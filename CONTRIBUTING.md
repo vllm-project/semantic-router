@@ -187,6 +187,9 @@ of truth for schemas, test selection, or public documentation.
 
 ## Submit a pull request
 
+Contributors without repository write access may have at most six open pull
+requests at a time, including drafts.
+
 1. Link the change to an accepted issue with exactly one `wg/*` owner.
 2. Create a focused branch and make one coherent change.
 3. Update tests, examples, and public docs for behavior the user can observe.
@@ -259,7 +262,8 @@ succeed while that rule's conditions remain unmet. Items marked
 Summary check shows the effective conditions, including inherited requirements.
 
 - **Waiting in the queue:** the queue processes PRs serially, so a long wait
-  can be normal.
+  can be normal. Mergify checks each PR on a draft pull request that merges it
+  onto current `main`, and that run needs no new `/ci run`.
   Avoid pushing while queued: a push restarts PR Gate, which the queue requires.
 - **Unresolved review conversation:** every review thread must be resolved,
   including threads marked **Outdated** after a push or branch update. Use

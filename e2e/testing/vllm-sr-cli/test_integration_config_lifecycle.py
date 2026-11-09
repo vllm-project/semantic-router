@@ -59,6 +59,62 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
             base_url=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
         )
 
+    def test_status_uses_the_active_management_port(self):
+        self.print_test_header(
+            "Status with a custom management port",
+            "Router health keeps its startup port until a pending change restarts",
+        )
+        mock_container = f"{self.runtime_stack.stack_name}-status-port-upstream"
+        self._write_config(mock_container)
+
+        def set_management_port(document, port):
+            management = (
+                document.setdefault("global", {})
+                .setdefault("services", {})
+                .setdefault("management_api", {})
+            )
+            management["bind_address"] = "0.0.0.0"
+            management["port"] = port
+
+        self._edit_config(lambda document: set_management_port(document, 8080))
+        try:
+            self._serve()
+            self._edit_config(lambda document: set_management_port(document, 8082))
+
+            code, stdout, stderr = self.run_cli(["status", "router"], timeout=60)
+            self.assertEqual(code, 0, f"{stdout}\n{stderr}")
+            self.assertRegex(stdout, r"Router\s+Running")
+            self.assertNotIn("Status unknown", stdout)
+
+            def move_listener(document):
+                document["listeners"][0]["port"] = 8890
+
+            self._edit_config(move_listener)
+            # config apply recognizes the default local endpoint. A custom
+            # --endpoint follows its remote workflow and cannot save locally.
+            saved = self._cli_json(
+                "config",
+                "apply",
+                "--config",
+                "config.yaml",
+            )
+            self.assertEqual(saved["status"], "restart_required", saved)
+
+            code, stdout, stderr = self.run_cli(["status", "router"], timeout=60)
+            self.assertEqual(code, 0, f"{stdout}\n{stderr}")
+            self.assertRegex(stdout, r"Router\s+Running")
+            self.assertNotIn("Status unknown", stdout)
+
+            self._serve()
+            self._edit_config(lambda document: set_management_port(document, 8083))
+            code, stdout, stderr = self.run_cli(["status", "router"], timeout=60)
+            self.assertEqual(code, 0, f"{stdout}\n{stderr}")
+            self.assertRegex(stdout, r"Router\s+Running")
+            self.assertNotIn("Status unknown", stdout)
+        finally:
+            self.run_cli(["stop"], timeout=120)
+        self.print_test_result(True, "status followed the running management port")
+
     def test_apply_then_serve_keeps_the_management_api(self):
         self.print_test_header(
             "config apply, then serve",

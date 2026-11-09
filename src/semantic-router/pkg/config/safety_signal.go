@@ -7,8 +7,11 @@ const SignalTypeSafety = "safety"
 // SafetyRule observes content hazards independently of prompt attacks. Model
 // names identify sequence classifiers with complete label distributions.
 type SafetyRule struct {
-	Name         string            `yaml:"name"`
-	Description  string            `yaml:"description,omitempty"`
+	Name        string `yaml:"name"`
+	Description string `yaml:"description,omitempty"`
+	// Deployment names the deployment that answers the rule's question.
+	Deployment string `yaml:"deployment,omitempty"`
+	// Model is the deprecated external[] model of the rule.
 	Model        string            `yaml:"model,omitempty"`
 	Labels       []string          `yaml:"labels,omitempty"`
 	UnsafeLabels []string          `yaml:"unsafe_labels,omitempty"`
@@ -20,6 +23,9 @@ type SafetyRule struct {
 // Labels describes a complete multi-label sigmoid head. Categories selects
 // the hazards of interest; any selected score reaching Threshold matches.
 type SafetyHazardRule struct {
+	// Deployment names the deployment that scores the hazard categories.
+	Deployment string `yaml:"deployment,omitempty"`
+	// Model is the deprecated external[] model of the hazard part.
 	Model      string   `yaml:"model,omitempty"`
 	Labels     []string `yaml:"labels"`
 	Categories []string `yaml:"categories"`

@@ -173,12 +173,21 @@ func TestClientCancellationReachesEveryHop(t *testing.T) {
 		return nil, ctx.Err()
 	}}
 	program := &Program{Steps: Sequence{parallel("panel", &Parallel{Branches: branchesOf("a", "b", "c")}), respond()}}
-	_, err := Run(ctx, program, Input{Request: chatRequest(t, "hi")}, Options{Caller: caller})
+	outcome, err := Run(ctx, program, Input{Request: chatRequest(t, "hi")}, Options{Caller: caller})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err %v", err)
 	}
 	if stopped.Load() != 3 {
 		t.Fatalf("%d of 3 hops saw the cancellation", stopped.Load())
+	}
+	cancelled := 0
+	for _, attempt := range outcome.Attempts {
+		if attempt.Status == AttemptCancelled {
+			cancelled++
+		}
+	}
+	if cancelled != 3 {
+		t.Fatalf("cancelled attempts %d in %+v", cancelled, outcome.Attempts)
 	}
 }
 

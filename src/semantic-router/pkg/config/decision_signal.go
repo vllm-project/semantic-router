@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// SignalTypeDecision asks a decision model a typed question about the request
-// through the built-in model runtime (a model_runtime deployment).
+// SignalTypeDecision asks a decision model a typed question about the request:
+// a model_runtime deployment, or a systemone deployment's remote API.
 const SignalTypeDecision = "decision"
 
 const (

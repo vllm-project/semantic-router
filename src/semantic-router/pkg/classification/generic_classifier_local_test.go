@@ -45,9 +45,19 @@ func TestLocalClassifierMaintainedCPU(t *testing.T) {
 		}
 		labels[index] = label
 	}
-	classifier, err := newLocalLabelClassifier(config.ClassifierSignalRule{
-		Name: "model-compatibility", Type: "local", ModelPath: path, UseCPU: true, Labels: labels,
-	}, managedModelRuntime(t))
+	// The rule names a deployment of the published model, as a configuration
+	// writes it.
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{
+		"published-domain": {Provider: config.ModelRuntimeProvider, Artifact: path, Device: "cpu"},
+	}
+	rule := config.ClassifierSignalRule{Name: "model-compatibility", Deployment: "published-domain", Labels: labels}
+	cfg.ClassifierRules = []config.ClassifierSignalRule{rule}
+	models, err := newClassifierModelRuntime(cfg, managedRuntimeOptions(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	classifier, err := newLocalLabelClassifier(rule, models)
 	if err != nil {
 		t.Fatal(err)
 	}

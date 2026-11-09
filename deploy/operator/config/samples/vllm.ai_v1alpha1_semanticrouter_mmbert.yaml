@@ -33,7 +33,7 @@ spec:
       memory: 4Gi
     limits:
       cpu: 4000m
-      memory: 8Gi
+      memory: 12Gi
 
   # Semantic router configuration
   config:
@@ -84,7 +84,7 @@ spec:
     # Prompt guard (jailbreak detection)
     prompt_guard:
       enabled: true
-      threshold: "0.75"
+      threshold: "0.88"
       # Optional token windows on the local model; omission uses whole input.
       # max_sequence_length: 32768
       # window:

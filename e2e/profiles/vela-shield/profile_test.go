@@ -27,23 +27,18 @@ func TestProfileSelectsShieldForTheSafetyRuleOnly(t *testing.T) {
 		return root
 	}
 	cfg := section(values, "config")
-	modules := section(cfg, "global", "model_catalog", "modules")
-	if len(modules) != 1 {
-		t.Fatalf("profile must override only the safety module: %+v", modules)
+	catalog := section(cfg, "global", "model_catalog")
+	if modules, overridden := catalog["modules"]; overridden {
+		t.Fatalf("profile must leave the safety and Hazard modules at their defaults: %+v", modules)
 	}
-	safety := section(modules, "safety")
-	if len(safety) != 1 {
-		t.Fatalf("profile must leave the Hazard module at its default: %+v", safety)
-	}
-	head := section(safety, "safety")
-	if head["model_id"] != "models/Vela-1.0-Encoder-307M-Shield" || len(head) != 1 {
-		t.Fatalf("Shield must be selected explicitly and inherit the module's other settings: %+v", head)
+	deployments := section(catalog, "deployments")
+	for _, name := range []string{"primary", "hazard", "vela-embedding", "omni-nano"} {
+		if _, replaced := deployments[name]; replaced {
+			t.Fatalf("profile must not replace the pre-declared %s deployment", name)
+		}
 	}
 	if _, bound := section(cfg, "routing")["model_bindings"]; bound {
-		t.Fatal("profile must select Shield through the module, not a named binding")
-	}
-	if _, overridden := section(cfg, "global", "model_catalog")["deployments"]; overridden {
-		t.Fatal("profile must not replace a default deployment")
+		t.Fatal("profile must select Shield on the safety rule, not with a binding")
 	}
 	routing := section(cfg, "routing")
 	rules, ok := section(routing, "signals")["safety"].([]any)
@@ -55,7 +50,12 @@ func TestProfileSelectsShieldForTheSafetyRuleOnly(t *testing.T) {
 		t.Fatalf("unexpected safety rule: %+v", rule)
 	}
 	if _, external := rule["model"]; external {
-		t.Fatal("safety rule must use the local module rather than an endpoint")
+		t.Fatal("safety rule must name its deployment rather than an external model")
+	}
+	name, _ := rule["deployment"].(string)
+	shield := section(deployments, name)
+	if shield["provider"] != "model_runtime" || shield["artifact"] != "vllm-sr/Vela-1.0-Encoder-307M-Shield" {
+		t.Fatalf("the safety rule must ask Vela 1.0 Shield on the model runtime: %+v", shield)
 	}
 	decisions, ok := routing["decisions"].([]any)
 	if !ok || len(decisions) != 2 {

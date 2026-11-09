@@ -9,9 +9,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from cli.config_migration import migrate_config_data
+from cli.config_migration_notes import MigrationNotes
 from cli.config_schema.validation import validate_config_structure
-from cli.models import UserConfig
-from cli.validator_model_runtime import validate_model_runtime_references
 
 
 def legacy_document(protocol="http_classify", name=None):
@@ -48,28 +47,52 @@ def legacy_document(protocol="http_classify", name=None):
 def test_prompt_guard_protocol_migration_is_explicit_and_idempotent(protocol, name):
     source = legacy_document(protocol, name)
     original = copy.deepcopy(source)
-    assert validate_model_runtime_references(UserConfig.model_validate(source))
     result = migrate_config_data(source)
     assert source == original
     catalog = result["global"]["model_catalog"]
     guard = catalog["modules"]["prompt_guard"]
     assert "protocol" not in guard
-    assert guard["backend"] == {
-        "protocol": protocol,
-        "contract": (
-            "label_decision.v1" if protocol == "http_chat" else "label_distribution.v1"
-        ),
-        "model": name or "guardrail_classifier",
-    }
-    assert catalog["external"][0]["name"] == (name or "guardrail_classifier")
+    assert "backend" not in guard
+    assert "external" not in catalog
+    deployment = name or "guardrail_classifier"
+    assert catalog["deployments"][deployment] == (
+        {
+            "provider": "openai_chat",
+            "endpoint": "http://guard.example:8080/v1",
+            "model": "served-guard",
+        }
+        if protocol == "http_chat"
+        else {
+            "provider": "classify",
+            "endpoint": "http://guard.example:8080",
+            "model": "served-guard",
+        }
+    )
+    assert catalog["bindings"] == {"jailbreak": deployment}
     for field in ("enabled", "threshold", "on_error", "positive_labels"):
         assert (
             guard[field]
             == original["global"]["model_catalog"]["modules"]["prompt_guard"][field]
         )
     assert validate_config_structure(result) == []
-    assert validate_model_runtime_references(UserConfig.model_validate(result)) == []
     assert migrate_config_data(result) == result
+
+
+def test_prompt_guard_protocol_migration_keeps_chat_settings_on_the_backend():
+    source = legacy_document("http_chat")
+    source["global"]["model_catalog"]["external"][0]["parser_type"] = "json"
+    notes = MigrationNotes()
+    result = migrate_config_data(source, notes=notes)
+    catalog = result["global"]["model_catalog"]
+    assert catalog["modules"]["prompt_guard"]["backend"] == {
+        "protocol": "http_chat",
+        "contract": "label_decision.v1",
+        "model": "guardrail_classifier",
+    }
+    assert catalog["external"][0]["name"] == "guardrail_classifier"
+    assert "deployments" not in catalog
+    assert any("parser_type" in note.message for note in notes)
+    assert validate_config_structure(result) == []
 
 
 @pytest.mark.parametrize(

@@ -72,6 +72,27 @@ func TestCollectorCloseStopsPolling(t *testing.T) {
 	}
 }
 
+func TestCollectorJoinsAdapterAndStoreFailures(t *testing.T) {
+	invalid := validObservation()
+	invalid.Source = ""
+	adapterFailure := errors.New("gpu-b: refused")
+	adapter := &countingAdapter{obs: invalid, err: adapterFailure}
+	reported := make(chan error, 1)
+	collector := StartCollector(CollectorOptions{
+		Adapters: []Adapter{adapter}, Store: NewStore(0), Interval: time.Hour,
+		Report: func(_ Engine, _ []Observation, err error) { reported <- err },
+	})
+	defer func() { _ = collector.Close(context.Background()) }()
+	select {
+	case err := <-reported:
+		if !errors.Is(err, adapterFailure) || !errors.Is(err, ErrInvalidObservation) {
+			t.Fatalf("lost a collection failure: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no collection result")
+	}
+}
+
 func TestCollectorWithoutAdaptersIsIdle(t *testing.T) {
 	collector := StartCollector(CollectorOptions{Store: NewStore(0), Interval: time.Millisecond})
 	if err := collector.Close(context.Background()); err != nil {

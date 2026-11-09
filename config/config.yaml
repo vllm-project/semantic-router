@@ -64,13 +64,17 @@ providers:
       external_model_ids:
         openai: qwen3-8b
         analytics: qwen3-routing
+      # A backend connects with the shape a deployment uses: endpoint
+      # (host:port with protocol, or a full URL), auth and headers. The key
+      # comes from auth.api_key_env; it is never written here.
       backend_refs:
         - name: local-primary
           endpoint: 127.0.0.1:8000
           protocol: http
           weight: 80
           provider: vllm
-          api_key_env: VLLM_SR_PRIMARY_API_KEY
+          auth:
+            api_key_env: VLLM_SR_PRIMARY_API_KEY
           # engine names the serving engine so backend telemetry can read its
           # load metrics; metrics overrides where it exposes them (default:
           # the endpoint's port and /metrics).
@@ -82,7 +86,8 @@ providers:
           endpoint: 127.0.0.1:8004
           protocol: http
           provider: vllm
-          api_key_env: VLLM_SR_PRIMARY_API_KEY
+          auth:
+            api_key_env: VLLM_SR_PRIMARY_API_KEY
           weight: 20
           engine: vllm
     # Keep remote-provider access fields visible without mixing incompatible
@@ -92,28 +97,19 @@ providers:
       api_format: openai
       backend_refs:
         - name: remote-primary
-          base_url: https://api.example.com/v1
+          endpoint: https://api.example.com/v1
           provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          extra_headers:
+          # header and prefix default to the provider's own; prefix "" sends
+          # the bare key.
+          auth:
+            header: Authorization
+            prefix: Bearer
+            api_key_env: REMOTE_OPENAI_API_KEY
+          # Non-secret headers only; credential headers belong in auth.
+          headers:
             X-Tenant: reference-config
           api_version: "2025-03-01"
           chat_path: /chat/completions
-          api_key: static-demo-key
-          weight: 100
-    # A vLLM-type entry pointed at a relay opts in to the OpenAI-compatible
-    # gateway response contract; the plain vLLM backends above keep the
-    # strict one.
-    - name: remote-vllm-gateway-reference
-      provider_model_id: remote-vllm-gateway-reference
-      api_format: openai
-      backend_refs:
-        - name: remote-gateway-primary
-          base_url: https://gateway.example.com/v1
-          provider: vllm
-          openai_compat_gateway: true
-          api_key: static-demo-key
           weight: 100
     - name: qwen3-32b
       reasoning:
@@ -178,17 +174,23 @@ providers:
     - name: built-in-catalog-example
       catalog: vllm-sr/mom-v1-lite
 
-    # A native alias references a shared deployment instead of a second endpoint.
+    # A native alias names a deployment instead of a second endpoint and key:
+    # a model_runtime deployment, or a systemone deployment whose remote API
+    # answers the native requests.
     - name: native-kai
       api_format: systemone
       deployment: decision-kai
+    - name: native-d3
+      api_format: systemone
+      deployment: decision-remote
     - name: native-vega
       api_format: systemone
       provider_model_id: vllm-sr/Decision-2.0-Vega-27B
       backend_refs:
         - provider: systemone-compatible
-          base_url: https://native.example.com/v1
-          api_key_env: SYSTEMONE_API_KEY
+          endpoint: https://native.example.com/v1
+          auth:
+            api_key_env: SYSTEMONE_API_KEY
 
 evaluation:
   # Illustrative artifact identity: replace source and digest together after
@@ -216,22 +218,6 @@ evaluation:
         score: 0.79
 routing:
   strategy: priority
-  # Optional recipe-local consumer bindings to named model deployments.
-  model_bindings:
-    classifier.content-risk:
-      deployment: content-risk
-      contract: label_scores.v1
-      adapter: modernbert
-      operating_point:
-        path: operating_point.json
-        sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5
-    rag.reranker:
-      deployment: document-ranker
-      contract: relevance_scores.v1
-      adapter: vela_reranker
-      pair_scorer:
-        layer: 22
-        dimension: 768
   modelCards:
     - name: qwen3-8b
       display_name: Qwen3 8B reference model
@@ -393,12 +379,29 @@ routing:
         description: General fallback traffic.
         mmlu_categories: [other]
 
+    # A safety rule asks its own question: deployment names the deployment
+    # that answers it, else the decision model does. A hazard part scores the
+    # hazard categories with its own deployment, else with the pre-declared
+    # hazard deployment (Vela 1.0 Hazard).
     safety:
       - name: unsafe-content
         description: Content risk, independent of prompt attacks.
         labels: [safe, unsafe]
         unsafe_labels: [unsafe]
-        threshold: 0.46
+        threshold: 0.52
+      - name: unsafe-privacy
+        description: Unsafe content whose hazard is privacy.
+        deployment: vela-safety
+        labels: [safe, unsafe]
+        unsafe_labels: [unsafe]
+        threshold: 0.52
+        hazard:
+          deployment: content-risk
+          labels: [violence, criminal_activity, sexual_content, child_exploitation,
+                   hate, harassment_abuse, regulated_substances, weapons,
+                   self_harm, privacy, specialized_advice, misinformation]
+          categories: [privacy]
+          threshold: 0.6
 
     fact_check:
       - name: needs_fact_check
@@ -617,7 +620,7 @@ routing:
       # decision's response_jailbreak plugin enforces on it.
       - name: unsafe_completion
         direction: response
-        threshold: 0.77
+        threshold: 0.90
         description: Detect jailbreak content in the model's own output.
 
     # Hallucination rules check the model's answer against the grounding
@@ -631,7 +634,7 @@ routing:
     pii:
       - name: restricted_pii
         source: ""
-        threshold: 0.01
+        threshold: 0.18
         include_history: true
         pii_types_allowed:
           - EMAIL_ADDRESS
@@ -779,8 +782,10 @@ routing:
           max_turn_bytes: 16384
           max_input_bytes: 147456
 
-    # Typed questions answered by a decision model through the built-in model
-    # runtime (global.model_catalog.deployments, provider model_runtime).
+    # Typed questions. deployment names the deployment that answers each one:
+    # the built-in model runtime (provider model_runtime) or a remote System
+    # One API (provider systemone). A question without one asks the decision
+    # model.
     decision:
       - name: needs_reasoning
         description: The decision model judges that the request needs multi-step reasoning.
@@ -817,33 +822,51 @@ routing:
             - Hard
         predicate:
           gte: 1.5
+      - name: support_team
+        description: Which team should handle the request, asked of a remote System One API.
+        deployment: decision-remote
+        question:
+          type: choice
+          instructions: Which team should handle this request?
+          choices:
+            - key: billing
+              description: Payments and refunds
+            - key: engineering
+              description: Outages and bugs
 
+    # A classifier rule asks its own question: deployment names the deployment
+    # that answers it, and the deployment's provider decides how it is asked.
+    # A rule without one is asked of the decision model.
     classifiers:
       - name: content-risk
         description: Independent content hazards with model-specific operating points.
-        type: local
+        # content-risk pins the Hazard head's packaged operating point, so each
+        # label is scored independently against its own threshold.
+        deployment: content-risk
         labels: [violence, criminal_activity, sexual_content, child_exploitation,
                  hate, harassment_abuse, regulated_substances, weapons,
                  self_harm, privacy, specialized_advice, misinformation]
       - name: generic-safety-score
         description: Generic binary safety classification head.
-        type: local
-        model_path: models/Vela-1.0-Encoder-307M-Safety
+        deployment: vela-safety
         labels: [safe, unsafe]
-        use_cpu: true
       - name: tool-risk
         description: Prompted tool execution risk labeler.
-        type: llm
-        model: external-classifier
+        deployment: openai-classifier
         labels: [SAFE, RISKY]
         instructions: >-
           Choose RISKY only for destructive, privileged, or irreversible tool
           operations.
+        # false (default) asks the chat model for a short rationale with the
+        # label scores; true asks for the scores only.
+        disable_rationale: false
       - name: remote-safety-score
         description: Remote binary safety classification head.
-        type: sequence_classifier
-        model: external-sequence-classifier
+        deployment: sequence-classifier
         labels: [SAFE, RISKY]
+      - name: support-intent
+        description: Whether a support request is about billing or a technical problem.
+        labels: [billing, technical]
 
   projections:
     partitions:
@@ -1173,6 +1196,10 @@ routing:
             capture_request_body: true
             capture_response_body: true
             capture_personal_data: false
+            # Tool results stay redacted. true stores each client tool
+            # result, bounded by max_tool_trace_bytes, and requires
+            # capture_personal_data: true; use it for development or audit.
+            capture_tool_results: false
             max_body_bytes: 4096
             # 0 = no truncation (the documented default). Set to a positive
             # byte cap to independently limit structured tool-trace fields
@@ -1824,8 +1851,14 @@ routing:
             backend: vectorstore
             similarity_threshold: 0.69
             top_k: 5
+            # The reranker is named where it is used: document-ranker scores
+            # each query-passage pair at the pair scorer's layer-22, 768-wide
+            # exit and keeps the best 3 of the 5 candidates.
             rerank:
+              deployment: document-ranker
               top_k: 3
+              layer: 22
+              dimension: 768
             max_context_length: 7000
             injection_mode: tool_role
             on_failure: skip
@@ -1969,6 +2002,10 @@ recipes:
       candidate_requirements:
         capabilities: declared
         context: known_limits
+      # A recipe binding applies only to this recipe and wins over the global
+      # binding for the same signal type.
+      model_bindings:
+        pii: primary
       signals:
         keywords:
           - name: privacy_recipe_keywords
@@ -1977,6 +2014,20 @@ recipes:
             keywords: ["ssn", "passport number", "credit card number"]
             case_sensitive: false
             bm25_threshold: 0.1
+        # A complexity rule with a deployment asks it, with the hard and easy
+        # candidates as examples, instead of scoring them by embedding
+        # similarity.
+        complexity:
+          - name: private_escalation
+            description: Hard requests among the privacy-sensitive ones, judged by the local Decision model.
+            deployment: decision-kai
+            threshold: 0.1
+            hard:
+              candidates:
+                - review this contract for exposure of personal data
+            easy:
+              candidates:
+                - mask this phone number
       decisions:
         - name: privacy_recipe_route
           plugins:
@@ -2051,7 +2102,8 @@ recipes:
 
 global:
   router:
-    # Engine mode keeps native serving and disables routing consumers.
+    # Engine mode keeps native serving and turns off routing and the signals
+    # it reads.
     enabled: true
     config_source: file
     strategy: priority
@@ -2077,6 +2129,24 @@ global:
       timeout_sec: 15
     skip_processing:
       enabled: false
+    # Protocol losses to translate with an x-vsr-protocol-warnings entry instead
+    # of rejecting them. tool_result.is_error omits the Anthropic failed tool
+    # call flag that OpenAI Chat and Responses backends cannot carry, and
+    # messages[].role sends Anthropic system messages inside the conversation to
+    # those backends as user text, for chat templates that accept a system
+    # message only first. Empty keeps every lossy translation failing closed.
+    allow_lossy_translation: []
+    # The user text that routing reads. A user message whose text matches a
+    # skip pattern (RE2) is never routing text, and each strip block cuts its
+    # literal start...end spans from the routing text. Jailbreak, PII and
+    # content-safety signals still scan both; the request sent to the model is
+    # unchanged. Empty lists route on the last user message that has text.
+    routing_input:
+      skip_user_messages_matching:
+        - '(?s)^\s*OpenClaw runtime context:.*End OpenClaw runtime context\.\s*$'
+      strip_blocks:
+        - start: '<relevant-memories>'
+          end: '</relevant-memories>'
     model_selection:
       method: hybrid
       enabled: true
@@ -2133,6 +2203,9 @@ global:
           headers:
             session: x-session-id
             conversation: x-conversation-id
+            # Optional: holds each named agent (a delegated subagent) on its own
+            # model inside the session. Claude Code sends this on subagent calls.
+            agent: x-claude-code-agent-id
         tuning:
           idle_timeout_seconds: 300
           min_turns_before_switch: 1
@@ -2323,6 +2396,8 @@ global:
       capture_response_body: true
       # Keep detected or uncertain personal data out of captured content.
       capture_personal_data: false
+      # Client tool results stay redacted; true requires capture_personal_data.
+      capture_tool_results: false
       max_records: 10000
       max_body_bytes: 4096
       max_tool_trace_bytes: 0
@@ -2414,6 +2489,10 @@ global:
       enabled: true
       backend: milvus
       auto_store: true
+      # The chat deployment that rewrites a query with its conversation
+      # before memory search.
+      query_rewrite:
+        deployment: memory-rewriter
       disabled_routes: []
       disabled_models: []
       valkey:
@@ -2637,23 +2716,27 @@ global:
             key_prefix: "vllm-sr:flow:state:"
 
   model_catalog:
-    # Shared task defaults. Recipe model_bindings may override their own consumers.
-    bindings: {}
-    # Named physical deployments and their shared admission budgets.
+    # Every model the Router asks is a deployment, declared once by name;
+    # provider names the API the Router speaks to it. Declaring a deployment
+    # does not start it: only deployments a signal, selector, embedding or
+    # reranker resolves to load. primary, hazard, vela-embedding and omni-nano
+    # are always declared; a deployment of the same name replaces one.
     deployments:
       primary:
         provider: model_runtime
         public_name: decision-public
-        artifact: vllm-sr/Vela-2.0-0.3B
+        artifact: vllm-sr/vela3-fast
         device: cpu
       # Decision 2.0 served by the built-in model runtime. The Router starts and
-      # supervises it on a private Unix socket; set endpoint to attach to an
-      # worker started elsewhere with `vllm-srun serve <hf-model>`.
+      # supervises it on a private Unix socket (managed: no endpoint).
       decision-kai:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
         device: auto
+      # operating_point pins the operating point the Hazard head's package
+      # serves: a classifier rule this deployment answers reads independent
+      # label scores at its thresholds.
       content-risk:
         provider: model_runtime
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
@@ -2662,6 +2745,18 @@ global:
         input:
           max_tokens: 32768
           overflow: reject
+        operating_point:
+          path: operating_point.json
+          sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5
+      # Vela 1.0 Safety for the generic-safety-score classifier; inputs over
+      # the model's limit are truncated rather than refused.
+      vela-safety:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Safety
+        revision: 6e70e725a5f4d86da10f5be5e4dfd1da0358bb85
+        device: cpu
+        input:
+          overflow: truncate
       document-ranker:
         provider: model_runtime
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
@@ -2670,7 +2765,9 @@ global:
         input:
           max_tokens: 4096
           overflow: reject
-      # Unbound example pool: only deployments used by a task or listener load.
+      # Unbound examples below: nothing resolves to them, so they do not load.
+      # Replicas of one logical deployment: a local worker, and a worker
+      # started elsewhere, named by endpoint and its served model.
       decision-replicas:
         provider: model_runtime
         public_name: decision-replicas
@@ -2679,8 +2776,134 @@ global:
         replicas:
           - device: cpu
           - endpoint: http://decision-worker:8100
-            served_name: decision-kai
+            model: decision-kai
+      # Engine arguments tune batching, precision, shared context and a
+      # Decision model's input limit; each one left out keeps the runtime's
+      # default (website/docs/model-runtime/engine-args.md).
+      decision-kai-tuned:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
+        device: auto
+        max_num_seqs: 64
+        max_num_batched_tokens: 8192
+        batch_window_ms: 2.0
+        dtype: auto
+        enable_shared_context: true
+        max_model_len: 4096
+      # An attached model runtime: endpoint connects to a runtime started
+      # elsewhere (`vllm-srun serve <hf-model>`) instead of starting one, and
+      # model selects its served model. An attached runtime takes the
+      # connection block without max_retries and limits; a unix:///abs/path.sock
+      # endpoint works too.
+      decision-attached:
+        provider: model_runtime
+        endpoint: https://runtime.example.com:8100
+        model: decision-kai
+        auth:
+          api_key_env: DECISION_RUNTIME_API_KEY
+        headers:
+          X-Tenant: reference-config
+        timeout_ms: 2000
+        # Verifies the runtime's certificate against ca_file under server_name
+        # and presents a client certificate; verification is never skipped
+        # unless insecure_skip_verify says so. https endpoints only.
+        tls:
+          ca_file: /etc/ssl/certs/runtime-ca.pem
+          server_name: runtime.example.com
+          cert_file: /etc/ssl/certs/router-client.pem
+          key_file: /etc/ssl/private/router-client-key.pem
+          insecure_skip_verify: false
+      # A remote System One API the Router asks decision questions, as it asks
+      # a model_runtime deployment; requests are never routed to it. The key
+      # comes from auth.api_key_env or auth.api_key_file, sent as
+      # "Authorization: Bearer <key>" unless auth sets another header or prefix.
+      # timeout_ms bounds one attempt (at most 60000 for systemone).
+      decision-remote:
+        provider: systemone
+        endpoint: https://systemone.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth:
+          api_key_env: SYSTEMONE_DECISION_KEY
+        timeout_ms: 3000
+      # The same API behind a gateway with its own header and path prefix;
+      # prefix "" sends the bare key. capabilities declares the question types
+      # and presets the model answers, used only when GET <endpoint>/models
+      # lists none for it.
+      decision-gateway:
+        provider: systemone
+        endpoint: https://gateway.example.com/Unified/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth:
+          header: Ocp-Apim-Subscription-Key
+          prefix: ""
+          api_key_file: /run/secrets/systemone-gateway-key
+        capabilities:
+          question_types: [choice, noul, score]
+          presets: [pii, halu]
+      # A chat model used as the tool-risk classifier: POST
+      # <endpoint>/chat/completions. generation sets max_tokens and
+      # temperature of its completions.
+      openai-classifier:
+        provider: openai_chat
+        endpoint: https://openai-proxy:443/v1
+        model: gpt-4.1-mini
+        auth:
+          api_key_env: OPENAI_CLASSIFIER_API_KEY
+        timeout_ms: 15000
+        generation:
+          max_tokens: 128
+          temperature: 0
+      # A chat model asked with reasoning off: generation.reasoning names a
+      # built-in reasoning family.
+      memory-rewriter:
+        provider: openai_chat
+        endpoint: http://memory-rewriter:8000/v1
+        model: qwen3
+        timeout_ms: 5000
+        generation:
+          max_tokens: 256
+          reasoning:
+            family: qwen3
+            use_reasoning: false
+      # A classifier service speaking the Router's classification API: POST
+      # <endpoint>/classify. limits bounds the request and response bodies.
+      sequence-classifier:
+        provider: classify
+        endpoint: http://sequence-classifier:8080
+        auth:
+          api_key_env: SEQUENCE_CLASSIFIER_API_KEY
+        timeout_ms: 5000
+        limits:
+          max_request_bytes: 262144
+          max_response_bytes: 1048576
+      # A remote embedding model: POST <endpoint>/embeddings. Name it in
+      # embeddings.default to embed with it; max_retries retries transport
+      # failures within the caller's deadline.
+      remote-embedding:
+        provider: openai_embeddings
+        endpoint: http://embedding-service:8000/v1
+        model: BAAI/bge-m3
+        auth:
+          api_key_env: EMBEDDING_API_KEY
+        timeout_ms: 5000
+        max_retries: 2
+        limits:
+          max_response_bytes: 16777216
+        capabilities:
+          dimensions: 1024
+      # A remote reranker: POST <endpoint>/rerank. Name it in a rag plugin's
+      # rerank.deployment to rerank with it.
+      remote-reranker:
+        provider: rerank
+        endpoint: https://rerank.example.com
+        model: bge-reranker-v2-m3
+    # The deployments that embed text and images: embedding signals, the
+    # response cache, memory and the vector store. vela-embedding and
+    # omni-nano are the defaults.
     embeddings:
+      default: vela-embedding
+      multimodal: omni-nano
       semantic:
         qwen3_model_path: models/mom-embedding-pro
         mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
@@ -2688,8 +2911,9 @@ global:
         use_cpu: true
         embedding_config:
           full_context: false
-          # model_runtime embeds with the built-in model runtime;
-          # openai_compatible calls the endpoint below.
+          # model_runtime embeds with the built-in model runtime. A remote
+          # model is an openai_embeddings deployment named in
+          # embeddings.default, such as remote-embedding above.
           backend: model_runtime
           model_type: mmbert
           preload_embeddings: true
@@ -2705,25 +2929,22 @@ global:
             best_weight: 0.75
             top_m: 2
             margin_threshold: 0.0
-        endpoint:
-          base_url: http://embedding-service:8000/v1
-          model: BAAI/bge-m3
-          api_key_env: EMBEDDING_API_KEY
-          timeout_seconds: 5
-          max_retries: 2
-          max_response_bytes: 16777216
-          dimensions: 1024
-    # Default judgment tasks resolve this exact deployment. Task bindings may
-    # select another resource. Model capabilities, rather than family names,
-    # determine which tasks are available. Omission selects primary (Vela 0.3B).
+    # The decision model answers every question-style signal and selector that
+    # no rule deployment or binding names. The Router checks at load that the
+    # deployment answers each one. Omission selects primary (vela3-fast).
     system:
       decision_model:
         deployment: primary
-      hazard: models/Vela-1.0-Encoder-307M-Hazard
-    # admission bounds concurrent inference per system model deployment.
-    # Keys must match global.model_catalog.system entries (prompt_guard,
-    # domain_classifier, pii_classifier, fact_check_classifier,
-    # hallucination_detector, feedback_detector).
+    # Bindings choose the deployment of a signal type whose rules share one
+    # answer (domain, jailbreak, pii, fact_check, user_feedback, modality,
+    # hallucination, preference, reask), in every recipe. A recipe's
+    # routing.model_bindings wins over them for that recipe.
+    bindings:
+      pii: primary
+    # admission bounds concurrent calls. A key is a deployment name, for a gate
+    # the deployment's users share, or a signal type (jailbreak, domain, pii,
+    # fact_check, hallucination, user_feedback, safety, hazard), for that
+    # signal's own gate.
     # max_concurrency: inference slots running at once (>= 1).
     # max_queue: bounded wait queue beyond the slots (0 = no queue).
     # queue_timeout_ms: longest a request may wait for a slot; on expiry the
@@ -2735,7 +2956,7 @@ global:
     # on_error / on_unknown policy as any other inference failure.
     # Omitting admission means no gate and preserves current behavior.
     admission:
-      prompt_guard:
+      jailbreak:
         max_concurrency: 4
         max_queue: 64
         queue_timeout_ms: 250
@@ -2746,77 +2967,6 @@ global:
     # through its policy: a routing signal through on_error, a safety signal
     # (prompt guard, PII) as unscanned.
     signal_timeout_ms: 0
-    external:
-      - name: external-safety
-        model_role: classification
-        llm_endpoint:
-          address: safety-service
-          port: 8080
-          protocol: http
-      - name: external-hazard
-        model_role: classification
-        llm_endpoint:
-          address: hazard-service
-          port: 8080
-          protocol: http
-      - name: external-guardrail
-        llm_provider: openai
-        model_role: guardrail
-        llm_endpoint:
-          address: openai-proxy
-          port: 443
-          protocol: https
-          name: openai-guardrail
-          use_chat_template: true
-          prompt_template: "{{ .Prompt }}"
-        llm_model_name: gpt-4.1-mini
-        llm_timeout_seconds: 30
-        parser_type: json
-        threshold: 0.65
-        access_key: external-guardrail-key
-        max_tokens: 2048
-        temperature: 0.2
-      - name: external-classifier
-        llm_provider: openai
-        model_role: classification
-        llm_endpoint:
-          address: openai-proxy
-          port: 443
-          protocol: https
-          name: openai-classifier
-          use_chat_template: true
-          prompt_template: "{{ .Prompt }}"
-        llm_model_name: gpt-4.1-mini
-        llm_timeout_seconds: 15
-        parser_type: json
-        access_key: external-classifier-key
-        max_tokens: 128
-        temperature: 0
-      - name: external-reasoning-classifier
-        llm_provider: vllm
-        model_role: classification
-        llm_endpoint:
-          address: vllm-classifier
-          port: 8000
-          protocol: http
-          use_chat_template: true
-        llm_model_name: qwen/qwen3.8-27b
-        reasoning:
-          family: qwen3.8
-          use_reasoning: true
-          reasoning_effort: low
-      - name: external-sequence-classifier
-        llm_provider: openai
-        model_role: classification
-        llm_endpoint:
-          address: sequence-classifier
-          port: 8080
-          protocol: http
-          name: openai-sequence-classifier
-        llm_timeout_seconds: 5
-        access_key: external-sequence-classifier-key
-        max_request_bytes: 262144
-        max_response_bytes: 1048576
     kbs:
       - name: privacy_kb
         source:
@@ -2907,10 +3057,12 @@ global:
             type: group_margin
             positive_group: escalate
             negative_group: keep
+    # Modules tune each built-in signal; the deployment that answers a signal
+    # is chosen by a rule's deployment, a binding or the decision model, not
+    # here.
     modules:
       safety:
         safety:
-          model_ref: safety
           use_cpu: true
           max_sequence_length: 0
       prompt_compression:
@@ -2931,11 +3083,11 @@ global:
         preserve_last_n: 2
       prompt_guard:
         enabled: true
-        model_ref: prompt_guard
-        # model_id binds the guard to one model and threshold sets its own;
-        # without them it runs the decision model at that model's threshold.
+        # The jailbreak signal asks the deployment bindings.jailbreak names,
+        # else the decision model. Without a threshold here the guard uses the
+        # calibrated threshold of the model that answers.
         use_cpu: true
-        # Vela 2.0 reads the whole text up to its scan budget (four inputs on a
+        # vela3-fast reads the whole text up to its scan budget (four inputs on a
         # CPU, or the deployment's input {overflow: window, max_tokens}) and
         # names its own labels, so it sets no window. A sequence classifier such
         # as Vela 1.0 Guard takes a document budget, token windows
@@ -2955,13 +3107,12 @@ global:
         on_unscanned: block
       classifier:
         domain:
-          # Omit to keep the historical behaviour of running whenever a model is
-          # configured; false disables the classifier outright.
+          # Omit to run the classifier whenever a deployment answers the
+          # signal; false disables the classifier outright.
           enabled: true
-          model_ref: domain_classifier
           max_sequence_length: 0
           use_cpu: true
-          # Vela 2.0 names its 14 domains itself; a classifier head takes its
+          # vela3-fast names its 14 domains itself; a classifier head takes its
           # category_mapping.json.
           category_mapping_path: ""
           fallback_category: other
@@ -2978,11 +3129,10 @@ global:
           timeout_seconds: 15
           max_response_bytes: 16777216
         pii:
-          # Omit to keep the historical behaviour of running whenever a model is
-          # configured; false disables the classifier outright.
+          # Omit to run the classifier whenever a deployment answers the
+          # signal; false disables the classifier outright.
           enabled: true
-          model_ref: pii_classifier
-          # Vela 2.0 0.3B finds spans with its router span head and reads the
+          # vela3-fast finds spans with its span-set adapter and reads the
           # whole text up to its scan budget, so it sets no window; a token
           # classifier such as Vela 1.0 PII takes a document budget (32768),
           # token windows (window: {size: 512, overlap: 255}) and its
@@ -3020,13 +3170,13 @@ global:
       hallucination_mitigation:
         enabled: true
         fact_check:
-          model_ref: fact_check_classifier
+          # enabled: false runs no fact-check classifier.
+          enabled: true
           max_sequence_length: 0
           use_cpu: true
         detector:
           backend: model_runtime
           include_explanation: false
-          model_ref: hallucination_detector
           threshold: 0.5
           use_cpu: true
           min_span_length: 1
@@ -3034,16 +3184,15 @@ global:
           context_window_size: 50
       feedback_detector:
         enabled: true
-        model_ref: feedback_detector
         max_sequence_length: 0
         use_cpu: true
         feedback_mapping_path: ''
       modality_detector:
         enabled: true
         method: hybrid
+        # The modality signal asks the deployment bindings.modality names, else
+        # the decision model.
         classifier:
-          # Empty runs the decision model; a model or package path binds one.
-          model_path: ""
           max_sequence_length: 0
           use_cpu: true
         keywords:
@@ -3053,5 +3202,5 @@ global:
         both_keywords:
           - explain and illustrate
           - describe with an image
-        confidence_threshold: 0.51
+        confidence_threshold: 0.63
         lower_threshold_ratio: 0.7

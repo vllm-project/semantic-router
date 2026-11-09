@@ -12,6 +12,8 @@
 // PROVIDERS - Model and endpoint configuration
 // =============================================================================
 
+import type { BackendEngine, ProviderLBPolicy } from '../generated/routerConfigContract'
+
 export interface ProviderEndpoint {
   name: string
   weight: number
@@ -21,7 +23,7 @@ export interface ProviderEndpoint {
   provider?: string
   api_key?: string
   api_key_env?: string
-  engine?: 'vllm' | 'sglang' | 'atom' | 'tensorrt-llm'
+  engine?: BackendEngine
   metrics?: { port?: number; path?: string }
 }
 
@@ -44,7 +46,7 @@ export interface ProviderModel {
     completion_per_1m?: number
   }
   reliability?: {
-    lb_policy?: 'round_robin' | 'least_request' | 'load_aware'
+    lb_policy?: ProviderLBPolicy
     retry_count?: number
     retry_on?: string
     consecutive_5xx?: number
@@ -218,12 +220,18 @@ export interface MetadataSignal {
 export interface ClassifierSignal {
   name: string
   description?: string
-  type: 'local' | 'llm' | 'sequence_classifier'
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
+  /** @deprecated Name a deployment instead. */
+  type?: 'local' | 'llm' | 'sequence_classifier'
+  /** @deprecated Name a deployment instead. */
   model?: string
+  /** @deprecated Name a deployment instead. */
   model_path?: string
   labels: string[]
   instructions?: string
   disable_rationale?: boolean
+  /** @deprecated Name a deployment instead. */
   use_cpu?: boolean
 }
 
@@ -286,6 +294,8 @@ export interface RuleComposer {
 
 export interface ComplexitySignal {
   name: string
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
   threshold: number
   hard: ComplexityCandidates
   easy: ComplexityCandidates
@@ -324,11 +334,17 @@ export interface JailbreakSignal {
 export interface SafetySignal {
   name: string
   description?: string
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
+  /** @deprecated Name a deployment instead. */
   model?: string
   labels?: string[]
   unsafe_labels?: string[]
   threshold: number
   hazard?: {
+    /** The deployment that scores the hazard categories. */
+    deployment?: string
+    /** @deprecated Name a deployment instead. */
     model?: string
     labels: string[]
     categories: string[]

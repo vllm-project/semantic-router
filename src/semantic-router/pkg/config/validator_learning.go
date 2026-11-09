@@ -99,6 +99,9 @@ func validateRouterLearningProtectionConfig(cfg RouterLearningProtectionConfig) 
 	if cfg.Identity.Headers.Conversation != nil && strings.TrimSpace(*cfg.Identity.Headers.Conversation) == "" {
 		return fmt.Errorf("global.router.learning.protection.identity.headers.conversation cannot be empty")
 	}
+	if cfg.Identity.Headers.Agent != nil && strings.TrimSpace(*cfg.Identity.Headers.Agent) == "" {
+		return fmt.Errorf("global.router.learning.protection.identity.headers.agent cannot be empty")
+	}
 
 	return validateProtectionTuning(
 		"global.router.learning.protection.tuning",

@@ -122,47 +122,38 @@ config:
     integrations: {}
     model_catalog:
       kbs: []
-      external:
+      deployments:
         # The same provider-mocker that serves the chat backend also serves the
-        # http_classify contract on /classify. It scores only the first
+        # classification API on /classify. It scores only the first
         # CLASSIFY_WINDOW_CHARS of whatever it is sent, the way a real
         # sequence classifier only ever sees its own sequence window - which
         # is what lets this profile tell a whole-response scan apart from a
         # first-chunk-only one.
-        - name: mock-guardrail
-          llm_provider: openai
-          model_role: guardrail
-          llm_model_name: mock-guardrail
-          llm_endpoint:
-            address: provider-mocker.default.svc.cluster.local
-            port: 8000
-            protocol: http
-          llm_timeout_seconds: 10
+        mock-guardrail:
+          provider: classify
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000
+          model: mock-guardrail
+          timeout_ms: 5000
+      bindings:
+        jailbreak: mock-guardrail
       modules:
         prompt_guard:
           enabled: true
-          model_ref: ""
-          model_id: ""
-          backend:
-            protocol: http_classify
-            contract: label_distribution.v1
-            model: mock-guardrail
           threshold: 0.5
           positive_labels: [jailbreak]
           jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
         classifier:
           domain:
-            model_ref: ""
-            model_id: ""
+            enabled: false
             category_mapping_path: ""
           pii:
-            model_ref: ""
-            model_id: ""
+            enabled: false
             pii_mapping_path: ""
         hallucination_mitigation:
           enabled: false
-# The router requires a jailbreak_type_mapping.json on disk even for
-# protocol: http_classify, so a minimal stand-in mapping is mounted from the
+# The router requires a jailbreak_type_mapping.json on disk even when a
+# classify deployment answers the jailbreak signal, so a minimal stand-in
+# mapping is mounted from the
 # ConfigMap applied as a prerequisite - no need to bake the real model.
 extraVolumes:
   - name: jailbreak-mapping

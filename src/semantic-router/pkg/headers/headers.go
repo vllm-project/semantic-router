@@ -431,7 +431,8 @@ const (
 
 	// AuthzTeamID and AuthzTenantID are trusted ext_authz outputs used for
 	// response-cache partitioning. Client-provided values must be stripped by
-	// the gateway before authorization.
+	// the gateway before authorization. Like the user and group headers, they
+	// never reach a model backend.
 	AuthzTeamID   = "x-authz-team-id"
 	AuthzTenantID = "x-authz-tenant-id"
 )

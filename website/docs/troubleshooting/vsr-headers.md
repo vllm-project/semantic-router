@@ -253,6 +253,22 @@ x-vsr-matched-projections: use-reasoning-model
 x-vsr-replay-id: replay_01J...
 ```
 
+## Identity headers
+
+An authenticator in front of the Router sets these, and the Router reads them
+for role bindings, rate limits, memory, and the user, team and tenant
+response-cache scopes. A listener drops the ones a client sends unless it
+trusts identity headers (see
+[Gateway modes](../installation/gateway-modes#identity-headers)), and no
+identity header reaches a model provider.
+
+| Header | Description |
+| ------ | ----------- |
+| `x-authz-user-id` | The authenticated user. `global.services.authz.identity.user_id_header` names another header. |
+| `x-authz-user-groups` | The user's groups, comma-separated. `global.services.authz.identity.user_groups_header` names another header. |
+| `x-authz-team-id` | The team, for the `team` response-cache scope. |
+| `x-authz-tenant-id` | The tenant, for the `tenant` response-cache scope. |
+
 ## Compatibility and interpretation
 
 - Use `x-vsr-schema-version` before parsing optional headers; the current value

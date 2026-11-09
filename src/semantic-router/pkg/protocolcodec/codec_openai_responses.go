@@ -291,6 +291,9 @@ func decodeResponsesDroppedFields(wire responsesRequestWire, policy llmprotocol.
 	if len(wire.ClientMetadata) > 0 {
 		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, "client_metadata", "client telemetry is not model input")
 	}
+	if bytes.Contains(wire.Input, []byte(`"`+codexItemMetadataField+`"`)) {
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, "input[]."+codexItemMetadataField, "client metadata is not model input")
+	}
 	return diagnostics, nil
 }
 

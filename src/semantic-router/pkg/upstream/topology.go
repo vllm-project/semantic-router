@@ -75,6 +75,10 @@ type ClusterSpec struct {
 	PathPrefix string
 	// RouteHeaders are set on every request, replacing any value present.
 	RouteHeaders []Header
+	// RemoveHeaders are removed from every request after RouteHeaders are
+	// set: the caller identity headers the configuration reads, which the
+	// Envoy template removes too.
+	RemoveHeaders []string
 	// Policy is the cluster's own timeouts and retry policy, between the
 	// listener's route defaults and a call's override.
 	Policy Policy

@@ -379,7 +379,7 @@ providers:
           provider: vllm
 ```
 
-当提供方需要完整 API 根（例如 `https://provider.example/v1`）时，使用 `base_url`。使用 Router 网络可达的主机名；`localhost` 指向 Router 容器自身。
+当提供方需要完整 API 根（例如 `https://provider.example/v1`）时，在 `endpoint` 中写完整 URL。使用 Router 网络可达的主机名；`localhost` 指向 Router 容器自身。
 
 该 API 根中的版本段对每个 Provider ID 都可接受。自身操作路径已带版本的提供方（例如 `anthropic` 和 `minimax`）不会重复它，因此 `https://provider.example/v1` 和 `https://provider.example` 解析到同一上游路径。
 

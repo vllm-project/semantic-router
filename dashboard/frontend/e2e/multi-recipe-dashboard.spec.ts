@@ -84,11 +84,48 @@ const config = {
   ],
 }
 
+const builtInRecipes = {
+  catalog_version: 'latest',
+  bundles: [
+    {
+      name: 'mom-v1',
+      sha256: 'sha256:aaaa',
+      recipes: [
+        {
+          name: 'vault',
+          description: 'Keep private traffic inside the deployment boundary.',
+          decisions: [
+            {
+              name: 'guard',
+              description: 'Contain prompt attacks.',
+              algorithm: null,
+              minimum_candidates: 0,
+            },
+            {
+              name: 'private',
+              description: 'Serve private requests.',
+              algorithm: 'multi_factor',
+              minimum_candidates: 1,
+            },
+          ],
+        },
+      ],
+    },
+  ],
+}
+
 let savedConfig: typeof config | undefined
 
 test.beforeEach(async ({ page }) => {
   savedConfig = undefined
   await mockAuthenticatedAppShell(page)
+  await page.route('**/api/recipes/builtin', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(builtInRecipes),
+    })
+  })
   await page.route('**/api/router/config/all', async (route) => {
     await route.fulfill({
       status: 200,
@@ -176,6 +213,58 @@ test('creates a Mixture-of-Models without clipped aliases or assignments', async
   expect(savedConfig?.recipes[0].routing.decisions[0].modelRefs).toEqual([
     { model: 'model-a', use_reasoning: false },
   ])
+})
+
+test('publishes a built-in recipe from the config the packaged CLI composes', async ({ page }) => {
+  let composeRequest: unknown
+  const vault = { name: 'vault', description: 'Composed vault', routing: { decisions: [] } }
+  await page.route('**/api/recipes/builtin/compose', async (route) => {
+    composeRequest = route.request().postDataJSON()
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...config,
+        entrypoints: [
+          ...config.entrypoints,
+          { model_names: ['acme/vault', 'vault'], recipe: 'vault' },
+        ],
+        recipes: [...config.recipes, vault],
+      }),
+    })
+  })
+  await page.goto('/config/entrypoints-recipes')
+  await page.getByRole('tab', { name: 'Recipes' }).click()
+  await page.getByRole('button', { name: 'Create a model from built-in recipe vault' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'Create model' })
+  await expect(dialog.getByLabel('Recipe').locator('option:checked')).toHaveText('vault')
+  await dialog.getByLabel('Model name').fill('acme/vault')
+  await dialog.getByPlaceholder('Add an alias').fill('vault')
+  await dialog.getByRole('button', { name: 'Add', exact: true }).click()
+  await expect(dialog.getByRole('tabpanel', { name: 'guard model assignment' })).toContainText(
+    'No model needed',
+  )
+  await dialog.getByRole('tab', { name: /private/ }).click()
+  await dialog
+    .getByRole('tabpanel', { name: 'private model assignment' })
+    .getByText('model-a', { exact: true })
+    .click()
+  await dialog.getByRole('button', { name: 'Create model' }).click()
+  await expect(dialog).toBeHidden()
+
+  expect(composeRequest).toEqual({
+    bundle: 'mom-v1',
+    recipe: 'vault',
+    bindings: { private: [{ model: 'model-a', use_reasoning: false }] },
+    model_names: ['acme/vault', 'vault'],
+  })
+  await expect.poll(() => savedConfig).toBeDefined()
+  expect(savedConfig?.entrypoints).toContainEqual({
+    model_names: ['acme/vault', 'vault'],
+    recipe: 'vault',
+  })
+  expect(savedConfig?.recipes).toContainEqual(vault)
 })
 
 test('dashboard and managers expose recipe-owned routing state', async ({ page }) => {

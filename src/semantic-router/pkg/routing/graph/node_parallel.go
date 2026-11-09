@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // OnError is what a parallel step does when a branch fails.
@@ -26,6 +27,12 @@ var ErrTooFewResults = errors.New("graph: too few branches succeeded")
 // first k successes it needs.
 var errEnough = errors.New("graph: the parallel step has its first results")
 
+// branchReportGrace is how long the collector keeps taking results after the
+// step stops. A branch that returns on cancellation is recorded with the run.
+// A branch that ignores the context is left behind when the grace expires, so
+// it cannot hold the caller.
+const branchReportGrace = 100 * time.Millisecond
+
 // Parallel is the parallel step: it runs its branches concurrently, each on a
 // fork of the state, and makes the successful branches' results the state's
 // results, in branch order.
@@ -43,6 +50,10 @@ type Parallel struct {
 	// one under OnErrorSkip.
 	MinSuccess int
 	OnError    OnError
+	// afterStop, when set, runs on the collect goroutine once the step context
+	// is done and before the returned error is chosen. Tests cancel the caller
+	// there, after FirstK has recorded errEnough. Production leaves it nil.
+	afterStop func()
 }
 
 type branchRun struct {
@@ -53,20 +64,28 @@ type branchRun struct {
 
 // Run runs the branches. One loop starts them in order, as slots free up,
 // and takes their outcomes, so a branch starts only after every outcome that
-// could have stopped the step has been taken.
+// could have stopped the step has been taken. After the step stops, the
+// collector keeps taking results until every running branch reports or
+// branchReportGrace elapses. A branch that ignores cancellation may still
+// be running when Run returns.
 func (n *Parallel) Run(ctx context.Context, x *Exec, st *State) error {
-	ctx, stop := context.WithCancelCause(ctx)
+	// Keep the caller context. FirstK cancels the step with errEnough, and
+	// that cause stays on the step context when the caller is canceled later.
+	caller := ctx
+	step, stop := context.WithCancelCause(caller)
 	defer stop(nil)
 	runs := make([]branchRun, len(n.Branches))
+	// Buffered for every branch, so a branch that ignores ctx can still send
+	// after Run has returned.
 	finished := make(chan int, len(n.Branches))
 	next, running := 0, 0
 	launch := func() {
-		for next < len(n.Branches) && running < n.concurrency() && ctx.Err() == nil {
+		for next < len(n.Branches) && running < n.concurrency() && step.Err() == nil {
 			i, fork := next, st.fork()
 			next++
 			running++
 			go func() {
-				runs[i].err = n.Branches[i].Run(ctx, x, fork)
+				runs[i].err = n.Branches[i].Run(step, x, fork)
 				runs[i].results = fork.Results
 				finished <- i
 			}()
@@ -75,8 +94,7 @@ func (n *Parallel) Run(ctx context.Context, x *Exec, st *State) error {
 
 	kept, failed := 0, 0
 	var firstErr error
-	for launch(); running > 0; launch() {
-		i := <-finished
+	take := func(i int) {
 		running--
 		run := &runs[i]
 		switch {
@@ -88,7 +106,7 @@ func (n *Parallel) Run(ctx context.Context, x *Exec, st *State) error {
 					stop(errEnough)
 				}
 			}
-		case errors.Is(context.Cause(ctx), errEnough):
+		case errors.Is(context.Cause(step), errEnough):
 		default:
 			failed++
 			if firstErr == nil {
@@ -104,10 +122,36 @@ func (n *Parallel) Run(ctx context.Context, x *Exec, st *State) error {
 			}
 		}
 	}
-	if cause := context.Cause(ctx); cause != nil && !errors.Is(cause, errEnough) &&
+
+	// Stop launching once the step is done, then keep taking results from the
+	// branches already running. branchReportGrace bounds that wait.
+	stopped := false
+	for launch(); running > 0 && !stopped; launch() {
+		select {
+		case i := <-finished:
+			take(i)
+		case <-step.Done():
+			stopped = true
+		}
+	}
+	if running > 0 {
+		drainBranches(finished, &running, take)
+	}
+	if n.afterStop != nil && step.Err() != nil {
+		n.afterStop()
+	}
+	if cause := context.Cause(step); cause != nil && !errors.Is(cause, errEnough) &&
 		(!errors.Is(cause, firstErr) || errors.Is(cause, ErrHopLimit)) {
 		// The run itself was stopped: a ceiling, its timeout or the client.
 		return cause
+	}
+	// errEnough is the step's own cause. A caller cancel that lands after it
+	// is still the result, whether the step would otherwise succeed or report
+	// too few results.
+	if errors.Is(context.Cause(step), errEnough) {
+		if cause := context.Cause(caller); cause != nil {
+			return cause
+		}
 	}
 	if n.OnError != OnErrorSkip && firstErr != nil {
 		return firstErr
@@ -126,6 +170,29 @@ func (n *Parallel) Run(ctx context.Context, x *Exec, st *State) error {
 	}
 	st.Results = results
 	return nil
+}
+
+// drainBranches takes results that arrive after the step has stopped. It
+// returns when every running branch has reported, or when branchReportGrace
+// has elapsed and no result is already queued.
+func drainBranches(finished <-chan int, running *int, take func(int)) {
+	timer := time.NewTimer(branchReportGrace)
+	defer timer.Stop()
+	for *running > 0 {
+		select {
+		case i := <-finished:
+			take(i)
+		case <-timer.C:
+			for *running > 0 {
+				select {
+				case i := <-finished:
+					take(i)
+				default:
+					return
+				}
+			}
+		}
+	}
 }
 
 func (n *Parallel) concurrency() int {

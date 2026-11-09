@@ -130,9 +130,10 @@ type routerSessionState struct {
 }
 
 type routerSessionMemoryStore struct {
-	mu       sync.Mutex
-	sessions map[string]*routerSessionState
-	nowFn    func() time.Time
+	mu        sync.Mutex
+	sessions  map[string]*routerSessionState
+	nowFn     func() time.Time
+	lastEvict time.Time
 }
 
 var globalRouterSessionMemory = &routerSessionMemoryStore{
@@ -170,7 +171,7 @@ func RecordSessionDecision(p SessionDecisionParams) {
 		now = s.nowFn()
 	}
 	s.evictExpiredLocked(now)
-	st := s.sessionLocked(p.SessionID)
+	st := s.sessionLocked(p.SessionID, now)
 	if p.UserID != "" {
 		st.userID = p.UserID
 	}
@@ -219,7 +220,7 @@ func RecordSessionUsage(p SessionUsageParams) {
 		now = s.nowFn()
 	}
 	s.evictExpiredLocked(now)
-	st := s.sessionLocked(p.SessionID)
+	st := s.sessionLocked(p.SessionID, now)
 	if st.turnCount == 0 {
 		st.currentModel = p.Model
 	}
@@ -314,9 +315,11 @@ func routerSessionSnapshot(sessionID string, now time.Time, mutate bool) (Router
 	return snapshot, true
 }
 
-func (s *routerSessionMemoryStore) sessionLocked(sessionID string) *routerSessionState {
+// sessionLocked returns the live session or a fresh one. An entry idle past
+// routerMemoryTTL starts over: the throttled sweep may not have removed it yet.
+func (s *routerSessionMemoryStore) sessionLocked(sessionID string, now time.Time) *routerSessionState {
 	st := s.sessions[sessionID]
-	if st != nil {
+	if st != nil && now.Sub(st.lastSeen) <= routerMemoryTTL {
 		return st
 	}
 	if len(s.sessions) >= maxRouterSessions {
@@ -330,7 +333,14 @@ func (s *routerSessionMemoryStore) sessionLocked(sessionID string) *routerSessio
 	return st
 }
 
+// evictExpiredLocked is throttled to one full sweep per evictInterval, like
+// evictLocked; sessionLocked resets expired entries the sweep has not reached.
+// Callers must hold s.mu.
 func (s *routerSessionMemoryStore) evictExpiredLocked(now time.Time) {
+	if !s.lastEvict.IsZero() && now.Sub(s.lastEvict) < evictInterval {
+		return
+	}
+	s.lastEvict = now
 	for k, v := range s.sessions {
 		if now.Sub(v.lastSeen) > routerMemoryTTL {
 			delete(s.sessions, k)
@@ -442,6 +452,7 @@ func ResetRouterSessionMemoryForTesting() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sessions = make(map[string]*routerSessionState)
+	s.lastEvict = time.Time{}
 }
 
 // routerSessionCount returns the number of tracked sessions (tests only).

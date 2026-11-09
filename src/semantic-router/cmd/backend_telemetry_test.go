@@ -68,16 +68,15 @@ func TestBackendTelemetryCollectsFromEngineBackends(t *testing.T) {
 		t.Fatalf("targets = %+v, want only the backend that names an engine", targets)
 	}
 
-	store := backendtelemetry.NewStore(0)
-	collector, err := startBackendTelemetry(cfg, backendTelemetryRegistry(), store)
+	part, err := startBackendTelemetry(cfg, backendTelemetryRegistry())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = collector.Close(context.Background()) }()
+	defer func() { _ = part.Close(context.Background()) }()
 	id := backendtelemetry.Identity{Model: "m", BackendRef: "gpu-a", Engine: backendtelemetry.EngineVLLM}
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		if o, ok := store.Fresh(id); ok {
+		if o, ok := part.store.Fresh(id); ok {
 			if depth, _ := o.QueueDepth.Get(); depth != 4 {
 				t.Fatalf("queue depth = %d, want 4", depth)
 			}
@@ -112,11 +111,11 @@ func TestBackendTelemetryDisabledCollectsNothing(t *testing.T) {
 	}))
 	defer engine.Close()
 	cfg := telemetryConfig(t, strings.TrimPrefix(engine.URL, "http://"), "        enabled: false")
-	collector, err := startBackendTelemetry(cfg, backendTelemetryRegistry(), backendtelemetry.NewStore(0))
+	part, err := startBackendTelemetry(cfg, backendTelemetryRegistry())
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = collector.Close(context.Background()) }()
+	defer func() { _ = part.Close(context.Background()) }()
 	select {
 	case <-scraped:
 		t.Fatal("a disabled collector scraped a backend")

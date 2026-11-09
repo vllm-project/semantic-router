@@ -72,41 +72,44 @@ func TestWrapWithAcceptanceContractSkipsUnscopedProfiles(t *testing.T) {
 	}
 }
 
-func TestWrapWithAcceptanceContractAddsProgressiveOverallDetails(t *testing.T) {
+func progressiveStressDetails(answered50 int) map[string]interface{} {
+	stage := func(total, answered int) map[string]interface{} {
+		return map[string]interface{}{
+			"total_requests": total,
+			"successful":     answered,
+			"failed":         total - answered,
+		}
+	}
+	return map[string]interface{}{
+		"qps_10": stage(10, 10),
+		"qps_20": stage(20, 20),
+		"qps_50": stage(50, answered50),
+	}
+}
+
+func runProgressiveStressContract(t *testing.T, answered50 int) (map[string]interface{}, error) {
+	t.Helper()
 	wrapped := wrapWithAcceptanceContract(
 		"chat-completions-progressive-stress",
 		func(ctx context.Context, client *kubernetes.Clientset, opts TestCaseOptions) error {
-			opts.SetDetails(map[string]interface{}{
-				"qps_10": map[string]interface{}{
-					"total_requests": 10,
-					"successful":     10,
-					"failed":         0,
-					"success_rate":   "100.00%",
-				},
-				"qps_20": map[string]interface{}{
-					"total_requests": 20,
-					"successful":     18,
-					"failed":         2,
-					"success_rate":   "90.00%",
-				},
-				"qps_50": map[string]interface{}{
-					"total_requests": 50,
-					"successful":     40,
-					"failed":         10,
-					"success_rate":   "80.00%",
-				},
-			})
+			opts.SetDetails(progressiveStressDetails(answered50))
 			return nil
 		},
 	)
 
 	var details map[string]interface{}
-	if err := wrapped(context.Background(), nil, TestCaseOptions{
+	err := wrapped(context.Background(), nil, TestCaseOptions{
 		Profile: baselineRouterContractProfile,
 		SetDetails: func(next map[string]interface{}) {
 			details = next
 		},
-	}); err != nil {
+	})
+	return details, err
+}
+
+func TestWrapWithAcceptanceContractAddsProgressiveOverallDetails(t *testing.T) {
+	details, err := runProgressiveStressContract(t, 50)
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -115,8 +118,20 @@ func TestWrapWithAcceptanceContractAddsProgressiveOverallDetails(t *testing.T) {
 		t.Fatalf("overall details missing or wrong type: %#v", details["overall"])
 	}
 
-	if got := overall["minimum_success_rate"]; got != "75.00%" {
-		t.Fatalf("overall minimum_success_rate = %v, want 75.00%%", got)
+	if got := overall["minimum_success_rate"]; got != "100.00%" {
+		t.Fatalf("overall minimum_success_rate = %v, want 100.00%%", got)
+	}
+}
+
+// The client waits out the gateway's deadline, so a missing answer is a
+// failure of the gateway or the Router at any stage.
+func TestProgressiveStressContractRejectsOneUnansweredRequest(t *testing.T) {
+	_, err := runProgressiveStressContract(t, 49)
+	if err == nil {
+		t.Fatal("expected one unanswered request to fail the contract")
+	}
+	if !strings.Contains(err.Error(), "49/50 qps_50 successful requests") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

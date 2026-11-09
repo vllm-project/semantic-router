@@ -58,13 +58,19 @@ def set_parameter(
     )
 
 
-def set_buffer(root: nn.Module, name: str, tensor: torch.Tensor) -> None:
-    """Replace a (possibly meta) persistent buffer with a loaded tensor, FP32 when floating (FP8 weights stay FP8)."""
+def set_buffer(
+    root: nn.Module, name: str, tensor: torch.Tensor, private: bool = True
+) -> None:
+    """Replace a (possibly meta) persistent buffer with a loaded tensor, FP32 when floating (FP8 weights stay FP8).
+
+    ``private`` is ``set_parameter``'s: a model bound for a GPU keeps a buffer
+    it does not widen (FP8 and packed int4 weights) as the mapping's view.
+    """
     owner_name, _, leaf = name.rpartition(".")
     owner = root.get_submodule(owner_name) if owner_name else root
     widen = tensor.is_floating_point() and tensor.element_size() > 1
     dtype = torch.float32 if widen else tensor.dtype
-    owner._buffers[leaf] = tensor.to(dtype, copy=True).contiguous()
+    owner._buffers[leaf] = tensor.to(dtype, copy=private).contiguous()
 
 
 def persistent_buffers(module: nn.Module) -> dict[str, torch.Tensor]:
@@ -114,7 +120,7 @@ def load_backbone(
         if name in parameters:
             set_parameter(module, name, tensor, dtype, private)
         else:
-            set_buffer(module, name, tensor)
+            set_buffer(module, name, tensor, private)
         seen.add(name)
     missing = sorted(expected - seen)
     if missing:

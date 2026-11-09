@@ -280,8 +280,7 @@ func materializedProviderProfile(
 		ExtraHeaders:       mergeProviderHeaders(provider.Definition.DefaultHeaders, provider.Instance.Headers),
 		APIVersion:         provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
 		AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,
-		ChatPath:            provider.Instance.ChatPath,
-		OpenAICompatGateway: provider.Instance.OpenAICompatGateway,
+		ChatPath: provider.Instance.ChatPath,
 	}
 }
 

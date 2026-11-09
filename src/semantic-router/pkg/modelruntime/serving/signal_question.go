@@ -146,7 +146,7 @@ func (r *Runtime) questionSequence(ctx context.Context, spec config.ResolvedMode
 		return nil, err
 	}
 	capability := binding.Capability{
-		Contract: spec.Binding.Contract, Provider: Provider, Device: card.Device, Precision: card.Dtype, Labels: question.labels(),
+		Contract: spec.Binding.Contract, Provider: providerOf(spec), Device: card.Device, Precision: card.Dtype, Labels: question.labels(),
 		Question: question.key, Deployment: spec.Binding.Deployment,
 		Limits: binding.Limits{ModelTokens: card.MaxInputTokens, Overflow: spec.Deployment.Input.Overflow},
 	}
@@ -187,7 +187,7 @@ func choiceDistribution(response modelservice.Response, question modelservice.Qu
 // rejectQuestionWindows refuses a window task on a deployment that answers
 // the consumer's question: the model reads the whole text itself.
 func (r *Runtime) rejectQuestionWindows(ctx context.Context, spec config.ResolvedModelBinding) error {
-	if !spec.Deployment.IsModelRuntime() || r.services == nil {
+	if (!spec.Deployment.IsModelRuntime() && !spec.Deployment.IsSystemOne()) || r.services == nil {
 		return nil
 	}
 	card, err := r.card(ctx, spec)

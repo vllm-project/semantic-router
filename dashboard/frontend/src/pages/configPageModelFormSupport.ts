@@ -1,7 +1,8 @@
-import { BACKEND_ENGINES } from './configPageSupport'
+import { BACKEND_ENGINES, PROVIDER_LB_POLICIES } from './configPageSupport'
 import type {
   BackendEngine,
   BackendMetrics,
+  BackendRefAuth,
   BackendRefEntry,
   ConfigData,
   LoRAAdapter,
@@ -10,6 +11,7 @@ import type {
   ModelReasoningConfig,
   NormalizedModel,
   ProviderReliability,
+  ProviderLBPolicy,
 } from './configPageSupport'
 
 export function normalizeModelLoras(value: unknown): LoRAAdapter[] {
@@ -28,6 +30,29 @@ export function normalizeModelLoras(value: unknown): LoRAAdapter[] {
           : undefined,
     }))
     .filter((entry) => entry.name)
+}
+
+function stringMap(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, nestedValue]) => typeof nestedValue === 'string')
+      .map(([key, nestedValue]) => [key, nestedValue as string]),
+  )
+}
+
+function backendRefAuth(value: unknown): BackendRefAuth | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const entry = value as Record<string, unknown>
+  const auth: BackendRefAuth = {}
+  if (typeof entry.header === 'string' && entry.header.trim()) auth.header = entry.header.trim()
+  // As with auth_prefix, an explicit empty prefix sends the bare key.
+  if (typeof entry.prefix === 'string') auth.prefix = entry.prefix.trim()
+  if (typeof entry.api_key_env === 'string' && entry.api_key_env.trim())
+    auth.api_key_env = entry.api_key_env.trim()
+  if (typeof entry.api_key_file === 'string' && entry.api_key_file.trim())
+    auth.api_key_file = entry.api_key_file.trim()
+  return auth
 }
 
 export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
@@ -56,17 +81,12 @@ export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
       // Presence is semantic: an explicit empty prefix disables a provider's
       // catalog default instead of falling back to it.
       if (typeof entry.auth_prefix === 'string') normalized.auth_prefix = entry.auth_prefix.trim()
-      if (
-        entry.extra_headers &&
-        typeof entry.extra_headers === 'object' &&
-        !Array.isArray(entry.extra_headers)
-      ) {
-        normalized.extra_headers = Object.fromEntries(
-          Object.entries(entry.extra_headers as Record<string, unknown>)
-            .filter(([, nestedValue]) => typeof nestedValue === 'string')
-            .map(([key, nestedValue]) => [key, nestedValue as string]),
-        )
-      }
+      const extraHeaders = stringMap(entry.extra_headers)
+      if (extraHeaders) normalized.extra_headers = extraHeaders
+      const headers = stringMap(entry.headers)
+      if (headers) normalized.headers = headers
+      const auth = backendRefAuth(entry.auth)
+      if (auth) normalized.auth = auth
       if (typeof entry.api_version === 'string' && entry.api_version.trim())
         normalized.api_version = entry.api_version.trim()
       if (typeof entry.chat_path === 'string' && entry.chat_path.trim())
@@ -312,7 +332,6 @@ export function normalizeModelReliability(value: unknown): ProviderReliability |
   const source = value as Record<string, unknown>
   const normalized: ProviderReliability = {}
   const stringFields = [
-    'lb_policy',
     'retry_on',
     'base_ejection_time',
     'health_check_path',
@@ -335,6 +354,10 @@ export function normalizeModelReliability(value: unknown): ProviderReliability |
     'retry_budget_min_concurrency',
   ] as const
 
+  const policy = typeof source.lb_policy === 'string' ? source.lb_policy.trim() : ''
+  if ((PROVIDER_LB_POLICIES as readonly string[]).includes(policy)) {
+    normalized.lb_policy = policy as ProviderLBPolicy
+  }
   for (const field of stringFields) {
     if (typeof source[field] === 'string' && source[field].trim()) {
       normalized[field] = source[field].trim()

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import ProductIcon from '../components/ProductIcon'
+import { PROVIDER_LB_POLICIES, PROVIDER_LB_POLICY_LABELS } from './configPageSupport'
 import type { ConnectModelAdvancedValues } from './configPageConnectModelSupport'
 import styles from './ConfigPageConnectModelsDialog.module.css'
 
@@ -171,12 +172,19 @@ export default function ConfigPageConnectModelAdvanced({
             <Field label="Load balancing" hint="Optional">
               <select
                 value={value.loadBalancing}
-                onChange={(event) => update('loadBalancing', event.target.value)}
+                onChange={(event) =>
+                  update(
+                    'loadBalancing',
+                    event.target.value as ConnectModelAdvancedValues['loadBalancing'],
+                  )
+                }
               >
                 <option value="">Platform default</option>
-                <option value="round_robin">Round robin</option>
-                <option value="least_request">Least requests</option>
-                <option value="load_aware">Least engine load</option>
+                {PROVIDER_LB_POLICIES.map((policy) => (
+                  <option key={policy} value={policy}>
+                    {PROVIDER_LB_POLICY_LABELS[policy]}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="Retry conditions" hint="Optional" fullWidth>

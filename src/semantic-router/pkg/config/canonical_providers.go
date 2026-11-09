@@ -112,11 +112,12 @@ type CanonicalBackendRef struct {
 	ChatPath     string            `yaml:"chat_path,omitempty"`
 	APIKey       string            `yaml:"api_key,omitempty"`
 	APIKeyEnv    string            `yaml:"api_key_env,omitempty"`
-	// OpenAICompatGateway opts a vLLM-type backend in to the OpenAI-compatible
-	// gateway response contract: the backend is a relay that injects its own
-	// usage metering fields, so the decoder tolerates them. A plain vLLM
-	// backend must leave it unset.
-	OpenAICompatGateway bool `yaml:"openai_compat_gateway,omitempty"`
+	// Auth is the backend's credential, as in a deployment's connection
+	// block: the header (the provider's own when unset), the prefix ("" sends
+	// the bare key) and the key's environment variable.
+	Auth *DeploymentAuth `yaml:"auth,omitempty"`
+	// Headers are non-secret headers sent with every request.
+	Headers map[string]string `yaml:"headers,omitempty"`
 	// Engine names the serving engine behind this backend (vllm, sglang,
 	// atom or tensorrt-llm) so the Router can read its load metrics. An
 	// empty engine leaves the backend without telemetry.

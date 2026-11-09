@@ -12,12 +12,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-// backendTelemetryStore holds the latest load observation of every backend
-// for the life of the process; collectors of successive snapshots write to it.
-var backendTelemetryStore = backendtelemetry.NewStore(0)
-
-// backendTelemetryRegistry lists the engines the Router can read load
-// metrics from.
 func backendTelemetryRegistry() *backendtelemetry.Registry {
 	registry := backendtelemetry.NewRegistry()
 	for _, register := range []func(*backendtelemetry.Registry) error{vllm.Register, sglang.Register} {
@@ -28,30 +22,55 @@ func backendTelemetryRegistry() *backendtelemetry.Registry {
 	return registry
 }
 
-// backendTelemetryPart makes each snapshot own a collector that reads the
-// load metrics of its backends into store, the one store the process keeps
-// across snapshots. A snapshot that leaves the backends and settings unchanged
-// keeps the running collector.
-func backendTelemetryPart(store *backendtelemetry.Store) configsnapshot.PartBuilder {
+// backendTelemetryRuntime owns a generation's collector, samples and exported
+// metrics. Snapshots with unchanged telemetry inputs share the whole part.
+type backendTelemetryRuntime struct {
+	store     *backendtelemetry.Store
+	collector *backendtelemetry.Collector
+	metrics   *metrics.BackendTelemetry
+}
+
+func (p *backendTelemetryRuntime) Activate() { p.metrics.Activate() }
+
+func (p *backendTelemetryRuntime) Close(ctx context.Context) error {
+	p.metrics.Close()
+	err := p.collector.Close(ctx)
+	clearSamples := func() {
+		if p.store != nil {
+			p.store.Clear()
+		}
+	}
+	if err != nil {
+		// A bounded drain may end before an adapter returns. Clear only after
+		// the writer has stopped, so a late result cannot repopulate the store.
+		cleanupContext := context.WithoutCancel(ctx)
+		go func() {
+			_ = p.collector.Close(cleanupContext)
+			clearSamples()
+		}()
+	} else {
+		clearSamples()
+	}
+	return err
+}
+
+func backendTelemetryPart() configsnapshot.PartBuilder {
 	registry := backendTelemetryRegistry()
 	return configsnapshot.PartBuilder{
 		Component: configsnapshot.ComponentBackendTelemetry,
 		Build: func(_ context.Context, candidate *configsnapshot.Snapshot, _ configsnapshot.Part) (configsnapshot.Part, error) {
-			return startBackendTelemetry(candidate.Config(), registry, store)
+			return startBackendTelemetry(candidate.Config(), registry)
 		},
 	}
 }
 
-// startBackendTelemetry starts a collector for the backends of cfg that name
-// an engine. Disabled collection, or no such backend, starts an idle one.
-func startBackendTelemetry(
-	cfg *config.RouterConfig,
-	registry *backendtelemetry.Registry,
-	store *backendtelemetry.Store,
-) (*backendtelemetry.Collector, error) {
+func startBackendTelemetry(cfg *config.RouterConfig, registry *backendtelemetry.Registry) (*backendTelemetryRuntime, error) {
 	telemetry := cfg.Observability.BackendTelemetry
 	if !telemetry.Enabled {
-		return backendtelemetry.StartCollector(backendtelemetry.CollectorOptions{}), nil
+		return &backendTelemetryRuntime{
+			collector: backendtelemetry.StartCollector(backendtelemetry.CollectorOptions{}),
+			metrics:   metrics.NewBackendTelemetry(nil, nil),
+		}, nil
 	}
 	settings, err := telemetry.Settings()
 	if err != nil {
@@ -59,43 +78,41 @@ func startBackendTelemetry(
 	}
 	byEngine := backendTelemetryTargets(cfg.VLLMEndpoints)
 	var adapters []backendtelemetry.Adapter
-	targetCount := 0
+	var targets []backendtelemetry.Target
 	for _, engine := range backendtelemetry.Engines() {
-		targets := byEngine[engine]
-		if len(targets) == 0 {
+		engineTargets := byEngine[engine]
+		if len(engineTargets) == 0 {
 			continue
 		}
 		if !registry.Has(engine) {
 			logging.ComponentWarnEvent("router", "backend_telemetry_engine_unsupported", map[string]interface{}{
 				"engine":   string(engine),
-				"backends": len(targets),
+				"backends": len(engineTargets),
 				"effect":   "these backends report no load metrics; load-aware balancing falls back for their models",
 			})
 			continue
 		}
 		adapter, err := registry.New(engine, backendtelemetry.AdapterConfig{
-			Targets: targets, RequestTimeout: settings.RequestTimeout, TTL: settings.TTL,
+			Targets: engineTargets, RequestTimeout: settings.RequestTimeout, TTL: settings.TTL,
 		})
 		if err != nil {
 			return nil, err
 		}
 		adapters = append(adapters, adapter)
-		targetCount += len(targets)
+		targets = append(targets, engineTargets...)
 	}
-	logging.ComponentEvent("router", "backend_telemetry_started", map[string]interface{}{
-		"backends":      targetCount,
-		"poll_interval": settings.PollInterval.String(),
-		"ttl":           settings.TTL.String(),
+	part := &backendTelemetryRuntime{store: backendtelemetry.NewStore(settings.TTL)}
+	part.metrics = metrics.NewBackendTelemetry(part.store, targets)
+	part.collector = backendtelemetry.StartCollector(backendtelemetry.CollectorOptions{
+		Adapters: adapters, Store: part.store, Interval: settings.PollInterval,
+		Report: reportBackendTelemetry(byEngine, part.metrics),
 	})
-	return backendtelemetry.StartCollector(backendtelemetry.CollectorOptions{
-		Adapters: adapters,
-		Store:    store,
-		Interval: settings.PollInterval,
-		Report:   reportBackendTelemetry(byEngine),
-	}), nil
+	logging.ComponentEvent("router", "backend_telemetry_started", map[string]interface{}{
+		"backends": len(targets), "poll_interval": settings.PollInterval.String(), "ttl": settings.TTL.String(),
+	})
+	return part, nil
 }
 
-// backendTelemetryTargets groups the endpoints that name an engine by it.
 func backendTelemetryTargets(endpoints []config.VLLMEndpoint) map[backendtelemetry.Engine][]backendtelemetry.Target {
 	byEngine := make(map[backendtelemetry.Engine][]backendtelemetry.Target)
 	for _, endpoint := range endpoints {
@@ -104,31 +121,23 @@ func backendTelemetryTargets(endpoints []config.VLLMEndpoint) map[backendtelemet
 		}
 		identity := endpoint.TelemetryIdentity()
 		byEngine[identity.Engine] = append(byEngine[identity.Engine], backendtelemetry.Target{
-			Identity: identity, MetricsURL: endpoint.MetricsURL(),
+			Identity: identity, EndpointName: endpoint.Name, MetricsURL: endpoint.MetricsURL(),
 		})
 	}
 	return byEngine
 }
 
-// reportBackendTelemetry records each round: a target with an observation
-// succeeded, every other target failed.
 func reportBackendTelemetry(
 	byEngine map[backendtelemetry.Engine][]backendtelemetry.Target,
+	scope *metrics.BackendTelemetry,
 ) func(backendtelemetry.Engine, []backendtelemetry.Observation, error) {
 	return func(engine backendtelemetry.Engine, observations []backendtelemetry.Observation, err error) {
 		observed := make(map[backendtelemetry.Identity]bool, len(observations))
 		for _, o := range observations {
-			observed[o.Identity] = true
-			if depth, ok := o.QueueDepth.Get(); ok {
-				metrics.SetBackendTelemetryQueueDepth(o.Identity.Model, o.Identity.BackendRef, float64(depth))
-			}
+			observed[o.Identity] = o.Validate() == nil
 		}
 		for _, target := range byEngine[engine] {
-			outcome := "success"
-			if !observed[target.Identity] {
-				outcome = "error"
-			}
-			metrics.RecordBackendTelemetryScrape(target.Identity.Model, target.Identity.BackendRef, string(engine), outcome)
+			scope.RecordScrape(target.Identity, observed[target.Identity])
 		}
 		if err != nil {
 			logging.ComponentDebugEvent("router", "backend_telemetry_scrape_failed", map[string]interface{}{

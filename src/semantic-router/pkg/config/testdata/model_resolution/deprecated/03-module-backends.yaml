@@ -1,0 +1,63 @@
+# Deprecated: modules.*.backend with external[] models (llm_endpoint, access_key, model_role).
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+routing:
+  signals:
+    domains: [{name: math, description: Mathematics}]
+    jailbreak: [{name: injection, threshold: 0.6}]
+    pii: [{name: personal, threshold: 0.5}]
+    complexity:
+      - name: hard
+        hard_above: 0.6
+        easy_below: 0.4
+        hard: {candidates: [prove this theorem]}
+        easy: {candidates: [say hello]}
+  decisions:
+    - name: route
+      priority: 100
+      rules:
+        operator: OR
+        conditions:
+          - {type: domain, name: math}
+          - {type: jailbreak, name: injection}
+          - {type: pii, name: personal}
+          - {type: complexity, name: hard:hard}
+      modelRefs: [{model: general}]
+global:
+  model_catalog:
+    external:
+      - name: domain-service
+        model_role: classification
+        llm_endpoint: {address: domain.example.com, port: 8080, protocol: http}
+        llm_timeout_seconds: 5
+      - name: pii-service
+        model_role: classification
+        llm_endpoint: {address: pii.example.com, port: 8443, protocol: https}
+      - name: guard-chat
+        model_role: guardrail
+        llm_provider: openai
+        llm_endpoint: {address: guard.example.com, port: 443, protocol: https}
+        llm_model_name: gpt-4.1-mini
+        llm_timeout_seconds: 10
+      - name: difficulty-service
+        model_role: classification
+        llm_model_name: difficulty
+        llm_endpoint: {address: difficulty.example.com, port: 8000, protocol: http}
+    modules:
+      prompt_guard:
+        enabled: true
+        jailbreak_mapping_path: models/guard/jailbreak_type_mapping.json
+        backend: {protocol: http_chat, model: guard-chat, contract: label_decision.v1}
+      classifier:
+        domain:
+          category_mapping_path: models/domain/category_mapping.json
+          backend: {protocol: http_classify, model: domain-service, contract: label_distribution.v1}
+        pii:
+          pii_mapping_path: models/pii/pii_type_mapping.json
+          backend: {protocol: http_classify, model: pii-service, contract: token_spans.v1}
+      complexity:
+        backend: {protocol: http_classify, model: difficulty-service, contract: score.v1}

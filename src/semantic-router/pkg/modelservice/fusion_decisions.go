@@ -111,10 +111,11 @@ func disjointAnswers(ids []string, taken map[string]struct{}) bool {
 	return true
 }
 
-// fuseDecisions turns one client's parked decisions calls into tasks. The
-// calls are placed in a fixed order, so the same calls make the same tasks
-// whatever order they parked in.
-func fuseDecisions(client *Client, calls []*bundleCall) []*bundleTask {
+// fuseDecisions turns the decisions calls parked for one process or remote
+// deployment into tasks of at most limit states each. The calls are placed in
+// a fixed order, so the same calls make the same tasks whatever order they
+// parked in.
+func fuseDecisions(limit int, calls []*bundleCall) []*bundleTask {
 	type placed struct {
 		call  *bundleCall
 		group string
@@ -141,7 +142,7 @@ func fuseDecisions(client *Client, calls []*bundleCall) []*bundleTask {
 		}
 		return a.first < b.first
 	})
-	limit := max(1, int(client.bundleTasks.Load()))
+	limit = max(1, limit)
 	open := make(map[string][]*bundleTask)
 	var tasks []*bundleTask
 	for _, entry := range ordered {

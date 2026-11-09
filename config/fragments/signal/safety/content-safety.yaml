@@ -1,34 +1,28 @@
-# Merge into a canonical config with a safety-capable default-model and two complete-label HTTP classifier endpoints.
+# Merge into a canonical config with a safety-capable default-model and two classify deployments that return every label.
 # Hazard is the independent sigmoid head; more than one risk can be present.
 version: v0.3
 global:
   model_catalog:
-    external:
-    - name: content-safety-binary
-      model_role: classification
-      llm_endpoint:
-        address: safety-binary
-        port: 8080
-        protocol: http
-      llm_timeout_seconds: 10
-    - name: content-safety-hazard
-      model_role: classification
-      llm_endpoint:
-        address: safety-hazard
-        port: 8080
-        protocol: http
-      llm_timeout_seconds: 10
+    deployments:
+      content-safety-binary:
+        provider: classify
+        endpoint: http://safety-binary:8080
+        timeout_ms: 10000
+      content-safety-hazard:
+        provider: classify
+        endpoint: http://safety-hazard:8080
+        timeout_ms: 10000
 routing:
   signals:
     safety:
     - name: unsafe-content
-      model: content-safety-binary
+      deployment: content-safety-binary
       threshold: 0.5
     - name: unsafe-privacy
-      model: content-safety-binary
+      deployment: content-safety-binary
       threshold: 0.5
       hazard:
-        model: content-safety-hazard
+        deployment: content-safety-hazard
         labels:
         - violence
         - criminal_activity

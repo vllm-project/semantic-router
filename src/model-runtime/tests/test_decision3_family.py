@@ -14,8 +14,15 @@ from vllm_srun.families.decision3 import images as img
 from vllm_srun.families.decision3 import package as pkg
 from vllm_srun.families.decision3 import prompt
 from vllm_srun.families.decision3 import videos as vid
-from vllm_srun.families.decision3.family import BATCH_SIZE, Decision3Family
+from vllm_srun.families.decision3.family import (
+    BATCH_SIZE,
+    Decision3Family,
+    Decision3Model,
+)
+from vllm_srun.families.decision3.state_once import StateOnceModel
+from vllm_srun.plugins.base import PackageRef
 from vllm_srun.registry.tables.decision3 import DECISION3_MODELS
+from vllm_srun.testing.decision3 import write_fixture
 
 QUESTIONS = {
     "domain": {
@@ -522,9 +529,16 @@ def test_identity_covers_the_inference_fields(tmp_path, d3_package):
         pkg.verify(copy)
 
 
-def test_the_family_detects_only_d3_exports(d3_package, qwen3_package):
-    from vllm_srun.plugins.base import PackageRef
+def test_load_as_refuses_a_misfit_model_class_before_loading(d3_package, tmp_path):
+    state_once = write_fixture(tmp_path / "causal", "causal", 3)
+    family = Decision3Family()
+    for root, wrong in ((d3_package, StateOnceModel), (state_once, Decision3Model)):
+        package = family.verify(PackageRef(root=root))
+        with pytest.raises(TypeError, match="does not fit the package's layout"):
+            family.load_as(package, None, None, wrong)
 
+
+def test_the_family_detects_only_d3_exports(d3_package, qwen3_package):
     family = Decision3Family()
     assert family.detect(PackageRef(root=d3_package))
     assert not family.detect(PackageRef(root=qwen3_package))
@@ -619,6 +633,10 @@ def test_every_model_records_goldens_and_kernel_choices(model):
         devices.add("cuda:sm_89")
     elif model.repo_id in ("vllm-sr/d3", "vllm-sr/d3-turbo"):
         expected.add("cpu:x86_64:avx512:bf16_native")
+    elif model.repo_id == "vllm-sr/d3-ultra":
+        expected.update({"cpu:x86_64:avx512:bf16_native", "rocm:gfx942"})
+    elif model.repo_id == "vllm-sr/d3-mini":
+        expected.update({"npu", "npu:Ascend950DT"})
     assert set(model.golden_answers) == expected
     for answers in model.golden_answers.values():
         assert set(answers) == {

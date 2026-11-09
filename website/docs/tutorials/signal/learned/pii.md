@@ -5,8 +5,9 @@
 `pii` detects sensitive personal data in requests. Define PII rules under
 `routing.signals.pii`.
 
-It uses the PII detector configured through
-`global.model_catalog.system.pii_classifier`.
+The decision model answers it unless a `pii` binding names another deployment;
+see [Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md).
+`global.model_catalog.modules.classifier.pii` holds its scan settings.
 
 ## Key Advantages
 
@@ -71,10 +72,10 @@ leaving it empty) preserves the legacy prompt and optional history behavior.
 
 ## Complete local scans
 
-The default PII model, Vela 2.0 0.3B, reads each text item whole, up to its
-8,192-token input, and finds spans with its router span head. When the module
-runs Vela 1.0 PII, it scans each text item up to 32,768 tokens, including
-special tokens. Each forward uses at most 512 tokens, with 255 content tokens
+The default decision model finds spans with its router span head, within its
+own input limit; [Choose a model](../../../model-runtime/choose-a-model.md#built-in-signals)
+lists each model's limits. Bound to Vela 1.0 PII, the signal scans each text
+item up to 32,768 tokens, including special tokens. Each forward uses at most 512 tokens, with 255 content tokens
 of overlap. The model tokenizer defines the windows; character estimates
 and text re-tokenization at window boundaries do not determine coverage.
 
@@ -84,9 +85,9 @@ its surrounding context, then decodes BIO entities once. Overlap does not
 double-count input usage or entity confidence. This guarantees coverage of
 admitted tokens, not detection accuracy or the quality of a single 32K forward.
 
-An explicit module budget, backend, window, or recipe binding keeps its own
-policy. For example, a deployment with `input: {max_tokens: 8192, overflow: reject}`
-still rejects an oversized input. For a checkpoint and graph qualified for 32K
+An explicit module budget, window, or `pii` binding keeps its own policy. For
+example, a deployment with `input: {max_tokens: 8192, overflow: reject}` still
+rejects an oversized input. For a checkpoint and graph qualified for 32K
 forwards, a 64K document budget can use:
 
 ```yaml
@@ -99,7 +100,7 @@ global:
           window: {size: 32768, overlap: 256}
 ```
 
-With a named binding, declare `input.overflow: window` and a positive
+With a `pii` binding, declare `input.overflow: window` and a positive
 `input.max_tokens` on its deployment; that limit replaces the module budget.
 The same `window` block supplies the geometry. The document budget can exceed
 the loaded model's single-forward capacity; each window must fit that capacity
@@ -110,15 +111,15 @@ the downstream generative model's tokenizer.
 
 A text beyond the document limit or a failed window produces a classifier error,
 not a successful partial scan. Existing `on_error` and decision `rules.on_unknown`
-policies determine its routing effect. Remote backends and explicitly selected
-truncation retain the partial-result behavior described below.
+policies determine its routing effect. Remote deployments and explicitly
+selected truncation retain the partial-result behavior described below.
 
 ## Vela 2.0
 
-Bind `pii_classifier` to a Vela 2.0 deployment and the signal asks the model's
-ready-made PII question, answered by its router span head, instead of a
-separate PII model. The PII question then travels in the same call as the
-deployment's [`decision`](decision.md) questions about the same text:
+Bind `pii` to a Vela 2.0 deployment and the signal asks the model's ready-made
+PII question, answered by its router span head, instead of a separate PII
+model. The PII question then travels in the same call as the deployment's
+[`decision`](decision.md) questions about the same text:
 
 ```yaml
 global:
@@ -129,13 +130,11 @@ global:
         artifact: vllm-sr/Vela-2.0-0.3B
         device: cpu
     bindings:
-      pii_classifier:
-        deployment: vela2
-        contract: token_spans.v1
+      pii: vela2
 ```
 
 - The model finds the same 17 entity types as Vela 1.0 PII and names them in
-  its spans, so the binding takes no `mapping_path`.
+  its spans.
 - The Router sends each text as one state. The runtime must cover the admitted
   text within its model and scan budgets. Inputs outside that policy are
   unscanned, not clean; one state does not promise one forward or unlimited
@@ -143,45 +142,34 @@ global:
 - The model's calibrated threshold decides which spans it reports. A rule's
   `threshold` and `pii_types_allowed` then apply to those spans as they do for
   Vela 1.0; the model's span probability is the mean over the span's words.
-- `head` may only be `router`, the span head that answers the PII question.
+- To select the span head that answers the PII question, write the binding as
+  an object: `pii: {deployment: vela2, head: router}`. `router` is the only
+  head it accepts.
 
-Explicit Vela 1.0 PII bindings keep that specialist. An unbound task follows
-the configured default decision deployment.
+A `pii` binding to a Vela 1.0 PII deployment keeps that specialist. Without a
+binding, PII follows the decision model.
 
-## Presence and categories with a decision model
+## PII without positions
 
-A decision model can answer whether PII is present and which categories occur
-without locating characters. Select this task contract explicitly:
+A `systemone` deployment whose capabilities list neither the `pii` preset nor
+`span` questions answers PII yes/no: the signal learns whether the text holds
+personal data, but not where. The load reports a `span_fallback` warning, the
+Router counts each such answer in `vsr_signal_span_verdict_fallbacks_total`,
+and a configuration that masks PII on that deployment is refused. Bind `pii`
+to a deployment that returns spans when exact locations are required.
 
-```yaml
-routing:
-  model_bindings:
-    pii_classifier:
-      deployment: primary
-      contract: decision.v1
-```
+## Remote PII service
 
-This uses `pii_presence` (`noul`) and `pii_categories` (`set`). When the model
-has no native `set` head, the task compiler can ask one `noul` question per
-category. The complete input must still be covered. These answers provide no
-entity offsets and must not be used as fabricated redaction spans. Use a
-native `span` model with `token_spans.v1` when exact locations are required.
-Task availability establishes an executable contract, not detection accuracy.
-
-## Remote backend (token_spans.v1)
-
-With no `backend`, PII detection keeps its local model. A remote PII classifier
-uses the shared backend block: `model` names an entry in
-`global.model_catalog.external[]` with `model_role: classification`, the
-protocol is `http_classify`, and the contract is `token_spans.v1`. The service
-receives `{"inputs": "<request text>"}` and answers with entity spans whose
+A remote PII classifier is a `classify` deployment that `pii` is bound to. The
+Router posts to `<endpoint>/classify`; the service receives
+`{"inputs": "<request text>"}` and answers with entity spans whose
 `start`/`end` are Unicode code-point offsets into that exact string, a `label`
 from the configured PII mapping, a `score` in `[0, 1]`, and the span `text`,
 which must equal the slice it points at. The HuggingFace token-classification
 spellings `entity_group` and `word` are accepted as aliases. A bare JSON list of
 spans or an envelope `{"spans": [...], "truncated_at": n, "model": "..."}` are
-both valid; the envelope's `model`, when present, must equal the catalog
-entry's `llm_model_name`.
+both valid; the envelope's `model`, when present, must equal the deployment's
+`model`.
 
 The router rejects the whole response, rather than part of it, when a span is
 outside the text, overlaps itself, carries an unknown or outside label, has a
@@ -212,26 +200,23 @@ scan.
 ```yaml
 global:
   model_catalog:
-    external:
-      - name: pii-service
-        model_role: classification
-        llm_endpoint:
-          address: pii-spans.default.svc
-          port: 8080
-        llm_model_name: pii-spans-v1
+    deployments:
+      pii-service:
+        provider: classify
+        endpoint: https://pii-spans.example.com
+        model: pii-spans-v1
+        auth: {api_key_env: PII_SERVICE_KEY}
+        timeout_ms: 5000
+    bindings:
+      pii: pii-service
     modules:
       classifier:
         pii:
-          backend:
-            protocol: http_classify
-            contract: token_spans.v1
-            model: pii-service
-            deadline_ms: 5000
           on_error: block
 ```
 
 `PIIDetected`, `PIIEntities`, `MatchedPIIRules` and the masked text are the
-same whether the spans came from the local model or from a remote backend;
+same whether the spans came from a local model or from a remote deployment;
 overlapping and nested spans are merged before masking. A model may label a
 value once and miss its later copies, so every other exact, whole-word copy of
 a detected value of two or more characters is also reported by the PII API and

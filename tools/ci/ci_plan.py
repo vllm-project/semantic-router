@@ -87,7 +87,7 @@ def resolve_image_sources(plan: dict) -> None:
         if plan["profile"] not in {"pr", "main", "nightly"}:
             # Explicit release qualification requires a published fixture.
             raise
-        # Main publication is explicit. PRs and weekly qualification can test
+        # Main publication is explicit. PRs and nightly qualification can test
         # exact fixture inputs before that publication, without promoting them.
         published["source"] = "candidate"
         plan["build_images"] = sorted({*plan["build_images"], MOCKER_IMAGE})
@@ -148,7 +148,7 @@ def make_plan(
     deferred = []
     if profile == "main" and not publish:
         # Main continuously checks source. Reviewed PRs own affected product
-        # qualification; explicit publication and weekly/release own full runs.
+        # qualification; explicit publication and nightly/release own full runs.
         ids = [name for name in ids if records[name]["execution"] == "automatic"]
         required_ids = list(ids)
     elif require_approval and profile == "pr" and not requested:

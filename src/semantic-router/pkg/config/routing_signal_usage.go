@@ -108,8 +108,14 @@ func (c *RouterConfig) UsesPIIClassifierInReachableRouting() bool {
 	if c == nil {
 		return false
 	}
-	if c.UsesSignalTypeInReachableRouting(SignalTypePII) {
-		return true
+	return c.UsesSignalTypeInReachableRouting(SignalTypePII) || c.UsesMaskingInReachableRouting()
+}
+
+// UsesMaskingInReachableRouting reports whether a request-reachable decision
+// masks PII, which replaces each detection by its position.
+func (c *RouterConfig) UsesMaskingInReachableRouting() bool {
+	if c == nil {
+		return false
 	}
 	decisions := c.routingConsumerDecisions()
 	for i := range decisions {
@@ -192,7 +198,8 @@ func (c *RouterConfig) reachableRoutingSignals() []Signals {
 // those rules.
 func (c *RouterConfig) NeedsFactCheckModelForAPI() bool {
 	if !c.ownsDefaultAPIConsumer() ||
-		c.HallucinationMitigation.FactCheckModel.ModelID == "" {
+		!c.HallucinationMitigation.FactCheckModel.Active() ||
+		!c.ModuleModelConfigured("fact_check_classifier") {
 		return false
 	}
 	return c.HallucinationMitigation.Enabled ||
@@ -204,7 +211,7 @@ func (c *RouterConfig) NeedsFactCheckModelForAPI() bool {
 func (c *RouterConfig) NeedsFeedbackModelForAPI() bool {
 	return c.ownsDefaultAPIConsumer() &&
 		c.FeedbackDetector.Enabled &&
-		c.FeedbackDetector.ModelID != "" &&
+		c.ModuleModelConfigured("feedback_detector") &&
 		len(c.RoutingProfileSignals().UserFeedbackRules) > 0
 }
 
@@ -214,7 +221,7 @@ func (c *RouterConfig) NeedsFeedbackModelForAPI() bool {
 func (c *RouterConfig) NeedsHallucinationDetectorForDefaultRuntime() bool {
 	return c.ownsDefaultAPIConsumer() &&
 		c.HallucinationMitigation.Enabled &&
-		c.HallucinationMitigation.HallucinationModel.ModelID != ""
+		c.ModuleModelConfigured("hallucination_detector")
 }
 
 func (c *RouterConfig) ownsDefaultAPIConsumer() bool {
@@ -228,7 +235,8 @@ func (c *RouterConfig) ownsDefaultAPIConsumer() bool {
 // through a projection.
 func (c *RouterConfig) NeedsFactCheckModelForRouting() bool {
 	return c != nil &&
-		c.HallucinationMitigation.FactCheckModel.ModelID != "" &&
+		c.HallucinationMitigation.FactCheckModel.Active() &&
+		c.ModuleModelConfigured("fact_check_classifier") &&
 		c.UsesSignalTypeInReachableRouting(SignalTypeFactCheck)
 }
 
@@ -237,7 +245,7 @@ func (c *RouterConfig) NeedsFactCheckModelForRouting() bool {
 func (c *RouterConfig) NeedsFeedbackModelForRouting() bool {
 	return c != nil &&
 		c.FeedbackDetector.Enabled &&
-		c.FeedbackDetector.ModelID != "" &&
+		c.ModuleModelConfigured("feedback_detector") &&
 		c.UsesSignalTypeInReachableRouting(SignalTypeUserFeedback)
 }
 
@@ -247,7 +255,7 @@ func (c *RouterConfig) NeedsFeedbackModelForRouting() bool {
 // selected decision's plugin to consume, or a decision's hallucination plugin
 // still classifies the answer itself because no rule is declared.
 func (c *RouterConfig) NeedsHallucinationDetectorForRouting() bool {
-	if c == nil || c.HallucinationMitigation.HallucinationModel.ModelID == "" {
+	if c == nil || !c.ModuleModelConfigured("hallucination_detector") {
 		return false
 	}
 	for _, signals := range c.reachableRoutingSignals() {

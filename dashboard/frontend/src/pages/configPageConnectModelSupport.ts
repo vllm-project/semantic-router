@@ -1,3 +1,4 @@
+import type { ProviderLBPolicy } from '../generated/routerConfigContract'
 import type { ModelPricing, ProviderModelConfig, ProviderReliability } from './configPageSupport'
 
 export interface ConnectModelAdvancedValues {
@@ -15,7 +16,7 @@ export interface ConnectModelAdvancedValues {
   cacheWriteCost: string
   maxRetries: string
   retryOn: string
-  loadBalancing: string
+  loadBalancing: '' | ProviderLBPolicy
   healthCheckPath: string
   healthCheckInterval: string
   healthCheckTimeout: string

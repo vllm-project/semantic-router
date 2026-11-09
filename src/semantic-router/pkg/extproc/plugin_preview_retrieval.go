@@ -31,7 +31,8 @@ func (r *OpenAIRouter) PreviewRAG(ctx context.Context, input pluginruntime.RAGPr
 	}
 	requestContext.SemanticRequest = &request
 	requestContext.RequestID = "plugin-preview"
-	requestContext.UserContent = extractSemanticRequestSignals(&request).UserContent
+	snapshot := extractSemanticRequestSignalsWith(&request, r.routingInputSelector())
+	requestContext.UserContent, requestContext.RoutingInput = snapshot.UserContent, snapshot.RoutingInput
 	policy := requestContext.VSRSelectedDecision.GetRAGConfig()
 	if policy == nil {
 		return pluginruntime.RAGPreviewResponse{}, pluginruntime.ErrInvalidBinding
@@ -115,7 +116,7 @@ func (r *OpenAIRouter) PreviewTools(ctx context.Context, input pluginruntime.Too
 		if policyErr != nil {
 			return result, policyErr
 		}
-		signals := extractSemanticRequestSignals(&request)
+		signals := extractSemanticRequestSignalsWith(&request, r.routingInputSelector())
 		query, _, hasQuery := buildToolClassificationText(signals.UserContent, signals.NonUserMessages)
 		selectionEnabled := (selectionPolicy != nil && selectionPolicy.Enabled) || (toolsPolicy != nil && toolsPolicy.SelectionEnabled())
 		if selectionPolicy != nil && selectionPolicy.Enabled && selectionPolicy.Mode == config.ToolSelectionModeFilter && len(request.Tools) == 0 {

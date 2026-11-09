@@ -211,7 +211,7 @@ func DeleteUpstreamCluster(cluster string) {
 		UpstreamRequestsTotal, UpstreamRetriesTotal, UpstreamAttemptsTotal, UpstreamAttemptDuration,
 		UpstreamActiveRequests, UpstreamStreamsTotal,
 		UpstreamEndpointHealthy, UpstreamClusterPanic, UpstreamEjectionsTotal, UpstreamHealthChecksTotal,
-		UpstreamOverflowTotal,
+		UpstreamOverflowTotal, UpstreamLoadAwarePicksTotal,
 	} {
 		vec.DeletePartialMatch(labels)
 	}

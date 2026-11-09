@@ -29,8 +29,10 @@ export interface ToolTraceStep {
   arguments?: string
   raw_arguments?: string
   raw_output?: string
+  output?: string
   status?: string
   content_redacted?: boolean
+  truncated?: boolean
 }
 
 export interface ToolTrace {
@@ -100,6 +102,7 @@ export interface ProjectionTrace {
 }
 
 export interface InsightsRecord {
+  provider_cache?: ProviderCacheAccounting
   conversation_id?: string
   id: string
   timestamp: string
@@ -188,6 +191,24 @@ export interface InsightsRecord {
   baseline_model?: string
 }
 
+export interface TokenCostComponent {
+  tokens?: number
+  provenance: 'unknown' | 'estimated' | 'derived' | 'authoritative'
+  cost?: number
+}
+
+export interface ProviderCacheAccounting {
+  state: 'complete' | 'partial' | 'unavailable' | 'invalid'
+  uncached_input: TokenCostComponent
+  cache_read: TokenCostComponent
+  cache_write: TokenCostComponent
+  output: TokenCostComponent
+  cache_write_5m: TokenCostComponent
+  cache_write_1h: TokenCostComponent
+  no_cache_cost?: number
+  cache_savings?: number
+}
+
 export interface InsightsTrajectoryToolCall {
   id: string
   type: string
@@ -206,6 +227,7 @@ export interface InsightsTrajectoryMessage {
   tool_name?: string
   status?: 'succeeded' | 'failed'
   content_redacted?: boolean
+  content_truncated?: boolean
   turn_index: number
 }
 
@@ -273,6 +295,30 @@ export interface InsightsAggregateSummary {
   by_currency?: InsightsAggregateCurrencySummary[]
 }
 
+export interface InsightsProviderCacheCurrencyTotal {
+  currency: string
+  no_cache_spend: number
+  actual_spend: number
+  net_savings: number
+  priced_records: number
+}
+
+export interface InsightsProviderCacheSpendEntry extends InsightsProviderCacheCurrencyTotal {
+  name: string
+}
+
+export interface InsightsAggregateProviderCache {
+  no_cache_spend: number
+  actual_spend: number
+  net_savings: number
+  currency?: string
+  priced_records: number
+  excluded_records: number
+  by_currency?: InsightsProviderCacheCurrencyTotal[]
+  by_decision: InsightsProviderCacheSpendEntry[]
+  by_selected_model: InsightsProviderCacheSpendEntry[]
+}
+
 export interface InsightsAggregateTokenVolume {
   input_tokens: number
   output_tokens: number
@@ -303,6 +349,7 @@ export interface InsightsAggregateResponse {
     unknown: number
   }
   summary: InsightsAggregateSummary
+  provider_cache?: InsightsAggregateProviderCache
   model_selection: InsightsAggregateValue[]
   decision_distribution: InsightsAggregateValue[]
   signal_distribution: InsightsAggregateValue[]

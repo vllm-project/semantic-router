@@ -212,9 +212,6 @@ type ProviderInstance struct {
 	// ProviderInstance an internal materialization contract.
 	AuthPrefixSet bool   `json:"-" yaml:"-"`
 	ChatPath      string `json:"chat_path,omitempty" yaml:"chat_path,omitempty"`
-	// OpenAICompatGateway marks a vLLM-typed instance that is actually an
-	// OpenAI-compatible relay, carried through to the provider profile.
-	OpenAICompatGateway bool `json:"openai_compat_gateway,omitempty" yaml:"openai_compat_gateway,omitempty"`
 	// Telemetry carries where the instance's serving engine exposes load
 	// metrics from the Router config to its runtime endpoints. Like
 	// AuthPrefixSet it is internal: catalogs never declare it.

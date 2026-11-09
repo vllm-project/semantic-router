@@ -1,5 +1,13 @@
 # Release note: the built-in signals default to Vela 2.0 0.3B
 
+:::note
+This note records an earlier release and keeps its original examples. Their
+system lines and `modality_detector.classifier.model_path` are deprecated: they
+still load, with a `deprecated_model_field` warning.
+[Migrate model resources](../installation/model-resource-migration) shows the
+current form of each.
+:::
+
 Vela 2.0 is public on Hugging Face:
 [`vllm-sr/Vela-2.0-0.3B`, `-0.8B`, `-4B` and `-9B`](https://huggingface.co/collections/vllm-sr/vela-20),
 Apache-2.0, with no token needed. The model runtime keeps the revisions it

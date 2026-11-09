@@ -126,11 +126,23 @@ returned score; thresholds and explicit difficulty boundaries are unchanged.
 
 ### Decision-model scoring
 
-Authored `hard`/`easy` prototype banks keep embedding comparison by default.
-To use a judgment task instead, set
-`routing.model_bindings.complexity: {deployment: primary, contract: decision.v1}`.
-Rules without prototype banks can also use the default decision deployment.
-The deployment must support `score` questions.
+Each complexity rule asks its own question, so it names its model with
+`deployment` on the rule. A rule with `hard`/`easy` candidate banks and no
+`deployment` keeps embedding comparison. Name a `model_runtime` or `systemone`
+deployment on the rule to ask it a scoring question instead; the candidates
+then serve as examples of each level. A rule without candidate banks and
+without `deployment` asks the decision model. The deployment must support
+`score` questions.
+
+```yaml
+routing:
+  signals:
+    complexity:
+      - name: needs_reasoning
+        deployment: primary
+        threshold: 0.10
+        description: Estimate the work needed to produce a supported answer.
+```
 
 The task asks for easy, medium and hard levels, then normalizes the native
 level score to `[0, 1]` for explicit `easy_below`/`hard_above` boundaries (or
@@ -141,26 +153,22 @@ when changing the task or model.
 
 ### Local and remote scoring
 
-With no `backend`, complexity keeps its existing local behaviour: the `hard`
-and `easy` candidate lists are embedded once at startup, and each request is
-scored by how much more it resembles the hard examples than the easy ones. That
-difference is a signed margin centred on zero, which is why `threshold` is
-symmetric - above `+threshold` is hard, below `-threshold` is easy, and the band
-between them is medium.
+Without a remote deployment, complexity scores locally: the `hard` and `easy`
+candidate lists are embedded once at startup, and each request is scored by how
+much more it resembles the hard examples than the easy ones. That difference is
+a signed margin centred on zero, which is why `threshold` is symmetric - above
+`+threshold` is hard, below `-threshold` is easy, and the band between them is
+medium.
 
-A remote scorer uses the shared backend block, declared beside
-`prototype_scoring` rather than on a rule. `routing.signals` is replaced
-wholesale by each routing recipe, so a backend declared on a rule would
-disappear under any recipe that did not repeat it, leaving a signal that still
-ran but had quietly reverted to local. Its `model` is an explicit name from
-`global.model_catalog.external[]`, and that entry needs
-`model_role: classification`.
+A remote scorer is a `classify` deployment named on the complexity rules. The
+Router posts the request text to `<endpoint>/classify`, and the service returns
+one difficulty score (`score.v1`). One score drives every complexity rule, so
+every rule of a routing profile names the same deployment: the Router refuses a
+profile whose rules name different remote deployments, or where some rules ask
+the scorer and others do not. A recipe that replaces `routing.signals` names
+the deployment on its own rules.
 
-Complexity reads two contracts, and the one you choose depends on what your
-model returns. Because there are two, `contract` cannot be defaulted and must
-be stated.
-
-#### A model that returns a score: `score.v1`
+#### A model that returns a score
 
 A regression model - a query-difficulty scorer, say - returns one number, and
 the router turns it into a verdict using each rule's boundaries. One request
@@ -173,28 +181,22 @@ which way difficulty runs:
 ```yaml
 global:
   model_catalog:
-    external:
-      - name: difficulty-scorer
-        model_role: classification
-        llm_endpoint:
-          address: difficulty-scorer.default.svc
-          port: 8080
-        llm_model_name: query-difficulty-v1
-    modules:
-      complexity:
-        backend:
-          protocol: http_classify
-          contract: score.v1
-          model: difficulty-scorer
-          deadline_ms: 5000
+    deployments:
+      difficulty-scorer:
+        provider: classify
+        endpoint: https://difficulty-scorer.example.com
+        auth: {api_key_env: DIFFICULTY_SCORER_KEY}
+        timeout_ms: 5000
 
 routing:
   signals:
     complexity:
       - name: needs_reasoning
+        deployment: difficulty-scorer
         hard_above: 0.85          # a higher score is harder
         easy_below: 0.60
       - name: extreme
+        deployment: difficulty-scorer
         hard_above: 0.95          # same score, stricter boundaries
         easy_below: 0.30
 ```
@@ -206,7 +208,7 @@ For a model whose score falls as difficulty rises - one predicting the chance
 of a correct answer, for instance - use `hard_below` with `easy_above`
 instead. Encoding the direction in the field names means there is no separate
 direction setting to keep in sync, and an overlapping band cannot be written
-by accident. Those two fields work with score-based backends or decision-model scoring. The local prototype margin is
+by accident. Those two fields work with a remote score or decision-model scoring. The local prototype margin is
 hard-minus-easy, so a higher value is harder by construction, and to invert it
 locally you swap the candidate lists.
 
@@ -241,7 +243,7 @@ Renaming a decision would then change which model a request reaches. Send
 `x-vsr-debug: true` and `x-vsr-decision-ranking` names the decision that lost
 and ends in `decision name ordering` when that is what settled it.
 
-`score.v1` reports no confidence. A score just short of `hard_above` is the
+A remote score reports no confidence. A score just short of `hard_above` is the
 least certain position rather than a strong one, so no confidence is derived
 from it, and any decision gated on such a rule ranks on the engine's structural
 default instead of a reported score. The router warns at startup when this
@@ -253,24 +255,7 @@ bare object, `{"score": 0.73}`. A missing or null score, more than one entry,
 or a non-finite value is an error, never a zero - zero is a real score at the
 easy end of a `[0,1]` range, and a fault must not route as one.
 
-#### A model that returns the verdict: `label_distribution.v1`
-
-A three-class model returns `hard`, `easy` and `medium` directly. No boundaries
-are consulted - the winning label *is* the verdict - and its probability is a
-real confidence, so confidence-based ranking is unaffected. The labels are the
-fixed verdict vocabulary and are not configured:
-
-```yaml
-    modules:
-      complexity:
-        backend:
-          protocol: http_classify
-          contract: label_distribution.v1
-          model: difficulty-classifier
-          deadline_ms: 5000
-```
-
-Either way, the `hard` and `easy` candidate lists are never read once a backend
+The `hard` and `easy` candidate lists are never read once a remote deployment
 supplies the score, and the router says so at startup rather than leaving you
 to edit examples that have no effect.
 
@@ -329,8 +314,9 @@ number, so a numeric predicate over `:score` is not a routing mechanism.
 
 ## Dependencies and Limitations
 
-- Complexity uses the configured semantic embedding runtime. A remote embedding
-  provider receives the request text used for classification.
+- Local scoring uses the embedding deployment `embeddings.default` names. A
+  remote embedding deployment receives the request text used for
+  classification.
 - Candidate phrases and thresholds must be calibrated together against labeled
   traffic. Re-evaluate them whenever the embedding model changes.
 - Ambiguous prompts can land in the `medium` band; always define a route or

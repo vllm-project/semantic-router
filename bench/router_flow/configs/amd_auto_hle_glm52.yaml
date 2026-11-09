@@ -29,11 +29,12 @@ providers:
         completion_per_1m: 3
       backend_refs:
         - name: openrouter
-          base_url: https://openrouter.ai/api/v1
+          endpoint: https://openrouter.ai/api/v1
           provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: OPENROUTER_API_KEY
+          auth:
+            header: Authorization
+            prefix: Bearer
+            api_key_env: OPENROUTER_API_KEY
           weight: 1
     - name: glm52-solver-b
       provider_model_id: z-ai/glm-5.2
@@ -47,11 +48,12 @@ providers:
         completion_per_1m: 3
       backend_refs:
         - name: openrouter
-          base_url: https://openrouter.ai/api/v1
+          endpoint: https://openrouter.ai/api/v1
           provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: OPENROUTER_API_KEY
+          auth:
+            header: Authorization
+            prefix: Bearer
+            api_key_env: OPENROUTER_API_KEY
           weight: 1
     - name: glm52-solver-c
       provider_model_id: z-ai/glm-5.2
@@ -65,11 +67,12 @@ providers:
         completion_per_1m: 3
       backend_refs:
         - name: openrouter
-          base_url: https://openrouter.ai/api/v1
+          endpoint: https://openrouter.ai/api/v1
           provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: OPENROUTER_API_KEY
+          auth:
+            header: Authorization
+            prefix: Bearer
+            api_key_env: OPENROUTER_API_KEY
           weight: 1
     - name: glm52-finalizer
       provider_model_id: z-ai/glm-5.2
@@ -83,11 +86,12 @@ providers:
         completion_per_1m: 3
       backend_refs:
         - name: openrouter
-          base_url: https://openrouter.ai/api/v1
+          endpoint: https://openrouter.ai/api/v1
           provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: OPENROUTER_API_KEY
+          auth:
+            header: Authorization
+            prefix: Bearer
+            api_key_env: OPENROUTER_API_KEY
           weight: 1
     - name: gpt55-judge
       provider_model_id: openai/gpt-5.5
@@ -101,11 +105,12 @@ providers:
         completion_per_1m: 30
       backend_refs:
         - name: openrouter
-          base_url: https://openrouter.ai/api/v1
+          endpoint: https://openrouter.ai/api/v1
           provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: OPENROUTER_API_KEY
+          auth:
+            header: Authorization
+            prefix: Bearer
+            api_key_env: OPENROUTER_API_KEY
           weight: 1
 
 evaluation:

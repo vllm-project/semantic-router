@@ -38,7 +38,7 @@ providers:
       provider_model_id: vllm-sr/Decision-2.0-Vega-27B
       backend_refs:
         - provider: systemone-compatible
-          base_url: http://localhost:8900/v1
+          endpoint: http://engine.example.com:8900/v1
 
 global:
   model_catalog:
@@ -49,7 +49,7 @@ global:
         device: auto
 ```
 
-`provider_model_id` is the model name sent to the remote endpoint. If a backend requires authentication, set `api_key_env` on its binding. Credentials stay on that binding. Replicas of the same remote model go in its `backend_refs`; different models are separate aliases and stage actions.
+`provider_model_id` is the model name sent to the remote endpoint. If a backend requires authentication, set `auth: {api_key_env: <VARIABLE>}` on its backend ref. Credentials stay on that backend. Replicas of the same remote model go in its `backend_refs`; different models are separate aliases and stage actions.
 
 ## Publish an auto entrypoint
 

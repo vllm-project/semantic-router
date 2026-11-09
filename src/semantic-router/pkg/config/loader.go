@@ -249,6 +249,7 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 		rejectUnsupportedRouterLearningFields,
 		rejectRemovedModelExecutionFields,
 		rejectRemovedDeploymentProfile,
+		rejectRemovedBackendRefFields,
 	}
 	for _, validate := range validators {
 		if err := validate(raw); err != nil {
@@ -553,7 +554,7 @@ func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]int
 		if err := rejectUnknownMapFields(
 			prefix+".identity.headers",
 			nestedStringMap(identityMap["headers"]),
-			[]string{"session", "conversation"},
+			[]string{"session", "conversation", "agent"},
 		); err != nil {
 			return err
 		}

@@ -319,6 +319,18 @@ const sidebars: SidebarsConfig = {
                 'installation/model-configuration-patterns',
               ],
             },
+            {
+              type: 'category',
+              label: 'Router Model Catalog',
+              link: {
+                type: 'doc',
+                id: 'installation/choose-a-model-for-a-signal',
+              },
+              items: [
+                'installation/model-catalog',
+                'installation/model-resource-migration',
+              ],
+            },
           ],
         },
         {

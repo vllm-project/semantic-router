@@ -17,10 +17,11 @@ image. Routes match on those labels.
 | [`modality`](tutorials/signal/learned/modality.md) | Vela 1.0 Modality | `AR` (text), `DIFFUSION` (image), `BOTH` |
 | [`classifier`](tutorials/signal/learned/classifier.md) | your own model | your labels |
 
-The table lists specialist models. With no task override, the built-in domain,
-fact-check, feedback, and modality signals use the default Vela 2.0 judgment
-deployment. The specialist bindings below select Vela 1.0 explicitly. See
-[Choose a model](../choose-a-model#by-task).
+The table lists specialist models. Without a binding, the built-in domain,
+fact-check, feedback, and modality signals use the decision model, vela3-fast
+by default. The bindings below select Vela 1.0 explicitly. See
+[Choose a model](../choose-a-model#by-task) and
+[Choose a model for a signal](../../installation/choose-a-model-for-a-signal.md).
 
 ## Turn it on
 
@@ -52,9 +53,9 @@ routing:
 ## Choose where it runs
 
 To pick the device, the input limit or another model, describe a deployment
-and bind the feature to it. The specialist binding names are `domain_classifier`,
-`fact_check_classifier`, `feedback_detector` and `modality_detector`; their
-native classifier contract reads label probabilities (`label_distribution.v1`):
+and bind the signal to it. The binding keys are the signal types `domain`,
+`fact_check`, `user_feedback` and `modality`; each reads the label
+probabilities of its model:
 
 ```yaml
 global:
@@ -68,9 +69,7 @@ global:
           max_tokens: 2048
           overflow: truncate
     bindings:
-      domain_classifier:
-        deployment: vela-domain
-        contract: label_distribution.v1
+      domain: vela-domain
 ```
 
 `overflow: truncate` classifies the first 2,048 tokens of a long request and
@@ -99,15 +98,15 @@ matched and `x-vsr-selected-decision` names the route.
 ## Use your own classifier
 
 A Hugging Face ModernBERT or mmBERT sequence classifier works as a `classifier`
-signal with your own labels. Pin its revision, bind it to the rule and route on
-its labels:
+signal with your own labels. Pin its revision, name its deployment on the rule
+and route on its labels:
 
 ```yaml
 routing:
   signals:
     classifiers:
       - name: ticket_topic
-        type: local
+        deployment: ticket-topics
         labels: [billing, shipping, other]
   decisions:
     - name: billing-desk
@@ -122,10 +121,6 @@ routing:
               gte: 0.5
       modelRefs:
         - model: support-model
-  model_bindings:
-    classifier.ticket_topic:
-      deployment: ticket-topics
-      contract: label_distribution.v1
 global:
   model_catalog:
     deployments:
@@ -142,5 +137,6 @@ global:
 List `labels` in the model's own label order (its `id2label`). The router
 reads the model's labels from the runtime and refuses to start if they do not
 match the rule. A model with independent
-labels and a published operating point uses `label_scores.v1` instead; see
-[classifier signals](tutorials/signal/learned/classifier.md).
+labels and a published operating point pins it with the deployment's
+`operating_point`; see
+[classifier signals](tutorials/signal/learned/classifier.md#independent-labels-with-a-frozen-operating-point).

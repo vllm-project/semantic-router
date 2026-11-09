@@ -148,6 +148,7 @@ func compileCluster(cfg *config.RouterConfig, alias string, endpoints []config.V
 	}
 	spec.PathPrefix = prefix
 	spec.RouteHeaders = routeHeaders(profile.ExtraHeaders)
+	spec.RemoveHeaders = cfg.Authz.Identity.HeaderNames()
 	if err := compileHealth(&spec, reliability); err != nil {
 		return ClusterSpec{}, fmt.Errorf("providers.models[%s].reliability: %w", alias, err)
 	}

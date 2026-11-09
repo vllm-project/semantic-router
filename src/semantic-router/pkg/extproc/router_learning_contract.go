@@ -49,6 +49,8 @@ type routerLearningIdentity struct {
 	scope              string
 	sessionHeader      string
 	conversationHeader string
+	agentID            string
+	agentHeader        string
 }
 
 func firstNonNilSelectionContext(values ...*selection.SelectionContext) *selection.SelectionContext {

@@ -10,7 +10,7 @@
 # RECIPE balance
 # =============================================================================
 
-RECIPE balance (description = "Spends reasoning only where a request needs it. One decision-model call answers every routing question, and an effort score selects the pool.") {
+RECIPE balance (description = "Spends reasoning only where a request needs it. One decision-model call answers every routing question, and ten lanes set the model and its reasoning effort.") {
   # =============================================================================
   # ROUTING PROFILE
   # =============================================================================
@@ -31,6 +31,16 @@ RECIPE balance (description = "Spends reasoning only where a request needs it. O
 
   SIGNAL user_feedback wrong_answer {
     description: "The user says an earlier answer was wrong; recovery also needs the correction question."
+  }
+
+  SIGNAL context long_input {
+    description: "Inputs of 200K tokens or more, which leave a 256K-token model too little room to answer."
+    min_tokens: "200K"
+  }
+
+  SIGNAL conversation has_image {
+    description: "The request carries at least one image."
+    feature: { source: { type: "image_content" }, type: "exists" }
   }
 
   SIGNAL conversation has_tools {
@@ -114,47 +124,118 @@ RECIPE balance (description = "Spends reasoning only where a request needs it. O
   # ROUTES
   # =============================================================================
 
-  ROUTE reasoning (description = "Deep reasoning: research-level and hard problems, tool work, and answers the user says were wrong.", on_unknown = "no_match") {
-    PRIORITY 300
-    WHEN (conversation("has_prior_answer") AND NOT conversation("tool_loop") AND decision("correction") AND user_feedback("wrong_answer") OR conversation("tool_loop") OR conversation("has_tools") AND NOT conversation("tool_disabled") AND (decision("task", label: "agentic") OR decision("needs", label: "tools", predicate: { gte: 0.5 }) OR decision("tool_use") OR conversation("tool_required")) OR projection("effort_max") OR projection("effort_high") AND NOT decision("task", label: "code") AND NOT (decision("precise_facts") AND (decision("task", label: "facts") OR decision("task", label: "analysis") OR decision("task", label: "writing"))) OR decision("task", label: "stem") AND decision("difficulty"))
-    ALGORITHM multi_factor {
-      latency_metric: "tpot"
-      latency_percentile: 95
+  ROUTE long_context (description = "Inputs of 200K tokens or more, for a model with a long context window.") {
+    PRIORITY 900
+    WHEN context("long_input")
+    ALGORITHM static {
       minimum_candidates: 1
-      objective: { priorities: [{ factor: "quality", tolerance: 0.03 }, { factor: "latency", tolerance: 0.1 }, { factor: "cost" }, { factor: "load" }], strategy: "lexicographic" }
-      on_no_candidates: "fail"
-      quality: { index: "vllm-sr/reasoning@1.0.0", on_missing: "exclude" }
     }
     PLUGIN request_params {
       default_max_tokens: 8192
     }
   }
 
-  ROUTE simple (description = "Requests that need no reasoning, positively identified by the decision model.", on_unknown = "no_match") {
-    PRIORITY 100
-    WHEN projection("effort_off") AND NOT (decision("precise_facts") AND (decision("task", label: "facts") OR decision("task", label: "analysis") OR decision("task", label: "writing")))
-    ALGORITHM multi_factor {
-      latency_metric: "ttft"
-      latency_percentile: 95
+  ROUTE vision (description = "Requests that carry an image, for a model that reads images.") {
+    PRIORITY 850
+    WHEN conversation("has_image")
+    ALGORITHM static {
       minimum_candidates: 1
-      objective: { priorities: [{ factor: "quality", tolerance: 0.12 }, { factor: "cost", tolerance: 0.05 }, { factor: "latency", tolerance: 0.1 }, { factor: "load" }], strategy: "lexicographic" }
-      on_no_candidates: "fail"
-      quality: { index: "vllm-sr/general@1.0.0", on_missing: "exclude" }
     }
     PLUGIN request_params {
       default_max_tokens: 4096
     }
   }
 
-  ROUTE medium (description = "Code, exact facts and requests that need some reasoning; also the fallback when a routing answer is unknown.") {
-    PRIORITY 10
-    ALGORITHM multi_factor {
-      latency_metric: "ttft"
-      latency_percentile: 95
+  ROUTE recovery (description = "An earlier answer the user says was wrong, for a stronger model at maximum effort.", on_unknown = "no_match") {
+    PRIORITY 800
+    WHEN conversation("has_prior_answer") AND NOT conversation("tool_loop") AND decision("correction") AND user_feedback("wrong_answer")
+    ALGORITHM static {
       minimum_candidates: 1
-      objective: { priorities: [{ factor: "quality", tolerance: 0.07 }, { factor: "latency", tolerance: 0.1 }, { factor: "cost", tolerance: 0.05 }, { factor: "load" }], strategy: "lexicographic" }
-      on_no_candidates: "fail"
-      quality: { index: "vllm-sr/general@1.0.0", on_missing: "exclude" }
+    }
+    PLUGIN request_params {
+      default_max_tokens: 8192
+    }
+  }
+
+  ROUTE agentic (description = "An active tool loop, or declared tools the request needs, for a strong agent at high effort.", on_unknown = "no_match") {
+    PRIORITY 700
+    WHEN (conversation("tool_loop") OR conversation("has_tools") AND NOT conversation("tool_disabled") AND (decision("task", label: "agentic") OR decision("needs", label: "tools", predicate: { gte: 0.5 }) OR decision("tool_use") OR conversation("tool_required")))
+    ALGORITHM static {
+      minimum_candidates: 1
+    }
+    PLUGIN request_params {
+      default_max_tokens: 8192
+    }
+  }
+
+  ROUTE facts (description = "Answers that depend on facts most people would look up, below maximum effort, for the model that hallucinates least, at low effort.", on_unknown = "no_match") {
+    PRIORITY 600
+    WHEN decision("precise_facts") AND (decision("task", label: "facts") OR decision("task", label: "analysis") OR decision("task", label: "writing")) AND NOT projection("effort_max")
+    ALGORITHM static {
+      minimum_candidates: 1
+    }
+    PLUGIN request_params {
+      default_max_tokens: 4096
+    }
+  }
+
+  ROUTE frontier (description = "Maximum effort; the decision model chooses one of the assigned models by its description.") {
+    PRIORITY 500
+    WHEN projection("effort_max")
+    ALGORITHM decision {
+      decision: { instructions: "Which model should answer this research-level request?", timeout_ms: 15000 }
+      minimum_candidates: 2
+    }
+    PLUGIN request_params {
+      default_max_tokens: 8192
+    }
+  }
+
+  ROUTE code (description = "Code at medium or high effort, for the strongest coder at medium effort.", on_unknown = "no_match") {
+    PRIORITY 450
+    WHEN decision("task", label: "code") AND (projection("effort_medium") OR projection("effort_high"))
+    ALGORITHM static {
+      minimum_candidates: 1
+    }
+    PLUGIN request_params {
+      default_max_tokens: 4096
+    }
+  }
+
+  ROUTE hard (description = "High effort, or a STEM problem rated multi-step, at extra-high effort; multi_factor balances quality, cost, latency and load.", on_unknown = "no_match") {
+    PRIORITY 400
+    WHEN (projection("effort_high") OR decision("task", label: "stem") AND decision("difficulty"))
+    ALGORITHM multi_factor {
+      latency_metric: "tpot"
+      minimum_candidates: 1
+      on_no_candidates: "cheapest"
+      quality: { index: "vllm-sr/reasoning@1.0.0", on_missing: "exclude" }
+      weights: { cost: 0.4, latency: 0.1, load: 0.25, quality: 0.25 }
+    }
+    PLUGIN request_params {
+      default_max_tokens: 8192
+    }
+  }
+
+  ROUTE standard (description = "Medium effort, and requests whose routing answers are unknown; multi_factor balances quality, cost, latency and load.", on_unknown = "match") {
+    PRIORITY 300
+    WHEN projection("effort_medium")
+    ALGORITHM multi_factor {
+      latency_metric: "tpot"
+      minimum_candidates: 1
+      on_no_candidates: "cheapest"
+      quality: { index: "vllm-sr/reasoning@1.0.0", on_missing: "exclude" }
+      weights: { cost: 0.4, latency: 0.1, load: 0.25, quality: 0.25 }
+    }
+    PLUGIN request_params {
+      default_max_tokens: 4096
+    }
+  }
+
+  ROUTE fast (description = "Everything else, with thinking off.") {
+    PRIORITY 100
+    ALGORITHM static {
+      minimum_candidates: 1
     }
     PLUGIN request_params {
       default_max_tokens: 4096

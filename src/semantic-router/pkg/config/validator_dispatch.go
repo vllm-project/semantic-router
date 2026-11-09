@@ -30,6 +30,8 @@ var (
 		validateComplexityModelBackendContracts,
 		validatePIIModelBackendContracts,
 		validateGlobalRouterLearningConfig,
+		validateLossyTranslationContracts,
+		validateRoutingInputContracts,
 		validateFlowContracts,
 		validateAdvancedToolFilteringConfig,
 		validatePromptCompressionContracts,
@@ -39,6 +41,7 @@ var (
 		validateModelDeploymentContracts,
 		validateGlobalModelBindingContracts,
 		validateGlobalToolSessionsContracts,
+		validateGlobalRouterReplayCaptureContracts,
 		validateBackendTelemetryConfig,
 	}
 
@@ -46,6 +49,7 @@ var (
 	routingConfigContractValidators = []configContractValidator{
 		validateKVTransferConfig,
 		validateModelBindingContracts,
+		validateModelResolutionContracts,
 		validateGlobalClassifierRuntimeContracts,
 		validateComplexityRoutingContracts,
 		logConfigWarnings,
@@ -80,6 +84,7 @@ var (
 		validateHallucinationSignalContracts,
 		validateTopicContinuityContracts,
 		validateDecisionRouterLearningConfig,
+		validateDecisionRouterReplayCaptureContracts,
 	}
 )
 
@@ -96,6 +101,12 @@ func validateConfigStructure(cfg *RouterConfig) error {
 // ValidateKubernetesConfigContracts validates the complete candidate after CRDs
 // have been merged, before the reconciler publishes it to the runtime.
 func ValidateKubernetesConfigContracts(cfg *RouterConfig) error {
+	if cfg != nil {
+		if err := cfg.translateModelResources(); err != nil {
+			return err
+		}
+		cfg.applyModuleThresholds()
+	}
 	return validateConfigContracts(cfg)
 }
 
@@ -109,6 +120,12 @@ func validateConfigContractsAtStage(cfg *RouterConfig, stage configValidationSta
 	}
 	effective := *cfg
 	effective.ModelBindings = cfg.EffectiveModelBindings(cfg.Signals, cfg.ModelBindings)
+	if effective.scopedBindings == nil {
+		effective.scopedBindings = cloneModelMap(cfg.ModelBindings)
+		if effective.scopedBindings == nil {
+			effective.scopedBindings = map[string]ModelBinding{}
+		}
+	}
 	cfg = &effective
 	if err := runConfigContractValidators(cfg, globalConfigContractValidators); err != nil {
 		return err

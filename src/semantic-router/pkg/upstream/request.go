@@ -42,7 +42,8 @@ type Request struct {
 }
 
 // internalRequestHeaders never reach a model backend: the Envoy template
-// removes them from every upstream request.
+// removes them from every upstream request. A cluster's RemoveHeaders add the
+// identity header names the configuration reads.
 var internalRequestHeaders = []string{
 	headers.VSRLooperRequest,
 	"x-vsr-looper-secret",
@@ -50,6 +51,8 @@ var internalRequestHeaders = []string{
 	headers.VSRLooperIteration,
 	headers.AuthzUserID,
 	headers.AuthzUserGroups,
+	headers.AuthzTeamID,
+	headers.AuthzTenantID,
 }
 
 // hopByHopHeaders are scoped to one connection and are never forwarded.
@@ -104,6 +107,9 @@ func outbound(ctx context.Context, req *Request, spec *ClusterSpec, ep *Endpoint
 		header.Set(h.Name, h.Value)
 	}
 	for _, name := range internalRequestHeaders {
+		header.Del(name)
+	}
+	for _, name := range spec.RemoveHeaders {
 		header.Del(name)
 	}
 	body := req.Body

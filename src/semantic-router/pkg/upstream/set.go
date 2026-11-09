@@ -29,9 +29,9 @@ type Options struct {
 	Rand Rand
 	// Clock drives health checks and outlier sweeps; nil uses real time.
 	Clock Clock
-	// Telemetry is read by load-aware clusters. It must live as long as the
-	// process: clusters carried over to a later Set keep reading it. Nil
-	// makes load-aware clusters balance as least-request.
+	// Telemetry belongs to this Set, not its reusable clusters. Calls pinned
+	// to an older Set keep their reader; the new Set uses this one. Nil makes
+	// load-aware clusters balance as least-request.
 	Telemetry TelemetryReader
 }
 
@@ -50,6 +50,7 @@ type Set struct {
 	shared    *shared
 	rnd       Rand
 	clock     Clock
+	telemetry TelemetryReader
 
 	abort  context.Context
 	cancel context.CancelFunc
@@ -71,6 +72,7 @@ func New(topology Topology, opts Options) (*Set, error) {
 		clusters:  make(map[string]*cluster, len(topology.Clusters)),
 		listeners: make(map[string]Policy, len(topology.Listeners)),
 		drained:   make(chan struct{}),
+		telemetry: opts.Telemetry,
 	}
 	s.abort, s.cancel = context.WithCancel(context.Background())
 	for i, listener := range topology.Listeners {
@@ -101,7 +103,7 @@ func New(topology Topology, opts Options) (*Set, error) {
 	for _, spec := range topology.Clusters {
 		c := previous[spec.Name]
 		if c == nil || !c.spec.equal(&spec) {
-			c = newCluster(spec, s.shared, rnd, clock, opts.Telemetry)
+			c = newCluster(spec, s.shared, rnd, clock)
 			fresh = append(fresh, c)
 		}
 		c.retain()
@@ -174,7 +176,7 @@ func (s *Set) Do(ctx context.Context, req *Request) (*Response, error) {
 	}
 	policy := s.policy(req, c)
 	callCtx, endCall := s.callContext(ctx, policy.Timeouts.Total)
-	cl := &call{req: req, cluster: c, defaultRoute: defaultRoute, policy: policy, rnd: s.rnd, clock: s.clock}
+	cl := &call{req: req, cluster: c, defaultRoute: defaultRoute, policy: policy, rnd: s.rnd, clock: s.clock, telemetry: s.telemetry}
 	done := func() {
 		endCall()
 		s.exit()

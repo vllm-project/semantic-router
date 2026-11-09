@@ -127,7 +127,8 @@ type Observation struct {
 	QueueDepth     Count
 	ActiveRequests Count
 	KVCacheUsage   Ratio
-	// PrefixCacheHitRate is the hit fraction over the latency window.
+	// PrefixCacheHitRate is an optional measured hit fraction. The current
+	// vLLM adapter leaves it absent, as it does the optional latencies below.
 	PrefixCacheHitRate Ratio
 
 	// TTFT, TPOT and E2E are means over LatencyWindow, derived from counter

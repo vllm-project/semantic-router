@@ -295,7 +295,7 @@ func validateVectorStoreMetadataStore(c *VectorStoreConfig) error {
 // ApplyDefaults fills in default values for unset fields.
 func (c *VectorStoreConfig) ApplyDefaults() {
 	if c.FileStorageDir == "" {
-		c.FileStorageDir = "/var/lib/vsr/data"
+		c.FileStorageDir = DefaultVectorStoreFileStorageDir
 	}
 	if c.MaxFileSizeMB <= 0 {
 		c.MaxFileSizeMB = 50

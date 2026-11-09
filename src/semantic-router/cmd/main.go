@@ -34,7 +34,7 @@ const (
 func main() {
 	opts := parseRuntimeOptions()
 	if opts.validateConfig {
-		os.Exit(validateConfigFile(opts.configPath, opts.gateway, os.Stdout))
+		os.Exit(validateConfigFile(opts.configPath, opts.gateway, opts.migrateConfig, os.Stdout))
 	}
 	logo.PrintVLLMLogo()
 	initializeRuntimeLogger()
@@ -110,6 +110,13 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		))
 	}()
 
+	// Checked before the downloads, which can take minutes, rather than when
+	// the first writer opens its directory.
+	if !opts.downloadOnly {
+		if err = routerruntime.CheckLocalStorage(cfg); err != nil {
+			return recordStartupError(startupWriter, "check local storage", err)
+		}
+	}
 	if err = ensureModelsDownloaded(ctx, cfg, startupWriter); err != nil {
 		return recordStartupError(startupWriter, "ensure models are downloaded", err)
 	}
@@ -132,7 +139,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	}
 	serverOpts := []extproc.ServerOption{
 		extproc.WithConfigHistoryLimit(opts.configHistoryLimit), extproc.WithGatewayMode(opts.gateway),
-		extproc.WithConfigParts(upstreamPart(opts.gateway), backendTelemetryPart(backendTelemetryStore)),
+		extproc.WithConfigParts(backendTelemetryPart(), upstreamPart(opts.gateway)),
 	}
 	stopProgress := reportModelDeploymentProgress(startupWriter, modelservice.DefaultManager())
 	routerServer, err = extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry,

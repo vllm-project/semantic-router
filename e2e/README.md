@@ -119,6 +119,7 @@ until the selected cases are known to be isolated.
 - **routing-errors**: all four Router error probes through Envoy, plus a routed positive control, without learned models or a default provider. The baseline retains its three unknown-model probes and its genuine default-provider fallback checks; `standalone` also runs all four error probes. Keeping the no-route policy separate avoids changing the baseline during parallel tests.
 - **model-runtime**: Router-managed and attached model runtimes on tiny fixture models: process groups, task signals and decision signals against the runtimes' own answers, the decision selector, request bundles, supervisor restarts, and fail-open.
 - **model-runtime-real** (opt-in, downloads about 4 GB): real Decision 2.0 Kai-0.6B and the Vela Domain, PII and Guard defaults on CPU in the Router's managed runtime; clear prompts take the routes the models decide, and the Router routes on Kai's own answer. Run it with `make e2e-test E2E_PROFILE=model-runtime-real` on a machine with Hugging Face Hub access.
+- **model-runtime-vela3** (opt-in, downloads about 6.6 GB): real vela3-fast on CPU as the Router's default decision deployment; prompt attacks and personal data take their routes on its calibrated thresholds, and the Router matches its Noul and Span decision signals exactly when vela3-fast's own answers pass their predicates. Run it with `make e2e-test E2E_PROFILE=model-runtime-vela3`.
 - **external-gateway-responses**: ExtProc-only Responses create, get, and conversation chaining with external gateway-owned dispatch.
 - **dashboard**: dashboard API, validation, and routing-authoring contracts.
 - **routing-strategies**: keyword, entropy, and fallback routing.
@@ -139,7 +140,7 @@ until the selected cases are known to be isolated.
 - **response-api-redis**: manual Redis persistence and TTL coverage.
 - **response-api-redis-cluster**: manual Redis Cluster persistence and TTL coverage.
 - **router-replay**: manual management-boundary, restart-recovery, and single-shadow failure-isolation coverage.
-- **vectorstore-registry**: manual metadata restart-recovery coverage.
+- **vectorstore-registry**: affected-change vector store restart recovery under the chart's hardened Pod: store and file records in Postgres, file bytes on the Router's data-directory PersistentVolumeClaim.
 - **rag-hybrid-search**: manual Llama Stack hybrid-search coverage.
 - **hallucination**: manual fact-check gating and warning behavior.
 - **jailbreak-onerror**: manual PromptGuardConfig.OnError coverage against an unreachable classifier endpoint.

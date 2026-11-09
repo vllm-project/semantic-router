@@ -287,14 +287,36 @@ exactly as `least_request`, so a replica is never preferred because its load
 is unknown. A replica its engine reports unhealthy is skipped, but health
 checks and outlier ejection still decide which replicas are in rotation.
 
+Equal loads prefer the higher backend weight, then choose evenly among tied
+replicas. Weights break ties; unlike weighted round robin, they do not promise
+a fixed traffic ratio. A retry prefers an eligible replica the call has not
+yet tried; after exhausting the pool it may try a replica again.
+
+The vLLM adapter reads queue depth, active requests and KV cache usage directly
+from gauges. Optional TTFT, TPOT, E2E and prefix-hit-rate fields remain in the
+shared observation contract, but this adapter leaves them absent until they
+have consumers; it keeps no previous-scrape counter state.
+
+Telemetry targets, collectors and samples belong to one configuration
+generation. Changing backends, metrics sources or collection settings creates
+a new store and rebinds upstream readers; unrelated reloads reuse the complete
+telemetry part. Pinned requests can finish with their old generation, whose
+collector stops and samples are cleared after its last request drains.
+
 The vLLM and SGLang engines are supported today. For SGLang the Router reads
 `sglang:num_queue_reqs`, `sglang:num_running_reqs`, and `sglang:token_usage`
 from `/metrics`, which SGLang serves when started with `--enable-metrics`, and
 counts each data-parallel rank once. Behind Envoy, `load_aware` balances as
 `least_request` because Envoy does not read engine telemetry. The
-`llm_upstream_load_aware_picks_total` metric counts picks by whether
-telemetry or a fallback made them, and `llm_backend_telemetry_scrapes_total`
-counts scrapes per backend.
+`llm_upstream_load_aware_picks_total` metric counts multi-replica picks once per
+attempt by whether telemetry or a fallback made them, and
+`llm_backend_telemetry_scrapes_total` counts scrapes per backend. Telemetry
+metrics switch only on successful activation, so a rejected candidate or a
+draining old collector cannot replace the active generation's series. The
+`llm_backend_telemetry_queue_depth` gauge omits missing or expired samples.
+Its `endpoint` label matches upstream metrics (for example,
+`production_replica-a`), while the observation identity keeps `replica-a` as
+the backend ref name.
 
 ### Override timeouts and retries for one decision
 

@@ -122,4 +122,4 @@ DSL 通过 `PROJECTION partition`、`PROJECTION score` 和 `PROJECTION mapping` 
 - 分区默认值是回退，不是其成员已匹配的证据。
 - 加权和不自动校准来自不同信号家族的输入。请在带标签的流量上一起评估权重和映射档。
 - 派生分数之间的环会在校验时被拒绝。
-- 端到端示例见 [`balance` 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)。
+- 分数和映射的端到端示例见 [`feedback` 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/feedback/config.yaml)，分区示例见 [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)。

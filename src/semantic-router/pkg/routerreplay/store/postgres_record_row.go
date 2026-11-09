@@ -22,7 +22,7 @@ const postgresRecordSelectColumns = `
 	prompt_tokens, cached_prompt_tokens, cache_write_tokens, completion_tokens, total_tokens,
 	actual_cost, baseline_cost, cost_savings, currency, baseline_model,
 	session_id, turn_index, previous_response_id, conversation_id,
-	cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata
+	cache_similarity, context_token_count, hallucination_span_details, recipe, safety_evidence, routing_metadata, provider_cache
 `
 
 type postgresRowScanner interface {
@@ -30,6 +30,7 @@ type postgresRowScanner interface {
 }
 
 type postgresInsertRecord struct {
+	providerCacheJSON            []byte
 	routingMetadataJSON          []byte
 	safetyEvidenceJSON           []byte
 	record                       Record
@@ -49,6 +50,7 @@ type postgresInsertRecord struct {
 }
 
 type postgresRecordRow struct {
+	providerCacheJSON            []byte
 	routingMetadataJSON          []byte
 	safetyEvidenceJSON           []byte
 	record                       Record
@@ -103,6 +105,7 @@ func marshalPostgresInsertJSON(record Record, out *postgresInsertRecord) error {
 		target  *[]byte
 		marshal func() ([]byte, error)
 	}{
+		{"provider cache accounting", &out.providerCacheJSON, func() ([]byte, error) { return marshalReplayOptionalJSON(record.ProviderCache) }},
 		{"safety evidence", &out.safetyEvidenceJSON, func() ([]byte, error) { return marshalPostgresSafety(record) }},
 		{"routing metadata", &out.routingMetadataJSON, func() ([]byte, error) { return marshalPostgresRoutingMetadata(record) }},
 		{"signals", &out.signalsJSON, func() ([]byte, error) { return json.Marshal(record.Signals) }},
@@ -220,6 +223,7 @@ func (record postgresInsertRecord) args() []interface{} {
 		emptyStringSQL(record.record.Recipe),
 		record.safetyEvidenceJSON,
 		record.routingMetadataJSON,
+		record.providerCacheJSON,
 	}
 }
 
@@ -319,10 +323,14 @@ func (row *postgresRecordRow) scanDestinations() []interface{} {
 		&row.recipe,
 		&row.safetyEvidenceJSON,
 		&row.routingMetadataJSON,
+		&row.providerCacheJSON,
 	}
 }
 
 func (row *postgresRecordRow) decode() (Record, error) {
+	if err := unmarshalReplayOptionalJSON(row.providerCacheJSON, &row.record.ProviderCache); err != nil {
+		return Record{}, err
+	}
 	if err := unmarshalPostgresSafety(row.safetyEvidenceJSON, &row.record); err != nil {
 		return Record{}, err
 	}
