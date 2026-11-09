@@ -61,6 +61,29 @@ class Dtype(unittest.TestCase):
         run.assert_not_called()
         self.assertIn("only 0.5 GiB disk free", err.getvalue())
 
+    def test_a_gpu_install_checks_the_disk_too(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            local.detect, "free_gib", return_value=3.0
+        ), mock.patch.object(local, "run") as run, contextlib.redirect_stderr(
+            io.StringIO()
+        ) as err:
+            code = local.main(
+                ["install", "--device", "cuda", "--venv", str(Path(tmp) / "venv")]
+            )
+        self.assertEqual(code, 1)
+        run.assert_not_called()
+        self.assertIn("only 3.0 GiB disk free", err.getvalue())
+
+    def test_skip_disk_check_installs_anyway(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            local.detect, "free_gib", return_value=0.5
+        ), mock.patch.object(local, "run", return_value=0) as run:
+            code = local.main(
+                ["install", "--skip-disk-check", "--venv", str(Path(tmp) / "venv")]
+            )
+        self.assertEqual(code, 0)
+        run.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -64,15 +64,17 @@ def serve_dtype(device: str, asked: str, bf16: bool | None) -> str | None:
     return "float32" if device == "cpu" and bf16 is False else None
 
 
-def disk_short(venv: Path) -> str | None:
-    """Why the disk is too full to install and download vela3-lite, or None when it fits."""
+def disk_short(venv: Path, device: str) -> str | None:
+    """Why the disk is too full to install and download vela3-lite, or None when it fits.
+    A GPU torch is several times a CPU one; `auto` may pick a GPU, so it is counted as one.
+    """
     cache = detect.model_cache()
     found = {
         "vllmSrun": (venv / "bin/vllm-srun").exists(),
         "modelCached": detect.model_cached(cache),
         "diskFreeGiB": min(detect.free_gib(venv), detect.free_gib(cache)),
     }
-    return detect.disk_short(found, "cpu")
+    return detect.disk_short(found, "cpu" if device == "cpu" else "gpu")
 
 
 def install_steps(venv: Path, device: str, python: str) -> list[list[str]]:
@@ -285,15 +287,27 @@ def main(argv: list[str]) -> int:
             default="launchd" if platform.system() == "Darwin" else "systemd",
         )
         one.add_argument("--dry-run", action="store_true")
+        one.add_argument(
+            "--skip-disk-check",
+            action="store_true",
+            help="install even when the free-space estimate says it will not fit",
+        )
         one.add_argument("--write", action="store_true")
     args = parser.parse_args(argv)
     if args.command == "install":
         steps = install_steps(args.venv, args.device, args.python)
         if not steps:
             print(f"nothing to install: {args.venv} already has torch and vllm-srun")
-        short = disk_short(args.venv) if steps and args.device == "cpu" else None
+        short = (
+            None
+            if not steps or args.skip_disk_check
+            else disk_short(args.venv, args.device)
+        )
         if short and not args.dry_run:
-            print(f"not installing: {short}", file=sys.stderr)
+            print(
+                f"not installing: {short} (--skip-disk-check installs anyway)",
+                file=sys.stderr,
+            )
             return 1
         if short:
             print(f"warning: {short}", file=sys.stderr)

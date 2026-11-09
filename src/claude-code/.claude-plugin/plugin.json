@@ -1,6 +1,6 @@
 {
   "name": "vsr",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "vSR runs a vLLM Semantic Router decision model (local CPU, local GPU or remote) inside Claude Code: routes subagents by difficulty, escalates when you push back, redacts personal data and secrets, shields against prompt injection, guards risky Bash commands, and checks answers against what Claude read.",
   "author": {
     "name": "Theo Hsiung"
