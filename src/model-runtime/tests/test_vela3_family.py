@@ -273,6 +273,58 @@ def test_pii_threshold_missing_bucket_raises_value_error(model) -> None:
         model.router.span["pii_buckets"] = original_buckets
 
 
+def test_generic_span_does_not_require_pii_buckets(model) -> None:
+    route = routing.SpanRoute(
+        adapter="span",
+        head="span",
+        label_set=None,
+        evidence=False,
+        relation_wording=False,
+        text="Find product names",
+        labels=(("custom", "Product names"),),
+        window=128,
+    )
+
+    span = model.router.span
+    original = span.pop("pii_buckets")
+
+    try:
+        threshold, temperature = model.router.span_threshold(route, 10)
+
+        assert threshold == float(span["threshold"])
+        assert temperature == 1.0
+    finally:
+        span["pii_buckets"] = original
+
+
+def test_generic_span_set_does_not_require_pii_buckets(model) -> None:
+    route = routing.SpanRoute(
+        adapter="span",
+        head="span_set",
+        label_set="halu",
+        evidence=False,
+        relation_wording=False,
+        text="Find unsupported claims",
+        labels=(("unsupported", ""),),
+        window=128,
+    )
+
+    span = model.router.span
+    overrides = span["set_adapter"]
+
+    original_base = span.pop("pii_buckets")
+    original_override = overrides.pop("pii_buckets")
+
+    try:
+        threshold, temperature = model.router.span_threshold(route, 10)
+
+        assert threshold == float(overrides["thresholds_by_set"]["halu"])
+        assert temperature == float(overrides["router_set_temperature"])
+    finally:
+        span["pii_buckets"] = original_base
+        overrides["pii_buckets"] = original_override
+
+
 def test_evidence_threshold_missing_bucket_raises_value_error(model) -> None:
     route = routing.SpanRoute(
         adapter="span",

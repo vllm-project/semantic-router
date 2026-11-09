@@ -186,13 +186,17 @@ class Router:
         span = self.span
         temperature = float(span["router_set_temperature"])
         thresholds = dict(span["thresholds_by_set"])
-        buckets = span["pii_buckets"]
+        overrides = None
         if route.head == "span_set":
             overrides = span["set_adapter"]
             temperature = float(overrides["router_set_temperature"])
             thresholds.update(overrides["thresholds_by_set"])
-            buckets = overrides["pii_buckets"]
         if route.label_set == "pii":
+            buckets = (
+                overrides["pii_buckets"]
+                if overrides is not None
+                else span["pii_buckets"]
+            )
             bucket = next(
                 (b for b in buckets if target_tokens <= b["max_tokens"]),
                 None,
