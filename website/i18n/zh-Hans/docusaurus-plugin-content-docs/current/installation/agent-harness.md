@@ -5,7 +5,7 @@ description: 将 Agent Harness 接入稳定的模型 API，并明确路由策略
 translation:
   source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
   source_file: "docs/installation/agent-harness.md"
-  outdated: false
+  outdated: true
 ---
 
 # 接入 Agent Harness

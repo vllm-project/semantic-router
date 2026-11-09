@@ -5,7 +5,7 @@ sidebar_label: 概览
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/training/training-overview.md"
-  outdated: false
+  outdated: true
 ---
 
 # 训练 Vela Router 模型 {#train-vela-router-models}

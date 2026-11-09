@@ -6,7 +6,7 @@ description: 前端、可选决策引擎与模型运行时如何组合，以及�
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/overview/component-architecture.md"
-  outdated: false
+  outdated: true
 ---
 
 # 组件架构
