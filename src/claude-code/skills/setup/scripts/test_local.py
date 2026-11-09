@@ -84,6 +84,61 @@ class Dtype(unittest.TestCase):
         self.assertEqual(code, 0)
         run.assert_called_once()
 
+    def test_a_measured_bf16_decides_over_the_flags(self):
+        fast = {"float32": 2.03, "bfloat16": 0.48}
+        slow = {"float32": 1.0, "bfloat16": 9.0}
+        self.assertIsNone(local.serve_dtype("cpu", "auto", False, fast))
+        self.assertEqual(local.serve_dtype("cpu", "auto", True, slow), "float32")
+
+    def test_bf16_is_kept_unless_clearly_slower(self):
+        near = {"float32": 1.0, "bfloat16": 1.4}
+        self.assertIsNone(local.serve_dtype("cpu", "auto", None, near))
+
+    def test_measuring_needs_the_venv_and_a_readable_answer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            venv = Path(tmp) / "venv"
+            self.assertIsNone(local.measure_dtypes(venv))
+            (venv / "bin").mkdir(parents=True)
+            (venv / "bin/python").touch()
+            answer = mock.Mock(stdout='noise\n{"float32": 2.0, "bfloat16": 0.5}\n')
+            with mock.patch.object(local.subprocess, "run", return_value=answer):
+                self.assertEqual(
+                    local.measure_dtypes(venv), {"float32": 2.0, "bfloat16": 0.5}
+                )
+            with mock.patch.object(
+                local.subprocess, "run", return_value=mock.Mock(stdout="Traceback")
+            ):
+                self.assertIsNone(local.measure_dtypes(venv))
+            with mock.patch.object(
+                local.subprocess,
+                "run",
+                side_effect=local.subprocess.TimeoutExpired("python", 60),
+            ):
+                self.assertIsNone(local.measure_dtypes(venv))
+
+    def test_start_measures_and_serves_in_the_faster_dtype(self):
+        slow = {"float32": 1.0, "bfloat16": 9.0}
+        with mock.patch.object(
+            local, "measure_dtypes", return_value=slow
+        ) as measured, mock.patch.object(
+            local, "start", return_value=0
+        ) as started, contextlib.redirect_stdout(
+            io.StringIO()
+        ) as out:
+            local.main(["start", "--device", "cpu"])
+        measured.assert_called_once()
+        self.assertEqual(started.call_args.args[-1], "float32")
+        self.assertIn(
+            "bf16 9.00 ms, float32 1.00 ms per matmul, so float32", out.getvalue()
+        )
+
+    def test_a_dry_run_does_not_measure(self):
+        with mock.patch.object(local, "measure_dtypes") as measured, mock.patch.object(
+            local.detect, "cpu_bf16", return_value=True
+        ), mock.patch.object(local, "start", return_value=0):
+            local.main(["start", "--device", "cpu", "--dry-run"])
+        measured.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

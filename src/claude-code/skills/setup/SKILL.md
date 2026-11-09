@@ -27,7 +27,7 @@ Apps and thresholds start at vSR's defaults. Every app is on by default except c
 4. **Where the classifier runs.** Custom only. Ask one AskUserQuestion. Put detect's suggestion first, marked "(Recommended)", with its reason as the description:
    - **Keep the running one**, only when detect found a ready runtime: it stays as it is.
    - **Local GPU**, only when detect found a GPU: fastest, uses about 2 GB of GPU memory for vela3-lite.
-   - **Local CPU**: about 2.3 GB of RAM, 0.1 to 0.25 s per question as measured on x86 CPUs with bf16 (a CPU without it runs in float32, 0.7 to 2.4 s on a 4-core laptop); an Apple Silicon CPU is several times slower, about 2 s, which is too slow for vSR's hooks.
+   - **Local CPU**: about 2.3 GB of RAM, 0.1 to 0.25 s per question as measured on x86 CPUs with bf16 (setup times bf16 against float32 and runs a CPU without it in float32, 0.7 to 2.4 s on a 4-core laptop); an Apple Silicon CPU is several times slower, about 2 s, which is too slow for vSR's hooks.
    - **Remote runtime**: a runtime on another machine, reached by URL, with an optional token. Everything the apps classify goes to that host: each Read and Bash output (keys hidden by the secret rules when redact is on), each fetched page (shield), your prompts (escalate), each subagent's task (router), each Bash command (guard), and Claude's answers with what it read that turn (check).
 
    Done when the user picked one.

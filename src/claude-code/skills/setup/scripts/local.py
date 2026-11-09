@@ -8,6 +8,7 @@ Every command is safe to rerun: it reads what exists and does only what is missi
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import platform
 import shlex
@@ -56,12 +57,60 @@ def serve_command(
     return command + (["--dtype", dtype] if dtype else [])
 
 
-def serve_dtype(device: str, asked: str, bf16: bool | None) -> str | None:
-    """The --dtype to pass: as asked, or float32 on a CPU that would emulate bfloat16 (vela3's
-    published precision); None leaves the runtime's own `auto`."""
+# Timing one matmul of vela3-lite's size in each dtype, with the venv's own torch: what the CPU
+# does, not what its flags claim. Measured on a Ryzen 7 9800X3D (avx512_bf16): bf16 0.48 ms,
+# float32 2.03 ms; on an i5-1135G7 without bf16, bf16 was 2 to 18 times slower than float32.
+BENCH = """
+import json, time, torch
+def ms(dtype, n=1024, tokens=256, reps=20):
+    w = torch.randn(n * 4, n, dtype=dtype)
+    x = torch.randn(tokens, n, dtype=dtype)
+    with torch.inference_mode():
+        for _ in range(3):
+            x @ w.T
+        start = time.perf_counter()
+        for _ in range(reps):
+            x @ w.T
+        return (time.perf_counter() - start) / reps * 1000
+print(json.dumps({"float32": ms(torch.float32), "bfloat16": ms(torch.bfloat16)}))
+"""
+# bf16 is kept unless it is clearly slower, so noise on a busy machine does not flip the choice.
+SLOWER = 1.5
+
+
+def measure_dtypes(venv: Path, timeout: float = 60) -> dict | None:
+    """Milliseconds per matmul in float32 and bfloat16 with the venv's torch; None when it
+    cannot be measured (no venv or torch yet, an error, a timeout)."""
+    python = venv / "bin/python"
+    if not python.exists():
+        return None
+    try:
+        done = subprocess.run(
+            [str(python), "-c", BENCH],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+        timings = json.loads(done.stdout.strip().splitlines()[-1])
+        return {k: float(timings[k]) for k in ("float32", "bfloat16")}
+    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, IndexError):
+        return None
+
+
+def serve_dtype(
+    device: str, asked: str, bf16: bool | None, timings: dict | None = None
+) -> str | None:
+    """The --dtype to pass: as asked; on a CPU, float32 when bf16 measured clearly slower (or,
+    unmeasured, when the CPU flags show no native bf16); None leaves the runtime's own `auto`.
+    """
     if asked != "auto":
         return asked
-    return "float32" if device == "cpu" and bf16 is False else None
+    if device != "cpu":
+        return None
+    if timings is not None:
+        return "float32" if timings["bfloat16"] > SLOWER * timings["float32"] else None
+    return "float32" if bf16 is False else None
 
 
 def disk_short(venv: Path, device: str) -> str | None:
@@ -314,9 +363,18 @@ def main(argv: list[str]) -> int:
         return run(steps, args.dry_run)
     if args.command == "wait":
         return wait(args.port, args.timeout, args.log)
-    bf16 = detect.cpu_bf16() if args.device == "cpu" else None
-    dtype = serve_dtype(args.device, args.dtype, bf16)
-    if dtype == "float32" and args.dtype == "auto":
+    timings, bf16 = None, None
+    if args.device == "cpu" and args.dtype == "auto":
+        timings = None if args.dry_run else measure_dtypes(args.venv)
+        bf16 = detect.cpu_bf16() if timings is None else None
+    dtype = serve_dtype(args.device, args.dtype, bf16, timings)
+    if timings is not None:
+        kept = "float32" if dtype == "float32" else "the runtime's bf16"
+        print(
+            f"dtype: bf16 {timings['bfloat16']:.2f} ms, float32 {timings['float32']:.2f} ms"
+            f" per matmul, so {kept}"
+        )
+    elif dtype == "float32" and args.dtype == "auto":
         print("this CPU has no native bf16, so the runtime computes in float32")
     if args.command == "start":
         return start(
