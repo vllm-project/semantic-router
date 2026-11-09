@@ -240,7 +240,11 @@ func appendMaterializedEndpoint(
 	endpointName := effectiveEndpointName(
 		modelAlias, provider.Instance.Name, endpointURL.name, bindingIndex, endpointIndex,
 	)
-	cfg.ProviderProfiles[endpointName] = materializedProviderProfile(effective, endpointURL.url)
+	profile := materializedProviderProfile(effective, endpointURL.url)
+	if err := validateTrustedGatewayProfile(&profile); err != nil {
+		return fmt.Errorf("providers.models[%s].backend_refs[%d]: %w", modelAlias, bindingIndex, err)
+	}
+	cfg.ProviderProfiles[endpointName] = profile
 	address, port, scheme, err := endpointAddress(endpointURL.url)
 	if err != nil {
 		return fmt.Errorf("providers.models[%s].backend_refs[%d]: %w", modelAlias, bindingIndex, err)
@@ -251,6 +255,25 @@ func appendMaterializedEndpoint(
 		Model: modelAlias, Protocol: scheme,
 	})
 	params.PreferredEndpoints = append(params.PreferredEndpoints, endpointName)
+	return nil
+}
+
+// validateTrustedGatewayProfile requires a trusted gateway to have a wire
+// header that can carry the request's credential.
+func validateTrustedGatewayProfile(profile *ProviderProfile) error {
+	if !profile.TrustedGateway {
+		return nil
+	}
+	auth, err := profile.ResolveAuth()
+	if err != nil {
+		return err
+	}
+	if auth.Strategy == "none" || strings.TrimSpace(auth.Header) == "" {
+		return fmt.Errorf(
+			"trusted_gateway needs an auth header to carry the gateway credential; provider %q sends none, set auth.header",
+			profile.Type,
+		)
+	}
 	return nil
 }
 
@@ -279,7 +302,8 @@ func materializedProviderProfile(
 		ExtraHeaders:       mergeProviderHeaders(provider.Definition.DefaultHeaders, provider.Instance.Headers),
 		APIVersion:         provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
 		AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,
-		ChatPath: provider.Instance.ChatPath,
+		ChatPath:       provider.Instance.ChatPath,
+		TrustedGateway: provider.Instance.TrustedGateway,
 	}
 }
 

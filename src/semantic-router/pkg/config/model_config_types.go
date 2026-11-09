@@ -383,6 +383,10 @@ type ProviderProfile struct {
 	ExtraHeaders  map[string]string `yaml:"extra_headers,omitempty"`
 	APIVersion    string            `yaml:"api_version,omitempty"`
 	ChatPath      string            `yaml:"chat_path,omitempty"`
+	// TrustedGateway selects the request's trusted gateway credential as this
+	// backend's credential; static keys and per-user provider keys are not
+	// consulted for it.
+	TrustedGateway bool `yaml:"trusted_gateway,omitempty"`
 }
 
 type ModelPricing struct {

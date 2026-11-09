@@ -112,6 +112,12 @@ type CanonicalBackendRef struct {
 	ChatPath     string            `yaml:"chat_path,omitempty"`
 	APIKey       string            `yaml:"api_key,omitempty"`
 	APIKeyEnv    string            `yaml:"api_key_env,omitempty"`
+	// TrustedGateway marks an upstream gateway that receives the request's
+	// deployment-injected gateway credential (global.services.authz
+	// .gateway_credential) under this backend's auth header, instead of a
+	// static api_key. A request without a trusted credential is rejected
+	// before dispatch.
+	TrustedGateway bool `yaml:"trusted_gateway,omitempty"`
 	// Auth is the backend's credential, as in a deployment's connection
 	// block: the header (the provider's own when unset), the prefix ("" sends
 	// the bare key) and the key's environment variable.
