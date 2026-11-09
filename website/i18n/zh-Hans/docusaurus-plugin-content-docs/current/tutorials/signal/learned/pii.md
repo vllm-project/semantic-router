@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/signal/learned/pii.md"
-  outdated: false
+  outdated: true
 ---
 
 # 个人身份信息信号 {#pii-signal}
@@ -11,7 +12,7 @@ translation:
 
 `pii` 检测请求中的敏感个人数据。在 `routing.signals.pii` 下定义 PII 规则。
 
-它使用通过 `global.model_catalog.system.pii_classifier` 配置的 PII 检测器。
+除非 `pii` 绑定指定了其他部署，否则由决策模型回答它；见[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md)。`global.model_catalog.modules.classifier.pii` 保存它的扫描设置。
 
 ## 主要优势 {#key-advantages}
 
@@ -54,7 +55,7 @@ routing:
 
 ## 完整的本地扫描 {#complete-local-scans}
 
-默认的 PII 模型 Vela 2.0 0.3B 完整读取每个文本项（最多 8,192 个 token），用它的路由片段头找出片段。模块运行 Vela 1.0 PII 时，逐项扫描最多 32,768 个 token（含特殊 token）的文本。
+默认的决策模型在其自身输入上限内用路由片段头找出片段；各模型的上限见[选择模型](../../../model-runtime/choose-a-model.md#vela-20)。绑定到 Vela 1.0 PII 时，信号逐项扫描最多 32,768 个 token（含特殊 token）的文本。
 每次前向计算最多处理 512 个 token，相邻窗口重叠 255 个内容 token。
 窗口由模型 tokenizer 确定；覆盖范围不依赖字符估算或窗口边界处的重新分词。
 
@@ -62,7 +63,7 @@ routing:
 最后统一解码 BIO 实体。重叠不会重复计算输入用量或实体置信度。
 这保证已准入 token 的完整覆盖，不保证检测准确率，也不等于单次 32K 前向的质量。
 
-显式模块预算、后端、窗口或配方绑定保留各自策略。例如，配置
+显式模块预算、窗口或 `pii` 绑定保留各自策略。例如，配置
 `input: {max_tokens: 8192, overflow: reject}` 的部署仍会拒绝超限输入。
 显式启用窗口的示例：
 
@@ -76,19 +77,18 @@ global:
           window: {size: 512, overlap: 255}
 ```
 
-使用命名绑定时，在部署中声明 `input.overflow: window` 和正整数
+使用 `pii` 绑定时，在部署中声明 `input.overflow: window` 和正整数
 `input.max_tokens`；此限制替代模块预算。窗口大小与重叠仍由同一个 `window` 块提供。
 不支持的适配器、缺少窗口参数或超过已加载模型容量的限制都会报错。
 窗口大小包含 tokenizer 的特殊 token，重叠只计算内容 token。
 
 文本超过文档限制或任一窗口失败时，会返回分类器错误，不会将部分扫描报告为成功。
 既有 `on_error` 和决策 `rules.on_unknown` 策略决定路由结果。
-远程后端及显式截断配置保留下文所述的部分结果语义。
+远程部署及显式截断配置保留下文所述的部分结果语义。
 
 ## Vela 2.0 {#vela-20}
 
-把 `pii_classifier` 绑定到 Vela 2.0 部署后，信号会向模型提出它内置的 PII 问题（由其路由片段头回答），而不再调用单独的 PII 模型。
-这个 PII 问题会与该部署针对同一文本的 [`decision`](decision.md) 问题在同一次调用中发送：
+把 `pii` 绑定到 Vela 2.0 部署后，信号会向模型提出它内置的 PII 问题（由其路由片段头回答），而不再调用单独的 PII 模型。这个 PII 问题会与该部署针对同一文本的 [`decision`](decision.md) 问题在同一次调用中发送：
 
 ```yaml
 global:
@@ -99,35 +99,23 @@ global:
         artifact: vllm-sr/Vela-2.0-0.3B
         device: cpu
     bindings:
-      pii_classifier:
-        deployment: vela2
-        contract: token_spans.v1
+      pii: vela2
 ```
 
-- 模型识别与 Vela 1.0 PII 相同的 17 种实体类型，并在片段中直接给出类型名，因此绑定不需要 `mapping_path`。
+- 模型识别与 Vela 1.0 PII 相同的 17 种实体类型，并在片段中直接给出类型名。
 - Router 将每段文本作为一个状态发送。运行时必须在模型与扫描预算内覆盖准入文本；超出策略的内容是未扫描，不是干净。一个状态不保证一次 forward，也不代表无限上下文。详见 [PII 运行时指南](../../../model-runtime/guides/pii)。
 - 模型校准后的阈值决定它报告哪些片段；规则的 `threshold` 与 `pii_types_allowed` 随后像 Vela 1.0 一样作用于这些片段，片段概率是其中各词概率的平均值。
-- `head` 只能是 `router`，即回答 PII 问题的片段头。
+- 要选择回答 PII 问题的片段头，把绑定写成对象：`pii: {deployment: vela2, head: router}`。`router` 是它唯一接受的头。
 
-显式 Vela 1.0 PII 绑定保留该专用模型；未绑定的任务使用配置的默认判断模型部署。
+绑定到 Vela 1.0 PII 部署的 `pii` 保留该专用模型；没有绑定时，PII 使用决策模型。
 
-## 用判断模型检测存在性与类别 {#presence-and-categories-with-a-decision-model}
+## 不含位置的 PII {#pii-without-positions}
 
-判断模型可以回答是否存在 PII、出现了哪些类别，而不定位字符。显式选择此任务契约：
+如果 `systemone` 部署的能力既未列出 `pii` 预设、也不支持 `span` 问题，它只能以是/否回答 PII：信号知道文本里是否有个人数据，但不知道在哪里。加载时报告 `span_fallback` 警告，Router 在 `vsr_signal_span_verdict_fallbacks_total` 中记录每次这样的回答，在该部署上对 PII 做 masking 的配置会被拒绝。需要精确位置时，把 `pii` 绑定到返回片段的部署。
 
-```yaml
-routing:
-  model_bindings:
-    pii_classifier:
-      deployment: primary
-      contract: decision.v1
-```
+## 远程 PII 服务 {#remote-pii-service}
 
-它使用 `pii_presence`（`noul`）和 `pii_categories`（`set`）。没有原生 `set` 头时，任务编译器可按类别组合多个 `noul` 问题。仍必须覆盖完整输入。这些结果不含实体偏移，不能被当成脱敏片段；需要精确位置时，使用具有原生 `span` 能力的模型和 `token_spans.v1`。任务可用仅表示契约可执行，不保证检测准确率。
-
-## 远程后端 {#remote-backend-token_spansv1}
-
-没有 `backend` 时，PII 检测保持本地模型。远程 PII 分类器使用共享 backend 块：`model` 命名 `global.model_catalog.external[]` 中带 `model_role: classification` 的条目，协议是 `http_classify`，约定是 `token_spans.v1`。服务接收 `{"inputs": "<request text>"}`，并回答实体片段：其 `start`/`end` 是该精确字符串中的 Unicode 码点偏移，`label` 来自已配置的 PII 映射，`score` 在 `[0, 1]` 内，以及片段 `text`，必须等于它指向的切片。HuggingFace token 分类拼写 `entity_group` 与 `word` 作为别名接受。裸 JSON 片段列表或信封 `{"spans": [...], "truncated_at": n, "model": "..."}` 都有效；信封的 `model` 若存在，必须等于目录条目的 `llm_model_name`。
+远程 PII 分类器是 `pii` 所绑定的 `classify` 部署。Router 向 `<endpoint>/classify` 发送请求；服务接收 `{"inputs": "<request text>"}`，并回答实体片段：其 `start`/`end` 是该精确字符串中的 Unicode 码点偏移，`label` 来自已配置的 PII 映射，`score` 在 `[0, 1]` 内，以及片段 `text`，必须等于它指向的切片。HuggingFace token 分类拼写 `entity_group` 与 `word` 作为别名接受。裸 JSON 片段列表或信封 `{"spans": [...], "truncated_at": n, "model": "..."}` 都有效；信封的 `model` 若存在，必须等于部署的 `model`。
 
 当片段超出文本、与自身重叠、携带未知或范围外标签、分数越界、别名值冲突，或正文不是片段列表时，Router 拒绝整个响应，而不是部分接受。已声明的 `truncated_at` 保留截止前的片段，并将其余内容标记为未打分。被拒绝或部分响应对 PII 规则的影响由 `on_error` 决定：`allow`（默认）把未读内容当作未匹配，`block` 将其匹配为 `classification_error`，因此未核验文本不能当作干净通过。模型完全没有读取的内容（超过模型输入上限或[扫描上限](../../../model-runtime/reference#long-inputs)的输入、被截断的输入，或未能在信号截止时间内扫描的输入）无论 `on_error` 如何设置都会以 `unscanned` 匹配，因此长请求按私有内容路由；设置 `classifier.pii.on_unscanned: allow` 可将其交给 `on_error`。
 
@@ -138,25 +126,22 @@ PII 映射不能将 `classification_error` 声明为实体标签。带 `B-`、`I
 ```yaml
 global:
   model_catalog:
-    external:
-      - name: pii-service
-        model_role: classification
-        llm_endpoint:
-          address: pii-spans.default.svc
-          port: 8080
-        llm_model_name: pii-spans-v1
+    deployments:
+      pii-service:
+        provider: classify
+        endpoint: https://pii-spans.example.com
+        model: pii-spans-v1
+        auth: {api_key_env: PII_SERVICE_KEY}
+        timeout_ms: 5000
+    bindings:
+      pii: pii-service
     modules:
       classifier:
         pii:
-          backend:
-            protocol: http_classify
-            contract: token_spans.v1
-            model: pii-service
-            deadline_ms: 5000
           on_error: block
 ```
 
-无论片段来自本地模型还是远程后端，`PIIDetected`、`PIIEntities`、`MatchedPIIRules` 与掩码文本都相同；重叠与嵌套片段在掩码前合并。
+无论片段来自本地模型还是远程部署，`PIIDetected`、`PIIEntities`、`MatchedPIIRules` 与掩码文本都相同；重叠与嵌套片段在掩码前合并。
 
 ## 依赖与限制 {#dependencies-and-limitations}
 

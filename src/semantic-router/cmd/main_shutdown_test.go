@@ -1,3 +1,5 @@
+//go:build !windows
+
 package main
 
 import (
@@ -9,8 +11,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
 func TestRunRouterProcessShutsDownManagementServerWhenStartupIsCancelled(t *testing.T) {
@@ -54,6 +60,49 @@ global:
 	}
 
 	requireListenerReleased(t, "management", fmt.Sprintf("127.0.0.1:%d", apiPort))
+}
+
+// A management API that cannot bind stops the start with its cause, returned
+// to the caller and recorded in the startup status, instead of exiting the
+// process.
+func TestRunRouterProcessReturnsTheManagementAPIBindFailure(t *testing.T) {
+	taken, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer taken.Close()
+	apiPort := taken.Addr().(*net.TCPAddr).Port
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	configYAML := fmt.Sprintf(`version: v0.3
+global:
+  services:
+    management_api:
+      bind_address: 127.0.0.1
+      port: %d
+      remote_exposure: false
+      auth:
+        mode: disabled
+`, apiPort)
+	if err = os.WriteFile(configPath, []byte(configYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("VLLM_SR_RUNTIME_STATUS_DIR", dir)
+
+	err = runRouterProcess(context.Background(), runtimeOptions{
+		configPath: configPath,
+		port:       freePort(t),
+		apiPort:    apiPort,
+		apiBind:    "127.0.0.1",
+		enableAPI:  true,
+	})
+	if err == nil || !strings.HasPrefix(err.Error(), "start management API: ") || !errors.Is(err, syscall.EADDRINUSE) {
+		t.Fatalf("runRouterProcess() error = %v, want the management API's bind failure", err)
+	}
+	state, loadErr := startupstatus.Load(filepath.Join(dir, "router-runtime.json"))
+	if loadErr != nil || state.Phase != "error" || state.Message != err.Error() {
+		t.Fatalf("startup status = %+v (%v), want the bind failure", state, loadErr)
+	}
 }
 
 func TestRunRouterProcessLoadedShutdownIsBoundedAndReleasesListener(t *testing.T) {

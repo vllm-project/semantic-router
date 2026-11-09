@@ -26,6 +26,7 @@ var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
 	"rag":                 emitRAGPluginConfig,
 	"header_mutation":     emitHeaderMutationPluginConfig,
 	"response_jailbreak":  emitResponseJailbreakPluginConfig,
+	"masking":             emitStructuredPluginConfig,
 }
 
 func decompilePluginConfig(p *config.DecisionPlugin) string {
@@ -264,11 +265,7 @@ func emitRAGCorePluginConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
 
 func emitRAGBackendAndFailureConfig(sb *strings.Builder, cfg *config.RAGPluginConfig) {
 	if cfg.Rerank != nil {
-		if cfg.Rerank.TopK == nil {
-			fmt.Fprint(sb, "    rerank: {}\n")
-		} else {
-			fmt.Fprintf(sb, "    rerank: { top_k: %d }\n", *cfg.Rerank.TopK)
-		}
+		fmt.Fprintf(sb, "    rerank: %s\n", formatRAGRerank(cfg.Rerank))
 	}
 	if backendConfig, ok := normalizePluginConfigMap(cfg.BackendConfig); ok && len(backendConfig) > 0 {
 		fmt.Fprintf(sb, "    backend_config: %s\n", formatPluginConfigValue(backendConfig))
@@ -335,4 +332,27 @@ func emitResponseJailbreakPluginConfig(
 	if cfg.Action != "" {
 		fmt.Fprintf(sb, "    action: %q\n", cfg.Action)
 	}
+}
+
+// formatRAGRerank writes a rag plugin's rerank block: the deployment that
+// scores the passages, how many it keeps, and the pair scorer's layer and
+// dimension.
+func formatRAGRerank(rerank *config.RAGRerankConfig) string {
+	var parts []string
+	if rerank.Deployment != "" {
+		parts = append(parts, fmt.Sprintf("deployment: %q", rerank.Deployment))
+	}
+	if rerank.TopK != nil {
+		parts = append(parts, fmt.Sprintf("top_k: %d", *rerank.TopK))
+	}
+	if rerank.Layer != 0 {
+		parts = append(parts, fmt.Sprintf("layer: %d", rerank.Layer))
+	}
+	if rerank.Dimension != 0 {
+		parts = append(parts, fmt.Sprintf("dimension: %d", rerank.Dimension))
+	}
+	if len(parts) == 0 {
+		return "{}"
+	}
+	return "{ " + strings.Join(parts, ", ") + " }"
 }

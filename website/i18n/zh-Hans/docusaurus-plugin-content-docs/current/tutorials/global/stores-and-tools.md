@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/global/stores-and-tools.md"
@@ -118,7 +119,20 @@ Qdrant 示例的 0.30 阈值基于原始余弦分数，只是起点，而不是�
 - [Qdrant](../../installation/qdrant) — Docker、Kubernetes、配置参考、调优和排障
 - `config/runtime/memory/` 提供后端专用配置参考
 
-当配置了带 `model_role: memory_rewrite` 的外部模型时，其 `max_response_bytes` 限制每次查询改写响应。省略或非正值使用 1 MiB 默认值。
+`query_rewrite.deployment` 指定在记忆检索前结合对话改写查询的 `openai_chat` 部署；未配置时按原样检索查询。该部署的 `limits.max_response_bytes` 限制每次改写响应（默认 1 MiB）：
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      rewriter:
+        provider: openai_chat
+        endpoint: http://llm.example.com:8000/v1
+        model: qwen3
+  stores:
+    memory:
+      query_rewrite: {deployment: rewriter}
+```
 
 #### 混合检索与反思 {#hybrid-search-and-reflection}
 
@@ -143,6 +157,8 @@ global:
 ```
 
 支持的后端：`memory`、`milvus`、`llama_stack`、`valkey`、`qdrant`。
+
+上传的文件本身保存在 Router 的磁盘上，位于 `file_storage_dir`（默认 `/var/lib/vsr/data`）。[Router 本地磁盘上的文件](../../installation/storage-overview#router-local-files)说明了每种部署方式如何让该目录可写，以及如何让它持久保存。
 
 `metadata_store` 控制向量存储和已上传文件元数据的注册表。本地或类生产堆栈若需重启安全，请使用 `postgres`；CLI 本地运行时在设置 `metadata_store: postgres` 时会配置 Postgres 并填充 `metadata_postgres` 连接默认值。仅对短暂的本地实验使用 `memory`，因为存储和文件元数据会在路由器重启后丢失。
 

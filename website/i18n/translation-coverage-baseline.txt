@@ -27,8 +27,10 @@ zh-Hans	faq.md
 zh-Hans	installation/agent-harness.md
 zh-Hans	installation/agent.md
 zh-Hans	installation/amd-rocm.md
+zh-Hans	installation/ascend-npu.md
 zh-Hans	installation/backend-target-compatibility.md
 zh-Hans	installation/catalog-backed-models.md
+zh-Hans	installation/choose-a-model-for-a-signal.md
 zh-Hans	installation/configuration-contract.md
 zh-Hans	installation/configuration-management.md
 zh-Hans	installation/configuration-workflows.md
@@ -53,9 +55,11 @@ zh-Hans	installation/k8s/operator.md
 zh-Hans	installation/k8s/production-stack.md
 zh-Hans	installation/k8s/streamed-extproc.md
 zh-Hans	installation/milvus.md
+zh-Hans	installation/model-catalog.md
 zh-Hans	installation/model-configuration-patterns.md
 zh-Hans	installation/model-configuration.md
 zh-Hans	installation/model-reasoning.md
+zh-Hans	installation/model-resource-migration.md
 zh-Hans	installation/nvidia-cuda.md
 zh-Hans	installation/ollama.md
 zh-Hans	installation/protocol-compatibility.md
@@ -115,6 +119,7 @@ zh-Hans	proposals/standalone-mode.md
 zh-Hans	proposals/unified-config-contract-v0-3.md
 zh-Hans	proposals/unified-model-catalog-and-evaluation-index.md
 zh-Hans	release-notes/router-memory-prometheus-labels.md
+zh-Hans	release-notes/unified-model-resources.md
 zh-Hans	training/classifier-models.md
 zh-Hans	training/ml-model-selection.md
 zh-Hans	training/mmbert-32k-models.md

@@ -1,9 +1,10 @@
 ---
+is_mtpe: false
 sidebar_position: 6
 translation:
   source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
   source_file: "docs/installation/valkey-memory.md"
-  outdated: false
+  outdated: true
 ---
 
 # Valkey 智能体记忆

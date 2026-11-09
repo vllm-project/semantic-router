@@ -18,11 +18,18 @@ labels from model names alone.
 
 ## Install
 
+This directory is a uv project. `pyproject.toml` bounds the dependencies and
+`uv.lock` pins them. From this directory:
+
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+uv sync --locked                      # service, benchmark and tests
+uv sync --locked --group embeddings   # also sentence-transformers and torch, to train
 ```
+
+Run the commands below with `uv run`, for example
+`uv run python train.py --help`. Embedding generation needs the `embeddings`
+group; `embeddings.py` guards those imports, so the tests run without it.
+`requirements.txt` and `requirements-parity.txt` stay for `pip` users and CI.
 
 Validation builds the router's selectors with Go and embeds queries through
 the model runtime (`vllm-sr serve`).
@@ -138,6 +145,15 @@ repository root with NumPy, scikit-learn, pytest and Go:
 
 ```bash
 make test-model-selection-parity
+```
+
+The same two pytest files through the locked environment:
+
+```bash
+uv run --project src/training/model_selection/ml_model_selection \
+  python -m pytest -q src/training/model_selection/ml_model_selection/tests/test_selector_parity.py
+uv run --project src/training/model_selection/ml_model_selection \
+  python -m pytest -q src/training/model_selection/ml_model_selection/tests/test_service_boundary.py
 ```
 
 It trains real sklearn selectors, exports them and replays the same queries

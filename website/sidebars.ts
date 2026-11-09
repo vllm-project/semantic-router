@@ -42,6 +42,7 @@ const sidebars: SidebarsConfig = {
           label: 'Plan a Deployment',
           items: [
             'installation/deployment-options',
+            'installation/deployment-architecture',
             'installation/gateway-modes',
             'installation/support-matrix',
           ],
@@ -210,6 +211,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/plugin/fast-response',
                 'tutorials/plugin/header-mutation',
                 'tutorials/plugin/context-compression',
+                'tutorials/plugin/masking',
                 'tutorials/plugin/request-params',
                 'tutorials/plugin/system-prompt',
                 'tutorials/plugin/tool-selection',
@@ -317,6 +319,18 @@ const sidebars: SidebarsConfig = {
                 'installation/model-configuration-patterns',
               ],
             },
+            {
+              type: 'category',
+              label: 'Router Model Catalog',
+              link: {
+                type: 'doc',
+                id: 'installation/choose-a-model-for-a-signal',
+              },
+              items: [
+                'installation/model-catalog',
+                'installation/model-resource-migration',
+              ],
+            },
           ],
         },
         {
@@ -381,6 +395,7 @@ const sidebars: SidebarsConfig = {
               items: [
                 'installation/amd-rocm',
                 'installation/nvidia-cuda',
+                'installation/ascend-npu',
               ],
             },
           ],
@@ -431,6 +446,7 @@ const sidebars: SidebarsConfig = {
             'proposals/decision-ranking-semantics',
             'proposals/batch-and-capacity-aware-routing',
             'proposals/router-learning-memory-and-adaptations',
+            'proposals/success-constrained-selection',
             'proposals/prompt-classification-routing',
           ],
         },
@@ -496,6 +512,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'training/mmbert-32k-models',
             'training/multimodal-embeddings',
+            'training/router-embeddings-huggingface',
           ],
         },
         {

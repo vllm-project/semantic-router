@@ -32,10 +32,10 @@ func TestScoringHTTPBackend_ReadsTheScore(t *testing.T) {
 	}))
 	defer server.Close()
 
-	backend, err := newScoringHTTPBackend(&config.ExternalModelConfig{
+	backend, err := newScoringHTTPBackend(externalClassifyDeployment(&config.ExternalModelConfig{
 		ModelEndpoint: endpointForTestServer(t, server),
 		ModelName:     "difficulty-scorer-svc",
-	}, time.Second)
+	}, time.Second))
 	if err != nil {
 		t.Fatalf("newScoringHTTPBackend: %v", err)
 	}
@@ -61,10 +61,10 @@ func TestScoringHTTPBackend_PreservesCallerCancellation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	backend, err := newScoringHTTPBackend(&config.ExternalModelConfig{
+	backend, err := newScoringHTTPBackend(externalClassifyDeployment(&config.ExternalModelConfig{
 		ModelEndpoint: endpointForTestServer(t, server),
 		ModelName:     "difficulty-scorer-svc",
-	}, time.Second)
+	}, time.Second))
 	if err != nil {
 		t.Fatalf("newScoringHTTPBackend: %v", err)
 	}
@@ -111,10 +111,10 @@ func TestScoringHTTPBackend_RejectsAmbiguousResponses(t *testing.T) {
 			_, _ = w.Write([]byte(body))
 		}))
 
-		backend, err := newScoringHTTPBackend(&config.ExternalModelConfig{
+		backend, err := newScoringHTTPBackend(externalClassifyDeployment(&config.ExternalModelConfig{
 			ModelEndpoint: endpointForTestServer(t, server),
 			ModelName:     "difficulty-scorer-svc",
-		}, time.Second)
+		}, time.Second))
 		if err != nil {
 			server.Close()
 			t.Fatalf("%s: newScoringHTTPBackend: %v", name, err)
@@ -134,10 +134,10 @@ func TestScoringHTTPBackend_NeedsNoLabelMapping(t *testing.T) {
 	}))
 	defer server.Close()
 
-	backend, err := newScoringHTTPBackend(&config.ExternalModelConfig{
+	backend, err := newScoringHTTPBackend(externalClassifyDeployment(&config.ExternalModelConfig{
 		ModelEndpoint: endpointForTestServer(t, server),
 		ModelName:     "difficulty-scorer-svc",
-	}, time.Second)
+	}, time.Second))
 	if err != nil {
 		t.Fatalf("a score backend must construct without a label mapping: %v", err)
 	}
@@ -154,10 +154,10 @@ func TestScoringHTTPBackend_NeedsNoLabelMapping(t *testing.T) {
 }
 
 func TestScoringHTTPBackend_RequiresAnEndpoint(t *testing.T) {
-	if _, err := newScoringHTTPBackend(nil, time.Second); err == nil {
+	if _, err := newScoringHTTPBackend(externalClassifyDeployment(nil, time.Second)); err == nil {
 		t.Error("expected a nil external model to be rejected")
 	}
-	if _, err := newScoringHTTPBackend(&config.ExternalModelConfig{ModelName: "x"}, time.Second); err == nil {
+	if _, err := newScoringHTTPBackend(externalClassifyDeployment(&config.ExternalModelConfig{ModelName: "x"}, time.Second)); err == nil {
 		t.Error("expected a missing endpoint address to be rejected")
 	}
 }
@@ -177,10 +177,10 @@ func TestScoringHTTPBackend_RejectsAMissingScore(t *testing.T) {
 			_, _ = w.Write([]byte(body))
 		}))
 
-		backend, err := newScoringHTTPBackend(&config.ExternalModelConfig{
+		backend, err := newScoringHTTPBackend(externalClassifyDeployment(&config.ExternalModelConfig{
 			ModelEndpoint: endpointForTestServer(t, server),
 			ModelName:     "difficulty-scorer-svc",
-		}, time.Second)
+		}, time.Second))
 		if err != nil {
 			server.Close()
 			t.Fatalf("%s: newScoringHTTPBackend: %v", name, err)
@@ -200,10 +200,10 @@ func TestScoringHTTPBackend_AcceptsAGenuineZero(t *testing.T) {
 	}))
 	defer server.Close()
 
-	backend, err := newScoringHTTPBackend(&config.ExternalModelConfig{
+	backend, err := newScoringHTTPBackend(externalClassifyDeployment(&config.ExternalModelConfig{
 		ModelEndpoint: endpointForTestServer(t, server),
 		ModelName:     "difficulty-scorer-svc",
-	}, time.Second)
+	}, time.Second))
 	if err != nil {
 		t.Fatalf("newScoringHTTPBackend: %v", err)
 	}
@@ -226,10 +226,10 @@ func TestScoringHTTPBackend_RejectsNonFiniteScores(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(body))
 		}))
-		backend, err := newScoringHTTPBackend(&config.ExternalModelConfig{
+		backend, err := newScoringHTTPBackend(externalClassifyDeployment(&config.ExternalModelConfig{
 			ModelEndpoint: endpointForTestServer(t, server),
 			ModelName:     "difficulty-scorer-svc",
-		}, time.Second)
+		}, time.Second))
 		if err != nil {
 			server.Close()
 			t.Fatalf("%s: newScoringHTTPBackend: %v", name, err)

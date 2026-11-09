@@ -25,11 +25,13 @@ func validatePromptGuardBackend(cfg *RouterConfig) error {
 		if !exists {
 			return fmt.Errorf("prompt_guard binding names an unknown deployment")
 		}
-		if err := guard.ValidateBoundWindow(deployment); err != nil {
-			return err
+		if !deployment.Translated() {
+			if err := guard.ValidateBoundWindow(deployment); err != nil {
+				return err
+			}
+			// Execution comes from the explicit binding, not a legacy variant.
+			guard.Window = nil
 		}
-		// Execution comes from the explicit binding, not a legacy variant.
-		guard.Window = nil
 	}
 	if err := validatePromptGuardBackendConfig(&guard); err != nil {
 		return err
@@ -127,6 +129,9 @@ func validatePromptGuardWiring(cfg *RouterConfig) error {
 		}
 		if _, err := ResolveRemoteClassifierBackend(cfg, backend, ModelRoleGuardrail, contract); err != nil {
 			return fmt.Errorf("prompt_guard: %w", err)
+		}
+		if cfg.PromptGuard.Window != nil {
+			return fmt.Errorf("prompt_guard.window requires the local model")
 		}
 		if cfg.PromptGuard.Enabled && cfg.PromptGuard.JailbreakMappingPath == "" {
 			return fmt.Errorf("prompt_guard.jailbreak_mapping_path is required for an enabled backend")

@@ -170,12 +170,17 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	if response := r.runLooperInternalPlugins(ctx, decisionName); response != nil {
 		return response, nil
 	}
-	compressionErr := r.applySemanticContextCompression(ctx, request)
-	if compressionErr != nil {
-		return r.createErrorResponse(
-			500,
-			"Context compression failed under fail_closed policy",
-		), nil
+	// Recovery follow-ups already carry uncompressed retrieved payloads and
+	// the reserved retrieve tool. Re-compressing that hop fails closed on
+	// vsr_context_retrieve injection.
+	if !isContextRecoveryFollowupRequest(request) {
+		compressionErr := r.applySemanticContextCompression(ctx, request)
+		if compressionErr != nil {
+			return r.createErrorResponse(
+				500,
+				"Context compression failed under fail_closed policy",
+			), nil
+		}
 	}
 	err = r.modifyRequestBodyForLooper(
 		request,
@@ -290,7 +295,8 @@ func (r *OpenAIRouter) parseLooperRequestForPlugins(
 		})
 		return nil, err
 	}
-	ctx.UserContent = extractSemanticRequestSignals(ctx.SemanticRequest).UserContent
+	snapshot := extractSemanticRequestSignalsWith(ctx.SemanticRequest, r.routingInputSelector())
+	ctx.UserContent, ctx.RoutingInput = snapshot.UserContent, snapshot.RoutingInput
 	return ctx.SemanticRequest, nil
 }
 
@@ -307,7 +313,7 @@ func (r *OpenAIRouter) runLooperInternalPlugins(
 	}
 
 	if err := r.executeRAGPlugin(ctx, decisionName); err != nil {
-		return r.createErrorResponse(503, fmt.Sprintf("RAG failed: %v", err))
+		return r.createErrorResponse(503, "RAG retrieval failed")
 	}
 
 	return nil

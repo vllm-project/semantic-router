@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import math
 import re
@@ -14,6 +13,7 @@ from pathlib import Path
 
 import yaml
 from ci_results import actual_platform, collection_errors
+from image_artifacts import file_digest
 from prepare_model_test_assets import pins, verify
 from workflow_evidence import go_cases
 
@@ -28,7 +28,7 @@ def read(path: Path) -> dict:
 
 def file_sha(path: Path) -> str:
     with path.open("rb") as stream:
-        return "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+        return "sha256:" + file_digest(stream, "sha256").hexdigest()
 
 
 def model_identity(manifest: dict) -> tuple[dict, dict[str, str]]:

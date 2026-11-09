@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 配置工作流
 description: 选择 CLI、控制面板、Helm、Operator 和 DSL 如何编写并应用同一份 canonical Router 配置。
 translation:
@@ -118,7 +119,7 @@ Operator 从两个 Kubernetes 原生输入渲染 canonical 配置：
 - `spec.vllmEndpoints` 发现模型服务，并创建 provider 绑定和 model card；以及
 - `spec.config.routing` 接受 canonical 路由对象。
 
-其他 `spec.config` 字段是用于响应缓存、分类器、工具、可观测性、推理家族和相关共享设置的类型化 Operator 适配器。Operator 将它们翻译为 canonical provider 和 `global` 节。
+其他 `spec.config` 字段是用于响应缓存、分类器、工具、可观测性、推理家族和相关共享设置的类型化 Operator 适配器。Operator 将它们翻译为 canonical provider 和 `global` 节。`spec.config.model_deployments`、`model_bindings` 和 `decision_model` 承载模型目录；见[模型部署与决策模型](../api/semantic-router-crd#model-deployments-and-the-decision-model)。
 
 ```yaml
 spec:

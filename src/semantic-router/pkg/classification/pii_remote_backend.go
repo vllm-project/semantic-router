@@ -18,7 +18,7 @@ type piiHTTPBackend struct {
 	backend *HTTPTokenClassifierInference
 }
 
-func newPIIHTTPTokenClassifierInference(external *config.ExternalModelConfig, mapping *PIIMapping, deadline time.Duration) (*HTTPTokenClassifierInference, error) {
+func newPIIHTTPTokenClassifierInference(deployment config.ModelDeployment, mapping *PIIMapping) (*HTTPTokenClassifierInference, error) {
 	if mapping == nil || len(mapping.LabelToIdx) == 0 {
 		return nil, fmt.Errorf("PII label mapping is required for token_spans")
 	}
@@ -30,11 +30,11 @@ func newPIIHTTPTokenClassifierInference(external *config.ExternalModelConfig, ma
 	for label := range outside {
 		labels.Outside = append(labels.Outside, label)
 	}
-	return newHTTPTokenClassifierInference(external, labels, deadline)
+	return newHTTPTokenClassifierInference(deployment, labels)
 }
 
 func newPIIHTTPBackend(external *config.ExternalModelConfig, mapping *PIIMapping, deadline time.Duration) (PIIInference, error) {
-	backend, err := newPIIHTTPTokenClassifierInference(external, mapping, deadline)
+	backend, err := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(external, deadline), mapping)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PII token_spans backend: %w", err)
 	}

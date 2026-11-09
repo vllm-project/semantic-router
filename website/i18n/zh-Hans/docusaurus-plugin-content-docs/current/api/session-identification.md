@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
   source_file: "docs/api/session-identification.md"

@@ -34,10 +34,10 @@ func validateSafetyModelBinding(rules []SafetyRule, name string, decl ModelBindi
 	if hazard {
 		want = RemoteClassifierContractLabelScores
 	}
-	if decl.Contract != want {
+	if decl.Contract != want && (!deployment.IsSystemOne() || decl.Contract != DecisionTaskContract) {
 		return fmt.Errorf("safety head requires %s", want)
 	}
-	if deployment.Provider == "http" && decl.Adapter != RemoteClassifierProtocolHTTPClassify {
+	if remoteTaskProvider(deployment) && decl.Adapter != RemoteClassifierProtocolHTTPClassify {
 		return fmt.Errorf("safety HTTP head requires http_classify")
 	}
 	return nil

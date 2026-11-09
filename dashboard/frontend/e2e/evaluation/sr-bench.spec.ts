@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
-import { mockAuthenticatedAppShell } from '../support/auth'
+import { mockAuthenticatedAppShell, unavailableCapability } from '../support/auth'
 
 const target = {
   id: 'single',
@@ -69,8 +69,12 @@ const comparisonProtocol = {
   baseline_selection_qualification: 'Delivered outcomes under the frozen limits.',
 }
 
-async function mockBench(page: Page, settings: Record<string, unknown> = {}) {
-  await mockAuthenticatedAppShell(page, { settings })
+async function mockBench(
+  page: Page,
+  settings: Record<string, unknown> = {},
+  capabilities: Record<string, Record<string, unknown>> = {},
+) {
+  await mockAuthenticatedAppShell(page, { settings, capabilities })
   const requests: unknown[] = []
   await page.route('**/api/sr-bench/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname.replace('/api/sr-bench/v1', '')
@@ -1252,10 +1256,7 @@ test('keeps actions disabled in a server readonly session', async ({ page }) => 
 })
 
 test('explains an unavailable worker without exposing a broken workspace', async ({ page }) => {
-  await mockBench(page, {
-    srBenchAvailable: false,
-    srBenchUnavailableReason: 'Start the sr-bench service.',
-  })
+  await mockBench(page, {}, { evaluation: unavailableCapability('Start the sr-bench service.') })
   await page.goto('/evaluation')
   await expect(page.getByText('Start the sr-bench service.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Start evaluation' })).toHaveCount(0)

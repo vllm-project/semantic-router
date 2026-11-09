@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 后端目标兼容性
 description: 查看哪些后端目标形式能在 Docker、Helm、Operator、控制面板和配方工作流中保留。
 translation:
@@ -47,6 +48,8 @@ Semantic Router 使用 `providers.models[].backend_refs[]` 作为逻辑模型名
 
 <!-- END BACKEND TARGET COMPATIBILITY MATRIX -->
 
+URL 那一行是完整 URL 的目标形式：在 `endpoint` 中写完整 URL（[迁移模型资源](model-resource-migration.md#request-backends)展示了早期写法）。
+
 默认 standalone 前端直接使用后端池；`--gateway extproc` 则为每个逻辑模型生成一条 Envoy 路由。在 Envoy 路径中，请求标头、Host 重写和 TLS SNI 来自第一个 ref；只有所有 ref 的路径相同时才应用路径前缀。为保持部署方式之间的可移植性，请为同一逻辑模型使用兼容的传输元数据。这里的 Chat 后端池与[模型运行时副本池](../overview/component-architecture#scale-a-deployment-through-replicas)不同；基于 Chat 后端实时推理遥测的选择由 [#2332](https://github.com/vllm-project/semantic-router/issues/2332) 跟踪。
 
 ## 可移植的目标形式
@@ -67,7 +70,7 @@ providers:
           weight: 100
 ```
 
-当上游身份包含 scheme 或路径时，使用 `base_url`。将凭据保留在环境引用中，而不是提交到 YAML：
+当上游身份包含 scheme 或路径时，在 `endpoint` 中写完整 URL。将凭据保留在环境引用中，而不是提交到 YAML：
 
 ```yaml
 providers:
@@ -77,17 +80,15 @@ providers:
       api_format: openai
       backend_refs:
         - name: hosted-primary
-          base_url: https://provider.example/v1
+          endpoint: https://provider.example.com/v1
           provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: PROVIDER_API_KEY
-          extra_headers:
+          auth: {header: Authorization, prefix: Bearer, api_key_env: PROVIDER_API_KEY}
+          headers:
             X-Tenant: production
           weight: 100
 ```
 
-对于可移植配置，不要在 `endpoint` 中放入 URL scheme 或路径。某些本地生成路径会接受这些形式，但并非每个维护中的生成方都对其含义达成一致。`base_url` 是 canonical URL 形式。
+`host[:port]` 形式的 `endpoint` 从 `protocol` 取得 scheme；完整 URL 自带 scheme 和路径，其路径就是完整的 API 根。`auth` 和 `headers` 与部署的[连接块](model-catalog.md#connection-block)形式相同；后端从 `auth.api_key_env` 读取密钥。
 
 `api_format` 属于模型，而不属于单个后端 ref。它选择后端请求和响应编解码器；后端 ref 上的 `protocol` 选择 HTTP 传输。在选择 `api_format` 之前，参见[协议兼容性](protocol-compatibility)。
 
@@ -98,7 +99,7 @@ providers:
 | Docker / 本地 CLI | standalone 前端直接使用后端池；`--gateway extproc` 将 ref 翻译为 Envoy cluster 和路由。配置保留主机、端口、HTTP 或 HTTPS、权重、路径和请求标头；上文说明 Envoy 的共享元数据限制。后端模型服务器必须已经可达。 |
 | Helm | `configOverride` 渲染一份完整的 canonical 映射，而不合并示例 provider 默认值。可达性和模型兼容性仍是运行时检查。 |
 | Operator | `spec.vllmEndpoints[]` 是 Kubernetes 发现适配器，而不是完整 provider schema 的副本。它发出下文所述的受支持 canonical 子集。 |
-| 控制面板 | 读写受支持的 canonical 后端清单，包括 provider 身份、URL、认证元数据、API 版本、chat 路径、额外标头和环境键引用。 |
+| 控制面板 | 读写受支持的 canonical 后端清单，包括 provider 身份、URL、认证元数据、API 版本、chat 路径、请求头和环境键引用。 |
 
 Operator 当前发现：
 

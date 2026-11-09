@@ -178,7 +178,7 @@ settings, and pricing for each provider.
 
 - `listeners` is empty.
 - `routing.decisions` is empty.
-- provider bindings use command-line defaults rather than deployment discovery.
+- backend references use command-line defaults rather than deployment discovery.
 - evaluation categories may not match your user-facing decisions.
 - the sparse `global` section may not match your runtime or security policy.
 

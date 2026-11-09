@@ -69,7 +69,7 @@ decisions:
       - id: mathematics
         query: If a matrix has a zero determinant, what does that imply about its invertibility?
         expected_signals:
-          keywords: [escalation_domain_override]
+          decision: [knowledge_subject:math]
         tags: [domain:math, escalation]
       - id: philosophy
         query: Which ethical theory evaluates actions primarily by their consequences?
@@ -80,13 +80,15 @@ decisions:
       - id: other_geography
         query: How many stars are on the flag of the United States?
         expected_signals:
-          kb: [best_other]
+          decision: [knowledge_subject:other]
         tags: [domain:other, escalation, kb-label]
       - id: ambiguous_keyword_override
         query: In a generic data table, what does a zero determinant indicate about invertibility?
         expected_signals:
-          keywords: [escalation_domain_override]
-        tags: [boundary, keyword-override, escalation]
+          decision: [knowledge_subject:math]
+        expected_signal_values:
+          decision:knowledge_subject: {gte: 0.75, lte: 1}
+        tags: [boundary, subject-override, escalation]
 
   - id: keep_7b
     expected_decision: keep_7b
@@ -99,7 +101,7 @@ decisions:
       - id: health
         query: Which blood cells are primarily responsible for transporting oxygen?
         expected_signals:
-          keywords: [local_domain_override]
+          decision: [knowledge_subject:health]
         tags: [domain:health, local]
       - id: law
         query: In contract law, what is consideration?
@@ -110,6 +112,5 @@ decisions:
       - id: chemistry
         query: Calculate the pH of a 0.5 M acetic-acid and sodium-acetate buffer.
         expected_signals:
-          kb: [best_chemistry]
-          projection: [no_escalation]
+          decision: [knowledge_subject:chemistry]
         tags: [domain:chemistry, local]

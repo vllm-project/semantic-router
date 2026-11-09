@@ -1,11 +1,12 @@
 ---
+is_mtpe: false
 title: 选择模型、规模和硬件
 sidebar_label: 选择模型
 description: 每个任务该用哪个模型，决策模型需要多大，以及用什么硬件运行。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/choose-a-model.md"
-  outdated: false
+  outdated: true
 ---
 
 # 选择模型、规模和硬件
@@ -24,7 +25,7 @@ translation:
 | 拦截提示词注入和越狱 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Guard` | |
 | 标记不安全内容 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Safety` 或 `-Shield` | Shield 是另一种安全模型 |
 | 对照来源检查回答 | Vela 2.0 0.3B | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | 标出回答中无依据的片段 |
-| 识别风险类别 | 显式绑定 | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | 12 个独立类别；绑定 `hazard` deployment 及其发布的 operating point |
+| 识别风险类别 | 预先声明的 `hazard` 部署 | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | 12 个独立类别；安全规则的 `hazard` 部分按规则的 `hazard.threshold` 使用它 |
 | 用于缓存、记忆、RAG 和工具的 embedding | `vllm-sr/Vela-1.0-Encoder-307M-Embedding` | | 更小的维度和更少的层以质量换速度 |
 | 更大或带指令的文本 embedding | `Qwen/Qwen3-Embedding-0.6B` | | 0.6B，1,024 维 |
 | 对检索到的文档重排序 | `vllm-sr/Vela-1.0-Encoder-307M-Reranker` | | |
@@ -101,7 +102,7 @@ domain、prompt guard、safety、fact check、user feedback、modality、PII 和
 | Vela 1.0 专用模型（恢复后） | 16 ms | 58 ms | 38.9 | 51.8 |
 | Vela 2.0 0.3B（默认） | 79 ms | 100 ms | 11.9 | 12.8 |
 
-[#4668](https://github.com/vllm-project/semantic-router/issues/4668) 继续改进 CPU 延迟。在 GPU 上（`use_cpu: false`），
+[#4668](https://github.com/vllm-project/semantic-router/issues/4668) 继续改进 CPU 延迟。在 GPU 上，
 0.3B 在一块 AMD Instinct MI325X 上回答同样的问题，中位耗时约 7 ms
 （[测量记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-performance.md#against-the-vela-10-path)）。
 
@@ -116,54 +117,67 @@ domain、prompt guard、safety、fact check、user feedback、modality、PII 和
   记录给出了每个 Vela 1.0 值在 0.3B 上的对应值：prompt guard 0.3–0.9 → 0.74–0.77、PII → 0.01、safety 0.5 → 0.46、
   fact check 0.95 → 0.93、modality 的 `confidence_threshold` 0.7 → 0.51。
 
-### 恢复 Vela 1.0 专用模型 {#restore-vela-10}
+### 恢复 Vela 1.0 专用模型 {#restore-the-vela-10-specialists}
 
-一个配置块即可恢复；你未设置的模块阈值也随之恢复为专用模型的默认值：
-
-```yaml
-global:
-  model_catalog:
-    system:
-      safety: models/Vela-1.0-Encoder-307M-Safety
-      prompt_guard: models/Vela-1.0-Encoder-307M-Guard
-      domain_classifier: models/Vela-1.0-Encoder-307M-Domain
-      pii_classifier: models/Vela-1.0-Encoder-307M-PII
-      fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
-      hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
-      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
-```
-
-modality 分类器在 `classifier.model_path` 中写明 `models/Vela-1.0-Encoder-307M-Modality`。
-
-只想恢复一个信号时，只写它那一行。以 user feedback 为例：
+为每个专用模型声明一个部署，并把对应信号绑定到它；你未设置的模块阈值也随之恢复为专用模型的默认值：
 
 ```yaml
 global:
   model_catalog:
-    system:
-      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
+    deployments:
+      vela-guard: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-Guard, device: cpu}
+      vela-domain: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain, device: cpu}
+      vela-pii: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-PII, device: cpu}
+      vela-factcheck: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-FactCheck, device: cpu}
+      vela-halu: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-Halu, device: cpu}
+      vela-feedback: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-Feedback, device: cpu}
+      vela-modality: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-Modality, device: cpu}
+      vela-safety: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-Safety, device: cpu}
+    bindings:
+      jailbreak: vela-guard
+      domain: vela-domain
+      pii: vela-pii
+      fact_check: vela-factcheck
+      hallucination: vela-halu
+      user_feedback: vela-feedback
+      modality: vela-modality
 ```
 
-| 信号 | `global.model_catalog` 下的一行 |
-| --- | --- |
-| Domain | `system.domain_classifier: models/Vela-1.0-Encoder-307M-Domain` |
-| Prompt guard | `system.prompt_guard: models/Vela-1.0-Encoder-307M-Guard` |
-| Safety | `system.safety: models/Vela-1.0-Encoder-307M-Safety` |
-| Fact check | `system.fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck` |
-| User feedback | `system.feedback_detector: models/Vela-1.0-Encoder-307M-Feedback` |
-| PII | `system.pii_classifier: models/Vela-1.0-Encoder-307M-PII` |
-| Hallucination | `system.hallucination_detector: models/Vela-1.0-Encoder-307M-Halu` |
-| Modality | `modules.modality_detector.classifier.model_path: models/Vela-1.0-Encoder-307M-Modality` |
+每条安全规则都提出自己的问题，因此每条规则自己写 `deployment: vela-safety`。
+
+只想恢复一个信号时，只声明它的部署和绑定。以 user feedback 为例：
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      vela-feedback:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Feedback
+        device: cpu
+    bindings:
+      user_feedback: vela-feedback
+```
+
+| 信号 | Vela 1.0 专用模型 | 部署写在哪里 |
+| --- | --- | --- |
+| Domain | `vllm-sr/Vela-1.0-Encoder-307M-Domain` | `bindings.domain` |
+| Prompt guard | `vllm-sr/Vela-1.0-Encoder-307M-Guard` | `bindings.jailbreak` |
+| Safety | `vllm-sr/Vela-1.0-Encoder-307M-Safety` | 每条安全规则上的 `deployment` |
+| Fact check | `vllm-sr/Vela-1.0-Encoder-307M-FactCheck` | `bindings.fact_check` |
+| User feedback | `vllm-sr/Vela-1.0-Encoder-307M-Feedback` | `bindings.user_feedback` |
+| PII | `vllm-sr/Vela-1.0-Encoder-307M-PII` | `bindings.pii` |
+| Hallucination | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | `bindings.hallucination` |
+| Modality | `vllm-sr/Vela-1.0-Encoder-307M-Modality` | `bindings.modality` |
 
 配置自己设置的规则阈值保持不变。内置配方的规则按 0.3B 校准，因此改回 Vela 1.0 的信号要连同它的 Vela 1.0
 规则阈值一起改回。在 `mom-v1` 中，它们是 prompt guard 0.5、safety 0.5 和 PII 0.7；记录列出了每个配方的值。
 
-专用模型通过明确的任务绑定选择；切换默认决策模型会保留这些覆盖。
+选择其他决策模型时，专用模型的绑定保持不变。如何为单个信号、单个配方或单条规则指定其他部署，见[为信号选择模型](../installation/choose-a-model-for-a-signal.md)。
 
 ## 选择规模 {#choose-a-size}
 
-默认决策绑定引用一个已声明的 deployment，用于 Router 判断任务及未指定覆盖的
-[`decision` 问题](tutorials/signal/learned/decision.md)。模型、设备和引擎参数仅在该资源中声明；
+决策模型是回答 Router 判断任务、以及没有被绑定或规则指定其他部署的 [`decision` 问题](../tutorials/signal/learned/decision.md)的部署。模型、设备和引擎参数仅在该部署中声明；
 没有覆盖配置时，内置默认模型为 Vela 2.0 0.3B。传入模型 artifact 可更新当前默认 deployment；
 `--platform` 选择运行平台，deployment 中显式设置的设备位置仍优先。例如：
 
@@ -186,7 +200,7 @@ global:
 
 `serve` 把这一行作为新版本写入当前生效的配置，`vllm-sr config versions` 会列出它，
 `vllm-sr config rollback` 可以撤销；之后的启动会保留它，`vllm-sr status` 会显示它。Helm chart 的
-`decisionModel` 值和 operator 的 `spec.config.decision_model` 设置相同绑定。deployment key 必须精确匹配，区分大小写。
+`decisionModel` 值和 operator 的 `spec.config.decision_model` 设置同一个决策模型。deployment key 必须精确匹配，区分大小写。模型身份、设备和引擎参数属于部署，而不属于 `decision_model`。
 
 通过 Router 在 router signal suite 上与 Vela 1.0 专用模型对比测得，延迟针对延迟记录的五个请求信号
 （[记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-decision-model-sizes.md)）：
@@ -205,7 +219,7 @@ global:
 - **CPU 上的 0.8B** 是解码器：如表所示，一个请求需要数秒。请在 GPU 上运行它，或在 CPU 上继续使用 0.3B。
 - **每个规模** 在 user feedback 的新留出文件（CrossWOZ）和分布内的 PII 上都落后于 Vela 1.0。带区间的逐信号数据见记录。
 - **Decision 1.0 和 Decision 2.0** 都可作为默认判断模型；可用任务取决于其原生能力，不按家族名称限制。
-- **专用模型** 通过任务绑定覆盖默认值，并可与默认决策模型同时运行。
+- **专用模型** 保持绑定在各自的信号上，并可与决策模型同时运行。
 
 每个规模都有自己的模块阈值；切换时，未设置阈值的模块会采用它们：
 
@@ -218,8 +232,7 @@ global:
 | `Vela-1.0` | 0.5 | 0.5 | 0.9 | 0.95 | 0.7 |
 
 配置自己设置的规则阈值（例如内置配方的）保持不变；记录把每个阈值映射到每个规模（例如 `mom-v1` 的
-`prompt_attack` 0.75 在 0.8B 上是 0.71，在 4B 上是 0.63，在 9B 上是 0.42）。`system.<module>` 行或 binding
-会让该信号留在它自己的模型上。
+`prompt_attack` 0.75 在 0.8B 上是 0.71，在 4B 上是 0.63，在 9B 上是 0.42）。绑定会让该信号留在它自己的模型上。
 
 ## 硬件 {#hardware}
 
@@ -227,8 +240,9 @@ global:
 | --- | --- | --- |
 | CPU | 已验证 | 每个路由器镜像都能开箱即用地在 CPU 上运行模型。 |
 | AMD Instinct MI300X、MI325X | 已验证 | 设置 `device: rocm:0`。`vllm-sr serve --platform rocm` 和 `vllm-sr-rocm` 镜像自带 ROCm 版 PyTorch。 |
-| NVIDIA GPU | 可用，尚未验证 | 设置 `device: cuda:0`。`vllm-sr serve --platform cuda` 自带 CUDA 版 PyTorch。 |
+| NVIDIA GPU | 已验证 | 设置 `device: cuda:0`。`vllm-sr serve --platform cuda` 自带 CUDA 版 PyTorch。 |
 | Intel GPU | 可用，尚未验证 | 设置 `device: xpu:0`，并把运行时安装在 XPU 版 PyTorch 旁边。 |
+| 昇腾 NPU（910B、950） | 可用，尚未验证 | 设置 `device: npu:0`，把运行时安装在 torch_npu 旁边并备好宿主机 CANN 工具包。见[昇腾 NPU](../installation/ascend-npu.md)。 |
 | Apple 芯片 | 本版本仅支持 CPU | 在 macOS 上 docker 目标使用 CPU 镜像，因为 Docker 的 Linux 虚拟机拿不到 GPU。通过宿主机使用 GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/4636)。 |
 
 在 AMD GPU 上，路由器镜像自带运行时经过验证的软件栈：ROCm 7.2 版 PyTorch 2.12、FLA 0.5.2，以及为 ROCm 构建的 `causal-conv1d` 1.7.0。
@@ -240,6 +254,8 @@ global:
 
 `device: auto`（默认）选择第一个有足够空闲显存的已验证 GPU，否则使用 CPU。
 你显式指定的 GPU 必须存在，否则模型会带着明确的原因加载失败，而不是悄悄在 CPU 上运行。
+尚未转正的加速器（`xpu`、`npu`）永远不会被 `auto` 选中——在装有它们的机器上 `auto` 仍选 CPU；
+要使用它们必须显式指定设备。
 
 ### 需要多少内存 {#how-much-memory}
 

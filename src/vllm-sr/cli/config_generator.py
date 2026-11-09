@@ -1,6 +1,7 @@
 """Envoy configuration generator for vLLM Semantic Router."""
 
 import os
+import re
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -94,6 +95,60 @@ def _check_decision_reliability(user_config: UserConfig) -> None:
                 )
 
 
+_DEFAULT_IDENTITY_HEADERS = (
+    "x-authz-user-id",
+    "x-authz-user-groups",
+    "x-authz-team-id",
+    "x-authz-tenant-id",
+)
+_HEADER_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+
+
+def _identity_headers(user_config: UserConfig) -> list[str]:
+    """Name the headers that carry a caller's identity.
+
+    They are the x-authz-* set and the names global.services.authz.identity
+    reads the user and groups from. Only an authenticating proxy in front of a
+    listener that trusts them may set them, and no provider receives them.
+    """
+
+    global_config = user_config.global_ if isinstance(user_config.global_, dict) else {}
+    services = global_config.get("services")
+    authz = services.get("authz") if isinstance(services, dict) else None
+    identity = authz.get("identity") if isinstance(authz, dict) else None
+    names = list(_DEFAULT_IDENTITY_HEADERS)
+    for field in ("user_id_header", "user_groups_header"):
+        value = identity.get(field) if isinstance(identity, dict) else None
+        if value is None or not str(value).strip():
+            continue
+        name = str(value).strip().lower()
+        if not _HEADER_NAME_PATTERN.match(name):
+            raise ValueError(
+                f"global.services.authz.identity.{field} {value!r} is not a "
+                "header name the Envoy listener can remove"
+            )
+        if name not in names:
+            names.append(name)
+    return names
+
+
+def _trusts_identity_headers(listener) -> bool:
+    """Report whether a listener keeps the identity headers clients send."""
+
+    identity = getattr(listener, "identity", None)
+    if identity is None:
+        return False
+    if identity.trusted_peers:
+        raise ValueError(
+            f"listener '{listener.name}': identity.trusted_peers is checked in "
+            "standalone mode, and the --gateway extproc Envoy listener does not "
+            "check the peer address; serve with --gateway standalone, or keep "
+            "identity.trust_headers alone behind a proxy that removes the "
+            "identity headers clients send"
+        )
+    return bool(identity.trust_headers)
+
+
 def _route_request_headers(endpoint: dict) -> list[dict[str, str]]:
     headers: dict[str, str] = {}
     for key, value in (endpoint.get("extra_headers") or {}).items():
@@ -168,6 +223,7 @@ def generate_envoy_config_from_user_config(
                         if getattr(listener, "api_keys", None)
                         else []
                     ),
+                    "trust_identity_headers": _trusts_identity_headers(listener),
                 }
             )
     else:
@@ -179,6 +235,7 @@ def generate_envoy_config_from_user_config(
                 "port": DEFAULT_LISTENER_PORT,
                 "timeout": "300s",
                 "api_keys": [],
+                "trust_identity_headers": False,
             }
         )
 
@@ -239,6 +296,7 @@ def generate_envoy_config_from_user_config(
     # Prepare template data
     template_data = {
         "listeners": listeners,
+        "identity_headers": _identity_headers(user_config),
         "extproc_host": extproc_host,
         "extproc_port": 50051,
         "extproc_cluster_type": "LOGICAL_DNS" if extproc_host_is_domain else "STATIC",
@@ -291,7 +349,7 @@ def generate_envoy_config_from_user_config(
 
     # Write output
     try:
-        with open(output_path, "w") as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(rendered)
         if log_summary:
             log.info(f"Generated Envoy config: {output_path}")

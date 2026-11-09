@@ -75,6 +75,9 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	registerMLPipelineRoutes(mux, cfg, wf)
 	setupTrainingRoutes(mux, cfg, wf)
 	registerProxyRoutes(mux, cfg, authSvc, setupResolver, recipeStore)
+	capabilityProber := handlers.NewCapabilityProber(cfg, statusMonitor)
+	capabilityProber.Start()
+	registerCapabilityRoutes(mux, cfg, setupResolver, capabilityProber)
 	registerOpenAPIRoute(mux, mux)
 
 	// Static frontend must be registered last.
@@ -92,7 +95,7 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 			if cp != nil {
 				projectionClose = cp.Close()
 			}
-			return errors.Join(statusMonitor.Close(), statusHistory.Close(), projectionClose, wf.Close())
+			return errors.Join(statusMonitor.Close(), capabilityProber.Close(), statusHistory.Close(), projectionClose, wf.Close())
 		},
 	}
 }

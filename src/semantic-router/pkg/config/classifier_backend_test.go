@@ -145,21 +145,23 @@ func TestRemoteClassifierBackendYAMLRejectsTimeoutAlias(t *testing.T) {
 	}
 }
 
-func TestReferenceConfigCategoryBackendReplacesDefaultVariant(t *testing.T) {
-	data := string(readReferenceConfigYAML(t))
+func TestReferenceConfigRemoteDomainDeploymentReplacesDefaultVariant(t *testing.T) {
+	reference := string(readReferenceConfigYAML(t))
+	data := strings.Replace(reference,
+		"    bindings:\n      pii: primary\n",
+		"    bindings:\n      pii: primary\n      domain: sequence-classifier\n", 1)
 	data = strings.Replace(data,
 		"          category_mapping_path: \"\"\n",
-		"          backend:\n"+
-			"            protocol: http_classify\n"+
-			"            contract: label_distribution.v1\n"+
-			"            model: external-classifier\n"+
-			"            deadline_ms: 5000\n"+
-			"          category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json\n", 1)
-	if data == string(readReferenceConfigYAML(t)) {
-		t.Fatal("reference config category block was not found")
+		"          category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json\n", 1)
+	if strings.Count(data, "domain: sequence-classifier") != 1 || !strings.Contains(data, "Vela-1.0-Encoder-307M-Domain/category_mapping.json") {
+		t.Fatal("reference config bindings or category block was not found")
 	}
-	if _, err := ParseYAMLBytes([]byte(data)); err != nil {
-		t.Fatalf("reference config plus backend rejected: %v", err)
+	cfg, err := ParseYAMLBytes([]byte(data))
+	if err != nil {
+		t.Fatalf("reference config with a remote domain deployment rejected: %v", err)
+	}
+	if provider := cfg.ResolvedProvider("domain_classifier"); provider != ClassifyProvider {
+		t.Fatalf("domain resolves to provider %q, want the classify deployment", provider)
 	}
 }
 

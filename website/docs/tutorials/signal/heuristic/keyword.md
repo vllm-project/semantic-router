@@ -52,6 +52,34 @@ routing:
 
 Use plain keyword lists for simple matching, then add `method: bm25` or `method: ngram` when exact text matching becomes too brittle.
 
+### Matching earlier user messages
+
+By default a keyword rule evaluates only the current (latest) user message.
+Set `include_history: true` on a rule when its keywords state a constraint
+that should keep applying for the rest of the conversation, such as a
+privacy or local-only marker:
+
+```yaml
+routing:
+  signals:
+    keywords:
+      - name: local_only_markers
+        operator: OR
+        keywords: ["local model only", "do not upload to cloud"]
+        include_history: true
+```
+
+With `include_history: true`, the rule also matches the most recent 20 prior
+user messages. Assistant and system messages are never included. Messages are
+joined with newlines, so an exact-match phrase cannot match across two
+messages; BM25 and n-gram rules score words rather than phrases, so they do not
+keep that boundary.
+
+Leave `include_history` off (the default) for keywords that describe what the
+current message asks for, such as reasoning or architecture markers;
+otherwise a phrase from an earlier turn keeps triggering the rule on every
+later request.
+
 ## Dependencies and Limitations
 
 Keyword rules require no model, but they are sensitive to wording and can be

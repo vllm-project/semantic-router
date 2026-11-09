@@ -13,12 +13,14 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/masking"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
@@ -110,6 +112,9 @@ type RequestContext struct {
 	RequestModel      string
 	RequestQuery      string
 	CacheRequestModel string
+	// RoutingInput records what global.router.routing_input changed in this
+	// request; UserContent holds the routing text it selected.
+	RoutingInput routinginput.Outcome
 	// CacheQuery is the semantic-cache lookup key (may include user scope); empty means fall back to RequestQuery.
 	CacheQuery                    string
 	CacheExactFingerprint         string
@@ -141,10 +146,12 @@ type RequestContext struct {
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
 	StreamedBody          *StreamedBodyHandler
 	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED
-	SkipProcessing        bool // true only when the configured opt-out header is valid
+	SkipProcessing        bool // the configured opt-out header, or a count_tokens answer passed back unchanged
 	BufferedRequestBody   bool // true when the data plane negotiated BUFFERED or BUFFERED_PARTIAL
 	// Arrival diagnostics, set at end of stream in STREAMED modes only.
 	StreamedBodyStats StreamedBodyStats
+	// A guard rejection ends the request even after its handler returns to the pool.
+	streamedBodyRejected bool
 
 	// Request header reply held until a full-duplex body is routed.
 	fullDuplexHold *fullDuplexHeaderHold
@@ -160,6 +167,10 @@ type RequestContext struct {
 	// this request (e.g. response headers not processed). The cache-write path
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
 	UpstreamStatusCode int
+	// UpstreamResponseGzip is set at every response-header phase from that
+	// reply's Content-Encoding. The response-body phase decodes a gzip reply
+	// before any phase reads it.
+	UpstreamResponseGzip bool
 
 	// UpstreamBackendAddress is the Envoy-selected upstream host:port for this request.
 	UpstreamBackendAddress string
@@ -353,6 +364,12 @@ type RequestContext struct {
 	VSRDecisionDiagnostics   decision.EvaluationDiagnostics
 	VSRProjectionTrace       *projectiontrace.Trace
 
+	// VSRContextReserveTokens is the reserve part of VSRContextTokenCount
+	// (llmprotocol.InputEstimate.ReserveTokens). Refusals rest on the count
+	// without it; once a decision needs that count, the Router drops the
+	// reserve from VSRContextTokenCount for the rest of the request.
+	VSRContextReserveTokens int
+
 	// Hallucination mitigation tracking
 	FactCheckNeeded             bool     // Result of fact-check classification
 	FactCheckConfidence         float32  // Confidence score of fact-check classification
@@ -415,6 +432,10 @@ type RequestContext struct {
 	// separately checks stage-specific evidence and the resolved capture policy.
 	RouterReplayContentOmitted bool
 
+	// pendingTrustedFactsOutcomes holds trusted-facts gate outcomes evaluated
+	// before Replay created its record; startRouterReplay appends them.
+	pendingTrustedFactsOutcomes []routerreplay.Outcome
+
 	// ShadowDispatchPluginConfig is the per-decision shadow_dispatch plugin
 	// configuration, or nil when the selected decision declares none.
 	ShadowDispatchPluginConfig *config.ShadowDispatchPluginConfig
@@ -465,9 +486,13 @@ type RequestContext struct {
 	ResponseBodyNeedsRewrite bool // The decoded client wire differs from the provider body.
 	ProtocolDiagnostics      llmprotocol.Diagnostics
 	ResponseVendor           llmprotocol.ResponseVendor
-	ResponseVendorExtensions bool // Upstream response carried vendor decorations that were dropped on decode
+	ResponseUnknownFields    bool // Upstream response carried members its wire contract does not declare
 	ImmediateProtocolError   *llmprotocol.ProtocolError
 	ImmediateResponseEncoded bool
+
+	// Masking is the request-scoped placeholder allocator: created on the
+	// first masked dispatch, never persisted, logged or shared (D5).
+	Masking *masking.Allocator
 
 	// RAG (Retrieval-Augmented Generation) tracking
 	RAGRetrievedContext string  // Retrieved context from RAG plugin
@@ -486,6 +511,11 @@ type RequestContext struct {
 	MemoryFailOpen       bool
 	MemoryResultCount    int
 	MemoryMessageIndexes map[int]struct{}
+
+	// PluginBackendModel is the model selected before plugins run, and
+	// PluginSkips lists the plugins that capability gating kept from running.
+	PluginBackendModel string
+	PluginSkips        []pluginSkip
 
 	// RequestAutoStore snapshots the client's memory persistence override before
 	// provider preparation removes router controls. Nil uses configured defaults.

@@ -141,6 +141,61 @@ describe('signal capability admission', () => {
     expect(questionType?.disabledOptions).toHaveProperty('span')
     expect(questionType?.disabledOptions).not.toHaveProperty('set')
   })
+  it('reads bindings written as deployment names under signal-type keys', () => {
+    const data = catalog()
+    data.global_bindings = { domain: 'specialist' }
+    expect(signalAvailability(data, { recipe: 'private' }, 'domain').supported).toBe(true)
+    expect(
+      signalAvailability(data, { recipe: 'private', bindings: { domain: 'primary' } }, 'domain')
+        .supported,
+    ).toBe(false)
+    expect(
+      signalAvailability(
+        data,
+        { recipe: 'private', globalBindings: { domain_classifier: { deployment: 'specialist' } } },
+        'domain',
+      ).supported,
+    ).toBe(true)
+  })
+  it('answers a rule from its deployment, then the rule key older configs bound it with', () => {
+    const data = catalog()
+    expect(
+      signalAvailability(
+        data,
+        { recipe: 'private', bindings: { 'classifier.risk': 'primary' } },
+        'classifier',
+        'risk',
+        { deployment: 'specialist' },
+      ).supported,
+    ).toBe(true)
+    expect(
+      signalAvailability(
+        data,
+        { recipe: 'private', bindings: { 'classifier.risk': 'specialist' } },
+        'classifier',
+        'risk',
+      ).supported,
+    ).toBe(true)
+    // A rule-level type has no type-level binding.
+    expect(
+      signalAvailability(
+        data,
+        { recipe: 'private', bindings: { classifier: 'specialist' } },
+        'classifier',
+        'risk',
+      ).supported,
+    ).toBe(false)
+    expect(
+      signalAvailability(data, { recipe: 'private' }, 'classifier', 'risk', {
+        deployment: 'specialist',
+      }).supported,
+    ).toBe(true)
+    expect(
+      signalAvailability(data, { recipe: 'private' }, 'classifier', 'risk', {
+        deployment: 'primary',
+      }).supported,
+    ).toBe(false)
+  })
   it('does not guess an unavailable model capability', () => {
     expect(signalAvailability(null, { recipe: 'default' }, 'domain').supported).toBe(false)
     expect(

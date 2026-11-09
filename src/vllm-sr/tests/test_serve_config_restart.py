@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from cli import runtime_lifecycle
+from cli import router_validation, runtime_lifecycle
 from cli.commands import runtime_paths, runtime_serve_config
 from cli.parser import ConfigParseError
 from cli.runtime_stack import resolve_runtime_stack
@@ -134,18 +134,10 @@ def test_invalid_candidate_does_not_stop_or_publish(tmp_path, monkeypatch):
     assert stopped == []
 
 
-def test_missing_deployment_does_not_stop_or_publish(tmp_path, monkeypatch):
+def test_a_semantic_error_does_not_stop_or_publish(tmp_path, monkeypatch):
     source, active, old, candidate = prepare_replacement(tmp_path, monkeypatch)
     document = yaml.safe_load(candidate)
-    document["routing"] = {
-        "model_bindings": {
-            "embedding": {
-                "deployment": "missing",
-                "contract": "embedding.v1",
-                "adapter": "sentence_embedding",
-            }
-        }
-    }
+    document["entrypoints"] = [{"model_names": ["private"], "recipe": "missing"}]
     monkeypatch.setattr(
         runtime_serve_config,
         "build_effective_config_bytes",
@@ -155,7 +147,7 @@ def test_missing_deployment_does_not_stop_or_publish(tmp_path, monkeypatch):
     monkeypatch.setattr(
         runtime_serve_config, "stop_runtime_before_config_replacement", stopped.append
     )
-    with pytest.raises(ValueError, match="Unknown model deployment"):
+    with pytest.raises(ValueError, match="unknown recipe 'missing'"):
         runtime_serve_config._prepare_docker_runtime_config(
             source, None, False, None, (), True
         )
@@ -186,7 +178,7 @@ def test_setup_flag_conflict_does_not_stop_or_publish(tmp_path, monkeypatch, fla
             platform=None,
             recipe_env_bindings=(),
             replace_active_config=True,
-            **{flag: True}
+            **{flag: True},
         )
     assert active.read_bytes() == old
     assert stopped == []
@@ -295,3 +287,33 @@ def test_restart_finishes_sigterm_before_old_process_can_reload(tmp_path, monkey
         if process.poll() is None:
             process.kill()
         process.wait(timeout=3)
+
+
+def test_serve_keeps_old_runtime_when_router_refuses_new_config(tmp_path, monkeypatch):
+    source, active, old, _candidate = prepare_replacement(tmp_path, monkeypatch)
+    router = tmp_path / "router"
+    router.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        "sys.stdin.read()\n"
+        "print(json.dumps({'valid': False, 'error': "
+        "'routing.model_bindings.pii: no deployment named redactor'}))\n"
+        "sys.exit(1)\n",
+        encoding="utf-8",
+    )
+    router.chmod(0o755)
+    monkeypatch.setenv(router_validation.ROUTER_BINARY_ENV, str(router))
+    stopped = []
+    monkeypatch.setattr(
+        runtime_serve_config,
+        "stop_runtime_before_config_replacement",
+        stopped.append,
+    )
+
+    with pytest.raises(ValueError, match="no deployment named redactor"):
+        runtime_serve_config._prepare_docker_runtime_config(
+            source, None, False, None, (), True
+        )
+
+    assert not stopped
+    assert active.read_bytes() == old

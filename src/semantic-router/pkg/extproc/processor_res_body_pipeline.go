@@ -420,28 +420,27 @@ func isResponseAPIRequest(ctx *RequestContext) bool {
 }
 
 // cacheableClientResponse returns the bytes that may be persisted as the public
-// response. The cache is read back under the strict canonical contract by
-// decodeCachedClientResponse, deliberately without a backend vendor allowance,
-// because a cache partition is keyed on the ingress protocol and may be served
-// to a request that never touches the same backend.
+// response. A cache partition is keyed on the ingress protocol and may be
+// served to a request that never touches the same backend, so an entry holds
+// only the canonical contract.
 //
-// A same-format response is forwarded to the client verbatim, so on a backend
-// with a vendor allowance those bytes still carry the provider's decorations.
-// Persisting them would store an entry the strict reader rejects: the first
-// Azure response would poison its own partition and every later hit would fail.
+// A same-format response is forwarded to the client verbatim, so when the
+// upstream added members its wire contract does not declare, such as a
+// gateway's own cost or trace fields, those bytes still carry them. Persisting
+// them would replay one request's gateway metadata to later clients.
 // Re-encoding from the neutral response yields the canonical equivalent. When
-// that encode fails, nothing is cached - a miss is recoverable, a poisoned
-// entry is not.
+// that encode fails, nothing is cached: a miss is recoverable, a wrong entry
+// is not.
 func (r *OpenAIRouter) cacheableClientResponse(
 	clientBody []byte,
 	rewritten bool,
 	response llmprotocol.Response,
 	ctx *RequestContext,
 ) []byte {
-	if rewritten || ctx == nil || !ctx.ResponseVendorExtensions {
+	if rewritten || ctx == nil || !ctx.ResponseUnknownFields {
 		return clientBody
 	}
-	canonical, err := r.encodeClientResponse(response, ctx)
+	canonical, err := r.encodeCanonicalClientResponse(response, ctx)
 	if err != nil {
 		logging.ComponentWarnEvent("extproc", "cache_write_skipped_noncanonical_response", map[string]interface{}{
 			"request_id": ctx.RequestID,

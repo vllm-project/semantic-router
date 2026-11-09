@@ -8,8 +8,9 @@ func (c *RouterConfig) ComplexityRuleUsesPrototypes(rule ComplexityRule) bool {
 		return true
 	}
 	if c != nil {
-		binding := c.EffectiveModelBindings(c.Signals, c.ModelBindings)["complexity"]
-		if binding.Contract == DecisionTaskContract {
+		// A rule whose deployment a configuration names asks it, its
+		// candidates as examples.
+		if task, ok, err := c.ResolveTask("complexity." + rule.Name); ok && err == nil && task.Explicit() {
 			return false
 		}
 	}

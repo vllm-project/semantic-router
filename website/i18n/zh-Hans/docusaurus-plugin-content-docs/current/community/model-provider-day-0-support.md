@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型与提供商 Day-0 支持
 description: 一次加入内置模型或提供商，再从共享目录生成所有运行时和产品视图。
 translation:
@@ -115,7 +116,7 @@ providers:
       backend_refs:
         - name: primary
           provider: openai
-          api_key_env: OPENAI_API_KEY
+          auth: {api_key_env: OPENAI_API_KEY}
 
 routing:
   decisions:
@@ -158,7 +159,7 @@ providers:
       backend_refs:
         - name: primary
           provider: provider-id
-          api_key_env: PROVIDER_API_KEY
+          auth: {api_key_env: PROVIDER_API_KEY}
 ```
 
 内置卡片不需要 `routing.modelCards`。有意覆盖时，用规范目录身份作为卡片名：

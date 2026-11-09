@@ -33,7 +33,7 @@ func TestMoMRecipeDocumentContract(t *testing.T) {
 	}
 
 	wantDecisions := map[string][]string{
-		"balance":  {"reasoning", "simple", "medium"},
+		"balance":  {"long_context", "vision", "recovery", "agentic", "facts", "frontier", "code", "hard", "standard", "fast"},
 		"speed":    {"tools", "reasoning", "fast"},
 		"cost":     {"tools", "reasoning", "economy"},
 		"accuracy": {"agent", "review", "reasoning", "simple"},

@@ -164,24 +164,7 @@ def test_classifier_contract_allows_independent_recipe_local_models():
     assert not any("identical model_path" in error.message for error in errors)
 
 
-@pytest.mark.parametrize(
-    ("external", "expected"),
-    [
-        ([], "unknown external model"),
-        (
-            [{"name": "judge", "model_role": "generation"}],
-            "model_role=classification",
-        ),
-        (
-            [{"name": "judge", "model_role": "classification"}],
-            "requires llm_model_name",
-        ),
-    ],
-)
-def test_llm_classifier_requires_classification_external_model(
-    external,
-    expected,
-):
+def test_a_classifier_rule_names_the_deployment_that_answers_it():
     config = UserConfig.model_validate(
         {
             "version": "v0.3",
@@ -190,70 +173,44 @@ def test_llm_classifier_requires_classification_external_model(
                     "classifiers": [
                         {
                             "name": "risk",
-                            "type": "llm",
-                            "model": "judge",
+                            "deployment": "chat-judge",
                             "labels": ["SAFE", "RISKY"],
                             "instructions": "Classify.",
                         }
                     ]
                 }
             },
-            "global": {"model_catalog": {"external": external}},
         }
     )
-    assert any(expected in error.message for error in validate_user_config(config))
+    rule = config.routing.signals.classifiers[0]
+    assert rule.deployment == "chat-judge" and rule.type is None
+    assert validate_user_config(config) == []
 
 
-@pytest.mark.parametrize(
-    ("external", "expected"),
-    [
-        ([], "unknown external model"),
-        (
-            [{"name": "judge", "model_role": "generation"}],
-            "model_role=classification",
-        ),
-        (
-            [
-                {
-                    "name": "judge",
-                    "model_role": "classification",
-                    "llm_endpoint": {
-                        "address": "classifier.example.com",
-                        "port": 8080,
-                        "protocol": "grpc",
-                    },
-                }
-            ],
-            "protocol must be http or https",
-        ),
-    ],
-)
-def test_sequence_classifier_requires_valid_classification_external_model(
-    external,
-    expected,
-):
-    config = UserConfig.model_validate(
-        {
-            "version": "v0.3",
-            "routing": {
-                "signals": {
-                    "classifiers": [
-                        {
-                            "name": "risk",
-                            "type": "sequence_classifier",
-                            "model": "judge",
-                            "labels": ["SAFE", "RISKY"],
-                        }
-                    ]
-                }
-            },
-            "global": {"model_catalog": {"external": external}},
-        }
-    )
-    assert any(expected in error.message for error in validate_user_config(config))
+@pytest.mark.parametrize("value", ["true", 1, None])
+def test_disable_rationale_requires_boolean(value):
+    with pytest.raises(PydanticValidationError, match="disable_rationale"):
+        UserConfig.model_validate(
+            {
+                "version": "v0.3",
+                "routing": {
+                    "signals": {
+                        "classifiers": [
+                            {
+                                "name": "risk",
+                                "type": "llm",
+                                "labels": ["SAFE", "RISKY"],
+                                "instructions": "Classify.",
+                                "disable_rationale": value,
+                            }
+                        ]
+                    }
+                },
+            }
+        )
 
 
-def test_classifier_decision_rejects_unknown_label_and_local_threshold():
+def test_classifier_decision_rejects_an_undeclared_label():
     config = UserConfig.model_validate(
         {
             "version": "v0.3",
@@ -287,7 +244,6 @@ def test_classifier_decision_rejects_unknown_label_and_local_threshold():
     )
     messages = [error.message for error in validate_user_config(config)]
     assert any("is not declared" in message for message in messages)
-    assert any("predicate.gte >= 0.5" in message for message in messages)
 
 
 def test_classifier_names_and_labels_reject_reserved_delimiters():

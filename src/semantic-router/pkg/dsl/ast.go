@@ -345,6 +345,7 @@ type Program struct {
 
 // EntrypointDecl is the DSL form of one request-facing recipe binding.
 type EntrypointDecl struct {
+	API        string
 	ModelNames []string
 	Recipe     string
 	Pos        Position

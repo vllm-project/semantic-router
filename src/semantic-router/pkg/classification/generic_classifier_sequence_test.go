@@ -21,7 +21,7 @@ func toxicityRule() config.ClassifierSignalRule {
 
 func newTestSequenceClassifier(t *testing.T, server *httptest.Server, rule config.ClassifierSignalRule) labelClassifier {
 	t.Helper()
-	classifier, err := newSequenceLabelClassifier(rule, &config.ExternalModelConfig{
+	classifier, err := sequenceLabelClassifierFor(rule, &config.ExternalModelConfig{
 		ModelEndpoint: endpointForTestServer(t, server),
 		ModelRole:     config.ModelRoleClassification,
 	})
@@ -94,7 +94,7 @@ func TestSequenceLabelClassifierRejectsIncompleteDistribution(t *testing.T) {
 }
 
 func TestNewSequenceLabelClassifierRequiresTheExternalModel(t *testing.T) {
-	if _, err := newSequenceLabelClassifier(toxicityRule(), nil); err == nil {
+	if _, err := sequenceLabelClassifierFor(toxicityRule(), nil); err == nil {
 		t.Fatal("expected an error for an unconfigured external model, got nil")
 	}
 }

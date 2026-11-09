@@ -8,7 +8,8 @@ You write the question in plain language: pick one of a few options
 answer them, such as Vela 2.0, also take `set` questions (which of these
 labels apply?) and `span` questions (where in the text is each label?). The
 model runs in the [built-in model runtime](../../../model-runtime/overview.md),
-which the router starts for you.
+which the router starts for you, or behind a remote
+[System One API](#ask-a-remote-system-one-model).
 
 ## Key Advantages
 
@@ -35,8 +36,8 @@ your question.
 ## Configuration
 
 A question that names no `deployment` asks the Router's decision model,
-`global.model_catalog.system.decision_model` (Vela 2.0 0.3B unless you
-[choose a size](../../../model-runtime/choose-a-model.md#choose-a-size)). It joins the
+`global.model_catalog.system.decision_model` (Vela 3.0 vela3-fast unless you
+[choose another model](../../../model-runtime/choose-a-model.md#choose-a-size)). It joins the
 request-stage batch with compatible built-in questions. Reusing a deployment
 avoids loading another copy of the model; it does not guarantee one forward
 pass for the complete routed request:
@@ -53,10 +54,10 @@ routing:
           gte: 0.7
 ```
 
-The binding uses `{deployment: primary}` and can select Vela or Decision
-1.0/2.0. The model must support every requested question type. The
-[`decision` selection algorithm](../../algorithm/selection/decision.md)
-uses the same default binding, so the resource can also choose a backend.
+The decision model is `{deployment: primary}` by default and can be a Vela or
+Decision 1.0/2.0 deployment. The model must support every requested question
+type. The [`decision` selection algorithm](../../algorithm/selection/decision.md)
+asks the same decision model by default, so it can also choose a backend.
 
 To ask another model, such as a Decision 2.0 model, name it as a
 `model_runtime` deployment and give each question its `deployment`:
@@ -117,6 +118,102 @@ routing:
       modelRefs:
         - model: large-coder
 ```
+
+### Ask a remote System One model
+
+A question can also ask a System One API that the router does not manage: a
+hosted Decision API, another vLLM-SR Engine, or a gateway in front of one.
+Declare it as a `systemone` deployment in `global.model_catalog.deployments`
+and name it as the question's `deployment`, as you would a `model_runtime`
+deployment. It answers decision questions only: it is not one of the
+`providers.models` that requests are routed to, and no model listing shows it.
+
+```yaml alternative
+global:
+  model_catalog:
+    deployments:
+      d3-ultra-remote:
+        provider: systemone
+        endpoint: https://app.vllm-sr.ai/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth:
+          api_key_env: VSR_APP_KEY
+        timeout_ms: 3000
+
+routing:
+  signals:
+    decision:
+      - name: support_team
+        deployment: d3-ultra-remote
+        question:
+          type: choice
+          instructions: Which team should handle this ticket?
+          choices:
+            - key: billing
+              description: Payments and refunds
+            - key: engineering
+              description: Outages and bugs
+```
+
+`endpoint` is the URL the API answers `POST` requests on, with any path
+prefix, and `model` is the model it answers with. The key comes from
+`auth.api_key_env` or from `auth.api_key_file` (an absolute path, read when a
+call needs it), never from the configuration itself, and goes as
+`Authorization: Bearer <key>`. For a gateway that takes the key in its own
+header, set `auth.header`, and `auth.prefix: ""` to send the key without a
+prefix:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      gateway-d3:
+        provider: systemone
+        endpoint: https://gateway.example.com/Unified/v1/systemone
+        model: vLLM-SR-d3-27B
+        capabilities: {question_types: [choice, noul, score]}
+        auth:
+          header: Ocp-Apim-Subscription-Key
+          prefix: ""
+          api_key_env: GATEWAY_KEY
+```
+
+- A request stage's questions to the deployment, including those of the
+  built-in signals that ask it, go in one System One call: their options as
+  System One `criteria`, any other text they read as a further `states`
+  entry, and the call's deadline as `options.deadline_ms`. A System One API
+  fails a call with a failed question as a whole and names the question, so
+  the router asks the other questions once more within the same deadline:
+  only the failed question's signal is unknown. Any other failure leaves
+  every signal of the call unknown. Answers to the same questions about the
+  same text are reused for up to 10 minutes, until the configuration
+  changes.
+- The question types and ready-made questions (`pii`, `halu`) the model
+  answers come from `GET <endpoint>/models`, read when the configuration
+  loads, when the API lists the model; else from `capabilities.question_types`
+  and `capabilities.presets`; else they are the System One types `choice`,
+  `noul` and `score`.
+  A `set` question is composed from `noul` questions when the model has no
+  native `set` support.
+- A network round trip takes longer than a local model. A question without
+  its own `timeout_ms` takes the deployment's `timeout_ms`, else the 1000 ms
+  default. A slow, failing or unreachable API leaves its signals unknown; it
+  never fails the request. The router logs each kind of failure once, without
+  the key.
+- `global.model_catalog.system.decision_model.deployment` can name a
+  `systemone` deployment too. Questions and
+  [decision selectors](../../algorithm/selection/decision.md) that name no
+  deployment then ask it, and so do the built-in signals that no binding
+  gives another deployment. The hazard part of a safety rule, embeddings and
+  reranking keep their own deployments. Module thresholds the configuration
+  does not write are 0.5 on such a model, with an `uncalibrated_threshold`
+  warning. On a model that answers no span questions, PII and hallucination
+  detection report a yes/no verdict without positions, with a `span_fallback`
+  warning when the configuration loads; a configuration that masks PII is
+  then refused. [Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md#s2-everything-on-a-remote-system-one-model)
+  shows this setup.
+- A `systemone` deployment takes no device, engine arguments, replicas or
+  input budget.
 
 | Question type | Matches when | Value a route can read |
 | --- | --- | --- |

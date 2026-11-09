@@ -4,6 +4,8 @@ import (
 	"math"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v2"
 )
 
 // threshold: X keeps working as the symmetric shorthand, because the local
@@ -205,6 +207,138 @@ func TestComplexityBoundaries_AcceptsUsableThreshold(t *testing.T) {
 		if bounds.HardAt != want || bounds.EasyAt != -want || !bounds.HigherIsHarder {
 			t.Errorf("%s: boundaries = %+v, want hard %v / easy %v, higher-is-harder",
 				name, bounds, want, -want)
+		}
+	}
+}
+
+// The CRD refuses `threshold` written alongside a boundary pair whatever its
+// value, through has(self.threshold). Threshold is a float32 with no presence
+// of its own, so a written zero used to load as an absent key and the same
+// YAML was rejected by kubectl apply yet accepted by the Router. Presence is
+// now recorded on load and the two agree.
+func TestComplexityBoundaries_RejectsWrittenZeroThresholdAlongsidePair(t *testing.T) {
+	cases := map[string]string{
+		"higher is harder": "name: r\nthreshold: 0\nhard_above: 0.85\neasy_below: 0.60\n",
+		"lower is harder":  "name: r\nthreshold: 0\nhard_below: 0.40\neasy_above: 0.80\n",
+		"zero as a float":  "name: r\nthreshold: 0.0\nhard_above: 0.85\neasy_below: 0.60\n",
+	}
+
+	for name, doc := range cases {
+		var rule ComplexityRule
+		if err := yaml.Unmarshal([]byte(doc), &rule); err != nil {
+			t.Fatalf("%s: unmarshal: %v", name, err)
+		}
+		if !rule.ThresholdSet {
+			t.Errorf("%s: a written threshold must be recorded as present", name)
+		}
+		_, err := rule.EffectiveBoundaries()
+		if err == nil || !strings.Contains(err.Error(), "keep one") {
+			t.Errorf("%s: expected a written threshold: 0 alongside a pair to be refused, got %v", name, err)
+		}
+	}
+}
+
+// Presence is about the key, not the value: an omitted key and a null one are
+// absent, and a written value of any size is present. A written zero on its
+// own keeps meaning the shorthand it always did.
+func TestComplexityRule_ThresholdPresenceFollowsTheKey(t *testing.T) {
+	cases := map[string]struct {
+		doc     string
+		present bool
+	}{
+		"omitted":  {doc: "name: r\n", present: false},
+		"null":     {doc: "name: r\nthreshold: null\n", present: false},
+		"zero":     {doc: "name: r\nthreshold: 0\n", present: true},
+		"positive": {doc: "name: r\nthreshold: 0.1\n", present: true},
+	}
+
+	for name, tc := range cases {
+		var rule ComplexityRule
+		if err := yaml.Unmarshal([]byte(tc.doc), &rule); err != nil {
+			t.Fatalf("%s: unmarshal: %v", name, err)
+		}
+		if rule.ThresholdSet != tc.present {
+			t.Errorf("%s: ThresholdSet = %v, want %v", name, rule.ThresholdSet, tc.present)
+		}
+		bounds, err := rule.EffectiveBoundaries()
+		if err != nil {
+			t.Errorf("%s: a threshold without a pair must still resolve: %v", name, err)
+			continue
+		}
+		want := float64(rule.Threshold)
+		if bounds.HardAt != want || bounds.EasyAt != -want || !bounds.HigherIsHarder {
+			t.Errorf("%s: boundaries = %+v, want the symmetric shorthand at %v", name, bounds, want)
+		}
+	}
+}
+
+// A rule that states a pair is written back out by the operator and the DSL
+// emitter. It must not grow a `threshold: 0` on the way, or the reloaded
+// document would be refused for stating both.
+func TestComplexityRule_ZeroThresholdIsNotWrittenBack(t *testing.T) {
+	rule := ComplexityRule{Name: "r", HardAbove: floatPtr(0.85), EasyBelow: floatPtr(0.60)}
+
+	out, err := yaml.Marshal(rule)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(out), "threshold") {
+		t.Fatalf("a zero threshold must be omitted on marshal, got:\n%s", out)
+	}
+
+	var reloaded ComplexityRule
+	if err := yaml.Unmarshal(out, &reloaded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if reloaded.ThresholdSet {
+		t.Error("a marshalled pair rule must reload without a threshold")
+	}
+	if _, err := reloaded.EffectiveBoundaries(); err != nil {
+		t.Fatalf("a pair rule must survive a marshal round trip: %v", err)
+	}
+}
+
+// The other half of the omitempty bargain: a zero that was written is
+// serialised, so a document the loader refuses does not become one it
+// accepts after a marshal round trip. A lone written zero keeps its meaning
+// as the shorthand on the way back in.
+func TestComplexityRule_WrittenZeroThresholdSurvivesMarshal(t *testing.T) {
+	cases := map[string]struct {
+		rule    ComplexityRule
+		refused bool
+	}{
+		"beside a pair": {
+			rule:    ComplexityRule{Name: "r", ThresholdSet: true, HardAbove: floatPtr(0.85), EasyBelow: floatPtr(0.60)},
+			refused: true,
+		},
+		"alone": {
+			rule:    ComplexityRule{Name: "r", ThresholdSet: true},
+			refused: false,
+		},
+	}
+
+	for name, tc := range cases {
+		out, err := yaml.Marshal(tc.rule)
+		if err != nil {
+			t.Fatalf("%s: marshal: %v", name, err)
+		}
+		if !strings.Contains(string(out), "threshold: 0") {
+			t.Fatalf("%s: a written zero must be serialised, got:\n%s", name, out)
+		}
+
+		var reloaded ComplexityRule
+		if err = yaml.Unmarshal(out, &reloaded); err != nil {
+			t.Fatalf("%s: unmarshal: %v", name, err)
+		}
+		if !reloaded.ThresholdSet {
+			t.Errorf("%s: presence must survive the round trip", name)
+		}
+		_, err = reloaded.EffectiveBoundaries()
+		if tc.refused && (err == nil || !strings.Contains(err.Error(), "keep one")) {
+			t.Errorf("%s: expected the reloaded rule to be refused, got %v", name, err)
+		}
+		if !tc.refused && err != nil {
+			t.Errorf("%s: a lone written zero must still resolve: %v", name, err)
 		}
 	}
 }

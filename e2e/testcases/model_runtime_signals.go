@@ -41,9 +41,9 @@ const (
 )
 
 func testModelRuntimeTaskSignals(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-	session, err := openModelRuntimeSession(ctx, client, opts)
-	if err != nil {
-		return err
+	session, openErr := openModelRuntimeSession(ctx, client, opts)
+	if openErr != nil {
+		return openErr
 	}
 	defer session.Close()
 	if err := session.waitReady(ctx, append(append([]string(nil), mrDeviceGroup...), mrAttachedFeedback)...); err != nil {
@@ -66,6 +66,14 @@ func testModelRuntimeTaskSignals(ctx context.Context, client *kubernetes.Clients
 		}
 		details[prompt] = observed
 	}
+	portable, portableErr := session.chat(ctx, "vsr-portable-observation-probe")
+	if portableErr != nil {
+		return fmt.Errorf("portable classifier observation: %w", portableErr)
+	}
+	if got := portable.Headers.Get("x-vsr-selected-decision"); got != "portable_observation_route" {
+		return fmt.Errorf("portable classifier observation selected %q, want portable_observation_route", got)
+	}
+	details["portable_classifier_observation"] = "portable_observation_route"
 	if opts.SetDetails != nil {
 		details["runtimes"] = "random-weight task_heads fixtures; managed device group and an attached process"
 		opts.SetDetails(details)

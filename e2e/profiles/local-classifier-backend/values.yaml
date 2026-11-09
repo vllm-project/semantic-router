@@ -26,10 +26,8 @@ config:
       classifiers:
         - name: local_jailbreak_score
           description: Deterministic local classifier E2E signal (real model runtime inference, no mock)
-          type: local
-          model_path: models/Vela-1.0-Encoder-307M-Guard
+          deployment: vela-guard
           labels: [benign, jailbreak]
-          use_cpu: true
     decisions:
       - name: local_classifier_jailbreak
         description: Route on a score from the local classifier backend (real model runtime inference, no mock)
@@ -59,6 +57,16 @@ config:
       strategy: priority
     model_catalog:
       kbs: []
+      deployments:
+        # Vela 1.0 Guard on the built-in model runtime; inputs over the model's
+        # limit are truncated rather than refused.
+        vela-guard:
+          provider: model_runtime
+          artifact: vllm-sr/Vela-1.0-Encoder-307M-Guard
+          revision: 087f9e401012df839c83717b746967ac7aebfa3e
+          device: cpu
+          input:
+            overflow: truncate
     services:
       response_api:
         enabled: true

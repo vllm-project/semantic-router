@@ -30,6 +30,14 @@ export function normalizeEntrypointModelNames(value: string | string[]): string[
   return [...new Set(values.map((item) => item.trim()).filter(Boolean))]
 }
 
+export function requireEntrypointModelNames(value: string | string[]): string[] {
+  const modelNames = normalizeEntrypointModelNames(value)
+  if (modelNames.length === 0) {
+    throw new Error('Add at least one request-facing model name.')
+  }
+  return modelNames
+}
+
 export function getRecipeNames(config: ConfigData | null): string[] {
   return [
     ...new Set([
@@ -120,10 +128,7 @@ export function validateEntrypointForm(
   models: NormalizedModel[],
   originalIndex: number | null,
 ): EntrypointConfig {
-  const modelNames = normalizeEntrypointModelNames(form.modelNames)
-  if (modelNames.length === 0) {
-    throw new Error('Add at least one request-facing model name.')
-  }
+  const modelNames = requireEntrypointModelNames(form.modelNames)
 
   const recipe = form.recipe.trim()
   if (!getRecipeNames(config).includes(recipe)) {

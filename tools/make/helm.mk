@@ -168,7 +168,7 @@ helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 		-f "$(HELM_BACKEND_TARGET_VALUES)" \
 		--namespace $(HELM_NAMESPACE) > "$(HELM_BACKEND_TARGET_OUTPUT)"
 	@for field in \
-		"base_url: https://provider.example/v1" \
+		"endpoint: https://provider.example/v1" \
 		"provider_model_id: provider/model-id" \
 		"api_key_env: PROVIDER_API_KEY" \
 		"X-Tenant: production" \
@@ -189,6 +189,7 @@ helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 	@echo "Model deployment and recipe binding rendering verified"
 	@"$(AGENT_PYTHON)" deploy/helm/check-gateway-mode.py $(HELM_CHART_PATH)
 	@echo "Standalone and extproc gateway modes verified"
+	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_data_volume.py -v
 	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_grafana_live.py -v
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm CI validation completed successfully"
 

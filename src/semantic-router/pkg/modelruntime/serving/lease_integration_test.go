@@ -73,7 +73,7 @@ func TestServingOverALeaseBundlesEverySignalOfAStage(t *testing.T) {
 		t.Fatal(err)
 	}
 	before, _ := fake.Bundles()
-	stage, bundle := modelservice.WithBundle(ctx, 50*time.Millisecond)
+	stage, bundle := modelservice.WithBundle(ctx, 10*time.Second)
 	text := "my person asks about math"
 	var (
 		wg       sync.WaitGroup
@@ -82,19 +82,29 @@ func TestServingOverALeaseBundlesEverySignalOfAStage(t *testing.T) {
 		spans    tasks.TokenClassificationResult
 		errs     [3]error
 	)
-	run := func(i int, call func()) {
-		leave := bundle.Join()
+	calls := []func(){
+		func() { labels, errs[0] = domain.Call(stage, "default", text) },
+		func() { jailbook, errs[1] = guard.Call(stage, "default", text) },
+		func() { spans, errs[2] = pii.Call(stage, "default", text) },
+	}
+	// Join all three before any call starts, or the first calls can flush without the last.
+	leaves := make([]func(), len(calls))
+	for i := range calls {
+		leaves[i] = bundle.Join()
+	}
+	started := time.Now()
+	for i, call := range calls {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			defer leave()
+			defer leaves[i]()
 			call()
 		}()
 	}
-	run(0, func() { labels, errs[0] = domain.Call(stage, "default", text) })
-	run(1, func() { jailbook, errs[1] = guard.Call(stage, "default", text) })
-	run(2, func() { spans, errs[2] = pii.Call(stage, "default", text) })
 	wg.Wait()
+	if elapsed := time.Since(started); elapsed >= 5*time.Second {
+		t.Fatalf("the stage waited for its window instead of sending once every participant parked: %v", elapsed)
+	}
 	for _, err := range errs {
 		if err != nil {
 			t.Fatal(err)

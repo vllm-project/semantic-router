@@ -251,6 +251,17 @@ func TestNewOpenAICompatibleProviderValidatesConfig(t *testing.T) {
 	}
 }
 
+func TestOpenAICompatibleProviderHonorsFractionalTimeout(t *testing.T) {
+	provider := newTestOpenAIProvider(t, OpenAICompatibleConfig{
+		BaseURL:        "http://localhost:8000",
+		Model:          "embedding-model",
+		TimeoutSeconds: 0.8,
+	})
+	if provider.timeout != 800*time.Millisecond {
+		t.Fatalf("timeout = %v, want 800ms", provider.timeout)
+	}
+}
+
 func newTestOpenAIProvider(t *testing.T, cfg OpenAICompatibleConfig) *OpenAICompatibleProvider {
 	t.Helper()
 	provider, err := NewOpenAICompatibleProvider(cfg)

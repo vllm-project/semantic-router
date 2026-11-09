@@ -104,6 +104,8 @@ The `store_backend` field controls where response and conversation history is pe
 | `redis` | Survives router restart, shared across replicas | Production (default) |
 | `memory` | Lost on router restart | Local development only |
 
+The `redis` store needs `redis.address` (or `cluster_addresses` in cluster mode). When the store cannot start, the router still starts, logs `response_api_store_init_failed`, and answers every `/v1/responses` request with 503 and code `response_store_unavailable`. Set `enabled: false` to serve no Responses API at all, which answers 404.
+
 ### Observability
 
 ```yaml
@@ -150,6 +152,7 @@ Common Prometheus metric families:
 | Complexity verdicts | `llm_complexity_verdict_total` (by `rule`, `verdict`, `source`), `llm_complexity_evaluation_failures_total` |
 | Remote classifier backends | `llm_remote_connector_requests_total` (by `operation`, `outcome`), `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
 | Recipe routing | `llm_entrypoint_requests_total`, `llm_recipe_selections_total`, `llm_routing_stage_duration_seconds` (stages `signals`, `decision`, `algorithm`, `prompt_compression`), `llm_prompt_compression_total` (by `recipe` and `outcome`: `compressed`, `skipped_disabled`, `skipped_min_length`, `skipped_max_tokens`) |
+| Routing input | `llm_routing_input_removed_total` (by `kind`: `skipped_message`, `stripped_block`), from [`global.router.routing_input`](../signal/overview#choose-the-user-text-signals-read) |
 | Streamed request body | `llm_streamed_body_arrival_seconds`, `llm_streamed_body_bytes`, `llm_streamed_body_chunks` (by `recipe`; STREAMED and FULL_DUPLEX_STREAMED modes only) |
 | Projections | `llm_projection_score` (by configured recipe and projection name) |
 | Trace export | `llm_trace_export_spans_total` (by exporter batch result) |
@@ -305,6 +308,27 @@ Gateway, ext_authz, route-level filters, etc.) is responsible for setting
 or stripping the header on trust grounds. Background on the AI Gateway
 interop pattern that motivates this gate lives in
 [issue #1808](https://github.com/vllm-project/semantic-router/issues/1808).
+
+### Debug Headers
+
+`global.router.headers.debug` decides who may turn on the debug response
+headers with `x-vsr-debug: true`. They name the signal and guard rules a
+request matched, so the default, `none`, ignores the header from every client.
+`any` honors it from every client, for development and tests. `authenticated`
+honors it only from the users and groups in `debug_principals`, as the identity
+headers your authenticator sets assert them.
+
+```yaml
+global:
+  router:
+    headers:
+      debug: authenticated
+      debug_principals:
+        groups: [platform-sre]
+```
+
+See [VSR routing headers](../../troubleshooting/vsr-headers#who-may-turn-on-the-debug-headers)
+for the headers it covers.
 
 ### Router Replay
 

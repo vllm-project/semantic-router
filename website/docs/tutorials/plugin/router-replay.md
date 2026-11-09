@@ -41,6 +41,7 @@ global:
       capture_request_body: true
       capture_response_body: true
       capture_personal_data: false
+      capture_tool_results: false
       max_records: 10000
       max_body_bytes: 4096
       max_tool_trace_bytes: 0
@@ -48,8 +49,9 @@ global:
 ```
 
 Absent service configuration leaves Replay disabled. Capture defaults are
-request and response bodies enabled, personal data enabled, 10,000 records,
-4,096 bytes per body, no per-field tool-trace byte limit, and 100 tool steps.
+request and response bodies enabled, personal data enabled, tool results
+redacted, 10,000 records, 4,096 bytes per body, no per-field tool-trace byte
+limit, and 100 tool steps.
 Storage, retention and asynchronous writes are global service settings.
 
 ### Limit capture on a decision
@@ -93,8 +95,11 @@ override an inherited value; omit a field when you want to inherit it.
 Set `capture_personal_data: false` globally or on a decision's `router_replay`
 plugin. The record keeps routing evidence, model, signals and detected PII types,
 while personal-data requests omit request and response bodies, prompts, tool
-definitions and tool traces. The recipe's configured PII signals are evaluated
-when needed for this capture setting, even if no decision references them.
+definitions and tool traces. The prompt is checked after routing, so requests
+never wait for it: unless a routing decision already read it with a PII signal,
+the record is written without the prompt, and the recipe's configured PII rules
+then read the latest user message alone. The prompt is added to the record once
+that read completes without finding personal data.
 
 When PII evidence is unavailable, classification fails, or the recipe has no
 PII detector configured, capture omits content conservatively. A PII signal is
@@ -108,6 +113,39 @@ routing:
       - name: personal_data
         pii_types_allowed: []
 ```
+
+### Capture tool results for development and audit
+
+By default a record keeps each client tool result's call ID and whether it
+succeeded or failed, but not its output, and a captured request body has its
+tool results removed. This applies whether or not a PII signal reads tool
+results. To debug an agent's tool loop, set `capture_tool_results: true`
+globally or on a decision's `router_replay` plugin:
+
+```yaml
+plugins:
+  - type: router_replay
+    configuration:
+      enabled: true
+      capture_request_body: true
+      capture_tool_results: true
+      max_tool_trace_bytes: 16384
+```
+
+Each `client_tool_result` step then stores the result's text in `output`, with
+`content_redacted: false`. A captured request body keeps the tool results, up
+to `max_body_bytes`. `max_tool_trace_bytes` bounds each stored result and sets
+the step's `truncated` flag when it cuts one. With the default of `0`, results
+are stored whole, so set a limit: a large tool output makes the record larger,
+and a store can reject a record above its size limit.
+
+Tool results are raw client data, so `capture_tool_results: true` requires
+`capture_personal_data: true`. The Router refuses to load a configuration where
+the global defaults, or any decision's effective `router_replay` settings,
+combine `capture_tool_results: true` with `capture_personal_data: false`. A
+masking route never records its request trace or body. Principals without
+`replay.detail` still receive tool results redacted. Keep the option off in
+production unless the records are an intended audit store.
 
 Request bodies, responses, and tool traces can contain secrets or personal data.
 Capture only what you need and restrict access with `replay.read` and

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "dc40c9a164b35316778c66982e6184d9f45cc97c"
   source_file: "docs/tutorials/global/model-runtime.md"
@@ -37,7 +38,7 @@ global:
         device: auto
       decision-shared:
         provider: model_runtime
-        endpoint: http://decision-runtime:8100
+        endpoint: http://decision-runtime.example.com:8100
 ```
 
 未配置 `endpoint` 时，Router 会启动该部署的运行时，并在它退出后重启。配置 `endpoint` 时，Router 连接你自行运行的运行时。
@@ -46,6 +47,7 @@ global:
 
 - [快速开始](/model-runtime/quickstart.md)：启动模型并在 Router 中使用。
 - [选择模型、规模和硬件](/model-runtime/choose-a-model.md)。
+- [为信号选择模型](/installation/choose-a-model-for-a-signal.md)：每个信号由哪个部署回答。
 - [与 Router 一起运行](/model-runtime/deploy.md)：设备、进程、连接外部运行时和 Kubernetes。
 - [引擎参数](/model-runtime/engine-args.md)：批处理、精度和共享上下文。
 - [从原生绑定迁移](/model-runtime/migrate.md)。

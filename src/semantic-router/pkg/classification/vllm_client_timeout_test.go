@@ -48,6 +48,37 @@ func TestVLLMClientTimeoutHonorsConfig(t *testing.T) {
 	}
 }
 
+// TestVLLMClientTimeoutHonorsSubSecondConfig verifies a fractional
+// llm_timeout_seconds is enforced on the HTTP client. yaml.v2 used to
+// truncate 0.8 into the int field as 0, and GetTimeout then substituted 30s.
+func TestVLLMClientTimeoutHonorsSubSecondConfig(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(time.Second)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"safe"}}]}`))
+	}))
+	defer server.Close()
+
+	client := newVLLMClientFromConfig(&config.ExternalModelConfig{
+		ModelEndpoint:  config.ClassifierVLLMEndpoint{Address: "placeholder", Port: 1},
+		TimeoutSeconds: 0.2,
+	})
+	setTestVLLMClientURL(client, server.URL)
+
+	start := time.Now()
+	_, err := client.Generate(context.Background(), "classifier", "test", nil)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected a timeout error, got nil")
+	}
+	if elapsed > 800*time.Millisecond {
+		t.Fatalf("elapsed = %v, want < 800ms (configured 200ms timeout); client timeout did not fire", elapsed)
+	}
+	if elapsed < 100*time.Millisecond {
+		t.Fatalf("elapsed = %v, want > 100ms; timed out too early, check test setup", elapsed)
+	}
+}
+
 // TestVLLMClientTimeoutDefaultsWhenUnset verifies the 30s default still
 // applies when llm_timeout_seconds is unset, so existing configs without an
 // explicit timeout keep the prior behavior.
@@ -71,12 +102,13 @@ func TestVLLMClientTimeoutDefaultsWhenUnset(t *testing.T) {
 func TestGetTimeoutCoversCallers(t *testing.T) {
 	cases := []struct {
 		name    string
-		seconds int
+		seconds float64
 		want    time.Duration
 	}{
 		{"unset_uses_default", 0, 30 * time.Second},
 		{"configured_passes_through", 60, 60 * time.Second},
 		{"negative_uses_default", -1, 30 * time.Second},
+		{"sub_second_passes_through", 0.8, 800 * time.Millisecond},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

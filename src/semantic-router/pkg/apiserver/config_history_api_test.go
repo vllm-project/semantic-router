@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
@@ -81,10 +82,11 @@ func rollbackTo(t *testing.T, server *ClassificationAPIServer, path string, payl
 
 func TestVersionsListTheHistoryOnce(t *testing.T) {
 	server, manager, path := newHistoryAPIServer(t, nil)
-	watchAndApply(t, manager, path)
+	applied := watchAndApply(t, manager, path)
 	if recorder, result := putConfig(t, server, path); recorder.Code != http.StatusOK || result.ConfigVersion != 2 {
 		t.Fatalf("PUT: %d %s", recorder.Code, recorder.Body.String())
 	}
+	applied()
 
 	entries := listVersions(t, server)
 	if len(entries) != 2 {
@@ -111,16 +113,18 @@ func TestRollbackActivatesARecordedVersionAsANewOne(t *testing.T) {
 	} {
 		server, manager, path := newHistoryAPIServer(t, nil)
 		startupDocument, _ := os.ReadFile(path)
-		watchAndApply(t, manager, path)
+		applied := watchAndApply(t, manager, path)
 		if recorder, _ := putConfig(t, server, path); recorder.Code != http.StatusOK {
 			t.Fatalf("PUT: %d %s", recorder.Code, recorder.Body.String())
 		}
+		applied()
 
-		watchAndApply(t, manager, path)
+		applied = watchAndApply(t, manager, path)
 		recorder, result := rollbackTo(t, server, path, payload)
 		if recorder.Code != http.StatusOK || result.ConfigVersion != 3 || result.RollbackOf != 1 {
 			t.Fatalf("rollback %+v: %d %s", payload, recorder.Code, recorder.Body.String())
 		}
+		applied()
 		if restored, _ := os.ReadFile(path); !bytes.Equal(restored, startupDocument) {
 			t.Fatal("the rollback did not persist the recorded document")
 		}
@@ -134,11 +138,12 @@ func TestRollbackActivatesARecordedVersionAsANewOne(t *testing.T) {
 		}
 
 		putDocument, _ := manager.History().ByVersion(2)
-		watchAndApply(t, manager, path)
+		applied = watchAndApply(t, manager, path)
 		recorder, result = rollbackTo(t, server, path, routerConfigRollbackRequest{ConfigVersion: 2})
 		if recorder.Code != http.StatusOK || result.ConfigVersion != 4 || result.RollbackOf != 2 {
 			t.Fatalf("roll forward: %d %s", recorder.Code, recorder.Body.String())
 		}
+		applied()
 		if restored, _ := os.ReadFile(path); !bytes.Equal(restored, putDocument.Document) {
 			t.Fatal("rolling forward did not restore version 2's document")
 		}
@@ -182,10 +187,11 @@ func TestRollbackReplacesARejectedDocument(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			server, manager, path := newHistoryAPIServer(t, nil)
 			startupDocument, _ := os.ReadFile(path)
-			watchAndApply(t, manager, path)
+			applied := watchAndApply(t, manager, path)
 			if recorder, _ := putConfig(t, server, path); recorder.Code != http.StatusOK {
 				t.Fatalf("PUT: %d %s", recorder.Code, recorder.Body.String())
 			}
+			applied()
 			rejectFileEdit(t, manager, path, document)
 
 			watchAndApply(t, manager, path)
@@ -242,6 +248,21 @@ func readAudit(t *testing.T, server *ClassificationAPIServer, action RouteAuditA
 	return server.managementAuditPage(0, 100, action).Entries
 }
 
+// waitForAudit polls until the audit holds want entries for action. The
+// runtime serves a document before the lifecycle's attempt listeners record
+// it, so a PUT can return before its activation reaches the audit (#5031).
+func waitForAudit(t *testing.T, server *ClassificationAPIServer, action RouteAuditAction, want int) []managementAuditEntry {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		entries := readAudit(t, server, action)
+		if len(entries) >= want || time.Now().After(deadline) {
+			return entries
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestConfigAuditRecordsWhoChangedWhatAndHowItEnded(t *testing.T) {
 	server, manager, path := newHistoryAPIServer(t, nil)
 	watchAndApply(t, manager, path)
@@ -251,7 +272,7 @@ func TestConfigAuditRecordsWhoChangedWhatAndHowItEnded(t *testing.T) {
 	}
 	requestID := recorder.Header().Get(managementRequestIDHeader)
 
-	activations := readAudit(t, server, AuditActionConfigActivate)
+	activations := waitForAudit(t, server, AuditActionConfigActivate, 2)
 	if len(activations) != 2 {
 		t.Fatalf("activation audit = %+v, want startup and the PUT", activations)
 	}
@@ -281,7 +302,7 @@ func TestConfigAuditRecordsARejection(t *testing.T) {
 	if recorder, _ := putConfig(t, server, path); recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("PUT: %d %s", recorder.Code, recorder.Body.String())
 	}
-	rejections := readAudit(t, server, AuditActionConfigReject)
+	rejections := waitForAudit(t, server, AuditActionConfigReject, 1)
 	if len(rejections) != 1 {
 		t.Fatalf("rejection audit = %+v", rejections)
 	}

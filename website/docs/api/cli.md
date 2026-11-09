@@ -807,11 +807,17 @@ Usage: vllm-sr config migrate [OPTIONS]
 
 Migrate a legacy or mixed config file to canonical v0.3 YAML.
 
+The output is written only when the Router's own validation accepts it: a
+local Router binary ($VLLM_SR_ROUTER_BINARY) or the Router in its local
+image. With --offline, or when no Router can run, only the CLI's
+structural checks run.
+
 | Parameter | Description |
 | --- | --- |
 | `--config TEXT` | Path to source config file (default: config.yaml) Default: config.yaml. |
 | `--output TEXT` | Path for migrated canonical config (default: &lt;config&gt;.migrated.yaml) |
 | `--force` | Overwrite the output file if it already exists. Default: false. |
+| `--offline` | Check the output with only the CLI's structural checks, without the Router's validation. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr config plan` {#vllm-sr-config-plan}
@@ -914,26 +920,30 @@ Usage: vllm-sr config validate [OPTIONS]
 
 Validate configuration file.
 
-The CLI's own checks run first. The Router's validation then decides, as
-it does when `vllm-sr serve` or `vllm-sr config apply` loads the file: the
-Router in its local image (never pulled), or the running Router --endpoint
-names.
+The Router's own validation decides, as it does when `vllm-sr serve` or
+`vllm-sr config apply` loads the file: a local Router binary
+(--router-binary or $VLLM_SR_ROUTER_BINARY), the Router in its local image
+(never pulled), or the running Router --endpoint names. The CLI checks the
+file's structure and the rules it owns as well. With --offline, or when no
+Router can run, only the CLI's structural checks run.
 
 Examples:
 
 ```bash
 vllm-sr config validate
 vllm-sr config validate --config my-config.yaml
+vllm-sr config validate --router-binary bin/router
 vllm-sr config validate --endpoint http://localhost:8080
 ```
 
 | Parameter | Description |
 | --- | --- |
 | `--config TEXT` | Path to config file (default: config.yaml) Default: config.yaml. |
-| `--endpoint TEXT` | Validate with this running Router instead of the local Router image. |
+| `--endpoint TEXT` | Validate with this running Router instead of a local Router. |
+| `--router-binary PATH` | Local Router executable whose own validation to run, preferred over the image (default: $VLLM_SR_ROUTER_BINARY). |
 | `--image TEXT` | Router image whose own validation to run (default: the stack's, if present). |
 | `--gateway CHOICE` | The gateway mode the configuration is served in (default: standalone). Choices: standalone, extproc. |
-| `--offline` | Run only the CLI's own checks, without the Router's validation. Default: false. |
+| `--offline` | Run only the CLI's structural checks, without the Router's validation. Default: false. |
 | `--timeout FLOAT` | [default: 15] |
 | `--token-env TEXT` | [default: VSR_MGMT_TOKEN] |
 | `--help` | Show this message and exit. Default: false. |
@@ -1369,7 +1379,7 @@ Probe a real route and assert complete assistant delivery for expected 2xx.
 | `--max-completion-tokens INTEGER RANGE` | Completion token budget, including reasoning; omitted uses the backend default.  [x&gt;=1] |
 | `--timeout FLOAT` | [default: 120.0] |
 | `--target TEXT` | Deployment target used for URL resolution. |
-| `--debug / --no-debug` | [default: debug] |
+| `--debug / --no-debug` | Ask for the debug response headers. The Router sends them only when global.router.headers.debug allows this caller.  [default: debug] |
 | `--expect-status INTEGER` | [default: OK] |
 | `--expect-recipe TEXT` | — |
 | `--expect-decision TEXT` | — |
@@ -1487,8 +1497,8 @@ prints a short summary (--verbose prints every detail). Saved routing
 configuration is retained.
 
 MODEL overrides the configured default judgment deployment's artifact.
-Omitting MODEL preserves that deployment (a new configuration uses Vela 2.0
-0.3B). Only explicit model, placement and engine options override saved
+Omitting MODEL preserves that deployment (a new configuration uses Vela 3.0
+vela3-fast). Only explicit model, placement and engine options override saved
 settings: --max-num-seqs, --max-num-batched-tokens, --batch-window-ms, --dtype
 and --enable-shared-context set the deployment's engine arguments.
 Backend LLMs, named deployments, listeners and API grants belong in --config.

@@ -75,7 +75,7 @@ func openAICompatibleConfigFromModels(models config.EmbeddingModels) OpenAICompa
 		BaseURL:           models.Endpoint.BaseURL,
 		Model:             models.Endpoint.Model,
 		APIKeyEnv:         models.Endpoint.APIKeyEnv,
-		TimeoutSeconds:    models.Endpoint.TimeoutSeconds,
+		TimeoutSeconds:    float64(models.Endpoint.TimeoutSeconds),
 		MaxRetries:        models.Endpoint.MaxRetries,
 		MaxResponseBytes:  models.Endpoint.MaxResponseBytes,
 		Dimensions:        models.Endpoint.Dimensions,

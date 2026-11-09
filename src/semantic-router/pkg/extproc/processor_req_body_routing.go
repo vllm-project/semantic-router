@@ -310,6 +310,9 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 		removeHeaders: []string{"content-length"},
 		profile:       dispatch.profile,
 	}
+	// The negotiated reply encoding comes before provider metadata and decision
+	// mutations, so an operator-supplied Accept-Encoding still takes precedence.
+	negotiated := appendUpstreamEncodingHeader(&state.setHeaders, ctx)
 	// Provider metadata is applied before credentials so an operator-supplied
 	// extra header can never replace the credential selected for this request.
 	appendProfileHeaders(&state.setHeaders, dispatch.profile)
@@ -321,6 +324,9 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 	appendRoutingHeaders(&state.setHeaders, dispatch.effectiveBackendModel())
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
 	r.applyDecisionHeaderMutations(state, ctx)
+	// Removals apply before every set, so an operator deletion wins only once
+	// the negotiated value yields to it.
+	yieldNegotiatedEncoding(state, negotiated)
 	// Body-stage model and path mutations can change the Envoy route selected
 	// during headers. Apply the same cache policy to every provider dispatch,
 	// including internal multi-model calls and unchanged logical model names.
@@ -352,6 +358,18 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 			return nil, err
 		}
 		if err := r.rejectDispatchCapabilityMismatch(ctx.SemanticRequest, dispatch, ctx); err != nil {
+			return nil, err
+		}
+		// Masking is the last provider-bound content mutation, and it runs
+		// before the fallback snapshot so a retry cannot replay unmasked
+		// content. All dispatch paths reach this function (#3566).
+		if err := r.applyMaskingBeforeDispatch(ctx); err != nil {
+			metrics.RecordRequestError(dispatch.logicalModel, "masking_error")
+			logging.ComponentErrorEvent("extproc", "masking_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"model":      dispatch.logicalModel,
+				"error":      err.Error(),
+			})
 			return nil, err
 		}
 		if r.shouldAttemptFallback(ctx) {

@@ -1,10 +1,11 @@
 ---
+is_mtpe: false
 title: 配置
 description: 理解 canonical v0.3 YAML 文档，以及路由、providers、配方、服务和密钥应放在哪里。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/configuration.md"
-  outdated: false
+  outdated: true
 ---
 
 # 配置
@@ -35,7 +36,7 @@ global:
 | `routing` | 默认配方：model card、信号、投影、决策、strategy、算法和路由插件。 |
 | `entrypoints` | 映射到默认配方或命名配方的公共虚拟模型别名。 |
 | `recipes` | 共享 providers 和全局基础设施的额外隔离路由配置。 |
-| `global` | Router 服务、存储、集成、可观测性、学习和 Router 拥有的模型资产。 |
+| `global` | Router 服务、存储、集成、可观测性、学习，以及 Router 询问的模型（`global.model_catalog`；见[模型目录参考](model-catalog.md)）。 |
 
 保持这些边界清晰：
 
@@ -54,11 +55,11 @@ Provider 定价放在每个具体模型旁边，位于 `providers.models[].prici
 
 Router 范围的调试表面默认关闭。`global.services.observability.profiling` 提供 Go `pprof` 端点，并且仅在显式启用时提供；然后它绑定 `127.0.0.1:6060`，因此除非显式更改 `bind`，否则 profile 永远不会到达可路由接口。该开关在启动时读取一次，因此更改它需要重启 Router。参见 [API 与可观测性](../tutorials/global/api-and-observability)。
 
-当未配置远程后端时，内置类别/领域分类在[模型运行时](model-runtime/overview.md)中运行 Vela Domain。要调用命名的外部分类器，在 `global.model_catalog.modules.classifier.domain` 下附加 `backend`，并从 `global.model_catalog.external[]` 解析其 `model`，设置 `model_role: classification`。共享后端字段是 `protocol`、`contract`、`model` 和可选的 `deadline_ms`；类别当前支持带完整 `label_distribution.v1` 响应契约的 `http_classify`。省略 `backend` 以保留运行时提供的模型。早期的 `variant`、`use_modernbert` 和 `use_mmbert_32k` 选择器已移除；`vllm-sr config migrate` 会删除它们。
+Router 询问的模型（回答信号、嵌入文本和重排文档的模型）是 `global.model_catalog.deployments` 下的部署。默认由决策模型在[模型运行时](model-runtime/overview.md)中回答每个问题类信号。绑定（`global.model_catalog.bindings.<signal>`，或配方的 `routing.model_bindings.<signal>`）或规则自身的 `deployment` 可以指定其他部署，例如为 domain、PII 或 complexity 指定远程 `classify` 服务。[为信号选择模型](choose-a-model-for-a-signal.md)说明这条规则，[模型目录参考](model-catalog.md)列出部署的全部字段。早期的 `variant`、`use_modernbert` 和 `use_mmbert_32k` 选择器已移除；`vllm-sr config migrate` 会删除它们。
 
-复杂度在 `global.model_catalog.modules.complexity` 下附加相同的块，位于 `prototype_scoring` 旁边。它读取两种契约，因此 `contract` 不能默认，必须声明：回归模型使用 `score.v1`，每条规则通过自己的 `hard_above`/`easy_below` 边界（或当分数随难度上升而下降时使用 `hard_below`/`easy_above`）将分数转换为判定；直接返回 `hard`/`easy`/`medium` 的模型使用 `label_distribution.v1`。`threshold` 仍是本地带符号边距的对称简写。`score.v1` 不报告置信度，因此由这些规则门控的决策按引擎的结构默认值排序；Router 会在启动时发出警告。远程调用通过 `llm_remote_connector_*` 和 `llm_complexity_*` 指标可见，评分器失败会记录在每条复杂度规则的信号错误上，而不是被丢弃。
+复杂度规则用自己的 `deployment` 指定远程评分器：一个返回单个分数的 `classify` 部署，每条规则通过自己的 `hard_above`/`easy_below` 边界（或当分数随难度上升而下降时使用 `hard_below`/`easy_above`）将分数转换为判定。所有复杂度规则由同一个分数驱动，因此一个路由配置中的规则都指定同一个评分器。`threshold` 仍是本地带符号边距的对称简写。远程分数不报告置信度，因此由这些规则门控的决策按引擎的结构默认值排序；Router 会在启动时发出警告。远程调用通过 `llm_remote_connector_*` 和 `llm_complexity_*` 指标可见，评分器失败会记录在每条复杂度规则的信号错误上，而不是被丢弃。
 
-PII 在 `global.model_catalog.modules.classifier.pii` 下附加相同的块。它读取一种契约 `token_spans.v1`，因此可以省略 `contract`。远程模型将实体跨度作为它收到的精确请求字符串的码点偏移返回，并且它返回的每个标签都必须存在于配置的 `pii_mapping_path` 中；契约拒绝的响应是后端失败，而不是干净的“无 PII”结果。后端旁边的 `on_error` 选择此类失败或 provider 声明的 `truncated_at` 对消费它的规则做什么：`allow`（默认）将内容视为不匹配，`block` 将其匹配为 `classification_error`。在声明截断之前返回的跨度在两种策略下都计入。后端与本地 `use_mmbert_32k` 选择器互斥。
+远程 PII 分类器是 `pii` 所绑定的 `classify` 部署。它将实体跨度作为它收到的精确请求字符串的码点偏移返回，并且它返回的每个标签都必须存在于配置的 `pii_mapping_path` 中；片段契约拒绝的响应是失败，而不是干净的“无 PII”结果。`global.model_catalog.modules.classifier.pii.on_error` 选择此类失败或 provider 声明的 `truncated_at` 对读取它的规则做什么：`allow`（默认）将内容视为不匹配，`block` 将其匹配为 `classification_error`。在声明截断之前返回的跨度在两种策略下都计入。
 
 [路由流水线](../overview/signal-driven-decisions)解释该设计。**能力**下的能力页面记录每个信号、投影、决策、算法、插件和全局块。
 
@@ -211,7 +212,7 @@ providers:
       catalog: openai/gpt-5.6-sol
       backend_refs:
         - provider: openai
-          api_key_env: OPENAI_API_KEY
+          auth: {api_key_env: OPENAI_API_KEY}
 ```
 
 `name` 仍是本地 Router 别名。私有或新发布的模型省略 `catalog`，并可选择在该别名下定义 Model Card 和推理契约。从[配置模型](model-configuration)开始，然后使用[模型配置模式](model-configuration-patterns)比较目录、自定义、推理、Provider 和副本组合。[模型与 provider Day-0 指南](../community/model-provider-day-0-support.md)面向向仓库目录添加可复用支持的贡献者。
@@ -256,7 +257,7 @@ api_key: ${MODEL_API_KEY}
 
 `global.router.strategy` 和 `global.router.fallback` 提供共享默认值。顶层 `routing` 仅配置默认配方；每个 `recipes[].routing` 独立继承全局默认值，不继承顶层默认配方的设置。decision 的 fallback 再覆盖自身配方的有效 fallback。默认和具名配方都允许 `fallback: {enabled: false}` 这样的部分覆盖，其余字段保留共享默认值。运行时的内置 strategy 默认值为 `priority`。
 
-在外部 LLM 分类器条目和 MCP 分类器模块上设置 `max_response_bytes`，以限制一次上游分类器响应。
+在远程分类器部署上设置 `limits.max_response_bytes`，在 MCP 分类器模块上设置 `max_response_bytes`，以限制一次上游分类器响应。
 
 在 schema 中，`entrypoints[].model_names` 列出公共别名，`entrypoints[].recipe` 选择命名配方，`recipes[].routing` 包含该配方的策略。
 

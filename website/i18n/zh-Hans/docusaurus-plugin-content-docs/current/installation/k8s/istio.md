@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 使用 Istio Gateway 部署
 description: 在 Istio Gateway 后面将 Semantic Router 作为 ExtProc 服务运行，并接入两个模型后端。
 translation:

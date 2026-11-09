@@ -192,7 +192,7 @@ var newVLLMJailbreakInferenceTestCases = []newVLLMJailbreakInferenceTestCase{
 func TestNewVLLMJailbreakInference(t *testing.T) {
 	for _, tt := range newVLLMJailbreakInferenceTestCases {
 		t.Run(tt.name, func(t *testing.T) {
-			inference, err := NewVLLMJailbreakInference(tt.externalCfg, tt.defaultThreshold, tt.mapping, tt.positiveLabels)
+			inference, err := NewVLLMJailbreakInference(externalChatDeployment(tt.externalCfg), tt.defaultThreshold, tt.mapping, tt.positiveLabels)
 
 			if tt.expectError {
 				if err == nil {

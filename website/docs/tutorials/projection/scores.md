@@ -213,4 +213,4 @@ Scores make no additional model calls and do not persist content by themselves;
 they combine signal results already present for the request. Weights do not
 calibrate heterogeneous inputs automatically, so evaluate the complete score
 and mapping on labeled traffic. See a complete example in the
-[`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml).
+[`config/recipes/feedback/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/feedback/config.yaml).

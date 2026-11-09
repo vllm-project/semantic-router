@@ -52,6 +52,13 @@ type DeployResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
+// deployedResponse answers a deploy with the Router's warnings about the
+// deployed config.
+type deployedResponse struct {
+	DeployResponse
+	Warnings []routerconfig.ConfigWarning `json:"warnings,omitempty"`
+}
+
 // ConfigVersion represents a backup version entry
 type ConfigVersion struct {
 	Version   string `json:"version"`
@@ -214,7 +221,7 @@ func RollbackHandler(configPath string, readonlyMode bool, configDir string) htt
 // GET /api/router/config/versions
 func ConfigVersionsHandler(configPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -268,7 +275,8 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 		return
 	}
 
-	if _, err := routerconfig.ParseYAMLBytes(yamlBytes); err != nil {
+	warnings, err := validateMergedDeploy(yamlBytes)
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -331,11 +339,11 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	if configActivationDeferred() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
-		_ = json.NewEncoder(w).Encode(DeployResponse{
+		_ = json.NewEncoder(w).Encode(deployedResponse{DeployResponse: DeployResponse{
 			Status:  "persisted",
 			Version: version,
 			Message: "Configuration saved to the Kubernetes ConfigMap. Roll out Router and Envoy to activate it.",
-		})
+		}, Warnings: warnings})
 		return
 	}
 
@@ -347,15 +355,31 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	})
 
 	if restartMessage != "" {
-		writeRestartRequiredResponse(w, version, restartMessage)
+		writeRestartRequiredResponse(w, version, restartMessage, warnings)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(DeployResponse{
+	_ = json.NewEncoder(w).Encode(deployedResponse{DeployResponse: DeployResponse{
 		Status:  "success",
 		Version: version,
 		Message: "Config deployed successfully. Router and Envoy have been updated.",
-	})
+	}, Warnings: warnings})
+}
+
+// validateMergedDeploy checks a merged deploy document as the Router loads
+// it with its own environment, which the Dashboard may not share, and returns
+// the Router's warnings about it.
+func validateMergedDeploy(data []byte) ([]routerconfig.ConfigWarning, error) {
+	if err := routerconfig.ValidateYAMLBytesDeferringEnv(data); err != nil {
+		return nil, err
+	}
+	// Warnings are advisory: a typed parse may refuse a ${VAR} reference
+	// that the deferred check accepted.
+	cfg, err := routerconfig.ParseYAMLBytesDeferringEnv(data)
+	if err != nil {
+		return []routerconfig.ConfigWarning{}, nil
+	}
+	return savedConfigWarnings(cfg), nil
 }
 
 func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
@@ -613,7 +637,7 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 	})
 
 	if restartMessage != "" {
-		writeRestartRequiredResponse(w, version, restartMessage)
+		writeRestartRequiredResponse(w, version, restartMessage, nil)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

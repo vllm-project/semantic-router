@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 多模态嵌入模型
 sidebar_label: 多模态嵌入
 translation:

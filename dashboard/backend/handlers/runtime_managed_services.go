@@ -16,12 +16,18 @@ const (
 	defaultDashboardContainerName = "vllm-sr-dashboard-container"
 )
 
-func managedContainerNameForService(service string) string {
+// managedStackNamePattern matches the CLI's STACK_NAME_PATTERN.
+var managedStackNamePattern = regexp.MustCompile(`[^A-Za-z0-9_.-]+`)
+
+// ManagedContainerName returns the container name the CLI gives a stack
+// service: the name it exports into every stack container, else the default
+// name scoped to the stack the way the CLI scopes it.
+func ManagedContainerName(service string) string {
 	switch service {
 	case "router":
-		return envOrDefaultTrimmed(routerContainerNameEnv, defaultRouterContainerName)
+		return envOrDefaultTrimmed(routerContainerNameEnv, stackScopedContainerName(defaultRouterContainerName))
 	case "envoy":
-		return envOrDefaultTrimmed(envoyContainerNameEnv, defaultEnvoyContainerName)
+		return envOrDefaultTrimmed(envoyContainerNameEnv, stackScopedContainerName(defaultEnvoyContainerName))
 	case "dashboard":
 		return managedDashboardContainerName()
 	default:
@@ -30,11 +36,17 @@ func managedContainerNameForService(service string) string {
 }
 
 func managedContainerNameForStorage(backend string) string {
+	return stackScopedContainerName("vllm-sr-" + backend)
+}
+
+// stackScopedContainerName prefixes a default container name with the
+// normalized stack name, except on the default stack.
+func stackScopedContainerName(name string) string {
 	stack := normalizedManagedStackName(os.Getenv("VLLM_SR_STACK_NAME"))
 	if stack == "" || stack == "vllm-sr" {
-		return "vllm-sr-" + backend
+		return name
 	}
-	return stack + "-vllm-sr-" + backend
+	return stack + "-" + name
 }
 
 func normalizedManagedStackName(raw string) string {
@@ -42,12 +54,12 @@ func normalizedManagedStackName(raw string) string {
 	if value == "" {
 		return "vllm-sr"
 	}
-	value = regexp.MustCompile(`[^A-Za-z0-9_.-]+`).ReplaceAllString(value, "-")
+	value = managedStackNamePattern.ReplaceAllString(value, "-")
 	return strings.Trim(value, "._-")
 }
 
 func managedDashboardContainerName() string {
-	return envOrDefaultTrimmed(dashboardContainerNameEnv, defaultDashboardContainerName)
+	return envOrDefaultTrimmed(dashboardContainerNameEnv, stackScopedContainerName(defaultDashboardContainerName))
 }
 
 // managedStackRunsEnvoy reports whether an Envoy container serves the
@@ -60,8 +72,8 @@ func managedStackRunsEnvoy() bool {
 
 func managedRuntimeUsesSplitContainers() bool {
 	dashboardContainer := managedDashboardContainerName()
-	return managedContainerNameForService("router") != dashboardContainer ||
-		managedContainerNameForService("envoy") != dashboardContainer
+	return ManagedContainerName("router") != dashboardContainer ||
+		ManagedContainerName("envoy") != dashboardContainer
 }
 
 func managedEnvoyReadyURL() string {

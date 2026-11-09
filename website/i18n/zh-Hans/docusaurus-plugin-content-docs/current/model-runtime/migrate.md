@@ -1,14 +1,19 @@
 ---
+is_mtpe: false
 title: 从原生绑定迁移
 sidebar_label: 从原生绑定迁移
 description: 更新使用了 candle、ONNX Runtime 或 OpenVINO 后端、旧模型名、NLI 解释器或模型运行时旧档位（profile）的配置。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/migrate.md"
-  outdated: false
+  outdated: true
 ---
 
 # 从原生绑定迁移
+
+:::note
+`legacy.yaml` 示例来自早期版本，保留了当时的模型字段，例如模块的 `model_id` 以及绑定的 `contract` 和 `adapter`。`vllm-sr config migrate` 也会改写这些字段；[迁移模型资源](../installation/model-resource-migration.md)将每个早期字段与取代它的“部署加绑定”形式并列展示。
+:::
 
 早期版本在路由器内部用三种后端运行模型：candle、ONNX Runtime（`ort`）和 OpenVINO。
 这些本地绑定已经由[模型运行时](model-runtime/overview.md)替代；显式配置的外部服务仍单独调用。
@@ -77,7 +82,7 @@ Changes to review
 | 旧模型目录中的标签映射，例如 `category_mapping_path: models/mom-domain-classifier/category_mapping.json` | 移除：路由器读取所运行模型的标签 |
 | MLP 选择算法上的 `mlp.device` | 移除：MLP 选择器在路由器内运行 |
 | fusion 算法的 `grounding.nli_contradiction_penalty` | `grounding.contradiction_penalty`：grounding 现在读取幻觉检测器 |
-| 使用 `backend: endpoint`、`endpoint` 和 `model_id` 的幻觉检测器 | 指向该聊天服务的 `hallucination_detector` binding；路径不是 `/v1` 的 endpoint 需要手动编写 |
+| 使用 `backend: endpoint`、`endpoint` 和 `model_id` 的幻觉检测器 | 该聊天服务的 `openai_chat` 部署，以及指向它的 `hallucination` 绑定；路径不是 `/v1` 的 endpoint 需要手动编写 |
 
 ### 更名的模型 {#model-names-that-changed}
 
@@ -190,36 +195,43 @@ providers:
   defaults:
     model: answer-model
   models:
-  - name: answer-model
-    backend_refs:
-    - name: answer
-      endpoint: vllm:8000
-      provider: vllm
+    - name: answer-model
+      backend_refs:
+        - name: answer
+          endpoint: vllm:8000
+          provider: vllm
 routing:
   model_bindings:
-    embedding:
-      deployment: vela-embedding
-      contract: embedding.v1
-      adapter: mmbert
+    embedding: vela-embedding
 global:
   model_catalog:
     deployments:
-      vela-embedding:
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
+      Vela-1.0-Encoder-307M-Guard:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Guard
+        revision: 087f9e401012df839c83717b746967ac7aebfa3e
         provider: model_runtime
-        device: rocm:0
+        device: cpu
+      Vela-1.0-Encoder-307M-Halu:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Halu
+        revision: ca87531211e414ac21c641b2faa8b8e21619de8f
+        provider: model_runtime
+        device: cpu
       vela-domain:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
         provider: model_runtime
         device: cuda:0
+      vela-embedding:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
+        provider: model_runtime
+        device: rocm:0
     modules:
       prompt_guard:
         enabled: true
-        model_id: models/Vela-1.0-Encoder-307M-Guard
       hallucination_mitigation:
         enabled: true
-        detector:
-          model_id: models/Vela-1.0-Encoder-307M-Halu
+    bindings:
+      hallucination: Vela-1.0-Encoder-307M-Halu
+      jailbreak: Vela-1.0-Encoder-307M-Guard
   stores:
     response_cache:
       enabled: true
@@ -228,6 +240,7 @@ global:
 ```
 
 响应缓存原本没有 `embedding_model`，因此使用的是此前的默认模型 MiniLM；现在它指定 Vela Embedding。
+原先由模块 `model_id` 指定的防护模型和幻觉检测器，现在是以各自模型命名的部署，并通过 `bindings.jailbreak` 和 `bindings.hallucination` 绑定。
 对迁移后的文件再次运行该命令不会做任何修改。
 
 ## 引擎参数 {#engine-arguments}

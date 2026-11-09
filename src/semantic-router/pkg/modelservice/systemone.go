@@ -111,7 +111,9 @@ func (c *Client) systemOne(ctx context.Context, model string, body json.RawMessa
 		return SystemOneResult{}, exchangeTiming{}, err
 	}
 	started := time.Now()
-	response, err := generated.CreateSystemOneWithBody(ctx, "application/json", bytes.NewReader(encoded))
+	// The decisions surface answers each question in place; the public
+	// /v1/systemone path answers a failed question for the whole request itself.
+	response, err := generated.CreateDecisionsWithBody(ctx, "application/json", bytes.NewReader(encoded))
 	timing := timedExchange(started, response)
 	if err != nil {
 		return SystemOneResult{}, timing, fmt.Errorf("%w: %w", ErrFailed, err)

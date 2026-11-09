@@ -409,6 +409,7 @@ function validateModelPricing(value: unknown): void {
       'prompt_per_1m',
       'cached_input_per_1m',
       'cache_write_per_1m',
+      'cache_write_1h_per_1m',
       'completion_per_1m',
     ]
     for (const field of rateFields) {

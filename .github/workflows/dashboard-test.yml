@@ -13,9 +13,14 @@ permissions:
 jobs:
   dashboard-test:
     name: Application Contracts
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.verification).runner }}
 
     steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - name: Check out the repo
         uses: actions/checkout@v4
 
@@ -86,15 +91,27 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: inputs.verification != ''
         with:
+          overwrite: true
           name: ci-result-dashboard
           path: .agent-harness/dashboard/result.json
           include-hidden-files: true
           if-no-files-found: error
 
+      - name: Upload Dashboard test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-framework-evidence
+          path: .agent-harness/dashboard/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Upload WASM test evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: dashboard-wasm-evidence
           path: .agent-harness/dashboard/wasm/
           include-hidden-files: true
@@ -105,6 +122,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: evaluation-browser-diagnostics
           path: |
             dashboard/frontend/playwright-report

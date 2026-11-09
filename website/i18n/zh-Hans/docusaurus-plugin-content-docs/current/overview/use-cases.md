@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 3
 title: 使用场景
 description: 面向 agent harness 的可编程模型决策，覆盖云、数据中心、边缘和企业环境。

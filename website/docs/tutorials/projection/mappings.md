@@ -137,4 +137,4 @@ Do not use mappings when:
 Mappings make no model or storage calls; they transform scores already computed
 for the request. Thresholds still inherit the uncertainty and calibration of
 their input signals. See a complete end-to-end example in the
-[`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml).
+[`config/recipes/feedback/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/feedback/config.yaml).

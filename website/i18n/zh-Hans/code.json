@@ -2973,10 +2973,10 @@
     "message": "Rebellions 前沿部署工程师，结合机器学习工程与解决方案架构，推动大语言模型在 NPU 上的推理部署。"
   },
   "team.members.TwilightTechie.role": {
-    "message": "技术团队成员"
+    "message": "工程研发"
   },
   "team.members.TwilightTechie.bio": {
-    "message": "Nutanix 软件工程师，从事分布式存储开发，关注大模型推理、模型服务和智能请求路由。"
+    "message": "Sarvam AI 软件工程师，关注大模型推理、模型服务和智能请求路由。"
   },
   "team.members.yaojiejia.role": {
     "message": "软件与数据工程师"
@@ -3723,7 +3723,7 @@
     "message": "信息物理系统"
   },
   "team.members.WUKUNTAI-0211.role": {
-    "message": "软件工程师"
+    "message": "副研究科学家"
   },
   "team.members.WUKUNTAI-0211.bio": {
     "message": "软件工程师，给大规模 LLM 服务和智能体搭 AI 基础设施，计算机视觉出身。"
@@ -3840,7 +3840,7 @@
     "message": "vLLM Semantic Router 开源贡献者。"
   },
   "team.members.theohsiung.role": {
-    "message": "初级软件工程师（研究科学家）"
+    "message": "副研究科学家"
   },
   "team.members.theohsiung.bio": {
     "message": "AI 研究者兼软件工程师，AI for Science、LLM 系统、智能体基础设施、计算机视觉都做。"
@@ -3855,6 +3855,18 @@
     "message": "个人贡献者"
   },
   "team.members.yuluo-yx.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.PharosEast.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.PharosEast.bio": {
+    "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "team.members.Zi-Yi-Ming.role": {
+    "message": "个人贡献者"
+  },
+  "team.members.Zi-Yi-Ming.bio": {
     "message": "vLLM Semantic Router 开源贡献者。"
   }
 }

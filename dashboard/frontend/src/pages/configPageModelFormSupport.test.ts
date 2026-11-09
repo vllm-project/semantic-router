@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 
+import { ROUTER_CONFIG_SCHEMA } from '../generated/routerConfigContract'
 import type { ProviderModel } from '../types/config'
 
 import {
@@ -47,9 +48,16 @@ describe('model form backend targets', () => {
       chat_path: '/chat/completions',
       api_key: 'test-only-key',
       api_key_env: 'PROVIDER_API_KEY',
+      auth: { header: 'x-api-key', prefix: '', api_key_env: 'PROVIDER_API_KEY' },
+      headers: { 'X-Org': 'acme' },
     } as const
 
     expect(normalizeModelBackendRefs([backend])).toEqual([backend])
+    // Every field the Router's schema defines for a backend survives an
+    // editor save (the guard from #5195).
+    expect(Object.keys(backend).sort()).toEqual(
+      Object.keys(ROUTER_CONFIG_SCHEMA.$defs.CanonicalBackendRef.properties).sort(),
+    )
   })
 
   it('preserves an explicitly empty authentication prefix through the model payload', () => {
@@ -97,6 +105,23 @@ describe('model form backend targets', () => {
   it('defaults the currency when the operator explicitly enters a zero rate', () => {
     expect(normalizeModelPricing({ prompt_per_1m: 0 })).toEqual({
       prompt_per_1m: 0,
+      currency: 'USD',
+    })
+  })
+
+  it('preserves cache_write_1h_per_1m on model save and defaults currency', () => {
+    const pricing = {
+      currency: 'USD',
+      prompt_per_1m: 3.0,
+      cached_input_per_1m: 0.3,
+      cache_write_per_1m: 3.75,
+      cache_write_1h_per_1m: 6.0,
+      completion_per_1m: 15.0,
+    }
+    expect(normalizeModelPricing(pricing)).toEqual(pricing)
+    expect(buildProviderModelPayload('claude-3-5-sonnet', { pricing }).pricing).toEqual(pricing)
+    expect(normalizeModelPricing({ cache_write_1h_per_1m: 6.0 })).toEqual({
+      cache_write_1h_per_1m: 6.0,
       currency: 'USD',
     })
   })

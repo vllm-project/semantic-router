@@ -82,8 +82,10 @@ func (c *Classifier) ClassifyPIIWithThreshold(ctx context.Context, text string, 
 			// Translate entity type from class_X format to named type (e.g., class_6 → DATE_TIME)
 			translatedType := c.PIIMapping.TranslatePIIType(entity.EntityType)
 			piiTypes[translatedType] = true
-			logging.Infof("Detected PII entity: %s → %s ('%s') at [%d-%d] with confidence %.3f",
-				entity.EntityType, translatedType, entity.Text, entity.Start, entity.End, entity.Confidence)
+			// The raw value is the thing being protected; it must not reach a
+			// log sink at Info level (#3566).
+			logging.Infof("Detected PII entity: %s → %s at [%d-%d] with confidence %.3f",
+				entity.EntityType, translatedType, entity.Start, entity.End, entity.Confidence)
 		}
 	}
 
@@ -192,8 +194,10 @@ func (c *Classifier) scanPIIChunks(ctx context.Context, text string, threshold f
 			seen[key] = len(detections)
 			detections = append(detections, detection)
 
-			logging.Infof("Detected PII entity: %s → %s ('%s') at [%d-%d] with confidence %.3f",
-				entity.EntityType, translatedType, entity.Text, detection.Start, detection.End, entity.Confidence)
+			// The raw value is the thing being protected; it must not reach a
+			// log sink at Info level (#3566).
+			logging.Infof("Detected PII entity: %s → %s at [%d-%d] with confidence %.3f",
+				entity.EntityType, translatedType, detection.Start, detection.End, entity.Confidence)
 		}
 	}
 
@@ -431,10 +435,12 @@ func (c *Classifier) AnalyzeContentForPIIWithThreshold(ctx context.Context, cont
 }
 
 // collectPIIRuleContents builds the list of text contents to analyze for a PII rule.
-func collectPIIRuleContents(piiText string, nonUserMessages []string, includeHistory bool) []string {
+func collectPIIRuleContents(current []string, nonUserMessages []string, includeHistory bool) []string {
 	var contents []string
-	if piiText != "" {
-		contents = append(contents, piiText)
+	for _, piece := range current {
+		if piece != "" {
+			contents = append(contents, piece)
+		}
 	}
 	if includeHistory {
 		for _, msg := range nonUserMessages {
@@ -453,7 +459,7 @@ func collectPIIRuleContents(piiText string, nonUserMessages []string, includeHis
 // duplicates are preserved for the shared detector cache to handle later.
 func collectPIIRuleContentsForSource(
 	rule config.PIIRule,
-	piiText string,
+	current []string,
 	nonUserMessages []string,
 	toolResultTexts []string,
 ) []string {
@@ -467,7 +473,7 @@ func collectPIIRuleContentsForSource(
 		return contents
 	}
 
-	return collectPIIRuleContents(piiText, nonUserMessages, rule.IncludeHistory)
+	return collectPIIRuleContents(current, nonUserMessages, rule.IncludeHistory)
 }
 
 // collectPIIEntityTypes extracts entity types from cached PII results that meet the threshold.

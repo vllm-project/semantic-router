@@ -178,6 +178,7 @@ class TestRouterReplayPluginConfig:
         assert config.capture_response_body is None
         assert config.max_body_bytes is None
         assert config.capture_personal_data is None
+        assert config.capture_tool_results is None
         assert config.max_tool_trace_bytes is None
         assert config.max_tool_trace_steps is None
 
@@ -187,6 +188,7 @@ class TestRouterReplayPluginConfig:
             {},
             {"enabled": False},
             {"capture_personal_data": False},
+            {"capture_tool_results": True},
             {"capture_request_body": False, "capture_response_body": False},
             {"max_tool_trace_bytes": 0, "max_tool_trace_steps": 0},
             {"max_records": 0, "max_body_bytes": 0},
@@ -200,6 +202,7 @@ class TestRouterReplayPluginConfig:
         "overrides",
         [
             {"capture_personal_data": "false"},
+            {"capture_tool_results": "true"},
             {"capture_request_body": 0},
             {"max_tool_trace_bytes": -1},
             {"max_tool_trace_steps": -1},

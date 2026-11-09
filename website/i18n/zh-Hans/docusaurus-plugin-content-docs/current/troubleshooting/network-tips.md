@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 受限网络环境
 sidebar_label: 受限网络
 translation:

@@ -24,6 +24,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// The skip-processing opt-out would bypass a listener's model allow-list,
 	// so a restricted listener does not honor it.
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil)
+	r.gateDebugHeaders(ctx)
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 	if rejected := r.benchmarkConfigPrecondition(ctx); rejected != nil {
 		return rejected, nil
@@ -49,6 +50,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		detectStreamingExpectation(ctx)
 		mutation := buildLooperInternalHeaderRemovalMutation()
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, headers.SelectedModel)
+		mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
 		if isAzureOpenAIPath(path) {
 			mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
 		}
@@ -79,6 +81,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		return r.rejectBodylessInferenceRequest(ctx), nil
 	}
 	mutation := buildIdentityEncodingRequestMutation()
+	mutation.RemoveHeaders = append(mutation.RemoveHeaders, r.protectionReleaseHeaderForRemoval()...)
 	if isAzureOpenAIPath(path) {
 		// The Azure client key authenticates to the Router, never to a provider.
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
@@ -116,6 +119,7 @@ func captureRequestHeaders(
 	skipProcessingGateEnabled bool,
 ) (string, string) {
 	requestHeaders := v.RequestHeaders.Headers
+	var acceptEncoding []string
 	for _, header := range requestHeaders.Headers {
 		headerValue := extractHeaderValue(header)
 		ctx.Headers[header.Key] = headerValue
@@ -125,6 +129,13 @@ func captureRequestHeaders(
 		// worry about casing. Internal request authentication runs after all
 		// headers have been captured so header order cannot affect validation.
 		lowerKey := strings.ToLower(header.Key)
+		// Accept-Encoding is a list, so its field lines form one value (RFC 9110
+		// section 5.3) that upstream encoding negotiation judges as a whole.
+		// Other repeated headers keep the last line, as before.
+		if lowerKey == "accept-encoding" {
+			acceptEncoding = append(acceptEncoding, headerValue)
+			ctx.Headers[header.Key] = strings.Join(acceptEncoding, ", ")
+		}
 		if lowerKey == headers.RequestID {
 			ctx.RequestID = headerValue
 		}

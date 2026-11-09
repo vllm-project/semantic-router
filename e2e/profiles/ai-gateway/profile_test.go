@@ -137,8 +137,8 @@ func TestFeatureEntrypointsPreserveDefaultSecurityPrecedence(t *testing.T) {
 		threshold                    float64
 	}{
 		// Vela 2.0 0.3B's thresholds for Vela 1.0's 0.5 and 0.7.
-		{"block_jailbreak", "jailbreak", "jailbreak_standard", 1000, 0.75},
-		{"block_pii", "pii", "pii_deny_all", 999, 0.01},
+		{"block_jailbreak", "jailbreak", "jailbreak_standard", 1000, 0.88},
+		{"block_pii", "pii", "pii_deny_all", 999, 0.18},
 	} {
 		decision := profileNamed(t, routing["decisions"], test.name)
 		signal := profileNamed(t, profileMap(t, routing, "signals")[test.signalType], test.signalName)
@@ -230,11 +230,17 @@ func decisionModelGuardThreshold(t *testing.T, catalog map[string]any) any {
 	deployment, _ := binding["deployment"].(string)
 	model := profileMap(t, profileMap(t, catalog, "deployments"), deployment)
 	name, _ := model["artifact"].(string)
-	size, ok := strings.CutPrefix(name, "vllm-sr/Vela-2.0-")
-	if !ok {
-		t.Fatalf("canonical decision_model %v is not a Vela 2.0 size", model)
+	// vela3-fast's thresholds are in its router signal record; each Vela 2.0
+	// size's in the sizes record.
+	recordFile, size := "vela3-router-signals.json", strings.TrimPrefix(name, "vllm-sr/")
+	if name != "vllm-sr/vela3-fast" {
+		var ok bool
+		recordFile = "vela2-decision-model-sizes.json"
+		if size, ok = strings.CutPrefix(name, "vllm-sr/Vela-2.0-"); !ok {
+			t.Fatalf("canonical decision_model %v is neither vela3-fast nor a Vela 2.0 size", model)
+		}
 	}
-	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "src", "model-runtime", "docs", "records", "vela2-decision-model-sizes.json"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "src", "model-runtime", "docs", "records", recordFile))
 	if err != nil {
 		t.Fatal(err)
 	}

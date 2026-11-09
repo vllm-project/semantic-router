@@ -188,3 +188,64 @@ func TestInjectRAGContextZeroMaxContextLengthDoesNotError(t *testing.T) {
 }
 
 func intPtr(value int) *int { return &value }
+
+// A chat answer mentioning the query is not retrieval evidence. Observe the
+// actual vector-store request and require returned context or an explicit error.
+func TestRetrieveFromOpenAISearchContract(t *testing.T) {
+	for _, test := range []struct {
+		name, response, wantError string
+		status                    int
+	}{
+		{name: "retrieved document", response: `{"data":[{"content":"document-only fact","score":0.9}]}`},
+		{name: "empty store", response: `{"data":[]}`, wantError: "no results"},
+		{name: "empty document", response: `{"data":[{"content":""}]}`, wantError: "no content"},
+		{name: "provider error", response: "unavailable", status: http.StatusServiceUnavailable, wantError: "search failed"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			requests := make(chan bool, 1)
+			endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+				requests <- true
+				if request.Method != http.MethodPost || request.URL.Path != "/v1/vector_stores/vs_fixture/search" {
+					t.Errorf("unexpected retrieval request: %s %s", request.Method, request.URL.Path)
+				}
+				if request.Header.Get("Authorization") != "Bearer fixture-key" {
+					t.Error("retrieval omitted configured provider credentials")
+				}
+				var payload map[string]interface{}
+				if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+					t.Errorf("decode search request: %v", err)
+				}
+				if payload["query"] != "find the document-only fact" || payload["limit"] != float64(2) {
+					t.Errorf("search lost query or result limit: %#v", payload)
+				}
+				if test.status != 0 {
+					w.WriteHeader(test.status)
+				}
+				_, _ = w.Write([]byte(test.response))
+			}))
+			defer endpoint.Close()
+			ctx := &RequestContext{UserContent: "find the document-only fact"}
+			contextText, err := (&OpenAIRouter{}).retrieveFromOpenAI(context.Background(), ctx, &config.RAGPluginConfig{
+				Backend: "openai",
+				BackendConfig: config.MustStructuredPayload(&config.OpenAIRAGConfig{
+					VectorStoreID: "vs_fixture", BaseURL: endpoint.URL,
+					APIKey: "fixture-key", MaxNumResults: intPtr(2),
+				}),
+			})
+			select {
+			case <-requests:
+			default:
+				t.Fatal("retrieval never reached the configured vector store")
+			}
+			if test.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantError) || contextText != "" {
+					t.Fatalf("failed search returned context=%q, error=%v", contextText, err)
+				}
+				return
+			}
+			if err != nil || contextText != "document-only fact" || ctx.RAGSimilarityScore != float32(0.9) {
+				t.Fatalf("retrieved context=%q, score=%v, error=%v", contextText, ctx.RAGSimilarityScore, err)
+			}
+		})
+	}
+}

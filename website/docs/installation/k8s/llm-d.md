@@ -5,6 +5,15 @@ description: Let Semantic Router choose a model pool while llm-d schedules a rep
 
 # Integrate with llm-d
 
+:::note Experimental integration example
+
+This integration has no maintained platform-specific E2E qualification. The
+project continuously tests standalone and the Agent Router ExtProc path. Use
+this guide as an example and qualify the exact upstream release and deployment
+you choose. See [Deployment Support](../support-matrix).
+
+:::
+
 llm-d is one
 [Inference Router](../../overview/semantic-router-overview#protocol-and-deployment-boundaries),
 alongside vLLM Router and the [AIBrix gateway](aibrix). Use this topology when

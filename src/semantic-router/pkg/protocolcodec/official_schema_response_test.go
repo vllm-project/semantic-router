@@ -15,7 +15,7 @@ func TestOfficialAnthropicTerminalReasonInventoryIsClosed(t *testing.T) {
 	tests := []anthropicTerminalReasonCase{
 		{reason: "end_turn", neutral: llmprotocol.StopEndTurn},
 		{reason: "max_tokens", neutral: llmprotocol.StopMaxTokens},
-		{reason: "stop_sequence", neutral: llmprotocol.StopSequence, openAIClosed: true},
+		{reason: "stop_sequence", neutral: llmprotocol.StopSequence, openAIClosed: true, projectsToGenericStop: true},
 		{reason: "tool_use", neutral: llmprotocol.StopToolCall},
 		{reason: "pause_turn", neutral: llmprotocol.StopPaused, openAIClosed: true},
 		{reason: "refusal", neutral: llmprotocol.StopContentFilter},
@@ -41,6 +41,12 @@ type anthropicTerminalReasonCase struct {
 	reason       string
 	neutral      llmprotocol.StopReason
 	openAIClosed bool
+	// projectsToGenericStop marks terminals whose reply is complete and whose
+	// only unrepresentable detail is the matched stop string: for those the
+	// OpenAI targets receive the generic stop terminal with a dropped
+	// diagnostic. Terminals whose reply is not actually finished
+	// (pause_turn, context window) stay closed for OpenAI.
+	projectsToGenericStop bool
 }
 
 func assertAnthropicTerminalReason(t *testing.T, engine *Engine, test anthropicTerminalReasonCase) {
@@ -62,7 +68,7 @@ func assertAnthropicTerminalReason(t *testing.T, engine *Engine, test anthropicT
 	}
 	assertAnthropicTerminalRoundTrip(t, engine, test.reason, body)
 	if test.openAIClosed {
-		assertAnthropicTerminalClosedForOpenAI(t, engine, test.reason, body)
+		assertAnthropicTerminalClosedForOpenAI(t, engine, test, body)
 	}
 }
 
@@ -89,11 +95,33 @@ func assertAnthropicTerminalRoundTrip(t *testing.T, engine *Engine, reason strin
 	}
 }
 
-func assertAnthropicTerminalClosedForOpenAI(t *testing.T, engine *Engine, reason string, body []byte) {
+func assertAnthropicTerminalClosedForOpenAI(t *testing.T, engine *Engine, test anthropicTerminalReasonCase, body []byte) {
 	t.Helper()
 	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1} {
-		if _, err := engine.TranslateResponse(llmprotocol.AnthropicMessagesV1, target, body, nil); err == nil {
-			t.Fatalf("%s silently accepted unrepresentable stop reason %q", target, reason)
+		translated, err := engine.TranslateResponse(llmprotocol.AnthropicMessagesV1, target, body, nil)
+		if test.projectsToGenericStop {
+			if err != nil {
+				t.Fatalf("%s refused a stop_sequence reply the format can represent: %v", target, err)
+			}
+			if translated.Response.StopReason != llmprotocol.StopEndTurn || translated.Response.MatchedStopSequence != "" {
+				t.Fatalf("%s terminal = %q matched=%q, want the projected generic stop", target, translated.Response.StopReason, translated.Response.MatchedStopSequence)
+			}
+			if translated.Response.SourceStopReason != test.reason {
+				t.Fatalf("%s lost the provider terminal provenance: %q", target, translated.Response.SourceStopReason)
+			}
+			var dropped bool
+			for _, diagnostic := range translated.Diagnostics {
+				if diagnostic.Field == "matched_stop_sequence" && diagnostic.Action == llmprotocol.DiagnosticDropped {
+					dropped = true
+				}
+			}
+			if !dropped {
+				t.Fatalf("%s projection was not diagnosed: %+v", target, translated.Diagnostics)
+			}
+			continue
+		}
+		if err == nil {
+			t.Fatalf("%s silently accepted unrepresentable stop reason %q", target, test.reason)
 		}
 	}
 }
@@ -169,9 +197,15 @@ func assertResponsesUsageFields(t *testing.T, body json.RawMessage) {
 	if err := json.Unmarshal(body, &usage); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"cached_tokens", "cache_write_tokens"} {
-		if _, found := usage.InputDetails[field]; !found {
-			t.Errorf("Responses input usage omitted required field %q", field)
+	if _, found := usage.InputDetails["cached_tokens"]; !found {
+		t.Error("Responses input usage omitted required cached_tokens")
+	}
+	// Cache writes are an optional extension: unknown counts must be omitted,
+	// while an explicitly reported zero is still a valid integer.
+	if value, found := usage.InputDetails["cache_write_tokens"]; found {
+		var count *int64
+		if err := json.Unmarshal(value, &count); err != nil || count == nil {
+			t.Errorf("Responses cache_write_tokens must be an integer when present, got %s", value)
 		}
 	}
 	if _, found := usage.OutputDetails["reasoning_tokens"]; !found {

@@ -94,7 +94,37 @@ func (c *RouterConfig) NeedsCategoryMappingForRouting() bool {
 // NeedsPIIMappingForRouting returns true when routing actually depends on the
 // local file-backed PII classifier assets.
 func (c *RouterConfig) NeedsPIIMappingForRouting() bool {
-	return c != nil && c.IsPIIClassifierEnabled() && c.UsesSignalTypeInReachableRouting(SignalTypePII)
+	return c != nil && c.IsPIIClassifierEnabled() && c.UsesPIIClassifierInReachableRouting()
+}
+
+// UsesPIIClassifierInReachableRouting reports whether a request-reachable
+// routing profile depends on the PII classifier. It has two consumers: a
+// decision rule that reads a pii rule, and the masking plugin, which scans at
+// the dispatch boundary without declaring any rule. The signal-type walk
+// alone misses masking, the mapping then stays unloaded, IsPIIEnabled stays
+// false, and because masking fails closed every request on that route answers
+// 503 (#3566).
+func (c *RouterConfig) UsesPIIClassifierInReachableRouting() bool {
+	if c == nil {
+		return false
+	}
+	return c.UsesSignalTypeInReachableRouting(SignalTypePII) || c.UsesMaskingInReachableRouting()
+}
+
+// UsesMaskingInReachableRouting reports whether a request-reachable decision
+// masks PII, which replaces each detection by its position.
+func (c *RouterConfig) UsesMaskingInReachableRouting() bool {
+	if c == nil {
+		return false
+	}
+	decisions := c.routingConsumerDecisions()
+	for i := range decisions {
+		plugin := decisions[i].GetMaskingConfig()
+		if plugin != nil && plugin.Enabled {
+			return true
+		}
+	}
+	return false
 }
 
 // NeedsJailbreakMappingForRouting returns true when routing actually depends on
@@ -168,7 +198,8 @@ func (c *RouterConfig) reachableRoutingSignals() []Signals {
 // those rules.
 func (c *RouterConfig) NeedsFactCheckModelForAPI() bool {
 	if !c.ownsDefaultAPIConsumer() ||
-		c.HallucinationMitigation.FactCheckModel.ModelID == "" {
+		!c.HallucinationMitigation.FactCheckModel.Active() ||
+		!c.ModuleModelConfigured("fact_check_classifier") {
 		return false
 	}
 	return c.HallucinationMitigation.Enabled ||
@@ -180,7 +211,7 @@ func (c *RouterConfig) NeedsFactCheckModelForAPI() bool {
 func (c *RouterConfig) NeedsFeedbackModelForAPI() bool {
 	return c.ownsDefaultAPIConsumer() &&
 		c.FeedbackDetector.Enabled &&
-		c.FeedbackDetector.ModelID != "" &&
+		c.ModuleModelConfigured("feedback_detector") &&
 		len(c.RoutingProfileSignals().UserFeedbackRules) > 0
 }
 
@@ -190,7 +221,7 @@ func (c *RouterConfig) NeedsFeedbackModelForAPI() bool {
 func (c *RouterConfig) NeedsHallucinationDetectorForDefaultRuntime() bool {
 	return c.ownsDefaultAPIConsumer() &&
 		c.HallucinationMitigation.Enabled &&
-		c.HallucinationMitigation.HallucinationModel.ModelID != ""
+		c.ModuleModelConfigured("hallucination_detector")
 }
 
 func (c *RouterConfig) ownsDefaultAPIConsumer() bool {
@@ -204,7 +235,8 @@ func (c *RouterConfig) ownsDefaultAPIConsumer() bool {
 // through a projection.
 func (c *RouterConfig) NeedsFactCheckModelForRouting() bool {
 	return c != nil &&
-		c.HallucinationMitigation.FactCheckModel.ModelID != "" &&
+		c.HallucinationMitigation.FactCheckModel.Active() &&
+		c.ModuleModelConfigured("fact_check_classifier") &&
 		c.UsesSignalTypeInReachableRouting(SignalTypeFactCheck)
 }
 
@@ -213,7 +245,7 @@ func (c *RouterConfig) NeedsFactCheckModelForRouting() bool {
 func (c *RouterConfig) NeedsFeedbackModelForRouting() bool {
 	return c != nil &&
 		c.FeedbackDetector.Enabled &&
-		c.FeedbackDetector.ModelID != "" &&
+		c.ModuleModelConfigured("feedback_detector") &&
 		c.UsesSignalTypeInReachableRouting(SignalTypeUserFeedback)
 }
 
@@ -223,7 +255,7 @@ func (c *RouterConfig) NeedsFeedbackModelForRouting() bool {
 // selected decision's plugin to consume, or a decision's hallucination plugin
 // still classifies the answer itself because no rule is declared.
 func (c *RouterConfig) NeedsHallucinationDetectorForRouting() bool {
-	if c == nil || c.HallucinationMitigation.HallucinationModel.ModelID == "" {
+	if c == nil || !c.ModuleModelConfigured("hallucination_detector") {
 		return false
 	}
 	for _, signals := range c.reachableRoutingSignals() {

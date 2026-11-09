@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 训练 Vela 分类器
 sidebar_label: 分类器
 translation:

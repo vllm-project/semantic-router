@@ -163,6 +163,14 @@ const pricingFields: ObjectEditorField<ModelPricing>[] = [
     placeholder: '0.625',
   },
   {
+    key: 'cache_write_1h_per_1m',
+    label: 'Cache write (1h) / 1M',
+    type: 'number',
+    min: 0,
+    step: 0.0001,
+    placeholder: '1.25',
+  },
+  {
     key: 'completion_per_1m',
     label: 'Completion / 1M',
     type: 'number',

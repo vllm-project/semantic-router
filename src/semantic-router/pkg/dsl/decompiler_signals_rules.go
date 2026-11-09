@@ -48,6 +48,9 @@ func (d *decompiler) decompileKeywordSignals() {
 		if kw.NgramArity != 0 {
 			d.write("  ngram_arity: %d\n", kw.NgramArity)
 		}
+		if kw.IncludeHistory {
+			d.write("  include_history: true\n")
+		}
 		d.write("}\n\n")
 	}
 }
@@ -361,7 +364,12 @@ func (d *decompiler) decompileClassifierSignals() {
 		if rule.Description != "" {
 			d.write("  description: %q\n", rule.Description)
 		}
-		d.write("  type: %q\n", rule.Type)
+		if rule.Deployment != "" {
+			d.write("  deployment: %q\n", rule.Deployment)
+		}
+		if rule.Type != "" {
+			d.write("  type: %q\n", rule.Type)
+		}
 		if rule.Model != "" {
 			d.write("  model: %q\n", rule.Model)
 		}
@@ -388,7 +396,9 @@ func (d *decompiler) decompileComplexitySignals() {
 		if comp.PrototypeScoring != nil {
 			d.write("  prototype_scoring: %s\n", formatPluginConfigValue(fieldsToMap(prototypeScoringFields(comp.PrototypeScoring))))
 		}
-		if comp.Threshold != 0 {
+		// A written zero is kept as written, so the round trip does not turn
+		// a stated threshold into an absent one.
+		if comp.Threshold != 0 || comp.ThresholdSet {
 			d.write("  threshold: %v\n", comp.Threshold)
 		}
 		// The explicit boundary pair. Omitting these here would silently
@@ -408,6 +418,9 @@ func (d *decompiler) decompileComplexitySignals() {
 		}
 		if comp.Description != "" {
 			d.write("  description: %q\n", comp.Description)
+		}
+		if comp.Deployment != "" {
+			d.write("  deployment: %q\n", comp.Deployment)
 		}
 		if comp.Composer != nil {
 			d.write("  composer: %s\n", decompileComposerObj(comp.Composer))

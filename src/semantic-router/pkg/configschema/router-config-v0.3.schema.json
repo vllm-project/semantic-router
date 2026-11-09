@@ -572,6 +572,15 @@
         },
         "api_key_env": {
           "type": "string"
+        },
+        "auth": {
+          "$ref": "#/$defs/DeploymentAuth"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         }
       },
       "additionalProperties": false,
@@ -630,6 +639,12 @@
     },
     "CanonicalEmbeddingModels": {
       "properties": {
+        "default": {
+          "type": "string"
+        },
+        "multimodal": {
+          "type": "string"
+        },
         "semantic": {
           "$ref": "#/$defs/EmbeddingModels"
         }
@@ -724,6 +739,9 @@
     },
     "CanonicalFactCheckModule": {
       "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
         "max_sequence_length": {
           "type": "integer"
         },
@@ -858,7 +876,76 @@
       "properties": {
         "bindings": {
           "additionalProperties": {
-            "$ref": "#/$defs/ModelBinding"
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The deployment that answers the signal."
+              },
+              {
+                "properties": {
+                  "deployment": {
+                    "type": "string",
+                    "description": "The deployment that answers the signal: a name in global.model_catalog.deployments."
+                  },
+                  "head": {
+                    "type": "string",
+                    "description": "The classify head of a multi-head model_runtime deployment."
+                  },
+                  "operating_point": {
+                    "properties": {
+                      "path": {
+                        "type": "string",
+                        "description": "The operating point file in the deployment's package."
+                      },
+                      "sha256": {
+                        "type": "string",
+                        "description": "The digest of the operating point file the runtime must serve."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "path",
+                      "sha256"
+                    ]
+                  },
+                  "contract": {
+                    "type": "string",
+                    "description": "Deprecated: the signal decides the result contract.",
+                    "deprecated": true
+                  },
+                  "adapter": {
+                    "type": "string",
+                    "description": "Deprecated: the deployment's provider decides the adapter.",
+                    "deprecated": true
+                  },
+                  "mapping_path": {
+                    "type": "string",
+                    "description": "Deprecated: the module's own mapping path names the labels.",
+                    "deprecated": true
+                  },
+                  "pair_scorer": {
+                    "properties": {
+                      "layer": {
+                        "type": "integer"
+                      },
+                      "dimension": {
+                        "type": "integer"
+                      }
+                    },
+                    "type": "object",
+                    "description": "Deprecated: write layer and dimension in the rag plugin's rerank block.",
+                    "deprecated": true
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "deployment"
+                ]
+              }
+            ],
+            "description": "The deployment that answers a signal, by name, or an object that also selects a head or pins an operating point."
           },
           "type": "object"
         },
@@ -878,12 +965,30 @@
                 "overflow": "reject"
               }
             },
+            "omni-nano": {
+              "artifact": "vllm-sr/Vela-1.0-Omni-Nano",
+              "revision": "2ff2d66385dbdd661a560ec3e8bcb45a0527d92e",
+              "provider": "model_runtime",
+              "device": "cpu",
+              "input": {
+                "overflow": "truncate"
+              }
+            },
             "primary": {
-              "artifact": "vllm-sr/Vela-2.0-0.3B",
-              "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+              "artifact": "vllm-sr/vela3-fast",
+              "revision": "7cbefd4b92b57234bd0ffb9872451e81abcdac79",
               "provider": "model_runtime",
               "device": "cpu",
               "input": {}
+            },
+            "vela-embedding": {
+              "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
+              "revision": "1e57cebf5a7b7fec6e6973f05bbca97c5cca4436",
+              "provider": "model_runtime",
+              "device": "cpu",
+              "input": {
+                "overflow": "truncate"
+              }
             }
           }
         },
@@ -1195,7 +1300,76 @@
         },
         "model_bindings": {
           "additionalProperties": {
-            "$ref": "#/$defs/ModelBinding"
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The deployment that answers the signal."
+              },
+              {
+                "properties": {
+                  "deployment": {
+                    "type": "string",
+                    "description": "The deployment that answers the signal: a name in global.model_catalog.deployments."
+                  },
+                  "head": {
+                    "type": "string",
+                    "description": "The classify head of a multi-head model_runtime deployment."
+                  },
+                  "operating_point": {
+                    "properties": {
+                      "path": {
+                        "type": "string",
+                        "description": "The operating point file in the deployment's package."
+                      },
+                      "sha256": {
+                        "type": "string",
+                        "description": "The digest of the operating point file the runtime must serve."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "path",
+                      "sha256"
+                    ]
+                  },
+                  "contract": {
+                    "type": "string",
+                    "description": "Deprecated: the signal decides the result contract.",
+                    "deprecated": true
+                  },
+                  "adapter": {
+                    "type": "string",
+                    "description": "Deprecated: the deployment's provider decides the adapter.",
+                    "deprecated": true
+                  },
+                  "mapping_path": {
+                    "type": "string",
+                    "description": "Deprecated: the module's own mapping path names the labels.",
+                    "deprecated": true
+                  },
+                  "pair_scorer": {
+                    "properties": {
+                      "layer": {
+                        "type": "integer"
+                      },
+                      "dimension": {
+                        "type": "integer"
+                      }
+                    },
+                    "type": "object",
+                    "description": "Deprecated: write layer and dimension in the rag plugin's rerank block.",
+                    "deprecated": true
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "deployment"
+                ]
+              }
+            ],
+            "description": "The deployment that answers a signal, by name, or an object that also selects a head or pins an operating point."
           },
           "type": "object"
         },
@@ -1261,6 +1435,24 @@
         },
         "fallback": {
           "$ref": "#/$defs/FallbackPolicy"
+        },
+        "allow_lossy_translation": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "tool_result.is_error",
+              "messages[].role",
+              "content.file",
+              "reasoning.signature"
+            ]
+          },
+          "type": "array"
+        },
+        "routing_input": {
+          "$ref": "#/$defs/RoutingInputConfig"
+        },
+        "headers": {
+          "$ref": "#/$defs/RouterHeadersConfig"
         }
       },
       "additionalProperties": false,
@@ -1273,7 +1465,76 @@
         },
         "model_bindings": {
           "additionalProperties": {
-            "$ref": "#/$defs/ModelBinding"
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The deployment that answers the signal."
+              },
+              {
+                "properties": {
+                  "deployment": {
+                    "type": "string",
+                    "description": "The deployment that answers the signal: a name in global.model_catalog.deployments."
+                  },
+                  "head": {
+                    "type": "string",
+                    "description": "The classify head of a multi-head model_runtime deployment."
+                  },
+                  "operating_point": {
+                    "properties": {
+                      "path": {
+                        "type": "string",
+                        "description": "The operating point file in the deployment's package."
+                      },
+                      "sha256": {
+                        "type": "string",
+                        "description": "The digest of the operating point file the runtime must serve."
+                      }
+                    },
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "path",
+                      "sha256"
+                    ]
+                  },
+                  "contract": {
+                    "type": "string",
+                    "description": "Deprecated: the signal decides the result contract.",
+                    "deprecated": true
+                  },
+                  "adapter": {
+                    "type": "string",
+                    "description": "Deprecated: the deployment's provider decides the adapter.",
+                    "deprecated": true
+                  },
+                  "mapping_path": {
+                    "type": "string",
+                    "description": "Deprecated: the module's own mapping path names the labels.",
+                    "deprecated": true
+                  },
+                  "pair_scorer": {
+                    "properties": {
+                      "layer": {
+                        "type": "integer"
+                      },
+                      "dimension": {
+                        "type": "integer"
+                      }
+                    },
+                    "type": "object",
+                    "description": "Deprecated: write layer and dimension in the rag plugin's rerank block.",
+                    "deprecated": true
+                  }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "required": [
+                  "deployment"
+                ]
+              }
+            ],
+            "description": "The deployment that answers a signal, by name, or an object that also selects a head or pins an operating point."
           },
           "type": "object"
         },
@@ -1660,6 +1921,9 @@
         "description": {
           "type": "string"
         },
+        "deployment": {
+          "type": "string"
+        },
         "type": {
           "type": "string"
         },
@@ -1745,6 +2009,9 @@
     "ComplexityRule": {
       "properties": {
         "name": {
+          "type": "string"
+        },
+        "deployment": {
           "type": "string"
         },
         "prototype_scoring": {
@@ -2046,6 +2313,24 @@
         },
         "role": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DebugPrincipals": {
+      "properties": {
+        "users": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "groups": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -2518,6 +2803,25 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "masking"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/MaskingPluginConfig"
+              }
+            }
+          }
         }
       ],
       "properties": {
@@ -2528,6 +2832,7 @@
             "fast_response",
             "hallucination",
             "header_mutation",
+            "masking",
             "memory",
             "prompt_cache",
             "rag",
@@ -2668,6 +2973,93 @@
         },
         "timeout_ms": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DeploymentAuth": {
+      "properties": {
+        "header": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "api_key_env": {
+          "type": "string"
+        },
+        "api_key_file": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DeploymentCapabilities": {
+      "properties": {
+        "question_types": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "presets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "dimensions": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DeploymentGeneration": {
+      "properties": {
+        "max_tokens": {
+          "type": "integer"
+        },
+        "temperature": {
+          "type": "number"
+        },
+        "reasoning": {
+          "$ref": "#/$defs/ExternalModelReasoningConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DeploymentLimits": {
+      "properties": {
+        "max_request_bytes": {
+          "type": "integer"
+        },
+        "max_response_bytes": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DeploymentTLS": {
+      "properties": {
+        "ca_file": {
+          "type": "string"
+        },
+        "server_name": {
+          "type": "string"
+        },
+        "cert_file": {
+          "type": "string"
+        },
+        "key_file": {
+          "type": "string"
+        },
+        "insecure_skip_verify": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -2883,7 +3275,7 @@
           "type": "string"
         },
         "llm_timeout_seconds": {
-          "type": "integer"
+          "type": "number"
         },
         "parser_type": {
           "type": "string"
@@ -3623,6 +4015,9 @@
         },
         "ngram_arity": {
           "type": "integer"
+        },
+        "include_history": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -3788,6 +4183,9 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "max_deadline_ms": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -4042,6 +4440,30 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "MaskingPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "entity_types": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "placeholders": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "MemoryConfig": {
       "properties": {
         "enabled": {
@@ -4100,6 +4522,9 @@
         },
         "persistence": {
           "$ref": "#/$defs/MemoryPersistenceConfig"
+        },
+        "query_rewrite": {
+          "$ref": "#/$defs/MemoryQueryRewriteConfig"
         }
       },
       "additionalProperties": false,
@@ -4198,6 +4623,15 @@
         },
         "dimension": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MemoryQueryRewriteConfig": {
+      "properties": {
+        "deployment": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -4587,33 +5021,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ModelBinding": {
-      "properties": {
-        "deployment": {
-          "type": "string"
-        },
-        "contract": {
-          "type": "string"
-        },
-        "adapter": {
-          "type": "string"
-        },
-        "head": {
-          "type": "string"
-        },
-        "mapping_path": {
-          "type": "string"
-        },
-        "pair_scorer": {
-          "$ref": "#/$defs/PairScorerSelection"
-        },
-        "operating_point": {
-          "$ref": "#/$defs/OperatingPointReference"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ModelDeployment": {
       "properties": {
         "artifact": {
@@ -4649,8 +5056,50 @@
         "enable_shared_context": {
           "type": "boolean"
         },
+        "max_model_len": {
+          "type": "integer"
+        },
         "endpoint": {
           "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "auth": {
+          "$ref": "#/$defs/DeploymentAuth"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        },
+        "max_retries": {
+          "type": "integer"
+        },
+        "tls": {
+          "$ref": "#/$defs/DeploymentTLS"
+        },
+        "limits": {
+          "$ref": "#/$defs/DeploymentLimits"
+        },
+        "capabilities": {
+          "$ref": "#/$defs/DeploymentCapabilities"
+        },
+        "operating_point": {
+          "$ref": "#/$defs/OperatingPointReference"
+        },
+        "generation": {
+          "$ref": "#/$defs/DeploymentGeneration"
+        },
+        "question_types": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "replicas": {
           "items": {
@@ -4711,6 +5160,9 @@
         },
         "cache_write_per_1m": {
           "type": "number"
+        },
+        "cache_write_1h_per_1m": {
+          "type": "number"
         }
       },
       "additionalProperties": false,
@@ -4752,6 +5204,9 @@
           "type": "string"
         },
         "served_name": {
+          "type": "string"
+        },
+        "model": {
           "type": "string"
         }
       },
@@ -5212,18 +5667,6 @@
         },
         "description": {
           "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "PairScorerSelection": {
-      "properties": {
-        "layer": {
-          "type": "integer"
-        },
-        "dimension": {
-          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -5785,6 +6228,15 @@
     "RAGRerankConfig": {
       "properties": {
         "top_k": {
+          "type": "integer"
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "integer"
+        },
+        "dimension": {
           "type": "integer"
         }
       },
@@ -6415,6 +6867,23 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "RouterHeadersConfig": {
+      "properties": {
+        "debug": {
+          "type": "string",
+          "enum": [
+            "none",
+            "any",
+            "authenticated"
+          ]
+        },
+        "debug_principals": {
+          "$ref": "#/$defs/DebugPrincipals"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "RouterLearningAdaptationConfig": {
       "properties": {
         "enabled": {
@@ -6476,6 +6945,10 @@
         "conversation": {
           "type": "string",
           "minLength": 1
+        },
+        "agent": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false,
@@ -6499,6 +6972,26 @@
         },
         "tuning": {
           "$ref": "#/$defs/RouterLearningProtectionTuning"
+        },
+        "release": {
+          "$ref": "#/$defs/RouterLearningProtectionReleaseConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterLearningProtectionReleaseConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "header": {
+          "type": "string",
+          "minLength": 1
+        },
+        "min_user_turns_between": {
+          "type": "integer",
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -6607,6 +7100,9 @@
         "capture_personal_data": {
           "type": "boolean"
         },
+        "capture_tool_results": {
+          "type": "boolean"
+        },
         "max_records": {
           "type": "integer"
         },
@@ -6686,6 +7182,9 @@
           "type": "boolean"
         },
         "capture_response_body": {
+          "type": "boolean"
+        },
+        "capture_tool_results": {
           "type": "boolean"
         },
         "max_body_bytes": {
@@ -6787,6 +7286,46 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "RoutingInputConfig": {
+      "properties": {
+        "skip_user_messages_matching": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "maxItems": 32
+        },
+        "strip_blocks": {
+          "items": {
+            "$ref": "#/$defs/RoutingInputStripBlock"
+          },
+          "type": "array",
+          "maxItems": 32
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RoutingInputStripBlock": {
+      "properties": {
+        "start": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        },
+        "end": {
+          "type": "string",
+          "maxLength": 256,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "start",
+        "end"
+      ]
     },
     "RoutingModel": {
       "properties": {
@@ -6944,6 +7483,9 @@
     },
     "SafetyHazardRule": {
       "properties": {
+        "deployment": {
+          "type": "string"
+        },
         "model": {
           "type": "string"
         },
@@ -6984,6 +7526,9 @@
           "type": "string"
         },
         "description": {
+          "type": "string"
+        },
+        "deployment": {
           "type": "string"
         },
         "model": {
@@ -7390,6 +7935,9 @@
         },
         "dynamic_retrieval": {
           "$ref": "#/$defs/DynamicRetrievalConfig"
+        },
+        "trusted_facts": {
+          "$ref": "#/$defs/TrustedFactsConfig"
         }
       },
       "additionalProperties": false,
@@ -7501,6 +8049,33 @@
         },
         "rate": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "TrustedFactsConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "enforcement": {
+          "type": "string"
+        },
+        "trust_sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "freshness_seconds": {
+          "type": "integer"
+        },
+        "stage_roles": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -8461,6 +9036,12 @@
         "display_name": "Shadow Dispatch",
         "description": "Send a bounded asynchronous copy to a secondary model.",
         "schema_ref": "#/$defs/ShadowDispatchPluginConfig"
+      },
+      {
+        "type": "masking",
+        "display_name": "Masking",
+        "description": "Replace detected PII in the provider-bound request with placeholders.",
+        "schema_ref": "#/$defs/MaskingPluginConfig"
       }
     ],
     "projections": [

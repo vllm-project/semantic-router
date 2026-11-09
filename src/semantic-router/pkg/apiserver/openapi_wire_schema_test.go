@@ -12,6 +12,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/openapischema"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
@@ -44,7 +45,7 @@ func TestOpenAPIWireRepresentationMatchesNullableScoreEncoding(t *testing.T) {
 				if !exists || (!available && value != nil) || (available && value != float64(0)) {
 					t.Fatalf("wrong wire score: %s", encoded)
 				}
-				schema := openAPISchemaFromType(reflect.TypeOf(test.value), make(map[reflect.Type]bool))
+				schema := openapischema.FromType(reflect.TypeOf(test.value), routerSchemaOverrides)
 				field := schema.Properties[test.field]
 				if field.Type != "number" || !field.Nullable {
 					t.Fatalf("wire score %s disagrees with schema %+v", encoded, field)

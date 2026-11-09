@@ -233,7 +233,11 @@ def test_golden_references_cover_every_pin_and_device_class():
     from vllm_srun.families.decision1.family import GOLDEN_QUESTIONS
 
     for model in builtin.all_models("decision1"):
-        assert set(model.golden_answers) == {"cpu", "rocm"}, model.repo_id
+        assert set(model.golden_answers) == {
+            "cpu",
+            "rocm",
+            "cuda:sm_90",
+        }, model.repo_id
         for answers in model.golden_answers.values():
             presets = {name for name in answers if name.startswith("preset:")}
             assert set(answers) - presets == set(GOLDEN_QUESTIONS)

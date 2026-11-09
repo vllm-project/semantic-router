@@ -28,8 +28,10 @@ vllm-sr serve --config config.yaml
 ```
 
 A stable CLI pulls Router and Dashboard images tagged with its own release
-version. Development CLI builds use `:latest`; `--image` and the documented
-image environment overrides select a different build when needed.
+version, and a development CLI build pulls the images published from its own
+`main` commit, tagged with that commit's SHA. A source checkout uses `:latest`.
+`--image` and the documented image environment overrides select a different
+build when needed.
 
 With no `--config`, `vllm-sr serve` uses `config.yaml` in the current directory
 or opens first-run setup in the Dashboard. During setup the command keeps

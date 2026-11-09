@@ -98,13 +98,28 @@ func recordModelIdentity(b *testing.B, names ...string) {
 		artifacts[name] = benchmarkArtifacts[name]
 	}
 	card := benchmarkCards[names[0]]
-	protocol := fmt.Sprintf("model-runtime-v1;engine=%s;profile=%s;max_tokens=512;overflow=truncate;embedding=full-layer/full-dimension", card.Engine, card.Profile)
+	embedding := "full-layer/full-dimension"
 	if _, ok := artifacts["embedding"]; ok {
 		// InMemoryCache applies these options to every mmBERT provider; this
 		// describes the measured workload, independent of owner setup.
-		protocol = fmt.Sprintf("model-runtime-v1;engine=%s;profile=%s;max_tokens=512;overflow=truncate;embedding=layer-6/dimension-256", card.Engine, card.Profile)
+		embedding = "layer-6/dimension-256"
+	}
+	protocol, err := modelRuntimeProtocol(card, benchmarkInput, embedding)
+	if err != nil {
+		b.Fatalf("record runtime execution settings: %v", err)
 	}
 	benchmarkIdentities[b.Name()] = benchmark.ModelIdentity{Artifacts: artifacts, Provider: config.ModelRuntimeProvider, Device: card.Device, Precision: card.Dtype, Protocol: protocol}
+}
+
+// modelRuntimeProtocol records the resolved engine arguments, not a retired
+// profile alias. Baselines must use identical batching, precision and workload.
+func modelRuntimeProtocol(card modelservice.ModelCard, input config.ModelInputBudget, embedding string) (string, error) {
+	args, err := json.Marshal(card.EngineArgs)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("model-runtime-v2;engine=%s;engine_args=%s;max_tokens=%d;overflow=%s;embedding=%s",
+		card.Engine, args, input.MaxTokens, input.Overflow, embedding), nil
 }
 
 func recordCacheProtocol(b *testing.B, scenario cacheScenario) {

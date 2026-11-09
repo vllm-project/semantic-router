@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 入口
 description: 通过受支持推理 API 的 model 字段，暴露用于选择路由配方的稳定虚拟模型名。
 translation:

@@ -202,7 +202,7 @@ func verifyResponseAfterRestart(ctx context.Context, client *kubernetes.Clientse
 }
 
 func extendRedisKeyTTL(ctx context.Context, client *kubernetes.Clientset, responseID string, ttlSeconds int, opts pkgtestcases.TestCaseOptions) error {
-	podName, useCluster, found, err := getRedisPod(ctx, client)
+	podName, useCluster, found, err := getResponseAPIRedisPod(ctx, client, opts.Profile)
 	if err != nil {
 		return err
 	}

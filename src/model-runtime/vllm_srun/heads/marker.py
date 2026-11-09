@@ -6,6 +6,8 @@ parts the question reads: ``u = normalize(W_o LN(h[O]) + W_q LN(h[Q]))``,
 ``MLP(h[O])`` (mlp); ``both`` sums them. A word start is scored against a
 label marker: ``normalize(W_t LN(h[word])) . normalize(W_e LN(h[E])) / tau_span``.
 Parameter names are the packages' (``norm``, ``w_*``, ``log_tau*``, ``cls_mlp``).
+A head built without ``spans`` (a choice-only readout) holds no word or label
+projections and returns an empty word x label block.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ READOUTS = ("cosine", "mlp", "both")
 
 
 class MarkerHead(nn.Module):
-    def __init__(self, hidden: int, projection: int, readout: str):
+    def __init__(self, hidden: int, projection: int, readout: str, spans: bool = True):
         super().__init__()
         if readout not in READOUTS:
             raise ValueError(f"unknown marker readout {readout!r}")
@@ -28,9 +30,11 @@ class MarkerHead(nn.Module):
         self.w_q = nn.Linear(hidden, projection)
         self.w_p = nn.Linear(hidden, projection)
         self.log_tau = nn.Parameter(torch.zeros(()))
-        self.w_t = nn.Linear(hidden, projection)
-        self.w_e = nn.Linear(hidden, projection)
-        self.log_tau_span = nn.Parameter(torch.zeros(()))
+        self.spans = spans
+        if spans:
+            self.w_t = nn.Linear(hidden, projection)
+            self.w_e = nn.Linear(hidden, projection)
+            self.log_tau_span = nn.Parameter(torch.zeros(()))
         if readout in ("mlp", "both"):
             # Index 2 is the packages' (training-only) dropout slot; parameter names keep it.
             self.cls_mlp = nn.Sequential(
@@ -75,6 +79,9 @@ class MarkerHead(nn.Module):
                 logits = logits + (option * part[owner]).sum(-1) / self.log_tau.exp()
             if self.readout in ("mlp", "both"):
                 logits = logits + self.cls_mlp(options).squeeze(-1)
+            if not self.spans:
+                empty = states.new_zeros(unit_index.shape[0], ent_index.shape[0])
+                return logits, empty
             words = F.normalize(
                 self.w_t(self.norm(states[unit_index[:, 0], unit_index[:, 1]])), dim=-1
             )

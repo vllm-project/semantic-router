@@ -21,7 +21,7 @@ func TestSystemOneHTTPUsesPublishedDeploymentAndNativeTypes(t *testing.T) {
 	fake := runtimetest.New(runtimetest.Model{ID: "served"})
 	var forwarded string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/systemone" {
+		if r.URL.Path == "/v1/decisions" {
 			body, _ := io.ReadAll(r.Body)
 			forwarded = string(body)
 			w.Header().Set("Server-Timing", "total;dur=2")

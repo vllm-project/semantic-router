@@ -1,11 +1,13 @@
-"""Decision signals, the decision selector and model_runtime deployments in the CLI contract."""
+"""Decision signals, the decision selector and model_runtime deployments in the CLI contract.
+
+The Router validates the deployments that answer them.
+"""
 
 import copy
 
 import pytest
 from cli.models import UserConfig
-from cli.validator import validate_user_config
-from cli.validator_decision_model import model_runtime_deployment_error
+from cli.validator import collect_validation_warnings, validate_user_config
 from pydantic import ValidationError
 
 REVISION = "cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764"
@@ -190,20 +192,6 @@ def test_set_and_span_conditions_name_a_declared_label():
     assert any("declared label" in error for error in _errors(_config(unlabelled)))
 
 
-def test_a_rule_named_like_a_set_label_answer_is_rejected():
-    def mutate(document):
-        _with_vela2(document)
-        document["routing"]["signals"]["decision"].append(
-            {
-                "name": "topics.billing",
-                "deployment": "vela2",
-                "question": {"type": "noul", "instructions": "x"},
-            }
-        )
-
-    assert any("answer key" in error for error in _errors(_config(mutate)))
-
-
 def test_score_question_requires_a_predicate():
     def mutate(document):
         document["routing"]["signals"]["decision"][1] = {
@@ -231,23 +219,6 @@ def test_condition_labels_follow_the_question_type():
     assert any("takes no label" in error for error in _errors(_config(labeled_noul)))
 
 
-def test_references_must_name_model_runtime_deployments():
-    def unknown(document):
-        document["routing"]["signals"]["decision"][0]["deployment"] = "missing"
-
-    def wrong_provider(document):
-        document["global"]["model_catalog"]["deployments"]["decision-kai"] = {
-            "provider": "http",
-            "external_model": "kai",
-        }
-
-    assert any("is not declared" in error for error in _errors(_config(unknown)))
-    assert any(
-        "must use provider model_runtime" in error
-        for error in _errors(_config(wrong_provider))
-    )
-
-
 def test_selector_candidates_must_be_model_refs():
     def mutate(document):
         selector = document["routing"]["decisions"][0]["algorithm"]["decision"]
@@ -256,6 +227,19 @@ def test_selector_candidates_must_be_model_refs():
     assert any(
         "not one of the decision's modelRefs" in e for e in _errors(_config(mutate))
     )
+
+
+def test_selector_candidate_count_applies_once_models_are_assigned():
+    def model_free(document):
+        decision = document["routing"]["decisions"][0]
+        del decision["modelRefs"]
+        del decision["algorithm"]["decision"]["candidates"]
+
+    def one_model(document):
+        document["routing"]["decisions"][0]["modelRefs"] = [{"model": "small"}]
+
+    assert _errors(_config(model_free)) == []
+    assert any("modelRefs to choose from" in e for e in _errors(_config(one_model)))
 
 
 def test_selector_without_deployment_asks_the_decision_model():
@@ -288,65 +272,40 @@ def test_decision_type_requires_its_configuration():
 
 
 @pytest.mark.parametrize(
-    "deployment, message",
+    "deployment, warned",
     [
-        ({"artifact": "vllm-sr/Decision-2.0-Kai-0.6B"}, None),
-        ({"endpoint": "unix:///run/vllm-sr/runtime.sock"}, None),
-        ({"endpoint": "http://runtime:8100", "device": "rocm:1"}, "cannot set device"),
-        ({"artifact": "/models/kai", "max_num_seqs": 64, "dtype": "bfloat16"}, None),
-        ({"artifact": "/models/kai", "batch_window_ms": 0}, None),
-        ({"artifact": "/models/kai", "enable_shared_context": False}, None),
-        ({"artifact": "./models/kai"}, "Hub repository ID or an absolute"),
-        ({"artifact": "/models/kai", "revision": REVISION}, "only to Hub"),
-        ({"artifact": "vllm-sr/x", "revision": "main"}, "40-hex"),
-        ({"artifact": "vllm-sr/x", "device": "Metal 0"}, "device must be"),
-        ({"artifact": "vllm-sr/x", "device": "xpu:1"}, None),
-        ({"artifact": "vllm-sr/x", "device": "mps"}, None),
-        ({"artifact": "vllm-sr/x", "max_num_seqs": 0}, "max_num_seqs must be"),
-        ({"artifact": "vllm-sr/x", "max_num_seqs": 1.5}, "max_num_seqs must be"),
+        ({"artifact": "vllm-sr/d3-FP8"}, True),
+        ({"artifact": "vllm-sr/d3-FP8", "revision": REVISION}, False),
+        ({"artifact": "VLLM-SR/decision-2.0-kai-0.6b"}, False),
+        ({"artifact": "vllm-sr/d3-turbo"}, False),
+        ({"artifact": "vllm-sr/d3-ultra"}, False),
+        ({"artifact": "/models/d3-FP8"}, False),
+        ({"artifact": "vllm-sr/d3-FP8", "endpoint": "http://runtime:8100"}, False),
         (
-            {"artifact": "vllm-sr/x", "max_num_batched_tokens": 7},
-            "max_num_batched_tokens must be",
+            {
+                "artifact": "vllm-sr/d3-FP8",
+                "replicas": [{"endpoint": "http://runtime:8100"}, {"device": "rocm:0"}],
+            },
+            True,
         ),
-        ({"artifact": "vllm-sr/x", "batch_window_ms": 1001}, "batch_window_ms must"),
-        ({"artifact": "vllm-sr/x", "dtype": "half"}, "dtype must be"),
-        (
-            {"artifact": "vllm-sr/x", "enable_shared_context": 1},
-            "enable_shared_context must be",
-        ),
-        ({"artifact": "vllm-sr/x", "input": {"overflow": "truncate"}}, None),
-        ({"artifact": "vllm-sr/x", "input": {"overflow": "cut"}}, "input.overflow"),
-        ({"artifact": "vllm-sr/x", "input": {"max_tokens": -1}}, "not be negative"),
-        ({"artifact": "vllm-sr/x", "process": "decisions"}, "retired"),
-        ({"artifact": "vllm-sr/x", "process": "-bad name"}, "retired"),
-        ({"artifact": "vllm-sr/x", "served_name": "kai"}, "attached endpoint"),
-        ({"endpoint": "http://runtime:8100", "served_name": "kai"}, None),
-        ({"endpoint": "http://runtime:8100", "served_name": " kai"}, "trimmed"),
-        ({"endpoint": "http://runtime:8100", "process": "x"}, "retired"),
-        ({"endpoint": "tcp://runtime:8100"}, "unix://, http:// or https://"),
-        ({"endpoint": "unix://relative.sock"}, "absolute socket path"),
-        ({}, "requires artifact"),
     ],
 )
-def test_model_runtime_deployment_rules(deployment, message):
-    error = model_runtime_deployment_error({"provider": "model_runtime", **deployment})
-    if message is None:
-        assert error is None
-    else:
-        assert error is not None and message in error
-
-
-def test_other_providers_reject_runtime_fields():
-    def runtime_field(document):
-        document["global"]["model_catalog"]["deployments"]["remote"] = {
-            "provider": "http",
-            "external_model": "x",
-            "max_num_seqs": 8,
-        }
-
-    assert any(
-        "apply only to model_runtime" in e for e in _errors(_config(runtime_field))
-    )
+def test_unpinned_hub_deployments_are_warned(deployment, warned):
+    document = copy.deepcopy(BASE)
+    document["global"]["model_catalog"]["deployments"]["decision-kai"] = {
+        "provider": "model_runtime",
+        **deployment,
+    }
+    config = UserConfig.model_validate(document)
+    assert _errors(document) == []
+    warnings = [
+        str(warning)
+        for warning in collect_validation_warnings(config)
+        if "decision-kai" in str(warning)
+    ]
+    assert bool(warnings) == warned
+    if warned:
+        assert "vllm-sr/d3-FP8 is not a built-in model" in warnings[0]
 
 
 def test_model_runtime_deployments_serve_task_bindings():
@@ -357,62 +316,20 @@ def test_model_runtime_deployments_serve_task_bindings():
             "device": "cpu",
             "input": {"max_tokens": 512, "overflow": "truncate"},
         }
-        document["global"]["model_catalog"]["bindings"] = {
-            "domain_classifier": {
-                "deployment": "vela-domain",
-                "contract": "label_distribution.v1",
-            }
-        }
-
-    def explainer(document):
-        binding(document)
-        document["global"]["model_catalog"]["bindings"]["hallucination_explainer"] = {
-            "deployment": "vela-domain",
-            "contract": "text_pair_distribution.v1",
-        }
+        document["global"]["model_catalog"]["bindings"] = {"domain": "vela-domain"}
 
     assert _errors(_config(binding)) == []
-    assert any("explainer is retired" in e for e in _errors(_config(explainer)))
 
 
-def test_decision_deployments_reject_an_input_budget():
-    def budget(document):
-        deployment = document["global"]["model_catalog"]["deployments"]["decision-kai"]
-        deployment["input"] = {"max_tokens": 4096, "overflow": "truncate"}
-
-    assert any("never truncate" in e for e in _errors(_config(budget)))
-
-
-@pytest.mark.parametrize(
-    "models,expected",
-    [
-        (["vllm-sr/Decision-2.0-Kai-0.6B"], None),
-        (["decision-kai"], "is not declared"),
-        (["small"], "is not declared"),
-    ],
-)
-def test_systemone_listener_uses_public_identity_not_chat_or_resource_key(
-    models, expected
-):
+def test_systemone_listener_bounds_the_request_deadline():
     document = copy.deepcopy(BASE)
-    document["listeners"][0]["models"] = ["small"]
-    document["listeners"][0]["systemone"] = {"models": models}
-    errors = _errors(document)
-    assert (
-        not errors if expected is None else any(expected in error for error in errors)
-    )
-
-
-def test_systemone_duplicate_identity_requires_explicit_public_names():
-    document = copy.deepcopy(BASE)
-    catalog = document["global"]["model_catalog"]["deployments"]
-    catalog["second"] = dict(catalog["decision-kai"])
-    document["listeners"][0]["systemone"] = {
-        "models": [catalog["decision-kai"]["artifact"]]
-    }
-    assert any("multiple deployments" in error for error in _errors(document))
-    catalog["second"]["public_name"] = "alternate"
+    systemone = {"models": ["vllm-sr/Decision-2.0-Kai-0.6B"], "max_deadline_ms": 120000}
+    document["listeners"][0]["systemone"] = systemone
     assert _errors(document) == []
+    for limit in (0, -1, "10m"):
+        systemone["max_deadline_ms"] = limit
+        with pytest.raises(ValidationError, match="max_deadline_ms"):
+            UserConfig.model_validate(document)
 
 
 def test_decision_window_input_is_a_supported_scan_budget():
@@ -424,59 +341,34 @@ def test_decision_window_input_is_a_supported_scan_budget():
     assert _errors(document) == []
 
 
-@pytest.mark.parametrize(
-    "replicas",
-    [
-        [],
-        [{"device": "cpu"}],
-        [{"device": "rocm:0"}, {"device": "rocm:0"}],
-        [
-            {"endpoint": "http://worker:8100", "served_name": "first"},
-            {"endpoint": "http://worker:8100", "served_name": "second"},
-        ],
-    ],
-)
-def test_replicas_share_one_logical_artifact(replicas):
-    assert (
-        model_runtime_deployment_error(
-            {"provider": "model_runtime", "artifact": "org/judge", "replicas": replicas}
-        )
-        is None
-    )
+def _ask_the_default_decision_model(document):
+    for rule in document["routing"]["signals"]["decision"]:
+        del rule["deployment"]
+    del document["routing"]["decisions"][0]["algorithm"]["decision"]["deployment"]
+    document["global"]["model_catalog"]["system"] = {
+        "decision_model": {"deployment": "decision-kai"}
+    }
 
 
-@pytest.mark.parametrize(
-    "updates,message",
-    [
-        ({"replicas": {}}, "must be a list"),
-        ({"replicas": [{}] * 65}, "at most 64"),
-        ({"replicas": [{}], "device": "cpu"}, "top-level"),
-        ({"replicas": [{"artifact": "other/model"}]}, "only device"),
-        ({"replicas": [{"endpoint": "http://worker:8100"}] * 2}, "duplicate attached"),
-        (
-            {
-                "replicas": [
-                    {"endpoint": "http://worker:8100"},
-                    {"endpoint": "http://worker:8100/"},
-                ]
-            },
-            "duplicate attached",
-        ),
-        (
-            {
-                "replicas": [
-                    {"endpoint": "http://worker:8100", "served_name": "bad\rname"}
-                ]
-            },
-            "trimmed model name",
-        ),
-        (
-            {"replicas": [{"endpoint": "http://worker:8100", "device": "cpu"}]},
-            "cannot set device",
-        ),
-    ],
-)
-def test_invalid_replica_placements_fail(updates, message):
-    assert message in model_runtime_deployment_error(
-        {"provider": "model_runtime", "artifact": "org/judge", **updates}
-    )
+def test_default_decision_model_accepts_a_scan_budget():
+    def mutate(document):
+        _ask_the_default_decision_model(document)
+        document["global"]["model_catalog"]["deployments"]["decision-kai"]["input"] = {
+            "max_tokens": 4096,
+            "overflow": "window",
+        }
+
+    assert _errors(_config(mutate)) == []
+
+
+def test_systemone_publication_accepts_a_scan_budget():
+    def mutate(document):
+        document["listeners"][0]["systemone"] = {
+            "models": ["vllm-sr/Decision-2.0-Kai-0.6B"]
+        }
+        document["global"]["model_catalog"]["deployments"]["decision-kai"]["input"] = {
+            "max_tokens": 4096,
+            "overflow": "window",
+        }
+
+    assert _errors(_config(mutate)) == []

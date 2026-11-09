@@ -58,6 +58,7 @@ func cloneCatalogBindingPointer(value *CatalogModelBinding) *CatalogModelBinding
 	result.Protocols = append([]string(nil), value.Protocols...)
 	result.Restrictions = cloneArbitraryMap(value.Restrictions)
 	result.Pricing.CacheWritePer1M = cloneFloatPointer(value.Pricing.CacheWritePer1M)
+	result.Pricing.CacheWrite1hPer1M = cloneFloatPointer(value.Pricing.CacheWrite1hPer1M)
 	return &result
 }
 

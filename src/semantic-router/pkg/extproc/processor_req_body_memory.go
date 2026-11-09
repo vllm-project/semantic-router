@@ -32,6 +32,11 @@ func (r *OpenAIRouter) handleMemoryRetrieval(
 	if !shouldRetrieve {
 		return nil
 	}
+	if applies, reason := r.pluginApplies(ctx, config.DecisionPluginMemory); !applies {
+		// pluginApplies already counted the skip; only the replay-visible outcome is set here.
+		ctx.MemoryStatus, ctx.MemoryReason = "skipped", string(reason)
+		return nil
+	}
 	store := r.getMemoryStore()
 	if store == nil || !store.IsEnabled() {
 		logging.Debugf("Memory: Store not available or disabled, skipping retrieval")
@@ -145,15 +150,24 @@ func (r *OpenAIRouter) prepareMemorySearchQuery(
 	return searchQuery, userID, true
 }
 
+// extractConversationHistory returns the routing view of the conversation that
+// memory query rewriting reads.
 func (r *OpenAIRouter) extractConversationHistory(
 	request *llmprotocol.Request,
 ) []ConversationMessage {
 	if request == nil {
 		return nil
 	}
+	selector := r.routingInputSelector()
 	history := make([]ConversationMessage, 0, len(request.Messages))
 	for _, message := range request.Messages {
 		text := semanticText(message.Content)
+		if message.Role == llmprotocol.RoleUser {
+			if textOnlyMessage(message) && selector.SkipsMessage(text) {
+				continue
+			}
+			text, _ = selector.Strip(text)
+		}
 		if text == "" {
 			continue
 		}

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 基于 ML 的模型选择
 sidebar_label: ML 模型选择
 translation:

@@ -50,7 +50,7 @@ func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *Rule
 			return fmt.Errorf("decision '%s': rules on_unknown must be %s", decisionName, UnknownPolicyChoices())
 		}
 		if ruleTreeSetsOnError(node) {
-			return fmt.Errorf("decision '%s': condition on_error has no effect when rules.on_unknown is set; remove one of them", decisionName)
+			return fmt.Errorf("decision '%s': %s", decisionName, OnUnknownOnErrorConflictMessage)
 		}
 	}
 	if node.IsLeaf() {
@@ -63,6 +63,8 @@ func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *Rule
 	}
 	return nil
 }
+
+const OnUnknownOnErrorConflictMessage = "condition on_error has no effect when rules.on_unknown is set; remove one of them"
 
 func ruleTreeSetsOnError(node *RuleNode) bool {
 	if node == nil {
@@ -154,10 +156,12 @@ func validateClassifierDecisionLeaf(
 			node.Name,
 		)
 	}
-	if bound, ok := cfg.ModelBindings["classifier."+node.Name]; ok && bound.OperatingPoint != nil && bound.Contract == RemoteClassifierContractLabelScores {
-		// A prepared operating point supplies the default label threshold. An
-		// explicit predicate remains a query of the raw independent score.
-		return nil
+	if task, ok, err := cfg.ResolveTask("classifier." + node.Name); ok && err == nil {
+		if bound := ImpliedBinding(task.Consumer, task.Binding, task.Deployment); bound.OperatingPoint != nil && bound.Contract == RemoteClassifierContractLabelScores {
+			// A prepared operating point supplies the default label threshold. An
+			// explicit predicate remains a query of the raw independent score.
+			return nil
+		}
 	}
 	if node.Predicate == nil {
 		return fmt.Errorf(
@@ -434,9 +438,9 @@ func validateDecisionRAGAndMemoryPlugins(cfg *RouterConfig, decision *Decision) 
 		if err := ragCfg.Validate(); err != nil {
 			return fmt.Errorf("decision '%s': RAG plugin: %w", decision.Name, err)
 		}
-		if ragCfg.Enabled && ragCfg.Rerank != nil {
+		if ragCfg.Enabled && ragCfg.Rerank != nil && ragCfg.Rerank.Deployment == "" {
 			if _, ok := cfg.ModelBindings[RAGRerankerConsumer]; !ok {
-				return fmt.Errorf("decision %q: rerank requires recipe-local model_bindings.%s", decision.Name, RAGRerankerConsumer)
+				return fmt.Errorf("decision %q: rerank names no deployment; set rerank.deployment to the reranker", decision.Name)
 			}
 		}
 	}

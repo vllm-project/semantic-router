@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -61,7 +62,7 @@ func TestManagedStackStatusReportsServicesThatAnswerTheirProbes(t *testing.T) {
 	envoy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
 	t.Cleanup(envoy.Close)
 
-	status := collectManagedStackStatus("", StackState{}, router.URL, envoy.URL)
+	status := collectManagedStackStatus(context.Background(), "", StackState{}, router.URL, envoy.URL)
 	if status.Overall != "healthy" || status.DeploymentType != "docker" {
 		t.Fatalf("status = %q (%q), want healthy docker: %+v", status.Overall, status.DeploymentType, status.Services)
 	}
@@ -84,7 +85,7 @@ func TestManagedStandaloneStackStatusReportsNoEnvoy(t *testing.T) {
 	t.Setenv("VLLM_SR_GATEWAY", "standalone")
 	router := answeringRouter(t)
 
-	status := collectManagedStackStatus("", StackState{}, router.URL, router.URL)
+	status := collectManagedStackStatus(context.Background(), "", StackState{}, router.URL, router.URL)
 	var names []string
 	for _, service := range status.Services {
 		names = append(names, service.Name)
@@ -148,7 +149,7 @@ func TestManagedStackStatusTellsStoppedServicesApart(t *testing.T) {
 			stack := StackState{ConfigPath: configPath, Setup: setupmode.New(configPath, false)}
 			stopped := closedHTTPAddress(t)
 
-			status := collectManagedStackStatus("", stack, stopped, stopped)
+			status := collectManagedStackStatus(context.Background(), "", stack, stopped, stopped)
 			if status.Overall != "degraded" {
 				t.Errorf("overall = %q, want degraded", status.Overall)
 			}
@@ -169,7 +170,7 @@ func TestManagedStackStatusTellsStoppedServicesApart(t *testing.T) {
 }
 
 func TestCollectHostStatusReportsDashboardWhenRouterIsUnavailable(t *testing.T) {
-	status := collectHostStatus("", closedHTTPAddress(t), "")
+	status := collectHostStatus(context.Background(), "", closedHTTPAddress(t), "")
 	if status.Overall != "not_running" {
 		t.Fatalf("overall status = %q, want not_running", status.Overall)
 	}

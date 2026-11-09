@@ -17,6 +17,7 @@ from pathlib import Path
 from ci_results import actual_platform, artifact_records, make_receipt
 from deployment_test_results import kubernetes
 from execution_batches import validate_execution_batch
+from execution_targets import execution_observation
 from image_artifacts import IMAGE_ENV
 from release_guard_waiver import waiver_evidence_errors
 
@@ -257,6 +258,7 @@ def run_profile(record: dict, raw: Path, state: Path, env: dict) -> tuple[bool, 
 
 def run_batch(batch: dict, output: Path) -> bool:
     validate_execution_batch(batch, "e2e")
+    execution_observation(batch["verifications"][0], actual_platform())
     output.mkdir(parents=True, exist_ok=False)
     (output / "results").mkdir()
     (output / "batch.json").write_text(json.dumps(batch, indent=2) + "\n")
@@ -308,7 +310,13 @@ def run_batch(batch: dict, output: Path) -> bool:
                 evidence,
                 source_sha=source,
                 execution_platform=actual_platform(),
-                environ={},
+                # Preserve actual runner observations without reattaching the
+                # worker's artifact union to this profile's selected inputs.
+                environ={
+                    key: value
+                    for key, value in env.items()
+                    if key != "CI_IMAGE_RECEIPTS"
+                },
             )
             (output / "results" / f"{identity}.json").write_text(
                 json.dumps(receipt, indent=2) + "\n"

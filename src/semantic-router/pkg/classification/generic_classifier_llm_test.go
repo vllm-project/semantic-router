@@ -64,7 +64,7 @@ func TestLLMLabelClassifierReturnsReportedDistribution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveExternalModelReasoningControl() error = %v", err)
 	}
-	classifier, err := newLLMLabelClassifier(
+	classifier, err := llmLabelClassifierFor(
 		config.ClassifierSignalRule{
 			Model:        "test-model",
 			Labels:       []string{"SAFE", "RISKY"},

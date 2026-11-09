@@ -53,6 +53,10 @@ type Request struct {
 	// generated stage rechecks this policy against its complete outbound request.
 	CandidateRequirements *config.CandidateRequirements
 
+	// ToolStageGate judges each model attempt's tools at that attempt's own
+	// stage. Nil leaves attempts' tools untouched.
+	ToolStageGate ToolStageGate
+
 	// PermittedModels contains the filtered assigned workers and explicitly
 	// configured helpers, including only their declared deployment aliases.
 	// A strict recipe never expands this boundary from the model catalog.

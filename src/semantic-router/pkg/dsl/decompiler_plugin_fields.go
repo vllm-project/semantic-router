@@ -24,6 +24,7 @@ var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
 	"rag":                 pluginFieldsRAG,
 	"header_mutation":     pluginFieldsHeaderMutation,
 	"response_jailbreak":  pluginFieldsResponseJailbreak,
+	"masking":             pluginFieldsStructuredConfiguration,
 }
 
 func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
@@ -254,8 +255,17 @@ func addRAGCoreFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
 func addRAGBackendAndFailureFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
 	if cfg.Rerank != nil {
 		rerank := make(map[string]Value)
+		if cfg.Rerank.Deployment != "" {
+			rerank["deployment"] = StringValue{V: cfg.Rerank.Deployment}
+		}
 		if cfg.Rerank.TopK != nil {
 			rerank["top_k"] = IntValue{V: *cfg.Rerank.TopK}
+		}
+		if cfg.Rerank.Layer != 0 {
+			rerank["layer"] = IntValue{V: cfg.Rerank.Layer}
+		}
+		if cfg.Rerank.Dimension != 0 {
+			rerank["dimension"] = IntValue{V: cfg.Rerank.Dimension}
 		}
 		fields["rerank"] = ObjectValue{Fields: rerank}
 	}
