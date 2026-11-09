@@ -188,11 +188,19 @@ vela3-lite serves in bf16 by default. CPUs without native bf16 support emulate i
 
 | | bf16 (emulated) | float32 |
 | --- | --- | --- |
-| Time per decision | 2 to 29 s | 0.7 to 2.4 s |
+| Time per decision | 2 to 29 s | 0.7 to 2.5 s |
 | Decided within the default waits | none | redact, shield, guard |
 | Verdicts | same | same |
 
-<small>Measured with vela3-lite on an Intel Core i5-1135G7 (no native bf16), CPU only, Linux. float32 used no more memory than bf16.</small>
+<small>Measured with vela3-lite on an Intel Core i5-1135G7 (no native bf16), CPU only, Linux, across two runs. float32 used no more memory than bf16.</small>
+
+<ArticleFigure
+  src="/img/blog/vsr-claude-code/06-setup-cpu-check.png"
+  width={1900} height={414}
+  alt="The end of /vsr:setup on a CPU without bf16: guard, escalate, shield, redact and router each give the expected verdict in 1.1 to 2.5 s, with a median of 1.5 s."
+>
+  The last step of `/vsr:setup` asks each app one question. On this CPU, in float32, every app gives the expected verdict, and setup says plainly which apps sit close to their waits.
+</ArticleFigure>
 
 On a CPU, each app's wait is the dial. Redact, shield and guard wait 3, 2 and 3 s by default, and step aside with a `SKIPPED` line when the model is slower than that. Set a wait to `until done` at the top of `/vsr` when you would rather wait than let anything through unchecked. Check stays off on CPU: it reads Claude's whole answer, and a long answer takes longer than its 3 s limit.
 
