@@ -29,7 +29,7 @@ test('an answer that keeps to what the turn read is GROUNDED, judged against the
   await turnThatReads($, FAITHFUL)
 
   expect(reply.bodies?.find(body => body.questions.hallucination)?.state).toEqual({
-    context: 'support/ticket-1042.txt:\nTicket 1042: [name] cannot log in after a password reset. She asks for a callback.',
+    context: 'support/ticket-1042.txt:\nTicket 1042: [vsr:name] cannot log in after a password reset. She asks for a callback.',
     request: PROMPT,
     answer: FAITHFUL,
   })

@@ -3,7 +3,7 @@ import type { EngineInterface, ToolCallInput, ToolCallResult } from 'claude-code
 
 import type { Tag } from '../types'
 import { type Classified, classify, isRecord, failureOf, probabilityOf, type Reply } from './lib/classify'
-import { addCounts, type Found, hide, PII_QUESTIONS, parsePii, piiIn, secretsIn, type Span } from './lib/redact'
+import { addCounts, type Found, hide, PII_QUESTIONS, parsePii, piiIn, secretsIn, type Span, tagText } from './lib/redact'
 import { budgetOf, remoteHostOf, type Settings } from './lib/settings'
 import { record } from './lib/state'
 import { stamp } from './lib/env'
@@ -237,16 +237,21 @@ export async function inspectOutput($: EngineInterface, e: ToolCallInput, ran: T
   // One question after the other, each in its own wait: the runtime answers one request at a time, so two read at
   // once each took the other's turns for its own pace and both ran out of time (a live 12,000-character read).
   const redacted = isRedactable ? await redactOutput($, settings, output.fields) : undefined
+  // Redact's question ran out of time: the model is still busy with it, so shield's would wait its own time for
+  // nothing. Shield steps aside with it (one card says both), unless it waits until done.
+  const isRedactSlow = redacted !== undefined && !redacted.pii.ok && !redacted.pii.offline && !redacted.pii.cancelled
+  const isShieldSkipped = isShieldable && isRedactSlow && settings.waits.shield !== 'done'
   if (redacted !== undefined) {
     const short = shortfallOf(redacted.pii, redacted.length)
     if (short !== undefined && settings.waits.redact === 'done') return withhold($, settings, call, 'redact', short)
     if (!redacted.pii.ok) {
       const { why } = redacted.pii
-      await record($, settings.log, { kind: 'unavailable', app: 'redact', id: `${call.toolUseId}:redact-off`, ...call, subject: source, why, ...failureOf(redacted.pii) })
+      const also = isShieldSkipped ? { also: 'shield' as const } : {}
+      await record($, settings.log, { kind: 'unavailable', app: 'redact', id: `${call.toolUseId}:redact-off`, ...call, subject: source, why, ...failureOf(redacted.pii), ...also })
     }
   }
   const fields = redacted?.fields ?? output.fields
-  const shielded = isShieldable ? await shieldOutput($, settings, source, fields.join('\n')) : undefined
+  const shielded = isShieldable && !isShieldSkipped ? await shieldOutput($, settings, source, fields.join('\n')) : undefined
   if (shielded !== undefined && settings.waits.shield === 'done') {
     const short = shortfallOf(shielded.injection, fields.join('\n').length)
     if (short !== undefined) return withhold($, settings, call, 'shield', short)
@@ -315,7 +320,7 @@ export async function writeBackOf($: EngineInterface, e: ToolCallInput, settings
   const path = input.file_path
   const text = e.tool === 'Write' ? input.content : input.new_string
   if (!settings.apps.redact || typeof path !== 'string' || typeof text !== 'string') return undefined
-  const written = (await read($, hiddenTags)).map(tag => `[${tag}]`).filter(tag => text.includes(tag))
+  const written = (await read($, hiddenTags)).map(tagText).filter(tag => text.includes(tag))
   if (written.length === 0) return undefined
   const before = e.tool === 'Write' ? await fileText($, path) : typeof input.old_string === 'string' ? input.old_string : ''
   const added = written.filter(tag => !before.includes(tag))

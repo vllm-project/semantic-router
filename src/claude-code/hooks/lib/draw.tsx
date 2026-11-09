@@ -2,7 +2,7 @@ import type { EngineInterface } from 'claude-code'
 
 import type { App, Calibration, Decision, Spend } from '../../types'
 import { APP_NAMES, APPS, type Color, LOOKS, type Section, SECTIONS, sectionOf } from './apps'
-import { type Body, type Described, describe, type Gauge, type TallyItem, tallyOf, tallyWidth } from './describe'
+import { type Body, type Described, describe, type Gauge, type TallyItem, tallyOf, tallyWidth, type Weight } from './describe'
 import { ANSWERS, type Answer, answersFor } from './labels'
 import { BRAND, brand, type Logo, wordmark, wordmarkHeight } from './logo'
 import { holdMeter, type Segment, textWidth } from './meters'
@@ -405,6 +405,8 @@ function fitSections(sections: { section: Section; entries: Entry[] }[], budget:
   return sections.map(({ section, entries }, index) => ({ section, count: entries.length, entries: entries.slice(0, shown[index]) }))
 }
 
+const WEIGHT_ORDER: Record<Weight, number> = { act: 0, notice: 1, quiet: 2 }
+
 // Said once above the answers, so a person knows what answering does.
 const ANSWER_HINT = 'Answers tune the thresholds when you run /vsr:calibrate.'
 
@@ -432,6 +434,9 @@ export function dashboard(
         const answers = labeling && answersFor(decision) ? 1 : 0
         return { decision, described, second, rows: 1 + Math.ceil(second.length / columns) + answers }
       })
+      // What needed a look (a held command, a withheld output) before what only went on, each newest first, so a
+      // run of ALLOWED rows does not push a HELD one out of view.
+      .sort((a, b) => WEIGHT_ORDER[a.described.weight] - WEIGHT_ORDER[b.described.weight])
     return entries.length === 0 ? [] : [{ section, entries }]
   })
   return (

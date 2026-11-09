@@ -81,6 +81,9 @@ export type Decision =
       why: string
       // Set when the runtime could not be reached: the band says so once, and no row repeats it.
       offline?: true
+      // Another app skipped with this one, for the same reason: shield, when redact's question on an output ran out of
+      // time and shield did not ask, so one card says both.
+      also?: App
       // Set when the request was cancelled with its call (the user pressed Esc): nothing went unchecked, so it is not kept.
       cancelled?: true
       // Set when the classifier answered but read only the first `chars` of an output of `of` characters.
@@ -184,6 +187,8 @@ declare module 'claude-code' {
       isOffline: boolean
       // When a request last went to a runtime known to be offline.
       offlineTry: number
+      // The ids of requests vSR gave up on (past their wait) that the runtime may still be answering.
+      abandoned: number[]
       calibration: Calibration
       // The answers given in the pane this session, by decision id.
       labels: Record<string, 'right' | 'wrong' | 'too-low' | 'too-high'>

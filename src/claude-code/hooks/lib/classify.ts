@@ -15,6 +15,12 @@ const RETRY_MS = 60_000
 const isOffline = atom({ plugin: 'vsr', key: 'isOffline' } as const, false)
 // When a request last went to a runtime known to be offline.
 const lastTry = atom({ plugin: 'vsr', key: 'offlineTry' } as const, 0)
+// The runtime answers one request at a time and a request cannot be called back, so one vSR gave up on still holds
+// it: a new question waits for those, within its own wait, rather than queue behind them and every one after. The
+// state names them; the requests themselves are kept here, and an id with none here (the module reloaded) is done.
+const abandoned = atom({ plugin: 'vsr', key: 'abandoned' } as const, [] as number[])
+const unanswered = new Map<number, Promise<unknown>>()
+let nextRequest = 0
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -70,12 +76,20 @@ export async function classify<T>(
     if (started - (await read($, lastTry)) < RETRY_MS) return failed('the decision model is offline', true)
     await update($, lastTry, () => started)
   }
+  const deadline = started + timeoutMs
+  for (const id of await read($, abandoned)) {
+    const earlier = unanswered.get(id)
+    if (earlier !== undefined) {
+      const left = Math.max(0, deadline - (await $.clock.now()))
+      const isAnswered = await Promise.race([earlier.then(() => true, () => true), $.clock.sleep(left).then(() => false)])
+      if (!isAnswered) return failed(`the decision model was still answering an earlier question after ${timeoutMs / 1000} s`)
+    }
+    await update($, abandoned, ids => ids.filter(one => one !== id))
+  }
+  const request = $.http.fetch(runtime.url, { method: 'POST', headers: headersOf(runtime), body: JSON.stringify({ state, questions }) })
   let response
   try {
-    response = await Promise.race([
-      $.http.fetch(runtime.url, { method: 'POST', headers: headersOf(runtime), body: JSON.stringify({ state, questions }) }),
-      $.clock.sleep(timeoutMs).then(() => undefined),
-    ])
+    response = await Promise.race([request, $.clock.sleep(Math.max(0, deadline - (await $.clock.now()))).then(() => undefined)])
   } catch (error) {
     // A request cancelled with its call (the user pressed Esc) says nothing about the runtime: only a fetch that
     // could not connect makes it offline.
@@ -84,6 +98,12 @@ export async function classify<T>(
     return await failed(`could not reach the decision model (${String(error).split(': ').pop()})`, true)
   }
   if (response === undefined) {
+    // Given up on, it still holds the runtime until it is answered.
+    const id = nextRequest++
+    const drop = () => unanswered.delete(id)
+    unanswered.set(id, request)
+    void request.then(drop, drop)
+    await update($, abandoned, ids => [...ids, id])
     // Slow or gone: /health tells, without holding this call up.
     void checkRuntime($, runtime)
     return await failed(`the decision model took over ${timeoutMs / 1000} s`)

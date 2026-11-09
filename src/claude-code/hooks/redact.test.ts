@@ -5,17 +5,17 @@ import { hide, secretsIn } from './lib/redact'
 const hidden = (text: string) => hide(text, secretsIn(text)).text
 
 test('secret values under JSON and YAML keys are hidden, the keys kept', () => {
-  expect(hidden('{"access_token": "ya29.a0AfH6SMBx3kQ9"}')).toBe('{"access_token": "[secret]"}')
-  expect(hidden('{"client_secret":"GOCSPX-abcdef123456"}')).toBe('{"client_secret":"[secret]"}')
-  expect(hidden("{'api_key': 'abcd1234efgh5678'}")).toBe("{'api_key': '[secret]'}")
-  expect(hidden('client_secret: "GOCSPX-abcdef123456"')).toBe('client_secret: "[secret]"')
-  expect(hidden('  refresh_token: 1//0gAbCdEfGhIjKlMn')).toBe('  refresh_token: [secret]')
+  expect(hidden('{"access_token": "ya29.a0AfH6SMBx3kQ9"}')).toBe('{"access_token": "[vsr:secret]"}')
+  expect(hidden('{"client_secret":"GOCSPX-abcdef123456"}')).toBe('{"client_secret":"[vsr:secret]"}')
+  expect(hidden("{'api_key': 'abcd1234efgh5678'}")).toBe("{'api_key': '[vsr:secret]'}")
+  expect(hidden('client_secret: "GOCSPX-abcdef123456"')).toBe('client_secret: "[vsr:secret]"')
+  expect(hidden('  refresh_token: 1//0gAbCdEfGhIjKlMn')).toBe('  refresh_token: [vsr:secret]')
 })
 
 test('an Authorization header loses its credentials', () => {
-  expect(hidden('Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc')).toBe('Authorization: Bearer [secret]')
-  expect(hidden("curl -H 'authorization: token 0123456789abcdef' https://x")).toBe("curl -H 'authorization: token [secret]' https://x")
-  expect(hidden('Authorization: Basic dXNlcjpwYXNzd29yZA==')).toBe('Authorization: Basic [secret]')
+  expect(hidden('Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc')).toBe('Authorization: Bearer [vsr:secret]')
+  expect(hidden("curl -H 'authorization: token 0123456789abcdef' https://x")).toBe("curl -H 'authorization: token [vsr:secret]' https://x")
+  expect(hidden('Authorization: Basic dXNlcjpwYXNzd29yZA==')).toBe('Authorization: Basic [vsr:secret]')
 })
 
 test('provider tokens are hidden wherever they stand', () => {
@@ -26,18 +26,26 @@ test('provider tokens are hidden wherever they stand', () => {
     `xoxb-1234567890-1234567890123-${'aBcD'.repeat(6)}`,
     `xoxp-1234567890-1234567890-1234567890123-${'abcd'.repeat(8)}`,
   ]) {
-    expect([token, hidden(`token is ${token} here`)]).toEqual([token, 'token is [secret] here'])
+    expect([token, hidden(`token is ${token} here`)]).toEqual([token, 'token is [vsr:secret] here'])
   }
 })
 
+test('a password in a connection URL or a DB_PASS assignment is hidden', () => {
+  expect(hidden('DATABASE_URL=postgres://app:hunter2pass@db.local:5432/app')).toBe('DATABASE_URL=postgres://app:[vsr:secret]@db.local:5432/app')
+  expect(hidden('redis://default:s3cr3t@cache:6379')).toBe('redis://default:[vsr:secret]@cache:6379')
+  expect(hidden('DB_PASS=hunter2pass')).toBe('DB_PASS=[vsr:secret]')
+  expect(hidden('db_pass=hunter2pass')).toBe('db_pass=[vsr:secret]')
+  expect(hidden('SECRET_KEY=django-insecure-abc123')).toBe('SECRET_KEY=[vsr:secret]')
+})
+
 test('a lowercase assignment of a password or key is hidden', () => {
-  expect(hidden('db_password=hunter2hunter2')).toBe('db_password=[secret]')
-  expect(hidden('export github_token="abcdef0123456789"')).toBe('export github_token="[secret]"')
+  expect(hidden('db_password=hunter2hunter2')).toBe('db_password=[vsr:secret]')
+  expect(hidden('export github_token="abcdef0123456789"')).toBe('export github_token="[vsr:secret]"')
 })
 
 test('an INI-style assignment with spaces around = is hidden', () => {
-  expect(hidden('api_key = sk-test-FAKE1234567890abcdef')).toBe('api_key = [secret]')
-  expect(hidden('[db]\npassword = hunter2FAKE99\nhost = db.local')).toBe('[db]\npassword = [secret]\nhost = db.local')
+  expect(hidden('api_key = sk-test-FAKE1234567890abcdef')).toBe('api_key = [vsr:secret]')
+  expect(hidden('[db]\npassword = hunter2FAKE99\nhost = db.local')).toBe('[db]\npassword = [vsr:secret]\nhost = db.local')
 })
 
 test('ordinary prose, code and Markdown keep their words', () => {
@@ -56,6 +64,15 @@ test('ordinary prose, code and Markdown keep their words', () => {
     'api_key = settings.api_key',
     'token = get_token()',
     'api_key = os.environ["API_KEY"]',
+    'SECRET_KEY = os.environ["SECRET_KEY"]',
+    'API_KEY = settings.API_KEY',
+    'TOKEN = process.env.GITHUB_TOKEN',
+    'export GITHUB_TOKEN=$GH_TOKEN',
+    'PASSWORD = getpass.getpass()',
+    'TOKEN = get_token()',
+    'BYPASS_CACHE=truefalse1',
+    'git clone git@github.com:org/repo.git',
+    'https://example.com/path?a=b',
   ]) {
     expect(hidden(text)).toBe(text)
   }

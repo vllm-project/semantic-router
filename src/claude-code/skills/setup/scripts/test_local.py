@@ -140,5 +140,63 @@ class Dtype(unittest.TestCase):
         measured.assert_not_called()
 
 
+class Service(unittest.TestCase):
+    def test_a_changed_systemd_unit_is_restarted_so_it_takes_its_new_flags(self):
+        steps = local.enable_steps("systemd", Path("/u/vllm-sr.service"), changed=True)
+        self.assertEqual(
+            steps[-1], ["systemctl", "--user", "restart", f"{local.LABEL}.service"]
+        )
+
+    def test_an_unchanged_systemd_unit_is_only_started(self):
+        steps = local.enable_steps("systemd", Path("/u/vllm-sr.service"), changed=False)
+        self.assertEqual(
+            steps[-1], ["systemctl", "--user", "start", f"{local.LABEL}.service"]
+        )
+        self.assertNotIn("restart", [word for step in steps for word in step])
+
+    def test_rerunning_setup_with_a_new_port_restarts_the_running_service(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            unit = Path(tmp) / "vllm-sr.service"
+            ran: list[list[str]] = []
+            done = mock.Mock(returncode=0)
+            with (
+                mock.patch.object(
+                    local,
+                    "unit_text",
+                    side_effect=lambda kind, command, log: (unit, " ".join(command)),
+                ),
+                mock.patch.object(
+                    local.subprocess,
+                    "run",
+                    side_effect=lambda step, check: ran.append(step) or done,
+                ),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                local.service(
+                    "systemd",
+                    Path(tmp),
+                    "m",
+                    "cpu",
+                    8790,
+                    Path(tmp) / "log",
+                    True,
+                    "float32",
+                )
+                ran.clear()
+                local.service(
+                    "systemd",
+                    Path(tmp),
+                    "m",
+                    "cpu",
+                    8791,
+                    Path(tmp) / "log",
+                    True,
+                    "float32",
+                )
+            self.assertIn(
+                ["systemctl", "--user", "restart", f"{local.LABEL}.service"], ran
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

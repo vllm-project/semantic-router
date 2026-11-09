@@ -5,7 +5,7 @@ import { bandRow, engine, logLines, PANE, paneText, readCallOf, type Reply, rowT
 
 const TICKET_PATH = '/repo/support/ticket-1042.txt'
 const TICKET = 'From: Maria Gonzalez <maria.gonzalez@example.com>'
-const TAGGED = 'From: [name] <[email]>'
+const TAGGED = 'From: [vsr:name] <[vsr:email]>'
 const TICKET_SPANS = [
   { label: 'PERSON', start: 6, end: 20, text: 'Maria Gonzalez', probability: 0.95 },
   { label: 'EMAIL_ADDRESS', start: 22, end: 48, text: 'maria.gonzalez@example.com', probability: 0.99 },
@@ -276,13 +276,14 @@ test('shield with its default 2 s gives up on an answer after 2.5 s', { options:
   expect(await paneText($, /unchecked for instructions/, 200)).toContain('the decision model took over 2 s')
 })
 
-test("guard's wait is the budget of all of a command's steps", { options: { guardWait: '1' } }, async ($, on) => {
+test("guard's wait is the budget of all of a command's steps: past it the command runs unchecked", { options: { guardWait: '1' } }, async ($, on) => {
   const elapse = slowEngine(on, { review: 0.1 })
 
   const pending = $.tool.check({ tool: 'Bash', input: { command: 'ls' } })
   await elapse(1500, 1)
 
-  expect(await pending).toMatchObject({ decision: 'ask', reason: 'vSR guard: could not check 1 of 1 step: the decision model took over 1 s. Confirm before it runs.' })
+  expect((await pending).decision).toBe('allow')
+  expect(await paneText($, /ran unchecked/)).toBe('command ran unchecked · the decision model took over 1 s · /vsr:setup checks it')
 })
 
 test('with guard waiting 2 s, an answer after 1.5 s lets the command run', { options: { guardWait: '2' } }, async ($, on) => {
@@ -360,7 +361,7 @@ test('a redact request cancelled with its call is not withheld and records nothi
   const ran = await $.tool.call({ tool: 'Read', file_path: TICKET_PATH, tool_use_id: 'r1' })
 
   expect(ran.deny).toBeUndefined()
-  expect(contentOf(ran)).toBe('API_TOKEN=[secret]')
+  expect(contentOf(ran)).toBe('API_TOKEN=[vsr:secret]')
   expect(await paneText($, /WITHHELD|SKIPPED/)).toBeUndefined()
   expect(logLines(reply).filter(line => line.verdict === 'off')).toEqual([])
 })

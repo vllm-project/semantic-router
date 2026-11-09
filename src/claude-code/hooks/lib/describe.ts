@@ -2,6 +2,7 @@ import type { App, Decision, Signal, Tag, Tiers } from '../../types'
 import { APPS, type Color, LOOKS } from './apps'
 import { difficultyMeter, holdMeter, type Segment } from './meters'
 import { clip, fixed, modelName, oneLine, plural, RISK_WORDS } from './text'
+import { tagText } from './redact'
 
 // One meter row: `lead`, the cells, `close`, then the first of `fits` (score, caption) that fits the row.
 export type Gauge = { lead: string; close: string; segments: Segment[]; fill: Color; fits: (readonly [string, string])[] }
@@ -276,7 +277,7 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
           body: { kind: 'chips', chips },
           note: d.unread
             ? `the last ${d.unread.toLocaleString('en-US')} characters went to Claude unchecked`
-            : `replaced with [${first ?? 'name'}]-style tags · ${d.checkedOn ? `the originals went to ${d.checkedOn}` : 'the originals stayed on this machine'}`,
+            : `replaced with ${tagText(first ?? 'name')}-style tags · ${d.checkedOn ? `the originals went to ${d.checkedOn}` : 'the originals stayed on this machine'}`,
         },
       }
     },
@@ -358,7 +359,8 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
           inline: { kind: 'card', glyph: APPS.off.glyph, color: APPS.off.color, title: headline, note },
         }
       }
-      const headline = SKIPPED[d.app](oneLine(d.subject))
+      const headline =
+        d.also === 'shield' ? `${oneLine(d.subject)} went to Claude unchecked for personal data or instructions` : SKIPPED[d.app](oneLine(d.subject))
       return {
         app: d.app,
         badge: 'SKIPPED',

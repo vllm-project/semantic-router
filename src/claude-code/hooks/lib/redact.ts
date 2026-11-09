@@ -37,8 +37,13 @@ export function parsePii({ answers, spans }: Reply): Span[] | undefined {
 }
 
 // A key that names a credential (`token`, `api_key`, `client_secret`, `db_password`, `access_token`), the keyword
-// ending the key or followed by `_`, `-` or `.`: not `tokens`, `tokenizer` or `secretary`.
-const KEY = String.raw`[A-Za-z0-9_.-]*?(?:api[_-]?key|apikey|secret|token|password|passwd|credentials?|private[_-]?key|access[_-]?key)(?:[_.-][A-Za-z0-9_.-]*)?`
+// ending the key or followed by `_`, `-` or `.`: not `tokens`, `tokenizer` or `secretary`. `pass` only as a word of
+// its own (`db_pass`), not in `bypass` or `passport`.
+const KEY = String.raw`[A-Za-z0-9_.-]*?(?:api[_-]?key|apikey|secret|token|password|passwd|(?<![A-Za-z0-9])pass(?![A-Za-z0-9])|credentials?|private[_-]?key|access[_-]?key)(?:[_.-][A-Za-z0-9_.-]*)?`
+// A value that names another value rather than holding one: `settings.API_KEY`, `process.env.TOKEN`, a call
+// (`getpass.getpass()`, `get_token()`) or a shell variable (`$TOKEN`).
+const IDENTIFIER = String.raw`[A-Za-z_][A-Za-z0-9_]*`
+const REFERENCE = String.raw`(?:${IDENTIFIER}(?:\.${IDENTIFIER})*\([^\s]*\)|${IDENTIFIER}(?:\.${IDENTIFIER})+|\$\{?${IDENTIFIER}\}?)(?:[ \t;]|$)`
 // The characters of a token or key: no spaces, quotes, brackets or calls.
 const VALUE_CHAR = String.raw`[A-Za-z0-9._~+/=:@%!*^#-]`
 
@@ -58,9 +63,18 @@ const SECRET_RULES: { pattern: RegExp; value?: number }[] = [
   { pattern: /\bauthorization["']?[ \t]*[:=][ \t]*["']?(?:bearer|basic|token|bot|digest|apikey)[ \t]+([A-Za-z0-9._~+/=-]{8,})/dgi, value: 1 },
   { pattern: /\bauthorization["']?[ \t]*:[ \t]*["']?(?!(?:bearer|basic|token|bot|digest|apikey)\b)([A-Za-z0-9._~+/=-]{16,})/dgi, value: 1 },
   { pattern: /\b(?:x-)?api-key[ \t]*:[ \t]*["']?([A-Za-z0-9._~+/=-]{16,})/dgi, value: 1 },
+  // A password in a connection URL: `postgres://user:hunter2@db`.
+  { pattern: /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:([^\s:/@]+)@/dgi, value: 1 },
   // Config-style assignments only: a bare `password:` also opens a Python block, and hiding what
-  // followed it broke code Claude read in a live run.
-  { pattern: /^[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:API_?KEY|SECRET|TOKEN|PASSWORD)[A-Z0-9_]*[ \t]*=[ \t]*["']?([^\s"'`]{8,})/dgm, value: 1 },
+  // followed it broke code Claude read in a live run. The value ends the word and is not code: not
+  // `os.environ["SECRET_KEY"]`, `settings.API_KEY` or `$TOKEN` (a quoted value is the rules' below).
+  {
+    pattern: new RegExp(
+      String.raw`^[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:API_?KEY|SECRET|TOKEN|PASSWORD|PASSWD|(?<![A-Z0-9])PASS(?![A-Z0-9]))[A-Z0-9_]*[ \t]*=[ \t]*(?!${REFERENCE})([^\s"'\x60]{8,})(?=[ \t;]|$)`,
+      'dgm',
+    ),
+    value: 1,
+  },
   // The same in any case, shell style (no spaces around `=`), the value ending the word: `db_password=…`, not `password_hint=hint()`.
   { pattern: new RegExp(String.raw`^[ \t]*(?:export[ \t]+)?${KEY}=["']?(${VALUE_CHAR}{8,})(?=["']?(?:[ \t;]|$))`, 'dgim'), value: 1 },
   // INI and .cfg style (`api_key = …`), held to the YAML rule's bar below, so `api_key = settings.api_key` stays.
@@ -117,6 +131,9 @@ export function piiIn(text: string, spans: readonly Span[], line: number): Found
 
 export type Hidden = { text: string; counts: Partial<Record<Tag, number>> }
 
+// What stands where a value was hidden: `[vsr:email]`, a tag no code holds, so writing one back is always a lost value.
+export const tagText = (tag: Tag) => `[vsr:${tag}]`
+
 // Replaces each found piece with its tag; of two that overlap, the one that starts first stays.
 export function hide(text: string, found: readonly Found[]): Hidden {
   const counts: Partial<Record<Tag, number>> = {}
@@ -124,7 +141,7 @@ export function hide(text: string, found: readonly Found[]): Hidden {
   let at = 0
   for (const one of [...found].sort((a, b) => a.from - b.from || b.to - a.to)) {
     if (one.from < at) continue
-    out += `${text.slice(at, one.from)}[${one.tag}]`
+    out += `${text.slice(at, one.from)}${tagText(one.tag)}`
     counts[one.tag] = (counts[one.tag] ?? 0) + 1
     at = one.to
   }

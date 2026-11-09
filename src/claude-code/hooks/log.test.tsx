@@ -177,7 +177,7 @@ test('a log subject never carries a secret the rules hide', async ($, on) => {
   await check($, 'DB_PASSWORD=hunter22 ./deploy.sh')
   await clock.advance(0)
 
-  expect(logLines(reply).map(line => line.subject)).toEqual(['DB_PASSWORD=[secret] ./deploy.sh'])
+  expect(logLines(reply).map(line => line.subject)).toEqual(['DB_PASSWORD=[vsr:secret] ./deploy.sh'])
 })
 
 test('a route line carries the steps answer and where the effort came from, a kept one carries neither', { options: { routerGoal: 'save' } }, async ($, on) => {

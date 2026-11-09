@@ -119,18 +119,21 @@ subagent routed to your session's own tier keeps your session's exact model (a p
 Before a Bash command runs, vSR splits it into the commands it runs (at `&&`, `||`, `;`, a lone `&`
 and new lines; pipes, quotes including `$'...'`, `$(...)`, subshells, comments and heredoc bodies are
 respected) and asks about each part in turn whether it needs a person's review. When a part scores
-0.9 or more, Claude Code's permission dialog asks you, with the reason. A command is held too when a
-part could not be checked: it has more than 12 parts, or a part timed out or got an error answer. All
-parts share one wait, `guardWait` (3 s by default). On a slow runtime that means more questions; vSR
-steps aside only while the decision model is offline, and not even then when guard waits `until
-done`.
+0.9 or more, Claude Code's permission dialog asks you, with the reason. All parts share one wait,
+`guardWait` (3 s by default). A part the decision model could not check in that time (slow, offline
+or an error answer) lets the command run with a `SKIPPED` row, as redact and shield step aside; only
+the fixed rules below and a score already over the line hold it. With `until done` guard waits up to
+60 s and holds a command it could not check. A command of more than 12 parts is always held.
 
 Some commands are always held, whatever the score and even while the decision model is offline:
 recursive deletes of `/`, your home directory or a top-level system directory, `mkfs`, `dd` to a
 device (not `/dev/null` and the like), fork bombs, recursive permission changes on `/`, and scripts
-from `curl` or `wget` run by a shell. These rules see through subshells, `{ ...; }` groups, `sudo`,
-`env`, `nohup` and similar wrappers, `bash -c` strings and every stage of a pipe. The guard only
-tightens: it never allows what Claude Code would ask about or refuse.
+from `curl` or `wget` run by a shell or by `python`, `perl`, `ruby`, `node` or `php` (a pipe, `<(...)`,
+`< <(...)` or `$(...)`). These rules see through subshells, `{ ...; }` groups, function bodies, `case`
+arms, `sudo`, `env`, `nohup` and similar wrappers, `bash -c` strings, every stage of a pipe, text a
+shell reads from `echo`, `printf`, a heredoc or a here-string (`echo 'rm -rf ~' | sh`), and the
+`$(...)` an unquoted heredoc body runs. The guard only tightens: it never allows what Claude Code
+would ask about or refuse.
 
 ## Check
 
@@ -153,13 +156,14 @@ as unencrypted. A remote runtime's token is kept in Claude Code's secure storage
 (`/plugin configure vsr@vllm-sr`), never in `settings.json`.
 
 Redact hides names, emails, phone numbers, card numbers, IP addresses, addresses, ID numbers and
-secrets (API keys, tokens, private keys, passwords in config files). It waits `redactWait` (3 s by
-default) for the decision model, and shield then waits `shieldWait` (2 s by default) on a `Read` or a
-fetched page. On CPU redact reads about the first 8,000 characters of an output in 3 s, and says so
+secrets (API keys, tokens, private keys, passwords in config files and connection URLs). It waits
+`redactWait` (3 s by default) for the decision model, and shield then waits `shieldWait` (2 s by
+default) on a `Read` or a fetched page; when redact ran out of time the model is still busy, so shield
+steps aside with it and one `SKIPPED` row says both (unless shield waits `until done`). On CPU redact reads about the first 8,000 characters of an output in 3 s, and says so
 when an output was longer. With `until done` it reads the whole output (up to 128,000 characters
 and 60 s), and an output it cannot finish is withheld from Claude instead of passed on unchecked. The output of a
 command that failed is hidden in too: Claude reads the error with the values replaced. If Claude then
-tries to write a file with a redact tag such as `[email]` in place of a real value, vSR refuses the
+tries to write a file with a redact tag such as `[vsr:email]` in place of a real value, vSR refuses the
 write and tells Claude to change only the lines it needs.
 
 ## Options

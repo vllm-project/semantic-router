@@ -1,6 +1,6 @@
 {
   "name": "vsr",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "vSR runs a vLLM Semantic Router decision model (local CPU, local GPU or remote) inside Claude Code: routes subagents by difficulty, escalates when you push back, redacts personal data and secrets, shields against prompt injection, guards risky Bash commands, and checks answers against what Claude read.",
   "author": {
     "name": "Theo Hsiung"
@@ -51,7 +51,7 @@
     "escalate": {
       "type": "boolean",
       "title": "App: escalate",
-      "description": "When you push back on an answer, tells Claude to re-check it and sends the next subagent to Opus. Off: no classifier call, no card.",
+      "description": "When you push back on an answer, tells Claude to re-check it and sends the next subagent one step up: from Haiku to Sonnet, otherwise at least the session's model with one effort level more. Off: no classifier call, no card.",
       "default": true
     },
     "redact": {
@@ -105,7 +105,7 @@
     "guardWait": {
       "type": "string",
       "title": "Wait: guard",
-      "description": "How long guard waits for the decision model on a Bash command, all its steps together: 1, 2 or 3 seconds, then a step not checked holds the command (with the model offline guard steps aside, and only its fixed rules hold). done: wait until every step is checked, at most 60 s; if one cannot be (a timeout, an error, the decision model offline), the command is held for your confirmation.",
+      "description": "How long guard waits for the decision model on a Bash command, all its steps together: 1, 2 or 3 seconds, then a command it could not check runs, as redact and shield step aside, and only its fixed rules hold. done: wait until every step is checked, at most 60 s; if one cannot be (a timeout, an error, the decision model offline), the command is held for your confirmation.",
       "default": "3",
       "options": [
         "1",

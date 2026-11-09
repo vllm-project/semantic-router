@@ -3,21 +3,34 @@ import type { Risk } from '../../types'
 // Bash read the way it runs, for the guard: a command split into the commands it runs (partsOf), and the fixed
 // rules that hold one whatever the classifier says (alwaysHeld). Pure functions, no engine calls.
 
-// `<<WORD`, `<<-WORD`, `<<'WORD'`, `<<"WORD"` or `<<\WORD`: a heredoc whose body runs to a line of WORD.
-const HEREDOC = /^<<(-?)[ \t]*\\?(['"]?)([A-Za-z0-9_.-]+)\2/
+// `<<WORD`, `<<-WORD`, `<<'WORD'`, `<<"WORD"` or `<<\WORD`: a heredoc whose body runs to a line of WORD. Quoted,
+// its body is plain text; unquoted, bash expands the `$(…)` and backticks in it.
+const HEREDOC = /^<<(-?)[ \t]*(\\?)(['"]?)([A-Za-z0-9_.-]+)\3/
 
-// The index just past the line that ends each heredoc, its body read from `at`; the end of the command when one
-// never ends (bash runs it so, the body running to the end).
-function pastHeredocs(command: string, at: number, heredocs: readonly { word: string; isTabbed: boolean }[]) {
-  for (const { word, isTabbed } of heredocs) {
+type Pending = { word: string; isTabbed: boolean; isQuoted: boolean; at: number }
+// A heredoc at the top: where its `<<` stands, its body, and the index just past the line that ends it.
+type Heredoc = { at: number; body: Span; past: number; isQuoted: boolean }
+
+// Each heredoc's body, read from `at`, and the index just past the line that ends the last; the end of the command
+// when one never ends (bash runs it so, the body running to the end).
+function pastHeredocs(command: string, at: number, pending: readonly Pending[]) {
+  const read: Heredoc[] = []
+  for (const { word, isTabbed, isQuoted, at: marker } of pending) {
+    const from = at
+    let to = command.length
     while (at < command.length) {
       const end = command.indexOf('\n', at)
       const line = command.slice(at, end < 0 ? command.length : end)
+      const start = at
       at = end < 0 ? command.length : end + 1
-      if ((isTabbed ? line.replace(/^\t+/, '') : line) === word) break
+      if ((isTabbed ? line.replace(/^\t+/, '') : line) === word) {
+        to = start
+        break
+      }
     }
+    read.push({ at: marker, body: [from, to], past: at, isQuoted })
   }
-  return at
+  return { past: at, read }
 }
 
 // What the scanner stands inside: a quote (`'…'`, `$'…'`, `"…"`), a command substitution (`$(…)`, backticks), a
@@ -41,6 +54,7 @@ type Scan = {
   regionKinds: FrameKind[]
   // The text of each outermost substitution or subshell: commands that run too.
   bodies: string[]
+  heredocs: Heredoc[]
   // False when a quote, substitution or subshell never closes: the split cannot be trusted.
   isSure: boolean
 }
@@ -67,9 +81,9 @@ const isWordStart = (text: string, i: number) => i === 0 || /[\s;&|()]/.test(tex
 
 // Reads a shell line as bash does, far enough to know where its commands, stages, comments and quotes are.
 function scan(command: string): Scan {
-  const found: Scan = { cuts: [], pipes: [], comments: [], regions: [], regionKinds: [], bodies: [], isSure: true }
+  const found: Scan = { cuts: [], pipes: [], comments: [], regions: [], regionKinds: [], bodies: [], heredocs: [], isSure: true }
   const stack: Frame[] = []
-  const heredocs: { word: string; isTabbed: boolean }[] = []
+  const heredocs: Pending[] = []
   const open = (kind: FrameKind, i: number, width: number) => {
     if (stack.length === 0) found.regionKinds.push(kind)
     stack.push({ kind, from: i, body: i + width, parens: 0 })
@@ -138,10 +152,11 @@ function scan(command: string): Scan {
     } else if (command.startsWith('<<<', i)) i += 2
     else if (command.startsWith('<<', i)) {
       const marker = HEREDOC.exec(command.slice(i))
-      if (marker !== null) heredocs.push({ word: marker[3], isTabbed: marker[1] === '-' })
+      if (marker !== null) heredocs.push({ word: marker[4], isTabbed: marker[1] === '-', isQuoted: marker[2] !== '' || marker[3] !== '', at: i })
       i += (marker?.[0].length ?? 2) - 1
     } else if (c === '\n' && heredocs.length > 0) {
-      const past = pastHeredocs(command, i + 1, heredocs.splice(0))
+      const { past, read } = pastHeredocs(command, i + 1, heredocs.splice(0))
+      if (stack.length === 0) found.heredocs.push(...read)
       if (stack.length === 0 && command[past - 1] === '\n') found.cuts.push([past - 1, past])
       i = past - 1
     } else if (stack.length === 0) {
@@ -292,7 +307,8 @@ const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=/
 // A redirection, its operator alone or with its target; not a process substitution, `<(…)`.
 const REDIRECTION = /^\d*(?:>>?|<>?|&>>?|>&|<&|>\|)(?!\()/
 
-type Command = { name: string; args: string[]; scripts: string[] }
+// `stdin`: what a here-string (`<<< 'text'`) hands the command.
+type Command = { name: string; args: string[]; scripts: string[]; stdin?: string }
 
 const basename = (word: string) => word.split('/').pop() ?? ''
 
@@ -317,11 +333,38 @@ function pastOptions(words: readonly string[], at: number, wrapper: Wrapper, scr
   return at + (wrapper.positionals ?? 0)
 }
 
+// What starts a stage without being its command: a function's header (`f() {`, `function f {`), a `case … in`,
+// and a case arm's pattern (`a|b)`), so the commands inside are read as the commands they are.
+const FUNCTION_HEADER = /^\s*(?:function\s+[^\s(){}]+(?:\s*\(\s*\))?|[A-Za-z_][\w.:-]*\s*\(\s*\))\s*/
+const CASE_HEAD = /^\s*case\s+\S+\s+in\b/
+const CASE_ARM = /^\s*\(?\s*[^\s()|;&]+(?:\s*\|\s*[^\s()|;&]+)*\s*\)/
+
+// The words a command gets, past its redirections, and what a here-string hands it. A process substitution after
+// `<` stays (`bash < <(curl …)` runs what it reads).
+function argumentsOf(words: readonly string[]) {
+  const kept: string[] = []
+  let stdin: string | undefined
+  for (let at = 0; at < words.length; at++) {
+    const word = words[at]
+    const here = /^\d*<<<(.*)$/s.exec(word)
+    if (here !== null) {
+      stdin = here[1] !== '' ? here[1] : words[++at]
+      continue
+    }
+    const isAlone = REDIRECTION.test(word) && (word.replace(REDIRECTION, '') === '' || /^\d*<<-?$/.test(word))
+    if (REDIRECTION.test(word)) {
+      if (isAlone && !/^[<>]\(/.test(words[at + 1] ?? '')) at++
+      continue
+    }
+    kept.push(word)
+  }
+  return { kept, stdin }
+}
+
 // The command a stage runs, past keywords, assignments, redirections and wrappers (`sudo -u root`, `nice -n 10`,
 // `timeout 5`); undefined when it runs none (a subshell, or `command -v`).
 function commandOf(stage: string): Command | undefined {
-  const isOperator = (word = '') => REDIRECTION.test(word) && word.replace(REDIRECTION, '') === ''
-  const words = wordsOf(stage).filter((word, at, all) => !REDIRECTION.test(word) && !isOperator(all[at - 1]))
+  const { kept: words, stdin } = argumentsOf(wordsOf(stage.replace(FUNCTION_HEADER, '').replace(CASE_HEAD, '').replace(CASE_ARM, '')))
   const scripts: string[] = []
   let at = 0
   while (at < words.length) {
@@ -339,12 +382,28 @@ function commandOf(stage: string): Command | undefined {
   if (at >= words.length) return scripts.length > 0 ? { name: '', args: [], scripts } : undefined
   const name = basename(words[at])
   const args = words.slice(at + 1)
-  return { name, args, scripts: [...scripts, ...scriptsOf(name, args)] }
+  return { name, args, scripts: [...scripts, ...scriptsOf(name, args)], ...(stdin !== undefined ? { stdin } : {}) }
 }
 
 const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'ash', 'fish'])
+// Interpreters that run a script they read from stdin: with no script named, or `-`.
+const INTERPRETERS = /^(?:python[0-9.]*|perl|ruby|node|php)$/
 const FETCHERS = /\b(?:curl|wget)\b/
 const SHELL_OPTIONS: Wrapper = { takes: 'oO' }
+
+// Whether a command runs what reaches its stdin as a script: a shell with no `-c` and no script file (or `-s`),
+// an interpreter with no `-c`, `-e` or `-m` and no script file (or `-`).
+function runsStdin({ name, args }: Command) {
+  if (SHELLS.has(name)) {
+    if (args.some(arg => /^-[A-Za-z]*c/.test(arg))) return false
+    if (args.some(arg => /^-[A-Za-z]*s/.test(arg))) return true
+    const at = pastOptions(args, 0, SHELL_OPTIONS, [])
+    return at === undefined || args[at] === undefined || args[at] === '-'
+  }
+  if (!INTERPRETERS.test(name) || args.some(arg => /^-[A-Za-z]*[cem]/.test(arg))) return false
+  const script = args.find(arg => !arg.startsWith('-') || arg === '-')
+  return script === undefined || script === '-'
+}
 
 // The command lines a command runs from its arguments: `bash -c '…'`, `eval …`, `su -c '…'`.
 function scriptsOf(name: string, args: readonly string[]): string[] {
@@ -388,17 +447,39 @@ function ruleOf({ name, args }: Command): string | undefined {
   return undefined
 }
 
-// A pipe that feeds a download to a shell, or a shell, `source` or `eval` handed one through `<(…)`, `$(…)` or backticks.
-function runsDownload(stages: readonly string[], commands: readonly (Command | undefined)[]) {
+const isFetched = (text: string) => /<\(|>\(|\$\(|`/.test(text) && FETCHERS.test(text)
+
+// A pipe that feeds a download to a shell or an interpreter, or one handed a download through `<(…)`, `$(…)` or
+// backticks, as an argument or as what it reads.
+function runsDownload(stages: readonly string[], commands: readonly (Command | undefined)[], scripts: readonly string[]) {
   const fetched = stages.findIndex(stage => FETCHERS.test(stage))
-  if (fetched >= 0 && commands.slice(fetched + 1).some(command => command && SHELLS.has(command.name))) return true
+  const isRunner = (command: Command) => SHELLS.has(command.name) || INTERPRETERS.test(command.name)
+  if (fetched >= 0 && commands.slice(fetched + 1).some(command => command && (SHELLS.has(command.name) || runsStdin(command)))) return true
+  if (scripts.some(isFetched)) return true
   return commands.some(
     command =>
-      command !== undefined &&
-      (SHELLS.has(command.name) || ['source', '.', 'eval'].includes(command.name)) &&
-      command.args.some(arg => /<\(|>\(|\$\(|`/.test(arg) && FETCHERS.test(arg)),
+      command !== undefined && (isRunner(command) || ['source', '.', 'eval'].includes(command.name)) && command.args.some(isFetched),
   )
 }
+
+// What a heredoc's unquoted body runs as bash expands it: the commands in its `$(…)` and backticks.
+function expansionsIn(body: string): string[] {
+  const found: string[] = []
+  for (let i = 0; i < body.length; i++) {
+    if (body[i] === '\\') i++
+    else if (body.startsWith('$((', i)) i++
+    else if (body.startsWith('$(', i) || body[i] === '`') {
+      const { regions, bodies } = scan(body.slice(i))
+      found.push(...bodies.slice(0, 1))
+      i += (regions[0]?.[1] ?? body.length - i) - 1
+    }
+  }
+  return found
+}
+
+// What `echo` or `printf` writes, its escapes read: what a shell after it in a pipe runs.
+const printedBy = ({ name, args }: Command) =>
+  (name === 'echo' ? args.filter((arg, at) => !(at === 0 && /^-[neE]+$/.test(arg))) : args).join(' ').replace(/\\n/g, '\n')
 
 export const firstOf = <T, F>(items: readonly T[], find: (item: T) => F | undefined) => {
   for (const item of items) {
@@ -418,14 +499,33 @@ export type Held = { rule: string; risk: Risk }
 export function alwaysHeld(text: string, depth = 0): Held | undefined {
   if (depth > MAX_DEPTH) return undefined
   if (FORK_BOMB.test(text)) return { rule: 'starts a fork bomb', risk: 'destructive' }
-  const { cuts, pipes, bodies } = scan(text)
+  const { cuts, pipes, bodies, heredocs } = scan(text)
   const inner = (line: string) => alwaysHeld(line, depth + 1)
   if (cuts.length > 0) return firstOf(piecesOf(text, cuts).map(([from, to]) => text.slice(from, to)), inner)
-  const stages = piecesOf(text, pipes).map(([from, to]) => text.slice(from, to))
+  // The stages read with each heredoc's body blanked out, so its lines are not taken for the command's words.
+  const bodyOf = (heredoc: Heredoc) => text.slice(...heredoc.body)
+  const plain = heredocs.reduce((line, { body: [from], past }) => line.slice(0, from) + ' '.repeat(past - from) + line.slice(past), text)
+  const spans = piecesOf(plain, pipes)
+  const stages = spans.map(([from, to]) => plain.slice(from, to))
   const commands = stages.map(commandOf)
-  if (runsDownload(stages, commands)) return { rule: 'runs a script straight from the internet', risk: 'remote_code' }
+  // What reaches a stage's stdin: its own heredoc or here-string, or what `echo`, `printf` or a bare `cat` before
+  // it in the pipe writes.
+  const stdinOf = (at: number): string | undefined => {
+    const [from, to] = spans[at]
+    const own = heredocs.filter(heredoc => heredoc.at >= from && heredoc.at < to).at(-1)
+    if (own !== undefined) return bodyOf(own)
+    const given = commands[at]?.stdin
+    if (given !== undefined) return given
+    const before = at > 0 ? commands[at - 1] : undefined
+    if (before?.name === 'echo' || before?.name === 'printf') return printedBy(before)
+    if (before?.name === 'cat' && before.args.every(arg => arg === '-')) return stdinOf(at - 1)
+    return undefined
+  }
+  const fed = commands.flatMap((command, at) => (command !== undefined && runsStdin(command) ? [stdinOf(at)] : [])).filter(script => script !== undefined)
+  if (runsDownload(stages, commands, fed)) return { rule: 'runs a script straight from the internet', risk: 'remote_code' }
   const present = commands.filter(command => command !== undefined)
   const rule = firstOf(present, ruleOf)
   if (rule !== undefined) return { rule, risk: 'destructive' }
-  return firstOf([...bodies, ...present.flatMap(command => command.scripts)], inner)
+  const expanded = heredocs.filter(heredoc => !heredoc.isQuoted).flatMap(heredoc => expansionsIn(bodyOf(heredoc)))
+  return firstOf([...fed, ...bodies, ...expanded, ...present.flatMap(command => command.scripts)], inner)
 }

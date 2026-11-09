@@ -109,13 +109,14 @@ export async function guardCheck(
     return held && { part, ...held }
   })
   const isRisky = scored !== undefined && scored.review >= line
-  // Offline (the circuit breaker open): vSR steps aside, and only the fixed rules and a score already over the
-  // line hold; a guard that waits until done holds instead. A part that timed out or got an error answer while the
-  // runtime is up was not checked: held. Cancelled with the call (the user pressed Esc): nothing will run, so
-  // nothing is held or recorded.
+  // A part the decision model could not check (offline, slow or an error answer): with a wait of seconds vSR steps
+  // aside, as redact and shield do, and only the fixed rules and a score already over the line hold; a guard that
+  // waits until done holds instead. Cancelled with the call (the user pressed Esc): nothing will run, so nothing is
+  // held or recorded.
   if (failures.length > 0 && failures.every(failure => failure.cancelled) && !ruled && !isRisky) return next(e)
-  const isSteppingAside = failures.length > 0 && failures.every(failure => failure.offline) && settings.waits.guard !== 'done'
-  if (isSteppingAside && !ruled && !isRisky) {
+  const isSteppingAside = failures.length > 0 && settings.waits.guard !== 'done'
+  if (isSteppingAside && !ruled && !isRisky && overLimit === 0) {
+    const failure = failures.find(one => !one.cancelled) ?? failures[0]
     await record($, settings.log, {
       kind: 'unavailable',
       app: 'guard',
@@ -123,8 +124,8 @@ export async function guardCheck(
       toolUseId: e.tool_use_id,
       at,
       subject: command,
-      why: failures[0].why,
-      offline: true,
+      why: failure.why,
+      ...(failure.offline ? { offline: true as const } : {}),
     })
     return next(e)
   }

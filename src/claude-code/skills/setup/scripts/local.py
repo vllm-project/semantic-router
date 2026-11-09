@@ -262,11 +262,21 @@ def unit_text(kind: str, command: list[str], log: Path) -> tuple[Path, str]:
     )
 
 
-def enable_steps(kind: str, path: Path) -> list[list[str]]:
+def enable_steps(kind: str, path: Path, changed: bool = True) -> list[list[str]]:
+    """The commands that load the service. A changed systemd unit is restarted: `enable --now` only starts a
+    service that is not running, so one already running would keep its old flags. launchd reloads it either way.
+    """
     if kind == "systemd":
+        unit = f"{LABEL}.service"
+        start = (
+            ["systemctl", "--user", "restart", unit]
+            if changed
+            else ["systemctl", "--user", "start", unit]
+        )
         return [
             ["systemctl", "--user", "daemon-reload"],
-            ["systemctl", "--user", "enable", "--now", f"{LABEL}.service"],
+            ["systemctl", "--user", "enable", unit],
+            start,
         ]
     domain = f"gui/{os.getuid()}"
     return [
@@ -297,7 +307,7 @@ def service(
         print(f"wrote {path}")
     else:
         print(f"unchanged: {path}")
-    steps = enable_steps(kind, path)
+    steps = enable_steps(kind, path, changed=current != text)
     for step in steps:
         print("$ " + shlex.join(step), flush=True)
         done = subprocess.run(step, check=False)
