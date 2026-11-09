@@ -147,6 +147,30 @@ vSR is six small apps on one decision model. You can turn each one on or off.
 - ⟦It only tightens.⟧
 - ⟦Step aside or wait until done: the trade-off, in one paragraph.⟧
 
+<ArticleFigure
+  src="/img/blog/vsr-claude-code/09-tally-offline.png"
+  width={920} height={60}
+  alt="The vSR tally reading: model offline, guard, redact, shield not checking."
+>
+  Default waits with the decision model offline: guard, redact and shield step aside, and Claude carries on as it would without vSR.
+</ArticleFigure>
+
+<ArticleFigure
+  src="/img/blog/vsr-claude-code/08-tally-redact-holding.png"
+  width={1010} height={60}
+  alt="The vSR tally reading: model offline, guard, shield not checking, redact holding."
+>
+  The same outage with redact set to `until done`: redact holds instead of stepping aside.
+</ArticleFigure>
+
+<ArticleFigure
+  src="/img/blog/vsr-claude-code/07-withheld.png"
+  width={800} height={120}
+  alt="A WITHHELD card: notes.md withheld from Claude, not checked for personal data, because the decision model is offline."
+>
+  **WITHHELD**: redact could not check `notes.md`, so Claude got nothing from it rather than an unchecked file.
+</ArticleFigure>
+
 ## What you see
 
 {/* 5. Cards only when something needs your eyes (HELD, DECLINED/APPROVED, SHIELDED, UNVERIFIED,
