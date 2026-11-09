@@ -296,7 +296,10 @@ func (decoder *chatStreamDecoder) nextAfterHeld(event llmprotocol.Event) ([]llmp
 		return events, err
 	}
 	terminal, err := decoder.next(event)
-	return append(events, terminal), err
+	if err != nil {
+		return events, err
+	}
+	return append(events, terminal), nil
 }
 
 // chatChunkIsQuiet reports a chunk whose choices decode to no events, such

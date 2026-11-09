@@ -186,7 +186,7 @@ func (state *streamState) finalToolArguments(event llmprotocol.Event, kind llmpr
 		arguments = []byte(event.ToolCall.Arguments)
 	}
 	if kind == "" && !isJSONObject(arguments, state.policy.Limits.JSONDepth) {
-		if !isTruncatedJSONObject(arguments) {
+		if !isTruncatedJSONObject(arguments, state.policy.Limits.JSONDepth) {
 			return nil, nonObjectToolArgumentsError()
 		}
 		// The output limit can cut a call mid-arguments, and Anthropic and OpenAI

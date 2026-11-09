@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -332,8 +334,42 @@ func TestStreamStateAcceptsCutToolArgumentsOnlyAtMaxTokens(t *testing.T) {
 	}
 }
 
+// A limit cuts only the final output, so another item after a cut call means
+// the arguments were malformed.
+func TestStreamStateRejectsOutputAfterACutToolCall(t *testing.T) {
+	state := newTestStreamState()
+	startTestStream(t, state)
+	for _, event := range []llmprotocol.Event{
+		{
+			Type: llmprotocol.EventOutputItemStarted, ItemIndex: 0, ItemID: "tool_item",
+			Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup"},
+		},
+		{
+			Type: llmprotocol.EventToolCallDelta, ItemIndex: 0,
+			ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup", Arguments: `{"query":`},
+		},
+		{Type: llmprotocol.EventOutputItemCompleted, ItemIndex: 0},
+	} {
+		if _, err := state.next(event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := state.next(llmprotocol.Event{
+		Type: llmprotocol.EventOutputItemStarted, ItemIndex: 1, ItemID: "tool_item_2",
+		Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{ID: "call_2", Name: "lookup"},
+	})
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolError) || protocolError.Code != "invalid_stream_tool_arguments" {
+		t.Fatalf("an item after a cut call = %v, want invalid_stream_tool_arguments", err)
+	}
+}
+
 func TestStreamStateRejectsMalformedAndNonObjectToolArguments(t *testing.T) {
-	for _, arguments := range []string{`[]`, `true`, `null`, `{"query":1,"query":2}`, `{"query":1}}`, `{"query" 1`} {
+	// A cut prefix gets no exemption from the duplicate-key and depth rules.
+	for _, arguments := range []string{
+		`[]`, `true`, `null`, `{"query":1,"query":2}`, `{"query":1}}`, `{"query" 1`,
+		`{"query":1,"query":2,"x":`, `{"query":` + strings.Repeat("[", 200),
+	} {
 		t.Run(arguments, func(t *testing.T) {
 			state := newTestStreamState()
 			startTestStream(t, state)

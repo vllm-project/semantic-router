@@ -422,15 +422,16 @@ func isJSONObject(body []byte, maximumDepth int) bool {
 }
 
 // isTruncatedJSONObject reports arguments that stop inside a JSON object, the
-// only shape an output limit leaves behind. A complete non-object, trailing
-// data or a syntax error mid-body is malformed, never cut.
-func isTruncatedJSONObject(body []byte) bool {
+// only shape an output limit leaves behind. The prefix must pass the same
+// duplicate-key and depth rules as a complete object. A complete non-object,
+// trailing data or a syntax error mid-body is malformed, never cut.
+func isTruncatedJSONObject(body []byte, maximumDepth int) bool {
 	trimmed := bytes.TrimSpace(body)
 	if len(trimmed) == 0 || trimmed[0] != '{' {
 		return false
 	}
-	err := json.NewDecoder(bytes.NewReader(trimmed)).Decode(new(any))
-	return errors.Is(err, io.ErrUnexpectedEOF)
+	err := llmprotocol.ValidateJSONObject(trimmed, maximumDepth)
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 
 var jsonRawMessageType = reflect.TypeOf(json.RawMessage{})
