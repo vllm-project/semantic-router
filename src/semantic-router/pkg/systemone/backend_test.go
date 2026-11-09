@@ -3,6 +3,7 @@ package systemone
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -64,6 +65,57 @@ providers:
 	}
 	if remote.Topology().DefaultCluster != "" {
 		t.Fatal("native backend became default Chat route")
+	}
+}
+
+func TestNativeRemoteAdapterRefusesATrustedGatewayBeforeDispatch(t *testing.T) {
+	var calls atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(certainResponse))
+	}))
+	defer server.Close()
+	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
+routing: {}
+global:
+  services:
+    authz:
+      gateway_credential:
+        enabled: true
+providers:
+  models:
+    - name: native
+      api_format: systemone
+      provider_model_id: native-model
+      backend_refs:
+        - provider: systemone-compatible
+          base_url: %[1]s/custom/v1
+          trusted_gateway: true
+    - name: judge
+      api_format: openai
+      provider_model_id: judge-model
+      backend_refs:
+        - provider: openai-compatible
+          base_url: %[1]s/v1
+          trusted_gateway: true
+`, server.URL)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	remote, err := upstream.Build(cfg, upstream.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remote.Close(context.Background())
+	invoke := BackendInvoker(cfg, "", nil, remote)
+	for _, alias := range []string{"native", "judge"} {
+		if _, _, err := invoke(context.Background(), alias, json.RawMessage(singleRequest)); !errors.Is(err, errTrustedGatewayUnsupported) {
+			t.Fatalf("%s: error = %v, want the trusted gateway refusal", alias, err)
+		}
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("a trusted gateway received %d calls without a credential", calls.Load())
 	}
 }
 

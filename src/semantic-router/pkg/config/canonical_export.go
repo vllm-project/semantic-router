@@ -579,6 +579,8 @@ func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fal
 		APIVersion: profile.APIVersion,
 		ChatPath:   profile.ChatPath,
 		APIKey:     endpoint.APIKey,
+		// A trusted gateway has no static key to export; the request supplies it.
+		TrustedGateway: profile.TrustedGateway,
 	}
 	if profile.AuthHeader != "" || profile.AuthPrefixSet || profile.AuthPrefix != "" {
 		ref.Auth = &DeploymentAuth{Header: profile.AuthHeader}
@@ -599,7 +601,7 @@ func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fal
 	if profile.BaseURL != "" {
 		ref.Endpoint, ref.Protocol = profile.BaseURL, ""
 	}
-	if ref.APIKey == "" {
+	if ref.APIKey == "" && !ref.TrustedGateway {
 		ref.APIKey = fallbackAPIKey
 	}
 	if ref.APIKey != "" && ref.Auth != nil {

@@ -21,7 +21,9 @@ providers:
       provider_model_id: z-ai/glm-5.2
       api_format: openai
       reasoning:
-        family: openrouter
+        type: reasoning_effort
+        parameter: reasoning_effort
+        levels: [low, medium, high]
       pricing:
         currency: USD
         prompt_per_1m: 0.95
@@ -40,7 +42,9 @@ providers:
       provider_model_id: z-ai/glm-5.2
       api_format: openai
       reasoning:
-        family: openrouter
+        type: reasoning_effort
+        parameter: reasoning_effort
+        levels: [low, medium, high]
       pricing:
         currency: USD
         prompt_per_1m: 0.95
@@ -59,7 +63,9 @@ providers:
       provider_model_id: z-ai/glm-5.2
       api_format: openai
       reasoning:
-        family: openrouter
+        type: reasoning_effort
+        parameter: reasoning_effort
+        levels: [low, medium, high]
       pricing:
         currency: USD
         prompt_per_1m: 0.95
@@ -78,7 +84,9 @@ providers:
       provider_model_id: z-ai/glm-5.2
       api_format: openai
       reasoning:
-        family: openrouter
+        type: reasoning_effort
+        parameter: reasoning_effort
+        levels: [low, medium, high]
       pricing:
         currency: USD
         prompt_per_1m: 0.95
@@ -97,7 +105,9 @@ providers:
       provider_model_id: openai/gpt-5.5
       api_format: openai
       reasoning:
-        family: openrouter
+        type: reasoning_effort
+        parameter: reasoning_effort
+        levels: [low, medium, high]
       pricing:
         currency: USD
         prompt_per_1m: 5
