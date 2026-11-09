@@ -36,7 +36,7 @@ func (r *OpenAIRouter) InspectPluginBinding(binding pluginruntime.Binding, plugi
 	case *config.ContextCompressionPluginConfig:
 		add("context_compression", r.ContextCompression != nil)
 		if policy.Recovery != nil && policy.Recovery.Enabled {
-			add("context_recovery", r.CompressionRecovery != nil)
+			add("context_recovery", r.ContextRecoveryBackend != nil)
 		}
 	case *config.MemoryPluginConfig:
 		add("memory_store", r.MemoryStore != nil)

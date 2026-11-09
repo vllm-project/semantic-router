@@ -36,7 +36,7 @@ func NewRedisRecoveryStore(options RedisRecoveryStoreOptions) (*RedisRecoverySto
 		options.KeyPrefix = "vsr:context-recovery:v1:"
 	}
 	if options.MaxTotalBytes <= 0 {
-		options.MaxTotalBytes = 256 * 1024 * 1024
+		options.MaxTotalBytes = DefaultRecoveryMaxTotalBytes
 	}
 	store := &RedisRecoveryStore{
 		client: redis.NewClient(&redis.Options{

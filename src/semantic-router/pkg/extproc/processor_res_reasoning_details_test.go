@@ -130,8 +130,8 @@ func TestContextRecoveryRefusesReasoningContinuity(t *testing.T) {
 				}},
 			}
 			router := &OpenAIRouter{
-				Config:              &config.RouterConfig{Looper: config.LooperConfig{Endpoint: server.URL}},
-				CompressionRecovery: &recoveryStoreStub{},
+				Config:                 &config.RouterConfig{Looper: config.LooperConfig{Endpoint: server.URL}},
+				ContextRecoveryBackend: &recoveryStoreStub{},
 			}
 			semantic := testNeutralRequest("model", "question")
 			if test.history {
@@ -141,12 +141,13 @@ func TestContextRecoveryRefusesReasoningContinuity(t *testing.T) {
 			ctx := &RequestContext{
 				RequestID: "request-1", RequestModel: "model", VSRSelectedModel: "model",
 				VSRSelectedDecisionName: decision.Name, VSRSelectedDecision: decision,
-				ContextCompressionRecoveryKeys: []string{"key-1"},
-				Headers:                        map[string]string{"x-authz-user-id": "user-1"},
-				SourceFormat:                   llmprotocol.OpenAIChatV1, SemanticRequest: semantic,
+				ContextRecoveryKeys: []string{"key-1"},
+				Headers:             map[string]string{"x-authz-user-id": "user-1"},
+				SourceFormat:        llmprotocol.OpenAIChatV1, SemanticRequest: semantic,
 			}
-			scope := router.contextCompressionScope(ctx)
-			router.CompressionRecovery.(*recoveryStoreStub).entries = map[string]contextcompression.RecoveryEntry{
+			router.bindContextPolicy(ctx)
+			scope := router.contextRecoveryScope(ctx)
+			router.ContextRecoveryBackend.(*recoveryStoreStub).entries = map[string]contextcompression.RecoveryEntry{
 				scope + ":key-1": {Key: "key-1", Scope: scope, Content: "full original context"},
 			}
 			response := []byte(`{"id":"initial","object":"chat.completion","created":1,"model":"model","usage":{"prompt_tokens":10,"completion_tokens":3,"total_tokens":13},"choices":[{"index":0,"finish_reason":"tool_calls","message":{"role":"assistant",` + test.message + `,"tool_calls":[{"id":"retrieve-1","type":"function","function":{"name":"vsr_context_retrieve","arguments":"{\"key\":\"key-1\"}"}}]}}]}`)

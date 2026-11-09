@@ -67,6 +67,7 @@ func (p *Profile) GetTestCases() []string {
 		"router-replay-session-turn-progression",
 		"router-replay-tool-result-capture",
 		"topic-continuity-replay-receipts",
+		"history-reset-replay-receipts",
 		"shadow-dispatch-observes-candidate-model",
 		"shadow-dataset-export-manifest",
 		"shadow-dataset-judge-tasks",

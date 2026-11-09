@@ -867,7 +867,7 @@ func publishSnapshotState(
 			ReplayRuntime:         router,
 			ResponseCache:         router.responseCacheService(),
 			ContextCompression:    router.contextCompressionService(),
-			CompressionRecovery:   router.CompressionRecovery,
+			CompressionRecovery:   router.ContextRecoveryBackend,
 			Plugins:               pluginruntime.Capabilities{Guards: router, Retrieval: router, Inspector: router},
 			NativeRouter:          router,
 		})

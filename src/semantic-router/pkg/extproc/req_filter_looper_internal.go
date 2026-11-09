@@ -167,19 +167,23 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 		return r.createErrorResponse(400, "Invalid request body"), nil
 	}
 
+	// Bind the context policy before the internal plugins run: their cache
+	// lookup happens first, and an enabled reset policy must not serve a
+	// cached answer that skipped its evaluation.
+	r.bindContextPolicy(ctx)
 	if response := r.runLooperInternalPlugins(ctx, decisionName); response != nil {
 		return response, nil
 	}
-	// Recovery follow-ups already carry uncompressed retrieved payloads and
-	// the reserved retrieve tool. Re-compressing that hop fails closed on
-	// vsr_context_retrieve injection.
+	// Recovery follow-ups already carry recovered payloads and the reserved
+	// retrieve tool. Re-running the context stage would fail closed on
+	// vsr_context_retrieve injection, and an inherited reset never removes on
+	// a follow-up, so the whole stage is skipped for that hop.
 	if !isContextRecoveryFollowupRequest(request) {
-		compressionErr := r.applySemanticContextCompression(ctx, request)
-		if compressionErr != nil {
-			return r.createErrorResponse(
-				500,
-				"Context compression failed under fail_closed policy",
-			), nil
+		captureOriginalContextHistory(ctx)
+		prepareLooperContextHistorySteps(ctx)
+		if contextErr := r.applyContextTransformationPlan(ctx, request); contextErr != nil {
+			status, message := contextTransformationFailure(ctx)
+			return r.createErrorResponse(status, message), nil
 		}
 	}
 	err = r.modifyRequestBodyForLooper(

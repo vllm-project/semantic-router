@@ -53,7 +53,7 @@ func TestOpenAIRouterCloseClosesOwnedResources(t *testing.T) {
 func TestRouterServiceCloseDrainsManagementLeasesBeforeRecoveryStore(t *testing.T) {
 	recovery := &closeTrackingRecoveryStore{closed: make(chan struct{})}
 	router := (&routerComponents{resources: newResourceScope()}).buildRouter()
-	router.CompressionRecovery = recovery
+	router.ContextRecoveryBackend = recovery
 	service := NewRouterService(router)
 	release, acquired := router.routerLearningRuntimeState().AcquireLease()
 	if !acquired {

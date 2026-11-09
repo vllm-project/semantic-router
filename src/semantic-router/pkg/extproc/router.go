@@ -69,7 +69,7 @@ type OpenAIRouter struct {
 	kvAddressRegistryStore kvtransfer.AddressRegistry
 	kvAddressRegistryMu    sync.Mutex
 	ContextCompression     *contextcompression.Service
-	CompressionRecovery    contextcompression.RecoveryStore
+	ContextRecoveryBackend contextcompression.RecoveryStore
 	CompressionEmbedding   embedding.Provider
 	CompressionScorer      contextcompression.RelevanceScorer
 	compressionScorers     map[string]contextcompression.RelevanceScorer

@@ -46,6 +46,10 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		return compilePluginFields(c, fields, cfg)
 	},
 	"prompt_cache": compilePromptCachePluginConfig,
+	"history_reset": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		cfg := &config.HistoryResetPluginConfig{}
+		return compilePluginFields(c, fields, cfg)
+	},
 	// masking uses the generic structured path: its configuration is a plain
 	// map, so hand-mapping fields would only add a place to forget one (#3566).
 	"masking": func(c *Compiler, fields map[string]Value) (interface{}, bool) {

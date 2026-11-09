@@ -195,3 +195,13 @@ func validateTopicContinuityLimits(rule TopicContinuityRule) error {
 	}
 	return nil
 }
+
+// TopicContinuityRule returns the declared rule with name, if any.
+func (c *RouterConfig) TopicContinuityRule(name string) (TopicContinuityRule, bool) {
+	for _, rule := range c.TopicContinuityRules {
+		if rule.Name == name {
+			return rule, true
+		}
+	}
+	return TopicContinuityRule{}, false
+}

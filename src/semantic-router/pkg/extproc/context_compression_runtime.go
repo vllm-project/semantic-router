@@ -83,28 +83,29 @@ func (r *OpenAIRouter) contextCompressionScorer(ctx context.Context, cfg *config
 	return scorer
 }
 
-func (r *OpenAIRouter) contextCompressionRecoveryStore(
-	cfg *config.ContextCompressionPluginConfig,
-) contextcompression.RecoveryStore {
-	if cfg == nil || cfg.Recovery == nil || !cfg.Recovery.Enabled {
-		return nil
-	}
+// contextRecoveryStore builds or returns the one process-wide recovery store.
+// Every context action that can remove content uses this instance, so a removed
+// turn and a compressed block remain retrievable through the same store, scope,
+// and reserved tool. It is built from the merged contract, so its total-bytes
+// bound is the stricter of the actions' bounds whichever request creates it;
+// router construction already requires every decision to agree on that bound.
+func (r *OpenAIRouter) contextRecoveryStore(contract contextRecoveryContract) contextcompression.RecoveryStore {
 	r.contextCompressionMu.Lock()
 	defer r.contextCompressionMu.Unlock()
-	if r.CompressionRecovery != nil {
-		return r.CompressionRecovery
+	if r.ContextRecoveryBackend != nil {
+		return r.ContextRecoveryBackend
 	}
 	if r.Config == nil {
 		return nil
 	}
-	storeType := strings.TrimSpace(cfg.Recovery.Store)
+	storeType := contract.Store
 	if storeType == "response_cache" {
 		storeType = strings.TrimSpace(r.Config.SemanticCache.BackendType)
 	}
 	options, ok, err := recoveryRedisOptions(
 		r.Config,
 		storeType,
-		cfg.Recovery.MaxTotalBytes,
+		contract.MaxTotalBytes,
 	)
 	if err != nil {
 		logging.ComponentWarnEvent("extproc", "context_recovery_store_config_failed", map[string]interface{}{
@@ -120,7 +121,7 @@ func (r *OpenAIRouter) contextCompressionRecoveryStore(
 	if err != nil {
 		return nil
 	}
-	r.CompressionRecovery = store
+	r.ContextRecoveryBackend = store
 	if r.ContextCompression == nil {
 		r.ContextCompression = contextcompression.NewService()
 	}
@@ -261,7 +262,7 @@ func compressionPolicyForRequest(
 	return policy
 }
 
-func (r *OpenAIRouter) contextCompressionScope(ctx *RequestContext) string {
+func (r *OpenAIRouter) contextRecoveryScope(ctx *RequestContext) string {
 	if ctx == nil {
 		return ""
 	}

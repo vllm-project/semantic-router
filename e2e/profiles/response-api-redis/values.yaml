@@ -43,6 +43,41 @@ config:
               model: openai/gpt-oss-20b
         modelRefs:
           - model: openai/gpt-oss-20b
+      - name: history_reset_recovery_probe
+        description: Keyword-gated history_reset route storing removed turns in Redis, captured by Router Replay (history-reset-recovery, issue #3343)
+        priority: 90
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: history_reset_recovery_probe
+        modelRefs:
+          - model: openai/gpt-oss-20b
+            use_reasoning: false
+        plugins:
+          - type: history_reset
+            configuration:
+              enabled: true
+              trigger:
+                signal: topic_boundary
+                min_confidence: 0.9
+                accepted_versions:
+                  - v1
+              scope: eligible_history
+              failure_mode: fail_closed
+              recovery:
+                enabled: true
+                store: redis
+                ttl_seconds: 900
+                max_bytes_per_request: 1048576
+                max_total_bytes: 67108864
+                max_retrievals: 4
+          - type: router_replay
+            configuration:
+              enabled: true
+              max_records: 100
+              capture_request_body: false
+              capture_response_body: false
       - name: default_decision
         description: Default catch-all decision
         priority: 1
@@ -55,7 +90,16 @@ config:
           - model: openai/gpt-oss-20b
             use_reasoning: false
     signals:
+      # Evidence for the history_reset recovery probe route.
+      topic_continuity:
+        - name: topic_boundary
+          description: Whether the live turn still depends on retained history.
       keywords:
+        - name: history_reset_recovery_probe
+          operator: OR
+          keywords:
+            - "__HISTORY_RESET_RECOVERY_PROBE__"
+          case_sensitive: false
         - name: workflow_keyword
           operator: OR
           keywords:
@@ -75,6 +119,15 @@ config:
     router:
       strategy: priority
     services:
+      # Bounded, synchronous in-memory Replay for the history_reset recovery
+      # probe; bodies are never captured.
+      router_replay:
+        enabled: true
+        store_backend: memory
+        async_writes: false
+        capture_request_body: false
+        capture_response_body: false
+        max_records: 1000
       response_api:
         enabled: true
         store_backend: redis
@@ -107,6 +160,13 @@ config:
     stores:
       response_cache:
         embedding_model: mmbert
+        # The cache stays on its memory backend: this Redis is plain Redis
+        # without vector search. Context recovery (recovery.store: redis)
+        # reuses only this connection.
+        redis:
+          connection:
+            host: redis.default.svc.cluster.local
+            port: 6379
       memory:
         embedding_model: mmbert
       vector_store:

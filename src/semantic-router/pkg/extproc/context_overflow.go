@@ -212,7 +212,7 @@ func (r *OpenAIRouter) applyContextOverflow(ctx *RequestContext, request *llmpro
 		callContext = context.Background()
 	}
 	result := r.contextCompressionService().Apply(callContext, contextcompression.Request{
-		Model: model, Scope: r.contextCompressionScope(ctx), Request: ir, Policy: policy,
+		Model: model, Scope: r.contextRecoveryScope(ctx), Request: ir, Policy: policy,
 		Capabilities: contextcompression.ModelContextCapabilities{ContextWindow: available}, TokenCounter: counter,
 		Scorer: r.contextCompressionScorer(callContext, cfg, ctx),
 	})
