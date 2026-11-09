@@ -1,0 +1,242 @@
+{
+  "model": "MoritzLaurer/ModernBERT-base-zeroshot-v2.0",
+  "revision": "d421c4545a438fd006fb43f8b981c5d908faa1e1",
+  "model_sha256": "a3858ccb4f576b734e2f304b541fbf5a2d445155eab77de69933ecd67df9ded3",
+  "device": "cpu",
+  "profile": "exact",
+  "golden_status": "unverified",
+  "python": "3.14.5",
+  "pytorch": "2.14.1",
+  "transformers": "5.19.0",
+  "reference_attention": "eager",
+  "dtype": "float32",
+  "tolerance": 1e-05,
+  "maximum_absolute_difference": 3.039836883544922e-06,
+  "maximum_pipeline_difference": 3.2032034132933873e-06,
+  "cases": [
+    {
+      "id": "code",
+      "state": "Write a Python function to sort a list.",
+      "expected_smoke_choice": "code",
+      "native_answers": {
+        "domain": {
+          "type": "choice",
+          "choice": "code",
+          "probabilities": {
+            "code": 0.9990273344402579,
+            "math": 0.0006241730948723885,
+            "travel": 0.00034849246486965806
+          },
+          "confidence": 0.9923970653981609
+        },
+        "code": {
+          "type": "noul",
+          "noul": 0.9983238342368664
+        }
+      },
+      "reference_choice": {
+        "code": 0.9990273714065552,
+        "math": 0.0006241750670596957,
+        "travel": 0.00034849264193326235
+      },
+      "reference_noul": 0.9983238577842712,
+      "pipeline_choice": {
+        "code": 0.9990273118019104,
+        "math": 0.0006241750088520348,
+        "travel": 0.00034849229268729687
+      },
+      "pipeline_noul": 0.9983237981796265,
+      "maximum_pipeline_difference": 3.6057239971576394e-08,
+      "maximum_absolute_difference": 3.696629724547762e-08,
+      "request_ms": 2.1375420037657022,
+      "parity_passed": true
+    },
+    {
+      "id": "math",
+      "state": "Solve the equation 2x + 5 = 13.",
+      "expected_smoke_choice": "math",
+      "native_answers": {
+        "domain": {
+          "type": "choice",
+          "choice": "math",
+          "probabilities": {
+            "code": 0.11337374520500856,
+            "math": 0.8850862205407743,
+            "travel": 0.0015400342542171562
+          },
+          "confidence": 0.6679102204442713
+        },
+        "code": {
+          "type": "noul",
+          "noul": 0.5639972245195176
+        }
+      },
+      "reference_choice": {
+        "code": 0.11337435990571976,
+        "math": 0.8850856423377991,
+        "travel": 0.0015400339616462588
+      },
+      "reference_noul": 0.5640002489089966,
+      "pipeline_choice": {
+        "code": 0.11337457597255707,
+        "math": 0.8850853443145752,
+        "travel": 0.0015400334959849715
+      },
+      "pipeline_noul": 0.5640004277229309,
+      "maximum_pipeline_difference": 3.2032034132933873e-06,
+      "maximum_absolute_difference": 3.039836883544922e-06,
+      "request_ms": 34.11933302413672,
+      "parity_passed": true
+    },
+    {
+      "id": "travel",
+      "state": "Plan a three-day holiday in Paris.",
+      "expected_smoke_choice": "travel",
+      "native_answers": {
+        "domain": {
+          "type": "choice",
+          "choice": "travel",
+          "probabilities": {
+            "code": 0.0012504659603824976,
+            "math": 0.0008336399835268834,
+            "travel": 0.9979158940560907
+          },
+          "confidence": 0.9851170325873351
+        },
+        "code": {
+          "type": "noul",
+          "noul": 0.00013363022026493098
+        }
+      },
+      "reference_choice": {
+        "code": 0.0012504648184403777,
+        "math": 0.0008336416212841868,
+        "travel": 0.9979159235954285
+      },
+      "reference_noul": 0.00013362984464038163,
+      "pipeline_choice": {
+        "code": 0.0012504634214565158,
+        "math": 0.0008336443570442498,
+        "travel": 0.9979158639907837
+      },
+      "pipeline_noul": 0.00013362907338887453,
+      "maximum_pipeline_difference": 3.006530702176491e-08,
+      "maximum_absolute_difference": 2.9539337753625716e-08,
+      "request_ms": 31.286375015042722,
+      "parity_passed": true
+    },
+    {
+      "id": "negation",
+      "state": "I do not want any code. Plan a vacation in Tokyo.",
+      "expected_smoke_choice": null,
+      "native_answers": {
+        "domain": {
+          "type": "choice",
+          "choice": "travel",
+          "probabilities": {
+            "code": 0.010377941505294995,
+            "math": 0.0020451862806939464,
+            "travel": 0.9875768722140111
+          },
+          "confidence": 0.9340830519986228
+        },
+        "code": {
+          "type": "noul",
+          "noul": 0.029672112814153984
+        }
+      },
+      "reference_choice": {
+        "code": 0.010377934202551842,
+        "math": 0.00204518367536366,
+        "travel": 0.9875768423080444
+      },
+      "reference_noul": 0.029672253876924515,
+      "pipeline_choice": {
+        "code": 0.010377928614616394,
+        "math": 0.0020451790187507868,
+        "travel": 0.9875769019126892
+      },
+      "pipeline_noul": 0.02967222034931183,
+      "maximum_pipeline_difference": 1.0753515784431289e-07,
+      "maximum_absolute_difference": 1.4106277053047012e-07,
+      "request_ms": 41.531375027261674,
+      "parity_passed": true
+    },
+    {
+      "id": "mixed",
+      "state": "Write Python code to calculate the roots of a quadratic equation.",
+      "expected_smoke_choice": null,
+      "native_answers": {
+        "domain": {
+          "type": "choice",
+          "choice": "code",
+          "probabilities": {
+            "code": 0.5862150533303279,
+            "math": 0.41354639132697685,
+            "travel": 0.00023855534269526203
+          },
+          "confidence": 0.38083315525475225
+        },
+        "code": {
+          "type": "noul",
+          "noul": 0.9974930019360728
+        }
+      },
+      "reference_choice": {
+        "code": 0.5862154960632324,
+        "math": 0.4135459065437317,
+        "travel": 0.00023855501785874367
+      },
+      "reference_noul": 0.9974930286407471,
+      "pipeline_choice": {
+        "code": 0.5862153172492981,
+        "math": 0.4135461747646332,
+        "travel": 0.00023855510517023504
+      },
+      "pipeline_noul": 0.9974930286407471,
+      "maximum_pipeline_difference": 2.639189702335898e-07,
+      "maximum_absolute_difference": 4.847832451582157e-07,
+      "request_ms": 33.45750004518777,
+      "parity_passed": true
+    },
+    {
+      "id": "unrelated",
+      "state": "Explain how photosynthesis works.",
+      "expected_smoke_choice": null,
+      "native_answers": {
+        "domain": {
+          "type": "choice",
+          "choice": "math",
+          "probabilities": {
+            "code": 0.07985519521502761,
+            "math": 0.8703752842617262,
+            "travel": 0.04976952052324627
+          },
+          "confidence": 0.5703686959946381
+        },
+        "code": {
+          "type": "noul",
+          "noul": 0.00014880705009989774
+        }
+      },
+      "reference_choice": {
+        "code": 0.07985522598028183,
+        "math": 0.8703752756118774,
+        "travel": 0.04976952075958252
+      },
+      "reference_noul": 0.00014880698290653527,
+      "pipeline_choice": {
+        "code": 0.07985525578260422,
+        "math": 0.8703753352165222,
+        "travel": 0.04976946488022804
+      },
+      "pipeline_noul": 0.00014880711387377232,
+      "maximum_pipeline_difference": 6.056757660688472e-08,
+      "maximum_absolute_difference": 3.076525421918941e-08,
+      "request_ms": 29.597041953820735,
+      "parity_passed": true
+    }
+  ],
+  "passed": true,
+  "note": "Parity and a small smoke panel, not a routing quality benchmark or calibrated confidence evaluation."
+}
