@@ -130,7 +130,7 @@ async function markOffline($: EngineInterface, runtime: Runtime) {
   await update($, lastTry, () => now)
   if (await read($, isOffline)) return
   await update($, isOffline, () => true)
-  $.ui.toast(`vSR: the decision model is not answering at ${runtime.url} · vSR's checks step aside until it does; guard's fixed rules still hold · /vsr:setup`)
+  $.ui.toast(`vSR: the decision model is not answering at ${runtime.url} · vSR's checks step aside until it does (apps set to wait until done hold instead); guard's fixed rules still hold · /vsr:setup`)
 }
 
 // Asks the runtime's `/health` once; one that does not answer in time is offline.

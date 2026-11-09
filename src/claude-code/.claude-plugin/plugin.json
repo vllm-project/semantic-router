@@ -1,6 +1,6 @@
 {
   "name": "vsr",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "vSR runs a vLLM Semantic Router decision model (local CPU, local GPU or remote) inside Claude Code: routes subagents by difficulty, escalates when you push back, redacts personal data and secrets, shields against prompt injection, guards risky Bash commands, and checks answers against what Claude read.",
   "author": {
     "name": "Theo Hsiung"
@@ -77,6 +77,42 @@
       "title": "App: check",
       "description": "Checks an answer against the files and command output Claude read that turn. Off by default: on a CPU runtime a long answer outlasts its 3 s limit, so turn it on with a GPU or remote runtime. Off: no classifier call, no card.",
       "default": false
+    },
+    "redactWait": {
+      "type": "string",
+      "title": "Wait: redact",
+      "description": "How long redact waits for the decision model on a file or command output: 1, 2 or 3 seconds, then what it read in time is hidden and the rest goes to Claude unchecked. done: wait until the check finishes, at most 60 s; if it cannot finish (a timeout, an error, the decision model offline, an output too long to read whole), the output is withheld from Claude.",
+      "default": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "done"
+      ]
+    },
+    "shieldWait": {
+      "type": "string",
+      "title": "Wait: shield",
+      "description": "How long shield waits for the decision model on a file or page: 1, 2 or 3 seconds, then what it read in time is judged and the rest goes to Claude unchecked. done: wait until the check finishes, at most 60 s; if it cannot finish (a timeout, an error, the decision model offline, an output too long to read whole), the output is withheld from Claude.",
+      "default": "2",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "done"
+      ]
+    },
+    "guardWait": {
+      "type": "string",
+      "title": "Wait: guard",
+      "description": "How long guard waits for the decision model on a Bash command, all its steps together: 1, 2 or 3 seconds, then a step not checked holds the command (with the model offline guard steps aside, and only its fixed rules hold). done: wait until every step is checked, at most 60 s; if one cannot be (a timeout, an error, the decision model offline), the command is held for your confirmation.",
+      "default": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "done"
+      ]
     },
     "routerEasyBelow": {
       "type": "number",

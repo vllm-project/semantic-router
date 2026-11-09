@@ -256,8 +256,8 @@ test('the tally and the newest decisions fit the rows the pane is given', { opti
   for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) await $.tool.check({ tool: 'Bash', input: { command: `git push origin b${n}` } })
 
   // Each entry is four rows here: its badge, its detail on two, and the answers it takes; the hint above the answers
-  // takes two rows at 60 columns.
-  const lines = await paneLines($, { columns: 60, rows: 30 })
+  // takes two rows at 60 columns, and the controls six.
+  const lines = await paneLines($, { columns: 60, rows: 35 })
 
   expect(lines).toContain(ANSWER_HINT)
   expect(lines.filter(text => text.startsWith(' ALLOWED  git')).length).toBe(2)
@@ -383,7 +383,8 @@ test('at 50 columns the cards of every new kind fall back to the one-line form',
 const ANSWER_HINT = 'Answers tune the thresholds when you run /vsr:calibrate.'
 
 // What the pane draws under its logo.
-const afterLogo = (lines: string[]) => lines.slice(lines.indexOf(LOGO_NAME) + 1)
+// The pane's lines past its top: the logo, and the controls, whose last row is guard's waits and its chosen pill.
+const afterLogo = (lines: string[]) => lines.slice(lines.findIndex(line => line.startsWith('guard waits')) + 2)
 
 type Test = Parameters<Parameters<typeof test>[1]>[0]
 type On = Parameters<Parameters<typeof test>[1]>[1]

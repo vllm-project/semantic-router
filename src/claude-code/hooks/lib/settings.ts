@@ -30,6 +30,25 @@ export type Display = 'normal' | 'quiet' | 'verbose'
 // only when the classifier is sure (balanced), or whenever it answers clearly enough to route at all (save).
 export type RouterGoal = 'quality' | 'balanced' | 'save'
 
+// The apps that hold up what Claude gets (an output, a command) while they wait for the decision model.
+export type WaitApp = 'redact' | 'shield' | 'guard'
+export const WAIT_APPS: readonly WaitApp[] = ['redact', 'shield', 'guard']
+// The wait options' values, in seconds or `done`: until the check finishes, and what it could not check is withheld.
+export const WAIT_CHOICES = ['1', '2', '3', 'done'] as const
+export type WaitChoice = (typeof WAIT_CHOICES)[number]
+// How long an app waits: milliseconds, or `done`, up to DONE_WAIT_MS.
+export type Wait = number | 'done'
+
+// The most a `done` wait holds up an output or a command.
+export const DONE_WAIT_MS = 60_000
+
+export const budgetOf = (wait: Wait) => (wait === 'done' ? DONE_WAIT_MS : wait)
+
+// The option's value for a wait, as the manifest lists it.
+export const choiceOf = (wait: Wait): WaitChoice => (wait === 'done' ? 'done' : (String(wait / 1000) as WaitChoice))
+
+const waitOf = (value: unknown): Wait => (value === 'done' ? 'done' : Number(value) * 1000)
+
 export type Thresholds = {
   router: Tiers & {
     minConfidence: number
@@ -48,6 +67,7 @@ export type Thresholds = {
 export type Settings = {
   runtime: Runtime
   apps: Readonly<Record<App, boolean>>
+  waits: Readonly<Record<WaitApp, Wait>>
   thresholds: Thresholds
   // `path` empty turns the log off; `calibrateEvery` 0 turns the reminder off.
   log: { path: string; calibrateEvery: number }
@@ -70,6 +90,7 @@ export function parseSettings(options: PluginOptions): Settings {
   return {
     runtime: { kind: options.runtime as RuntimeKind, url: String(options.runtimeUrl).trim(), token: String(options.runtimeToken).trim() },
     apps: Object.fromEntries(APP_NAMES.map(app => [app, options[app] === true])) as Record<App, boolean>,
+    waits: Object.fromEntries(WAIT_APPS.map(app => [app, waitOf(options[`${app}Wait`])])) as Record<WaitApp, Wait>,
     thresholds: {
       router: {
         easyBelow,

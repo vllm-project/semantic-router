@@ -1,13 +1,14 @@
-import type { EngineInterface, On } from 'claude-code'
+import type { ConfigValue, EngineInterface, On } from 'claude-code'
 
 import type { Decision } from '../types'
 import { readOffline } from './lib/classify'
 import { describe, named } from './lib/describe'
-import { band, dashboard, type Elements, overview, rowView } from './lib/draw'
+import { APP_NAMES } from './lib/apps'
+import { band, type Controls, controls, dashboard, type Elements, overview, rowView } from './lib/draw'
 import { type Answer, giveLabel, labelsFile, readLabels } from './lib/labels'
 import { markCalibrated, readCalibration } from './lib/log'
 import { BLOCKS_LOGO, loadLogo, type Logo, NO_LOGO, wordmark } from './lib/logo'
-import type { Display, Settings } from './lib/settings'
+import { choiceOf, type Display, type Settings, WAIT_APPS, WAIT_CHOICES, type WaitApp, type WaitChoice } from './lib/settings'
 import { readDecisions } from './lib/state'
 import { stamp } from './lib/env'
 import { answerKey } from './lib/text'
@@ -86,13 +87,64 @@ function under(elements: Elements, row: unknown, found: readonly Decision[], col
 export async function registerCommand($: EngineInterface) {
   await $.command.register({
     name: 'vsr',
-    description: 'Show what the vSR decision model decided and how it is set up, in a pane',
-    argumentHint: '[calibrated]',
+    description:
+      'Show what the vSR decision model decided and how it is set up, in a pane; /vsr <app> on|off turns an app on or off, /vsr <redact|shield|guard> wait 1|2|3|done sets how long it waits',
+    argumentHint: '[<app> on|off | <redact|shield|guard> wait 1|2|3|done]',
   })
+}
+
+// Changes one of vSR's options as the /config menu would; the plugin reloads with it. Says why in a toast when it
+// cannot, and returns whether it did.
+export async function setOption($: EngineInterface, field: string, value: ConfigValue) {
+  let why: string | undefined
+  try {
+    const rows = await $.config.list()
+    const row = rows.find(one => one.key === `vsr.${field}`) ?? rows.find(one => one.key.endsWith(`.${field}`))
+    why = row === undefined ? 'no such setting' : (await $.config.set({ key: row.key, value })).deny
+  } catch (error) {
+    why = String(error instanceof Error ? error.message : error)
+  }
+  if (why === undefined) return true
+  $.ui.toast(`vSR: could not change ${field}: ${why}`)
+  return false
+}
+
+const waitWords = (choice: WaitChoice) => (choice === 'done' ? 'waits until done' : `waits ${choice} s`)
+
+const USAGE = `vSR: /vsr opens the pane; /vsr <app> on|off (${APP_NAMES.join(', ')}); /vsr <${WAIT_APPS.join('|')}> wait ${WAIT_CHOICES.join('|')}.`
+
+// `/vsr <app> on|off` and `/vsr <app> wait <choice>`: the option it changes and the words that say so, or undefined.
+function changeOf(words: readonly string[]): { field: string; value: ConfigValue; said: string } | undefined {
+  const [app = '', verb, choice] = words
+  const isApp = APP_NAMES.some(one => one === app)
+  if (words.length === 2 && isApp && (verb === 'on' || verb === 'off')) return { field: app, value: verb === 'on', said: `${app} ${verb}` }
+  const waitApp = WAIT_APPS.find(one => one === app)
+  const waitChoice = WAIT_CHOICES.find(one => one === choice)
+  if (words.length === 3 && waitApp && verb === 'wait' && waitChoice) {
+    return { field: `${waitApp}Wait`, value: waitChoice, said: `${waitApp} ${waitWords(waitChoice)}` }
+  }
+  return undefined
+}
+
+// What the pane's controls do: each press changes one option.
+function controlsFor($: EngineInterface, settings: Settings): Controls {
+  return {
+    toggle: app => void setOption($, app, !settings.apps[app]),
+    wait: (app: WaitApp, choice: WaitChoice) => {
+      if (choice !== choiceOf(settings.waits[app])) void setOption($, `${app}Wait`, choice)
+    },
+  }
 }
 
 // The apps that stop checking while the decision model is offline (guard's fixed rules still hold).
 const OFFLINE_APPS: readonly App[] = ['guard', 'redact', 'shield', 'check']
+
+// Which apps stop checking while the model is offline, and which hold instead (set to wait until done).
+function offlineOf(settings: Settings) {
+  const on = OFFLINE_APPS.filter(app => settings.apps[app])
+  const isHolding = (app: App) => (app === 'redact' || app === 'shield' || app === 'guard') && settings.waits[app] === 'done'
+  return { notChecking: on.filter(app => !isHolding(app)), holding: on.filter(isHolding) }
+}
 
 export function registerView(on: On, settings: Settings) {
   // Blocks until the session start loads the logo; a reload starts over here.
@@ -100,13 +152,19 @@ export function registerView(on: On, settings: Settings) {
 
   // `/vsr calibrated` is what the calibration skill runs once it applied new thresholds.
   on('command.run', { command: 'vsr' }, async ($, e) => {
-    if (e.args.trim() === 'calibrated') {
+    const words = e.args.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    if (words.length === 1 && words[0] === 'calibrated') {
       const at = await stamp($)
       await markCalibrated($, at)
       return { text: `vSR: calibrated at ${at}.` }
     }
-    await $.ui.open({ id: PANE, title: PANE_TITLE })
-    return { text: 'vSR pane opened.' }
+    if (words.length === 0) {
+      await $.ui.open({ id: PANE, title: PANE_TITLE })
+      return { text: 'vSR pane opened.' }
+    }
+    const change = changeOf(words)
+    if (change === undefined) return { text: USAGE }
+    return { text: (await setOption($, change.field, change.value)) ? `vSR: ${change.said}.` : `vSR: ${change.said.split(' ')[0]} not changed.` }
   })
 
   on('ui.render', { component: 'ToolUse' }, async ($, e, next) => {
@@ -143,11 +201,12 @@ export function registerView(on: On, settings: Settings) {
     const list = await readDecisions($)
     const isOffline = await readOffline($)
     if (e.props.hasSurvey || e.props.maxRows < 1 || (list.length === 0 && !isOffline)) return next(e)
-    return band($.ui.resolve(e), list, e.props.bodyColumns, isOffline, e.props.maxRows, OFFLINE_APPS.filter(app => settings.apps[app]))
+    return band($.ui.resolve(e), list, e.props.bodyColumns, isOffline, e.props.maxRows, offlineOf(settings))
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const elements = $.ui.resolve(e)
+    const act = controlsFor($, settings)
     const list = await readDecisions($)
     const given = await readLabels($)
     const about = {
@@ -162,6 +221,7 @@ export function registerView(on: On, settings: Settings) {
       return (
         <Box flexDirection="column">
           {wordmark(elements, logo)}
+          {controls(elements, settings, act)}
           <Text dimColor>No decisions yet. Each one appears under the row it decided on.</Text>
           {overview(elements, about)}
         </Box>
@@ -170,6 +230,6 @@ export function registerView(on: On, settings: Settings) {
     // Answers given here are labels /vsr:calibrate fits the thresholds to; with the log off nothing keeps them.
     const labeling =
       (await labelsFile($, settings.log)) === undefined ? undefined : { given, answer: (d: Decision, answer: Answer) => void giveLabel($, settings.log, d, answer) }
-    return dashboard(elements, logo, list, e.props.bodyColumns, (e.viewport?.rows ?? 24) - PANE_CHROME_ROWS, about, labeling)
+    return dashboard(elements, logo, list, e.props.bodyColumns, (e.viewport?.rows ?? 24) - PANE_CHROME_ROWS, about, act, labeling)
   })
 }

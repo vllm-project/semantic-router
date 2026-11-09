@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { engine, paneText } from './kit'
+import { appToggles, engine } from './kit'
 import { parseSettings } from './lib/settings'
 
 test('numbers are held to their ranges, and the hard line never under the easy one', () => {
@@ -42,5 +42,5 @@ test('the runtime URL and token are trimmed', () => {
 test('the manifest defaults reach the hooks: check is off and the others are on', { options: {} }, async ($, on) => {
   engine(on, {})
 
-  expect(await paneText($, /^apps/)).toBe('apps  guard · shield · redact · router · escalate · check off')
+  expect(await appToggles($)).toEqual(['● guard', '○ check', '● shield', '● redact', '● router', '● escalate'])
 })

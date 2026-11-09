@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import {
+  appToggles,
   bandRow,
   engine,
   HOME,
@@ -399,7 +400,7 @@ test('an app turned off asks the classifier nothing and records nothing', {
   expect(reply.bodies).toEqual([])
   expect(reply.files).toEqual({})
   expect(await paneText($, /No decisions/)).toBe('No decisions yet. Each one appears under the row it decided on.')
-  expect(await paneText($, /^apps/)).toBe('apps  shield · redact · escalate · guard off · check off · router off')
+  expect(await appToggles($)).toEqual(['○ guard', '○ check', '● shield', '● redact', '○ router', '● escalate'])
 })
 
 test('a runtime token rides every request as a bearer header', { options: { runtimeToken: 'tok-123' } }, async ($, on) => {
@@ -442,7 +443,7 @@ test('a runtime that does not answer its health check toasts and draws the offli
   await clock.advance(0)
   const { texts, props } = await rowTree($, bandRow())
 
-  expect(reply.toasts).toEqual(["vSR: the decision model is not answering at http://127.0.0.1:8790/v1/decisions · vSR's checks step aside until it does; guard's fixed rules still hold · /vsr:setup"])
+  expect(reply.toasts).toEqual(["vSR: the decision model is not answering at http://127.0.0.1:8790/v1/decisions · vSR's checks step aside until it does (apps set to wait until done hold instead); guard's fixed rules still hold · /vsr:setup"])
   expect(texts[0]).toBe(' vSR   ○ model offline · guard, redact, shield not checking')
   expect(props[texts.indexOf('○')]).toMatchObject({ color: 'warning' })
   expect((await paneLines($)).filter(line => line.startsWith('model'))[0]).toContain('not answering')

@@ -18,11 +18,13 @@ export const APPS: Record<Section, { name: string; glyph: string; color: Color }
   off: { name: 'off', glyph: '○', color: 'inactive' },
 }
 
-// The looks of outcomes that are not an app's own: a kept subagent, an unverified answer, an allowed command.
+// The looks of outcomes that are not an app's own: a kept subagent, an unverified answer, an allowed command, an
+// output withheld from Claude.
 export const LOOKS = {
   kept: { glyph: '≈', color: 'suggestion' },
   unverified: { glyph: '!', color: 'warning' },
   allowed: { glyph: '›', color: 'success' },
+  withheld: { glyph: '⊘', color: 'warning' },
 } as const satisfies Record<string, { glyph: string; color: Color }>
 
 export const SECTIONS = Object.keys(APPS) as readonly Section[]
@@ -34,5 +36,5 @@ export function appOf(d: Decision): App {
   return d.kind === 'unavailable' ? d.app : d.kind
 }
 
-// Where a decision is listed: under its app, or with the skipped calls.
-export const sectionOf = (d: Decision): Section => (d.kind === 'unavailable' ? 'off' : appOf(d))
+// Where a decision is listed: under its app, or with the skipped calls; an output withheld is its app's own act.
+export const sectionOf = (d: Decision): Section => (d.kind === 'unavailable' && !d.withheld ? 'off' : appOf(d))

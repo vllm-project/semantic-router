@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { HOME, PANE, PUSH, type Reply, SPAWN, engine, paneLines } from './kit'
+import { HOME, isControl, PANE, PUSH, type Reply, SPAWN, engine, paneLines } from './kit'
 import { costOf } from './lib/prices'
 
 type Test = Parameters<Parameters<typeof test>[1]>[0]
@@ -13,7 +13,7 @@ async function pane($: Test) {
 
 async function buttonsIn($: Test) {
   const ui = await pane($)
-  const keys = (await ui.findAll({ type: 'Button' })).map(one => String(one.props.key))
+  const keys = (await ui.findAll({ type: 'Button' })).filter(one => !isControl(one.key)).map(one => String(one.props.key))
   await ui.unmount()
   return keys
 }
@@ -35,6 +35,7 @@ test('saying an allowed command was the wrong call labels it one to hold, beside
 
   expect(labelLines(reply)).toEqual([expect.objectContaining({ id: 'g1', app: 'guard', label: 'yes' })])
   expect(chosen).toMatchObject({ label: '✓ wrong call', variant: 'primary' })
+  expect(chosen).toMatchObject({ plain: true })
 })
 
 test('an allowed command takes two answers, right call and wrong call', async ($, on) => {

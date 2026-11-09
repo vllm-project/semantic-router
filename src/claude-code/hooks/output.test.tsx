@@ -136,14 +136,15 @@ test('redact fails open: a classifier that does not answer leaves the output as 
 
   const pending = $.tool.call({ tool: 'Read', file_path: TICKET_PATH, tool_use_id: 'r1' })
   await clock.advance(3000)
+  await clock.advance(2000)
   const ran = await pending
 
   expect(contentOf(ran)).toBe(TICKET)
   expect(await paneText($, /unchecked for personal data/, 200)).toBe(
-    'support/ticket-1042.txt went to Claude unchecked for personal data · the decision model took over 1.5 s · /vsr:setup checks it',
+    'support/ticket-1042.txt went to Claude unchecked for personal data · the decision model took over 3 s · /vsr:setup checks it',
   )
   expect(await paneText($, /unchecked for instructions/, 200)).toBe(
-    'support/ticket-1042.txt went to Claude unchecked for instructions · the decision model took over 1.5 s · /vsr:setup checks it',
+    'support/ticket-1042.txt went to Claude unchecked for instructions · the decision model took over 2 s · /vsr:setup checks it',
   )
 })
 
@@ -247,6 +248,7 @@ test('a piece that times out leaves the rest unchecked, and the card says how mu
 
   const pending = $.tool.call({ tool: 'Read', file_path: '/repo/app.log', tool_use_id: 'r1' })
   await clock.advance(3000)
+  await clock.advance(2000)
   const ran = await pending
   const { texts } = await rowTree($, toolRow(readCallOf('r1', '/repo/app.log')))
 
@@ -261,11 +263,12 @@ test('an output read only in part with nothing found shows PARTIAL, not a clean 
 
   const pending = $.tool.call({ tool: 'Read', file_path: '/repo/app.log', tool_use_id: 'r1' })
   await clock.advance(3000)
+  await clock.advance(2000)
   await pending
 
   expect(await paneText($, /PARTIAL/)).toBe(' PARTIAL  app.log')
   expect(await paneText($, /characters/, 120)).toBe(
-    'redact read the first 1,953 of 18,953 characters · the rest went to Claude unchecked · the decision model took over 1.5 s',
+    'redact read the first 1,953 of 18,953 characters · the rest went to Claude unchecked · the decision model took over 3 s',
   )
 })
 

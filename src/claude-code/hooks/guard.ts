@@ -1,15 +1,15 @@
 import type { EngineInterface, Hook, ToolCallResult } from 'claude-code'
 
 import type { Decision, Outcome, Risk } from '../types'
-import { ANSWER_MS, type Classified, classify, failureOf, isRecord, numberAt, type Reply } from './lib/classify'
-import type { Settings } from './lib/settings'
+import { type Classified, classify, failureOf, isRecord, numberAt, type Reply } from './lib/classify'
+import { budgetOf, type Settings } from './lib/settings'
 import { stamp } from './lib/env'
 import { alwaysHeld, firstOf, partsOf } from './lib/shell'
 import { record, updateDecision } from './lib/state'
 import { clip, fixed, oneLine, RISK_WORDS } from './lib/text'
 
 // Measured on vela3-lite on CPU: the runtime answers one part at a time, about 0.23 s each, so 12 parts fit in
-// the 3 s; a command of more is held rather than judged on its first parts alone.
+// the default 3 s wait; a command of more is held rather than judged on its first parts alone.
 const MAX_PARTS = 12
 const REASON_PART_WIDTH = 80
 
@@ -78,14 +78,15 @@ export async function guardCheck(
 
   // The runtime answers one request at a time, so the parts go one after another within one budget; once one
   // reaches the line the command is held whatever the rest score, and the rest are not asked.
+  const budget = budgetOf(settings.waits.guard)
   const started = await $.clock.now()
   const asked: { part: string; result: Classified<Guarded> }[] = []
   for (const part of parts.slice(0, MAX_PARTS)) {
-    const left = ANSWER_MS - ((await $.clock.now()) - started)
+    const left = budget - ((await $.clock.now()) - started)
     const result: Classified<Guarded> =
       left > 0
         ? await classify($, settings.runtime, `Tool: Bash\nCommand: ${part}`, GUARD_QUESTIONS, left, parseGuard)
-        : { ok: false, why: `no time left of the ${ANSWER_MS} ms`, latencyMs: 0 }
+        : { ok: false, why: `no time left of the ${budget} ms`, latencyMs: 0 }
     asked.push({ part, result })
     if (result.ok && result.value.review >= line) break
   }
@@ -109,11 +110,12 @@ export async function guardCheck(
   })
   const isRisky = scored !== undefined && scored.review >= line
   // Offline (the circuit breaker open): vSR steps aside, and only the fixed rules and a score already over the
-  // line hold. A part that timed out or got an error answer while the runtime is up was not checked: held.
-  // Cancelled with the call (the user pressed Esc): nothing will run, so nothing is held or recorded.
+  // line hold; a guard that waits until done holds instead. A part that timed out or got an error answer while the
+  // runtime is up was not checked: held. Cancelled with the call (the user pressed Esc): nothing will run, so
+  // nothing is held or recorded.
   if (failures.length > 0 && failures.every(failure => failure.cancelled) && !ruled && !isRisky) return next(e)
-  const isOffline = failures.length > 0 && failures.every(failure => failure.offline)
-  if (isOffline && !ruled && !isRisky) {
+  const isSteppingAside = failures.length > 0 && failures.every(failure => failure.offline) && settings.waits.guard !== 'done'
+  if (isSteppingAside && !ruled && !isRisky) {
     await record($, settings.log, {
       kind: 'unavailable',
       app: 'guard',
@@ -126,7 +128,7 @@ export async function guardCheck(
     })
     return next(e)
   }
-  const notChecked = isOffline ? 0 : failures.length
+  const notChecked = isSteppingAside ? 0 : failures.length
   const unchecked = overLimit + notChecked
   // A rule holds its part on its own; the classifier's score, when it gave one, is kept for the record (else 1).
   // With no part answered, the record names the first part not checked, at no score.

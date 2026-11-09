@@ -213,6 +213,17 @@ export async function paneLines($: Test, viewport = { columns: 60, rows: 40 }) {
   return lines
 }
 
+// The app toggles at the top of the pane, as they read: `● guard` on, `○ check` off.
+export async function appToggles($: Test) {
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const shown = (await ui.findAll({ type: 'Button' })).filter(one => one.key?.startsWith('toggle:')).map(one => one.text)
+  await ui.unmount()
+  return shown
+}
+
+// Whether a pane Button is one of the controls at its top.
+export const isControl = (key: string | undefined) => key !== undefined && /^(toggle|wait):/.test(key)
+
 const CALL = { isRunning: false, isErrored: false, isInterrupted: false } as const
 export const callOf = (id: string, command: string) => ({ tool_use_id: id, tool: 'Bash', input: { command }, ...CALL })
 export const readCallOf = (id: string, file_path: string) => ({ tool_use_id: id, tool: 'Read', input: { file_path }, ...CALL })

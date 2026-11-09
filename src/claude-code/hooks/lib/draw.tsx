@@ -6,7 +6,7 @@ import { type Body, type Described, describe, type Gauge, type TallyItem, tallyO
 import { ANSWERS, type Answer, answersFor } from './labels'
 import { BRAND, brand, type Logo, wordmark, wordmarkHeight } from './logo'
 import { holdMeter, type Segment, textWidth } from './meters'
-import { type Display, isCleartextRemote, type Settings } from './settings'
+import { choiceOf, type Display, isCleartextRemote, type Settings, WAIT_APPS, WAIT_CHOICES, type WaitApp, type WaitChoice } from './settings'
 import { clip, fixed, modelName } from './text'
 
 export type Elements = ReturnType<EngineInterface['ui']['resolve']>
@@ -209,10 +209,17 @@ function itemsWithin(items: readonly TallyItem[], columns: number, used: number)
 const BAND_LEAD = `${BRAND}  `
 
 // Offline the decision model's checks step aside, so the band says which: only guard's fixed rules still hold.
-const offlineItem = (checking: readonly App[]): TallyItem => ({
+// Offline, an app set to wait until done holds (the output, the command) instead of stepping aside.
+export type Offline = { notChecking: readonly App[]; holding: readonly App[] }
+
+const offlineItem = ({ notChecking, holding }: Offline): TallyItem => ({
   glyph: APPS.off.glyph,
   color: 'warning',
-  text: `model offline${checking.length > 0 ? ` · ${checking.join(', ')} not checking` : ''}`,
+  text: [
+    'model offline',
+    ...(notChecking.length > 0 ? [`${notChecking.join(', ')} not checking`] : []),
+    ...(holding.length > 0 ? [`${holding.join(', ')} holding`] : []),
+  ].join(' · '),
 })
 
 // A frame takes the line above and below it.
@@ -226,10 +233,10 @@ export function band(
   columns: number,
   isOffline: boolean,
   maxRows = FRAME_ROWS,
-  checking: readonly App[] = [],
+  offline: Offline = { notChecking: [], holding: [] },
 ) {
   const { Box, Text } = elements
-  const items = isOffline ? [offlineItem(checking), ...tallyOf(list)] : tallyOf(list)
+  const items = isOffline ? [offlineItem(offline), ...tallyOf(list)] : tallyOf(list)
   const isFramed = maxRows >= FRAME_ROWS && columns - CARD_CHROME >= MIN_FRAMED_COLUMNS
   const room = isFramed ? columns - CARD_CHROME : columns
   const line = (
@@ -248,7 +255,8 @@ export function band(
   )
 }
 
-// What the pane's foot says of the setup: where the classifier runs, the apps on, the lines in force, the last calibration.
+// What the pane's foot says of the setup: where the classifier runs, the lines in force, the last calibration (the
+// controls at its top show the apps and the waits).
 // `spend` is what routing cost against the session's model; `labeled`, the answers given this session.
 export type Overview = { settings: Settings; calibration: Calibration; isOffline: boolean; spend: Spend; labeled: number }
 
@@ -267,15 +275,12 @@ const tokenWords = ({ url, token }: Settings['runtime']) =>
   token === '' ? '' : isCleartextRemote(url) ? ' · token set, sent unencrypted' : ' · token set'
 
 function overviewRows(about: Overview) {
-  const { settings: { runtime, apps, thresholds: t, log }, calibration, isOffline, labeled } = about
+  const { settings: { runtime, thresholds: t, log }, calibration, isOffline, labeled } = about
   const routing = spendWords(about)
-  const on = APP_NAMES.filter(app => apps[app])
-  const off = APP_NAMES.filter(app => !apps[app])
   const since = `${calibration.since} ${calibration.since === 1 ? 'decision' : 'decisions'} since`
   return [
     ...(routing === undefined ? [] : [['routing', routing] as const]),
     ['model', `${runtime.kind} · ${runtime.url}${tokenWords(runtime)}${isOffline ? ' · not answering' : ''}`],
-    ['apps', [...on, ...off.map(app => `${app} off`)].join(' · ')],
     [
       'router',
       `easy below ${fixed(t.router.easyBelow)}, hard from ${fixed(t.router.hardFrom)} (of 2), sure from ${fixed(t.router.minConfidence)} · reasoning steps few below ${fixed(t.router.stepsLow)}, many from ${fixed(t.router.stepsHigh)}`,
@@ -312,6 +317,70 @@ export function overview(elements: Elements, about: Overview) {
 export const overviewHeight = (about: Overview, columns: number) =>
   1 + overviewRows(about).reduce((sum, [label, value]) => sum + Math.max(1, Math.ceil((label.length + 2 + value.length) / columns)), 0)
 
+// What pressing a control at the top of the pane does: turn an app on or off, or pick how long one waits.
+export type Controls = { toggle: (app: App) => void; wait: (app: WaitApp, choice: WaitChoice) => void }
+
+// Three apps to a row: with each hotkey drawn before its name (`1: ● guard`), six would not fit 60 columns.
+const APPS_PER_ROW = 3
+const CONTROL_LABEL_WIDTH = 'redact waits'.length + 2
+const WAIT_WORDS: Record<WaitChoice, string> = { '1': '1s', '2': '2s', '3': '3s', done: 'until done' }
+const APP_ROWS = Array.from({ length: Math.ceil(APP_NAMES.length / APPS_PER_ROW) }, (_, row) =>
+  APP_NAMES.slice(row * APPS_PER_ROW, (row + 1) * APPS_PER_ROW),
+)
+
+// The rows the controls take, their gap below included.
+export const CONTROLS_HEIGHT = APP_ROWS.length + WAIT_APPS.length + 1
+
+// The apps, each pressed (or its digit typed) to turn it on or off, then how long each protective app waits: the
+// chosen wait a pill in the app's colour, the rest dim and as wide, so the row does not shift when the pick moves.
+export function controls(elements: Elements, settings: Settings, act: Controls) {
+  const { Box, Button, Text } = elements
+  return (
+    <Box flexDirection="column" marginBottom={1}>
+      {APP_ROWS.map((row, index) => (
+        <Box flexDirection="row">
+          <Text>{(index === 0 ? 'apps' : '').padEnd(CONTROL_LABEL_WIDTH)}</Text>
+          <Box flexDirection="row" gap={2}>
+            {row.map(app => {
+              const isOn = settings.apps[app]
+              return (
+                <Button key={`toggle:${app}`} plain hotkey={String(APP_NAMES.indexOf(app) + 1)} dimColor={!isOn} onPress={() => act.toggle(app)}>
+                  {isOn ? <Text color={APPS[app].color}>{`● ${app}`}</Text> : `○ ${app}`}
+                </Button>
+              )
+            })}
+          </Box>
+        </Box>
+      ))}
+      {WAIT_APPS.map(app => {
+        const isOn = settings.apps[app]
+        const chosen = choiceOf(settings.waits[app])
+        return (
+          <Box flexDirection="row">
+            <Text dimColor={!isOn}>{`${app} waits`.padEnd(CONTROL_LABEL_WIDTH)}</Text>
+            <Box flexDirection="row" gap={1}>
+              {WAIT_CHOICES.map(choice => {
+                const words = ` ${WAIT_WORDS[choice]} `
+                return (
+                  <Button key={`wait:${app}:${choice}`} plain dimColor={!isOn || choice !== chosen} onPress={() => act.wait(app, choice)}>
+                    {choice === chosen ? (
+                      <Text backgroundColor={APPS[app].color} color="inverseText" dimColor={!isOn}>
+                        {words}
+                      </Text>
+                    ) : (
+                      words
+                    )}
+                  </Button>
+                )
+              })}
+            </Box>
+          </Box>
+        )
+      })}
+    </Box>
+  )
+}
+
 type Entry = { decision: Decision; described: Described; second: string; rows: number }
 
 // The answers given in the pane, and what pressing one does; absent where answers cannot be kept (the log is off).
@@ -346,6 +415,7 @@ export function dashboard(
   columns: number,
   rows: number,
   about: Overview,
+  act: Controls,
   labeling?: Labeling,
 ) {
   const { Box, Button, Text } = elements
@@ -367,9 +437,10 @@ export function dashboard(
   return (
     <Box flexDirection="column">
       {wordmark(elements, logo)}
+      {controls(elements, about.settings, act)}
       <Text>{tallyText(elements, tally)}</Text>
       {hint ? <Text dimColor>{ANSWER_HINT}</Text> : null}
-      {fitSections(sections, rows - wordmarkHeight(logo) - tallyRows - (hint ? Math.ceil(ANSWER_HINT.length / columns) : 0) - overviewHeight(about, columns)).map(({ section, count, entries }) => (
+      {fitSections(sections, rows - wordmarkHeight(logo) - CONTROLS_HEIGHT - tallyRows - (hint ? Math.ceil(ANSWER_HINT.length / columns) : 0) - overviewHeight(about, columns)).map(({ section, count, entries }) => (
         <Box flexDirection="column">
           <Text color={APPS[section].color} weight="bold">{`${APPS[section].glyph} ${APPS[section].name} · ${count}`}</Text>
           {entries.map(({ decision, described: { badge, color, subject, more = '', headline, detail } }) => {
@@ -393,8 +464,15 @@ export function dashboard(
                           key={`${decision.id}:${answer}`}
                           label={isChosen ? `✓ ${label}` : label}
                           variant={isChosen ? 'primary' : 'secondary'}
+                          plain
                           onPress={() => labeling.answer(decision, answer)}
-                        />
+                        >
+                          {isChosen ? (
+                            <Text backgroundColor="suggestion" color="inverseText">{` ✓ ${label} `}</Text>
+                          ) : (
+                            <Text dimColor>{` ${label} `}</Text>
+                          )}
+                        </Button>
                       )
                     })}
                   </Box>

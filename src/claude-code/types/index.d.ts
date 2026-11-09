@@ -85,6 +85,8 @@ export type Decision =
       cancelled?: true
       // Set when the classifier answered but read only the first `chars` of an output of `of` characters.
       read?: { chars: number; of: number }
+      // Set when the app waits until done and could not finish: the output was withheld from Claude, not let through.
+      withheld?: true
     }
   | {
       kind: 'guard'

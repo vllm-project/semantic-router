@@ -45,6 +45,17 @@ installed into `~/.local/share/vsr`, without sudo.
 vSR draws each decision under the row it is about, and keeps a one-line tally, in a dim frame,
 above the prompt. `/vsr` opens a pane with every decision of the session and the current setup.
 
+The top of the `/vsr` pane, under the logo, holds the controls, which you can change at any time:
+
+- `apps`: one entry per app, `● guard` when on and a dim `○ check` when off. Click one, or press its
+  digit (`1` to `6`) while the pane has focus, to turn it on or off.
+- `redact waits`, `shield waits`, `guard waits`: how long each protective app waits for the decision
+  model, `1s`, `2s`, `3s` or `until done`; the chosen one is highlighted in the app's colour. The row
+  of an app that is off is dim, and you can still pick its wait.
+
+The same changes work as commands: `/vsr redact off`, `/vsr check on`, `/vsr guard wait done`,
+`/vsr shield wait 3`. Each change is saved like one made in `/config`, and vSR reloads with it.
+
 By default (`display: normal`) vSR only interrupts when it matters:
 
 - **A card** when something needs your eyes:
@@ -53,6 +64,8 @@ By default (`display: normal`) vSR only interrupts when it matters:
   - `SHIELDED`: a file or page tried to instruct Claude; Claude was told to treat it as data.
   - `UNVERIFIED`: the answer claims things that what Claude read does not back. Look twice.
   - `REDACTED` with a note on unchecked characters: a long output was only partly checked in time.
+  - `WITHHELD`: redact or shield waits `until done` and could not finish its check, so Claude got
+    no output from that file or command. The card says why.
 - **One line in a dim frame**, set apart from Claude's reply, when vSR changed something, or the
   router decided on a subagent:
   - `ROUTED`: the subagent's model and effort, and how hard the task looked.
@@ -78,7 +91,8 @@ much, so their saving is overstated), and a model with no known price is left ou
 
 When the decision model cannot be reached, the tally says `model offline` and which checks stopped,
 a toast says so once, and vSR steps aside: Claude works as it would without vSR (guard's fixed rules
-still hold), and vSR tries the model again every minute.
+still hold), and vSR tries the model again every minute. An app that waits `until done` does not
+step aside: redact and shield withhold what they cannot check, and guard holds every command.
 
 ## How the router decides
 
@@ -106,8 +120,10 @@ Before a Bash command runs, vSR splits it into the commands it runs (at `&&`, `|
 and new lines; pipes, quotes including `$'...'`, `$(...)`, subshells, comments and heredoc bodies are
 respected) and asks about each part in turn whether it needs a person's review. When a part scores
 0.9 or more, Claude Code's permission dialog asks you, with the reason. A command is held too when a
-part could not be checked: it has more than 12 parts, or a part timed out or got an error answer. On
-a slow runtime that means more questions; vSR steps aside only while the decision model is offline.
+part could not be checked: it has more than 12 parts, or a part timed out or got an error answer. All
+parts share one wait, `guardWait` (3 s by default). On a slow runtime that means more questions; vSR
+steps aside only while the decision model is offline, and not even then when guard waits `until
+done`.
 
 Some commands are always held, whatever the score and even while the decision model is offline:
 recursive deletes of `/`, your home directory or a top-level system directory, `mkfs`, `dd` to a
@@ -137,8 +153,11 @@ as unencrypted. A remote runtime's token is kept in Claude Code's secure storage
 (`/plugin configure vsr@vllm-sr`), never in `settings.json`.
 
 Redact hides names, emails, phone numbers, card numbers, IP addresses, addresses, ID numbers and
-secrets (API keys, tokens, private keys, passwords in config files). On CPU it reads about the first
-4,000 characters of an output in its time, and says so when an output was longer. The output of a
+secrets (API keys, tokens, private keys, passwords in config files). It waits `redactWait` (3 s by
+default) for the decision model, and shield then waits `shieldWait` (2 s by default) on a `Read` or a
+fetched page. On CPU redact reads about the first 8,000 characters of an output in 3 s, and says so
+when an output was longer. With `until done` it reads the whole output (up to 128,000 characters
+and 60 s), and an output it cannot finish is withheld from Claude instead of passed on unchecked. The output of a
 command that failed is hidden in too: Claude reads the error with the values replaced. If Claude then
 tries to write a file with a redact tag such as `[email]` in place of a real value, vSR refuses the
 write and tells Claude to change only the lines it needs.
@@ -154,12 +173,23 @@ skill writes them, and `/plugin configure vsr@vllm-sr` edits them. The ones you 
 | `routerGoal` | `quality`, `balanced`, `save` | `balanced` |
 | `router`, `escalate`, `redact`, `shield`, `guard` | on or off | on |
 | `check` | on or off | off |
+| `redactWait` | `1`, `2`, `3` (seconds) or `done` | `3` |
+| `shieldWait` | `1`, `2`, `3` (seconds) or `done` | `2` |
+| `guardWait` | `1`, `2`, `3` (seconds) or `done` | `3` |
 | `logo` | `auto`, `image`, `smooth`, `blocks`, `off` | `auto` |
 | `logPath` | an absolute path or one under `~/`; empty turns the log off | `~/.claude/vsr/decisions.jsonl` |
 
 A log path under `~/.claude/` follows `CLAUDE_CONFIG_DIR` when it is set. A relative path is refused
 (it would put every project's commands into each project), and a file of your own already at the
 path is left as it is rather than replaced by the log.
+
+A wait in seconds is how long the app waits for the decision model before it lets through what it did
+not check: redact and shield pass the rest of the output on unchecked (`PARTIAL` or `SKIPPED`), and
+guard holds a command with a step it did not check. `done` waits until the check finishes, at most
+60 s. If it cannot finish (a timeout, an error answer, the decision model offline, or an output read
+only in part), redact and shield withhold the output from Claude (`WITHHELD`), and guard holds the
+command, even while the model is offline. A call you cancel is not withheld. The router, escalate and
+check keep their fixed waits (1.5 s, 1.5 s and 3 s).
 
 The thresholds (the options titled "Advanced") are measured defaults. After a few hundred
 decisions, `/vsr:calibrate` asks you about the decisions closest to each threshold (skipping the
@@ -174,12 +204,13 @@ and iTerm2 3.5 or later, and drawn in characters elsewhere (smooth wedge charact
 
 - **The tally says `model offline`.** The runtime is not answering at the URL `/vsr` shows. Run
   `/vsr:setup` to check and restart it; vSR picks it up within a minute of it answering again.
-- **`/vsr` still shows old settings after setup.** Run `/reload-plugins`; if the `model` and
-  `apps` rows still differ, restart Claude Code.
-- **Reads feel slower.** On an x86 CPU, redact and shield add up to 3 s to a long `Read` or Bash
-  output, and guard about 0.25 s per command part; an Apple Silicon CPU is several times slower, so
-  apps often step aside there and guard asks more often. A GPU runtime is several times faster; you
-  can also turn off apps you do not need.
+- **`/vsr` still shows old settings after setup.** Run `/reload-plugins`; if the `model` row or the
+  controls at the top still differ, restart Claude Code.
+- **Reads feel slower.** On an x86 CPU, redact and shield add up to their waits to a long output (by
+  default 5 s on a `Read`, 3 s on Bash output), and guard about 0.25 s per command part; an Apple
+  Silicon CPU is several times slower, so apps often step aside there and guard asks more often. A
+  GPU runtime is several times faster; you can also shorten a wait or turn off apps you do not need
+  at the top of `/vsr`.
 - **A subagent stayed on your model.** The router was not sure enough (`/vsr` shows its confidence),
   or `routerGoal` is `quality`.
 

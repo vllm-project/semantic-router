@@ -43,6 +43,9 @@ const SKIPPED: Record<App, (subject: string) => string> = {
   escalate: () => 'pushback not checked',
 }
 
+// What a withheld output was not checked for.
+const WITHHELD_FOR: Partial<Record<App, string>> = { redact: 'personal data', shield: 'instructions' }
+
 type Look = Omit<Described, 'weight' | 'brief' | 'line'>
 type Kind<D extends Decision> = {
   look: (d: D) => Look
@@ -330,6 +333,18 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
   },
   unavailable: {
     look: d => {
+      if (d.withheld) {
+        const headline = `${oneLine(d.subject)} withheld from Claude: not checked for ${WITHHELD_FOR[d.app] ?? d.app}`
+        return {
+          app: d.app,
+          badge: 'WITHHELD',
+          color: LOOKS.withheld.color,
+          headline,
+          detail: `${d.why} · ${d.app} waits until done · /vsr:setup checks it`,
+          subject: oneLine(d.subject),
+          inline: { kind: 'card', ...LOOKS.withheld, title: headline, note: d.why },
+        }
+      }
       if (d.read) {
         const headline = `${d.app} read the first ${d.read.chars.toLocaleString('en-US')} of ${d.read.of.toLocaleString('en-US')} characters`
         const note = `the rest went to Claude unchecked · ${d.why}`
@@ -354,7 +369,8 @@ const KINDS: { [K in Decision['kind']]: Kind<Extract<Decision, { kind: K }>> } =
         inline: { kind: 'card', glyph: APPS.off.glyph, color: APPS.off.color, title: headline, note: d.why },
       }
     },
-    weight: 'notice',
+    // A withheld output is a card: Claude got nothing, and the person decides what to change.
+    weight: d => (d.withheld ? 'act' : 'notice'),
     brief: d => (d.read ? 'the rest went to Claude unchecked' : d.why),
   },
 }
@@ -390,6 +406,7 @@ const heldOutcomes = (list: readonly Decision[]) => {
 const TALLIES: readonly { glyph: string; color: Color; word: string; count: (list: readonly Decision[]) => number; more?: (list: readonly Decision[]) => string }[] = [
   { ...APPS.guard, word: 'held', count: list => list.filter(d => d.kind === 'guard' && d.verdict === 'ask').length, more: heldOutcomes },
   { ...LOOKS.unverified, word: 'unverified', count: list => list.filter(d => d.kind === 'check' && d.verdict === 'unverified').length },
+  { ...LOOKS.withheld, word: 'withheld', count: list => list.filter(d => d.kind === 'unavailable' && d.withheld).length },
   { ...APPS.shield, word: 'shielded', count: list => list.filter(d => d.kind === 'shield').length },
   { ...APPS.redact, word: 'hidden', count: list => list.reduce((sum, d) => sum + (d.kind === 'redact' ? hiddenCount(d.counts) : 0), 0) },
   { ...APPS.router, word: 'routed', count: list => list.filter(d => d.kind === 'route').length },
@@ -397,7 +414,7 @@ const TALLIES: readonly { glyph: string; color: Color; word: string; count: (lis
   { ...LOOKS.kept, word: 'kept', count: list => list.filter(d => d.kind === 'keep').length },
   { ...LOOKS.allowed, word: 'allowed', count: list => list.filter(d => d.kind === 'guard' && d.verdict === 'pass').length },
   { ...APPS.check, word: 'grounded', count: list => list.filter(d => d.kind === 'check' && d.verdict === 'grounded').length },
-  { ...APPS.off, word: 'skipped', count: list => list.filter(d => d.kind === 'unavailable' && !d.offline).length },
+  { ...APPS.off, word: 'skipped', count: list => list.filter(d => d.kind === 'unavailable' && !d.offline && !d.withheld).length },
 ]
 
 export function tallyOf(list: readonly Decision[]): TallyItem[] {
