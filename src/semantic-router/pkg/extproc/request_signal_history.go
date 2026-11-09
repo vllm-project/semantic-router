@@ -22,6 +22,7 @@ type signalConversationHistory struct {
 	contextTextBytes         int
 	contextEquivalentBytes   int
 	contextHasNonText        bool
+	contextReserveTokens     int
 
 	// Conversation-shape facts for the conversation signal family.
 	hasDeveloperMessage       bool
@@ -61,6 +62,7 @@ func signalConversationHistoryFromSnapshot(result *requestSignalSnapshot) signal
 		contextTextBytes:          result.ContextTextBytes,
 		contextEquivalentBytes:    result.ContextEquivalentBytes,
 		contextHasNonText:         result.ContextHasNonText,
+		contextReserveTokens:      result.ContextReserveTokens,
 		hasDeveloperMessage:       result.HasDeveloperMessage,
 		userMessageCount:          result.UserMessageCount,
 		assistantMessageCount:     result.AssistantMessageCount,

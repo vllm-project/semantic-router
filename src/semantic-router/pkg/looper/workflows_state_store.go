@@ -139,12 +139,12 @@ func newWorkflowToolStateStoreFromConfig(flow config.FlowRuntimeConfig) workflow
 	}
 }
 
-func normalizeWorkflowToolStateForStore(state *workflowPendingToolState) {
+func normalizeWorkflowToolStateForStore(state *workflowPendingToolState, now time.Time) {
 	if state.ID == "" {
 		state.ID = newWorkflowToolStateID()
 	}
 	if state.CreatedAt.IsZero() {
-		state.CreatedAt = time.Now().UTC()
+		state.CreatedAt = now.UTC()
 	}
 	state.RecipeName = string(normalizeWorkflowRecipeName(config.RecipeName(state.RecipeName)))
 	state.ClaimToken = ""
@@ -272,11 +272,15 @@ type workflowMemoryToolStateStore struct {
 	done         chan struct{}
 	closeOnce    sync.Once
 	wg           sync.WaitGroup
+	// now is the store's time source for claim leases and TTL. Tests replace
+	// it with a manual clock instead of sleeping.
+	now func() time.Time
 }
 
 func newWorkflowMemoryToolStateStore(ttl time.Duration) *workflowMemoryToolStateStore {
 	s := &workflowMemoryToolStateStore{
 		ttl:    ttl,
+		now:    time.Now,
 		states: map[string]memoryStateEntry{},
 		done:   make(chan struct{}),
 	}
@@ -293,16 +297,16 @@ func (s *workflowMemoryToolStateStore) sweepLoop() {
 		select {
 		case <-s.done:
 			return
-		case now := <-ticker.C:
+		case <-ticker.C:
 			s.mu.Lock()
-			s.cleanupLocked(now.UTC())
+			s.cleanupLocked(s.now().UTC())
 			s.mu.Unlock()
 		}
 	}
 }
 
 func (s *workflowMemoryToolStateStore) Put(_ context.Context, state *workflowPendingToolState) (string, error) {
-	normalizeWorkflowToolStateForStore(state)
+	normalizeWorkflowToolStateForStore(state, s.now())
 	// Marshal early to enforce payload cap before touching the map.
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -313,7 +317,7 @@ func (s *workflowMemoryToolStateStore) Put(_ context.Context, state *workflowPen
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := time.Now().UTC()
+	now := s.now().UTC()
 	s.cleanupLocked(now)
 	key, err := workflowNamespacedStateID(config.RecipeName(state.RecipeName), state.ID)
 	if err != nil {
@@ -353,7 +357,7 @@ func (s *workflowMemoryToolStateStore) Replace(_ context.Context, recipe config.
 		return fmt.Errorf("workflow state %q replace id mismatch", id)
 	}
 	state.ID = id
-	normalizeWorkflowToolStateForStore(state)
+	normalizeWorkflowToolStateForStore(state, s.now())
 	data, err := json.Marshal(state)
 	if err != nil {
 		return fmt.Errorf("marshal workflow state: %w", err)
@@ -393,7 +397,7 @@ func (s *workflowMemoryToolStateStore) Claim(_ context.Context, recipe config.Re
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := time.Now().UTC()
+	now := s.now().UTC()
 	s.cleanupLocked(now)
 	if unscoped, ok := s.states[id]; ok && workflowStateRecipeMissing(unscoped.state) {
 		return nil, false, errWorkflowStateUnscoped
@@ -438,7 +442,7 @@ func (s *workflowMemoryToolStateStore) Renew(_ context.Context, recipe config.Re
 	if !ok || entry.claimToken != token {
 		return errWorkflowStateClaimNotHeld(id)
 	}
-	entry.claimedUntil = time.Now().UTC().Add(currentWorkflowStateClaimLease())
+	entry.claimedUntil = s.now().UTC().Add(currentWorkflowStateClaimLease())
 	s.states[key] = entry
 	return nil
 }
@@ -515,6 +519,9 @@ type workflowFileToolStateStore struct {
 	closeOnce    sync.Once
 	wg           sync.WaitGroup
 	currentBytes int64
+	// now is the store's time source for claim leases and TTL. Tests replace
+	// it with a manual clock instead of sleeping.
+	now func() time.Time
 }
 
 func cleanupStateStoreDirAndGetInitialBytes(storeDir string) int64 {
@@ -572,8 +579,8 @@ func (s *workflowFileToolStateStore) sweepLoop() {
 		select {
 		case <-s.done:
 			return
-		case now := <-ticker.C:
-			s.cleanupExpired(now.UTC())
+		case <-ticker.C:
+			s.cleanupExpired()
 		}
 	}
 }
@@ -590,7 +597,7 @@ func workflowStateFileDir(dir string) string {
 }
 
 func (s *workflowFileToolStateStore) Put(_ context.Context, state *workflowPendingToolState) (string, error) {
-	normalizeWorkflowToolStateForStore(state)
+	normalizeWorkflowToolStateForStore(state, s.now())
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return "", fmt.Errorf("create workflow state directory: %w", err)
 	}
@@ -611,7 +618,7 @@ func (s *workflowFileToolStateStore) Put(_ context.Context, state *workflowPendi
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	now := time.Now().UTC()
+	now := s.now().UTC()
 	s.cleanupExpiredLocked(now)
 
 	var oldSize int64
@@ -651,7 +658,7 @@ func (s *workflowFileToolStateStore) Replace(_ context.Context, recipe config.Re
 		return fmt.Errorf("workflow state %q replace id mismatch", id)
 	}
 	state.ID = id
-	normalizeWorkflowToolStateForStore(state)
+	normalizeWorkflowToolStateForStore(state, s.now())
 	path, err := s.pathForID(recipe, id)
 	if err != nil {
 		return err
@@ -683,7 +690,7 @@ func (s *workflowFileToolStateStore) Claim(_ context.Context, recipe config.Reci
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := time.Now().UTC()
+	now := s.now().UTC()
 	s.cleanupExpiredLocked(now)
 
 	if _, namespacedErr := os.Stat(path); errors.Is(namespacedErr, os.ErrNotExist) {
@@ -748,7 +755,7 @@ func (s *workflowFileToolStateStore) Renew(_ context.Context, recipe config.Reci
 	if state.ClaimToken != token {
 		return errWorkflowStateClaimNotHeld(id)
 	}
-	state.ClaimedAt = time.Now().UTC()
+	state.ClaimedAt = s.now().UTC()
 	return s.writeStateLocked(path, state)
 }
 
@@ -901,10 +908,10 @@ func (s *workflowFileToolStateStore) stopSweeper() error {
 	return nil
 }
 
-func (s *workflowFileToolStateStore) cleanupExpired(now time.Time) {
+func (s *workflowFileToolStateStore) cleanupExpired() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.cleanupExpiredLocked(now)
+	s.cleanupExpiredLocked(s.now().UTC())
 }
 
 func (s *workflowFileToolStateStore) cleanupExpiredLocked(now time.Time) {
@@ -1026,7 +1033,7 @@ func newWorkflowRedisToolStateStore(cfg config.WorkflowStateRedisConfig, ttl tim
 }
 
 func (s *workflowRedisToolStateStore) Put(ctx context.Context, state *workflowPendingToolState) (string, error) {
-	normalizeWorkflowToolStateForStore(state)
+	normalizeWorkflowToolStateForStore(state, time.Now())
 	data, err := json.Marshal(state)
 	if err != nil {
 		return "", fmt.Errorf("marshal workflow state: %w", err)
@@ -1059,7 +1066,7 @@ func (s *workflowRedisToolStateStore) Replace(ctx context.Context, recipe config
 		return fmt.Errorf("workflow state %q replace id mismatch", id)
 	}
 	state.ID = id
-	normalizeWorkflowToolStateForStore(state)
+	normalizeWorkflowToolStateForStore(state, time.Now())
 	data, err := json.Marshal(state)
 	if err != nil {
 		return fmt.Errorf("marshal workflow state: %w", err)

@@ -200,6 +200,7 @@ class ManualCIFeedbackTests(unittest.TestCase):
 
     def test_stale_merge_reports_branch_update_instead_of_only_waiting_for_plan(self):
         self.client.base_ref["object"]["sha"] = "f" * 40
+        self.client.merge_ancestor = "unrelated" * 4
         with self.assertRaises(manual_ci.ManualCIError) as error:
             manual_ci.authorize_with_feedback(self.client, self.event)
         self.assertEqual(error.exception.reason, "revision")
