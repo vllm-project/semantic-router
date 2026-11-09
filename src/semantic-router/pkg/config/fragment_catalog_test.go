@@ -107,19 +107,24 @@ func TestConfigFragmentsAreValidYAML(t *testing.T) {
 	}
 }
 
-func TestClassifierFragmentsCoverRemoteBackendTypes(t *testing.T) {
+func TestClassifierFragmentsCoverRemoteProviders(t *testing.T) {
 	root := repoRootFromTestFile(t)
 	fragments := map[string]string{
-		ClassifierSignalTypeLLM:                "label-score.yaml",
-		ClassifierSignalTypeSequenceClassifier: "sequence-label-score.yaml",
+		OpenAIChatProvider: "label-score.yaml",
+		ClassifyProvider:   "sequence-label-score.yaml",
 	}
-	for classifierType, filename := range fragments {
+	for provider, filename := range fragments {
 		path := filepath.Join(root, "config", "fragments", "signal", "classifier", filename)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("failed to read classifier fragment %s: %v", path, err)
 		}
 		var fragment struct {
+			Global struct {
+				ModelCatalog struct {
+					Deployments map[string]ModelDeployment `yaml:"deployments"`
+				} `yaml:"model_catalog"`
+			} `yaml:"global"`
 			Routing struct {
 				Signals struct {
 					Classifiers []ClassifierSignalRule `yaml:"classifiers"`
@@ -129,9 +134,9 @@ func TestClassifierFragmentsCoverRemoteBackendTypes(t *testing.T) {
 		if err := yaml.Unmarshal(data, &fragment); err != nil {
 			t.Fatalf("failed to parse classifier fragment %s: %v", path, err)
 		}
-		if len(fragment.Routing.Signals.Classifiers) != 1 ||
-			fragment.Routing.Signals.Classifiers[0].Type != classifierType {
-			t.Fatalf("classifier fragment %s must contain exactly one %q rule", path, classifierType)
+		rules := fragment.Routing.Signals.Classifiers
+		if len(rules) != 1 || fragment.Global.ModelCatalog.Deployments[rules[0].Deployment].Provider != provider {
+			t.Fatalf("classifier fragment %s must contain exactly one rule answered by a %s deployment", path, provider)
 		}
 	}
 }

@@ -14,6 +14,13 @@ config:
       model: MoM
     models:
       - name: MoM
+        pricing:
+          currency: USD
+          prompt_per_1m: 2
+          cached_input_per_1m: 1
+          cache_write_per_1m: 4
+          cache_write_1h_per_1m: 8
+          completion_per_1m: 10
         # The selected backend accepts Anthropic Messages. Keep this explicit:
         # the Router owns semantic mutation and emits the backend-native wire
         # contract, while the gateway owns transport and transparent delivery.
@@ -31,6 +38,21 @@ config:
           score: 0.5
   routing:
     decisions:
+      - name: provider_cache_cost
+        priority: 90
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: provider_cache_cost
+        modelRefs:
+          - model: MoM
+            use_reasoning: false
+        plugins:
+          - type: router_replay
+            configuration:
+              enabled: true
+              max_records: 100
       - name: json_prompt_keyword
         description: Distinguish original JSON text from the bounded signal view
         priority: 100
@@ -90,6 +112,10 @@ config:
             use_reasoning: false
     signals:
       keywords:
+        - name: provider_cache_cost
+          operator: OR
+          keywords:
+            - "__mock_provider_cache_cost__"
         - name: json_prompt_marker
           operator: OR
           keywords:
@@ -129,6 +155,9 @@ config:
       clear_route_cache: true
       strategy: priority
     services:
+      router_replay:
+        store_backend: memory
+        async_writes: false
       response_api:
         enabled: true
         store_backend: memory

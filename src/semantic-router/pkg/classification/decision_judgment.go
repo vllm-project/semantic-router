@@ -20,6 +20,8 @@ type decisionJudgment struct {
 	attached   *serving.Runtime
 	plan       modelservice.TaskPlan
 	scan       int
+	// remote is set for a systemone deployment.
+	remote bool
 }
 
 func newDecisionJudgment(models *classifierModelRuntime, consumer, taskID string, question *modelservice.Question) (*decisionJudgment, error) {
@@ -30,26 +32,27 @@ func newDecisionJudgment(models *classifierModelRuntime, consumer, taskID string
 	if !available {
 		return nil, nil
 	}
-	name, deployment, ok, err := models.cfg.DecisionModelDeployment()
-	generic := false
-	if spec, explicit := models.plan.Lookup(models.recipe, consumer); explicit {
-		if !spec.Deployment.IsModelRuntime() || spec.Binding.Head != "" || spec.Binding.OperatingPoint != nil {
-			return nil, nil
-		}
-		name, deployment, ok, err = spec.Binding.Deployment, spec.Deployment, true, nil
-		generic = spec.Binding.Contract == config.DecisionTaskContract
-	} else if selected, resource, found, resolveErr := models.cfg.ImplicitTaskDeployment(consumer); found {
-		name, deployment, ok, err = selected, resource, found, resolveErr
-	}
+	spec, ok, err := models.task(consumer)
 	if !ok || err != nil {
 		return nil, err
 	}
-	j := &decisionJudgment{deployment: name, decider: decider, scan: deployment.ScanBudget()}
+	name, deployment := spec.Binding.Deployment, spec.Deployment
+	if !deployment.IsModelRuntime() && !deployment.IsSystemOne() {
+		return nil, nil
+	}
+	if spec.Binding.Head != "" || spec.Binding.OperatingPoint != nil {
+		return nil, nil
+	}
+	_, explicit := models.plan.Lookup(models.recipe, consumer)
+	generic := explicit && spec.Binding.Contract == config.DecisionTaskContract
+	j := &decisionJudgment{deployment: name, decider: decider, scan: deployment.ScanBudget(), remote: deployment.IsSystemOne()}
 	card, ready := modelservice.ModelCard{}, false
 	// Explicit generic tasks have a model-independent adapter. Implicit and
 	// native bindings still require metadata to select their precise adapter;
 	// readiness must not silently choose between PII verdicts and token spans.
-	if generic && !deployment.Managed() {
+	// A systemone deployment's card is the one its API lists while the
+	// generation prepares.
+	if generic && !deployment.Managed() && !deployment.IsSystemOne() {
 		j.attached = models.runtime
 		card, ready = models.runtime.CurrentDeploymentCard(name)
 	} else {
@@ -69,8 +72,7 @@ func newDecisionJudgment(models *classifierModelRuntime, consumer, taskID string
 	// A precise specialist may support only Span. Keep its existing adapter
 	// unless the author explicitly selected the generic verdict contract.
 	if ready && !card.Answers("noul") && (taskID == "pii_presence" || taskID == "hallucination") {
-		spec, explicit := models.plan.Lookup(models.recipe, consumer)
-		if (!explicit || spec.Binding.Contract != config.DecisionTaskContract) && (card.Answers("span") || card.HasPreset("pii") || card.HasPreset("halu")) {
+		if !generic && (card.Answers("span") || card.HasPreset("pii") || card.HasPreset("halu")) {
 			return nil, nil
 		}
 	}
@@ -143,9 +145,18 @@ func (j *decisionJudgment) askPlans(ctx context.Context, input modelservice.Requ
 	return response, err
 }
 
+// explicitSpanBinding reports whether the configuration writes a
+// token_spans.v1 contract for consumer, which demands positions.
 func explicitSpanBinding(models *classifierModelRuntime, consumer string) bool {
 	spec, explicit := models.plan.Lookup(models.recipe, consumer)
-	return explicit && spec.Binding.Contract == config.RemoteClassifierContractTokenSpans
+	return explicit && spec.Binding.Contract == config.RemoteClassifierContractTokenSpans && !spec.Binding.ContractImplied()
+}
+
+// authoredVerdictBinding reports whether the configuration writes the
+// decision.v1 contract for consumer, which asks for a yes/no verdict.
+func authoredVerdictBinding(models *classifierModelRuntime, consumer string) bool {
+	spec, explicit := models.plan.Lookup(models.recipe, consumer)
+	return explicit && spec.Binding.Contract == config.DecisionTaskContract && !spec.Binding.ContractImplied()
 }
 
 func decisionAnswerError(code string) error {

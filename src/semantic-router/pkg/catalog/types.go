@@ -212,9 +212,9 @@ type ProviderInstance struct {
 	// ProviderInstance an internal materialization contract.
 	AuthPrefixSet bool   `json:"-" yaml:"-"`
 	ChatPath      string `json:"chat_path,omitempty" yaml:"chat_path,omitempty"`
-	// OpenAICompatGateway marks a vLLM-typed instance that is actually an
-	// OpenAI-compatible relay, carried through to the provider profile.
-	OpenAICompatGateway bool `json:"openai_compat_gateway,omitempty" yaml:"openai_compat_gateway,omitempty"`
+	// TrustedGateway receives the request's trusted gateway credential in
+	// place of a configured credential.
+	TrustedGateway bool `json:"trusted_gateway,omitempty" yaml:"trusted_gateway,omitempty"`
 }
 
 // ModelProviderBinding binds a request-facing model alias to one provider

@@ -45,3 +45,41 @@ func TestReplayPIIEvidenceRequiresCompleteCleanClassification(t *testing.T) {
 		})
 	}
 }
+
+func TestReplayPromptEvidenceCoversOnlyACompleteCleanReadOfThePrompt(t *testing.T) {
+	const prompt = "Summarize the meeting agenda."
+	for _, test := range []struct {
+		name     string
+		entities []tasks.TokenEntity
+		err      error
+		rules    bool
+		clean    bool
+		complete bool
+	}{
+		{name: "clean", rules: true, clean: true, complete: true},
+		{name: "personal data", rules: true, complete: true, entities: []tasks.TokenEntity{piiEntity("EMAIL", "alice@example.test", 0, 18, 0.99)}},
+		{name: "read failed", rules: true, err: errors.New("synthetic backend unavailable")},
+		{name: "read incomplete", rules: true, err: ErrTokenSpansTruncated},
+		{name: "no rules"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			classifier, _, model := newTestPIIClassifier()
+			classifier.Config.PIIModel.OnError = config.OnErrorAllow
+			classifier.Config.PIIModel.OnUnscanned = config.OnErrorAllow
+			if test.rules {
+				classifier.Config.PIIRules = []config.PIIRule{{Name: "privacy", Threshold: 0.7}}
+			}
+			model.setMockResponse(prompt, test.entities, test.err)
+			evidence := classifier.ReplayPromptEvidence(t.Context(), prompt)
+			if evidence.CoversClean("request", prompt) != test.clean {
+				t.Fatalf("clean=%v want=%v (%+v)", evidence.CoversClean("request", prompt), test.clean, evidence)
+			}
+			if (evidence.Coverage == "complete") != test.complete {
+				t.Fatalf("coverage=%q, want complete=%v", evidence.Coverage, test.complete)
+			}
+			if evidence.CoversClean("request", prompt+" ") {
+				t.Fatal("evidence must cover exactly the prompt that was read")
+			}
+		})
+	}
+}

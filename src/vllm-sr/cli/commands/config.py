@@ -3,19 +3,29 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
 
 import yaml
 
-from cli.commands.validate import collect_config_errors
+from cli import router_validation
+from cli.commands.runtime_paths import resolve_state_root_dir
+from cli.commands.validate import (
+    ask_router,
+    collect_config_errors,
+    router_check_line,
+    router_refusal,
+    router_warnings,
+)
 from cli.config_generator import generate_envoy_config_from_user_config
 from cli.config_migration import migrate_config_data
 from cli.config_migration_notes import MigrationNotes
 from cli.config_schema import schema_document
 from cli.config_schema.views import parse_surface_selector, schema_view
 from cli.config_yaml import safe_load_router_config
+from cli.gateway_mode import GATEWAY_ENV, resolve_gateway
 from cli.parser import (
     ConfigParseError,
     load_config_file,
@@ -23,10 +33,12 @@ from cli.parser import (
     parse_user_config_data,
 )
 from cli.router_management_client import RouterManagementClient
+from cli.router_validation import ROUTER_BINARY_ENV, RouterVerdict
 from cli.terminal import echo, fields, heading, success, warning
 from cli.utils import get_logger
 from cli.validator import (
     print_validation_errors,
+    print_validation_warnings,
     validate_user_config,
 )
 
@@ -157,7 +169,7 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
 
     if config_type == "router":
         # Router now reads canonical config.yaml directly.
-        echo(Path(config_path).read_text(), nl=False)
+        echo(Path(config_path).read_text(encoding="utf-8"), nl=False)
 
     elif config_type == "envoy":
         # Generate envoy config
@@ -174,7 +186,7 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
             )
 
             # Read and print
-            with open(temp_path) as f:
+            with open(temp_path, encoding="utf-8") as f:
                 echo(f.read(), nl=False)
 
             # Clean up
@@ -189,6 +201,7 @@ def migrate_config_command(
     config_path: str = "config.yaml",
     output_path: str | None = None,
     force: bool = False,
+    offline: bool = False,
 ) -> Path:
     """Migrate a legacy or mixed config file to canonical v0.3 YAML."""
 
@@ -206,6 +219,7 @@ def migrate_config_command(
     notes = MigrationNotes()
     migrated = migrate_config_data(data, notes)
     rendered = yaml.safe_dump(migrated, sort_keys=False, allow_unicode=True)
+    rendered = _migrate_model_resources(rendered, config_path, notes, offline=offline)
 
     destination = (
         Path(output_path)
@@ -217,7 +231,9 @@ def migrate_config_command(
         log.error("Use --force to overwrite the destination")
         sys.exit(1)
 
-    _validate_migrated_config(rendered, config_path)
+    verdict, unavailable = _validate_migrated_config(
+        rendered, config_path, offline=offline
+    )
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(rendered, encoding="utf-8")
@@ -230,6 +246,15 @@ def migrate_config_command(
             ("Output", destination),
         )
     )
+    echo(
+        router_check_line(
+            verdict,
+            unavailable,
+            f"set {ROUTER_BINARY_ENV}, or run `vllm-sr config validate` on the "
+            "output, to ask it",
+        )
+    )
+    print_validation_warnings(router_warnings(verdict))
     _print_migration_notes(notes)
     return destination
 
@@ -246,12 +271,67 @@ def _print_migration_notes(notes: MigrationNotes) -> None:
         warning(f"{note.path}: {note.message}")
 
 
-def _validate_migrated_config(rendered: str, config_path: str) -> None:
+def _migrate_model_resources(
+    rendered: str, config_path: str, notes: MigrationNotes, *, offline: bool
+) -> str:
+    """The document with its deprecated model fields in the forms that replace
+    them, as the Router reads them.
+
+    The Router owns the model resources, so it writes them: the CLI's output
+    goes to a local Router once with -migrate-config. Without one (or with
+    offline) the model fields stay, and the notes say how to rewrite them.
+    """
+
+    path = "global.model_catalog"
+    if offline:
+        notes.changed(
+            path,
+            "model fields were not checked for deprecated forms (--offline); "
+            "run `vllm-sr config migrate` where a Router can run to rewrite them",
+        )
+        return rendered
+    verdict, unavailable = ask_router(
+        lambda: _migrated_verdict(rendered, config_path, migrate=True)
+    )
+    if verdict is None:
+        notes.changed(
+            path,
+            f"model fields were not checked for deprecated forms: {unavailable}; "
+            f"set {ROUTER_BINARY_ENV} to a Router binary to rewrite them",
+        )
+        return rendered
+    if not verdict.valid or verdict.migration_error or not verdict.migrated:
+        if verdict.migration_error:
+            notes.action(
+                path,
+                f"the Router could not rewrite the deprecated model fields: {verdict.migration_error}",
+            )
+        return rendered
+    if verdict.migrated != rendered:
+        notes.changed(
+            path,
+            "deprecated model fields are written as the deployments, bindings "
+            "and rule deployments the Router reads them as",
+        )
+    for note in verdict.kept:
+        # migration_action says what to do for the file to work as before;
+        # every other note is a deprecated field with no replacement.
+        message = (
+            note.message if note.code == "migration_action" else f"kept: {note.message}"
+        )
+        notes.action(note.field or path, message)
+    return verdict.migrated
+
+
+def _validate_migrated_config(
+    rendered: str, config_path: str, *, offline: bool = False
+) -> tuple[RouterVerdict | None, str]:
     """Hold migrated output to the `config validate` standard before writing.
 
     The rendered YAML is reloaded so the checks see exactly what would land on
     disk. Fields migration carries over without a canonical form fail here with
-    their field paths instead of at serve time.
+    their field paths instead of at serve time. Returns the Router's verdict,
+    or why no Router could give one (nothing with offline).
     """
 
     try:
@@ -264,7 +344,30 @@ def _validate_migrated_config(rendered: str, config_path: str) -> None:
         sys.exit(1)
 
     errors = collect_config_errors(user_config)
+    verdict, unavailable = ask_router(
+        None if offline else lambda: _migrated_verdict(rendered, config_path)
+    )
+    errors.extend(router_refusal(verdict))
     if errors:
         print_validation_errors(errors)
+        print_validation_warnings(router_warnings(verdict))
         log.error("No output was written")
         sys.exit(1)
+    return verdict, unavailable
+
+
+def _migrated_verdict(
+    rendered: str, config_path: str, *, migrate: bool = False
+) -> RouterVerdict:
+    """A local Router's verdict on the output before it is written, with the
+    Router's migration of its model fields when migrate is set."""
+
+    with tempfile.TemporaryDirectory(prefix="vllm-sr-migrate-") as directory:
+        candidate = Path(directory) / "config.yaml"
+        candidate.write_text(rendered, encoding="utf-8")
+        return router_validation.local_router_verdict(
+            candidate,
+            gateway=resolve_gateway(os.getenv(GATEWAY_ENV)),
+            models_dir=Path(resolve_state_root_dir(config_path)) / "models",
+            migrate=migrate,
+        )

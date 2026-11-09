@@ -122,7 +122,8 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 	query := fmt.Sprintf(`SELECT COALESCE(request_id,''), COALESCE(recipe,''), COALESCE(decision,''),
 		COALESCE(original_model,''), COALESCE(selected_model,''), COALESCE(session_id,''),
 		from_cache, streaming, lifecycle_state, COALESCE(signals, '{}'::jsonb),
-		prompt_tokens, completion_tokens, total_tokens, actual_cost, baseline_cost, cost_savings, currency, baseline_model
+		prompt_tokens, completion_tokens, total_tokens, actual_cost, baseline_cost, cost_savings, currency, baseline_model,
+		provider_cache
 		FROM %s ORDER BY timestamp DESC, id DESC`, p.tableName)
 	rows, err := p.db.QueryContext(ctx, query)
 	if err != nil {
@@ -135,10 +136,13 @@ func (p *PostgresStore) ScanMetadata(ctx context.Context, visit func(Record) err
 			&row.record.OriginalModel, &row.record.SelectedModel, &row.record.SessionID,
 			&row.record.FromCache, &row.record.Streaming, &row.record.LifecycleState, &row.signalsJSON,
 			&row.promptTokens, &row.completionTokens, &row.totalTokens, &row.actualCost,
-			&row.baselineCost, &row.costSavings, &row.currency, &row.baselineModel); err != nil {
+			&row.baselineCost, &row.costSavings, &row.currency, &row.baselineModel, &row.providerCacheJSON); err != nil {
 			return err
 		}
 		if err = json.Unmarshal(row.signalsJSON, &row.record.Signals); err != nil {
+			return err
+		}
+		if err = unmarshalReplayOptionalJSON(row.providerCacheJSON, &row.record.ProviderCache); err != nil {
 			return err
 		}
 		assignUsageCostFields(&row.record, row.promptTokens, sql.NullInt64{}, sql.NullInt64{}, row.completionTokens,

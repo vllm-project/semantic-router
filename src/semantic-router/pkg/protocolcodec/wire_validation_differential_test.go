@@ -90,7 +90,7 @@ func validateExactJSONObject(body []byte, targetType reflect.Type) error {
 		if !found {
 			return fmt.Errorf("unknown field %q", name)
 		}
-		if err := validateExactJSONValue(value, dereferenceJSONType(fieldType)); err != nil {
+		if err := validateExactJSONValue(value, dereferenceJSONType(fieldType.typeOf)); err != nil {
 			return fmt.Errorf("field %q: %w", name, err)
 		}
 	}
@@ -429,15 +429,12 @@ func twoPassDecodeProviderJSONCanonical(body []byte, target any, policy llmproto
 		}
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON is invalid", err)
 	}
-	if policy.ResponseVendor == llmprotocol.ResponseVendorOpenAICompatGateway {
-		body = translateGatewayUsageCounters(body)
-	}
 	canonical := body
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	var dropped []string
 	if rejectUnknownFields(body, policy) {
-		if providerVendorExtensionsAllowed(policy) {
-			canonical, dropped = stripProviderVendorExtensions(body, reflect.TypeOf(target))
+		if dropUnknownUpstreamFields(policy) {
+			canonical, dropped = stripUnknownUpstreamFields(body, reflect.TypeOf(target))
 		}
 		if err := validateExactJSONFieldNames(canonical, reflect.TypeOf(target)); err != nil {
 			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON contains a non-canonical field", err)
@@ -466,11 +463,9 @@ var differentialProviderTargets = []wireTarget{
 }
 
 func differentialProviderPolicies() []llmprotocol.Policy {
-	policies := []llmprotocol.Policy{llmprotocol.DefaultPolicy(), shallowPolicy()}
+	policies := []llmprotocol.Policy{llmprotocol.DefaultPolicy(), shallowPolicy(), conformancePolicy()}
 	for _, vendor := range []llmprotocol.ResponseVendor{
-		llmprotocol.ResponseVendorAzure,
 		llmprotocol.ResponseVendorCloudflare,
-		llmprotocol.ResponseVendorOpenAICompatGateway,
 		llmprotocol.ResponseVendorSnowflake,
 	} {
 		policy := llmprotocol.DefaultPolicy()
@@ -487,12 +482,12 @@ func checkSinglePassProviderMatchesTwoPass(t *testing.T, body []byte) {
 			want := target.newValue()
 			wantCanonical, wantDropped, wantErr := twoPassDecodeProviderJSONCanonical(body, want, policy, target.requireObject)
 			got := target.newValue()
-			gotCanonical, gotDropped, gotErr := decodeProviderJSONCanonical(body, got, policy, target.requireObject)
+			gotCanonical, gotDropped, gotErr := decodeProviderJSONCanonical(body, got, policy, target.requireObject, nil)
 			wantOutcome := fmt.Sprintf("%s canonical=%q dropped=%q", outcome(want, wantErr), wantCanonical, wantDropped)
 			gotOutcome := fmt.Sprintf("%s canonical=%q dropped=%q", outcome(got, gotErr), gotCanonical, gotDropped)
 			if wantOutcome != gotOutcome {
-				t.Fatalf("%s (vendor %q, depth %d) diverged for %q\ntwo-pass:    %s\nsingle-pass: %s",
-					target.name, policy.ResponseVendor, policy.Limits.JSONDepth, body, wantOutcome, gotOutcome)
+				t.Fatalf("%s (vendor %q, conformance %t, depth %d) diverged for %q\ntwo-pass:    %s\nsingle-pass: %s",
+					target.name, policy.ResponseVendor, policy.RejectUnknownUpstreamFields, policy.Limits.JSONDepth, body, wantOutcome, gotOutcome)
 			}
 		}
 	}

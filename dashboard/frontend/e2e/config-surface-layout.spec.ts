@@ -170,14 +170,12 @@ async function expectInside(container: Locator, child: Locator) {
 }
 
 test.describe('Config surface layout regressions', () => {
-  test('opens decision model settings directly and saves without pinning inherited bindings', async ({ page }) => {
+  test('opens decision model settings directly and saves bindings instead of system lines', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await mockConfigSurface(page);
 
-    let systemModels: Record<string, unknown> = {
-      decision_model: { deployment: 'main-judge' },
-      pii_classifier: 'models/custom-pii',
-    };
+    let decisionModel = 'main-judge';
+    let patch: Record<string, unknown> | undefined;
     const deployments = {
       'main-judge': { provider: 'model_runtime', artifact: 'vllm-sr/Vela-2.0-4B' },
       'alternate-judge': { provider: 'model_runtime', artifact: 'vllm-sr/Vela-2.0-0.8B' },
@@ -186,32 +184,36 @@ test.describe('Config surface layout regressions', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ model_catalog: { system: systemModels, deployments } }),
+        body: JSON.stringify({
+          model_catalog: { system: { decision_model: { deployment: decisionModel } }, deployments },
+        }),
       });
     });
     await page.route('**/api/router/config/global/update', async route => {
-      const modelCatalog = route.request().postDataJSON().model_catalog;
-      systemModels = modelCatalog.system;
-      expect(Object.keys(modelCatalog)).toEqual(['system']);
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"success"}' });
+      patch = route.request().postDataJSON().model_catalog;
+      decisionModel = 'alternate-judge';
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"success","warnings":[]}' });
     });
 
     await page.goto('/config/global-config#global-section-system_models');
     const card = page.locator('#global-section-system_models');
     await expect(card.getByRole('heading', { name: 'Decision Model & Bindings' })).toBeInViewport();
     await expect(card.getByText('main-judge', { exact: true })).toBeVisible();
-    await expect(card.getByText('Follows main-judge').first()).toBeVisible();
-    await expect(card.getByText('1 explicit binding', { exact: true })).toBeVisible();
+    await expect(card.getByText('3 deprecated model paths', { exact: true })).toBeVisible();
     await card.getByRole('button', { name: 'Edit', exact: true }).click();
 
     const modal = page.getByRole('dialog', { name: 'Edit Decision Model & Bindings' });
-    await expect(modal.getByLabel('Deployment', { exact: true })).toHaveValue('main-judge');
-    await modal.getByLabel('Deployment', { exact: true }).fill('alternate-judge');
+    await expect(modal.getByLabel(/^Decision Model/)).toHaveValue('main-judge');
+    await modal.getByLabel(/^Decision Model/).selectOption('alternate-judge');
+    await modal.getByLabel('Domain', { exact: true }).selectOption('alternate-judge');
     await modal.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(modal).toBeHidden();
-    expect(systemModels).toEqual({ decision_model: { deployment: 'alternate-judge' }, pii_classifier: 'models/custom-pii' });
+    expect(patch).toEqual({
+      system: { decision_model: { deployment: 'alternate-judge' }, domain_classifier: null },
+      bindings: { domain: 'alternate-judge', domain_classifier: null },
+      modules: { classifier: { domain: { model_id: null, model_ref: null, backend: null } } },
+    });
     await expect(card.getByText('alternate-judge', { exact: true })).toBeVisible();
-    await expect(card.getByText('Follows alternate-judge').first()).toBeVisible();
   });
 
   test('keeps signal controls readable and aligned in the shared editor', async ({ page }) => {

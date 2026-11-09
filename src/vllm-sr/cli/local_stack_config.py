@@ -41,10 +41,16 @@ from cli.pending_activation import (
     record_pending_activation,
 )
 from cli.runtime_config_lock import acquire_runtime_config_lock
+from cli.runtime_service_status import _router_management_port
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 
 CONTAINER_STATE_DIR = "/app/.vllm-sr"
 _INSPECT_TIMEOUT_SECONDS = 15
+_LOOPBACK_BINDINGS = {
+    "localhost": frozenset({"127.0.0.1", "0.0.0.0", "::1", "::"}),
+    "127.0.0.1": frozenset({"127.0.0.1", "0.0.0.0"}),
+    "::1": frozenset({"::1", "::"}),
+}
 
 
 @dataclass(frozen=True)
@@ -64,6 +70,26 @@ class LocalStack:
 
     def runtime_config(self) -> Path:
         return self.state_dir / _runtime_config_filename(self.layout.stack_name)
+
+    def publishes_management_endpoint(self, host: str, port: int) -> bool:
+        """Match the Router's startup listener to its actual host publication."""
+
+        container_name = self.layout.router_container_name
+        try:
+            management_port = _router_management_port(container_name)
+        except (OSError, ValueError, SystemExit):
+            return False
+        bindings = _container_ports(container_name).get(f"{management_port}/tcp")
+        if not isinstance(bindings, list):
+            return False
+        addresses = _LOOPBACK_BINDINGS.get(host, frozenset())
+        return any(
+            isinstance(binding, dict)
+            and binding.get("HostPort") == str(port)
+            and isinstance(binding.get("HostIp"), str)
+            and binding.get("HostIp") in addresses
+            for binding in bindings
+        )
 
 
 def local_stack() -> LocalStack | None:
@@ -167,3 +193,30 @@ def _container_env(container_name: str) -> dict[str, str]:
             name, value = entry.split("=", 1)
             env[name] = value
     return env
+
+
+def _container_ports(container_name: str) -> dict:
+    """Return active published ports, without adopting a stopped container."""
+
+    try:
+        result = subprocess.run(
+            [
+                get_container_runtime(),
+                "container",
+                "inspect",
+                "--format",
+                '{"running":{{json .State.Running}},"ports":{{json .NetworkSettings.Ports}}}',
+                container_name,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=_INSPECT_TIMEOUT_SECONDS,
+        )
+        inspection = json.loads(result.stdout or "null")
+    except (OSError, subprocess.SubprocessError, ValueError, SystemExit):
+        return {}
+    if not isinstance(inspection, dict) or inspection.get("running") is not True:
+        return {}
+    ports = inspection.get("ports")
+    return ports if isinstance(ports, dict) else {}

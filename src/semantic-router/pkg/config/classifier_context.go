@@ -5,7 +5,7 @@ import "fmt"
 // Local classifier budgets are explicit; a remote backend must not silently
 // ignore a requested long context. The served model's card checks capacity.
 func validateClassifierContextLimits(cfg *RouterConfig) error {
-	if cfg.EmbeddingConfig.FullContext && (cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() || cfg.EmbeddingConfig.ModelType != "mmbert") {
+	if cfg.EmbeddingConfig.FullContext && (cfg.UsesRemoteEmbeddings() || cfg.EmbeddingConfig.ModelType != "mmbert") {
 		return fmt.Errorf("embedding_config.full_context currently requires the native mmbert model type")
 	}
 	checks := []struct {
@@ -13,9 +13,9 @@ func validateClassifierContextLimits(cfg *RouterConfig) error {
 		limit     int
 		supported bool
 	}{
-		{"classifier.domain", cfg.CategoryModel.MaxSequenceLength, cfg.CategoryModel.Backend == nil},
-		{"classifier.pii", cfg.PIIModel.MaxSequenceLength, cfg.PIIModel.Backend == nil},
-		{"prompt_guard", cfg.PromptGuard.MaxSequenceLength, cfg.PromptGuard.Backend == nil},
+		{"classifier.domain", cfg.CategoryModel.MaxSequenceLength, !cfg.remoteTaskModule("domain_classifier")},
+		{"classifier.pii", cfg.PIIModel.MaxSequenceLength, !cfg.remoteTaskModule("pii_classifier")},
+		{"prompt_guard", cfg.PromptGuard.MaxSequenceLength, !cfg.remoteTaskModule("prompt_guard")},
 		{"feedback_detector", cfg.FeedbackDetector.MaxSequenceLength, true},
 		{"hallucination_mitigation.fact_check", cfg.HallucinationMitigation.FactCheckModel.MaxSequenceLength, true},
 	}

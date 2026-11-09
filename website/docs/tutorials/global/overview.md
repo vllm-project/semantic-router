@@ -44,7 +44,7 @@ Global configuration has five groups:
 
 | Group | Owns | Guide |
 |---|---|---|
-| `global.router` | Router engine controls, selection defaults, streamed-body policy, learning | [Algorithms](../algorithm/overview), [Router Learning](../learning/overview) |
+| `global.router` | Router engine controls, selection defaults, streamed-body policy, routing input, learning | [Algorithms](../algorithm/overview), [Router Learning](../learning/overview), [Routing input](../signal/overview#choose-the-user-text-signals-read) |
 | `global.services` | API, Response API, observability, authz, rate limits, management API, startup status, replay | [API and Observability](./api-and-observability) |
 | `global.stores` | response cache, memory, vector store | [Stores and Tools](./stores-and-tools) |
 | `global.integrations` | tool catalog and Looper runtime/state | [Stores and Tools](./stores-and-tools) |

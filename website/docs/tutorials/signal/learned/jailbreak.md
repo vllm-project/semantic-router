@@ -5,8 +5,9 @@
 `jailbreak` detects prompt-injection and jailbreak attempts before the Router
 commits to a route. Define jailbreak rules under `routing.signals.jailbreak`.
 
-It uses `global.model_catalog.modules.prompt_guard` and the configured
-jailbreak model bindings in `global.model_catalog.system`.
+The decision model answers it unless a `jailbreak` binding names another
+deployment; see [Choose a model for a signal](../../../installation/choose-a-model-for-a-signal.md).
+`global.model_catalog.modules.prompt_guard` holds its settings.
 
 ## Key Advantages
 
@@ -50,7 +51,18 @@ routing:
           - summarize the safety rules
 ```
 
-Use `include_history` for multi-turn attacks, and treat the pattern lists as tuning data for the configured detection method.
+`jailbreak_patterns` define deterministic hard-block patterns.
+The runtime normalizes case and whitespace, then checks whether each normalized
+message contains a normalized pattern as a substring. A match blocks the
+request independently of the contrastive threshold. This explicit match does
+not create a contrastive confidence score or replace a genuine score when one
+is available.
+
+`benign_patterns` provide benign examples for contrastive scoring; they are
+not explicit allow rules. The contrastive threshold applies to the contrastive
+score, not to deterministic explicit-pattern matches.
+
+Use `include_history` for multi-turn attacks.
 
 ### Request content and history
 
@@ -78,20 +90,20 @@ contract; callers supplying flat text remain responsible for its scope.
 
 ### Token windows for a local classifier
 
-The default prompt guard, Vela 2.0 0.3B, reads each text whole, up to its
-8,192-token input, and takes no window
-([Choose a model](../../../model-runtime/choose-a-model.md#vela-20)). When the
-module runs Vela 1.0 Guard, it scans each text piece in 512-token windows with
-255 content tokens of overlap, within that model's document budget: 32,768
-tokens including special tokens. This applies only when no recipe model binding
-or `window` is specified and `max_sequence_length` remains zero. Each forward remains bounded to 512 tokens;
+The default decision model reads each text within its own input limit and
+takes no window ([Choose a model](../../../model-runtime/choose-a-model.md#built-in-signals)
+lists each model's limits). Bound to Vela 1.0 Guard, the signal scans each
+text piece in 512-token windows with 255 content tokens of overlap, within
+that model's document budget: 32,768 tokens including special tokens. This
+applies only when no `window` is specified and `max_sequence_length` remains
+zero. Each forward remains bounded to 512 tokens;
 a long piece requires multiple forwards. Preparation records the resolved window and document budget
 and checks the loaded model's actual capacity. An incompatible custom artifact
 fails preparation, and a piece exceeding the document budget produces an
 input-limit error.
 
-Explicit model bindings, document budgets, window policies, and remote backends
-keep their configured behavior. For example, a qualified 8K deployment with
+Document budgets, window policies, and remote deployments keep their
+configured behavior. For example, a qualified 8K deployment with
 `input.overflow: reject` continues to process one whole piece within that budget.
 
 For a checkpoint evaluated with overlapping token windows, configure the same
@@ -116,8 +128,8 @@ and resets positions in each window.
 The total input must fit `max_sequence_length`; overflow is an inference
 error, never an uninspected suffix.
 
-For an explicit local binding, the deployment's `input.max_tokens` supplies the
-complete-document budget. With window scanning, that budget can exceed the
+With a `jailbreak` binding to a local deployment, the deployment's
+`input.max_tokens` supplies the complete-document budget. With window scanning, that budget can exceed the
 checkpoint's single-forward capacity: `input: {max_tokens: 65536, overflow: window}`
 and `window: {size: 32768, overlap: 256}` scan up to 64K tokens using forwards of
 at most 32K tokens. Preparation checks each window against the loaded checkpoint
@@ -135,7 +147,7 @@ Outside the implicit default, omitting `window` retains whole-input inference
 or the configured legacy scan. Window sizes and thresholds need separate
 checkpoint evaluation; scanning all tokens does not establish understanding of
 distant context. Quoted attacks and instructions whose meaning depends on
-another window require separate evaluation. Model bindings to a
+another window require separate evaluation. A `jailbreak` binding to a
 [model runtime](../../../model-runtime/guides/safety.md) deployment can also
 select token windows; the model must support the requested window size.
 
@@ -188,10 +200,10 @@ scores only that entrypoint's responses. The plugin's own `threshold` is ignored
 once a response-direction rule is declared, and the load reports that; the rule
 owns the threshold. A decision whose `response_jailbreak` plugin runs with no
 response-direction rule declared is also reported at load: the plugin is then
-classifying the response itself, which is the compatibility path. Either
-consumer is enough to provision `prompt_guard` for the recipe: the jailbreak
-model and its label mapping are loaded for the response stage even when no
-decision rule reads a jailbreak signal.
+classifying the response itself, which is the compatibility path. Either one
+is enough to provision the jailbreak signal for the recipe: its model and
+label mapping are loaded for the response stage even when no decision rule
+reads a jailbreak signal.
 
 An unresolved detector (backend failure, or a response with no text to score)
 is reported through `SignalErrors`, the way every other signal reports one,

@@ -160,3 +160,13 @@ func TestImplicitAttachedPIIStillUsesMetadataToSelectPreciseAdapter(t *testing.T
 		t.Fatalf("implicit adapter selection changed to deferred generic tasks: %+v %v discovery=%v", backend, err, services.asked)
 	}
 }
+
+func TestPIIPresetKeepsThePreciseAdapter(t *testing.T) {
+	models, services := preparedJudgmentModels(t)
+	services.card = decisionObservation("choice", "noul", "score")
+	services.card.Presets = []string{"pii"}
+	backend, err := prepareDecisionPII(models)
+	if err != nil || backend != nil {
+		t.Fatalf("a decision model that defines the pii preset fell back to the yes/no verdict: %+v %v", backend, err)
+	}
+}

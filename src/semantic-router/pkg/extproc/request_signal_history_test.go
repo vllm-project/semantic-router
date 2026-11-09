@@ -79,7 +79,7 @@ func TestExtractToolTransitionContextFromNeutralHistory(t *testing.T) {
 	transition := extractToolTransitionContextFromRequest(req, 2, &RequestContext{
 		VSRSelectedCategory: "coding",
 		VSRSelectedDecision: &config.Decision{Name: "agent-tools"},
-	})
+	}, nil)
 	assert.Equal(t, []string{"lookup", "summarize"}, transition.RecentToolNames)
 	assert.Equal(t, 2, transition.UserMessageCount)
 	assert.Equal(t, 3, transition.ToolResultCount)
@@ -141,7 +141,7 @@ func TestToolTransitionContextWindowAndCopy(t *testing.T) {
 }
 
 func TestExtractToolTransitionContextNilRequest(t *testing.T) {
-	transition := extractToolTransitionContextFromRequest(nil, 2, nil)
+	transition := extractToolTransitionContextFromRequest(nil, 2, nil, nil)
 	assert.Nil(t, transition.RecentToolNames)
 	assert.Zero(t, transition.UserMessageCount)
 	assert.Zero(t, transition.ToolResultCount)

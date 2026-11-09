@@ -47,7 +47,7 @@ func runTokenSpansFixture(t *testing.T, tc tokenSpansFixtureCase) {
 		}
 		return wireSpans(tc.Spans)
 	})
-	backend, err := newPIIHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
+	backend, err := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(cfg, 0), testPIIMapping())
 	if err != nil {
 		t.Fatalf("construct backend: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestHTTPTokenClassifierTruncatedAt(t *testing.T) {
 		_, cfg := newTokenSpansServer(t, func(string) any {
 			return map[string]any{"spans": []any{}, "truncated_at": cut}
 		})
-		backend, err := newPIIHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
+		backend, err := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(cfg, 0), testPIIMapping())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -100,7 +100,7 @@ func TestHTTPTokenClassifierTruncatedAt(t *testing.T) {
 		_, cfg := newTokenSpansServer(t, func(string) any {
 			return map[string]any{"spans": wireSpans(target.Spans), "truncated_at": cut}
 		})
-		backend, err := newPIIHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
+		backend, err := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(cfg, 0), testPIIMapping())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -172,7 +172,7 @@ func TestHTTPTokenClassifierAcceptsExplicitEmptyList(t *testing.T) {
 func classifyThrough(t *testing.T, body any, text string) ([]tasks.TokenEntity, error) {
 	t.Helper()
 	_, cfg := newTokenSpansServer(t, func(string) any { return body })
-	backend, err := newPIIHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
+	backend, err := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(cfg, 0), testPIIMapping())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestHTTPTokenClassifierAliasesAndBytePair(t *testing.T) {
 		_, cfg := newTokenSpansServer(t, func(string) any {
 			return []map[string]any{{"entity_group": "PERSON", "word": "José Alvarez", "score": 0.9, "start": start, "end": end}}
 		})
-		backend, _ := newPIIHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
+		backend, _ := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(cfg, 0), testPIIMapping())
 		entities, err := backend.classifyTokens(context.Background(), text)
 		if err != nil || len(entities) != 1 {
 			t.Fatalf("aliases rejected: %v (%d entities)", err, len(entities))
@@ -208,7 +208,7 @@ func TestHTTPTokenClassifierAliasesAndBytePair(t *testing.T) {
 				"start": start, "end": end, "byte_start": bStart, "byte_end": bEnd,
 			}}
 		})
-		backend, _ := newPIIHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
+		backend, _ := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(cfg, 0), testPIIMapping())
 		if _, err := backend.classifyTokens(context.Background(), text); err != nil {
 			t.Fatalf("agreeing byte pair rejected: %v", err)
 		}
@@ -221,7 +221,7 @@ func TestHTTPTokenClassifierAliasesAndBytePair(t *testing.T) {
 				"start": start, "end": end, "byte_start": start, "byte_end": end,
 			}}
 		})
-		backend, _ := newPIIHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
+		backend, _ := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(cfg, 0), testPIIMapping())
 		if _, err := backend.classifyTokens(context.Background(), text); err == nil {
 			t.Fatal("byte pair equal to code-point pair on multi-byte text should be rejected")
 		}
@@ -233,19 +233,19 @@ func TestNewHTTPTokenClassifierInferenceValidation(t *testing.T) {
 		ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},
 		ModelName:     "pii-spans",
 	}
-	if _, err := newPIIHTTPTokenClassifierInference(nil, testPIIMapping(), 0); err == nil {
+	if _, err := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(nil, 0), testPIIMapping()); err == nil {
 		t.Error("nil config accepted")
 	}
-	if _, err := newPIIHTTPTokenClassifierInference(&config.ExternalModelConfig{ModelName: "x"}, testPIIMapping(), 0); err == nil {
+	if _, err := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(&config.ExternalModelConfig{ModelName: "x"}, 0), testPIIMapping()); err == nil {
 		t.Error("missing address accepted")
 	}
-	if _, err := newPIIHTTPTokenClassifierInference(good, nil, 0); err == nil {
+	if _, err := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(good, 0), nil); err == nil {
 		t.Error("nil mapping accepted")
 	}
-	if _, err := newPIIHTTPTokenClassifierInference(good, &PIIMapping{}, 0); err == nil {
+	if _, err := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(good, 0), &PIIMapping{}); err == nil {
 		t.Error("empty mapping accepted")
 	}
-	if _, err := newPIIHTTPTokenClassifierInference(good, testPIIMapping(), 0); err != nil {
+	if _, err := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(good, 0), testPIIMapping()); err != nil {
 		t.Errorf("valid config rejected: %v", err)
 	}
 }

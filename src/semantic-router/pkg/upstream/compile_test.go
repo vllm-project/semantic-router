@@ -110,6 +110,23 @@ func TestCompileMapsEndpointsAndRouteBehavior(t *testing.T) {
 	}
 }
 
+func TestCompileRemovesTheConfiguredIdentityHeaders(t *testing.T) {
+	topology := compileYAML(t, compileFixture+`
+global:
+  services:
+    authz:
+      identity:
+        user_id_header: x-jwt-sub
+        user_groups_header: x-jwt-groups
+`)
+	want := []string{"x-authz-user-id", "x-authz-user-groups", "x-authz-team-id", "x-authz-tenant-id", "x-jwt-sub", "x-jwt-groups"}
+	for _, cluster := range topology.Clusters {
+		if !reflect.DeepEqual(cluster.RemoveHeaders, want) {
+			t.Fatalf("cluster %s removes %v, want %v", cluster.Name, cluster.RemoveHeaders, want)
+		}
+	}
+}
+
 func TestCompileListenerTimeoutsBecomeRouteDefaults(t *testing.T) {
 	topology := compileYAML(t, compileFixture)
 	want := []ListenerSpec{

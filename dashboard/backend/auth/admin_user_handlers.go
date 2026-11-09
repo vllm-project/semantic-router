@@ -30,7 +30,7 @@ func adminUsersCollectionHandler(svc *Service) http.HandlerFunc {
 		}
 
 		switch r.Method {
-		case http.MethodGet:
+		case http.MethodGet, http.MethodHead:
 			handleAdminUsersList(w, r, svc)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -110,7 +110,7 @@ func adminUserItemHandler(svc *Service) http.HandlerFunc {
 		}
 
 		switch r.Method {
-		case http.MethodGet:
+		case http.MethodGet, http.MethodHead:
 			handleAdminUserGet(w, r, svc, userID)
 		case http.MethodPatch:
 			handleAdminUserPatch(w, r, svc, ac, userID)

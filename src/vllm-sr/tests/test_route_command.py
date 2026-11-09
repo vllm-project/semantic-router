@@ -26,7 +26,12 @@ from cli.commands.recipe_learning import (
     fetch_replay_payload,
     normalize_replay_payload,
 )
-from cli.commands.recipe_learning_metrics import record_switched
+from cli.commands.recipe_learning_metrics import (
+    DecisionMetrics,
+    record_switched,
+    update_model_selection_metrics,
+    update_protection_metrics,
+)
 from cli.commands.route import (
     _parse_messages_json,
     _prompt_to_messages,
@@ -301,6 +306,31 @@ def test_recipe_learning_switch_metric_uses_learning_switch_action() -> None:
     }
 
     assert record_switched(record) is True
+
+
+def test_recipe_learning_counts_releases_outside_switch_and_hold_rates() -> None:
+    protections = [
+        {"action": "release_switch"},
+        {"action": "hold_current", "reason": "release_kept_current"},
+        {"action": "hold_current"},
+        {"action": "allow_switch"},
+    ]
+    metrics = DecisionMetrics()
+    for i, protection in enumerate(protections):
+        record = {
+            "original_model": "auto",
+            "selected_model": "qwen/qwen3.6-rocm",
+            "learning": {"protection": protection},
+        }
+        metrics.records += 1
+        update_protection_metrics(metrics, protection, f"r{i}")
+        update_model_selection_metrics(metrics, record, f"r{i}", "qwen/qwen3.6-rocm")
+
+    data = metrics.to_json()
+    assert data["switch_rate"] == 0.25
+    assert data["hold_rate"] == 0.25
+    assert data["release_rate"] == 0.5
+    assert data["supporting_replay_ids"]["releases"] == ["r0", "r1"]
 
 
 def test_recipe_learning_artifact_contains_metrics_patch_candidates_and_seed_pack() -> (

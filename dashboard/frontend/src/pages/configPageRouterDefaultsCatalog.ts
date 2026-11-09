@@ -68,6 +68,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     capture_request_body: true,
     capture_response_body: true,
     capture_personal_data: true,
+    capture_tool_results: false,
     max_records: 10000,
     max_body_bytes: 4096,
     max_tool_trace_bytes: 0,
@@ -122,21 +123,18 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     tools_db_path: 'config/tools_db.json',
     fallback_to_empty: true,
   } satisfies ToolIntegrationConfig,
+  // The module thresholds are left out: the Router gives a module without one
+  // the operating point of the model it runs. No module names a model: a
+  // binding of its signal does, else the decision model answers it.
   prompt_guard: {
     enabled: true,
-    model_ref: 'prompt_guard',
-    threshold: 0.75,
     use_cpu: true,
   },
   classifier: {
     domain: {
-      model_ref: 'domain_classifier',
-      threshold: 0.28,
       use_cpu: true,
     },
     pii: {
-      model_ref: 'pii_classifier',
-      threshold: 0.01,
       use_cpu: true,
     },
     preference: {
@@ -146,12 +144,9 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   hallucination_mitigation: {
     enabled: false,
     fact_check: {
-      model_ref: 'fact_check_classifier',
-      threshold: 0.93,
       use_cpu: true,
     },
     detector: {
-      model_ref: 'hallucination_detector',
       threshold: 0.5,
       use_cpu: true,
       min_span_length: 1,
@@ -161,14 +156,11 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   } satisfies CanonicalHallucinationModuleConfig,
   feedback_detector: {
     enabled: true,
-    model_ref: 'feedback_detector',
-    threshold: 0.37,
     use_cpu: true,
-  } satisfies FeedbackDetectorConfig & { model_ref?: string },
+  } satisfies FeedbackDetectorConfig,
   complexity: {},
   external_models: [],
   admission: {},
-  // Every module follows the decision model unless a line binds it.
   system_models: {
     decision_model: { deployment: 'primary' },
   } satisfies CanonicalSystemModels,
@@ -309,7 +301,8 @@ export const SECTION_META: Record<
   prompt_guard: {
     title: 'Prompt Guard',
     eyebrow: 'Model Catalog',
-    description: 'Prompt-injection detection module settings and system-model binding.',
+    description:
+      'Prompt-injection detection module settings. The jailbreak binding chooses its model.',
   },
   classifier: {
     title: 'Classifier Modules',
@@ -334,7 +327,7 @@ export const SECTION_META: Record<
   external_models: {
     title: 'External Models',
     eyebrow: 'Model Catalog',
-    description: 'Optional external LLM integrations used by router-owned auxiliary workflows.',
+    description: 'Deprecated external LLM integrations, kept as the configuration declares them.',
   },
   admission: {
     title: 'Model Admission',
@@ -345,7 +338,7 @@ export const SECTION_META: Record<
     title: 'Decision Model & Bindings',
     eyebrow: 'Model Catalog',
     description:
-      'Choose the Vela decision model for built-in signals and decision questions, with optional per-signal model overrides.',
+      'Choose the deployment that answers built-in signals and decision questions, and bind individual signals to other deployments.',
   },
   embedding_models: {
     title: 'Embedding Models',

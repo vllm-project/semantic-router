@@ -10,6 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 )
@@ -39,6 +40,10 @@ func prepareNativeExecutors(cfg *config.RouterConfig) (map[string]*systemone.Exe
 // preserving the native task and using a separate native algorithm executor.
 // invoke is bound to the same retained generation's local and remote backends.
 func (r *OpenAIRouter) RouteSystemOne(ctx context.Context, model string, body json.RawMessage, invoke systemone.Invoke) (int, []byte, error) {
+	requestStarted, arrived := systemone.RequestArrival(ctx)
+	if !arrived {
+		requestStarted = time.Now()
+	}
 	entrypoint, ok := r.Config.ResolveEntrypoint(config.SystemOneAPI, model)
 	if !ok {
 		return http.StatusNotFound, nil, errors.New("native entrypoint not found")
@@ -51,6 +56,15 @@ func (r *OpenAIRouter) RouteSystemOne(ctx context.Context, model string, body js
 	if err != nil {
 		return http.StatusBadRequest, nil, err
 	}
+	requestDuration, requestCalls, err := nativeRequestCeiling(recipe.Profile.Decisions)
+	if err != nil {
+		return http.StatusServiceUnavailable, nil, err
+	}
+	requestDeadline := requestStarted.Add(requestDuration)
+	ctx, cancel := context.WithDeadline(ctx, requestDeadline)
+	defer cancel()
+	ctx, ledger := budget.WithLimit(ctx, requestCalls)
+
 	requestContext := &RequestContext{TraceContext: ctx}
 	requestContext.Routing.SelectRecipe(recipe)
 	classifier := r.classifierForRequest(requestContext)
@@ -58,12 +72,24 @@ func (r *OpenAIRouter) RouteSystemOne(ctx context.Context, model string, body js
 		return http.StatusServiceUnavailable, nil, errors.New("native recipe classifier unavailable")
 	}
 	text := request.SignalText
+	signalCallsBefore := ledger.Used()
 	signals := classifier.EvaluateAllSignalsWithRequestFactsForDecisions(
 		text, text, text, nil, nil, false, false, text, nil,
 		classification.ConversationFacts{}, "", classification.RequestFacts{Context: ctx}, recipe.Profile.Decisions,
 	)
+	metrics.RecordSystemOneSignalCalls(ledger.Used() - signalCallsBefore)
 	if contextErr := ctx.Err(); contextErr != nil {
-		return http.StatusGatewayTimeout, nil, contextErr
+		if errors.Is(contextErr, context.DeadlineExceeded) {
+			return systemOneBudgetExhausted(http.StatusGatewayTimeout, "deadline", contextErr, ledger)
+		}
+		return 0, nil, contextErr
+	}
+	// A signal's equal-deadline timer can fire before the request timer.
+	if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) {
+		return systemOneBudgetExhausted(http.StatusGatewayTimeout, "deadline", context.DeadlineExceeded, ledger)
+	}
+	if ledger.Remaining() <= 0 {
+		return systemOneBudgetExhausted(http.StatusServiceUnavailable, "max_calls", budget.ErrExhausted, ledger)
 	}
 	decision, err := classifier.EvaluateDecisionWithEngineForDecisions(signals, recipe.Profile.Decisions)
 	if err != nil || decision == nil || decision.Decision == nil {
@@ -81,13 +107,21 @@ func (r *OpenAIRouter) RouteSystemOne(ctx context.Context, model string, body js
 	if err != nil || duration <= 0 {
 		return http.StatusServiceUnavailable, nil, errors.New("native algorithm deadline invalid")
 	}
-	ctx, cancel := context.WithTimeout(ctx, duration)
+	if !ledger.TightenLimit(limits.MaxCalls) {
+		return systemOneBudgetExhausted(http.StatusServiceUnavailable, "max_calls", budget.ErrExhausted, ledger)
+	}
+	ctx, cancel = context.WithDeadline(ctx, requestStarted.Add(duration))
 	defer cancel()
-	ctx, ledger := budget.WithLimit(ctx, limits.MaxCalls)
 	result, err := executor.Execute(ctx, request, invoke)
 	if err != nil {
+		if errors.Is(err, budget.ErrExhausted) {
+			return systemOneBudgetExhausted(http.StatusServiceUnavailable, "max_calls", err, ledger)
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return systemOneBudgetExhausted(http.StatusGatewayTimeout, "deadline", err, ledger)
+		}
 		if ctx.Err() != nil {
-			return http.StatusGatewayTimeout, nil, ctx.Err()
+			return 0, nil, ctx.Err()
 		}
 		return http.StatusServiceUnavailable, nil, err
 	}
@@ -105,6 +139,31 @@ func (r *OpenAIRouter) RouteSystemOne(ctx context.Context, model string, body js
 	})
 	encoded, err := json.Marshal(response)
 	return http.StatusOK, encoded, err
+}
+
+func nativeRequestCeiling(decisions []config.Decision) (time.Duration, int, error) {
+	var maxDuration time.Duration
+	var maxCalls int
+	for _, decision := range decisions {
+		algorithm := decision.Algorithm
+		if !algorithm.IsNative() || algorithm.Budget == nil {
+			continue
+		}
+		duration, err := time.ParseDuration(algorithm.Budget.Deadline)
+		if err != nil || duration <= 0 || algorithm.Budget.MaxCalls <= 0 {
+			return 0, 0, fmt.Errorf("native algorithm budget invalid for decision %q", decision.Name)
+		}
+		maxDuration = max(maxDuration, duration)
+		maxCalls = max(maxCalls, algorithm.Budget.MaxCalls)
+	}
+	if maxCalls == 0 || maxDuration <= 0 {
+		return 0, 0, errors.New("native request budget unavailable")
+	}
+	return maxDuration, maxCalls, nil
+}
+
+func systemOneBudgetExhausted(status int, reason string, cause error, ledger *budget.Ledger) (int, []byte, error) {
+	return status, nil, &systemone.BudgetExhaustedError{Calls: ledger.Used(), Reason: reason, Cause: cause}
 }
 
 // Metadata visibility applies to each native response envelope. Answers are

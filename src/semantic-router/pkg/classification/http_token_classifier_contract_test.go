@@ -72,7 +72,7 @@ func TestHTTPTokenClassifierRejectsConflictingAliases(t *testing.T) {
 	for _, tc := range conflictingAliasSpans {
 		t.Run(tc.name, func(t *testing.T) {
 			_, cfg := newTokenSpansServer(t, func(string) any { return []map[string]any{tc.span} })
-			backend, err := newPIIHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
+			backend, err := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(cfg, 0), testPIIMapping())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -86,7 +86,7 @@ func TestHTTPTokenClassifierRejectsConflictingAliases(t *testing.T) {
 		_, cfg := newTokenSpansServer(t, func(string) any {
 			return []map[string]any{{"label": "B-PERSON", "entity_group": "PERSON", "text": "José Alvarez", "word": "José Alvarez", "score": 0.9, "start": 8, "end": 20}}
 		})
-		backend, _ := newPIIHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
+		backend, _ := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(cfg, 0), testPIIMapping())
 		entities, err := backend.classifyTokens(context.Background(), conflictingAliasText)
 		if err != nil || len(entities) != 1 || entities[0].EntityType != "PERSON" {
 			t.Fatalf("agreeing aliases rejected: %v (%v)", err, entities)
@@ -139,7 +139,7 @@ func TestHTTPTokenClassifierModelIdentity(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, cfg := newTokenSpansServer(t, func(string) any { return tc.body })
-			backend, err := newPIIHTTPTokenClassifierInference(cfg, testPIIMapping(), 0)
+			backend, err := newPIIHTTPTokenClassifierInference(externalClassifyDeployment(cfg, 0), testPIIMapping())
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -462,7 +462,9 @@ func positiveConjunctionClauses(expr BoolExpr) [][]SignalRefExpr {
 func (v *Validator) suggestSignalByName(name string) *QuickFix {
 	var candidates []string
 	for _, s := range v.prog.Signals {
-		candidates = append(candidates, s.Name)
+		if ref := signalReferenceName(s); ref != "" {
+			candidates = append(candidates, ref)
+		}
 	}
 	closest := suggestSimilar(name, candidates)
 	if closest == "" {

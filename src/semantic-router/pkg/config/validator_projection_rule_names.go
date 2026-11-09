@@ -100,17 +100,16 @@ func collectModalityRuleNames(rules []ModalityRule) map[string]struct{} {
 	return names
 }
 
-func collectRoleBindingNames(rules []RoleBinding) map[string]struct{} {
-	names := make(map[string]struct{}, len(rules)*2)
+// collectRoleBindingRoles returns the roles the bindings grant: the authz
+// signal emits a matched binding's role, never its name.
+func collectRoleBindingRoles(rules []RoleBinding) map[string]struct{} {
+	roles := make(map[string]struct{}, len(rules))
 	for _, rule := range rules {
-		if rule.Name != "" {
-			names[rule.Name] = struct{}{}
-		}
 		if rule.Role != "" {
-			names[rule.Role] = struct{}{}
+			roles[rule.Role] = struct{}{}
 		}
 	}
-	return names
+	return roles
 }
 
 func collectJailbreakRuleNames(rules []JailbreakRule) map[string]struct{} {

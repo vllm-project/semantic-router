@@ -6,7 +6,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestAPersonalDataReplayLimitUsesThePIISignals(t *testing.T) {
+func TestAPersonalDataReplayLimitLeavesThePIISignalsOutOfRouting(t *testing.T) {
 	no := false
 	classifier := &Classifier{Config: &config.RouterConfig{
 		RouterReplay: config.RouterReplayConfig{Enabled: true, CapturePersonalData: &no},
@@ -15,12 +15,11 @@ func TestAPersonalDataReplayLimitUsesThePIISignals(t *testing.T) {
 			Decisions: []config.Decision{{Name: "everything", Rules: config.RuleCombination{Operator: "AND"}}},
 		},
 	}}
-	if !classifier.getUsedSignals()["pii:personal_data"] {
-		t.Fatal("the replay data policy reads the PII signal, so it must be evaluated")
+	if !classifier.Config.ReplayNeedsPIIEvidence() {
+		t.Fatal("the replay data policy reads the PII rules")
 	}
-	classifier.Config.RouterReplay.CapturePersonalData = nil
 	if classifier.getUsedSignals()["pii:personal_data"] {
-		t.Fatal("without the policy an unreferenced PII signal is not evaluated")
+		t.Fatal("Replay checks the prompt after routing; routing must not evaluate an unreferenced PII signal for it")
 	}
 }
 

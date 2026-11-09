@@ -291,16 +291,16 @@ func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string, piiRules []PI
 // IsPIIClassifierEnabled checks if PII classification is enabled. A local
 // model serves its own labels; a remote backend needs a mapping file.
 func (c *RouterConfig) IsPIIClassifierEnabled() bool {
-	if c.PIIModel.Backend != nil {
+	if c.remoteTaskModule("pii_classifier") {
 		return c.PIIModel.Active() && c.PIIMappingPath != ""
 	}
-	return c.PIIModel.Active() && c.PIIModel.ModelID != ""
+	return c.PIIModel.Active() && c.ModuleModelConfigured("pii_classifier")
 }
 
 // IsCategoryClassifierEnabled checks if category classification is enabled. A
 // local model serves its own labels; a remote backend needs a mapping file.
 func (c *RouterConfig) IsCategoryClassifierEnabled() bool {
-	return c.CategoryModel.Active() && c.CategoryModel.ModelID != "" && (c.CategoryModel.Backend == nil || c.CategoryMappingPath != "")
+	return c.CategoryModel.Active() && c.ModuleModelConfigured("domain_classifier") && (!c.remoteTaskModule("domain_classifier") || c.CategoryMappingPath != "")
 }
 
 // IsMCPCategoryClassifierEnabled checks if MCP-based category classification is enabled
@@ -320,20 +320,11 @@ func (c *RouterConfig) IsPromptGuardEnabled() bool {
 		return false
 	}
 
-	if c.PromptGuard.Backend != nil {
-		if c.PromptGuard.JailbreakMappingPath == "" {
-			return false
-		}
-		backend := c.PromptGuard.Backend
-		contract := RemoteClassifierContractLabelDistribution
-		if backend.Protocol == RemoteClassifierProtocolHTTPChat {
-			contract = RemoteClassifierContractLabelDecision
-		}
-		_, err := ResolveRemoteClassifierBackend(c, backend, ModelRoleGuardrail, contract)
-		return err == nil
+	if c.remoteTaskModule("prompt_guard") {
+		return c.PromptGuard.JailbreakMappingPath != ""
 	}
 
-	return c.PromptGuard.ModelID != ""
+	return c.ModuleModelConfigured("prompt_guard")
 }
 
 // GetEndpointsForModel returns all endpoints that can serve the specified model

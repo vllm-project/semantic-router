@@ -144,7 +144,7 @@ func newEffectiveBackendSemantics(
 		discovery:          discovery,
 		basePath:           strings.TrimSuffix(parsed.Path, "/"),
 		tlsServerName:      tlsServerName,
-		credentials:        effectiveBackendCredential(effective.Provider.Instance.Credentials),
+		credentials:        effectiveBackendCredential(effective.Provider.Instance),
 		authHeader:         authHeader,
 		authPrefix:         authPrefix,
 		headers:            profile.ExtraHeaders,
@@ -157,7 +157,11 @@ func newEffectiveBackendSemantics(
 	}, nil
 }
 
-func effectiveBackendCredential(credentials modelcatalog.CredentialsRef) effectiveCredentialIdentity {
+func effectiveBackendCredential(instance modelcatalog.ProviderInstance) effectiveCredentialIdentity {
+	if instance.TrustedGateway {
+		return effectiveCredentialIdentity{source: "trusted_gateway"}
+	}
+	credentials := instance.Credentials
 	if credentials.APIKey != "" {
 		return effectiveCredentialIdentity{source: "inline", value: credentials.APIKey}
 	}

@@ -5,10 +5,10 @@
 `embedding` matches requests by semantic similarity to representative examples.
 Define embedding rules under `routing.signals.embeddings`.
 
-It depends on the embedding model configured in
-`global.model_catalog.embeddings`.
+It runs on the deployment `global.model_catalog.embeddings.default` names
+(`vela-embedding` by default).
 
-Those assets can run locally or through an external OpenAI-compatible text embedding endpoint. See [Runtime embeddings](../../../model-runtime/guides/embeddings.md) for the shared provider configuration; signal candidates, thresholds, and decision conditions remain unchanged.
+That deployment can run locally or be an `openai_embeddings` deployment of a remote text embedding API. See [Runtime embeddings](../../../model-runtime/guides/embeddings.md) for both; signal candidates, thresholds, and decision conditions remain unchanged.
 
 ## Key Advantages
 
@@ -163,10 +163,11 @@ Accepted values:
 - `"audio"`: query embedded from bounded inline PCM or float WAV data. Remote audio URLs, MP3, and other compressed formats are not accepted.
 
 Image/audio queries and image candidates require
-`global.model_catalog.embeddings.semantic.embedding_config.model_type: multimodal`
-or an explicit recipe embedding binding. The Router checks the prepared model's
-actual modality capabilities at startup; a name or catalog entry does not prove
-that an image or audio encoder is available.
+`global.model_catalog.embeddings.semantic.embedding_config.model_type: multimodal`.
+They run on the deployment `global.model_catalog.embeddings.multimodal` names
+(`omni-nano` by default). The Router checks the prepared model's actual
+modality capabilities at startup; a name or catalog entry does not prove that
+an image or audio encoder is available.
 
 ### Positive and negative candidate banks
 
@@ -205,8 +206,8 @@ compares `min_score_threshold` to the raw score; choose it in the same units.
 global:
   model_catalog:
     embeddings:
+      multimodal: omni-nano
       semantic:
-        multimodal_model_path: models/vela-1.0-omni-nano
         embedding_config:
           model_type: multimodal
 
@@ -306,9 +307,9 @@ new calibration; Nano thresholds must not be reused for Mini.
 
 ## Dependencies and Limitations
 
-- Text, image, or audio content is processed by the configured embedding runtime. A
-  remote provider currently supports text only and receives the text being
-  embedded. Local Vela Omni deployments support all three input modalities.
+- Text, image, or audio content is processed by the embedding deployment. A
+  remote `openai_embeddings` deployment supports text only and receives the
+  text being embedded. Local Vela Omni deployments support all three input modalities.
 - Similarity scores and thresholds are not portable across embedding models,
   dimensions, or modalities. Recalibrate whenever those change.
 - Image matching is semantic rather than OCR or PII extraction; use a dedicated

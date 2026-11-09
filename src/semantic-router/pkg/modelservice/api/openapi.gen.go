@@ -789,6 +789,10 @@ type EngineArgs struct {
 	// EnableSharedContext Whether a multi-question decision request computes its shared state once.
 	EnableSharedContext bool `json:"enable_shared_context"`
 
+	// MaxModelLen The most input tokens one question of a Decision model may have, as configured; null keeps the
+	// package's limit. The limit the model applies is the card's `limits.max_input_tokens`.
+	MaxModelLen *int `json:"max_model_len"`
+
 	// MaxNumBatchedTokens The most tokens one merged forward holds: the sum of its rows, each rounded up to 8, for a model
 	// that packs merged rows, else its rows times its longest row. A value the engine arguments leave unset
 	// is the one the runtime chose for the device (its memory class, adjusted by the startup calibration).
@@ -1071,7 +1075,8 @@ type ModelLimits struct {
 	MinOptions    *int `json:"min_options,omitempty"`
 
 	// TruncateTokens The same models: the most tokens of a part a question with `overflow: truncate` reads, one input on a
-	// CPU (one forward) and the scan budget on a GPU.
+	// CPU (one forward) and the scan budget on a GPU. A Vela 3.0 evidence span question reads its route's
+	// 32,768-token window instead.
 	TruncateTokens *int `json:"truncate_tokens,omitempty"`
 
 	// ValidatedInputTokens The length the model was validated at: each question's cap unless the request asks for long context
@@ -1163,6 +1168,14 @@ type Question struct {
 	// 1..255 labels to descriptions. Descriptions are non-blank text, an object or an array.
 	Criteria *interface{} `json:"criteria,omitempty"`
 
+	// DecisionAdapter Vela 3.0 d3 sizes (family `vela3_d3`) whose package declares `decision_opt_in`: true answers a
+	// Choice, Noul or Score question with the opt-in decision adapter (`decision_optin`, else the router
+	// adapter), as the package's runtime does. A router question keeps the router adapter; one the package
+	// routes to a task adapter takes the opt-in adapter instead. Only true turns it on; any other value, a
+	// package without opt-in, and a request with images, videos, assets or Box / track questions (which
+	// runs every adapter off) answer it as false. Other models answer the field with invalid_question.
+	DecisionAdapter *bool `json:"decision_adapter,omitempty"`
+
 	// Head Span questions on models with a broad span head: the head that answers (default: the model's routing,
 	// reported per question in `span_heads`). Models without one answer `broad` with invalid_question.
 	Head *QuestionHead `json:"head,omitempty"`
@@ -1183,8 +1196,9 @@ type Question struct {
 
 	// Overflow Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
 	// than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
-	// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
-	// both kinds share their model inputs unless one has to be read in windows.
+	// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only (a Vela 3.0
+	// evidence span question: its route's 32,768-token window). Questions of both kinds share their model inputs
+	// unless one has to be read in windows.
 	Overflow *QuestionOverflow `json:"overflow,omitempty"`
 
 	// Preset A question the model defines; the model fills in its type, instructions and criteria.
@@ -1216,8 +1230,9 @@ type QuestionHead string
 
 // QuestionOverflow Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
 // than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
-// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
-// both kinds share their model inputs unless one has to be read in windows.
+// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only (a Vela 3.0
+// evidence span question: its route's 32,768-token window). Questions of both kinds share their model inputs
+// unless one has to be read in windows.
 type QuestionOverflow string
 
 // QuestionRate Track questions: updates per second over the whole video, 1 (16-second windows at 2 frames per

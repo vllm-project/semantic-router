@@ -310,6 +310,9 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 		removeHeaders: []string{"content-length"},
 		profile:       dispatch.profile,
 	}
+	// The negotiated reply encoding comes before provider metadata and decision
+	// mutations, so an operator-supplied Accept-Encoding still takes precedence.
+	negotiated := appendUpstreamEncodingHeader(&state.setHeaders, ctx)
 	// Provider metadata is applied before credentials so an operator-supplied
 	// extra header can never replace the credential selected for this request.
 	appendProfileHeaders(&state.setHeaders, dispatch.profile)
@@ -321,6 +324,9 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 	appendRoutingHeaders(&state.setHeaders, dispatch.effectiveBackendModel())
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
 	r.applyDecisionHeaderMutations(state, ctx)
+	// Removals apply before every set, so an operator deletion wins only once
+	// the negotiated value yields to it.
+	yieldNegotiatedEncoding(state, negotiated)
 	// Body-stage model and path mutations can change the Envoy route selected
 	// during headers. Apply the same cache policy to every provider dispatch,
 	// including internal multi-model calls and unchanged logical model names.
@@ -518,6 +524,12 @@ func (r *OpenAIRouter) appendProviderCredential(
 		})
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
+	// No upstream receives the authenticator's gateway credential header; a
+	// trusted gateway receives its value under the provider auth header.
+	state.removeHeaders = append(state.removeHeaders, r.gatewayCredentialHeadersForRemoval()...)
+	if state.profile != nil && state.profile.TrustedGateway {
+		return r.appendTrustedGatewayCredential(state, providerAuth, model, backendName, ctx)
+	}
 	if providerAuth.Strategy == "none" {
 		if r.CredentialResolver != nil {
 			state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
@@ -541,6 +553,54 @@ func (r *OpenAIRouter) appendProviderCredential(
 	value := accessKey
 	if providerAuth.Prefix != "" {
 		value = providerAuth.Prefix + " " + accessKey
+	}
+	state.setHeaders = append(state.setHeaders, overwriteRequestHeader(providerAuth.Header, value))
+	return nil
+}
+
+// appendTrustedGatewayCredential presents the request's trusted gateway
+// credential to a trusted gateway, replacing whatever the client sent under
+// the auth header. Static and per-user provider keys are not consulted: a
+// request without the credential fails before dispatch.
+func (r *OpenAIRouter) appendTrustedGatewayCredential(
+	state *routeHeaderState,
+	providerAuth modelcatalog.ProviderAuth,
+	model string,
+	backendName string,
+	ctx *RequestContext,
+) *ext_proc.ProcessingResponse {
+	if r.CredentialResolver != nil {
+		state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
+	}
+	if providerAuth.Strategy == "none" || providerAuth.Header == "" {
+		logging.ComponentErrorEvent("extproc", "trusted_gateway_auth_header_missing", map[string]interface{}{
+			"request_id": ctx.RequestID, "model": model, "backend": backendName,
+		})
+		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
+	}
+	credential, ok := trustedGatewayCredential(ctx)
+	if !ok {
+		logging.ComponentWarnEvent("extproc", "trusted_gateway_credential_missing", map[string]interface{}{
+			"request_id": ctx.RequestID, "model": model, "backend": backendName,
+		})
+		// The protocol contract replaces a bare 401 with a generic message;
+		// the typed error keeps the client-visible reason.
+		ctx.ImmediateProtocolError = llmprotocol.NewError(
+			llmprotocol.ErrorAuthentication, trustedGatewayCredentialCode, trustedGatewayCredentialMessage, nil,
+		)
+		return r.createErrorResponse(401, trustedGatewayCredentialMessage)
+	}
+	// The gateway receives the dedicated credential and no other: a client's
+	// own Authorization or key header does not travel beside it when the
+	// gateway authenticates on a different header.
+	for _, name := range config.CredentialCarrierHeaders() {
+		if !strings.EqualFold(name, providerAuth.Header) {
+			state.removeHeaders = append(state.removeHeaders, name)
+		}
+	}
+	value := credential
+	if providerAuth.Prefix != "" {
+		value = providerAuth.Prefix + " " + credential
 	}
 	state.setHeaders = append(state.setHeaders, overwriteRequestHeader(providerAuth.Header, value))
 	return nil

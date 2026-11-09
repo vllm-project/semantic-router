@@ -54,3 +54,50 @@ Semantic Router 可以在没有外部向量数据库的情况下运行，但若�
 6. 谁负责备份和恢复该服务？
 
 然后在 `global.stores` 或相关服务块下配置共享存储，并仅启用需要它的路由插件。canonical 配置表面见[存储与工具](../tutorials/global/stores-and-tools)。
+
+## Router 本地磁盘上的文件 {#router-local-files}
+
+有两项能力把文件保存在 Router 自己的磁盘上，而不是保存在某个服务中：
+
+| 能力 | 设置 | 未设置时 |
+| --- | --- | --- |
+| 向量存储上传的文件 | `global.stores.vector_store.file_storage_dir` | `/var/lib/vsr/data` |
+| Router Flow 工具状态（`file` 后端） | `global.integrations.looper.flow.state.file.directory` | 用户缓存目录 |
+
+`/var/lib/vsr` 是 Router 的数据目录，下面每种部署方式都会让它可写。本地存储路径都应放在它下面：
+
+```yaml title="vector-store-files"
+global:
+  stores:
+    vector_store:
+      enabled: true
+      backend_type: memory
+      file_storage_dir: /var/lib/vsr/data
+```
+
+Router 启动时，在下载任何模型之前，会检查配置用到的每个目录是否可写。不可写时，它会停止启动，并给出指明该设置的错误：
+
+```text
+check local storage: global.stores.vector_store.file_storage_dir: /var/lib/vsr/data is not writable (/var/lib: read-only file system); mount a writable volume at that path, or set global.stores.vector_store.file_storage_dir to a writable directory
+```
+
+使用此类目录的配置更新会以原因 `storage_unavailable` 被拒绝，正在运行的配置保持生效。
+
+### Helm
+
+Chart 以只读根文件系统运行 Router，并在 `/var/lib/vsr` 挂载一个可写卷。默认情况下该卷是 `emptyDir`，新 Pod 启动时它是空的：即使 `metadata_store: postgres` 保留了文件记录，Pod 被替换后上传的文件也会丢失。若要保留它们，把数据目录放到 PersistentVolumeClaim 上：
+
+```yaml title="values.yaml"
+data:
+  persistence:
+    enabled: true
+    size: 20Gi
+```
+
+`storageClassName`、`accessMode`、`annotations` 和 `existingClaim` 的用法与模型卷 `persistence` 相同。除非 claim 是 `ReadWriteMany`，每个 Router 副本都有自己的数据目录；因此在多副本时，通过一个副本上传的文件无法通过另一个副本读取。用 `extraVolumes` 和 `extraVolumeMounts` 挂载到 `/var/lib/vsr` 的卷会替换 Chart 自带的卷。
+
+Router 的其他可写状态位于模型卷 `/app/models`（已下载的模型、运行时缓存，以及单副本的配置历史）和 `/tmp`（运行时套接字、启动状态和默认的 Flow 状态目录）。
+
+### 本地 Docker 栈
+
+`vllm-sr serve` 在可写文件系统上运行 Router，因此默认值可以直接使用；但 `/var/lib/vsr` 位于 Router 容器内部，新容器启动时没有其中的内容。若要在重启后保留上传的文件，把 `file_storage_dir` 指向 `/app/.vllm-sr` 下的目录，即该栈在主机上的状态目录；`vela-amd` 配方就使用了 `/app/.vllm-sr/files`。

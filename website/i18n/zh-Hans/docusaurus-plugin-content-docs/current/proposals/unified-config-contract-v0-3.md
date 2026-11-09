@@ -12,6 +12,10 @@ translation:
 
 > **状态：** 已实现 · **创建日期：** 2026-03-17
 
+:::note
+本记录早于模型目录的重新设计。它描述的绑定契约、模块 `backend` 块和 `external[]` 模型已弃用：它们仍可加载，并报告 `deprecated_model_field` 警告。[迁移模型资源](../installation/model-resource-migration.md)给出了每一种的当前形式。
+:::
+
 ## 问题 {#problem}
 
 路由器、CLI、仪表盘、Helm chart、operator 和 DSL 先前解释重叠的配置形态。一个表面接受的文件，在另一表面可能需要翻译或未文档化的默认值。模型身份也与部署端点和凭证混在一起。

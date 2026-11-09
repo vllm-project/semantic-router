@@ -65,3 +65,37 @@ func TestInputEstimateIncludesConstrainedOutputSchema(t *testing.T) {
 		t.Fatalf("schema demand before=%+v after=%+v", before, after)
 	}
 }
+
+func TestInputEstimateIncludesReasoningContinuityHistory(t *testing.T) {
+	request := Request{Messages: []Message{{Role: RoleAssistant}}}
+	before := EstimateInput(&request)
+	request.Messages[0].Content = []Content{
+		{Kind: ContentReasoning, ReasoningDetail: &ReasoningDetail{Type: ReasoningDetailText, Text: OptionalString{Present: true, Value: "12345678"}, Signature: OptionalString{Present: true, Value: "signed"}}},
+		{Kind: ContentReasoning, ReasoningDetail: &ReasoningDetail{Type: ReasoningDetailEncrypted, Data: OptionalString{Present: true, Value: "opaque-state"}}},
+	}
+	after := EstimateInput(&request)
+	if after.TextBytes-before.TextBytes != 8 || after.StructuredBytes-before.StructuredBytes != 18 || after.Tokens-before.Tokens != 20 || !after.HasNonText {
+		t.Fatalf("continuity history was not reserved: before=%+v after=%+v", before, after)
+	}
+}
+
+// Structured bytes beyond the text rate, image reserves and media payloads are
+// reserves; a request of prose and framing has none.
+func TestInputEstimateSeparatesReserves(t *testing.T) {
+	prose := Request{Messages: []Message{{Role: RoleUser, Content: []Content{{Kind: ContentText, Text: "12345678"}}}}}
+	if estimate := EstimateInput(&prose); estimate.ReserveTokens != 0 {
+		t.Fatalf("prose reserve = %d, want 0", estimate.ReserveTokens)
+	}
+	agent := prose
+	agent.Messages = append(append([]Message(nil), prose.Messages...),
+		Message{Role: RoleAssistant, Content: []Content{{Kind: ContentToolCall, ToolCall: &ToolCall{ID: "c", Name: "w", Arguments: string(make([]byte, 399))}}}},
+		Message{Role: RoleUser, Content: []Content{{Kind: ContentImage, URL: "https://example.invalid/i"}, {Kind: ContentAudio, Data: string(make([]byte, 1000))}}},
+	)
+	estimate := EstimateInput(&agent)
+	// 400 tool-call bytes keep 100 at the text rate; the image and the audio
+	// payload are wholly reserve.
+	want := 400 - 100 + InputImageTokens + 1000
+	if estimate.ReserveTokens != want {
+		t.Fatalf("reserve = %d, want %d (estimate %+v)", estimate.ReserveTokens, want, estimate)
+	}
+}

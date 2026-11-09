@@ -29,6 +29,9 @@ func (r *OpenAIRouter) handleRequestBody(
 ) (*ext_proc.ProcessingResponse, error) {
 	ctx.ProcessingStartTime = time.Now()
 	requestBody := v.RequestBody.GetBody()
+	if isCountTokensRequest(ctx) {
+		requestBody = withCountTokensOutputLimit(requestBody)
+	}
 	request, earlyResponse := r.prepareProtocolRequest(requestBody, ctx)
 	if earlyResponse != nil {
 		return earlyResponse, nil
@@ -45,6 +48,11 @@ func (r *OpenAIRouter) handleRequestBody(
 	if rejected := r.listenerModelRejection(originalModel, ctx); rejected != nil {
 		return rejected, nil
 	}
+	if isCountTokensRequest(ctx) {
+		// Token budgets admit a count by its input, as they admit a turn.
+		applyRequestContextEstimate(snapshot, ctx)
+		return r.handleCountTokens(request, originalModel, ctx)
+	}
 	if ctx.RequestModel == "" {
 		ctx.RequestModel = originalModel
 	}
@@ -56,6 +64,7 @@ func (r *OpenAIRouter) handleRequestBody(
 		return r.handleLooperInternalRequestWithPlugins(originalModel, ctx)
 	}
 	ctx.UserContent = snapshot.UserContent
+	observeRoutingInput(snapshot.RoutingInput)
 	ctx.RequestImageURL = snapshot.FirstImageURL
 	ctx.RequestAudio = snapshot.FirstAudio
 
