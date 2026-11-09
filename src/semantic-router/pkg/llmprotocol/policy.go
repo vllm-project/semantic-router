@@ -23,6 +23,11 @@ const LossyFieldToolResultError = "tool_result.is_error"
 // and Responses backends as user text.
 const LossyFieldSystemMessageRole = "messages[].role"
 
+// LossyFieldUnreadableFile names files in the conversation when the selected
+// model declares no file input. Accepting the loss sends each such file as a
+// short note, which ProjectUnreadableFiles writes.
+const LossyFieldUnreadableFile = "content.file"
+
 // LossyFieldToolResultContent names images and files inside a tool result,
 // which Chat Completions tool messages cannot carry. Accepting the loss sends
 // them as a user message right after the tool results.
@@ -35,7 +40,7 @@ const LossyFieldReasoningSignature = "reasoning.signature"
 // OptInLossyFields lists the losses an operator may accept while every other
 // lossy translation keeps failing closed.
 func OptInLossyFields() []string {
-	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldToolResultContent, LossyFieldReasoningSignature}
+	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldToolResultContent, LossyFieldReasoningSignature}
 }
 
 type MissingIDPolicy string

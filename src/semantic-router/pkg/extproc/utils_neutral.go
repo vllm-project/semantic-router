@@ -121,6 +121,7 @@ func extractSemanticRequestSignalsWith(request *llmprotocol.Request, selector *r
 	result.ContextTextBytes = estimate.TextBytes
 	result.ContextEquivalentBytes = estimate.EquivalentBytes
 	result.ContextHasNonText = estimate.HasNonText
+	result.ContextReserveTokens = estimate.ReserveTokens
 	return result
 }
 

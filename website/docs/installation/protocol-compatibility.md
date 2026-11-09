@@ -245,6 +245,16 @@ after a tool result, and `x-vsr-protocol-warnings` reports an `approximated`
 diagnostic for `messages[].role`. Messages backends receive the message in
 place either way.
 
+A model whose declared capabilities leave out `file_input` cannot receive a
+file, so a request that holds one fails with `unsupported_capability`. A coding
+agent that reads a PDF returns it as a document in a tool result, and every
+later call of the session resends it. Listing `content.file` in
+`global.router.allow_lossy_translation` sends each file to such a model as a
+short note saying it was not sent, so the agent can read the file another
+way, and `x-vsr-protocol-warnings` reports a `dropped` diagnostic for
+`content.file`. A model that declares `file_input`, or declares no
+capabilities, still receives the file.
+
 Chat Completions tool messages carry text only, so an image or file inside a
 tool result, such as the image a coding agent returns after reading an image
 file, fails toward a Chat backend with `tool_result_media`. Listing
@@ -343,9 +353,10 @@ schema, streaming, tools, or error translation.
   and reports the loss as `approximated` with field `tool_result.is_error` in
   `x-vsr-protocol-warnings` and in `llm_translation_lossy_total`. The list
   also accepts `messages[].role` for system messages inside the conversation
-  and `tool_result.content` for images and files in tool results, both
-  described above, `reasoning.signature` (see the signed thinking note above),
-  and every other lossy translation still fails closed.
+  and `content.file` for files a model cannot read and `tool_result.content`
+  for images and files in tool results, all described above,
+  `reasoning.signature` (see the signed thinking note above), and every other
+  lossy translation still fails closed.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.
@@ -428,4 +439,24 @@ web_search = "disabled"
 
 [features]
 multi_agent = false
+```
+
+Point Codex at the Router through a model provider of your own rather than
+`openai_base_url`. The built-in `openai` provider opens a Responses WebSocket
+first, which the Router does not serve. Codex CLI 0.163.0 retries it for about
+six seconds at the start of every run before it sends the first turn over HTTP,
+and tries it again before later turns. A provider
+defined in `config.toml` uses HTTP from the start, since `supports_websockets`
+defaults to `false`. Set `model` to a Router entrypoint as well, such as
+`vllm-sr/auto`, since a name that matches no entrypoint is sent to a backend
+model of that name:
+
+```toml
+model = "vllm-sr/auto"
+model_provider = "vllm-sr"
+
+[model_providers.vllm-sr]
+name = "vLLM Semantic Router"
+base_url = "http://localhost:8899/v1"
+wire_api = "responses"
 ```
