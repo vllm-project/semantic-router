@@ -349,3 +349,35 @@ func TestAllocator_AcrossCallsNoIndexReuse(t *testing.T) {
 		t.Fatalf("got %q, want %q", secondGot, want)
 	}
 }
+
+// Case: a placeholder already in the text is not masked again, while a real
+// value next to it still is, for the default shape and a configured template.
+func TestMaskText_ExistingPlaceholderNotMaskedAgain(t *testing.T) {
+	cases := []struct {
+		name, text, inside, want string
+		cfg                      *config.MaskingPluginConfig
+	}{
+		{"default shape", "Hi [PERSON_2], Bob called", "PERSON_2", "Hi [PERSON_2], [PERSON_0] called", defaultCfg()},
+		{
+			"configured template", "Hi <<name 3>>, Bob called", "name 3", "Hi <<name 3>>, <<name 0>> called",
+			&config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "<<name {index}>>"}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			inStart, inEnd := byteRange(t, tc.text, tc.inside)
+			bobStart, bobEnd := byteRange(t, tc.text, "Bob")
+			spans := []Span{
+				{EntityType: "PERSON", Start: inStart, End: inEnd, Confidence: 0.9},
+				{EntityType: "PERSON", Start: bobStart, End: bobEnd, Confidence: 0.9},
+			}
+			got, _, err := MaskText(tc.text, spans, nil, NewAllocator(tc.cfg))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

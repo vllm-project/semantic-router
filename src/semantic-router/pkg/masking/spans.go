@@ -2,6 +2,7 @@ package masking
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -31,6 +32,7 @@ type Allocator struct {
 	cfg       *config.MaskingPluginConfig
 	assigned  map[string]string // entityType + "\x00" + value -> placeholder
 	nextIndex map[string]int
+	existing  *regexp.Regexp // text already shaped like one of this config's placeholders
 }
 
 // NewAllocator constructs an Allocator bound to one decision's masking
@@ -42,7 +44,54 @@ func NewAllocator(cfg *config.MaskingPluginConfig) *Allocator {
 		cfg:       cfg,
 		assigned:  make(map[string]string),
 		nextIndex: make(map[string]int),
+		existing:  placeholderPattern(cfg),
 	}
+}
+
+// placeholderPattern matches the placeholders cfg can produce: the default
+// [TYPE_n] shape and every configured template with {index} as digits.
+func placeholderPattern(cfg *config.MaskingPluginConfig) *regexp.Regexp {
+	alternatives := []string{`\[[A-Z][A-Z0-9_]*_\d+\]`}
+	if cfg != nil {
+		entityTypes := make([]string, 0, len(cfg.Placeholders))
+		for entityType := range cfg.Placeholders {
+			entityTypes = append(entityTypes, entityType)
+		}
+		sort.Strings(entityTypes)
+		for _, entityType := range entityTypes {
+			if template := cfg.Placeholders[entityType]; template != "" {
+				alternatives = append(alternatives, strings.ReplaceAll(regexp.QuoteMeta(template),
+					regexp.QuoteMeta(config.MaskingPlaceholderIndexToken), `\d+`))
+			}
+		}
+	}
+	return regexp.MustCompile(strings.Join(alternatives, "|"))
+}
+
+// dropPlaceholderSpans drops spans that touch a placeholder already in the
+// text. Agents echo placeholders back in later turns (a reply that starts
+// "Hi [NAME_2],"), and a detector reading NAME_2 as a name would otherwise
+// mask it again into [[NAME_5]], so the model sees its own earlier output
+// change under it.
+func (a *Allocator) dropPlaceholderSpans(text string, spans []Span) []Span {
+	found := a.existing.FindAllStringIndex(text, -1)
+	if len(found) == 0 {
+		return spans
+	}
+	kept := make([]Span, 0, len(spans))
+	for _, span := range spans {
+		inside := false
+		for _, loc := range found {
+			if span.Start < loc[1] && loc[0] < span.End {
+				inside = true
+				break
+			}
+		}
+		if !inside {
+			kept = append(kept, span)
+		}
+	}
+	return kept
 }
 
 // Placeholder returns the placeholder for one (entityType, value) pair,
@@ -159,7 +208,7 @@ func MaskText(text string, spans []Span, citations []llmprotocol.Citation, a *Al
 			return "", nil, fmt.Errorf("masking: span [%d,%d) outside text of %d bytes", span.Start, span.End, len(text))
 		}
 	}
-	merged := MergeSpans(a.filter(spans))
+	merged := MergeSpans(a.dropPlaceholderSpans(text, a.filter(spans)))
 	if len(merged) == 0 {
 		return text, citations, nil
 	}
