@@ -38,7 +38,7 @@ func validateDecisionReferences(cfg *RouterConfig, decision Decision) error {
 	if err := validateDecisionRuleNode(cfg, decision.Name, &decision.Rules, true); err != nil {
 		return err
 	}
-	warnUnguardedClassifierConditions(decision)
+	warnUnguardedConditions(cfg, decision)
 	if err := validateDecisionAnnotations(decision); err != nil {
 		return err
 	}
