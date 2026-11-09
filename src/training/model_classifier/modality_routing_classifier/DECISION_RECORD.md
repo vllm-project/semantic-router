@@ -31,21 +31,26 @@ not build them.
   in the #3198 thread: `BOTH` means the user explicitly asked for visuals, not
   that visuals would help (§11.4). That is the strict column throughout this
   record, and it is now the operative one.
-- **Consequence, stated because he asked us to:** under that ruling the
+- **Consequence, stated because adaamko asked us to:** under that ruling the
   student-vs-teacher gap becomes significant. The ruling was made on routing
   grounds (§11.4), not to get a particular answer, and would have been the
   same ruling if it had gone the other way.
-- **Human spot-check done (§11.5):** one reviewer labelled 100 test rows
-  blind. On the rows where the judge and the original disagreed, the human
-  sided with the judge 45 times and with the original 7 times. Estimated
-  error: about 7.8% for the judge's labels, about 12.8% for the originals.
-  Applying the human's 100 corrections on top of the judge's labels and
-  recomputing the student-vs-teacher test gives p = 0.011, still significant,
-  against p = 0.007 before the correction (§11.3). One reviewer on a sample
-  of 100, so still not final: a second labeller is being asked for in the
-  #3198 thread, and validation is still to check.
+- **Human spot-check done by two reviewers (§11.5):** two people labelled the
+  same 100 test rows blind.
+  - The two agree on 85 of 100 rows (Cohen's kappa 0.68). The 15 splits are a
+    rubric reading question: where visuals were only implied or talked
+    about, the first reviewer gave `BOTH` or `DIFFUSION`, which rules 3, 5
+    and 6 of the rubric say not to do.
+  - The second sheet follows the rubric as written, so it is the reference
+    (agreed with adaamko in the #3198 thread). Against it the judge's error is
+    about 2.1% and the originals' about 9.5%, and the student-vs-teacher test
+    is unchanged (p = 0.007).
+  - 85/100 is kept as the spread between two humans reading the same rubric.
+  - The rubric was written after looking at the data, so these numbers check
+    the judge against the rubric, not the rubric itself. A fresh 100 rows
+    would do that.
 - **Still open otherwise:** latency (#3856), controls (#3857), the accuracy
-  tolerance itself (§9).
+  tolerance number itself (§9), and the validation spot-check.
 
 ## 1. Task contract
 
@@ -188,10 +193,10 @@ Two baselines are reported. The reason is in §4.
     two-sided p = 0.31. Noise.
   - On the judged, strict labels, which is the policy adaamko ruled for in
     the #3198 thread: 19 against 5, p = **0.007**. Significant (§11.3).
-  - **Recomputed on the human-corrected labels (§11.5): 18 against 5,
-    p = 0.011.** Still significant, and close to the uncorrected p = 0.007.
-    One reviewer on 100 of 759 rows, so this still isn't the final word; a
-    second labeller is being asked for in the #3198 thread.
+  - **Recomputed on the human-corrected labels (§11.5):** 18 against 5,
+    p = 0.011, with the first reviewer's sheet; 19 against 5, p = **0.007**,
+    with the reference sheet. Significant either way. Both sheets cover 100
+    of 759 rows.
   - **Training seed noise is not measured.** Each model was trained once,
     before the trainer had a `--seed` option. A gap of 0.79 points is about 6
     rows, and the McNemar test only covers which test rows were sampled, not
@@ -464,23 +469,28 @@ itself waits on #3856's run format.
 
 **Status: `TODO` for the number itself.** adaamko left the tolerance number
 open for reviewers ("happy to have the tolerance itself be part of the
-decision record review"). It is not invented here. What is now settled is
-which label set the tolerance gets set against: the judged, strict labels
-(§11.4), not the original ones.
+decision record review"). It is not invented here. What is now settled:
+
+- **Labels:** the tolerance is set against the judged, strict labels
+  (§11.4), not the original ones.
+- **Human reference:** the second reviewer's sheet, which follows the rubric
+  as written (§11.5). adaamko proposed this in the #3198 thread and it was
+  agreed there.
+- **Human spread:** two people reading the same rubric agree on 85 of 100
+  rows (kappa 0.68). A tolerance should not claim more precision than that.
 
 What reviewers have to work with:
 
 - **Accuracy gap:** the candidate is 0.79 points below the clean baseline on
   the original labels (96.31% against 97.10%), not significant there
   (p = 0.31, §3). On the judged, strict labels, the operative ones, the same
-  comparison is significant (p = 0.007, §11.3), and stays significant after
-  the human correction (p = 0.011, §11.5).
+  comparison is significant (p = 0.007, §11.3), and stays at p = 0.007 after
+  the correction from the reference sheet (§11.5).
 - **Agreement:** 96.44% with the clean baseline.
 - **Direction of the errors:** the candidate over-predicts `BOTH` (§3, §7). It
   is not simply weaker everywhere.
-- **Human check:** done on 100 test rows (§11.5), with the p-value recomputed
-  on the correction. It has one reviewer, so the tolerance should not be set
-  from it alone until a second labeller confirms.
+- **Human check:** done on 100 test rows by two reviewers (§11.5). Against
+  the reference sheet the judge's error is about 2.1%.
 
 Choices for whoever sets the tolerance:
 
@@ -498,9 +508,10 @@ The candidate does not move forward if any of these hold:
 - No meaningful p99 win is measured once §5 lands.
 - Once §8 lands, it does not clearly beat the controls (lexical, majority
   class, prior-matched random), judged per class and not only on accuracy.
-- The human spot-check (§11.5) puts the judge's error near 7.8%. Any tolerance
-  has to be wide enough to absorb a label error of that size, or the check
-  is not meaningful.
+- The human spot-check (§11.5) puts the judge's error near 2.1% against the
+  reference sheet, and two humans disagree on 15 of 100 rows. Any tolerance
+  has to be wide enough to absorb label error of that size, or the check is
+  not meaningful.
 
 ## 11. Label audit
 
@@ -542,7 +553,10 @@ All in `label_audit/`:
   row and rejects any that were made for different prompts, instead of joining
   them by position.
 - `audit_report_test.txt` and `audit_report_validation.txt`.
-- `human_review.tsv`: blinded sheet for a human spot-check (§11.5).
+- `human_review.tsv`: the first reviewer's labels on the blinded 100-row
+  spot-check sheet (§11.5).
+- `human_review_second_labeler.tsv`: the second reviewer's labels on the same
+  rows, labelled blind. This is the reference sheet.
 
 ### 11.1 How often the judge agrees with the original labels
 
@@ -622,21 +636,23 @@ Exact McNemar test on paired correctness, candidate against clean baseline:
 | Original | 15 | 9 | 0.31 |
 | Judged, strict | 19 | 5 | **0.007** |
 | Judged, inclusive | 16 | 8 | 0.15 |
-| Judged, strict, human-corrected | 18 | 5 | **0.011** |
+| Judged, strict, corrected by the first sheet | 18 | 5 | **0.011** |
+| Judged, strict, corrected by the reference sheet | 19 | 5 | **0.007** |
 
 - Original labels: the gap is noise.
 - Strict labels, the operative ones (§11.4): the gap is significant.
 - Inclusive labels, the rejected policy: the gap is noise again.
-- Strict labels after applying the one-reviewer human correction (§11.5): one
-  fewer row favours the clean baseline, and the gap is still significant.
+- Strict labels after the human correction (§11.5): the first sheet moves one
+  row, the reference sheet moves none, and the gap stays significant.
 - **The verdict depends on the `BOTH` policy**, which is now decided (§11.4):
   strict. So the operative claim is that the candidate is measurably worse
   than the clean baseline, not that the two are indistinguishable. That
-  claim rests on the judged labels, which one human reviewer has checked on
-  100 test rows and the p-value recomputed against (§11.5). A second
-  labeller is still being asked for.
+  claim rests on the judged labels, which two human reviewers have checked on
+  100 test rows (§11.5).
 
-To reproduce the tables in §11.2 and §11.3, and the human-corrected row:
+To reproduce the tables in §11.2 and §11.3, and the corrected rows (run once
+per sheet, swapping `--human human_review_second_labeler.tsv` for the
+reference row):
 
 ```bash
 cd label_audit
@@ -676,7 +692,7 @@ So: `BOTH` is **explicitly requests visual output**. The how-tos in §11.1's
 confusion breakdown move to `AR`, which they already do under the strict
 column used throughout this record.
 
-What this record does as a result, each one his explicit instruction:
+What this record does as a result, each one at adaamko's explicit instruction:
 
 - **Adopts strict, not inclusive, as the operative label set** for every
   table above. Inclusive stays in the tables as the rejected alternative,
@@ -692,18 +708,23 @@ What this record does as a result, each one his explicit instruction:
   about the ruling's effect, not as the reason the ruling was made. The
   ruling is justified on routing grounds, in the quote above, and would have
   been made the same way if it had come out the other direction.
-- **Human check done, p-value recomputed, not yet a settled gate.** His
-  ruling asked for the spot-check before the number goes anywhere. It is
-  done (§11.5), with one reviewer, and the p-value is recomputed on the
-  correction (0.011, against 0.007 before it). Everything in §3 and §9 that
-  depends on the judged labels should still be read as provisional until a
-  second labeller confirms it.
+- **Human check done by two reviewers, p-value recomputed.** The ruling
+  asked for the spot-check before the number goes anywhere. It is done
+  (§11.5), and the p-value on the reference sheet's correction is 0.007, the
+  same as before it. The tolerance number itself (§9) is still open.
 
 ### 11.5 Limits of this audit (read before citing it)
 
 - **The judge is not independent.**
   - All 1,517 judgments came from one model in one session (`claude-sonnet-5`),
     using a rubric I wrote after looking at the data.
+- **The rubric was written after seeing the data.** I wrote it for this audit,
+  after the split was exported and after reading rows, so some rules and
+  examples ("make it bluer", the Stable Diffusion style prompts) come from
+  rows in these splits. The second reviewer noticed this in the #3198 thread.
+  The human check therefore measures how well the judge applies this rubric,
+  not whether the rubric holds up on new prompts. A fresh 100 rows, not seen
+  while writing it, would test that.
   - It gave the same answer on a 76-row re-judge (100% self-consistency). That
     is inflated, because it was the same session and context. It shows the
     judge is steady, not that it is right.
@@ -713,16 +734,44 @@ What this record does as a result, each one his explicit instruction:
 - **Clipped text.** The judge saw rows cut at 400 characters (106 test rows and
   87 validation rows are tagged `truncated`). Those judgments reflect what was
   visible.
-- **Human check: done for test, one reviewer.** adaamko's ruling in §11.4
-  asked for it before the number goes anywhere. `label_audit/human_review.tsv`
-  holds 100 blind test rows (56 disagreements, 44 agreements), labelled by one
-  reviewer. Run `judge_labels.py report --split test --human
-  human_review.tsv` to reproduce the estimate: the judge's error is about
-  7.8% and the originals' about 12.8%.
-  - Done: the p-value is recomputed on the human-corrected labels (§11.3):
-    0.011, against 0.007 before the correction.
-  - Not done: a second labeller on the same 100 rows (being asked for in the
-    #3198 thread) and the validation split's spot-check.
+- **Human check: done for test, two reviewers.** adaamko's ruling in §11.4
+  asked for it before the number goes anywhere. Both sheets hold the same 100
+  blind test rows (56 disagreements, 44 agreements). Run `judge_labels.py
+  report --split test --human <sheet>` to reproduce each line below.
+
+| Sheet | Sides with judge / original / neither (of 56) | Agrees on the 44 agreement rows | Judge error | Original error |
+|---|---|---|---|---|
+| `human_review.tsv` (first) | 45 / 7 / 4 | 41 | ~7.8% | ~12.8% |
+| `human_review_second_labeler.tsv` (reference) | 56 / 0 / 0 | 43 | ~2.1% | ~9.5% |
+
+- **The two sheets agree on 85 of 100 rows (kappa 0.68).** 14 of the 15
+  splits are `DIFFUSION` or `BOTH` on the first sheet (mine) and `AR` on the
+  reference sheet:
+  - 7 talk about image generation or ask for image prompts ("can you create
+    images?", "List of 60 prompts to create... coloring book images"). Rule 3
+    makes these `AR`; I gave `DIFFUSION`.
+  - 2 are "what does X look like in detail" questions. Rule 5 makes them `AR`
+    with the `vh` flag; I gave `DIFFUSION`.
+  - 4 are text tasks that mention images or usually come with visuals (a
+    presentation, a photo essay, a rewrite about image segmentation, a cut
+    resume text). Rules 3 and 6 make them `AR`; I gave `BOTH`.
+  - 1 is "Show me the difference between LCD and DC motors and explain why".
+    I gave `BOTH`, as the judge did; the reference sheet gave `AR`. It is the
+    one row where the reference sheet and the judge differ.
+  - The 15th split goes the other way: a terse Stable Diffusion style prompt
+    that the rubric's `D` definition names outright. I gave `AR`; the
+    reference sheet and the judge gave `DIFFUSION`.
+- So the first sheet read the rubric loosely wherever visuals were implied or
+  talked about; the reference sheet reads it strictly, as the judge does.
+- **Reference:** the second sheet, agreed with adaamko in the #3198 thread.
+  85/100 is kept as the spread between two humans. No new round for now.
+- **If implied-visual prompts should route differently,** that is a rubric
+  change first, with a few worked `BOTH` and `DIFFUSION` examples, then a
+  fresh 100 rows.
+- **The reference sheet sits close to the judge** (99 of 100). Both read
+  the rubric strictly, and the rubric was fitted to these rows (above), so
+  read the 2.1% as a lower bound.
+- Not done: the validation split's spot-check.
 - **The API mode is untested.** `judge_labels.py api` should reproduce the audit
   with an independent model, but it has not been run against the real API (no
   key was available).
