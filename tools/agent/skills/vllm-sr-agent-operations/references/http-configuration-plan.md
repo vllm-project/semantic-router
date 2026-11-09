@@ -1,0 +1,259 @@
+# Prepare a configuration change over HTTP
+
+This example prepares one decision-description change for review through the
+Router management API. It stops after a config plan; nothing is saved or
+activated. The [configuration workflow](https://vllm-sr.ai/install/agent/vllm-sr/references/configuration-loop.md) covers a later,
+separately authorized activation.
+
+Use Bash, curl and Python 3 in an empty working directory. Use a disposable
+Router with the secret-free fixture below, a converged persisted/active
+configuration, and no concurrent writers. Follow the
+[installation skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md) to start a new stack; do not restart an existing
+stack to try this example. Set `ROUTER_ORIGIN` to its management origin. If bearer
+auth is enabled, supply `ROUTER_TOKEN` through your environment with the built-in
+`viewer` role; it permits discovery, reads and planning, but blocks writes.
+
+A viewer's config read may redact secrets. Do not use that redacted document as
+a whole-config replacement for a deployment containing real credentials. This
+example has no provider secrets and tests preparation, not backend delivery.
+
+## 1. Use a fixture with something to preserve
+
+For a new disposable stack, use this as `config.yaml`. Both backend addresses
+are synthetic; no model server or inference request is needed for this task.
+The second decision makes accidental replacement of the decision list visible.
+
+```yaml
+version: v0.3
+listeners:
+  - name: example-http
+    address: 127.0.0.1
+    port: 8888
+    timeout: 120s
+providers:
+  defaults:
+    model: general-model
+  models:
+    - name: general-model
+      provider_model_id: general-model
+      backend_refs:
+        - name: general-local
+          endpoint: 127.0.0.1:18081
+          protocol: http
+          provider: vllm
+          weight: 100
+    - name: specialist-model
+      provider_model_id: specialist-model
+      backend_refs:
+        - name: specialist-local
+          endpoint: 127.0.0.1:18082
+          protocol: http
+          provider: vllm
+          weight: 100
+routing:
+  strategy: priority
+  decisions:
+    - name: default-route
+      description: Generated during setup to route all requests to the default model.
+      priority: 100
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: general-model, use_reasoning: false}]
+    - name: specialist-route
+      description: Preserve this unrelated decision.
+      priority: 50
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: specialist-model, use_reasoning: false}]
+```
+
+For a running disposable stack, proceed only if its canonical config has these
+same two decisions and the expected old description. Always build the candidate
+from the fresh API response, not from this launch file, which may omit defaults.
+
+## 2. Discover the contract and record the baseline
+
+Run the following blocks in the same Bash session. These requests read data;
+`curl --fail-with-body` stops on HTTP errors rather than treating them as success.
+
+```bash
+set -euo pipefail
+export ROUTER_ORIGIN="${ROUTER_ORIGIN:-http://127.0.0.1:8080}"
+request() {
+  if [[ -n "${ROUTER_TOKEN:-}" ]]; then
+    set -- -H "Authorization: Bearer $ROUTER_TOKEN" "$@"
+  fi
+  curl --fail-with-body --silent --show-error "$@"
+}
+
+request "$ROUTER_ORIGIN/ready" > ready.json
+request "$ROUTER_ORIGIN/api/v1?capability=config" > discovery.json
+request "$ROUTER_ORIGIN/openapi.json?path=/api/v1/config/plan&method=POST" > plan-contract.json
+request "$ROUTER_ORIGIN/api/v1/config/schema?view=section&path=routing.decisions" > decision-schema.json
+request "$ROUTER_ORIGIN/api/v1/config/hash" > before-hash.json
+request "$ROUTER_ORIGIN/api/v1/config/versions" > before-versions.json
+request -D baseline.headers "$ROUTER_ORIGIN/api/v1/config" > baseline.json
+```
+
+Inspect discovery and the filtered OpenAPI: the plan request is an object with
+`yaml` (a string containing the candidate document) and `mode` (`replace` here).
+It is not a bare candidate object or a JSON-encoded string containing that object.
+`GET /api/v1/config` returns the canonical document as JSON, with an ETag header.
+
+## 3. Prepare and inspect the local candidate
+
+```bash
+python3 - <<'PY'
+import copy
+import difflib
+import json
+from pathlib import Path
+
+load = lambda name: json.loads(Path(name).read_text())
+assert load("ready.json")["ready"] is True
+identity = load("before-hash.json")
+hashes = [identity.get(k) for k in (
+    "source_config_hash", "generated_runtime_hash", "active_runtime_hash")]
+assert all(hashes) and len(set(hashes)) == 1
+assert identity["activation_status"] == "active"
+baseline = load("baseline.json")
+decisions = baseline["routing"]["decisions"]
+assert len(decisions) >= 2
+matches = [i for i, d in enumerate(decisions) if d["name"] == "default-route"]
+assert len(matches) == 1
+index = matches[0]
+old = "Generated during setup to route all requests to the default model."
+new = "General requests use the default model"
+assert decisions[index]["description"] == old
+candidate = copy.deepcopy(baseline)
+candidate["routing"]["decisions"][index]["description"] = new
+baseline_text = json.dumps(baseline, indent=2, sort_keys=True) + "\n"
+candidate_text = json.dumps(candidate, indent=2, sort_keys=True) + "\n"
+Path("candidate.json").write_text(candidate_text)
+Path("candidate.diff").write_text("".join(difflib.unified_diff(
+    baseline_text.splitlines(keepends=True), candidate_text.splitlines(keepends=True),
+    fromfile="baseline", tofile="candidate")))
+# JSON is also a YAML document: preserve the full config without another parser.
+Path("plan-request.json").write_text(json.dumps({
+    "yaml": json.dumps(candidate), "mode": "replace"}) + "\n")
+print(f"default-route.description: {old!r} -> {new!r}")
+PY
+
+cat candidate.diff
+```
+
+Review the diff: only `default-route.description` should change. The complete
+second decision and all other fields must remain. A merge request also replaces
+lists wholesale, so a patch containing only the target decision could remove
+others. This example deliberately submits the complete candidate with `replace`.
+
+## 4. Check the exact candidate without applying it
+
+```bash
+python3 - <<'PY'
+import difflib
+import json
+import os
+import subprocess
+from pathlib import Path
+
+# Read once: inspect and send these same bytes, without reopening the request.
+request_bytes = Path("plan-request.json").read_bytes()
+payload = json.loads(request_bytes)
+submitted = json.loads(payload["yaml"])  # This walkthrough writes JSON as YAML.
+candidate = json.loads(Path("candidate.json").read_text())
+if payload.get("mode") != "replace" or submitted != candidate:
+    raise SystemExit("Request differs from reviewed candidate; no plan request sent.")
+baseline = json.loads(Path("baseline.json").read_text())
+baseline_text = json.dumps(baseline, indent=2, sort_keys=True) + "\n"
+submitted_text = json.dumps(submitted, indent=2, sort_keys=True) + "\n"
+expected_diff = "".join(difflib.unified_diff(
+    baseline_text.splitlines(keepends=True), submitted_text.splitlines(keepends=True),
+    fromfile="baseline", tofile="candidate"))
+if Path("candidate.diff").read_text() != expected_diff:
+    raise SystemExit("Review diff is stale; no plan request sent.")
+command = ["curl", "--fail-with-body", "--silent", "--show-error",
+           "-H", "Content-Type: application/json", "--data-binary", "@-"]
+if os.environ.get("ROUTER_TOKEN"):
+    command += ["-H", "Authorization: Bearer " + os.environ["ROUTER_TOKEN"]]
+command += [os.environ["ROUTER_ORIGIN"] + "/api/v1/config/plan"]
+with Path("plan.json").open("wb") as output:
+    subprocess.run(command, input=request_bytes, stdout=output, check=True)
+PY
+
+request "$ROUTER_ORIGIN/api/v1/config/hash" > after-hash.json
+request "$ROUTER_ORIGIN/api/v1/config/versions" > after-versions.json
+
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+load = lambda name: json.loads(Path(name).read_text())
+plan = load("plan.json")
+etags = [line.split(":", 1)[1].strip()
+         for line in Path("baseline.headers").read_text().splitlines()
+         if line.lower().startswith("etag:")]
+assert len(etags) == 1 and plan["current_etag"] == etags[0]
+assert plan["valid"] is True and plan["changed"] is True
+assert plan["mode"] == "replace" and plan["candidate_etag"]
+assert load("before-hash.json") == load("after-hash.json")
+assert load("before-versions.json") == load("after-versions.json")
+print("Baseline:", plan["current_etag"])
+print("Candidate:", plan["candidate_etag"])
+print("Server plan passed; observed config identities and history unchanged.")
+print("Prepared for review only. Nothing saved or activated.")
+PY
+```
+
+Stop here. Retain `plan-request.json`, `candidate.json`, the reviewed diff and
+responses together: the plan returns identities, not a field-level diff. The
+submission step checks the request document against the candidate, checks its
+diff against the reviewed diff, and sends the same in-memory request bytes to
+curl through stdin. A mismatch stops before the plan call. These checks bind
+the contents; they do not establish that a person read or approved the diff.
+The local review establishes the intended change; `valid: true` alone does not.
+ETags identify bytes, so do not compare the candidate ETag with a hash of your
+locally formatted JSON and assume a mismatch means different configuration.
+
+A successful config plan includes the mutation path's validation and hot-reload
+compatibility checks, not activation or a routed-request test. The read/plan and
+before/after checks are separate observations, not a transaction or continuous
+monitor. If the baseline differs or a check fails, stop and inspect the response;
+do not apply the candidate or infer that the failure is an API defect.
+
+Distinguish a confirmed baseline mismatch from missing baseline evidence. If a
+required response field, ETag or state observation is missing or unreadable, stop
+and retain the artifacts. When reporting results, mark the affected guarantee and
+dependent conclusions as unverified; retain other conclusions only where the
+evidence supports them. Stopping alone does not prove the candidate incorrect.
+This walkthrough does not emit a structured pass/fail/unknown result.
+
+## Recipe validation is a narrower alternative
+
+An agent may instead discover `GET /api/v1/config/recipes/default` and
+`POST /api/v1/config/recipes/validate`. For the same description-only task,
+construct the request as `{"name": "default", "routing": <complete routing block>}`,
+keeping every other decision and field. Omit read-view metadata such as
+`entrypoint_source`, `source` and `deletable`.
+
+The default recipe's read view includes a synthesized recipe-level description.
+A nonempty recipe-level `description` is rejected on mutation; omit it. Named
+recipes can set their recipe-level description. This restriction does not apply
+to decision descriptions within `routing`. An explicitly supplied `entrypoints`
+field can change entrypoint bindings: omitting it preserves them for this task.
+
+Recipe validation applies the requested recipe mutation to the current persisted
+configuration in memory, then validates the resulting complete configuration
+document without saving or reloading it. It returns `valid`, `name` and
+`action`, but neither a candidate ETag nor the full-config plan's hot-reload
+compatibility check. The returned `action` describes the proposed operation, not
+a completed save.
+
+Record the recipe GET ETag as the read baseline and preserve the exact submitted
+payload. However, validation reads the persisted configuration again, does not
+enforce an `If-Match` precondition, and returns no `current_etag`. The earlier
+GET ETag therefore does not establish which baseline validation used if the
+configuration changes between requests. This example assumes no concurrent
+writers; that assumption is not a baseline-binding guarantee provided by the
+validation endpoint.
+
+Compare the complete intended result separately. Do not describe recipe
+validation as a config plan or as proof that the candidate is ready to activate.

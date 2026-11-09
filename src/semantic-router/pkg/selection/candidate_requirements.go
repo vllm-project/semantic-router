@@ -19,6 +19,16 @@ type CandidateDemand struct {
 	InputTokens       int
 	MaxOutputTokens   *int64
 	AutomaticOutput   bool
+
+	// InputReserveTokens is the part of InputTokens that the input estimate
+	// reserves for structured data and media. A refusal does not count it.
+	InputReserveTokens int
+}
+
+// WithoutReserves is the demand a refusal rests on.
+func (d CandidateDemand) WithoutReserves() CandidateDemand {
+	d.InputTokens, d.InputReserveTokens = d.InputTokens-d.InputReserveTokens, 0
+	return d
 }
 
 func DemandForRequest(request *llmprotocol.Request) CandidateDemand {
@@ -51,10 +61,11 @@ func DemandForRequest(request *llmprotocol.Request) CandidateDemand {
 		}
 	}
 	modelRequired, _ = llmprotocol.ParseCapabilities(filtered)
-	demand := CandidateDemand{Known: true, Capabilities: required, ModelCapabilities: modelRequired, InputTokens: llmprotocol.EstimateInput(request).Tokens}
+	estimate := llmprotocol.EstimateInput(request)
+	demand := CandidateDemand{Known: true, Capabilities: required, ModelCapabilities: modelRequired, InputTokens: estimate.Tokens, InputReserveTokens: estimate.ReserveTokens}
 	demand.AutomaticOutput = request.Sampling.AutomaticOutput
 	if request.Sampling.AutomaticInputTokens != nil {
-		demand.InputTokens = int(*request.Sampling.AutomaticInputTokens)
+		demand.InputTokens, demand.InputReserveTokens = int(*request.Sampling.AutomaticInputTokens), 0
 	}
 	if request.Sampling.MaxOutputTokens != nil {
 		value := *request.Sampling.MaxOutputTokens
