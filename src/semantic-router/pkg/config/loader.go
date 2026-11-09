@@ -231,6 +231,7 @@ func decodeYAMLBytes(data []byte, expand func(map[string]interface{})) (*RouterC
 	if err != nil {
 		return nil, err
 	}
+	cfg.SourceDocument = append([]byte(nil), data...)
 	documentDigest := sha256.Sum256(data)
 	cfg.DocumentHash = hex.EncodeToString(documentDigest[:])
 	return cfg, nil

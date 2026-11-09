@@ -13,6 +13,8 @@ ignore: |
   # Jinja2 template files (contain {% %} and {{ }} syntax)
   **/*.template.yaml
   **/.vllm-sr/**
+  # Intentionally invalid YAML used as a parse-error fixture.
+  src/semantic-router/pkg/config/testdata/dryrun/parse-error.yaml
 
 rules:
   braces:
