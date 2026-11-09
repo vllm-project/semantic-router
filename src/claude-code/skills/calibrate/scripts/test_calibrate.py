@@ -119,7 +119,7 @@ class EndToEnd(Sandbox):
         self.assertEqual(record["model"], "vela3-lite")
 
     def test_the_options_may_follow_the_subcommand(self):
-        code, out, _ = self.run_cli("report", "--id", "vsr@inline")
+        code, out, _ = self.run_cli("report", "--id", "vsr@inline", "--detail")
         self.assertEqual(code, 0)
         self.assertIn("pluginConfigs['vsr@inline']", out)
         code, out, _ = self.run_cli("sample", "--id", "vsr@inline", "--apps", "guard")
@@ -128,7 +128,7 @@ class EndToEnd(Sandbox):
 
     def test_the_default_log_path_is_under_the_config_dir(self):
         self.save({})
-        code, out, _ = self.run_cli("report", "--id", "vsr@inline")
+        code, out, _ = self.run_cli("report", "--id", "vsr@inline", "--detail")
         self.assertEqual(code, 0)
         self.assertIn(f"log {self.log}: 10 decisions", out)
 
@@ -241,6 +241,182 @@ class Probe(Sandbox):
         self.assertEqual(code, 2)
         self.assertIn("chmod 600", err)
         probes.assert_not_called()
+
+
+# Ten labeled routes: three tasks just over the easy line went to Sonnet and could have gone to Haiku.
+ROUTES = [
+    (0.55, "sonnet", "too-high"),
+    (0.58, "sonnet", "too-high"),
+    (0.60, "sonnet", "too-high"),
+    (0.20, "haiku", "right"),
+    (0.30, "haiku", "right"),
+    (0.40, "haiku", "right"),
+    (0.90, "sonnet", "right"),
+    (1.00, "sonnet", "right"),
+    (1.10, "sonnet", "right"),
+    (1.20, "sonnet", "right"),
+]
+
+
+class Scoped(Sandbox):
+    """A log with labeled routes and labeled guard decisions, both enough to tune."""
+
+    def setUp(self):
+        super().setUp()
+        with self.log.open("a") as out:
+            for i, (level, model, _) in enumerate(ROUTES):
+                line = {
+                    "id": f"r{i}",
+                    "at": 0,
+                    "session": "s",
+                    "app": "router",
+                    "verdict": "routed",
+                    "score": level,
+                    "subject": f"task {i}",
+                    "detail": {"level": level, "confidence": 0.8, "model": model},
+                    "learnable": True,
+                }
+                out.write(json.dumps(line) + "\n")
+        pairs = [f"g{i}={label}" for i, (_, label) in enumerate(GUARD_LABELS)]
+        pairs += [f"r{i}={label}" for i, (_, _, label) in enumerate(ROUTES)]
+        self.assertEqual(self.run_cli("--id", "vsr@inline", "label", *pairs)[0], 0)
+        self.plan_path = self.dir / "calibration-plan.json"
+
+    def suggest(self, *extra):
+        code, out, err = self.run_cli(
+            "--id", "vsr@inline", "suggest", "--out", str(self.plan_path), *extra
+        )
+        self.assertEqual(code, 0, err)
+        return out
+
+
+class Scope(Scoped):
+    def test_a_router_only_plan_never_touches_the_other_apps(self):
+        self.suggest("--apps", "router")
+        saved = json.loads(self.plan_path.read_text())
+        self.assertEqual(list(saved["apps"]), ["router"])
+        self.assertEqual(set(saved["changes"]), {"routerEasyBelow"})
+        self.assertEqual(
+            self.run_cli("--id", "vsr@inline", "apply", str(self.plan_path))[0], 0
+        )
+        options = self.options()
+        self.assertEqual(options["routerEasyBelow"], 0.61)
+        self.assertNotIn("guardReview", options)
+        self.assertNotIn("redactPii", options)
+
+    def test_apply_with_apps_takes_only_those_from_a_wider_plan(self):
+        self.suggest()
+        saved = json.loads(self.plan_path.read_text())
+        self.assertIn("guardReview", saved["changes"])
+        code, _, err = self.run_cli(
+            "--id", "vsr@inline", "apply", str(self.plan_path), "--apps", "router"
+        )
+        self.assertEqual(code, 0, err)
+        self.assertNotIn("guardReview", self.options())
+        record = json.loads(
+            (self.log.parent / "calibrations.jsonl").read_text().splitlines()[-1]
+        )
+        self.assertEqual(set(record["changes"]), {"routerEasyBelow"})
+
+    def test_apply_refuses_a_change_for_an_app_the_plan_was_not_made_for(self):
+        path = self.dir / "plan.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "pluginId": "vsr@inline",
+                    "apps": {"router": {}},
+                    "changes": {"guardReview": {"from": 0.9, "to": 0.85}},
+                }
+            )
+        )
+        code, _, err = self.run_cli("--id", "vsr@inline", "apply", str(path))
+        self.assertEqual(code, 2)
+        self.assertIn("may not set guardReview", err)
+        self.assertNotIn("guardReview", self.options())
+
+    def test_an_unknown_app_is_refused(self):
+        code, _, err = self.run_cli("--id", "vsr@inline", "report", "--apps", "routing")
+        self.assertEqual(code, 2)
+        self.assertIn("unknown app 'routing'", err)
+
+
+class PlainWords(Scoped):
+    def test_the_report_says_what_happened_in_words(self):
+        code, out, _ = self.run_cli(
+            "--id", "vsr@inline", "report", "--apps", "router,guard"
+        )
+        self.assertEqual(code, 0)
+        self.assertIn(
+            "10 subagents: 3 went to Haiku, 7 to Sonnet, 0 to Opus, 0 kept your session's model. "
+            "You answered 10; 8 are needed to tune.",
+            out,
+        )
+        self.assertIn(
+            "10 commands: 3 held for you, 7 allowed. You answered 10; 8 are needed to tune.",
+            out,
+        )
+        for hidden in ("routerEasyBelow", "guardReview", "#", "Pushback", "Details"):
+            self.assertNotIn(hidden, out)
+        _, detail, _ = self.run_cli(
+            "--id", "vsr@inline", "report", "--apps", "router", "--detail"
+        )
+        self.assertIn("routerEasyBelow 0.50", detail)
+        self.assertIn("#", detail)
+        self.assertNotIn("guardReview", detail)
+
+    def test_the_router_suggestion_in_words_without_a_goal(self):
+        out = self.suggest("--apps", "router")
+        for line in (
+            "Easy line 0.50 → 0.61: tasks judged easier than this go to Haiku.",
+            "Hard line stays 1.50: tasks judged at least this hard go to Opus",
+            "Confidence line stays 0.30: vSR changes a subagent's model only when it is at least this sure.",
+            "On your log: 3 tasks that went to Sonnet would go to Haiku.",
+            "Your answers: 7 of 10 agree with vSR now, 10 of 10 would after.",
+            "Recommended: apply",
+        ):
+            self.assertIn(line, out)
+        for hidden in ("goal", "Aim", "routerEasyBelow", "Risky commands", "Details"):
+            self.assertNotIn(hidden, out)
+        self.assertIsNone(json.loads(self.plan_path.read_text())["goal"])
+
+    def test_detail_still_shows_the_table_and_the_diff(self):
+        out = self.suggest("--apps", "router", "--detail")
+        self.assertIn("\nDetails\n", out)
+        self.assertIn("labels agree (before → after)", out)
+        self.assertRegex(out, r"router +routerEasyBelow +0\.50 +0\.61 \*")
+        self.assertIn("settings diff:", out)
+        self.assertNotIn("goal", out)
+
+    def test_the_goal_is_named_in_plain_words_for_the_other_apps(self):
+        out = self.suggest("--apps", "router,guard", "--goal", "fewer-false-alarms")
+        self.assertIn("Aim: fewer false alarms", out)
+        self.assertIn("Review line 0.90 →", out)
+
+    def test_too_few_answers_say_how_many_more(self):
+        self.save({"logPath": str(self.log), "check": True})
+        out = self.suggest("--apps", "check")
+        self.assertIn("No decisions logged yet", out)
+        (self.log.parent / "labels.jsonl").write_text("")
+        out = self.suggest("--apps", "guard")
+        self.assertIn(
+            "Not enough answers yet: 0 of 8 (answer more in /vsr or here)", out
+        )
+        self.assertNotIn("Recommended", out)
+
+
+class Recommendation(unittest.TestCase):
+    def test_apply_only_when_more_answers_agree(self):
+        self.assertEqual(plan.recommend(7, True, 1, 6), "more")
+        self.assertEqual(plan.recommend(8, False, 5, 5), "keep")
+        self.assertEqual(plan.recommend(8, True, 5, 5), "keep")
+        self.assertEqual(plan.recommend(8, True, 6, 5), "keep")
+        self.assertEqual(plan.recommend(8, True, 5, 6), "apply")
+
+    def test_keep_when_the_lines_already_fit(self):
+        entry = {"recommend": "keep", "labels": 9}
+        self.assertEqual(
+            plan.plain.recommendation(entry), "Recommended: keep the current settings"
+        )
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "setup" / "scripts"))
+import plain
 import runtime
 import settings
 from decisions import (
@@ -21,6 +22,8 @@ from decisions import (
     BINARY,
     BINARY_LABELS,
     ROUTER_KEYS,
+    TIERS,
+    Decision,
     Log,
     acts,
     as_number,
@@ -29,6 +32,7 @@ from decisions import (
     level_of,
     read_labels,
     read_log,
+    tier_of,
 )
 from fitting import (
     GOALS,
@@ -45,6 +49,23 @@ from questions import distance
 
 # The options a calibration may write: the router's lines and each binary app's thresholds.
 CALIBRATED = (*ROUTER_KEYS, *(key for spec in BINARY.values() for key in spec.keys))
+APP_OF = {
+    **dict.fromkeys(ROUTER_KEYS, "router"),
+    **{key: app for app, spec in BINARY.items() for key in spec.keys},
+}
+
+
+def parse_apps(text: str | None) -> list[str] | None:
+    """The apps a comma list names, in vSR's order; None for no list (every app)."""
+    if not text:
+        return None
+    named = {name.strip().lower() for name in text.split(",") if name.strip()}
+    unknown = sorted(named - set(APPS))
+    if unknown:
+        raise settings.SettingsError(
+            f"unknown app {', '.join(map(repr, unknown))}; choose from {', '.join(APPS)}"
+        )
+    return [app for app in APPS if app in named]
 
 
 @dataclass
@@ -100,18 +121,67 @@ def context(args: argparse.Namespace) -> Context:
     )
 
 
+def binary_case(ctx: Context, d: Decision) -> tuple[tuple[float, ...], bool] | None:
+    label = str(ctx.labels.get(d.id)).lower()
+    values = features(d)
+    if d.id not in ctx.labels or label not in BINARY_LABELS or values is None:
+        return None
+    return values, BINARY_LABELS[label]
+
+
 def binary_cases(ctx: Context, app: str) -> list[tuple[tuple[float, ...], bool]]:
-    cases = []
-    for d in ctx.log.decisions:
-        if (
-            d.app == app
-            and d.id in ctx.labels
-            and str(ctx.labels[d.id]).lower() in BINARY_LABELS
-        ):
-            values = features(d)
-            if values is not None:
-                cases.append((values, BINARY_LABELS[str(ctx.labels[d.id]).lower()]))
-    return cases
+    return [
+        case
+        for d in ctx.log.decisions
+        if d.app == app
+        for case in [binary_case(ctx, d)]
+        if case is not None
+    ]
+
+
+def answers(ctx: Context, app: str) -> tuple[int, int]:
+    """How many of an app's labels a fit can use: the user's own, and the ones only the log implies."""
+    usable = [
+        d
+        for d in ctx.log.decisions
+        if d.app == app
+        and (
+            router_cases([d], ctx.labels)
+            if app == "router"
+            else binary_case(ctx, d) is not None
+        )
+    ]
+    explicit = sum(d.id in ctx.explicit for d in usable)
+    return explicit, len(usable) - explicit
+
+
+def logged_tiers(mine: list[Decision]) -> dict[str, int]:
+    """Where vSR's logged routes went: Haiku, Sonnet, Opus, another model, kept, or off."""
+    tiers = dict.fromkeys((*TIERS, "other", "kept", "off"), 0)
+    for d in mine:
+        if d.verdict == "routed":
+            tier = tier_of(d.detail.get("model"))
+            tiers[TIERS[tier] if tier is not None else "other"] += 1
+        else:
+            tiers["kept" if d.verdict == "kept" else "off"] += 1
+    return tiers
+
+
+def plain_app(ctx: Context, app: str) -> list[str]:
+    mine = [d for d in ctx.log.decisions if d.app == app]
+    head = plain.title(app) + (
+        "" if ctx.options.get(app) else " — off in your settings"
+    )
+    if not mine:
+        return [head, "  No decisions logged yet."]
+    if app == "router":
+        logged = plain.router_logged(logged_tiers(mine))
+    else:
+        acted = sum(d.verdict == plain.ACTED_VERDICT[app] for d in mine)
+        logged = plain.LOGGED[app].format(
+            n=len(mine), acted=acted, other=len(mine) - acted
+        )
+    return [head, f"  {logged} {plain.answered(app, *answers(ctx, app))}"]
 
 
 def histogram(
@@ -133,31 +203,46 @@ def histogram(
     return lines
 
 
-def report(ctx: Context) -> str:
+def report(ctx: Context, apps: list[str] | None = None, detail: bool = False) -> str:
+    """The log in plain words for each app in `apps` (default every app); with `detail`, the
+    option names, the near-the-line counts and the score histograms after it.
+    """
+    apps = apps or list(APPS)
     when = [d.at for d in ctx.log.decisions if d.at is not None]
     span = (
-        f", {datetime.fromtimestamp(min(when)):%Y-%m-%d} to {datetime.fromtimestamp(max(when)):%Y-%m-%d}"
+        f" from {datetime.fromtimestamp(min(when)):%Y-%m-%d} to {datetime.fromtimestamp(max(when)):%Y-%m-%d}"
         if when
         else ""
     )
-    out = [
-        f"log {ctx.log_path}: {len(ctx.log.decisions)} decisions{span}"
-        + (
-            f"; {ctx.log.skipped} unreadable line(s) skipped" if ctx.log.skipped else ""
-        ),
-        f"settings {settings.settings_path()} under pluginConfigs[{ctx.plugin_id!r}]",
-    ]
+    skipped = (
+        f" ({plain.plural(ctx.log.skipped, 'unreadable line')} skipped)"
+        if ctx.log.skipped
+        else ""
+    )
     last = last_calibration(ctx.path("calibrations.jsonl"))
     now = runtime_model(ctx)
-    out.append(
-        f"runtime model now {now or 'unreachable'}; "
+    out = [
+        f"vSR's log holds {plain.plural(len(ctx.log.decisions), 'decision')}{span}{skipped}.",
+        f"Decision model now: {now or 'unreachable'}; "
         + (
-            f"last calibration {last.get('at')} with model {last.get('model')}"
+            f"last calibrated {last.get('at')} with {last.get('model')}."
             if last
-            else "no calibration recorded yet"
-        )
-    )
-    for app in APPS:
+            else "not calibrated before."
+        ),
+    ]
+    for app in apps:
+        out += ["", *plain_app(ctx, app)]
+    if detail:
+        out += ["", "Details", *detail_report(ctx, apps)]
+    return "\n".join(out)
+
+
+def detail_report(ctx: Context, apps: list[str]) -> list[str]:
+    out = [
+        f"log {ctx.log_path}: {len(ctx.log.decisions)} decisions",
+        f"settings {settings.settings_path()} under pluginConfigs[{ctx.plugin_id!r}]",
+    ]
+    for app in apps:
         mine = [d for d in ctx.log.decisions if d.app == app]
         off = sum(d.verdict == "off" for d in mine)
         state = "on" if ctx.options.get(app) else "off in settings"
@@ -201,81 +286,116 @@ def report(ctx: Context) -> str:
             if reasks:
                 out.append("    reask:")
                 out.extend(histogram(reasks, 1.0, [ctx.options["escalateReask"]]))
-    return "\n".join(out)
+    return out
 
 
-def suggestion(ctx: Context, goal: str) -> dict:
-    beta = GOALS[goal]
+def route_of(d: Decision, values: tuple[float, ...]) -> str | None:
+    """Where router lines `values` send a logged subagent: a tier's name, or kept."""
+    level = level_of(d)
+    if level is None:
+        return None
+    confidence = as_number(d.detail.get("confidence"))
+    if confidence is not None and confidence < values[2]:
+        return "kept"
+    return TIERS[route_tier(level, values[0], values[1])]
+
+
+def recommend(labels: int, changed: bool, before: int, after: int) -> str:
+    """apply when the change agrees with more of the user's answers; more when too few answers."""
+    if labels < MIN_LABELS:
+        return "more"
+    return "apply" if changed and after > before else "keep"
+
+
+def router_entry(ctx: Context, mine: list[Decision]) -> dict:
+    cases = router_cases(ctx.log.decisions, ctx.labels)
+    currents = tuple(ctx.options[k] for k in ROUTER_KEYS)
+    fit = fit_router(cases, *currents)
+    entry = {"labels": len(cases), "why": fit["why"]}
+    for name, values in (("before", currents), ("after", fit["thresholds"])):
+        routes = [r for d in mine for r in [route_of(d, values)] if r is not None]
+        right, routed, kept = router_agreement(cases, *values)
+        entry[name] = {
+            "values": dict(zip(ROUTER_KEYS, values, strict=False)),
+            **{tier: routes.count(tier) for tier in (*TIERS, "kept")},
+            "agree": f"{right}/{routed} routed right, {kept} kept",
+        }
+        entry[f"agree{name.capitalize()}"] = right
+    moves: dict[tuple[str, str], int] = {}
+    for d in mine:
+        was, now = route_of(d, currents), route_of(d, fit["thresholds"])
+        if was != now:
+            moves[(was, now)] = moves.get((was, now), 0) + 1
+    entry["moves"] = [{"from": f, "to": t, "n": n} for (f, t), n in moves.items()]
+    return entry
+
+
+def binary_entry(ctx: Context, app: str, mine: list[Decision], beta: float) -> dict:
+    spec = BINARY[app]
+    cases = binary_cases(ctx, app)
+    currents = tuple(ctx.options[k] for k in spec.keys)
+    fit = fit_binary(cases, currents, beta, raise_only=app in ACTED_ONLY)
+    entry = {"labels": len(cases), "why": fit["why"], "decisions": len(mine)}
+    for name, values in (("before", currents), ("after", fit["thresholds"])):
+        acted = sum(
+            1 for d in mine for f in [features(d)] if f is not None and acts(f, values)
+        )
+        s = confusion(cases, values)
+        entry[name] = {
+            "values": dict(zip(spec.keys, values, strict=False)),
+            "acted": acted,
+            spec.noun: acted,
+            "agree": f"{s.agree}/{s.n}" if s.n else "-",
+            "falseAlarms": s.fp,
+            "missed": s.fn,
+        }
+        entry[f"agree{name.capitalize()}"] = s.agree
+    return entry
+
+
+def suggestion(ctx: Context, goal: str | None, apps: list[str] | None = None) -> dict:
+    """New thresholds for each chosen app (default every enabled app), and what they would do.
+
+    The goal weighs the binary apps' fit only; the router has none, so a router-only plan records no goal.
+    """
+    apps = apps or ctx.enabled
+    goal = (goal or "balanced") if any(app != "router" for app in apps) else None
     plan = {"pluginId": ctx.plugin_id, "goal": goal, "changes": {}, "apps": {}}
-    for app in ctx.enabled:
+    for app in apps:
         mine = [d for d in ctx.log.decisions if d.app == app]
+        if not ctx.options.get(app):
+            plan["apps"][app] = {
+                "why": "off in settings",
+                "plain": "Off in your settings, so there is nothing to tune.",
+            }
+            continue
         if not mine:
-            plan["apps"][app] = {"why": "no decisions in the log"}
+            plan["apps"][app] = {
+                "why": "no decisions in the log",
+                "plain": "No decisions logged yet, so there is nothing to tune.",
+            }
             continue
         if app == "router":
-            cases = router_cases(ctx.log.decisions, ctx.labels)
-            currents = tuple(ctx.options[k] for k in ROUTER_KEYS)
-            fit = fit_router(cases, *currents)
-            entry = {"labels": len(cases), "why": fit["why"], "before": {}, "after": {}}
-            for name, values in (("before", currents), ("after", fit["thresholds"])):
-                tiers = [0, 0, 0, 0]
-                for d in mine:
-                    level = level_of(d)
-                    if level is None:
-                        continue
-                    confidence = as_number(d.detail.get("confidence"))
-                    tiers[
-                        (
-                            3
-                            if confidence is not None and confidence < values[2]
-                            else route_tier(level, values[0], values[1])
-                        )
-                    ] += 1
-                right, routed, kept = router_agreement(cases, *values)
-                entry[name] = {
-                    "values": dict(zip(ROUTER_KEYS, values, strict=False)),
-                    "haiku": tiers[0],
-                    "sonnet": tiers[1],
-                    "opus": tiers[2],
-                    "kept": tiers[3],
-                    "agree": f"{right}/{routed} routed right, {kept} kept",
-                }
+            entry = router_entry(ctx, mine)
         else:
-            spec = BINARY[app]
-            cases = binary_cases(ctx, app)
-            currents = tuple(ctx.options[k] for k in spec.keys)
-            fit = fit_binary(cases, currents, beta, raise_only=app in ACTED_ONLY)
-            entry = {"labels": len(cases), "why": fit["why"]}
-            for name, values in (("before", currents), ("after", fit["thresholds"])):
-                acted = sum(
-                    1
-                    for d in mine
-                    for f in [features(d)]
-                    if f is not None and acts(f, values)
-                )
-                s = confusion(cases, values)
-                entry[name] = {
-                    "values": dict(zip(spec.keys, values, strict=False)),
-                    spec.noun: acted,
-                    "agree": f"{s.agree}/{s.n}" if s.n else "-",
-                    "falseAlarms": s.fp,
-                    "missed": s.fn,
-                }
-        plan["apps"][app] = entry
-        for k, before, after in zip(
-            entry["before"]["values"],
-            entry["before"]["values"].values(),
-            entry["after"]["values"].values(),
-            strict=False,
-        ):
+            entry = binary_entry(ctx, app, mine, GOALS[goal])
+        changed = False
+        for k, before in entry["before"]["values"].items():
+            after = entry["after"]["values"][k]
             if abs(after - before) > 1e-9:
                 plan["changes"][k] = {"from": before, "to": after}
+                changed = True
+        entry["recommend"] = recommend(
+            entry["labels"], changed, entry["agreeBefore"], entry["agreeAfter"]
+        )
+        plan["apps"][app] = entry
     return plan
 
 
 def table(plan: dict) -> str:
+    goal = f"goal: {plan['goal']} · " if plan.get("goal") else ""
     rows = [
-        f"goal: {plan['goal']} · at most {MAX_STEP} per threshold per run · at least {MIN_LABELS} labels per app",
+        f"{goal}at most {MAX_STEP} per threshold per run · at least {MIN_LABELS} labels per app",
         "",
     ]
     rows.append(
@@ -330,31 +450,45 @@ def last_calibration(path: Path) -> dict | None:
     return None
 
 
-def checked_changes(ctx: Context, plan: dict) -> dict[str, object]:
-    """The plan's new values, refused unless each is a threshold calibration sets, for this
-    plugin id, at most MAX_STEP from the value in use now.
+def checked_changes(
+    ctx: Context, plan: dict, apps: list[str] | None = None
+) -> dict[str, dict]:
+    """The plan's changes for `apps` (default all it holds), refused unless each is a threshold
+    calibration sets, of an app the plan was made for, for this plugin id, at most MAX_STEP
+    from the value in use now.
     """
     if plan.get("pluginId") != ctx.plugin_id:
         raise settings.SettingsError(
             f"the plan is for {plan.get('pluginId')!r}, not {ctx.plugin_id!r}"
         )
-    values = {}
+    held = plan.get("apps")
+    changes = {}
     for name, change in plan.get("changes", {}).items():
         if name not in CALIBRATED or not isinstance(change, dict):
             raise settings.SettingsError(
                 f"a calibration plan sets only {', '.join(CALIBRATED)}; not {name!r}"
             )
+        if isinstance(held, dict) and APP_OF[name] not in held:
+            raise settings.SettingsError(
+                f"the plan was made for {', '.join(held)}, so it may not set {name}"
+            )
+        if apps is not None and APP_OF[name] not in apps:
+            continue
         value = settings.parse_value(name, change.get("to"))
         if abs(value - ctx.options[name]) > MAX_STEP + 1e-9:
             raise settings.SettingsError(
                 f"{name} would move from {ctx.options[name]} to {value}, more than {MAX_STEP} in one run"
             )
-        values[name] = value
-    return values
+        changes[name] = {**change, "to": value}
+    return changes
 
 
-def apply(ctx: Context, plan: dict, model: str | None = None) -> str:
-    values = checked_changes(ctx, plan)
+def apply(
+    ctx: Context, plan: dict, model: str | None = None, apps: list[str] | None = None
+) -> str:
+    """Writes the plan's changes for `apps` (default all it holds) into the settings."""
+    changes = checked_changes(ctx, plan, apps)
+    values = {name: change["to"] for name, change in changes.items()}
     if not values:
         return "nothing to apply"
     path = settings.settings_path()
@@ -369,9 +503,11 @@ def apply(ctx: Context, plan: dict, model: str | None = None) -> str:
         "pluginId": ctx.plugin_id,
         "goal": plan.get("goal"),
         "model": model,
-        "changes": plan["changes"],
+        "changes": changes,
         "labels": {
-            app: entry.get("labels", 0) for app, entry in plan.get("apps", {}).items()
+            app: entry.get("labels", 0)
+            for app, entry in plan.get("apps", {}).items()
+            if apps is None or app in apps
         },
     }
     with calibrations.open("a") as out:

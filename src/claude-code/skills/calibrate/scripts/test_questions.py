@@ -54,28 +54,64 @@ class Sampling(unittest.TestCase):
 
 
 class Questions(unittest.TestCase):
+    options: ClassVar[dict] = {"routerEasyBelow": 0.5, "routerHardFrom": 1.5}
+
+    def ask(self, d):
+        return questions.question(d, self.options)
+
     def test_every_app_has_a_question_whose_answers_are_labels(self):
         self.assertEqual(set(questions.QUESTIONS), set(APPS))
         for app in APPS:
             with self.subTest(app=app):
                 d = Decision("x", None, "s", app, "acted", 0.5, 0.5, "subject", {})
-                entry = questions.question(d)
-                self.assertEqual(entry["header"], app.capitalize())
+                entry = self.ask(d)
+                self.assertLessEqual(len(entry["header"]), 12)
                 allowed = ROUTER_LABELS if app == "router" else ("yes", "no")
                 self.assertLessEqual(
                     {o["value"] for o in entry["options"]}, set(allowed)
                 )
 
-    def test_a_routed_task_asks_whether_the_model_was_right(self):
-        entry = questions.question(route(1, 1.2, "sonnet"))
-        self.assertIn("vSR sent it to sonnet (difficulty 1.20 of 2)", entry["question"])
+    def test_a_routed_task_is_asked_in_plain_words(self):
+        entry = self.ask(route(1, 1.55, "claude-opus-4"))
         self.assertEqual(
-            [o["value"] for o in entry["options"]], ["too-low", "right", "too-high"]
+            entry["question"],
+            'A subagent was given the task "task 1". vSR judged it hard and sent it to Opus. Was that the right model?',
         )
-        kept = questions.question(route(2, 0.3, "opus", 0.2, verdict="kept"))
+        self.assertEqual(
+            [(o["label"], o["value"]) for o in entry["options"]],
+            [("Right model", "right"), ("Could be lighter", "too-high")],
+        )
+        sonnet = self.ask(route(2, 1.2, "sonnet"))
+        self.assertIn("judged it multi-step and sent it to Sonnet.", sonnet["question"])
+        self.assertEqual(
+            [o["label"] for o in sonnet["options"]],
+            ["Right model", "Needed stronger", "Could be lighter"],
+        )
+        self.assertEqual(
+            [o["value"] for o in sonnet["options"]], ["right", "too-low", "too-high"]
+        )
+        haiku = self.ask(route(3, 0.3, "haiku"))
+        self.assertIn("judged it easy and sent it to Haiku.", haiku["question"])
+        self.assertEqual([o["value"] for o in haiku["options"]], ["right", "too-low"])
+
+    def test_a_kept_task_names_the_session_model(self):
+        kept = self.ask(route(2, 0.3, "opus", 0.2, verdict="kept"))
+        self.assertIn(
+            "vSR judged it easy but was not sure enough, so the subagent kept your session's model.",
+            kept["question"],
+        )
         self.assertEqual(
             [o["value"] for o in kept["options"]], ["haiku", "sonnet", "opus"]
         )
+
+    def test_no_question_shows_a_score(self):
+        for app in APPS:
+            with self.subTest(app=app):
+                d = Decision("x", None, "s", app, "acted", 0.93, 0.9, "subject", {})
+                text = self.ask(d)["question"]
+                self.assertNotIn("0.93", text)
+                self.assertNotIn("score", text)
+                self.assertNotIn("difficulty", text)
 
 
 if __name__ == "__main__":

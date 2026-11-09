@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from decisions import BINARY, Decision, acts, features, level_of, tier_of
+import plain
+from decisions import BINARY, TIERS, Decision, acts, features, level_of, tier_of
 
 
 def distance(d: Decision, options: dict) -> tuple[float, bool] | None:
@@ -62,42 +63,60 @@ def _yes_no(yes: tuple[str, str], no: tuple[str, str]) -> list[dict]:
     return [_option(*yes, "yes"), _option(*no, "no")]
 
 
-def _score(d: Decision) -> str:
-    return "-" if d.score is None else f"{d.score:.2f}"
-
-
-def _router(d: Decision, subject: str) -> tuple[str, list[dict]]:
+def _router(d: Decision, subject: str, options: dict) -> tuple[str, list[dict]]:
     level = level_of(d)
-    score = "-" if level is None else f"{level:.2f}"
-    model = str(d.detail.get("model") or "the default model")
-    if d.verdict == "kept" or tier_of(model) is None:
+    judged = (
+        ""
+        if level is None
+        else plain.difficulty(
+            level, options["routerEasyBelow"], options["routerHardFrom"]
+        )
+    )
+    task = f'A subagent was given the task "{subject}".'
+    tier = tier_of(d.detail.get("model"))
+    if d.verdict == "kept" or tier is None:
+        unsure = (
+            f"vSR judged it {judged} but was not sure" if judged else "vSR was not sure"
+        )
         return (
-            f'For the subagent task "{subject}", vSR kept {model} because the classifier was unsure (difficulty {score} of 2). Which model would have fit?',
+            f"{task} {unsure} enough, so the subagent kept {plain.KEPT}. Which model would have fit?",
             [
                 _option("Haiku", "a quick lookup or formatting job", "haiku"),
                 _option("Sonnet", "a few steps of ordinary work", "sonnet"),
                 _option("Opus", "hard reasoning or deep expertise", "opus"),
             ],
         )
-    return (
-        f'For the subagent task "{subject}", vSR sent it to {model} (difficulty {score} of 2). Was that model right?',
-        [
-            _option("Too low", "it needed a stronger model", "too-low"),
-            _option("Right", "that model fit the task", "right"),
-            _option("Too high", "a lighter model would have done", "too-high"),
-        ],
-    )
+    model = plain.model_name(d.detail.get("model"))
+    judged = f" judged it {judged} and" if judged else ""
+    answers = [_option("Right model", f"{model} fit the task", "right")]
+    if tier < len(TIERS) - 1:
+        answers.append(
+            _option(
+                "Needed stronger",
+                f"a stronger model than {model} would have done better",
+                "too-low",
+            )
+        )
+    if tier > 0:
+        answers.append(
+            _option(
+                "Could be lighter",
+                f"a lighter model than {model} would have done",
+                "too-high",
+            )
+        )
+    return f"{task} vSR{judged} sent it to {model}. Was that the right model?", answers
 
 
-def _guard(d: Decision, subject: str) -> tuple[str, list[dict]]:
-    did = (
-        "held it for you"
-        + (", and you declined" if d.detail.get("outcome") == "declined" else "")
-        if d.verdict == "held"
-        else "let it run"
-    )
+def _guard(d: Decision, subject: str, _options: dict) -> tuple[str, list[dict]]:
+    if d.verdict == "held":
+        did = "held this command for you" + (
+            ", and you declined it" if d.detail.get("outcome") == "declined" else ""
+        )
+    else:
+        did = "let this command run without asking"
     return (
-        f"Should vSR have asked you before `{subject}`? (risk score {_score(d)}; vSR {did})",
+        f"vSR {did}: `{subject}`. Should vSR ask you before a command like this?",
         _yes_no(
             ("Ask first", "this command deserves a confirmation"),
             ("Let it run", "routine enough to run without asking"),
@@ -105,18 +124,14 @@ def _guard(d: Decision, subject: str) -> tuple[str, list[dict]]:
     )
 
 
-def _escalate(d: Decision, subject: str) -> tuple[str, list[dict]]:
+def _escalate(d: Decision, subject: str, _options: dict) -> tuple[str, list[dict]]:
     did = (
-        "sent the next subagent to Opus"
+        "took it as a complaint and sent the next subagent to Opus"
         if d.verdict == "escalated"
         else "took it as ordinary"
     )
-    values = features(d) or (d.score or 0.0, 0.0)
-    scores = f"pushback {values[0]:.2f}" + (
-        f", repeat {values[1]:.2f}" if values[1] else ""
-    )
     return (
-        f'Was "{subject}" a real complaint about Claude\'s last answer? ({scores}; vSR {did})',
+        f'You wrote "{subject}", and vSR {did}. Was it a complaint about Claude\'s last answer?',
         _yes_no(
             ("A complaint", "the last answer was wrong or not what you wanted"),
             ("Not a complaint", "a new request, a thank-you or a question"),
@@ -124,12 +139,12 @@ def _escalate(d: Decision, subject: str) -> tuple[str, list[dict]]:
     )
 
 
-def _redact(d: Decision, subject: str) -> tuple[str, list[dict]]:
+def _redact(d: Decision, subject: str, _options: dict) -> tuple[str, list[dict]]:
     counts = d.detail.get("counts") if isinstance(d.detail.get("counts"), dict) else {}
     what = ", ".join(f"{tag} ({n})" for tag, n in counts.items()) or "some text"
     source = d.detail.get("source") or subject
     return (
-        f"vSR hid {what} in `{_clip(str(source))}` (score {_score(d)}). Was that personal data or a secret worth hiding?",
+        f"vSR hid {what} in `{_clip(str(source))}` before Claude read it. Was that personal data or a secret worth hiding?",
         _yes_no(
             ("Keep hiding", "it was personal data or a secret"),
             ("Fine to show", "it was ordinary text"),
@@ -137,11 +152,15 @@ def _redact(d: Decision, subject: str) -> tuple[str, list[dict]]:
     )
 
 
-def _shield(d: Decision, subject: str) -> tuple[str, list[dict]]:
-    did = "warned Claude" if d.verdict == "shielded" else "let it through"
+def _shield(d: Decision, subject: str, _options: dict) -> tuple[str, list[dict]]:
+    did = (
+        "warned Claude that it may be trying to give instructions"
+        if d.verdict == "shielded"
+        else "let it through as ordinary content"
+    )
     source = _clip(str(d.detail.get("source") or subject))
     return (
-        f"Did `{source}` really try to give Claude instructions? (score {_score(d)}; vSR {did})",
+        f"vSR {did}: `{source}`. Did it really try to give Claude instructions?",
         _yes_no(
             ("Yes, warn", "it tried to steer Claude"),
             ("No", "ordinary file or page content"),
@@ -149,15 +168,13 @@ def _shield(d: Decision, subject: str) -> tuple[str, list[dict]]:
     )
 
 
-def _check(d: Decision, subject: str) -> tuple[str, list[dict]]:
-    did = (
-        "marked it unverified" if d.verdict == "unverified" else "passed it as grounded"
-    )
+def _check(d: Decision, subject: str, _options: dict) -> tuple[str, list[dict]]:
+    did = "marked it unverified" if d.verdict == "unverified" else "passed it as backed"
     reads = (
         f"{d.detail.get('files', 0)} files and {d.detail.get('commands', 0)} commands"
     )
     return (
-        f'Did Claude\'s answer to "{subject}" claim things that what it read ({reads}) does not back? (score {_score(d)}; vSR {did})',
+        f'For Claude\'s answer to "{subject}", vSR {did}. Did the answer claim things that what Claude read ({reads}) does not back?',
         _yes_no(
             ("Unsupported", "it made something up or went beyond what it read"),
             ("Backed", "what it said matches what it read"),
@@ -166,7 +183,7 @@ def _check(d: Decision, subject: str) -> tuple[str, list[dict]]:
 
 
 # Each app's question and answer options, for one of its decisions.
-QUESTIONS: dict[str, Callable[[Decision, str], tuple[str, list[dict]]]] = {
+QUESTIONS: dict[str, Callable[[Decision, str, dict], tuple[str, list[dict]]]] = {
     "router": _router,
     "guard": _guard,
     "escalate": _escalate,
@@ -176,13 +193,15 @@ QUESTIONS: dict[str, Callable[[Decision, str], tuple[str, list[dict]]]] = {
 }
 
 
-def question(d: Decision) -> dict:
-    """An AskUserQuestion entry for one decision, in plain words, with the label each option saves."""
-    text, options = QUESTIONS[d.app](d, _clip(d.subject))
+def question(d: Decision, options: dict) -> dict:
+    """An AskUserQuestion entry for one decision, in plain words, with the label each option
+    saves; `options` are the thresholds in use, for the router's difficulty in words.
+    """
+    text, answers = QUESTIONS[d.app](d, _clip(d.subject), options)
     return {
         "id": d.id,
         "app": d.app,
-        "header": d.app.capitalize(),
+        "header": plain.APP_WORDS[d.app][2],
         "question": text,
-        "options": options,
+        "options": answers,
     }

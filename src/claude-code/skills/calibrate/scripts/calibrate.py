@@ -14,10 +14,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # plan puts setup/scripts, where runtime and settings live, on the path.
+import plain
 import plan
 import runtime
 import settings
-from decisions import ROUTER_LABELS
+from decisions import APPS, ROUTER_LABELS
 from fitting import GOALS
 from questions import question, sample
 
@@ -57,12 +58,25 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         commands[name] = sub.add_parser(name)
         # Suppressed, so an option given before the subcommand is not reset after it.
         _common(commands[name], argparse.SUPPRESS)
-    one = commands["sample"]
-    one.add_argument("--per-side", type=int, default=2)
-    one.add_argument("--apps", help="comma-separated apps (default: every enabled app)")
+    for name in ("report", "sample", "suggest", "apply"):
+        commands[name].add_argument(
+            "--apps",
+            help=f"comma-separated apps, of {', '.join(APPS)} (default: every app; enabled ones for sample and suggest)",
+        )
+    for name in ("report", "suggest"):
+        commands[name].add_argument(
+            "--detail",
+            action="store_true",
+            help="also print the option names, the table and the settings diff",
+        )
+    commands["sample"].add_argument("--per-side", type=int, default=2)
     commands["label"].add_argument("pairs", nargs="+", metavar="ID=LABEL")
     one = commands["suggest"]
-    one.add_argument("--goal", choices=tuple(GOALS), default="balanced")
+    one.add_argument(
+        "--goal",
+        choices=tuple(GOALS),
+        help="how the apps other than the router weigh false alarms against misses (default balanced; the router has no goal)",
+    )
     one.add_argument(
         "--out",
         help="where to save the plan for `apply` (default: calibration-plan.json beside the log)",
@@ -120,32 +134,37 @@ def writable(given: str | None, default: Path, name: str) -> Path:
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     try:
+        apps = plan.parse_apps(getattr(args, "apps", None))
         ctx = plan.context(args)
         if args.command == "report":
-            print(plan.report(ctx))
+            print(plan.report(ctx, apps, args.detail))
         elif args.command == "sample":
-            apps = args.apps.split(",") if args.apps else ctx.enabled
             picked = sample(
-                ctx.log.decisions, ctx.labels, ctx.options, apps, args.per_side
+                ctx.log.decisions,
+                ctx.labels,
+                ctx.options,
+                apps or ctx.enabled,
+                args.per_side,
             )
-            print(
-                json.dumps([question(d) for d in picked], indent=2, ensure_ascii=False)
-            )
+            entries = [question(d, ctx.options) for d in picked]
+            print(json.dumps(entries, indent=2, ensure_ascii=False))
         elif args.command == "label":
             path = writable(args.labels, ctx.path(LABELS_NAME), LABELS_NAME)
             print(label(ctx, args.pairs, path))
         elif args.command == "suggest":
-            suggested = plan.suggestion(ctx, args.goal)
-            print(plan.table(suggested))
-            if suggested["changes"]:
-                print("\nsettings diff:\n" + plan.settings_diff(suggested), end="")
+            suggested = plan.suggestion(ctx, args.goal, apps)
+            print(plain.suggestion(suggested))
+            if args.detail:
+                print("\nDetails\n" + plan.table(suggested))
+                if suggested["changes"]:
+                    print("\nsettings diff:\n" + plan.settings_diff(suggested), end="")
             out = writable(args.out, ctx.path(PLAN_NAME), PLAN_NAME)
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(json.dumps(suggested, indent=2) + "\n")
             print(f"\nplan saved to {out}")
         elif args.command == "apply":
             saved = json.loads(Path(args.plan or ctx.path(PLAN_NAME)).read_text())
-            print(plan.apply(ctx, saved, plan.runtime_model(ctx)))
+            print(plan.apply(ctx, saved, plan.runtime_model(ctx), apps))
         else:
             rows = runtime.run_probes(
                 args.url or ctx.options["runtimeUrl"],
