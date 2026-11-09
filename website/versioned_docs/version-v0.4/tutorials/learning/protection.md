@@ -358,5 +358,5 @@ routing:
 If a legacy v0.3 configuration is loaded, `vllm-sr config validate` rejects `session_aware` with:
 
 ```text
-decision '<name>': algorithm.type=session_aware is no longer supported; remove algorithm.type=session_aware and enable global.router.learning.protection. If this decision needs an explicit base selector, configure a normal algorithm.type; otherwise omit algorithm
+routing.decisions[<index>].algorithm.type=session_aware is no longer supported; remove algorithm.type=session_aware and enable global.router.learning.protection
 ```
