@@ -129,3 +129,16 @@ test('Fable 5 cache reads cost four times Fable 5.1\'s, and a retired Opus 4 has
   expect(costOf('claude-opus-4-1', USAGE)).toBeUndefined()
   expect(costOf('claude-opus-4-8', USAGE)).toBe(7.5)
 })
+
+test('an answer not given yet is underlined, as a link is, in its dim colour', async ($, on) => {
+  engine(on, { review: 0.2, files: {} })
+  on('tool.call', () => ({ result: { stdout: '' } }))
+  await $.tool.call({ ...PUSH, command: 'git status', tool_use_id: 'g1' })
+
+  const ui = await pane($)
+  const texts = await ui.findAll({ type: 'Text' })
+  await ui.unmount()
+  const label = texts.find(one => one.text === 'wrong call')?.props
+
+  expect(label).toMatchObject({ underline: true, dimColor: true })
+})

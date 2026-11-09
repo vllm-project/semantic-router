@@ -470,7 +470,12 @@ export function dashboard(
                           {isChosen ? (
                             <Text backgroundColor="suggestion" color="inverseText">{` ✓ ${label} `}</Text>
                           ) : (
-                            <Text dimColor>{` ${label} `}</Text>
+                            <Text dimColor>
+                              {' '}
+                              <Text dimColor underline>
+                                {label}
+                              </Text>{' '}
+                            </Text>
                           )}
                         </Button>
                       )
