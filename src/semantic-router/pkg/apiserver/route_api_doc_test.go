@@ -64,7 +64,7 @@ func TestSwaggerUIEndpoint(t *testing.T) {
 func TestAPIOverviewIncludesNewEndpoints(t *testing.T) {
 	response := requestAPIOverview(t, "/api/v1?view=operations")
 
-	assertOverviewPaths(t, response, []string{"/openapi.json", "/docs"})
+	assertOverviewPaths(t, response, append(documentedAPIOverviewPaths(), "/openapi.json", "/docs"))
 	if response.Links["openapi_spec"] != "/openapi.json" {
 		t.Error("expected 'openapi_spec' link to '/openapi.json'")
 	}
@@ -107,6 +107,12 @@ func TestAPIOverviewFiltersOneCapability(t *testing.T) {
 	if len(response.Capabilities) != 1 || response.Capabilities[0].Name != "routing" {
 		t.Fatalf("routing capabilities = %+v", response.Capabilities)
 	}
+	assertOverviewPathsAbsent(t, response, []string{
+		"/api/v1/config",
+		"/api/v1/config/schema",
+		"/api/v1/diagnostics/embeddings",
+		"/api/v1/storage/memories",
+	})
 }
 
 func TestAPIOverviewRejectsUnknownFilter(t *testing.T) {
