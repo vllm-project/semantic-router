@@ -148,7 +148,9 @@ def continuity(
         for request in requests:
             model = _observed_model(request)
             if model:
-                known_requests.append((model, request.get("phase")))
+                # A replayed fixture's recorded turn phase outranks the observed one.
+                phase = request.get("fixture_phase") or request.get("phase")
+                known_requests.append((model, phase))
         models = [model for model, _ in known_requests]
         unknown += len(requests) - len(models)
         switches[case_id] = _changes(models)

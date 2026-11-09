@@ -163,6 +163,20 @@ on its subject calls. Configure the mode on each registered target; targets are
 `stateless` by default. See [the results guide](./results.md) for request headers
 and report labels.
 
+The `agent-session-replay` extension benchmark replays the recorded coding-agent
+session fixture turn by turn: one case is one replay, resending the cumulative
+recorded messages and tool catalog on every turn. It requires
+`session_mode: session_aware` on every target, so each replay carries exactly
+one session identity, and it reports as an extension diagnostic outside the
+published sr-bench score. Prepare its dataset locally from the repository
+fixture, and run with the same profile the dataset was prepared with:
+
+```bash
+vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
+  --benchmark agent-session-replay \
+  --source-path bench/data/coding_agent_session.v1.json
+```
+
 An operator can freeze native generation settings in a target's `request_params`.
 These settings override the run's `sampling` defaults, including temperature,
 reasoning options and output length when present. Inspect the effective profile
