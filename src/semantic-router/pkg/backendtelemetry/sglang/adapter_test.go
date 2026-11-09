@@ -153,6 +153,30 @@ func TestCollectWithoutMetricsReportsAbsence(t *testing.T) {
 	}
 }
 
+func TestInvalidGaugesStayAbsent(t *testing.T) {
+	for _, value := range []string{"-1", "NaN", "+Inf", "9.223372036854776e18"} {
+		t.Run(value, func(t *testing.T) {
+			o := collectOne(t, "# TYPE sglang:num_queue_reqs gauge\nsglang:num_queue_reqs "+value+"\n"+
+				"# TYPE sglang:num_running_reqs gauge\nsglang:num_running_reqs "+value+"\n"+
+				"# TYPE sglang:token_usage gauge\nsglang:token_usage "+value+"\n")
+			if o.QueueDepth.Present() || o.ActiveRequests.Present() || o.KVCacheUsage.Present() {
+				t.Fatalf("invalid gauges became observed load: %+v", o)
+			}
+		})
+	}
+}
+
+func TestIdleReplicaAndFullCacheAreObserved(t *testing.T) {
+	o := collectOne(t, "# TYPE sglang:num_queue_reqs gauge\nsglang:num_queue_reqs 0\n"+
+		"# TYPE sglang:token_usage gauge\nsglang:token_usage 1\n")
+	if v, ok := o.QueueDepth.Get(); !ok || v != 0 {
+		t.Fatalf("queue depth = %d, %v; want an observed 0", v, ok)
+	}
+	if v, ok := o.KVCacheUsage.Get(); !ok || v != 1 {
+		t.Fatalf("kv cache usage = %v, %v; want an observed 1", v, ok)
+	}
+}
+
 func TestCollectReportsFailedTargetsAndKeepsTheRest(t *testing.T) {
 	healthy := newMetricsServer(t, singleRank, http.StatusOK)
 	broken := newMetricsServer(t, "oops", http.StatusInternalServerError)

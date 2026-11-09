@@ -91,7 +91,12 @@ func (a *adapter) Collect(ctx context.Context) ([]backendtelemetry.Observation, 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			limit <- struct{}{}
+			select {
+			case limit <- struct{}{}:
+			case <-ctx.Done():
+				results[i].err = ctx.Err()
+				return
+			}
 			defer func() { <-limit }()
 			observation, err := a.scrape(ctx, target)
 			results[i] = result{observation, err}
@@ -128,15 +133,18 @@ func (a *adapter) scrape(ctx context.Context, target backendtelemetry.Target) (b
 
 func applyGauges(o *backendtelemetry.Observation, families promscrape.Families) {
 	if sum, _, ok := perRank(families, "sglang:num_queue_reqs"); ok {
-		o.QueueDepth = backendtelemetry.Observed(roundCount(sum))
+		o.QueueDepth = observedCount(sum)
 	}
 	if sum, _, ok := perRank(families, "sglang:num_running_reqs"); ok {
-		o.ActiveRequests = backendtelemetry.Observed(roundCount(sum))
+		o.ActiveRequests = observedCount(sum)
 	}
 	// Each data-parallel rank has its own KV pool, so the replica's usage is
 	// their mean, as the vLLM adapter does for its engines.
 	if sum, ranks, ok := perRank(families, "sglang:token_usage"); ok {
-		o.KVCacheUsage = backendtelemetry.Observed(clampRatio(sum / float64(ranks)))
+		usage := sum / float64(ranks)
+		if usage >= 0 && usage <= 1 {
+			o.KVCacheUsage = backendtelemetry.Observed(usage)
+		}
 	}
 }
 
@@ -218,19 +226,11 @@ func lower(a, b []int64) bool {
 	return false
 }
 
-func roundCount(v float64) int64 {
-	if v < 0 || math.IsNaN(v) {
-		return 0
+// observedCount leaves an invalid gauge absent rather than reporting an idle
+// replica.
+func observedCount(v float64) backendtelemetry.Count {
+	if !(v >= 0 && v < math.MaxInt64) {
+		return backendtelemetry.Count{}
 	}
-	return int64(math.Round(v))
-}
-
-func clampRatio(v float64) float64 {
-	switch {
-	case math.IsNaN(v) || v < 0:
-		return 0
-	case v > 1:
-		return 1
-	}
-	return v
+	return backendtelemetry.Observed(int64(math.Round(v)))
 }
