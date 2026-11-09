@@ -2670,6 +2670,9 @@ class BackendRef(BaseModel):
     chat_path: Optional[str] = None
     api_key: Optional[str] = None
     api_key_env: Optional[str] = None
+    # The backend receives the request's deployment-injected gateway credential
+    # (global.services.authz.gateway_credential) instead of a static key.
+    trusted_gateway: bool = False
 
     @model_validator(mode="before")
     @classmethod
