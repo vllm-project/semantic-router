@@ -61,7 +61,12 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 
 // GetTestCases returns the list of test cases for this profile.
 func (p *Profile) GetTestCases() []string {
-	return testmatrix.Combine(testmatrix.BaselineRouterContract)
+	return testmatrix.Combine(
+		testmatrix.BaselineRouterContract,
+		// The gateway credential contract is off here; its header must still
+		// never reach the backend (issue #2286 default-disabled behavior).
+		[]string{"trusted-gateway-credential-disabled"},
+	)
 }
 
 // GetServiceConfig returns the service configuration for accessing the deployed service.

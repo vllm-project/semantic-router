@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
@@ -34,6 +35,17 @@ var shadowCredentialHeaders = map[string]struct{}{
 func IsShadowCredentialHeader(name string) bool {
 	_, ok := shadowCredentialHeaders[strings.ToLower(strings.TrimSpace(name))]
 	return ok
+}
+
+// CredentialCarrierHeaders returns the known credential carriers, sorted, for
+// a request that must reach its upstream with no credential but its own.
+func CredentialCarrierHeaders() []string {
+	names := make([]string, 0, len(shadowCredentialHeaders))
+	for name := range shadowCredentialHeaders {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 const (
