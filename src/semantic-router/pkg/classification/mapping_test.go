@@ -188,6 +188,28 @@ func TestLoadJailbreakMapping_RejectsSentinelCollision(t *testing.T) {
 	}
 }
 
+// TestLoadJailbreakMapping_RejectsExplicitPatternTypeCollision ensures that
+// explicit_pattern cannot be configured as a model output label.
+func TestLoadJailbreakMapping_RejectsExplicitPatternTypeCollision(t *testing.T) {
+	for name, data := range map[string]string{
+		"label_to_idx_and_idx_to_label": `{"label_to_idx":{"benign":0,"explicit_pattern":1},"idx_to_label":{"0":"benign","1":"explicit_pattern"}}`,
+		"idx_to_label_only":             `{"idx_to_label":{"0":"benign","1":"explicit_pattern"}}`,
+		"id_to_label_only_huggingface":  `{"id_to_label":{"0":"benign","1":"explicit_pattern"}}`,
+		"label_to_id_only_huggingface":  `{"label_to_id":{"benign":0,"explicit_pattern":1}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "jailbreak_mapping.json")
+			if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+				t.Fatalf("failed to write test mapping file: %v", err)
+			}
+
+			if _, err := LoadJailbreakMapping(path); err == nil {
+				t.Error("expected an error when a configured label collides with the explicit-pattern sentinel")
+			}
+		})
+	}
+}
+
 // TestLoadJailbreakMapping_AllowsOrdinaryLabels guards against the collision
 // check rejecting every mapping by mistake - in every supported shape, so
 // widening the guard above cannot silently start rejecting real mappings

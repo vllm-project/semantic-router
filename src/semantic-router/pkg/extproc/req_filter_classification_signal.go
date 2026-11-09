@@ -73,6 +73,7 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 			ContextTextBytes:       history.contextTextBytes,
 			ContextEquivalentBytes: history.contextEquivalentBytes,
 			ContextHasNonText:      history.contextHasNonText,
+			ContextReserveTokens:   history.contextReserveTokens,
 			InputModality:          history.inputModality,
 		},
 	}
