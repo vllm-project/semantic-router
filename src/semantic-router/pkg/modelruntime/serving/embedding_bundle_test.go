@@ -36,8 +36,13 @@ func TestBundledEmbeddingsOfOneTextFlushAtOnce(t *testing.T) {
 	started := time.Now()
 	var wg sync.WaitGroup
 	errs := make([]error, 2)
+	leaves := make([]func(), len(errs))
 	for i := range errs {
-		leave := bundle.Join()
+		leaves[i] = bundle.Join()
+	}
+	// A bundle may flush when all registered participants are waiting, so
+	// register everyone before starting any caller.
+	for i, leave := range leaves {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

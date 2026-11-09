@@ -78,3 +78,24 @@ func TestInputEstimateIncludesReasoningContinuityHistory(t *testing.T) {
 		t.Fatalf("continuity history was not reserved: before=%+v after=%+v", before, after)
 	}
 }
+
+// Structured bytes beyond the text rate, image reserves and media payloads are
+// reserves; a request of prose and framing has none.
+func TestInputEstimateSeparatesReserves(t *testing.T) {
+	prose := Request{Messages: []Message{{Role: RoleUser, Content: []Content{{Kind: ContentText, Text: "12345678"}}}}}
+	if estimate := EstimateInput(&prose); estimate.ReserveTokens != 0 {
+		t.Fatalf("prose reserve = %d, want 0", estimate.ReserveTokens)
+	}
+	agent := prose
+	agent.Messages = append(append([]Message(nil), prose.Messages...),
+		Message{Role: RoleAssistant, Content: []Content{{Kind: ContentToolCall, ToolCall: &ToolCall{ID: "c", Name: "w", Arguments: string(make([]byte, 399))}}}},
+		Message{Role: RoleUser, Content: []Content{{Kind: ContentImage, URL: "https://example.invalid/i"}, {Kind: ContentAudio, Data: string(make([]byte, 1000))}}},
+	)
+	estimate := EstimateInput(&agent)
+	// 400 tool-call bytes keep 100 at the text rate; the image and the audio
+	// payload are wholly reserve.
+	want := 400 - 100 + InputImageTokens + 1000
+	if estimate.ReserveTokens != want {
+		t.Fatalf("reserve = %d, want %d (estimate %+v)", estimate.ReserveTokens, want, estimate)
+	}
+}
