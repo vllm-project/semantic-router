@@ -19,7 +19,10 @@ import { EntityDetailView } from './builderPageEntityDetailView'
 import { AddRouteForm } from './builderPageRouteForms'
 import { BuilderValidationPanel } from './builderPageValidationPanel'
 import type { BuilderSelectedEntity, EntityKind, SectionState, Selection } from './builderPageTypes'
-import type { BuilderRoutingScope } from './builderPageRoutingScopeSupport'
+import {
+  listReferenceableSignals,
+  type BuilderRoutingScope,
+} from './builderPageRoutingScopeSupport'
 import { BuilderRoutingScopeBar } from './builderPageRoutingScopeBar'
 import { useResizableWidth } from './builderPageResizeHooks'
 import ProductLoadingState from '../components/ProductLoadingState'
@@ -137,26 +140,10 @@ const VisualMode: React.FC<VisualModeProps> = ({
     getMaxWidth: () => Math.min(440, Math.floor(window.innerWidth * 0.34)),
     edge: 'right',
   })
-  // Collect available signal names for expression builder
-  // Complexity signals are referenced as "<name>:easy", "<name>:medium", "<name>:hard" in route conditions
-  const availableSignals = useMemo(() => {
-    const result: { signalType: string; name: string }[] = []
-    for (const s of ast?.signals ?? []) {
-      if (s.signalType === 'complexity') {
-        result.push({ signalType: s.signalType, name: `${s.name}:easy` })
-        result.push({ signalType: s.signalType, name: `${s.name}:medium` })
-        result.push({ signalType: s.signalType, name: `${s.name}:hard` })
-      } else {
-        result.push({ signalType: s.signalType, name: s.name })
-      }
-    }
-    for (const mapping of ast?.projectionMappings ?? []) {
-      for (const output of mapping.outputs ?? []) {
-        result.push({ signalType: 'projection', name: output.name })
-      }
-    }
-    return result
-  }, [ast?.signals, ast?.projectionMappings])
+  const availableSignals = useMemo(
+    () => listReferenceableSignals(ast?.signals, ast?.projectionMappings),
+    [ast?.signals, ast?.projectionMappings],
+  )
   // Collect available plugin names for toggle panel
   const availablePlugins = useMemo(
     () => ast?.plugins?.map((p) => ({ name: p.name, pluginType: p.pluginType })) ?? [],
