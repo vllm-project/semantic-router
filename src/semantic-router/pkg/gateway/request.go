@@ -101,7 +101,12 @@ func newRequestID() string {
 // identityHeaders are set by an authenticator in front of the Router in
 // Envoy deployments. The native gateway has no such authenticator, so a
 // client-sent value is dropped before routing sees it.
-var identityHeaders = []string{"x-authz-user-id", "x-authz-user-groups", "x-authz-team-id", "x-authz-tenant-id"}
+var identityHeaders = []string{
+	"x-authz-user-id", "x-authz-user-groups", "x-authz-team-id", "x-authz-tenant-id",
+	// The deployment authenticator's gateway credential is an authentication
+	// output too, and a client must not supply its own.
+	"x-vsr-gateway-credential",
+}
 
 func headerSet(names []string) map[string]bool {
 	set := make(map[string]bool, len(names))

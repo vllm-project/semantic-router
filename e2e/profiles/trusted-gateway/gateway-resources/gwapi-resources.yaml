@@ -1,0 +1,178 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: semantic-router
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        container:
+          resources: {}
+  logging:
+    level:
+      default: debug
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  gatewayClassName: semantic-router
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: semantic-router
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: semantic-router
+  connection:
+    bufferLimit: 50Mi
+---
+# Envoy routes on the model the Router selected: the trusted gateway and the
+# static backend are separate upstreams, so a credential meant for one can be
+# observed not to reach the other.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: semantic-router-direct
+  namespace: default
+spec:
+  parentRefs:
+    - name: semantic-router
+      kind: Gateway
+      group: gateway.networking.k8s.io
+  rules:
+    - matches:
+        - headers:
+            - type: Exact
+              name: x-selected-model
+              value: static-model
+      backendRefs:
+        - name: static-backend
+          kind: Backend
+          group: gateway.envoyproxy.io
+      timeouts:
+        request: 120s
+        backendRequest: 120s
+    - backendRefs:
+        - name: trusted-gateway
+          kind: Backend
+          group: gateway.envoyproxy.io
+      timeouts:
+        request: 120s
+        backendRequest: 120s
+---
+# The Lua filter stands in for the deployment authenticator (ext_authz, JWT
+# claim mapping, oauth2-proxy): it removes every authentication output a
+# client may have supplied, then, for a recognized client token, asserts the
+# principal and attaches that principal's dedicated gateway credential. ext_proc
+# runs after it, so the Router sees only authenticator-owned values.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyPatchPolicy
+metadata:
+  name: ai-gateway-prepost-extproc-patch-policy
+  namespace: default
+spec:
+  jsonPatches:
+    - name: default/semantic-router/http
+      operation:
+        op: add
+        path: /default_filter_chain/filters/0/typed_config/http_filters/0
+        value:
+          name: envoy.filters.http.lua
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+            inlineCode: |
+              function envoy_on_request(request_handle)
+                local headers = request_handle:headers()
+                -- Authentication outputs are never accepted from the client.
+                headers:remove("x-authz-user-id")
+                headers:remove("x-authz-user-groups")
+                headers:remove("x-vsr-gateway-credential")
+                local authorization = headers:get("authorization")
+                if authorization == "Bearer e2e-client-token-alice" then
+                  -- alice is authenticated and holds a gateway credential.
+                  headers:add("x-authz-user-id", "alice")
+                  headers:add("x-vsr-gateway-credential", "gw-virtual-key-alice")
+                elseif authorization == "Bearer e2e-client-token-bob" then
+                  -- bob is authenticated but was issued no gateway credential.
+                  headers:add("x-authz-user-id", "bob")
+                end
+              end
+      type: type.googleapis.com/envoy.config.listener.v3.Listener
+    - name: default/semantic-router/http
+      operation:
+        op: add
+        path: /default_filter_chain/filters/0/typed_config/http_filters/1
+        value:
+          name: semantic-router-extproc
+          typedConfig:
+            '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+            # A decision's reliability block reaches Envoy's router through these
+            # per-request headers; ext_proc may set no other x-envoy-* header.
+            mutation_rules:
+              allow_expression:
+                regex: "^x-envoy-(upstream-rq-timeout-ms|upstream-rq-per-try-timeout-ms|max-retries|retry-on|retriable-status-codes)$"
+            allow_mode_override: true
+            grpcService:
+              envoyGrpc:
+                authority: semantic-router.vllm-semantic-router-system:50051
+                clusterName: semantic-router
+              timeout: 120s
+            message_timeout: 120s
+            processing_mode:
+              request_body_mode: BUFFERED
+              request_header_mode: SEND
+              request_trailer_mode: SKIP
+              response_body_mode: BUFFERED
+              response_header_mode: SEND
+              response_trailer_mode: SKIP
+      type: type.googleapis.com/envoy.config.listener.v3.Listener
+    - name: semantic-router
+      operation:
+        op: add
+        path: ''
+        value:
+          connect_timeout: 120s
+          http2_protocol_options: {}
+          lb_policy: ROUND_ROBIN
+          load_assignment:
+            cluster_name: semantic-router
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: semantic-router.vllm-semantic-router-system.svc.cluster.local
+                          port_value: 50051
+          name: semantic-router
+          type: STRICT_DNS
+      type: type.googleapis.com/envoy.config.cluster.v3.Cluster
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: semantic-router
+  type: JSONPatch
