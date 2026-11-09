@@ -14,6 +14,7 @@ func TestIsSensitiveHeaderKey(t *testing.T) {
 		"x-api-key", "X-API-Key", "api-key", "proxy-authorization",
 		"x-goog-api-key", "x-litellm-api-key", "x-user-openai-key",
 		"x-session-token", "client-secret",
+		"x-vsr-gateway-credential", "X-Gateway-Credential",
 	}
 	for _, k := range sensitive {
 		if !isSensitiveHeaderKey(k) {

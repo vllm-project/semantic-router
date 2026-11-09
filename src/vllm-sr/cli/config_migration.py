@@ -254,6 +254,7 @@ def _normalize_existing_provider_model(
         provider_model, "external_model_ids", model.get("external_model_ids")
     )
     _set_if_missing(provider_model, "reasoning_family", model.get("reasoning_family"))
+    _set_if_missing(provider_model, "deployment", model.get("deployment"))
 
     backend_refs = _clone_list(access.get("backend_refs") or model.get("backend_refs"))
     if backend_refs:
