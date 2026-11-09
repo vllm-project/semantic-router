@@ -98,6 +98,29 @@ main agent keeps its session key and each subagent gets its own. A subagent is
 held on the model chosen for its first request, under the same rules as a
 session. Without `agent`, protection behaves as before.
 
+Codex CLI sends `session-id` and `thread-id` on every request. A root thread
+sends its own ID in both. A review child that Codex starts on that thread keeps
+the root's `session-id` and sends its own `thread-id`:
+
+```yaml
+protection:
+  enabled: true
+  scope: session
+  identity:
+    headers:
+      session: session-id
+      agent: thread-id
+```
+
+Because the root also sends `thread-id`, its key holds both its session ID and
+its thread ID, not the session ID alone. Both IDs stay the same across tool
+continuations and across turns after `codex exec resume`, so protection holds
+the root and each review child on their own models across the session.
+`codex exec review` starts a new session, so its review child gets its own key
+either way. These headers were checked with Codex CLI 0.167.0, configured as
+the [protocol compatibility guide](../../installation/protocol-compatibility)
+requires.
+
 ### Explicit release
 
 A harness that knows its task has changed phase can ask for a fresh decision
