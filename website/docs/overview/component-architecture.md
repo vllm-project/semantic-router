@@ -148,9 +148,10 @@ flowchart LR
 An explicit `api: systemone` entrypoint selects an isolated native recipe.
 Its signals and decisions choose an experimental `cascade` algorithm. Each
 cascade keeps a Choice / Score / Noul question bundle together and calls
-declared decision-model backends within its own deadline and call budget.
-Signal evaluation precedes that budget and retains its own timeouts and request
-cancellation. A backend can be a local deployment, a separate
+declared decision-model backends. Signals and the selected cascade share one
+request deadline and physical-call ledger. The selected decision's budget
+tightens both limits, while signal-specific timeouts remain upper bounds. A
+backend can be a local deployment, a separate
 vLLM-SR Engine service, or a compatible external System One API.
 
 The recipe chooses between models; each deployment separately chooses among

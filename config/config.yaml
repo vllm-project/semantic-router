@@ -103,6 +103,18 @@ providers:
           api_version: "2025-03-01"
           chat_path: /chat/completions
           weight: 100
+    - name: gateway-routed-reference
+      provider_model_id: gateway-routed-reference
+      api_format: openai
+      backend_refs:
+        # A trusted upstream gateway: it receives the request's
+        # deployment-injected gateway credential as its Bearer token instead
+        # of a static api_key, and requests without one are rejected.
+        - name: trusted-gateway
+          endpoint: https://gateway.example.com/v1
+          provider: openai-compatible
+          trusted_gateway: true
+          weight: 100
     - name: qwen3-32b
       reasoning:
         type: reasoning_effort
@@ -2135,7 +2147,11 @@ global:
     # call flag that OpenAI Chat and Responses backends cannot carry, and
     # messages[].role sends Anthropic system messages inside the conversation to
     # those backends as user text, for chat templates that accept a system
-    # message only first. Empty keeps every lossy translation failing closed.
+    # message only first. content.file sends each file in the conversation as
+    # a short note to a model whose capabilities leave out file_input.
+    # reasoning.signature drops the signature an Anthropic backend puts on its
+    # thinking, which Chat and Responses clients cannot carry. Empty keeps every
+    # lossy translation failing closed.
     allow_lossy_translation: []
     # The user text that routing reads. A user message whose text matches a
     # skip pattern (RE2) is never routing text, and each strip block cuts its
@@ -2225,6 +2241,13 @@ global:
             min_consecutive_recoveries: 2
             cooldown_seconds: 120
             max_switches_per_window: 2
+        # A client sends this header on one request to get a fresh decision for
+        # its protection key, with at least min_user_turns_between user turns
+        # between honored releases.
+        release:
+          enabled: true
+          header: x-vsr-protection-release
+          min_user_turns_between: 2
       state_store:
         backend: redis
         ttl_seconds: 86400
@@ -2318,6 +2341,12 @@ global:
           headers:
             X-Plan: premium
             X-Role: admin
+      # The deployment authenticator attaches a dedicated credential for
+      # trusted upstream gateways under this header; only backend_refs marked
+      # trusted_gateway receive it.
+      gateway_credential:
+        enabled: true
+        header: x-vsr-gateway-credential
     ratelimit:
       fail_open: false
       providers:
@@ -2553,7 +2582,7 @@ global:
       embedding_dimension: 384
       ingestion_workers: 4
       ingestion_drain_timeout_seconds: 25
-      supported_formats: [.txt, .md, .json, .csv, .html, .pdf]
+      supported_formats: [.txt, .md, .json, .csv, .html]
       milvus:
         connection:
           host: milvus

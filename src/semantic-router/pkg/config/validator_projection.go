@@ -414,7 +414,7 @@ func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{}
 		SignalTypeStructure:     collectStructureRuleNames(cfg.StructureRules),
 		SignalTypeComplexity:    collectComplexityRuleNames(cfg.ComplexityRules),
 		SignalTypeModality:      collectModalityRuleNames(cfg.ModalityRules),
-		SignalTypeAuthz:         collectRoleBindingNames(cfg.GetRoleBindings()),
+		SignalTypeAuthz:         collectRoleBindingRoles(cfg.GetRoleBindings()),
 		SignalTypeJailbreak:     collectJailbreakRuleNames(cfg.JailbreakRules),
 		SignalTypeSafety:        collectSafetyRuleNames(cfg.SafetyRules),
 		SignalTypePII:           collectPIIRuleNames(cfg.PIIRules),

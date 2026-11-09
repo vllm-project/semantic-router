@@ -456,7 +456,12 @@ func encodeResponsesContent(contents []llmprotocol.Content, direction string) (j
 			if content.Data != "" {
 				imageURL = "data:" + content.MediaType + ";base64," + content.Data
 			}
-			parts = append(parts, responsesContentWire{Type: "input_image", ImageURL: imageURL, FileID: content.FileID, Detail: content.Detail})
+			// detail is required on input_image, and auto is the documented default.
+			detail := content.Detail
+			if detail == "" {
+				detail = "auto"
+			}
+			parts = append(parts, responsesContentWire{Type: "input_image", ImageURL: imageURL, FileID: content.FileID, Detail: detail})
 		case llmprotocol.ContentFile:
 			if direction != "input" {
 				return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "file_content_position", "Responses output messages cannot contain input files", nil)

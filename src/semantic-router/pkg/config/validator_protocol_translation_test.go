@@ -39,11 +39,11 @@ global:
 }
 
 func TestAllowLossyTranslationReachesRuntimeAndExport(t *testing.T) {
-	cfg, err := ParseYAMLBytes(lossyTranslationConfig(`[tool_result.is_error, "messages[].role"]`))
+	cfg, err := ParseYAMLBytes(lossyTranslationConfig(`[tool_result.is_error, "messages[].role", reasoning.signature]`))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes() error = %v", err)
 	}
-	want := []string{"tool_result.is_error", "messages[].role"}
+	want := []string{"tool_result.is_error", "messages[].role", "reasoning.signature"}
 	if !slices.Equal(cfg.AllowLossyTranslation, want) {
 		t.Fatalf("runtime allow_lossy_translation = %v, want %v", cfg.AllowLossyTranslation, want)
 	}

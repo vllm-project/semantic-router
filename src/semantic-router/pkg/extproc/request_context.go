@@ -150,6 +150,8 @@ type RequestContext struct {
 	BufferedRequestBody   bool // true when the data plane negotiated BUFFERED or BUFFERED_PARTIAL
 	// Arrival diagnostics, set at end of stream in STREAMED modes only.
 	StreamedBodyStats StreamedBodyStats
+	// A guard rejection ends the request even after its handler returns to the pool.
+	streamedBodyRejected bool
 
 	// Request header reply held until a full-duplex body is routed.
 	fullDuplexHold *fullDuplexHeaderHold
@@ -209,11 +211,17 @@ type RequestContext struct {
 	// authentication; this field must only ever be populated from the
 	// configured auth gateway header, never from request-body content.
 	AuthenticatedPrincipal string
-	TurnIndex              int     // Number of prior turns in this session (0 = first turn)
-	PreviousModel          string  // Model used in the immediately preceding turn; empty on first turn
-	CacheWarmthEstimate    float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
-	SessionIdleSeconds     float64 // Seconds since the last locally observed turn for this session
-	SessionIdleKnown       bool    // True when SessionIdleSeconds came from local session observation
+	// gatewayCredential is the dedicated credential the deployment
+	// authenticator attached for a trusted upstream gateway, taken off the
+	// headers at capture (see captureGatewayCredential). Unexported so no
+	// serialization or dump of the context carries it; read it through
+	// trustedGatewayCredential.
+	gatewayCredential   string
+	TurnIndex           int     // Number of prior turns in this session (0 = first turn)
+	PreviousModel       string  // Model used in the immediately preceding turn; empty on first turn
+	CacheWarmthEstimate float64 // [0,1] from EstimateCacheProbability; 0.5 = unknown
+	SessionIdleSeconds  float64 // Seconds since the last locally observed turn for this session
+	SessionIdleKnown    bool    // True when SessionIdleSeconds came from local session observation
 
 	// HistoryTokenCount is the estimated token count of conversation history,
 	// excluding the current turn. Source priority: provider usage accumulation
@@ -361,6 +369,12 @@ type RequestContext struct {
 	VSRHallucinationEvidence *ResponseHallucinationEvidence
 	VSRDecisionDiagnostics   decision.EvaluationDiagnostics
 	VSRProjectionTrace       *projectiontrace.Trace
+
+	// VSRContextReserveTokens is the reserve part of VSRContextTokenCount
+	// (llmprotocol.InputEstimate.ReserveTokens). Refusals rest on the count
+	// without it; once a decision needs that count, the Router drops the
+	// reserve from VSRContextTokenCount for the rest of the request.
+	VSRContextReserveTokens int
 
 	// Hallucination mitigation tracking
 	FactCheckNeeded             bool     // Result of fact-check classification

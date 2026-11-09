@@ -51,6 +51,11 @@ const (
 	// omits or demotes to replay are emitted inline for that request — the
 	// debug/replay-mode trigger for the v0.4 header surface. See issue #2216.
 	VSRDebug = "x-vsr-debug"
+
+	// VSRProtectionRelease asks router-learning protection for a fresh
+	// decision on the request's protection key. Any non-empty value requests
+	// it; global.router.learning.protection.release.header can rename it.
+	VSRProtectionRelease = "x-vsr-protection-release"
 )
 
 // VSR Decision Tracking Headers
@@ -435,6 +440,15 @@ const (
 	// never reach a model backend.
 	AuthzTeamID   = "x-authz-team-id"
 	AuthzTenantID = "x-authz-tenant-id"
+
+	// VSRGatewayCredential is the default header through which the deployment
+	// authenticator hands the Router the dedicated credential for a trusted
+	// upstream gateway (global.services.authz.gateway_credential). It is a
+	// trusted authentication output like the identity headers: the gateway
+	// strips client-supplied copies, the Router removes it from every upstream
+	// request, and only a backend_ref marked trusted_gateway receives its
+	// value, under that backend's auth header. See issue #2286.
+	VSRGatewayCredential = "x-vsr-gateway-credential" // #nosec G101 -- header name, not a credential
 )
 
 // Internal Request Authentication

@@ -76,6 +76,9 @@ static_resources:
               {% for header in identity_headers %}
               - {{ header | tojson }}
               {% endfor %}
+              {% for header in gateway_credential_headers %}
+              - {{ header | tojson }}
+              {% endfor %}
               routes:
               {% for model in models %}
               # Route for model: {{ model.name | tojson }}
@@ -194,6 +197,20 @@ static_resources:
                   )
                 end
           {% endif %}
+          # The gateway credential is an authenticator output, never a client
+          # input. Remove any client copy before ext_proc sees the request; the
+          # route-level removal above only runs at the router filter. This
+          # stack runs no authenticator, so a deployment that issues the
+          # credential adds its authenticator after this filter.
+          - name: envoy.filters.http.lua
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+              inline_code: |
+                function envoy_on_request(request_handle)
+                {% for header in gateway_credential_headers %}
+                  request_handle:headers():remove({{ header | tojson }})
+                {% endfor %}
+                end
           - name: envoy.filters.http.ext_proc
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor

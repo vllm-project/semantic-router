@@ -227,7 +227,7 @@ type MemoryConfig struct {
 	Qdrant                     *MemoryQdrantConfig     `yaml:"qdrant,omitempty"`
 	RedisCache                 *MemoryRedisCacheConfig `yaml:"redis_cache,omitempty"`
 	EmbeddingModel             string                  `yaml:"embedding_model,omitempty"`
-	DefaultRetrievalLimit      int                     `yaml:"default_retrieval_limit,omitempty"`
+	DefaultRetrievalLimit      int                     `yaml:"default_retrieval_limit"`
 	DefaultSimilarityThreshold float32                 `yaml:"default_similarity_threshold,omitempty"`
 	HybridSearch               bool                    `yaml:"hybrid_search,omitempty"`
 	HybridMode                 string                  `yaml:"hybrid_mode,omitempty"`
@@ -338,8 +338,8 @@ type MemoryQdrantConfig struct {
 type ResponseAPIConfig struct {
 	Enabled      bool                   `yaml:"enabled"`
 	StoreBackend string                 `yaml:"store_backend,omitempty"`
-	TTLSeconds   int                    `yaml:"ttl_seconds,omitempty"`
-	MaxResponses int                    `yaml:"max_responses,omitempty"`
+	TTLSeconds   int                    `yaml:"ttl_seconds"`
+	MaxResponses int                    `yaml:"max_responses"`
 	Redis        ResponseAPIRedisConfig `yaml:"redis,omitempty"`
 }
 

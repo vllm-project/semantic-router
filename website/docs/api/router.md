@@ -93,20 +93,22 @@ you leave response metadata disabled.
 }
 ```
 
-`model_calls` counts physical inference attempts within the selected algorithm,
-including its transport retries. Signal calls are outside this counter and have
-their own timeouts and request cancellation. It is not a count of GPU forwards. `usage`
-belongs to the returned native candidate and is not total cascade billing.
+`model_calls` counts physical inference attempts across signal evaluation and
+the selected algorithm, including remote decision-model calls and transport
+retries. Signal timeouts remain upper bounds inside the shared request deadline.
+It is not a count of GPU forwards. `usage` belongs to the returned native
+candidate and is not total cascade billing.
 The `quality` field names the configured acceptance method; it is not an
 accuracy score. Native discovery marks recipe entrypoints with `routing: true`
 and concrete models with `routing: false`.
 
 Malformed or unsupported auto questions return `400`. If no complete answer
-passes the declared acceptance rule within the call budget, the request
-returns `503` with `systemone_unresolved`; expiration of the algorithm deadline
-returns `504` with `systemone_deadline_exceeded`. Failed
-candidates never become empty successful answers. Direct model requests keep
-their existing native API contract and do not run the cascade.
+passes the declared acceptance rule, the request returns `503` with
+`systemone_unresolved`. Exhausting the shared physical-call limit returns
+`503`; exhausting its deadline returns `504`. Both budget errors use
+`systemone_budget_exhausted` and include the reason and `model_calls` count.
+Failed candidates never become empty successful answers. Direct model requests
+keep their existing native API contract and do not run the cascade.
 
 A remote Engine backend must expose a concrete model. Native backend calls
 carry `X-VSR-SystemOne-Backend: 1`; a receiving Router returns `409`
@@ -191,7 +193,12 @@ curl -sS http://localhost:8899/v1/chat/completions \
 
 The response keeps the client protocol's shape. Its model, content, token
 usage, and optional router headers depend on the selected backend and recipe.
-See [VSR routing headers](../troubleshooting/vsr-headers) for the stable
+A reply the backend produced names the model as the backend reports it,
+whether it streams or not and whatever format the backend speaks. A stream
+whose backend names no model in its first event keeps the logical name. A
+reply the Router composes itself, from a Looper algorithm or its own refusal,
+names the logical model, the name `x-vsr-selected-model` reports. See
+[VSR routing headers](../troubleshooting/vsr-headers) for the stable
 observability contract.
 
 The model names accepted by the Router come from canonical provider entries.
@@ -362,7 +369,7 @@ decision, or request content:
 | --- | --- | --- | --- |
 | `model_not_found` | 400 | `invalid_request_error` | The request names a model this Router does not serve. |
 | `no_route` | 400 | `invalid_request_error` | No decision matched, and no default model applies. A recipe entrypoint falls back to `providers.defaults.model` when it is configured. Looper entrypoints follow the same recipe rules; their names do not select an algorithm. |
-| `context_length_exceeded` | 400 or 422 | `invalid_request_error` | The request does not fit the models that could serve it: 400 from the [request budget check](#request-budget-errors), 422 from the models' `context_window_size`. |
+| `context_length_exceeded` | 400 or 422 | `invalid_request_error` | The request does not fit the models that could serve it, even without the estimate's reserves for structured data and media: 400 from the [request budget check](#request-budget-errors), 422 from the models' `context_window_size`. |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
 | `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. `x-vsr-applied-unknown-policy` names the decision. |
 | `no_eligible_model` | 503 | `server_error` | The selection policy rejected every candidate model of the matched decision. |
@@ -389,7 +396,10 @@ is never intentionally sent with a success status.
 
 With `candidate_requirements.context: known_limits`, the Router checks estimated
 input plus the effective output allowance against the candidates' configured
-limits. If all candidates fail only the budget check, it returns HTTP 400:
+limits. When the full estimate leaves fewer candidates than the decision needs,
+the Router checks again without the estimate's reserves for structured data and
+media and keeps the candidates that count fits. If all candidates still fail
+only the budget check, it returns HTTP 400:
 
 | Error code | Meaning |
 | --- | --- |

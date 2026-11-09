@@ -156,9 +156,13 @@ traffic before using them for production routing.
 ### Native System One Algorithms
 
 A recipe published with `api: systemone` uses native execution. Its matched
-decision runs a `cascade`, preserving complete typed responses. Each cascade
-has its own `algorithm.budget` for its stages and transport retries. Signals
-run first with their own timeouts and request cancellation.
+decision runs a `cascade`, preserving complete typed responses. The request
+deadline and physical-call ledger start when the request arrives. Before a
+decision is selected, the ceiling uses the largest `algorithm.budget` deadline
+and `max_calls` among the recipe's native decisions; signal-specific timeouts
+remain upper bounds. After selection, the decision's `algorithm.budget`
+tightens the same deadline and ledger for its stages, judges and transport
+retries. Calls already spent on signals count toward that decision's `max_calls`.
 
 | Type | Status | Goal | Guide |
 | --- | --- | --- | --- |

@@ -117,12 +117,16 @@ Kai fails its stricter early-exit gate. This sample has no model-backed routing
 signals, so its two-call budget covers Kai and, when needed, Vega. If a transport
 retry consumes a call, fewer calls remain for later stages.
 
-`modelRefs` is the complete candidate roster. Each stage names one member and can set its own timeout. Stage names cannot use `abstain`, which is reserved for the judge’s no-selection result. A stage cannot add a model that the decision did not declare. The algorithm's deadline starts after its decision is selected. Its call limit covers its physical inference exchanges, including transport retries; advancing a stage does not reset either limit. Signal evaluation has its own timeouts and follows request cancellation; signal calls do not consume the selected algorithm's budget. Internal work behind an opaque external provider is not visible to this call ledger.
+`modelRefs` is the complete candidate roster. Each stage names one member and can set its own timeout. Stage names cannot use `abstain`, which is reserved for the judge’s no-selection result. A stage cannot add a model that the decision did not declare.
 
-The Router validates every required answer before accepting a response. Missing answers, invalid values, unsupported question types and unproven full-input coverage do not become successful results. If no declared stage satisfies the rule within the budget, the request is unresolved.
+For a native request, the Router starts one deadline and physical-call ledger when the public request handler begins, before it reads the body. The request ceiling is derived from the largest `algorithm.budget.deadline` and `algorithm.budget.max_calls` among the recipe's native decisions. After selecting a decision, the Router tightens both limits to that decision's configured budget. This preserves existing per-decision configuration without adding a recipe-level budget field.
 
-The algorithm deadline is not a whole-request timeout. HTTP server, proxy and
-client timeouts still apply to the complete request. In particular, Dashboard's
+Decision signals and built-in model signals run inside the request deadline and call ledger. Their own timeouts remain upper bounds. Every physical exchange counts, including remote decision-model calls and provider transport retries. Signal telemetry tracks signal exchanges; each algorithm stage's call telemetry includes its retries and judge calls. If signals exhaust the request ceiling, remaining signals stay unknown and execution stops. If the selected decision's tighter budget is already exhausted, its algorithm does not start. Either case returns `systemone_budget_exhausted` with `reason: max_calls` or `reason: deadline`; `model_calls` reports all physical exchanges charged so far. The call ledger cannot see work hidden inside an opaque external provider.
+
+The Router validates every required answer before accepting a response. Missing answers, invalid values, unsupported question types and unproven full-input coverage do not become successful results. If no declared stage satisfies the rule before the budget is exhausted, the request is unresolved.
+
+The native budget does not replace HTTP server, proxy and client timeouts for
+the complete request. In particular, Dashboard's
 operator diagnostics use the management API's two-minute response write limit;
 configure the full serving path appropriately for longer requests.
 
@@ -177,7 +181,7 @@ accuracy.
 
 Native signals inspect the complete task document, including its states and questions. The request does not supply a Chat conversation or trusted identity envelope. References to `authz`, `metadata`, `conversation`, `reask`, `user_feedback` and `input_modality` therefore fail configuration validation, including through projections. KB signals are also unavailable in native recipes.
 
-Preference signals must use a native decision task deployment. Explicit contrastive or external preference adapters and MCP domain classifiers are unavailable in native recipes until they share the request lifecycle. Supported model-backed signals retain their own transport timeouts and request cancellation. They run before the selected algorithm starts its budget.
+Preference signals must use a native decision task deployment. Explicit contrastive or external preference adapters and MCP domain classifiers are unavailable in native recipes until they share the request lifecycle. Supported model-backed signals retain their own transport timeouts inside the shared request deadline and call ledger.
 
 The recipe's `strategy` still chooses among matching decisions. Native execution uses its explicit stages and budget rather than Chat fallback, candidate requirements, decision reliability, output contracts or adaptation controls. Keep Chat fallback disabled for this native recipe. `modelRefs` declares aliases only; stage order determines selection, so Chat reasoning controls and model weights are rejected. Provider-level retry and timeout settings still apply to remote exchanges.
 
@@ -246,9 +250,10 @@ recipes:
 
 Only the selected decision executes. A one-stage cascade uses the same typed
 validation and acceptance contract for a single model; the other decision has
-its own two-call limit. Both budgets begin after signal evaluation. The keyword
-signal needs no model inference. The simpler first example has no routing
-signal at all: Kai's one original answer supplies its early-exit evidence.
+its own two-call limit, tightened from the shared request ceiling after
+selection. The keyword signal needs no model inference. The simpler first
+example has no routing signal at all: Kai's one original answer supplies its
+early-exit evidence.
 
 Keywords inspect the task document, including question text, and callers can
 trigger them deliberately. Use them as routing hints, not authorization or a
@@ -326,9 +331,9 @@ stages:
 
 Add `reviewer` to the decision's `modelRefs` and connect it with
 `api_format: openai` and increase this algorithm's budget to allow the third
-call. The judge consumes that same algorithm deadline and call budget. Its
-output is a selection from prior complete native responses, not a replacement
-answer synthesized by an LLM.
+call. The judge consumes the same shared request deadline and call ledger as
+the native stages. Its output is a selection from prior complete native
+responses, not a replacement answer synthesized by an LLM.
 
 ## Measure the tradeoff
 

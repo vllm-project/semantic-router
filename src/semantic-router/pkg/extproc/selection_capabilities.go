@@ -48,7 +48,9 @@ func (r *OpenAIRouter) selectionCapabilityRequest(ctx *RequestContext) (*llmprot
 
 // candidateCapabilityMismatch uses the same capability contract as final
 // dispatch. Unannotated models retain the existing wire-only qualification.
-func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request *llmprotocol.Request, decision *config.Decision, requirements *config.CandidateRequirements, automaticDemands map[string]selection.CandidateDemand) error {
+// Without countReserves, the known-limits check uses the input estimate
+// without its reserves.
+func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request *llmprotocol.Request, decision *config.Decision, requirements *config.CandidateRequirements, automaticDemands map[string]selection.CandidateDemand, countReserves bool) error {
 	if request == nil {
 		return nil // Eval/selector-only callers have no full inference envelope.
 	}
@@ -57,7 +59,7 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 		return err
 	}
 	preview := *request
-	if decision != nil && !preserveExplicitAnthropicReasoning(&preview, format) {
+	if decision != nil && !preserveExplicitAnthropicReasoningOff(&preview, format) {
 		if format != llmprotocol.OpenAIChatV1 {
 			if family := r.getModelReasoningFamily(ref.Model); family != nil {
 				exact := *decision
@@ -75,6 +77,9 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 	demand, err := selection.EffectiveCandidateDemand(&preview, decision)
 	if err != nil {
 		return err
+	}
+	if !countReserves {
+		demand = demand.WithoutReserves()
 	}
 	if demand.AutomaticOutput {
 		// Selection already rendered this candidate without mutating ingress.
@@ -126,7 +131,7 @@ func (r *OpenAIRouter) capabilityEligibleSelectionContext(input *selection.Selec
 			onlyUnsupported = false
 			continue
 		}
-		if err := r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, requirements, ctx.AutomaticCandidateDemands); err != nil {
+		if err := r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, requirements, ctx.AutomaticCandidateDemands, contextReservesCounted(ctx)); err != nil {
 			var protocolErr *llmprotocol.ProtocolError
 			if !errors.As(err, &protocolErr) || protocolErr.Category != llmprotocol.ErrorUnsupportedFeature {
 				onlyUnsupported = false

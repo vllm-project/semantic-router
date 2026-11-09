@@ -742,7 +742,7 @@
       "get": {
         "operationId": "listDecisionRoutes",
         "summary": "List active System One routes",
-        "description": "Reads the configured frontend without probing models. available describes routing availability, not backend health. Each route includes model, recipe, algorithms, question_types, and execution_timeout_ms. The timeout is the largest algorithm execution deadline in the recipe; signals have separate timeouts.",
+        "description": "Reads the configured frontend without probing models. available describes routing availability, not backend health. Each route includes model, recipe, algorithms, question_types, and execution_timeout_ms. The timeout is the largest algorithm budget deadline in the recipe; it bounds signals and the selected algorithm together.",
         "tags": [
           "decision-model"
         ],
@@ -884,7 +884,7 @@
       "post": {
         "operationId": "runDecisionRoute",
         "summary": "Run an active System One route",
-        "description": "Runs an operator diagnostic using configured management credentials. Browser credentials are not forwarded; no public listener API key is needed. The frontend validates the native request and owns route selection. The selected algorithm controls its execution deadline and physical call budget; signals use their own timeouts.",
+        "description": "Runs an operator diagnostic using configured management credentials. Browser credentials are not forwarded; no public listener API key is needed. The frontend validates the native request and owns route selection. Signals and the selected algorithm share one deadline and physical call ledger, with per-decision limits tightening the request ceiling.",
         "tags": [
           "decision-model"
         ],
@@ -3768,35 +3768,6 @@
       "post": {
         "operationId": "postApiRouterApiV1DiagnosticsModelsTokens",
         "summary": "POST /api/router/api/v1/diagnostics/models/tokens",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "evaluation.run",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "evaluation",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/router/api/v1/diagnostics/nli": {
-      "post": {
-        "operationId": "postApiRouterApiV1DiagnosticsNli",
-        "summary": "POST /api/router/api/v1/diagnostics/nli",
         "tags": [
           "router"
         ],

@@ -214,18 +214,6 @@ func writeStartupState(writer startupstatus.StatusWriter, state startupstatus.St
 	}
 }
 
-func failStartup(writer startupstatus.StatusWriter, format string, args ...interface{}) {
-	message := fmt.Sprintf(format, args...)
-	_ = writer.Write(startupstatus.State{
-		Phase:   "error",
-		Ready:   false,
-		Message: message,
-	})
-	logging.ComponentFatalEvent("router", "startup_failed", map[string]interface{}{
-		"message": message,
-	})
-}
-
 func initializeTracing(cfg *config.RouterConfig) func(context.Context) error {
 	if !cfg.Observability.Tracing.Enabled {
 		return func(context.Context) error { return nil }

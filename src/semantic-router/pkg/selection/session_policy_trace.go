@@ -30,6 +30,8 @@ type SessionPolicyTrace struct {
 	IdleForSeconds float64
 	IdleExpired    bool
 
+	ExplicitRelease bool
+
 	HasNonPortableContext    bool
 	NonPortableContextReason string
 	DecisionDrift            bool
@@ -148,6 +150,7 @@ func (t *SessionPolicyTrace) ToMap() map[string]interface{} {
 		"idle_known":                        t.IdleKnown,
 		"idle_for_seconds":                  t.IdleForSeconds,
 		"idle_expired":                      t.IdleExpired,
+		"explicit_release":                  t.ExplicitRelease,
 		"has_non_portable_context":          t.HasNonPortableContext,
 		"non_portable_context_reason":       t.NonPortableContextReason,
 		"decision_drift":                    t.DecisionDrift,

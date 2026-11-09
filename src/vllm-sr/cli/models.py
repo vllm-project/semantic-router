@@ -1758,6 +1758,16 @@ class RouterLearningProtectionTuningConfig(BaseModel):
     stability_weight: Optional[float] = Field(default=None, ge=0.0)
 
 
+class RouterLearningProtectionReleaseConfig(BaseModel):
+    """Client-requested release of a protection hold."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[StrictBool] = None
+    header: Optional[StrictStr] = Field(default=None, min_length=1)
+    min_user_turns_between: Optional[int] = Field(default=None, ge=0)
+
+
 class RouterLearningProtectionConfig(BaseModel):
     """Global Router Learning protection controls."""
 
@@ -1767,6 +1777,7 @@ class RouterLearningProtectionConfig(BaseModel):
     scope: Optional[Literal["conversation", "session"]] = None
     identity: Optional[RouterLearningIdentityConfig] = None
     tuning: Optional[RouterLearningProtectionTuningConfig] = None
+    release: Optional[RouterLearningProtectionReleaseConfig] = None
 
 
 class RouterLearningRedisStateStoreConfig(BaseModel):
@@ -2659,6 +2670,9 @@ class BackendRef(BaseModel):
     chat_path: Optional[str] = None
     api_key: Optional[str] = None
     api_key_env: Optional[str] = None
+    # The backend receives the request's deployment-injected gateway credential
+    # (global.services.authz.gateway_credential) instead of a static key.
+    trusted_gateway: bool = False
 
     @model_validator(mode="before")
     @classmethod

@@ -261,6 +261,9 @@
             "$ref": "#/$defs/AuthzProviderConfig"
           },
           "type": "array"
+        },
+        "gateway_credential": {
+          "$ref": "#/$defs/GatewayCredentialConfig"
         }
       },
       "additionalProperties": false,
@@ -572,6 +575,9 @@
         },
         "api_key_env": {
           "type": "string"
+        },
+        "trusted_gateway": {
+          "type": "boolean"
         },
         "auth": {
           "$ref": "#/$defs/DeploymentAuth"
@@ -1441,7 +1447,9 @@
             "type": "string",
             "enum": [
               "tool_result.is_error",
-              "messages[].role"
+              "messages[].role",
+              "content.file",
+              "reasoning.signature"
             ]
           },
           "type": "array"
@@ -3537,6 +3545,18 @@
         },
         "max_completion_tokens": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "GatewayCredentialConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "header": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -6970,6 +6990,26 @@
         },
         "tuning": {
           "$ref": "#/$defs/RouterLearningProtectionTuning"
+        },
+        "release": {
+          "$ref": "#/$defs/RouterLearningProtectionReleaseConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RouterLearningProtectionReleaseConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "header": {
+          "type": "string",
+          "minLength": 1
+        },
+        "min_user_turns_between": {
+          "type": "integer",
+          "minimum": 0
         }
       },
       "additionalProperties": false,

@@ -19266,8 +19266,8 @@
         "x-vllm-sr-visibility": "advanced"
       },
       "post": {
-        "summary": "Run a native recipe using operator classify.invoke permission; the selected algorithm owns its execution deadline and physical call budget, while signals use their own timeouts; independent of public listener grants",
-        "description": "Run a native recipe using operator classify.invoke permission; the selected algorithm owns its execution deadline and physical call budget, while signals use their own timeouts; independent of public listener grants",
+        "summary": "Run a native recipe using operator classify.invoke permission; signals and the selected algorithm share one deadline and physical call ledger, with per-decision limits tightening the request ceiling; independent of public listener grants",
+        "description": "Run a native recipe using operator classify.invoke permission; signals and the selected algorithm share one deadline and physical call ledger, with per-decision limits tightening the request ceiling; independent of public listener grants",
         "operationId": "post_api_v1_diagnostics_routes_systemone",
         "tags": [
           "diagnostics"
@@ -24423,6 +24423,30 @@
                                   "reason": {
                                     "type": "string"
                                   },
+                                  "release": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "header": {
+                                        "type": "string"
+                                      },
+                                      "honored": {
+                                        "type": "boolean"
+                                      },
+                                      "previous_model": {
+                                        "type": "string"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "selected_model": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "honored"
+                                    ]
+                                  },
                                   "remaining_turn_prior": {
                                     "type": "number"
                                   },
@@ -24714,6 +24738,30 @@
                                   },
                                   "reason": {
                                     "type": "string"
+                                  },
+                                  "release": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "header": {
+                                        "type": "string"
+                                      },
+                                      "honored": {
+                                        "type": "boolean"
+                                      },
+                                      "previous_model": {
+                                        "type": "string"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "selected_model": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "honored"
+                                    ]
                                   },
                                   "remaining_turn_prior": {
                                     "type": "number"
@@ -29457,6 +29505,30 @@
                             "reason": {
                               "type": "string"
                             },
+                            "release": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "header": {
+                                  "type": "string"
+                                },
+                                "honored": {
+                                  "type": "boolean"
+                                },
+                                "previous_model": {
+                                  "type": "string"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "selected_model": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "honored"
+                              ]
+                            },
                             "remaining_turn_prior": {
                               "type": "number"
                             },
@@ -29748,6 +29820,30 @@
                             },
                             "reason": {
                               "type": "string"
+                            },
+                            "release": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "header": {
+                                  "type": "string"
+                                },
+                                "honored": {
+                                  "type": "boolean"
+                                },
+                                "previous_model": {
+                                  "type": "string"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "selected_model": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "honored"
+                              ]
                             },
                             "remaining_turn_prior": {
                               "type": "number"

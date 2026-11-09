@@ -78,7 +78,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	startupWriter := newStartupWriter(cfg, opts.configPath, runtimeRegistry)
 	resolvedOpts, err := resolveRuntimeManagementOptions(opts, cfg)
 	if err != nil {
-		failStartup(startupWriter, "Failed to resolve management API: %v", err)
+		return recordStartupError(startupWriter, "resolve management API", err)
 	}
 	opts = resolvedOpts
 
@@ -86,7 +86,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	// model downloads and initialization.
 	apiServer, err := startAPIServerIfEnabled(opts, runtimeRegistry)
 	if err != nil {
-		failStartup(startupWriter, "Failed to start management API: %v", err)
+		return recordStartupError(startupWriter, "start management API", err)
 	}
 	var (
 		routerServer     *extproc.Server
