@@ -235,6 +235,10 @@ def test_parse_user_config_accepts_decision_learning_controls(
             "enabled": True,
             "strategy": "routing_sampling",
             "candidate_set": "decision",
+            "success": {
+                "outcome": "request_completion",
+                "stale_after_seconds": 86400,
+            },
         },
         "protection": {
             "enabled": True,
@@ -255,6 +259,7 @@ def test_parse_user_config_accepts_decision_learning_controls(
         "adaptation": {
             "mode": "observe",
             "candidate_set": "tier",
+            "success": {"stale_after_seconds": 3600},
         },
         "protection": {
             "mode": "apply",
@@ -271,6 +276,11 @@ def test_parse_user_config_accepts_decision_learning_controls(
     assert adaptations.adaptation is not None
     assert adaptations.adaptation.mode == "observe"
     assert adaptations.adaptation.candidate_set == "tier"
+    assert adaptations.adaptation.success is not None
+    assert adaptations.adaptation.success.stale_after_seconds == 3600
+    assert parsed.global_["router"]["learning"]["adaptation"]["success"]["outcome"] == (
+        "request_completion"
+    )
     assert adaptations.protection is not None
     assert adaptations.protection.mode == "apply"
     assert adaptations.protection.stability_weight == 1.5
@@ -386,6 +396,10 @@ def test_parse_user_config_rejects_removed_decision_protection_weight(
             "global.router.learning.adaptation.routing_sampling",
         ),
         (
+            {"adaptation": {"success": {"target_probability": 0.85}}},
+            "global.router.learning.adaptation.success.target_probability",
+        ),
+        (
             {"protection": {"privacy_affinity": True}},
             "global.router.learning.protection.privacy_affinity",
         ),
@@ -458,6 +472,14 @@ def test_parse_user_config_rejects_unknown_global_learning_fields(
         (
             {"adaptation": {"strategy": "linucb"}},
             "global.router.learning.adaptation.strategy",
+        ),
+        (
+            {"adaptation": {"success": {"outcome": "tool_success"}}},
+            "global.router.learning.adaptation.success.outcome",
+        ),
+        (
+            {"adaptation": {"success": {"stale_after_seconds": -1}}},
+            "global.router.learning.adaptation.success.stale_after_seconds",
         ),
         (
             {"protection": {"scope": "run"}},
