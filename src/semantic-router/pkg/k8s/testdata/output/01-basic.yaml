@@ -129,6 +129,8 @@ global:
           detailed_goroutine_tracking: true
     response_api:
       enabled: false
+      ttl_seconds: 0
+      max_responses: 0
     observability:
       tracing:
         enabled: false
@@ -161,7 +163,8 @@ global:
     response_cache:
       enabled: false
       ttl_seconds: 0
-    memory: {}
+    memory:
+      default_retrieval_limit: 0
   integrations:
     tools:
       enabled: true
