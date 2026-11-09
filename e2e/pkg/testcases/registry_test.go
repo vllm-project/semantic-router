@@ -1,6 +1,11 @@
-package testcases
+package testcases_test
 
-import "testing"
+import (
+	"testing"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
+	_ "github.com/vllm-project/semantic-router/e2e/profiles/all"
+)
 
 // Guarding retired testcases stops a revert from silently re-introducing it.
 var retiredTestCaseNames = []string{
@@ -13,7 +18,7 @@ var retiredTestCaseNames = []string{
 
 func TestRetiredTestCasesAreNotRegistered(t *testing.T) {
 	for _, name := range retiredTestCaseNames {
-		if _, ok := Get(name); ok {
+		if _, ok := pkgtestcases.Get(name); ok {
 			t.Errorf("retired test case %q is still registered in the E2E catalog", name)
 		}
 	}
