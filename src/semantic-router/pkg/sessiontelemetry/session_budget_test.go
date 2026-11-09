@@ -160,3 +160,29 @@ func TestUsageWithoutModelReleasesTheReservation(t *testing.T) {
 	RecordSessionUsage(SessionUsageParams{SessionID: "s", PromptTokens: 5, Reservation: id})
 	mustReserve(t, "s", 1000, 1000)
 }
+
+func TestColdReservationCountsSharedUsage(t *testing.T) {
+	resetSessionBudget(t)
+	now := time.Now()
+	SetRouterSessionStateStore(&fakeRouterSessionStateStore{found: true, snapshot: RouterSessionSnapshot{
+		SessionID: "s", LastSeen: now, CumulativePromptTokens: 700, CumulativeCompletionTokens: 200,
+	}})
+	t.Cleanup(func() { SetRouterSessionStateStore(nil) })
+
+	mustExceed(t, "s", 101, 1000)
+	mustReserve(t, "s", 100, 1000)
+	snapshot, _ := GetRouterSessionSnapshot("s", now)
+	if snapshot.CumulativePromptTokens != 700 || snapshot.CumulativeCompletionTokens != 200 {
+		t.Fatalf("shared usage lost after a cold reservation: %+v", snapshot)
+	}
+}
+
+func TestHydrationKeepsOpenReservations(t *testing.T) {
+	resetSessionBudget(t)
+	mustReserve(t, "s", 600, 1000)
+	// A second cold load of the same session finishes after the reservation.
+	hydrateRouterSessionSnapshot(RouterSessionSnapshot{SessionID: "s", LastSeen: time.Now(), CumulativePromptTokens: 100})
+
+	mustExceed(t, "s", 301, 1000)
+	mustReserve(t, "s", 300, 1000)
+}

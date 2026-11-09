@@ -39,13 +39,20 @@ type SessionReservationParams struct {
 // session cannot pass the limit with their reservations. The returned id is
 // closed once, by RecordSessionUsage (SessionUsageParams.Reservation) or by
 // ReleaseSessionTokens. Reservations stay in this process: they are not part
-// of RouterSessionSnapshot.
+// of RouterSessionSnapshot. A session this process has not seen yet starts from
+// the usage in the shared store, when one is set.
 func ReserveSessionTokens(p SessionReservationParams) (uint64, error) {
 	if p.SessionID == "" || p.Tokens < 0 || p.Limit <= 0 || p.MaxInFlight < 0 {
 		return 0, fmt.Errorf("invalid session token reservation for %q: tokens %d, limit %d, max in flight %d",
 			p.SessionID, p.Tokens, p.Limit, p.MaxInFlight)
 	}
 	s := globalRouterSessionMemory
+	s.mu.Lock()
+	cold := s.sessions[p.SessionID] == nil
+	s.mu.Unlock()
+	if cold {
+		loadSharedRouterSessionSnapshotMode(p.SessionID, p.Timestamp, true)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
