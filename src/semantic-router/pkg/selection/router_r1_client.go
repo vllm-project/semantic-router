@@ -130,12 +130,15 @@ const maxSelectionErrorBodyBytes int64 = 8 * 1024
 
 // AutoMixVerifyResponse is the response from the AutoMix verifier
 type AutoMixVerifyResponse struct {
-	Confidence     float64  `json:"confidence"`
-	ShouldEscalate bool     `json:"should_escalate"`
-	VerifiedCount  int      `json:"verified_count"`
-	TotalSamples   int      `json:"total_samples"`
-	Samples        []string `json:"samples"`
-	Threshold      float64  `json:"threshold"`
+	// Usage is optional for compatibility with older verifier servers. The
+	// Looper adapter validates and accounts the protocol-boundary payload.
+	Usage          json.RawMessage `json:"usage,omitempty"`
+	Confidence     float64         `json:"confidence"`
+	ShouldEscalate bool            `json:"should_escalate"`
+	VerifiedCount  int             `json:"verified_count"`
+	TotalSamples   int             `json:"total_samples"`
+	Samples        []string        `json:"samples"`
+	Threshold      float64         `json:"threshold"`
 }
 
 // NewAutoMixVerifierClient creates a new AutoMix verifier client
