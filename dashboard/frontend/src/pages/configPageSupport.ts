@@ -190,6 +190,9 @@ export interface BackendRefEntry {
   api_key_env?: string
   auth?: BackendRefAuth
   headers?: Record<string, string>
+  // The backend receives the request's deployment-injected gateway credential
+  // instead of a static key (global.services.authz.gateway_credential).
+  trusted_gateway?: boolean
 }
 
 export interface ModelReasoningConfig {
