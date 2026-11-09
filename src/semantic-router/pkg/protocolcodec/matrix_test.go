@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -107,6 +109,12 @@ func TestOpenAIRequestsWithoutOutputLimitRemainValidForAnthropic(t *testing.T) {
 			}
 			if len(translated.Diagnostics) != 1 || translated.Diagnostics[0].Action != llmprotocol.DiagnosticGenerated {
 				t.Fatalf("diagnostics = %+v, want one generated max_tokens diagnostic", translated.Diagnostics)
+			}
+			// the header is the only place an operator sees the value and how to change it
+			reason := translated.Diagnostics[0].Reason
+			if !strings.Contains(reason, strconv.FormatInt(defaultAnthropicMaxOutputTokens, 10)) ||
+				!strings.Contains(reason, "request_params.default_max_tokens") {
+				t.Fatalf("reason = %q, want the sent value and the setting that changes it", reason)
 			}
 		})
 	}

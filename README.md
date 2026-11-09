@@ -118,10 +118,8 @@ We host two monthly community meetings across APAC and the Americas:
 
 - **APAC-friendly meeting — second Wednesday of the month**: 9:00-10:00 AM Singapore time (UTC+8; the same local time in Beijing)
   - [Google Meet](https://meet.google.com/sed-jmht-ddm)
-  - [Google Calendar Invite](https://calendar.app.google/w3r6mfKf4X4xCMAm9)
 - **Americas-friendly meeting — fourth Wednesday of the month**: 8:00-9:00 PM Eastern Time (`America/New_York`) / 5:00-6:00 PM Pacific Time
   - [Google Meet](https://meet.google.com/wvm-vbfy-xzj)
-  - [Google Calendar Invite](https://calendar.app.google/xHPHx8xhD1wHQfhH6)
 
 ## Contributing
 

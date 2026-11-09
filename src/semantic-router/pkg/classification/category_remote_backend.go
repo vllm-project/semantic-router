@@ -41,7 +41,7 @@ func newCategoryHTTPBackend(
 	if external == nil {
 		return nil, fmt.Errorf("category backend external model is required")
 	}
-	backend, err := newHTTPClassifierInference(external, mapping, deadline)
+	backend, err := newHTTPClassifierInference(externalClassifyDeployment(external, deadline), mapping)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create category http_classify backend: %w", err)
 	}

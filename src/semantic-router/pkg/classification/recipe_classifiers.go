@@ -7,6 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -28,6 +29,8 @@ type RecipeClassifiers struct {
 type RecipeRuntimeOptions struct {
 	Runtime    *serving.Runtime
 	Embeddings *embedding.Set
+	// SystemOne asks the systemone deployments' remote APIs.
+	SystemOne modelservice.Remote
 }
 
 // BuildRecipeClassifiers prepares the classifier graph and owned dependencies

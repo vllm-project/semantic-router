@@ -53,7 +53,13 @@ func (r *Runtime) RemoteEmbedding(ctx context.Context, spec config.ResolvedModel
 	identity := binding.ResourceIdentity{Artifact: cfg.BaseURL, Revision: cfg.Model, Provider: "http", Device: "external", Precision: "external", Execution: connector}
 	budget, gate := resourceAdmission(spec)
 	resource, err := r.Pool.Acquire(ctx, identity, budget, gate, func(context.Context) (io.Closer, error) {
-		return embedding.NewOpenAICompatibleProvider(cfg)
+		// A nil *OpenAICompatibleProvider in an io.Closer is not a nil
+		// Closer: return the error without it.
+		provider, buildErr := embedding.NewOpenAICompatibleProvider(cfg)
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		return provider, nil
 	})
 	if err != nil {
 		return nil, err
@@ -106,12 +112,21 @@ func (r *Runtime) RemoteEmbedding(ctx context.Context, spec config.ResolvedModel
 // with itself.
 func remoteConnector(cfg embedding.OpenAICompatibleConfig) (string, error) {
 	auth := sha256.Sum256([]byte(cfg.APIKey))
+	var connection []byte
+	if cfg.Deployment != nil {
+		connection, _ = json.Marshal(struct {
+			Auth    *config.DeploymentAuth
+			Headers map[string]string
+			TLS     *config.DeploymentTLS
+		}{cfg.Deployment.Auth, cfg.Deployment.Headers, cfg.Deployment.TLS})
+	}
 	encoded, err := json.Marshal(struct {
 		Endpoint, Model, Auth, Client         string
 		TimeoutSeconds                        float64
 		Retries, Dimension, ExpectedDimension int
 		MaxResponseBytes                      int64
-	}{cfg.BaseURL, cfg.Model, hex.EncodeToString(auth[:]), fmt.Sprintf("%p", cfg.HTTPClient), cfg.TimeoutSeconds, cfg.MaxRetries, cfg.Dimensions, cfg.ExpectedDimension, cfg.MaxResponseBytes})
+		Connection                            []byte
+	}{cfg.BaseURL, cfg.Model, hex.EncodeToString(auth[:]), fmt.Sprintf("%p", cfg.HTTPClient), cfg.TimeoutSeconds, cfg.MaxRetries, cfg.Dimensions, cfg.ExpectedDimension, cfg.MaxResponseBytes, connection})
 	if err != nil {
 		return "", err
 	}

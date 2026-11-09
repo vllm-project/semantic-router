@@ -2,15 +2,9 @@
 
 from copy import deepcopy
 
-import pytest
 from cli.config_schema import schema_document
 from cli.model_runtime_defaults import effective_model_deployments
 from cli.models import UserConfig
-from cli.validator_classifier import validate_classifier_contracts
-from cli.validator_model_runtime import (
-    project_classifier_rule,
-    validate_model_runtime_references,
-)
 
 
 def hazard_document():
@@ -25,26 +19,21 @@ def hazard_document():
                         "classifiers": [
                             {
                                 "name": "content-risk",
-                                "type": "local",
+                                "deployment": "hazard",
                                 "labels": ["violence", "self_harm"],
                             }
                         ]
-                    },
-                    "model_bindings": {
-                        "classifier.content-risk": {
-                            "deployment": "hazard",
-                            "contract": "label_scores.v1",
-                            "adapter": "modernbert",
-                            "operating_point": {
-                                "path": "operating_point.json",
-                                "sha256": "e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5",
-                            },
-                        }
                     },
                 },
             }
         ],
     }
+
+
+def _defaults():
+    return schema_document()["$defs"]["CanonicalModelCatalog"]["properties"][
+        "deployments"
+    ]["default"]
 
 
 def test_named_default_resolves_without_mutating_authoring_config():
@@ -53,23 +42,10 @@ def test_named_default_resolves_without_mutating_authoring_config():
     config = UserConfig.model_validate(raw)
     before = config.model_dump()
     deployments = effective_model_deployments(config)
-    defaults = schema_document()["$defs"]["CanonicalModelCatalog"]["properties"][
-        "deployments"
-    ]["default"]
-    assert deployments == defaults
-    assert validate_model_runtime_references(config) == []
-    assert validate_classifier_contracts(config) == []
-    profile = config.recipes[0].routing
-    source_rule = profile.signals.classifiers[0]
-    projected = project_classifier_rule(
-        source_rule, profile.model_bindings, deployments
-    )
-    assert projected.model_path == defaults["hazard"]["artifact"]
-    assert projected.use_cpu is True
-    assert not source_rule.model_path
+    assert deployments == _defaults()
     assert config.routing.model_bindings == {}
     deployments["hazard"]["input"]["max_tokens"] = 1
-    assert effective_model_deployments(config) == defaults
+    assert effective_model_deployments(config) == _defaults()
     assert config.model_dump() == before
     assert raw == original
 
@@ -88,47 +64,25 @@ def test_explicit_amd_override_replaces_whole_entry_and_remains_immutable():
     resolved = effective_model_deployments(config)
     assert resolved["hazard"] == deployment
     assert "revision" not in resolved["hazard"]
-    assert validate_model_runtime_references(config) == []
-    assert validate_classifier_contracts(config) == []
-    profile = config.recipes[0].routing
-    projected = project_classifier_rule(
-        profile.signals.classifiers[0], profile.model_bindings, resolved
-    )
-    assert projected.model_path == deployment["artifact"]
-    assert projected.use_cpu is False
     resolved["hazard"]["input"]["max_tokens"] = 1
     assert effective_model_deployments(config)["hazard"] == deployment
     assert raw == original
 
 
-@pytest.mark.parametrize("scenario", ["unknown", "incomplete_override", "cleared"])
-def test_deployment_defaults_do_not_rescue_invalid_explicit_bindings(scenario):
+def test_an_override_replaces_the_whole_default_and_null_clears_them():
     raw = hazard_document()
-    if scenario == "unknown":
-        raw["recipes"][0]["routing"]["model_bindings"]["classifier.content-risk"][
-            "deployment"
-        ] = "not-registered"
-    elif scenario == "incomplete_override":
-        raw["global"] = {
-            "model_catalog": {"deployments": {"hazard": {"provider": "model_runtime"}}}
-        }
-    else:
-        raw["global"] = {"model_catalog": {"deployments": None}}
-    config = UserConfig.model_validate(raw)
-    errors = validate_model_runtime_references(config)
-    assert errors
-    if scenario == "incomplete_override":
-        assert effective_model_deployments(config)["hazard"] == {
-            "provider": "model_runtime"
-        }
-        assert "requires artifact" in str(errors[0])
-    else:
-        assert any("Unknown model deployment" in str(error) for error in errors)
+    raw["global"] = {
+        "model_catalog": {"deployments": {"hazard": {"provider": "model_runtime"}}}
+    }
+    assert effective_model_deployments(UserConfig.model_validate(raw))["hazard"] == {
+        "provider": "model_runtime"
+    }
+    raw["global"] = {"model_catalog": {"deployments": None}}
+    assert effective_model_deployments(UserConfig.model_validate(raw)) == {}
 
 
 def test_unbound_config_does_not_materialize_or_activate_defaults():
     config = UserConfig.model_validate({"version": "v0.3", "routing": {}})
-    assert validate_model_runtime_references(config) == []
     assert config.global_ is None
     assert config.routing.model_bindings == {}
     assert config.routing.signals.classifiers == []

@@ -1,0 +1,36 @@
+# Native SDK built exclusively from public, checksummed release archives.
+# Build context: repository root. No host toolchains or caches are copied.
+ARG BASE_IMAGE=docker.io/library/debian@sha256:c6d58429cec88e03b2fe5c3d285bf90517be50b20bc1151b1b5a436d05865a9d
+FROM ${BASE_IMAGE}
+RUN test "$(dpkg --print-architecture)" = riscv64 && \
+    apt-get update && apt-get install -y --no-install-recommends \
+      build-essential busybox ca-certificates curl git cmake pkg-config protobuf-compiler \
+      libssl-dev python3 python3-venv xz-utils && \
+    rm -rf /var/lib/apt/lists/* && \
+    ln -s /bin/busybox /usr/local/bin/tar
+# GNU tar in trixie uses fchmodat2(AT_SYMLINK_NOFOLLOW), denied by older
+# container seccomp profiles. Use BusyBox's public archive tool in this SDK
+# instead of weakening the container sandbox or ignoring extraction errors.
+RUN mkdir -p /tmp/tar-probe/source/dir /tmp/tar-probe/destination && \
+    printf 'archive-check\n' > /tmp/tar-probe/source/dir/value && \
+    tar -cf /tmp/tar-probe/archive.tar -C /tmp/tar-probe/source dir && \
+    tar -xf /tmp/tar-probe/archive.tar -C /tmp/tar-probe/destination && \
+    cmp /tmp/tar-probe/source/dir/value /tmp/tar-probe/destination/dir/value && \
+    test "$(stat -c %a /tmp/tar-probe/destination/dir)" = 755 && \
+    rm -rf /tmp/tar-probe
+COPY tools/docker/riscv64/fetch-toolchains.py tools/docker/riscv64/toolchains.json /opt/sdk-inputs/
+RUN python3 /opt/sdk-inputs/fetch-toolchains.py --output /tmp/sdk-archives && \
+    cd /tmp/sdk-archives && \
+    tar -xzf go1.25.14.linux-riscv64.tar.gz -C /usr/local && \
+    for component in rustc cargo rust-std; do \
+      package="$component-1.90.0-riscv64gc-unknown-linux-gnu"; \
+      tar -xJf "$package.tar.xz"; \
+      bash "$package/install.sh" --prefix=/opt/rust --disable-ldconfig; \
+    done && rm -rf /tmp/sdk-archives
+ARG BUILD_JOBS=2
+RUN test "$BUILD_JOBS" -gt 0
+ENV PATH="/usr/local/go/bin:/opt/rust/bin:${PATH}" \
+    CARGO_BUILD_JOBS=${BUILD_JOBS} GOMAXPROCS=${BUILD_JOBS} GOTOOLCHAIN=local
+RUN go version && rustc --version && cargo --version && \
+    test "$(go env GOHOSTARCH)" = riscv64 && \
+    test -z "$(find /root -name go-build -o -name registry)"

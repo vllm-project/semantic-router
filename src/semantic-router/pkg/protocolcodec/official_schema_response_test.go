@@ -197,9 +197,15 @@ func assertResponsesUsageFields(t *testing.T, body json.RawMessage) {
 	if err := json.Unmarshal(body, &usage); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"cached_tokens", "cache_write_tokens"} {
-		if _, found := usage.InputDetails[field]; !found {
-			t.Errorf("Responses input usage omitted required field %q", field)
+	if _, found := usage.InputDetails["cached_tokens"]; !found {
+		t.Error("Responses input usage omitted required cached_tokens")
+	}
+	// Cache writes are an optional extension: unknown counts must be omitted,
+	// while an explicitly reported zero is still a valid integer.
+	if value, found := usage.InputDetails["cache_write_tokens"]; found {
+		var count *int64
+		if err := json.Unmarshal(value, &count); err != nil || count == nil {
+			t.Errorf("Responses cache_write_tokens must be an integer when present, got %s", value)
 		}
 	}
 	if _, found := usage.OutputDetails["reasoning_tokens"]; !found {

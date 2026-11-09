@@ -87,6 +87,8 @@ config:
               min_consecutive_recoveries: 2
               cooldown_seconds: 10
               max_switches_per_window: 2
+          release:
+            min_user_turns_between: 3
     services:
       management_api:
         auth:
@@ -106,10 +108,10 @@ config:
       embeddings:
         semantic: {mmbert_model_path: ""}
       modules:
-        prompt_guard: {enabled: false, model_ref: "", model_id: "", jailbreak_mapping_path: ""}
+        prompt_guard: {enabled: false, jailbreak_mapping_path: ""}
         classifier:
-          domain: {model_ref: "", model_id: "", category_mapping_path: ""}
-          pii: {model_ref: "", model_id: "", pii_mapping_path: ""}
+          domain: {enabled: false, category_mapping_path: ""}
+          pii: {enabled: false, pii_mapping_path: ""}
 resources:
   limits: {cpu: '2', memory: 4Gi}
   requests: {cpu: 500m, memory: 1Gi}

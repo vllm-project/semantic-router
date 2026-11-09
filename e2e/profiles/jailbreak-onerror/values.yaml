@@ -101,47 +101,37 @@ config:
     integrations: {}
     model_catalog:
       kbs: []
-      external:
+      deployments:
         # Deliberately unreachable: nothing listens on 127.0.0.1:1 inside the
-        # router pod, so every http_classify call fails with a connection
+        # router pod, so every /classify call fails with a connection
         # error - this profile exists to exercise on_error: block against a
         # real classify failure, not to exercise a working classifier.
-        - name: unreachable-guardrail
-          llm_provider: openai
-          model_role: guardrail
-          llm_model_name: unreachable-guardrail
-          llm_endpoint:
-            address: 127.0.0.1
-            port: 1
-            protocol: http
-          llm_timeout_seconds: 2
+        unreachable-guardrail:
+          provider: classify
+          endpoint: http://127.0.0.1:1
+          model: unreachable-guardrail
+          timeout_ms: 5000
+      bindings:
+        jailbreak: unreachable-guardrail
       modules:
         prompt_guard:
           enabled: true
-          model_ref: ""
-          model_id: ""
-          backend:
-            protocol: http_classify
-            contract: label_distribution.v1
-            model: unreachable-guardrail
           on_error: block
           threshold: 0.5
           positive_labels: [jailbreak]
           jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
         classifier:
           domain:
-            model_ref: ""
-            model_id: ""
+            enabled: false
             category_mapping_path: ""
           pii:
-            model_ref: ""
-            model_id: ""
+            enabled: false
             pii_mapping_path: ""
         hallucination_mitigation:
           enabled: false
-# The router requires a jailbreak_type_mapping.json on disk even for
-# protocol: http_classify (IsJailbreakEnabled/LoadJailbreakMapping don't
-# special-case the external-classifier path) - this profile deliberately
+# The router requires a jailbreak_type_mapping.json on disk even when a
+# classify deployment answers the jailbreak signal (IsJailbreakEnabled and
+# LoadJailbreakMapping don't special-case it) - this profile deliberately
 # never runs a local model, so a minimal stand-in mapping
 # (from the ConfigMap in jailbreak-mapping-configmap.yaml, applied as a
 # prerequisite) is enough; no need to bake/download the real model.

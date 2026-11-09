@@ -22,6 +22,8 @@ domains:
       - tools/agent/**
       - tools/ci/**
       - tools/docker/Dockerfile.precommit
+      - tools/docker/Dockerfile.attached
+      - tools/docker/riscv64/**
       - tools/linter/**
       - tools/make/**
     checks: [make harness-check]
@@ -163,6 +165,19 @@ domains:
     checks: [make test-semantic-router, make config-schema-check]
     verifications: [core]
 
+  # The Router's config tests load every YAML example of these pages and files
+  # (src/semantic-router/pkg/config/docs_examples_test.go).
+  router-checked-docs:
+    owner: router-core
+    documentation_check: true
+    paths:
+      - website/docs/installation/protocol-compatibility.md
+      - website/docs/installation/storage-overview.md
+      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/installation/storage-overview.md
+      - tools/docker/riscv64/standalone.yaml
+    checks: [make test-semantic-router]
+    verifications: [core]
+
   # The registry pins the Hub revisions that implicit model_runtime deployments serve.
   model-artifacts:
     owner: router-core
@@ -180,6 +195,17 @@ domains:
         - src/semantic-router/pkg/config/canonical_defaults.go
         - src/semantic-router/pkg/config/canonical_global.go
         - src/semantic-router/pkg/modeldownload/**
+
+  claude-code-plugin:
+    owner: developer-experience
+    documentation_check: true
+    paths:
+      - .claude-plugin/**
+      - src/claude-code/**
+    checks:
+      - python3 -m unittest discover -s src/claude-code/skills/setup/scripts
+      - python3 -m unittest discover -s src/claude-code/skills/calibrate/scripts
+    verifications: []
 
   vela-omni-artifacts:
     owner: model-runtime
@@ -426,6 +452,25 @@ domains:
     checks: [make vllm-sr-test]
     verifications: [cli-unit]
 
+  # The Router loads every titled YAML block of these pages and checks what it
+  # resolves to (src/semantic-router/pkg/config/model_catalog_docs_test.go);
+  # the CLI validates them (src/vllm-sr/tests/test_docs_model_catalog_examples.py);
+  # their translations show the same blocks.
+  model-catalog-docs:
+    owner: router-core
+    documentation_check: true
+    paths:
+      - website/docs/installation/choose-a-model-for-a-signal.md
+      - website/docs/installation/model-catalog.md
+      - website/docs/installation/model-resource-migration.md
+      - website/docs/model-runtime/migrate.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/installation/choose-a-model-for-a-signal.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/installation/model-catalog.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/installation/model-resource-migration.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/model-runtime/migrate.md
+    checks: [make test-semantic-router, make vllm-sr-test]
+    verifications: [core, cli-unit]
+
   model-runtime:
     owner: model-runtime
     paths:
@@ -526,6 +571,21 @@ domains:
     verify: [make recipe-conformance-live-cpu-all]
     verifications: [recipe-conformance]
 
+  # The model, pins and thresholds the built-in signals use by default decide
+  # what every recipe and E2E profile reads. #5512 changed them without these
+  # lanes and broke the balance recipe (#5592) and two CPU E2E lanes (#5594).
+  default-signal-models:
+    owner: model-runtime
+    paths:
+      - src/semantic-router/pkg/config/canonical_defaults.go
+      - src/semantic-router/pkg/config/canonical_operating_points.go
+      - src/semantic-router/pkg/config/model_runtime_implicit.go
+      - src/semantic-router/pkg/config/registry.go
+      - src/model-runtime/vllm_srun/registry/releases.generated.json
+      - src/model-runtime/vllm_srun/registry/tables/**
+    checks: []
+    verifications: [recipe-conformance, e2e.envoy-ai-gateway, e2e.vela-halu]
+
   memory:
     owner: router-core
     paths:
@@ -615,6 +675,14 @@ domains:
       - bench/test_agentic_routing_experiment.py
     checks: [make test-learning-tools]
     verifications: [learning-tools]
+
+  looper-bench-contracts:
+    owner: router-core
+    paths:
+      - bench/looper_tts/**
+      - tools/make/tooling.mk
+    checks: [make test-looper-tts]
+    verifications: [bench-tools]
 
   grounded-fusion-bench:
     owner: evaluation-quality
@@ -710,7 +778,7 @@ domains:
       - bench/openai_fault_proxy.py
       - bench/test_openai_fault_proxy.py
       - tools/make/soak.mk
-    checks: [make soak-test]
+    checks: [make soak-test, make test-fault-proxy]
     verifications: [soak-tools]
 
   image-runtime-artifacts:
@@ -880,6 +948,8 @@ profiles:
     default_local: true
     paths:
       - e2e/testcases/signal_routing_helpers.go
+      - e2e/testcases/trusted_gateway_credential.go
+      - src/semantic-router/pkg/extproc/gateway_credential*.go
       - e2e/profiles/ai-gateway/**
       - deploy/kubernetes/ai-gateway/**
       - e2e/pkg/**
@@ -937,6 +1007,14 @@ profiles:
     paths:
       - e2e/profiles/model-runtime-real/**
       - e2e/testcases/model_runtime_real.go
+  model-runtime-vela3:
+    display_name: Model Runtime vela3-fast
+    owner: e2e
+    coverage_role: model-runtime-vela3-fast-default-on-cpu
+    selection: manual
+    paths:
+      - e2e/profiles/model-runtime-vela3/**
+      - e2e/testcases/model_runtime_vela3.go
   pii-remote-backend:
     display_name: Remote PII Classifier
     owner: e2e
@@ -1047,6 +1125,19 @@ profiles:
       - src/semantic-router/pkg/classification/contrastive_preference_classifier.go
       - src/semantic-router/pkg/classification/contrastive_preference_embeddings.go
       - src/semantic-router/pkg/classification/contrastive_preference_scoring.go
+      - src/semantic-router/pkg/classification/classifier_signal_preference_support.go
+      - src/semantic-router/pkg/classification/classifier_preference_lifecycle.go
+  preference-external-routing:
+    display_name: Preference External Routing
+    owner: e2e
+    coverage_role: preference-external-routing
+    selection: pr
+    paths:
+      - e2e/profiles/preference-external-routing/**
+      - e2e/testcases/preference_external_routing.go
+      - e2e/testcases/testdata/preference_external_routing_cases.json
+      - src/semantic-router/pkg/classification/preference_classifier.go
+      - src/semantic-router/pkg/classification/preference_classifier_external.go
       - src/semantic-router/pkg/classification/classifier_signal_preference_support.go
       - src/semantic-router/pkg/classification/classifier_preference_lifecycle.go
   external-gateway-responses:
@@ -1196,6 +1287,18 @@ profiles:
       - e2e/testcases/full_duplex_routing.go
       - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
+  trusted-gateway:
+    display_name: Trusted Gateway Credential
+    owner: e2e
+    coverage_role: deployment-injected-gateway-credential-forwarding-and-rejection
+    selection: pr
+    paths:
+      - e2e/profiles/trusted-gateway/**
+      - e2e/testcases/trusted_gateway_credential.go
+      - src/semantic-router/pkg/extproc/gateway_credential*.go
+      - src/semantic-router/pkg/extproc/processor_req_body_routing.go
+      - src/semantic-router/pkg/extproc/processor_req_header.go
+      - src/semantic-router/pkg/authz/**
   provider-protocols:
     display_name: Provider Protocols
     owner: e2e
@@ -1275,9 +1378,11 @@ profiles:
     paths:
       - e2e/profiles/progress-gate/**
       - e2e/testcases/router_progress_gate*.go
+      - e2e/testcases/router_protection_release*.go
       - src/semantic-router/pkg/extproc/router_learning_progress_gate*.go
       - src/semantic-router/pkg/extproc/router_learning_gate_constraints.go
       - src/semantic-router/pkg/extproc/router_learning_protection*.go
+      - src/semantic-router/pkg/extproc/router_learning_release*.go
       - src/semantic-router/pkg/extproc/router_learning_outcome_ingest.go
       - src/semantic-router/pkg/extproc/router_learning_helpers.go
       - src/semantic-router/pkg/extproc/session_evidence*.go
@@ -1310,12 +1415,22 @@ profiles:
     display_name: Vector Store Registry
     owner: e2e
     coverage_role: vectorstore-registry-restart-recovery
-    selection: manual
+    # The only profile that keeps files across a Router restart under the
+    # chart's read-only root filesystem, so chart and file-storage changes run it.
+    selection: pr
     paths:
       - e2e/profiles/vectorstore-registry/**
+      - e2e/testcases/vectorstore_registry_restart_recovery.go
       - deploy/kubernetes/router-replay/postgres.yaml
+      - deploy/helm/semantic-router/values.yaml
+      - deploy/helm/semantic-router/templates/deployment.yaml
+      - deploy/helm/semantic-router/templates/data-pvc.yaml
+      - src/semantic-router/pkg/vectorstore/filestore*.go
       - src/semantic-router/pkg/vectorstore/metadata_registry*.go
       - src/semantic-router/pkg/postgres/**
+      - src/semantic-router/pkg/routerruntime/vectorstore_runtime.go
+      - src/semantic-router/pkg/routerruntime/local_storage.go
+      - src/semantic-router/pkg/config/local_storage.go
   rag-hybrid-search:
     display_name: Hybrid RAG Search
     owner: e2e

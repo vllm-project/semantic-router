@@ -267,7 +267,7 @@ func canonicalRecipesFromRouterConfig(cfg *RouterConfig) []CanonicalRecipe {
 			Name:        string(recipe.Name),
 			Description: recipe.Description,
 			Routing: CanonicalRouting{
-				ModelBindings:         cloneModelMap(recipe.Profile.ModelBindings),
+				ModelBindings:         publicBindings(recipe.Profile.ModelBindings),
 				CandidateRequirements: recipe.Profile.CandidateRequirements.Clone(),
 				Signals:               canonicalSignalsFromSignals(recipe.Profile.Signals),
 				Projections:           canonicalProjectionsFromProjections(recipe.Profile.Projections),

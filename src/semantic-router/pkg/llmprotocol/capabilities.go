@@ -58,6 +58,7 @@ const (
 	// a JSON Schema function tool cannot represent.
 	CapabilityCustomTools
 	CapabilityTextVerbosity
+	CapabilityReasoningContinuity
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -145,6 +146,7 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityImageGeneration, "image_generation"},
 		{CapabilityCustomTools, "custom_tools"},
 		{CapabilityTextVerbosity, "text_verbosity"},
+		{CapabilityReasoningContinuity, "reasoning_continuity"},
 	}
 	names := make([]string, 0, len(known))
 	for _, item := range known {
@@ -328,6 +330,9 @@ func RequiredResponseCapabilities(response Response) CapabilitySet {
 // has no approximation in another public wire format.
 func RequiredEventCapabilities(event Event) CapabilitySet {
 	var required CapabilitySet
+	if event.Content != nil && event.Content.ReasoningDetail != nil {
+		required.bits |= CapabilityReasoningContinuity
+	}
 	if event.MatchedStopSequence != "" {
 		required.bits |= CapabilityMatchedStopSequence
 	}
@@ -356,6 +361,9 @@ func capabilityForRequestContent(content Content) Capability {
 	case ContentToolResult:
 		return requestToolResultCapabilities(content.ToolResult) | cache
 	case ContentReasoning:
+		if content.ReasoningDetail != nil {
+			return CapabilityReasoning | CapabilityReasoningContinuity | cache
+		}
 		return reasoningContentCapabilities(content.Signature) | cache
 	case ContentGeneratedImage:
 		return CapabilityImageGeneration | cache
@@ -375,6 +383,9 @@ func capabilityForResponseContent(content Content) Capability {
 	case ContentToolResult:
 		return responseToolResultCapabilities(content.ToolResult)
 	case ContentReasoning:
+		if content.ReasoningDetail != nil {
+			return CapabilityReasoning | CapabilityReasoningContinuity
+		}
 		return reasoningContentCapabilities(content.Signature)
 	case ContentGeneratedImage:
 		return CapabilityImageGeneration
@@ -479,6 +490,7 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"image_generation":      CapabilityImageGeneration,
 		"custom_tools":          CapabilityCustomTools,
 		"text_verbosity":        CapabilityTextVerbosity,
+		"reasoning_continuity":  CapabilityReasoningContinuity,
 	}
 	var set CapabilitySet
 	for _, name := range names {

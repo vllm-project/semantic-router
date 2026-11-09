@@ -1079,6 +1079,9 @@ spec:
                           category_mapping_path:
                             type: string
                           model_id:
+                            description: |-
+                              ModelID binds the domain classifier to one model. Deprecated: bind domain
+                              in model_bindings instead.
                             type: string
                           threshold:
                             description: Classification threshold (0.0-1.0). Stored
@@ -1145,6 +1148,9 @@ spec:
                             minimum: 0
                             type: integer
                           model_id:
+                            description: |-
+                              ModelID binds the PII classifier to one model. Deprecated: bind pii in
+                              model_bindings instead.
                             type: string
                           on_error:
                             description: |-
@@ -1450,9 +1456,14 @@ spec:
                     type: array
                   decision_model:
                     description: |-
-                      DecisionModel selects the declared deployment that answers default judgment tasks.
-                      Omitted uses the Router's primary deployment. Artifact identity belongs in
-                      model_deployments; the reference never infers a model family or alias.
+                      DecisionModel selects the declared deployment that answers default judgment
+                      tasks: a model_runtime deployment, or a systemone deployment that a remote
+                      System One API serves. Every built-in signal that no binding names follows
+                      it. A module threshold the resource does not set comes from the deployment
+                      that answers the module: calibrated for a built-in model, 0.5 for a
+                      systemone one. Omitted uses the Router's primary deployment. Artifact
+                      identity belongs in model_deployments; the reference never infers a model
+                      family or alias.
                     properties:
                       deployment:
                         description: Deployment is an exact key in model_deployments.
@@ -1884,10 +1895,27 @@ spec:
                       Keys name deployments or the router's existing admission consumers.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
+                  model_bindings:
+                    description: |-
+                      ModelBindings contains canonical global.model_catalog.bindings: each key
+                      is a signal type whose rules share one answer (domain, jailbreak, pii,
+                      fact_check, user_feedback, modality, hallucination, preference, reask),
+                      and each value names the model_deployments entry that answers it. A rule
+                      that asks its own question names its deployment on the rule. A signal no
+                      binding names follows decision_model; routing.model_bindings binds in
+                      the routing scope and wins over these.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   model_deployments:
                     description: |-
                       ModelDeployments contains canonical global.model_catalog.deployments.
                       The router validates provider, device, precision and task compatibility.
+                      A remote deployment (provider systemone, openai_embeddings, classify,
+                      openai_chat or rerank) takes a connection block: endpoint, model, auth,
+                      headers, timeout_ms, max_retries, tls, limits and capabilities. Its key
+                      never goes in the resource: auth.api_key_env names a spec.env variable
+                      that valueFrom.secretKeyRef fills from a Secret. The operator mounts no
+                      Secret into the Pod, so auth.api_key_file is not available.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   observability:
@@ -1998,8 +2026,10 @@ spec:
                         minimum: 0
                         type: integer
                       model_id:
-                        description: ModelID binds the guard to one model; empty runs
-                          the decision model.
+                        description: |-
+                          ModelID binds the guard to one model; empty runs the deployment
+                          model_bindings names for jailbreak, else the decision model. Deprecated:
+                          bind jailbreak in model_bindings instead.
                         type: string
                       on_error:
                         description: |-
@@ -2024,7 +2054,8 @@ spec:
                       threshold:
                         description: |-
                           Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float
-                          precision issues; empty takes the threshold calibrated for the model.
+                          precision issues; empty takes the threshold of the deployment that
+                          answers the guard.
                         pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
                         type: string
                       use_cpu:

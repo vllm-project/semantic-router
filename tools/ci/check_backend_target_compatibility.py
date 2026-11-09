@@ -38,7 +38,7 @@ TARGET_FORMS = {
 EVIDENCE = {
     Path("config/config.yaml"): (
         "remote-openai-reference",
-        "base_url: https://api.example.com/v1",
+        "endpoint: https://api.example.com/v1",
         "api_key_env: VLLM_SR_PRIMARY_API_KEY",
     ),
     Path("src/vllm-sr/tests/test_config_generator.py"): (
@@ -46,7 +46,7 @@ EVIDENCE = {
         "test_backend_ref_https_base_url_uses_tls_and_explicit_extra_headers",
     ),
     Path("deploy/helm/testdata/backend-target-values.yaml"): (
-        "base_url: https://provider.example/v1",
+        "endpoint: https://provider.example/v1",
         "api_key_env: PROVIDER_API_KEY",
     ),
     Path("deploy/helm/validate-chart.sh"): (

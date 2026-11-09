@@ -19,7 +19,7 @@ conformance = importlib.import_module("recipe_conformance")
 runtime = importlib.import_module("recipe_conformance_runtime")
 sources = importlib.import_module("recipe_conformance_sources")
 http = importlib.import_module("router_calibration_http")
-EXPECTED_BUILTIN_PROBES = 347
+EXPECTED_BUILTIN_PROBES = 366
 
 
 class BuiltInRecipeConformanceTest(unittest.TestCase):
@@ -49,7 +49,7 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
         conformance.validate_probe_references(
             self.recipe / "probes.yaml", self.config, self.manifest, bound
         )
-        self.assertEqual(len(bound), 347)
+        self.assertEqual(len(bound), EXPECTED_BUILTIN_PROBES)
         self.assertEqual(
             {probe.model for probe in bound},
             {
@@ -265,8 +265,14 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                     for index in range(16)
                 ],
             )
-            self.assertEqual(sum(row["variants"] for row in built_in), 347)
-            hardware = {"decision-balance", "vela-amd"}
+            self.assertEqual(sum(row["variants"] for row in built_in), 366)
+            hardware = {
+                recipe.name
+                for recipe in conformance.discover_inventory(
+                    conformance.DEFAULT_RECIPE_ROOT
+                )
+                if recipe.required_devices
+            }
             self.assertTrue(
                 all(not hardware & set(row["recipes"].split(",")) for row in matrix)
             )
@@ -334,7 +340,7 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
             self.assertNotIn(("standalone", "vela-amd"), expected)
 
     def test_eval_rejects_zero_or_partial_probe_execution(self):
-        for count in (0, 346, 347):
+        for count in (0, 365, 366):
             with self.subTest(count=count), tempfile.TemporaryDirectory() as directory:
                 probes = runtime.bind_runtime_entrypoints(self.config, self.probes)
                 evaluation = {
@@ -384,11 +390,11 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                 )
 
     def test_consolidation_fails_missing_partial_or_empty_results(self):
-        for count in (None, 0, 346, 347):
+        for count in (None, 0, 365, 366):
             with self.subTest(count=count), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 (root / "inventory.json").write_text(
-                    json.dumps({"recipes": [{"name": "mom-v1", "variants": 347}]})
+                    json.dumps({"recipes": [{"name": "mom-v1", "variants": 366}]})
                 )
                 if count is not None:
                     (root / "mom-v1").mkdir()

@@ -103,6 +103,12 @@ function getRouterReplayPluginFieldSchema(): FieldSchema[] {
     { key: 'max_records', label: 'Max Records', type: 'number', placeholder: '10000' },
     { key: 'capture_request_body', label: 'Capture Request Body', type: 'boolean' },
     { key: 'capture_response_body', label: 'Capture Response Body', type: 'boolean' },
+    {
+      key: 'capture_tool_results',
+      label: 'Capture Tool Results',
+      type: 'boolean',
+      description: 'Store client tool-result text; requires personal data capture',
+    },
     { key: 'max_body_bytes', label: 'Max Body Bytes', type: 'number', placeholder: '4096' },
   ]
 }

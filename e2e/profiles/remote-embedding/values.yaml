@@ -56,45 +56,42 @@ config:
         enabled: false
     model_catalog:
       kbs: []
+      deployments:
+        remote-embedding:
+          provider: openai_embeddings
+          endpoint: http://mock-embedding.default.svc.cluster.local:8000/v1
+          model: e2e-remote-embedding
+          auth:
+            api_key_env: REMOTE_EMBEDDING_E2E_KEY
+          timeout_ms: 5000
+          max_retries: 1
+          capabilities:
+            dimensions: 4
       embeddings:
+        default: remote-embedding
         semantic:
           qwen3_model_path: ""
           mmbert_model_path: ""
           multimodal_model_path: ""
           use_cpu: true
           embedding_config:
-            backend: openai_compatible
-            model_type: remote
             preload_embeddings: false
             target_dimension: 4
             top_k: 1
             min_score_threshold: 0.9
-          endpoint:
-            base_url: http://mock-embedding.default.svc.cluster.local:8000/v1
-            model: e2e-remote-embedding
-            api_key_env: REMOTE_EMBEDDING_E2E_KEY
-            timeout_seconds: 5
-            max_retries: 1
-            dimensions: 4
       modules:
         prompt_guard:
           enabled: false
-          model_ref: ""
-          model_id: ""
           jailbreak_mapping_path: ""
         classifier:
           domain:
-            model_ref: ""
-            model_id: ""
+            enabled: false
             category_mapping_path: ""
           pii:
-            model_ref: ""
-            model_id: ""
+            enabled: false
             pii_mapping_path: ""
         feedback_detector:
           enabled: false
-          model_ref: ""
-          model_id: ""
 
 extraEnv:
   - name: REMOTE_EMBEDDING_E2E_KEY

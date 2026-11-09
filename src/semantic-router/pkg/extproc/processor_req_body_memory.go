@@ -150,15 +150,24 @@ func (r *OpenAIRouter) prepareMemorySearchQuery(
 	return searchQuery, userID, true
 }
 
+// extractConversationHistory returns the routing view of the conversation that
+// memory query rewriting reads.
 func (r *OpenAIRouter) extractConversationHistory(
 	request *llmprotocol.Request,
 ) []ConversationMessage {
 	if request == nil {
 		return nil
 	}
+	selector := r.routingInputSelector()
 	history := make([]ConversationMessage, 0, len(request.Messages))
 	for _, message := range request.Messages {
 		text := semanticText(message.Content)
+		if message.Role == llmprotocol.RoleUser {
+			if textOnlyMessage(message) && selector.SkipsMessage(text) {
+				continue
+			}
+			text, _ = selector.Strip(text)
+		}
 		if text == "" {
 			continue
 		}

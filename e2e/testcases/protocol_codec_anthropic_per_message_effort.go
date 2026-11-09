@@ -25,27 +25,51 @@ func init() {
 		Tags:        []string{"protocol-codec", "anthropic", "agents"},
 		Fn:          testProtocolCodecAnthropicPerMessageEffortBackend,
 	})
+	pkgtestcases.Register("protocol-codec-anthropic-system-messages-opt-in", pkgtestcases.TestCase{
+		Description: "Claude system messages inside the conversation reach Chat and Responses backends as user text with a protocol warning when the operator accepts that loss",
+		Tags:        []string{"protocol-codec", "anthropic", "agents"},
+		Fn:          testProtocolCodecAnthropicSystemMessagesOptIn,
+	})
 }
 
 type perMessageEffortBackend struct {
 	model, format, reply string
+	// userText is set for the Router that lists messages[].role in
+	// allow_lossy_translation.
+	userText bool
 }
 
 func testProtocolCodecAnthropicPerMessageEffort(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-	return runProtocolCodecAnthropicPerMessageEffort(ctx, client, opts, []perMessageEffortBackend{
+	return runProtocolCodecAnthropicPerMessageEffort(ctx, client, opts, opts, []perMessageEffortBackend{
 		{model: chatBackendModel, format: "openai.chat.v1", reply: protocolCodecChatReply},
 		{model: nativeResponsesBackendModel, format: "openai.responses.v1", reply: protocolCodecResponsesReply},
 	})
 }
 
 func testProtocolCodecAnthropicPerMessageEffortBackend(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-	return runProtocolCodecAnthropicPerMessageEffort(ctx, client, opts, []perMessageEffortBackend{
+	return runProtocolCodecAnthropicPerMessageEffort(ctx, client, opts, opts, []perMessageEffortBackend{
 		{model: "vllm-sr/auto", format: "anthropic.messages.v1", reply: protocolCodecAnthropicReply},
 	})
 }
 
-func runProtocolCodecAnthropicPerMessageEffort(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, backends []perMessageEffortBackend) error {
-	session, err := fixtures.OpenServiceSession(ctx, client, opts)
+func testProtocolCodecAnthropicSystemMessagesOptIn(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	routerOpts := opts
+	routerOpts.ServiceConfig = pkgtestcases.ServiceConfig{
+		Namespace: ToolResultOptInNamespace, Name: ToolResultOptInRelease, ServicePort: ToolResultOptInPort,
+	}
+	return runProtocolCodecAnthropicPerMessageEffort(ctx, client, opts, routerOpts, []perMessageEffortBackend{
+		{model: "mock/opt-in-chat", format: "openai.chat.v1", reply: protocolCodecChatReply, userText: true},
+		{model: "mock/opt-in-responses", format: "openai.responses.v1", reply: protocolCodecResponsesReply, userText: true},
+	})
+}
+
+func runProtocolCodecAnthropicPerMessageEffort(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	opts, routerOpts pkgtestcases.TestCaseOptions,
+	backends []perMessageEffortBackend,
+) error {
+	session, err := fixtures.OpenServiceSession(ctx, client, routerOpts)
 	if err != nil {
 		return err
 	}
@@ -86,18 +110,22 @@ func runProtocolCodecAnthropicPerMessageEffort(ctx context.Context, client *kube
 		if observationErr != nil {
 			return fmt.Errorf("%s provider observation: %w", check.format, observationErr)
 		}
-		if inspectErr := assertPerMessageEffortProjection(upstream, check.format); inspectErr != nil {
+		if inspectErr := assertPerMessageEffortProjection(upstream, check.format, check.userText); inspectErr != nil {
 			return fmt.Errorf("%s: %w", check.format, inspectErr)
 		}
-		warned := hasProtocolFieldDiagnostic(result.Headers.Get("x-vsr-protocol-warnings"), "dropped", "messages[].output_config.effort")
+		warnings := result.Headers.Get("x-vsr-protocol-warnings")
+		warned := hasProtocolFieldDiagnostic(warnings, "dropped", "messages[].output_config.effort")
 		if warned != (check.format != "anthropic.messages.v1") {
 			return fmt.Errorf("%s per-message effort warning = %t", check.format, warned)
+		}
+		if moved := hasProtocolFieldDiagnostic(warnings, "approximated", "messages[].role"); moved != check.userText {
+			return fmt.Errorf("%s system turn as user text warning = %t", check.format, moved)
 		}
 	}
 	return nil
 }
 
-func assertPerMessageEffortProjection(raw []byte, format string) error {
+func assertPerMessageEffortProjection(raw []byte, format string, userText bool) error {
 	var observation struct {
 		Body    map[string]json.RawMessage `json:"body"`
 		Headers map[string]string          `json:"headers"`
@@ -133,10 +161,16 @@ func assertPerMessageEffortProjection(raw []byte, format string) error {
 		}
 		return nil
 	}
-	if len(messages) != 3 {
+	// The nonempty system turn stays in place, or joins the user turn before
+	// it when the Router sends system messages as user text.
+	turns, at, role := 3, 1, `"system"`
+	if userText {
+		turns, at, role = 2, 0, `"user"`
+	}
+	if len(messages) != turns {
 		return fmt.Errorf("%s forwarded the empty effort-only system turn: %s", format, truncateString(string(raw), 500))
 	}
-	if !bytes.Contains(messages[1]["content"], []byte("Current date is 2026-01-01.")) {
+	if string(messages[at]["role"]) != role || !bytes.Contains(messages[at]["content"], []byte("Current date is 2026-01-01.")) {
 		return fmt.Errorf("%s lost the nonempty system turn: %s", format, truncateString(string(raw), 500))
 	}
 	for _, message := range messages {

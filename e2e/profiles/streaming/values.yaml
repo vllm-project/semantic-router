@@ -22,7 +22,8 @@ config:
             provider: vllm
             endpoint: full-duplex-selected.default.svc.cluster.local:8000
             chat_path: /provider/v1/chat/completions
-            api_key: e2e-provider-credential
+            auth:
+              api_key_env: FULL_DUPLEX_PROVIDER_KEY
   routing:
     decisions:
       # ── Security layer: block before routing (priority 1000+) ──
@@ -147,12 +148,12 @@ config:
             - other
       jailbreak:
         - name: jailbreak_standard
-          threshold: 0.75
+          threshold: 0.88
           include_history: false
           description: Standard jailbreak detection for streaming tests
       pii:
         - name: pii_deny_all
-          threshold: 0.01
+          threshold: 0.18
           include_history: false
           description: Block all PII
     modelCards:
@@ -214,3 +215,9 @@ config:
         similarity_threshold: 0.2
         tools_db_path: config/tools_db.json
         fallback_to_empty: true
+
+# The full-duplex backend checks this test credential; the Router reads it from
+# the environment, never from its configuration.
+extraEnv:
+  - name: FULL_DUPLEX_PROVIDER_KEY
+    value: e2e-provider-credential

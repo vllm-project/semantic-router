@@ -56,12 +56,17 @@ func balanceWith(in SignalResults, conversation, keywords, feedback []string) Si
 	return in
 }
 
+func balanceLong(in SignalResults) SignalResults {
+	in.MatchedContextRules = []string{"long_input"}
+	return in
+}
+
 // These are policy counterexamples, not classifier accuracy measurements. Read
 // the shipped recipe and run its actual projections and decision evaluator.
 func TestBuiltinBalanceEffortLanes(t *testing.T) {
 	c := builtinPolicyClassifier(t, "balance")
 	unknown := SignalResults{SignalErrors: map[string]string{}}
-	for _, name := range []string{"task", "difficulty", "precise_facts", "needs", "correction"} {
+	for _, name := range []string{"task", "difficulty", "precise_facts", "needs", "correction", "tool_use"} {
 		unknown.SignalErrors["decision:"+name] = "unavailable"
 	}
 	tools := balanceAnswers("chat", 0.5, 0)
@@ -71,18 +76,26 @@ func TestBuiltinBalanceEffortLanes(t *testing.T) {
 		in   SignalResults
 		want string
 	}{
-		{"unknown answers keep the middle pool", unknown, "medium"},
-		{"no reasoning needed", balanceAnswers("chat", 0.5, 0), "simple"},
-		{"some reasoning", balanceAnswers("analysis", 1.8, 0), "medium"},
-		{"brief request lowers effort", balanceWith(balanceAnswers("analysis", 1.8, 0), nil, []string{"brief_request"}, nil), "simple"},
-		{"high effort", balanceAnswers("analysis", 2.5, 0.2), "reasoning"},
-		{"maximum effort", balanceAnswers("stem", 3.5, 1), "reasoning"},
-		{"brief STEM problem rated multi-step", balanceWith(balanceAnswers("stem", 2, 0), nil, []string{"brief_request"}, nil), "reasoning"},
-		{"code at high effort keeps its lane", balanceAnswers("code", 2.5, 0.2), "medium"},
-		{"code at maximum effort", balanceAnswers("code", 3.5, 1), "reasoning"},
-		{"exact facts at high effort keep their lane", balanceAnswers("facts", 2.5, 0.2, "precise_facts"), "medium"},
-		{"exact facts are not simple", balanceAnswers("facts", 0.5, 0, "precise_facts"), "medium"},
-		{"exact facts at maximum effort", balanceAnswers("facts", 3.5, 1, "precise_facts"), "reasoning"},
+		{"unknown answers keep medium effort", unknown, "standard"},
+		{"no reasoning needed", balanceAnswers("chat", 0.5, 0), "fast"},
+		{"some reasoning", balanceAnswers("analysis", 1.8, 0), "standard"},
+		{"brief request lowers effort", balanceWith(balanceAnswers("analysis", 1.8, 0), nil, []string{"brief_request"}, nil), "fast"},
+		{"high effort", balanceAnswers("analysis", 2.5, 0.2), "hard"},
+		{"maximum effort", balanceAnswers("stem", 3.5, 1), "frontier"},
+		{"brief STEM problem rated multi-step", balanceWith(balanceAnswers("stem", 2, 0), nil, []string{"brief_request"}, nil), "hard"},
+		{"code at medium effort", balanceAnswers("code", 1.8, 0), "code"},
+		{"code at high effort keeps its lane", balanceAnswers("code", 2.5, 0.2), "code"},
+		{"code that needs no reasoning", balanceAnswers("code", 0.5, 0), "fast"},
+		{"code at maximum effort", balanceAnswers("code", 3.5, 1), "frontier"},
+		{"exact facts at high effort keep their lane", balanceAnswers("facts", 2.5, 0.2, "precise_facts"), "facts"},
+		{"exact facts are not fast", balanceAnswers("facts", 0.5, 0, "precise_facts"), "facts"},
+		{"exact facts at maximum effort", balanceAnswers("facts", 3.5, 1, "precise_facts"), "frontier"},
+		{"long input", balanceLong(balanceAnswers("chat", 0.5, 0)), "long_context"},
+		{"long input with unknown answers", balanceLong(unknown), "long_context"},
+		{"long input outranks an image", balanceLong(balanceWith(balanceAnswers("chat", 0.5, 0), []string{"has_image"}, nil, nil)), "long_context"},
+		{"image", balanceWith(balanceAnswers("chat", 0.5, 0), []string{"has_image"}, nil, nil), "vision"},
+		{"hard question about an image", balanceWith(balanceAnswers("stem", 3.5, 1), []string{"has_image"}, nil, nil), "vision"},
+		{"image during a tool loop", balanceWith(balanceAnswers("chat", 0.5, 0), []string{"has_image", "tool_loop"}, nil, nil), "vision"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) { assertBuiltinPolicy(t, c, &tt.in, tt.want) })
@@ -92,15 +105,19 @@ func TestBuiltinBalanceEffortLanes(t *testing.T) {
 		in   SignalResults
 		want string
 	}{
-		{"active tool loop", balanceWith(balanceAnswers("chat", 0.5, 0), []string{"tool_loop"}, nil, nil), "reasoning"},
-		{"tool loop with unknown answers", balanceWith(unknown, []string{"tool_loop"}, nil, nil), "reasoning"},
-		{"declared tools for agentic work", balanceWith(balanceAnswers("agentic", 0.5, 0), []string{"has_tools"}, nil, nil), "reasoning"},
-		{"declared tools the answer needs", balanceWith(tools, []string{"has_tools"}, nil, nil), "reasoning"},
-		{"tools disabled by the client", balanceWith(balanceAnswers("agentic", 0.5, 0), []string{"has_tools", "tool_disabled"}, nil, nil), "simple"},
-		{"declared tools the request does not need", balanceWith(balanceAnswers("writing", 0.5, 0), []string{"has_tools"}, nil, nil), "simple"},
-		{"correction and feedback after an answer", balanceWith(balanceAnswers("chat", 0.5, 0, "correction"), []string{"has_prior_answer"}, nil, []string{"wrong_answer"}), "reasoning"},
-		{"correction without the feedback judgment", balanceWith(balanceAnswers("chat", 0.5, 0, "correction"), []string{"has_prior_answer"}, nil, nil), "simple"},
-		{"feedback without an earlier answer", balanceWith(balanceAnswers("chat", 0.5, 0, "correction"), nil, nil, []string{"wrong_answer"}), "simple"},
+		{"active tool loop", balanceWith(balanceAnswers("chat", 0.5, 0), []string{"tool_loop"}, nil, nil), "agentic"},
+		{"tool loop with unknown answers", balanceWith(unknown, []string{"tool_loop"}, nil, nil), "agentic"},
+		{"declared tools for agentic work", balanceWith(balanceAnswers("agentic", 0.5, 0), []string{"has_tools"}, nil, nil), "agentic"},
+		{"declared tools the answer needs", balanceWith(tools, []string{"has_tools"}, nil, nil), "agentic"},
+		{"explicit tool request", balanceWith(balanceAnswers("chat", 0.5, 0, "tool_use"), []string{"has_tools"}, nil, nil), "agentic"},
+		{"forced tool call", balanceWith(balanceAnswers("chat", 0.5, 0), []string{"has_tools", "tool_required"}, nil, nil), "agentic"},
+		{"tools disabled by the client", balanceWith(balanceAnswers("agentic", 0.5, 0), []string{"has_tools", "tool_disabled"}, nil, nil), "fast"},
+		{"declared tools the request does not need", balanceWith(balanceAnswers("writing", 0.5, 0), []string{"has_tools"}, nil, nil), "fast"},
+		{"correction and feedback after an answer", balanceWith(balanceAnswers("chat", 0.5, 0, "correction"), []string{"has_prior_answer"}, nil, []string{"wrong_answer"}), "recovery"},
+		{"correction outranks declared tools", balanceWith(balanceAnswers("agentic", 0.5, 0, "correction"), []string{"has_prior_answer", "has_tools"}, nil, []string{"wrong_answer"}), "recovery"},
+		{"correction during a tool loop", balanceWith(balanceAnswers("chat", 0.5, 0, "correction"), []string{"has_prior_answer", "tool_loop"}, nil, []string{"wrong_answer"}), "agentic"},
+		{"correction without the feedback judgment", balanceWith(balanceAnswers("chat", 0.5, 0, "correction"), []string{"has_prior_answer"}, nil, nil), "fast"},
+		{"feedback without an earlier answer", balanceWith(balanceAnswers("chat", 0.5, 0, "correction"), nil, nil, []string{"wrong_answer"}), "fast"},
 	} {
 		t.Run(tt.name, func(t *testing.T) { assertBuiltinPolicy(t, c, &tt.in, tt.want) })
 	}
@@ -113,12 +130,13 @@ func TestBuiltinHardNamedToolRequiresCapableCandidate(t *testing.T) {
 		t.Run(recipe, func(t *testing.T) {
 			c := builtinPolicyClassifier(t, recipe)
 			in := &SignalResults{MatchedDecisionRules: []string{"depth"}, MatchedConversationRules: []string{"has_tools", "tool_required"}}
+			want := "reasoning"
 			if recipe == "balance" {
 				answers := balanceWith(balanceAnswers("agentic", 2.5, 0.2), []string{"has_tools"}, nil, nil)
-				in = &answers
+				in, want = &answers, "agentic"
 			}
 			result, err := c.EvaluateDecisionWithEngine(c.applyProjections(in))
-			if err != nil || result == nil || result.Decision == nil || result.Decision.Name != "reasoning" {
+			if err != nil || result == nil || result.Decision == nil || result.Decision.Name != want {
 				t.Fatalf("hard named-tool decision=%+v err=%v", result, err)
 			}
 			request := &llmprotocol.Request{

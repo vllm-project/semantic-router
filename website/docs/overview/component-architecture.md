@@ -44,11 +44,11 @@ Every invocation without `--engine` (`-e`) starts Router mode. Passing MODEL
 alone does not select Engine mode. Dashboard reports the startup mode and
 manages deployments; it does not switch the instance mode.
 
-Model workers are prepared for actual consumers: native model grants, routing
-tasks, and enabled model-backed services. Declaring an unused deployment does
-not start it. A rule-only Chat router can therefore run without model workers
-when no other feature needs them. Semantic cache, embeddings, memory, and RAG
-can introduce additional consumers. “On demand” refers to this configuration
+Model workers are prepared only for deployments in actual use: native model
+grants, routing signals, and enabled model-backed services. Declaring an unused
+deployment does not start it. A rule-only Chat router can therefore run without
+model workers when no other feature needs them. Semantic cache, embeddings,
+memory, and RAG can put further deployments in use. “On demand” refers to this configuration
 demand, not loading every model on its first request.
 
 ## Separate protocol handling from routing policy
@@ -148,9 +148,10 @@ flowchart LR
 An explicit `api: systemone` entrypoint selects an isolated native recipe.
 Its signals and decisions choose an experimental `cascade` algorithm. Each
 cascade keeps a Choice / Score / Noul question bundle together and calls
-declared decision-model backends within its own deadline and call budget.
-Signal evaluation precedes that budget and retains its own timeouts and request
-cancellation. A backend can be a local deployment, a separate
+declared decision-model backends. Signals and the selected cascade share one
+request deadline and physical-call ledger. The selected decision's budget
+tightens both limits, while signal-specific timeouts remain upper bounds. A
+backend can be a local deployment, a separate
 vLLM-SR Engine service, or a compatible external System One API.
 
 The recipe chooses between models; each deployment separately chooses among

@@ -14,36 +14,45 @@ type values struct {
 	Config struct {
 		Routing struct {
 			Signals struct {
-				Domains  []struct{ Name string } `yaml:"domains"`
+				Domains     []struct{ Name string } `yaml:"domains"`
+				Classifiers []struct {
+					Deployment string `yaml:"deployment"`
+				} `yaml:"classifiers"`
 				Decision []struct {
 					Name       string `yaml:"name"`
 					Deployment string `yaml:"deployment"`
 				} `yaml:"decision"`
 			} `yaml:"signals"`
-			ModelBindings map[string]struct {
-				Deployment string `yaml:"deployment"`
-			} `yaml:"model_bindings"`
-			Decisions []struct {
+			ModelBindings map[string]string `yaml:"model_bindings"`
+			Decisions     []struct {
 				Name      string `yaml:"name"`
 				Algorithm *struct {
 					Decision *struct {
 						Deployment string `yaml:"deployment"`
 					} `yaml:"decision"`
 				} `yaml:"algorithm"`
+				Plugins []struct {
+					Configuration struct {
+						Rerank *struct {
+							Deployment string `yaml:"deployment"`
+						} `yaml:"rerank"`
+					} `yaml:"configuration"`
+				} `yaml:"plugins"`
 			} `yaml:"decisions"`
 		} `yaml:"routing"`
 		Global struct {
 			ModelCatalog struct {
 				Deployments map[string]struct {
-					Provider   string `yaml:"provider"`
-					Artifact   string `yaml:"artifact"`
-					Endpoint   string `yaml:"endpoint"`
-					ServedName string `yaml:"served_name"`
-					Device     string `yaml:"device"`
+					Provider string `yaml:"provider"`
+					Artifact string `yaml:"artifact"`
+					Endpoint string `yaml:"endpoint"`
+					Model    string `yaml:"model"`
+					Device   string `yaml:"device"`
 				} `yaml:"deployments"`
-				Bindings map[string]struct {
-					Deployment string `yaml:"deployment"`
-				} `yaml:"bindings"`
+				Bindings   map[string]string `yaml:"bindings"`
+				Embeddings struct {
+					Default string `yaml:"default"`
+				} `yaml:"embeddings"`
 			} `yaml:"model_catalog"`
 		} `yaml:"global"`
 	} `yaml:"config"`
@@ -113,7 +122,7 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 	attached := map[string]string{"attached-decisions": "decision-a", "attached-feedback": "feedback-a", "attached-vela2": "vela2-a"}
 	for name, served := range attached {
 		deployment := deployments[name]
-		if !strings.Contains(deployment.Endpoint, "model-runtime-attached.") || deployment.ServedName != served {
+		if !strings.Contains(deployment.Endpoint, "model-runtime-attached.") || deployment.Model != served {
 			t.Fatalf("%s must attach to model-runtime-attached as %s: %+v", name, served, deployment)
 		}
 	}
@@ -141,12 +150,15 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 		}
 	}
 
-	used := map[string]bool{}
-	for _, binding := range profile.Config.Global.ModelCatalog.Bindings {
-		used[binding.Deployment] = true
+	used := map[string]bool{profile.Config.Global.ModelCatalog.Embeddings.Default: true}
+	for _, deployment := range profile.Config.Global.ModelCatalog.Bindings {
+		used[deployment] = true
 	}
-	for _, binding := range profile.Config.Routing.ModelBindings {
-		used[binding.Deployment] = true
+	for _, deployment := range profile.Config.Routing.ModelBindings {
+		used[deployment] = true
+	}
+	for _, rule := range profile.Config.Routing.Signals.Classifiers {
+		used[rule.Deployment] = true
 	}
 	for _, rule := range profile.Config.Routing.Signals.Decision {
 		used[rule.Deployment] = true
@@ -155,7 +167,13 @@ func TestProfileRunsManagedAndAttachedRuntimesOnItsOwnFixtures(t *testing.T) {
 		if decision.Algorithm != nil && decision.Algorithm.Decision != nil {
 			used[decision.Algorithm.Decision.Deployment] = true
 		}
+		for _, plugin := range decision.Plugins {
+			if plugin.Configuration.Rerank != nil {
+				used[plugin.Configuration.Rerank.Deployment] = true
+			}
+		}
 	}
+	delete(used, "")
 	for name := range deployments {
 		if !used[name] {
 			t.Fatalf("deployment %s is declared but nothing uses it, so the Router would not start it", name)

@@ -106,26 +106,33 @@ func WarmupRouter(
 }
 
 func remoteEmbeddingProviderRuntimeStateFromConfig(cfg *config.RouterConfig) *EmbeddingProviderRuntimeState {
-	if cfg == nil || !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	if cfg == nil {
 		return nil
 	}
-
-	apiKeyEnv := strings.TrimSpace(cfg.EmbeddingModels.Endpoint.APIKeyEnv)
+	// embeddings.default names the openai_embeddings deployment; a deprecated
+	// embeddings.semantic.endpoint is read as one.
+	cfg = config.WithModelResources(cfg)
+	deployment, ok := cfg.ModelDeployments[cfg.EmbeddingDeployment]
+	if !ok || deployment.Provider != config.OpenAIEmbeddingsProvider {
+		return nil
+	}
+	apiKeyEnv := ""
+	if deployment.Auth != nil {
+		apiKeyEnv = strings.TrimSpace(deployment.Auth.APIKeyEnv)
+	}
 	var apiKeyEnvSet *bool
 	if apiKeyEnv != "" {
 		value := os.Getenv(apiKeyEnv) != ""
 		apiKeyEnvSet = &value
 	}
-
-	dimension := cfg.EmbeddingModels.Endpoint.Dimensions
+	dimension := deployment.DeclaredDimensions()
 	if dimension == 0 {
 		dimension = cfg.EmbeddingModels.EmbeddingConfig.TargetDimension
 	}
-
 	return &EmbeddingProviderRuntimeState{
 		Mode:         "remote",
-		Backend:      cfg.EmbeddingModels.EmbeddingBackend(),
-		Model:        strings.TrimSpace(cfg.EmbeddingModels.Endpoint.Model),
+		Backend:      config.EmbeddingBackendOpenAICompatible,
+		Model:        strings.TrimSpace(deployment.Model),
 		Dimension:    dimension,
 		APIKeyEnv:    apiKeyEnv,
 		APIKeyEnvSet: apiKeyEnvSet,

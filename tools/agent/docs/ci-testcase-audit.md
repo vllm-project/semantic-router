@@ -157,9 +157,10 @@ A function returning `nil` after recording results is not necessarily a false
 pass. Baseline floors are domain 60%, cache hits 40%, PII 65%, priority 75%, and
 fallback 85%. Jailbreak additionally requires 80% in each attack/non-attack
 class and fails request/contract errors directly; its wrapper also checks 70%
-aggregate accuracy. Sequential stress requires 95%; progressive 10/20/50
-stages require 95/85/60%, with 75% overall. Missing details and invalid counts
-fail acceptance. These model/pressure thresholds remain unchanged.
+aggregate accuracy. Sequential stress requires 95%. Progressive 10/20/50
+stages wait out the gateway's 60 s deadline and require the Router to answer
+every request inside it. Missing details and invalid counts fail acceptance.
+The model thresholds remain unchanged.
 
 Other profiles do not inherit the baseline wrapper. For example,
 `TestWrapWithAcceptanceContractSkipsUnscopedProfiles` explicitly preserves that
@@ -234,7 +235,7 @@ when sharing execution setup.
 | [plugin-request-mutations](../../../e2e/testcases/plugin_request_mutations.go) | Actual provider messages, token/n caps, removed parameters and header mutations. Keep; replaces inferred plugin effects. |
 | [tool-selection](../../../e2e/testcases/tool_selection_e2e.go) | Every subcase must pass provider tool passthrough/filter/removal and PII no-dispatch checks. Optional debug fields are supplemental. |
 | [decision-fallback-behavior](../../../e2e/testcases/decision_fallback.go) | Explicit match/no-match fixture plus provider model/message observations; baseline floor is 85%. Keep. |
-| [chat-completions-progressive-stress](../../../e2e/testcases/chat_completions_progressive_stress.go) | 10/20/50 concurrent requests require 95/85/60% per stage and 75% overall. Full scope only; no latency regression threshold. |
+| [chat-completions-progressive-stress](../../../e2e/testcases/chat_completions_progressive_stress.go) | Every one of 10/20/50 concurrent requests gets a Router answer (`x-vsr-response-path`, not `error`) inside the gateway's 60 s deadline; the client waits 90 s. Answers are reported per response path. After the last stage the Router must answer a fresh request in about its unloaded time within 5 minutes, so the next case does not queue behind the burst. Full scope only; no latency regression threshold. |
 | [protocol-codec-openai-regression](../../../e2e/testcases/protocol_codec_openai_regression.go) | Native Chat HTTP/JSON and selected route smoke. Some overlap with chat smoke; share the worker, retain its receipt. |
 | [retention-directive](../../../e2e/testcases/retention_directive.go) | A pinned decision emits exact retention headers and omits unset fields. Keep. |
 | [looper-latency-token-headers](../../../e2e/testcases/looper_latency_token_headers.go) | A pinned Looper decision emits positive latency/token fields and total equals prompt plus completion. Keep accounting, not timing accuracy. |
