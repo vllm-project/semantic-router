@@ -30,6 +30,7 @@ type requestSignalSnapshot struct {
 	ContextTextBytes       int
 	ContextEquivalentBytes int
 	ContextHasNonText      bool
+	ContextReserveTokens   int
 
 	HasDeveloperMessage       bool
 	UserMessageCount          int

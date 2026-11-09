@@ -82,17 +82,23 @@ func TestPIIBindingAsksTheReadyMadeQuestionOfADecisionModel(t *testing.T) {
 	var decided modelservice.Response
 	var spans tasks.TokenClassificationResult
 	var decideErr, spanErr error
-	for _, call := range []func(){
+	callers := []func(){
 		func() { decided, decideErr = lease.Decide(ctx, "vela", signals) },
 		func() { spans, spanErr = handle.Call(ctx, string(config.DefaultRecipeName), text) },
-	} {
-		leave := bundle.Join()
+	}
+	leaves := make([]func(), len(callers))
+	for i := range callers {
+		leaves[i] = bundle.Join()
+	}
+	// A bundle may flush when all registered participants are waiting, so
+	// register everyone before starting any caller.
+	for i, call := range callers {
 		wg.Add(1)
-		go func(call func()) {
+		go func(call func(), leave func()) {
 			defer wg.Done()
 			defer leave()
 			call()
-		}(call)
+		}(call, leaves[i])
 	}
 	wg.Wait()
 	if decideErr != nil || spanErr != nil || decided.Answers["urgent"].Type != "noul" || len(spans.Entities) != 2 {
