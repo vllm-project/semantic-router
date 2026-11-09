@@ -1,11 +1,14 @@
 package extproc
 
 import (
+	"context"
+
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/retention"
 )
 
 // retentionDropReason is the canonical skip-reason value used in metrics, log
@@ -119,6 +122,16 @@ func observeRetentionDirective(ctx *RequestContext) {
 			span.SetAttributes(attribute.Bool("vsr.retention.prefer_prefix_retention", *r.PreferPrefixRetention))
 		}
 	}
+	if ctx.RetentionOutcome != nil {
+		fields["vsr.retention.status"] = string(ctx.RetentionOutcome.Status)
+		fields["vsr.retention.reason"] = ctx.RetentionOutcome.Reason
+		if span.IsRecording() {
+			span.SetAttributes(
+				attribute.String("vsr.retention.status", string(ctx.RetentionOutcome.Status)),
+				attribute.String("vsr.retention.reason", ctx.RetentionOutcome.Reason),
+			)
+		}
+	}
 	logging.ComponentDebugEvent("extproc", "retention_directive_observed", fields)
 }
 
@@ -160,9 +173,18 @@ func applyEmittedRetention(decision *config.Decision, ctx *RequestContext) *conf
 			PreferPrefixRetention: cloneBoolPtr(e.Retention.PreferPrefixRetention),
 		}
 		ctx.EmittedRetention = clone
+		outcome := retention.Resolve(contextForRetention(ctx), clone, nil)
+		ctx.RetentionOutcome = &outcome
 		return clone
 	}
 	return nil
+}
+
+func contextForRetention(ctx *RequestContext) context.Context {
+	if ctx == nil || ctx.TraceContext == nil {
+		return context.Background()
+	}
+	return ctx.TraceContext
 }
 
 func cloneBoolPtr(p *bool) *bool {
