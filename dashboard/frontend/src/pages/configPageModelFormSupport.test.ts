@@ -50,6 +50,7 @@ describe('model form backend targets', () => {
       api_key_env: 'PROVIDER_API_KEY',
       auth: { header: 'x-api-key', prefix: '', api_key_env: 'PROVIDER_API_KEY' },
       headers: { 'X-Org': 'acme' },
+      trusted_gateway: true,
     } as const
 
     expect(normalizeModelBackendRefs([backend])).toEqual([backend])
@@ -81,6 +82,20 @@ describe('model form backend targets', () => {
       },
     ])
     expect(Object.prototype.hasOwnProperty.call(payload.backend_refs[0], 'auth_prefix')).toBe(true)
+  })
+
+  it('keeps a trusted gateway marker through the model payload', () => {
+    const backend = {
+      name: 'litellm',
+      base_url: 'https://litellm.internal/v1',
+      provider: 'openai-compatible',
+      trusted_gateway: true,
+    }
+
+    expect(normalizeModelBackendRefs([backend])).toEqual([backend])
+    expect(buildProviderModelPayload('gateway', { backend_refs: [backend] }).backend_refs).toEqual([
+      backend,
+    ])
   })
 
   it('leaves new-model pricing unset until the operator enters a value', () => {
