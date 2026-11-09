@@ -124,7 +124,7 @@ func (r *OpenAIRouter) selectWithSelector(
 	defaultCandidate *config.ModelRef,
 	ctx *RequestContext,
 ) (*config.ModelRef, string, error) {
-	requestCtx := selectionRequestContext(ctx)
+	requestCtx := requestDecisionContext(ctx)
 	selectionStart := time.Now()
 	result, err := selector.Select(requestCtx, selCtx)
 	selection.RecordSelectionDuration(

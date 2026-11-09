@@ -279,6 +279,7 @@ func (l *Lease) observe(m member, deployment, surface string, started time.Time,
 // bundle when there is one; the bundle answers it together with the stage's
 // other questions to the same model.
 func (l *Lease) Decide(ctx context.Context, deployment string, request Request) (Response, error) {
+	request = attachDecisionMedia(ctx, deployment, request)
 	m, err := l.call(deployment)
 	if err != nil {
 		return Response{}, err

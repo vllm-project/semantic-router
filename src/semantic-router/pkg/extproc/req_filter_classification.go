@@ -31,7 +31,8 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 
 	signalInput := r.prepareSignalEvaluationInput(history)
 	observePromptCompression(ctx, signalInput.compression.outcome, signalInput.compression.elapsed)
-	signalInput.requestFacts.Context = ctx.TraceContext
+	ctx.decisionMedia = r.prepareRequestDecisionMedia(history.decisionMedia)
+	signalInput.requestFacts.Context = requestDecisionContext(ctx)
 	ctx.VSRConversationFacts = signalInput.conversationFacts
 	ctx.VSRContextHasNonText = ctx.VSRContextHasNonText ||
 		signalInput.requestFacts.ContextHasNonText

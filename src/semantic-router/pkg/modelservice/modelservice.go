@@ -69,6 +69,8 @@ type Choice struct {
 type Request struct {
 	Model     string
 	State     string
+	Images    []string
+	Videos    []string
 	Parts     map[string]string
 	Questions []Question
 	MaxTokens int

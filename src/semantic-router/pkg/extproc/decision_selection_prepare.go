@@ -18,6 +18,24 @@ func prepareDecisionSelectionCards(cfg *config.RouterConfig, provider interface 
 	if cfg == nil {
 		return cards, nil
 	}
+	for name, deployment := range cfg.ModelDeployments {
+		if deployment.Input.Media == nil {
+			continue
+		}
+		if provider == nil {
+			return nil, fmt.Errorf("decision media %s requires a model runtime", name)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), modelservice.ReadyTimeout())
+		card, err := provider.Card(ctx, name)
+		cancel()
+		if err != nil {
+			return nil, fmt.Errorf("prepare decision media %s: %w", name, err)
+		}
+		if err := modelservice.ValidateDecisionMedia(deployment, card); err != nil {
+			return nil, fmt.Errorf("prepare decision media %s: %w", name, err)
+		}
+		cards[name] = card
+	}
 	definition, _ := modelservice.BuiltinTask("model_selection")
 	for _, recipe := range cfg.ReachableRoutingRecipes() {
 		for _, decision := range recipe.Profile.Decisions {

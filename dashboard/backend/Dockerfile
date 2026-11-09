@@ -95,6 +95,7 @@ COPY src/semantic-router/pkg/trainingcontract/ /app/src/semantic-router/pkg/trai
 COPY src/semantic-router/pkg/systemone/ /app/src/semantic-router/pkg/systemone/
 COPY src/semantic-router/pkg/upstream/ /app/src/semantic-router/pkg/upstream/
 COPY src/semantic-router/pkg/utils/contentcoding/ /app/src/semantic-router/pkg/utils/contentcoding/
+COPY src/semantic-router/pkg/utils/decisionmedia/ /app/src/semantic-router/pkg/utils/decisionmedia/
 COPY src/semantic-router/pkg/topiccontinuity/ /app/src/semantic-router/pkg/topiccontinuity/
 COPY src/semantic-router/pkg/configsnapshot/historylock/ /app/src/semantic-router/pkg/configsnapshot/historylock/
 

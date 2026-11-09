@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	modelselection "github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/decisionmedia"
 )
 
 // ClassifyIntentForEval performs intent classification specifically for evaluation scenarios.
@@ -42,7 +43,7 @@ func (s *ClassificationService) ClassifyIntentForEval(ctx context.Context, req I
 	}
 
 	wantTrace := req.Options != nil && req.Options.Trace
-	input.requestFacts.Context = ctx
+	input.requestFacts.Context = classifier.RequestDecisionContext(ctx, decisionmedia.FromRequest(input.semanticRequest))
 	signals := classifier.EvaluateAllSignalsWithRequestFacts(
 		input.evaluationText,
 		input.contextText,
