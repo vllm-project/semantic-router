@@ -1,10 +1,13 @@
 package extproc
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"strings"
 	"testing"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	http_ext "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
@@ -54,6 +57,86 @@ func TestBufferedResponsesAnswerReachesAStreamingClient(t *testing.T) {
 	if strings.Contains(client, "stream_incomplete") {
 		t.Fatalf("a complete upstream answer must not be reported as incomplete: %q", client)
 	}
+}
+
+// A buffered provider reply is one body message, and its end_of_stream is false
+// when trailers follow it. The object being complete ends the read, not the flag:
+// without that, the answer reaches the SSE decoder and the client gets
+// stream_incomplete instead of the terminal event.
+func TestBufferedResponsesAnswerArrivesBeforeTrailers(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIResponsesV1, TargetFormat: llmprotocol.OpenAIResponsesV1,
+		RequestModel: "public-model", TraceContext: context.Background(),
+		SemanticRequest: &llmprotocol.Request{Generation: 1, Model: "public-model", Stream: true},
+	}
+	if _, err := router.handleResponseHeaders(looperTransportHeaders(200, "application/json"), ctx); err != nil {
+		t.Fatal(err)
+	}
+	response, err := router.handleResponseBody(&ext_proc.ProcessingRequest_ResponseBody{
+		ResponseBody: &ext_proc.HttpBody{Body: []byte(bufferedResponsesBody()), EndOfStream: false},
+	}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := string(response.GetResponseBody().GetResponse().GetBodyMutation().GetBody())
+	if !strings.Contains(client, "event: response.completed") || !strings.Contains(client, `"text":"hello"`) {
+		t.Fatalf("the buffered answer was not served before the trailers: %q", client)
+	}
+	if strings.Contains(client, "stream_incomplete") {
+		t.Fatalf("a complete upstream answer must not be reported as incomplete: %q", client)
+	}
+}
+
+// A gzip provider body reaches the bridge compressed, because a streaming
+// response leaves content coding to the client. It is decoded to recognize the
+// object and encoded again under the header the client already has.
+func TestBufferedResponsesAnswerDecodesGzipBeforeBridging(t *testing.T) {
+	var compressed bytes.Buffer
+	writer := gzip.NewWriter(&compressed)
+	if _, err := writer.Write([]byte(bufferedResponsesBody())); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIResponsesV1, TargetFormat: llmprotocol.OpenAIResponsesV1,
+		RequestModel: "public-model", TraceContext: context.Background(),
+		SemanticRequest: &llmprotocol.Request{Generation: 1, Model: "public-model", Stream: true},
+	}
+	headers := looperTransportHeaders(200, "application/json")
+	headers.ResponseHeaders.Headers.Headers = append(headers.ResponseHeaders.Headers.Headers,
+		&core.HeaderValue{Key: "content-encoding", Value: "gzip"})
+	if _, err := router.handleResponseHeaders(headers, ctx); err != nil {
+		t.Fatal(err)
+	}
+	response, err := router.handleResponseBody(&ext_proc.ProcessingRequest_ResponseBody{
+		ResponseBody: &ext_proc.HttpBody{Body: compressed.Bytes(), EndOfStream: true},
+	}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sent := response.GetResponseBody().GetResponse().GetBodyMutation().GetBody()
+	reader, err := gzip.NewReader(bytes.NewReader(sent))
+	if err != nil {
+		t.Fatalf("the client body no longer matches its content-encoding: %v", err)
+	}
+	var decoded bytes.Buffer
+	if _, err := decoded.ReadFrom(reader); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(decoded.String(), "event: response.completed") || !strings.Contains(decoded.String(), `"text":"hello"`) {
+		t.Fatalf("the gzip answer was not served as a stream: %q", decoded.String())
+	}
+}
+
+func bufferedResponsesBody() string {
+	return `{"id":"resp_1","object":"response","created_at":1,"model":"public-model",` +
+		`"status":"completed","output":[{"type":"message","id":"msg_1","status":"completed",` +
+		`"role":"assistant","content":[{"type":"output_text","text":"hello","annotations":[]}]}],` +
+		`"usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}`
 }
 
 // A provider that does stream SSE can still have its bytes split anywhere,

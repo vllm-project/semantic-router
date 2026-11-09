@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -53,12 +54,13 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	recordStreamingTTFT(ctx)
 	r.initializeSemanticResponseStream(ctx)
 	buffers := semanticStreamBuffers{}
-	// Only a provider body that is not SSE can be a buffered answer, and only
-	// once it is complete: the bridge replaces the whole read with the events
-	// the client asked for.
-	if endOfStream && !ctx.UpstreamBodyStreamed {
+	// Only a provider body that is not SSE can be a buffered answer. Such a
+	// reply arrives as one body message, whose end_of_stream is false when
+	// trailers follow, so a complete object ends the read rather than the flag.
+	if !ctx.UpstreamBodyStreamed {
 		if bridged, ok := r.bridgeBufferedResponsesBody(responseBody, ctx); ok {
 			responseBody, buffers.bridged = bridged, true
+			endOfStream = true
 		}
 	}
 	buffers.push(responseBody, ctx)
@@ -148,10 +150,21 @@ func (buffers *semanticStreamBuffers) recordError(ctx *RequestContext, err error
 //
 // It only applies to a body the provider did not send as SSE, and only once the
 // body is complete: the header phase keeps such an answer out of streamed reads
-// so the whole object arrives in the final read.
+// so the whole object arrives in one message. A gzip reply is decoded here,
+// since the streaming path leaves content coding to the client; the client body
+// is encoded again under that header.
 func (r *OpenAIRouter) bridgeBufferedResponsesBody(body []byte, ctx *RequestContext) ([]byte, bool) {
-	if !isResponseAPIStreamRequest(ctx) || ctx.UpstreamBodyStreamed ||
-		!bytes.HasPrefix(bytes.TrimSpace(body), []byte("{")) || !json.Valid(body) {
+	if !isResponseAPIStreamRequest(ctx) || ctx.UpstreamBodyStreamed {
+		return nil, false
+	}
+	if ctx.UpstreamResponseGzip {
+		decoded, err := gunzipBounded(ctx.TraceContext, body, maxDecodedUpstreamBodyBytes)
+		if err != nil {
+			return nil, false
+		}
+		body = decoded
+	}
+	if !bytes.HasPrefix(bytes.TrimSpace(body), []byte("{")) || !json.Valid(body) {
 		return nil, false
 	}
 	var probe struct {
@@ -177,6 +190,20 @@ func (r *OpenAIRouter) bridgeBufferedResponsesBody(body []byte, ctx *RequestCont
 	// the buffered path's diagnostics are recorded here.
 	observeProtocolStream(ctx, nil, append(diagnostics, encoded...))
 	return frames, true
+}
+
+// encodeGzip encodes frames under the coding the client's content-encoding
+// header still names.
+func encodeGzip(frames []byte) ([]byte, error) {
+	var out bytes.Buffer
+	writer := gzip.NewWriter(&out)
+	if _, err := writer.Write(frames); err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
 }
 
 func appendProtocolFrames(body []byte, frames [][]byte) []byte {
@@ -225,8 +252,16 @@ func (buffers *semanticStreamBuffers) processingResponse(ctx *RequestContext) *e
 	}
 	if ctx.ProtocolResponseStream != nil &&
 		(requiresClientResponseRewrite(ctx) || ctx.StreamingAborted || buffers.bridged) {
+		body := buffers.translated
+		// A bridged answer replaces a gzip provider body, and the client's
+		// content-encoding still names that coding, so the frames carry it too.
+		if buffers.bridged && ctx.UpstreamResponseGzip {
+			if encoded, err := encodeGzip(body); err == nil {
+				body = encoded
+			}
+		}
 		return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
-			Mutation: &ext_proc.BodyMutation_Body{Body: buffers.translated},
+			Mutation: &ext_proc.BodyMutation_Body{Body: body},
 		}, nil)
 	}
 	if ctx.PublicChatUsageFilter != nil {
