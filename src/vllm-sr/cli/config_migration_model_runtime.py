@@ -213,7 +213,7 @@ def migrate_model_runtime_contract(
     catalog = dict_at(canonical, "global", "model_catalog")
     if catalog is not None:
         migrated = _migrate_deployments(catalog, notes)
-        _retire_explainer_deployments(catalog, notes)
+        _retire_explainer_deployments(canonical, catalog, notes)
         for path, bindings in binding_maps(canonical):
             _migrate_bindings(path, bindings, migrated, notes)
         _migrate_system_models(catalog, notes)
@@ -369,7 +369,7 @@ def _looks_like_hub_repository(value: str) -> bool:
 
 
 def _retire_explainer_deployments(
-    catalog: dict[str, Any], notes: MigrationNotes
+    canonical: dict[str, Any], catalog: dict[str, Any], notes: MigrationNotes
 ) -> None:
     deployments = catalog.get("deployments")
     if not isinstance(deployments, dict):
@@ -380,6 +380,23 @@ def _retire_explainer_deployments(
             f"global.model_catalog.deployments.{name}",
             "removed; the NLI explainer is retired",
         )
+        _note_provider_models_naming(canonical, name, notes)
+
+
+def _note_provider_models_naming(
+    canonical: dict[str, Any], deployment: str, notes: MigrationNotes
+) -> None:
+    """A provider model that still names a removed deployment needs another one."""
+
+    providers = canonical.get("providers")
+    models = providers.get("models") if isinstance(providers, dict) else None
+    for index, model in enumerate(models if isinstance(models, list) else []):
+        if isinstance(model, dict) and model.get("deployment") == deployment:
+            notes.action(
+                f"providers.models[{index}].deployment",
+                f"names {deployment!r}, which the migration removed as a retired NLI "
+                "explainer; point the model at the deployment that serves it",
+            )
 
 
 def _is_nli(deployment: Any) -> bool:
