@@ -1,23 +1,31 @@
-"""The native engine's encoder path on GPUs: length buckets and a graph per bucket.
+"""The native engine's encoder path on GPUs and NPUs: length buckets and a graph per bucket.
 
-A short encoder forward is hundreds of tiny kernels, so on a GPU its latency
-is launch overhead. Rows are padded to a bucket (rows and width from
+A short encoder forward is hundreds of tiny kernels, so on an accelerator its
+latency is launch overhead. Rows are padded to a bucket (rows and width from
 ``ROW_BUCKETS`` / ``WIDTH_BUCKETS``), the key-padding mask is built from the
 host-known lengths inside the forward, and each bucket's forward is captured
-as a HIP / CUDA graph on its second use and replayed afterwards. Eager runs of
-a bucket shape compute exactly what its replay computes, so an answer never
-depends on whether its bucket was captured yet. Padded keys get exactly zero
-attention weight; padded queries' rows are dropped. Rows wider than the last
-width bucket, batches above ``MAX_GRAPH_TOKENS`` padded tokens and buckets
-that pad too much (``pads_little``) are GPU-bound: they run eagerly on the
-packed layout (on MI325X a 512-token row is faster unpadded, 5.4 ms, than as a
-masked bucket replay, 5.8 ms).
+as a HIP / CUDA / NPU graph on its second use and replayed afterwards. Eager
+runs of a bucket shape compute exactly what its replay computes, so an answer
+never depends on whether its bucket was captured yet. Padded keys get exactly
+zero attention weight; padded queries' rows are dropped. Rows wider than the
+last width bucket, batches above ``MAX_GRAPH_TOKENS`` padded tokens and
+buckets that pad too much (``pads_little``) are device-bound: they run eagerly
+on the packed layout (on MI325X a 512-token row is faster unpadded, 5.4 ms,
+than as a masked bucket replay, 5.8 ms).
+
+Padded ``[rows, width]`` batches (a family's own window layout, as opposed to
+the scheduler's packed rows) take the same buckets through ``padded``: their
+grid is padded to a bucket and the key mask comes from the device-side mask
+through ``EncoderBackbone.masked``, which never reads it back — the backbone's
+``padded`` layout reads the mask on the host, and a replay would keep that
+read from its capture. A grid above the buckets or one that pads too much
+returns None for the engine's eager padded path.
 """
 
 from __future__ import annotations
 
 import bisect
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -49,6 +57,39 @@ def bucket(value: int, buckets: Sequence[int]) -> int | None:
     return buckets[index] if index < len(buckets) else None
 
 
+def graph_type(module: Any) -> Any | None:
+    """The module's graph class (``torch.cuda.CUDAGraph``, ``torch.npu.NPUGraph``)."""
+    return getattr(module, "CUDAGraph", None) or getattr(module, "NPUGraph", None)
+
+
+def graph_module(device: torch.device | str) -> Any | None:
+    """The device API with graph capture (``torch.cuda``, ``torch.npu``); None without the APIs.
+
+    Takes the device or its type string: a type the running torch does not
+    know (``"npu"`` without torch_npu registered) never builds a
+    ``torch.device``. ``torch.npu`` exists once the ``torch_npu`` extension
+    registered it; device types whose module lacks the capture APIs (CPU,
+    MPS, XPU) return None, and a deferred backend autoload that fails outside
+    its runtime environment (torch_npu without its CANN environment) counts
+    as missing too.
+    """
+    kind = device if isinstance(device, str) else device.type
+    try:
+        module = getattr(torch, kind, None)
+    except Exception:
+        return None
+    if (
+        module is None
+        or not all(
+            hasattr(module, name)
+            for name in ("Stream", "graph", "current_stream", "synchronize")
+        )
+        or graph_type(module) is None
+    ):
+        return None
+    return module
+
+
 class EncoderGraphs:
     """Bucketed padded forwards of an encoder backbone, captured as graphs."""
 
@@ -63,15 +104,28 @@ class EncoderGraphs:
     ):
         self.backbone = backbone
         self.device = device
+        self.module = graph_module(device)
+        self.graph_cls = graph_type(self.module) if self.module else None
         self.capture_after = capture_after
         self.max_graphs = max_graphs
         self.max_tokens = max_tokens
         self.graphs: dict[GraphKey, dict[str, Any]] = {}
         self.seen: dict[GraphKey, int] = {}
         self.failed: set[GraphKey] = set()
+        self.padded_graphs: dict[GraphKey, dict[str, Any]] = {}
+        self.padded_seen: dict[GraphKey, int] = {}
+        self.padded_failed: set[GraphKey] = set()
         self.pool: Any = None
         self.stream: Any = None
-        self.stats = {"captures": 0, "replays": 0, "eager": 0, "packed": 0, "failed": 0}
+        self.stats = {
+            "captures": 0,
+            "replays": 0,
+            "eager": 0,
+            "packed": 0,
+            "padded_eager": 0,
+            "padded_skip": 0,
+            "failed": 0,
+        }
 
     def shape(self, lengths: Sequence[int]) -> tuple[int, int] | None:
         """The ``(rows, width)`` bucket of a batch; None when it runs packed."""
@@ -108,6 +162,7 @@ class EncoderGraphs:
                 key in self.failed
                 or self.seen[key] < self.capture_after
                 or len(self.graphs) >= self.max_graphs
+                or self.module is None
                 or not torch.is_inference_mode_enabled()
             ):
                 self.stats["eager"] += 1
@@ -132,6 +187,63 @@ class EncoderGraphs:
             layer: value.view(rows * width, -1)[index]
             for layer, value in entry["output"].items()
         }
+
+    def padded(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        exits: tuple[int, ...],
+        normalize: bool,
+    ) -> dict[int, torch.Tensor] | None:
+        """Hidden states by exit for padded ``input_ids`` ``[rows, width]``, sliced back to ``[rows, width, H]``.
+
+        None when the grid runs the engine's eager padded path: a width above
+        the buckets, a grid above ``max_tokens`` padded tokens, or a bucket
+        that pads too much.
+        """
+        rows, width = input_ids.shape
+        rb = bucket(rows, ROW_BUCKETS)
+        wb = bucket(width, WIDTH_BUCKETS)
+        if (
+            rb is None
+            or wb is None
+            or rb * wb > self.max_tokens
+            or not pads_little(rb * wb, rows * width)
+        ):
+            self.stats["padded_skip"] += 1
+            return None
+        key = (rb, wb, exits, normalize)
+        entry = self.padded_graphs.get(key)
+        if entry is None:
+            self.padded_seen[key] = self.padded_seen.get(key, 0) + 1
+            if (
+                key in self.padded_failed
+                or self.padded_seen[key] < self.capture_after
+                or len(self.padded_graphs) >= self.max_graphs
+                or self.module is None
+                or not torch.is_inference_mode_enabled()
+            ):
+                self.stats["padded_eager"] += 1
+                return self._padded_forward(
+                    input_ids, attention_mask, rb, wb, exits, normalize
+                )
+            entry = self._capture_padded(key, rb, wb, input_ids.dtype, exits, normalize)
+            if entry is None:
+                self.stats["padded_eager"] += 1
+                return self._padded_forward(
+                    input_ids, attention_mask, rb, wb, exits, normalize
+                )
+        entry["ids"][:rows, :width].copy_(input_ids.to(self.device))
+        entry["mask"][:rows, :width].copy_(
+            attention_mask.to(self.device, dtype=torch.bool)
+        )
+        if rows < rb:
+            entry["mask"][rows:, :].fill_(False)
+        if width < wb:
+            entry["mask"][:rows, width:].fill_(False)
+        entry["graph"].replay()
+        self.stats["replays"] += 1
+        return {layer: value[:rows, :width] for layer, value in entry["output"].items()}
 
     def _pad(
         self, input_ids: torch.Tensor, lengths: Sequence[int], rows: int, width: int
@@ -165,6 +277,64 @@ class EncoderGraphs:
         layout = self.backbone.masked(valid, rows, width, self.device)
         return self.backbone.encode(ids, layout, exits, normalize)
 
+    def _padded_forward(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        rows: int,
+        width: int,
+        exits: tuple[int, ...],
+        normalize: bool,
+    ) -> dict[int, torch.Tensor]:
+        """One bucketed padded forward on the masked layout, sliced back to the live grid."""
+        live_rows, live_width = input_ids.shape
+        ids = input_ids.new_zeros(rows, width, device=self.device)
+        ids[:live_rows, :live_width] = input_ids.to(self.device)
+        mask = torch.zeros(rows, width, dtype=torch.bool, device=self.device)
+        mask[:live_rows, :live_width] = attention_mask.to(self.device, dtype=torch.bool)
+        hidden = self._forward(ids, mask, exits, normalize)
+        return {
+            layer: value[:live_rows, :live_width] for layer, value in hidden.items()
+        }
+
+    def _captured(
+        self, body: Callable[[], dict[int, torch.Tensor]]
+    ) -> tuple[Any, dict[int, torch.Tensor]] | None:
+        """``body`` as a graph replay on the shared pool; ``(graph, output)``, None on failure.
+
+        One capture stream: BLAS keeps a workspace per stream, so a new stream per
+        capture would leave a workspace behind for every graph.
+        """
+        module, graph_cls = self.module, self.graph_cls
+        if module is None or graph_cls is None:
+            return None
+        try:
+            if self.pool is None:
+                self.pool = module.graph_pool_handle()
+                self.stream = module.Stream()
+            stream = self.stream
+            stream.wait_stream(module.current_stream())
+            with module.stream(stream):
+                for _ in range(2):
+                    body()
+            module.current_stream().wait_stream(stream)
+            module.synchronize()
+            graph = graph_cls()
+            # Device work is serialized, but other threads may still query the device
+            # meanwhile (placement); global capture mode would fail them and the capture.
+            with module.graph(
+                graph,
+                pool=self.pool,
+                stream=stream,
+                capture_error_mode="thread_local",
+            ):
+                output = body()
+            module.synchronize()
+        except Exception:
+            module.synchronize()
+            return None
+        return graph, output
+
     def _capture(
         self,
         key: GraphKey,
@@ -174,41 +344,38 @@ class EncoderGraphs:
         normalize: bool,
     ) -> dict[str, Any] | None:
         static = {"ids": ids.clone(), "valid": valid.clone()}
-
-        def body() -> dict[int, torch.Tensor]:
-            return self._forward(static["ids"], static["valid"], exits, normalize)
-
-        try:
-            if self.pool is None:
-                self.pool = torch.cuda.graph_pool_handle()
-                # One capture stream: BLAS keeps a workspace per stream, so a new stream per
-                # capture would leave a workspace behind for every graph.
-                self.stream = torch.cuda.Stream()  # type: ignore[no-untyped-call]  # torch leaves Stream's constructor unannotated
-            stream = self.stream
-            stream.wait_stream(torch.cuda.current_stream())
-            with torch.cuda.stream(stream):
-                for _ in range(2):
-                    body()
-            torch.cuda.current_stream().wait_stream(stream)
-            torch.cuda.synchronize()
-            graph = torch.cuda.CUDAGraph()
-            # Device work is serialized, but other threads may still query the device
-            # meanwhile (placement); global capture mode would fail them and the capture.
-            with torch.cuda.graph(
-                graph,
-                pool=self.pool,
-                stream=stream,
-                capture_error_mode="thread_local",
-            ):
-                output = body()
-            torch.cuda.synchronize()
-        except Exception:
-            torch.cuda.synchronize()
+        captured = self._captured(
+            lambda: self._forward(static["ids"], static["valid"], exits, normalize)
+        )
+        if captured is None:
             self.failed.add(key)
             self.stats["failed"] += 1
             return None
+        graph, output = captured
         entry = {**static, "graph": graph, "output": output}
         self.graphs[key] = entry
+        self.stats["captures"] += 1
+        return entry
+
+    def _capture_padded(
+        self,
+        key: GraphKey,
+        rows: int,
+        width: int,
+        dtype: torch.dtype,
+        exits: tuple[int, ...],
+        normalize: bool,
+    ) -> dict[str, Any] | None:
+        ids = torch.zeros(rows, width, dtype=dtype, device=self.device)
+        mask = torch.ones(rows, width, dtype=torch.bool, device=self.device)
+        captured = self._captured(lambda: self._forward(ids, mask, exits, normalize))
+        if captured is None:
+            self.padded_failed.add(key)
+            self.stats["failed"] += 1
+            return None
+        graph, output = captured
+        entry = {"ids": ids, "mask": mask, "graph": graph, "output": output}
+        self.padded_graphs[key] = entry
         self.stats["captures"] += 1
         return entry
 

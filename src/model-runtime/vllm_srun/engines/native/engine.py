@@ -36,7 +36,7 @@ from ...scheduler.planner import padded
 from . import fast, models, quantized
 from . import threads as adaptive_threads
 from .adapters import load_adapter_network
-from .encoder import EncoderGraphs
+from .encoder import EncoderGraphs, graph_module
 from .models import branch as branch_module
 from .models.branch import (
     CAUSAL,
@@ -222,7 +222,7 @@ class NativeEngineModel(EngineModel):
         ):
             # only graph captures take FlashInfer's product (``accel/flashinfer_nvfp4.py``)
             self.fast["nvfp4_product"] = quantized.use_flashinfer(nvfp4, self.device)
-        if self.device.type == "cuda" and spec.encoder and options.graphs:
+        if spec.encoder and options.graphs and graph_module(self.device) is not None:
             self.encoder_graphs = {
                 name: EncoderGraphs(cast(models.EncoderBackbone, module), self.device)
                 for name, module in self.stacks().items()
@@ -1078,6 +1078,13 @@ class NativeEngineModel(EngineModel):
         else:
             input_ids = batch.input_ids.to(self.device)
             rows, width = input_ids.shape
+            if graphs is not None and batch.attention_mask is not None:
+                with torch.inference_mode(), context():
+                    replayed = graphs.padded(
+                        input_ids, batch.attention_mask, exits, batch.normalize_exits
+                    )
+                if replayed is not None:
+                    return EncoderOutput(hidden=replayed)
             layout = backbone.padded(batch.attention_mask, rows, width, self.device)
         with torch.inference_mode(), context():
             hidden = backbone.encode(input_ids, layout, exits, batch.normalize_exits)

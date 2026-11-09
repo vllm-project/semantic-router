@@ -7,6 +7,7 @@ from vllm_srun.engines.native.encoder import (
     WIDTH_BUCKETS,
     EncoderGraphs,
     bucket,
+    graph_module,
 )
 
 from .test_modernbert import CONFIGS, batch, native
@@ -72,3 +73,61 @@ def test_graph_replays_are_the_eager_bucket_bit_for_bit():
     assert all(torch.equal(outputs[0], value) for value in outputs[1:])
     assert wide.shape == (400, CONFIGS["yarn"]["hidden_size"])
     assert graphs.receipt()["packed"] == 1
+
+
+def test_graph_module_resolves_by_device_type():
+    assert graph_module("cpu") is None
+    if graph_module("npu") is not None:
+        assert graph_module("npu") is torch.npu
+    if torch.cuda.is_available():
+        assert graph_module(torch.device("cuda")) is torch.cuda
+
+
+def test_bucketed_padded_rows_match_the_padded_layout():
+    backbone, _ = native(CONFIGS["yarn"], seed=8)
+    graphs = EncoderGraphs(backbone, torch.device("cpu"), max_tokens=64)
+    bucketed = None
+    for lengths in ([9], [12, 3, 7]):
+        ids, mask = batch(lengths, seed=5)
+        with torch.inference_mode():
+            bucketed = graphs.padded(ids, mask, (2, 4), False)
+            engine = backbone.encode(
+                ids, backbone.padded(mask, len(lengths), max(lengths), "cpu"), (2, 4)
+            )
+        for layer in (2, 4):
+            assert bucketed[layer].shape == engine[layer].shape
+            torch.testing.assert_close(
+                bucketed[layer], engine[layer], rtol=0, atol=1e-5
+            )
+    with torch.inference_mode():
+        again = graphs.padded(ids, mask, (2, 4), False)
+    assert torch.equal(bucketed[4], again[4])
+    assert graphs.receipt()["padded_eager"] == 3 and graphs.receipt()["captures"] == 0
+
+
+def test_padded_grids_above_the_buckets_run_the_engine_path():
+    backbone, _ = native(CONFIGS["yarn"])
+    graphs = EncoderGraphs(backbone, torch.device("cpu"))
+    ids, mask = batch([16] * 65, seed=2)
+    assert graphs.padded(ids, mask, (2,), False) is None
+    assert graphs.receipt()["padded_skip"] == 1
+
+
+@pytest.mark.gpu
+def test_padded_graph_replays_are_the_eager_bucket_bit_for_bit():
+    if not torch.cuda.is_available():
+        pytest.skip("needs a CUDA or ROCm device")
+    device = torch.device("cuda")
+    backbone, _ = native(CONFIGS["yarn"], seed=9)
+    backbone = backbone.to(device)
+    graphs = EncoderGraphs(backbone, device)
+    ids, mask = batch([13, 4], seed=6)
+    with torch.inference_mode():
+        outputs = [graphs.padded(ids, mask, (4,), False)[4] for _ in range(4)]
+        engine = backbone.encode(ids, backbone.padded(mask, 2, 13, device), (4,))
+        big = graphs.padded(ids.repeat(65, 1), mask.repeat(65, 1), (4,), False)
+    assert graphs.receipt()["captures"] == 1 and graphs.receipt()["replays"] == 3
+    assert all(torch.equal(outputs[0], value) for value in outputs[1:])
+    torch.testing.assert_close(outputs[0], engine[4], rtol=0, atol=1e-5)
+    assert big is None
+    assert graphs.receipt()["padded_skip"] == 1
