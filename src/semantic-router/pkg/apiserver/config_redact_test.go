@@ -113,6 +113,7 @@ func TestRedactSensitiveConfigValue(t *testing.T) {
 		},
 		"api_keys":        []interface{}{"listener-plain"},
 		"provider_keys":   []interface{}{"not-a-secret"},
+		"max_tokens":      4096,
 		"tokens_per_unit": 100,
 		"token_filter":    "keep",
 		"auth_token":      "auth-token",
@@ -155,6 +156,9 @@ func TestRedactSensitiveConfigValue(t *testing.T) {
 	}
 	if _, ok := redacted["provider_keys"].([]interface{}); !ok {
 		t.Fatalf("provider_keys should stay a list, got %v", redacted["provider_keys"])
+	}
+	if redacted["max_tokens"] != 4096 {
+		t.Fatalf("max_tokens is a generation limit, not a secret: %v", redacted["max_tokens"])
 	}
 	if redacted["tokens_per_unit"] != 100 {
 		t.Fatalf("tokens_per_unit should not be redacted")
