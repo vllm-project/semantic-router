@@ -20,7 +20,7 @@ func createBootstrapSetupConfig(t *testing.T, dir string) string {
 
 	configPath := filepath.Join(dir, "config.yaml")
 	config := map[string]interface{}{
-		"version": "v0.3",
+		"version": "v0.5",
 		"listeners": []map[string]interface{}{
 			{
 				"name":    "http-8899",
@@ -60,53 +60,55 @@ func isolateConfigMutationRuntime(t *testing.T) {
 func TestSummarizeSetupConfigIncludesRecipeOwnedSignalsAndDecisions(t *testing.T) {
 	var config setupConfigFile
 	err := yaml.Unmarshal([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: shared-model
-routing:
-  modelCards:
-    - name: shared-model
-  decisions: []
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/balanced]
     recipe: balanced
 recipes:
+  - name: default
+    decisions: []
   - name: balanced
-    routing:
-      signals:
-        keywords:
-          - name: balanced-keyword
-            operator: OR
-            keywords: [balanced]
-      decisions:
-        - name: balanced-route
-          priority: 100
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: balanced-keyword
-          modelRefs:
-            - model: shared-model
-              use_reasoning: false
+    signals:
+      keywords:
+        - name: balanced-keyword
+          operator: OR
+          keywords: [balanced]
+    decisions:
+      - name: balanced-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: balanced-keyword
+        modelRefs:
+          - model: shared-model
+            use_reasoning: false
   - name: private
-    routing:
-      signals:
-        pii:
-          - name: private-pii
-            threshold: 0.8
-      decisions:
-        - name: private-route
-          priority: 100
-          rules:
-            operator: AND
-            conditions:
-              - type: pii
-                name: private-pii
-          modelRefs:
-            - model: shared-model
-              use_reasoning: false
+    signals:
+      pii:
+        - name: private-pii
+          threshold: 0.8
+    decisions:
+      - name: private-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: pii
+              name: private-pii
+        modelRefs:
+          - model: shared-model
+            use_reasoning: false
 `), &config)
 	if err != nil {
 		t.Fatalf("unmarshal config: %v", err)
@@ -119,7 +121,7 @@ recipes:
 	}
 
 	merged := mergeSetupCanonicalConfig(setupConfigFile{}.CanonicalConfig, config.CanonicalConfig)
-	if len(merged.Entrypoints) != 1 || len(merged.Recipes) != 2 {
+	if len(merged.Entrypoints) != 2 || len(merged.Recipes) != 3 {
 		t.Fatalf(
 			"setup merge dropped scoped routing: entrypoints=%d recipes=%d",
 			len(merged.Entrypoints),
@@ -149,13 +151,8 @@ func createValidSetupPatch() map[string]interface{} {
 				},
 			},
 		},
-		"routing": map[string]interface{}{
-			"modelCards": []map[string]interface{}{
-				{
-					"name":     "test-model",
-					"modality": "text",
-				},
-			},
+		"recipes": []map[string]interface{}{{
+			"name": "default",
 			"signals": map[string]interface{}{
 				"domains": []map[string]interface{}{
 					{
@@ -198,7 +195,7 @@ func createValidSetupPatch() map[string]interface{} {
 					},
 				},
 			},
-		},
+		}},
 	}
 }
 
@@ -284,56 +281,6 @@ func TestSetupValidateHandler(t *testing.T) {
 	}
 }
 
-func TestSetupValidateHandlerUsesConfigDirectoryForRelativeKBAssets(t *testing.T) {
-	tempDir := t.TempDir()
-	configPath := createBootstrapSetupConfig(t, tempDir)
-
-	kbDir := filepath.Join(tempDir, "custom-kb")
-	if err := os.MkdirAll(kbDir, 0o755); err != nil {
-		t.Fatalf("failed to create custom kb directory: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(kbDir, "labels.json"), []byte(`{
-  "labels": {
-    "safe": {
-      "description": "Safe content",
-      "exemplars": ["hello world"]
-    }
-  }
-}`), 0o644); err != nil {
-		t.Fatalf("failed to write custom kb labels manifest: %v", err)
-	}
-
-	patch := createValidSetupPatch()
-	patch["global"] = map[string]interface{}{
-		"model_catalog": map[string]interface{}{
-			"kbs": []map[string]interface{}{
-				{
-					"name": "custom_kb",
-					"source": map[string]interface{}{
-						"path":     "custom-kb/",
-						"manifest": "labels.json",
-					},
-					"threshold": 0.55,
-				},
-			},
-		},
-	}
-
-	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, patch)})
-	if err != nil {
-		t.Fatalf("failed to marshal request: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/setup/validate", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-
-	SetupValidateHandler(configPath, setupmode.New(configPath, false))(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
 func TestSetupImportRemoteHandler(t *testing.T) {
 	// The fixture server is on loopback; declare it the way an operator would
 	// declare a real internal target (#1388).
@@ -345,7 +292,7 @@ func TestSetupImportRemoteHandler(t *testing.T) {
 	remoteConfigServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-yaml")
 		_, _ = w.Write([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: remote-model
@@ -357,26 +304,26 @@ providers:
           endpoint: remote.example.com
           protocol: https
           weight: 100
-routing:
-  modelCards:
-    - name: remote-model
-      modality: text
-  signals:
-    domains:
-      - name: remote-domain
-        description: Remote domain signal
-  decisions:
-    - name: remote-route
-      description: Remote route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: remote-domain
-      modelRefs:
-        - model: remote-model
-          use_reasoning: false
+      capabilities: [chat]
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: remote-domain
+          description: Remote domain signal
+          labels: [other]
+    decisions:
+      - name: remote-route
+        description: Remote route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: remote-domain
+        modelRefs:
+          - model: remote-model
+            use_reasoning: false
 `))
 	}))
 	defer remoteConfigServer.Close()
@@ -418,87 +365,13 @@ routing:
 	} else if defaults, ok := providers["defaults"].(map[string]interface{}); !ok || defaults["model"] != "remote-model" {
 		t.Fatalf("expected imported config providers.defaults.model=remote-model, got %#v", importedConfig["providers"])
 	}
-	if routing, ok := importedConfig["routing"].(map[string]interface{}); !ok || routing["modelCards"] == nil {
-		t.Fatalf("expected imported config routing.modelCards to be preserved, got %#v", importedConfig["routing"])
+	models, _ := importedConfig["providers"].(map[string]interface{})["models"].([]interface{})
+	var capabilities []interface{}
+	if len(models) > 0 {
+		capabilities, _ = models[0].(map[string]interface{})["capabilities"].([]interface{})
 	}
-}
-
-func TestSetupImportRemoteHandlerUsesConfigDirectoryForRelativeKBAssets(t *testing.T) {
-	// The fixture server is on loopback; declare it the way an operator would
-	// declare a real internal target (#1388).
-	allowLoopbackForTest(t)
-
-	tempDir := t.TempDir()
-	configPath := createBootstrapSetupConfig(t, tempDir)
-
-	kbDir := filepath.Join(tempDir, "remote-kb")
-	if err := os.MkdirAll(kbDir, 0o755); err != nil {
-		t.Fatalf("failed to create remote kb directory: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(kbDir, "labels.json"), []byte(`{
-  "labels": {
-    "safe": {
-      "description": "Safe content",
-      "exemplars": ["hello world"]
-    }
-  }
-}`), 0o644); err != nil {
-		t.Fatalf("failed to write remote kb labels manifest: %v", err)
-	}
-
-	remoteConfigServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/x-yaml")
-		_, _ = w.Write([]byte(`
-version: v0.3
-providers:
-  defaults:
-    model: remote-model
-  models:
-    - name: remote-model
-      backend_refs:
-        - name: primary
-          provider: openai-compatible
-          endpoint: remote.example.com
-          protocol: https
-          weight: 100
-routing:
-  modelCards:
-    - name: remote-model
-      modality: text
-  decisions:
-    - name: remote-route
-      description: Remote route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: remote-model
-          use_reasoning: false
-global:
-  model_catalog:
-    kbs:
-      - name: remote_kb
-        source:
-          path: remote-kb/
-          manifest: labels.json
-        threshold: 0.55
-`))
-	}))
-	defer remoteConfigServer.Close()
-
-	body, err := json.Marshal(SetupImportRemoteRequest{URL: remoteConfigServer.URL})
-	if err != nil {
-		t.Fatalf("failed to marshal request: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-
-	SetupImportRemoteHandler(configPath, setupmode.New(configPath, false))(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	if len(capabilities) != 1 || capabilities[0] != "chat" {
+		t.Fatalf("expected imported config model facts to be preserved, got %#v", importedConfig["providers"])
 	}
 }
 
@@ -547,13 +420,11 @@ func TestSetupActivateHandler(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected global.model_catalog.embeddings in activated config, got %#v", modelCatalog["embeddings"])
 	}
-	semantic, ok := embeddings["semantic"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected global.model_catalog.embeddings.semantic in activated config, got %#v", embeddings["semantic"])
+	if binding, _ := embeddings["default"].(map[string]interface{}); binding["deployment"] != "vela-embedding" {
+		t.Fatalf("expected embeddings.default {deployment: vela-embedding}, got %#v", embeddings["default"])
 	}
-	// Mirrors pkg/config/canonical_defaults global.model_catalog.embeddings.semantic.mmbert_model_path
-	if semantic["mmbert_model_path"] != "models/Vela-1.0-Encoder-307M-Embedding" {
-		t.Fatalf("expected explicit mmbert default path, got %#v", semantic["mmbert_model_path"])
+	if _, ok := embeddings["semantic"]; ok {
+		t.Fatalf("activated config kept removed embeddings.semantic: %#v", embeddings["semantic"])
 	}
 
 	if info, err := os.Stat(filepath.Join(tempDir, ".vllm-sr")); err != nil || !info.IsDir() {

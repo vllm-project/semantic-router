@@ -91,27 +91,64 @@ func literalKeywordNeedsBoundary(keyword string) bool {
 }
 
 // Literal boundaries belong to the neighboring runes, not to the keyword's
-// first/last character. Reuse the structure keyword contract, retaining CJK
-// substring matching and the regex engine's Unicode case folding. Explicit
-// regex patterns remain untouched. Unlike structure features, literal routing
-// also keeps its existing underscore word boundary. Advance one rune after a rejected match so
-// an overlapping or later valid occurrence is still considered.
+// first/last character: CJK substrings match, the regex engine's Unicode case
+// folding applies, and an underscore joins a word. Explicit regex patterns
+// remain untouched. Advance one rune after a rejected match so an
+// overlapping or later valid occurrence is still considered.
 func matchesKeywordPattern(text string, rule preppedKeywordRule, index int, pattern *regexp.Regexp) bool {
 	if !rule.LiteralBoundaries[index] {
 		return pattern.MatchString(text)
 	}
-	for offset := 0; offset < len(text); {
+	_, found := nextLiteralMatch(text, 0, pattern)
+	return found
+}
+
+// countKeywordPattern counts a keyword's matches in text, one per place: a
+// pattern's non-overlapping matches, and a literal keyword's matches that are
+// words of their own.
+func countKeywordPattern(text string, rule preppedKeywordRule, index int, pattern *regexp.Regexp) int {
+	if !rule.LiteralBoundaries[index] {
+		return len(pattern.FindAllStringIndex(text, -1))
+	}
+	count := 0
+	for offset := 0; ; count++ {
+		end, found := nextLiteralMatch(text, offset, pattern)
+		if !found {
+			return count
+		}
+		offset = end
+	}
+}
+
+// nextLiteralMatch finds the first match of a literal keyword at or after
+// offset that is a word of its own, and returns where it ends.
+func nextLiteralMatch(text string, offset int, pattern *regexp.Regexp) (int, bool) {
+	for offset < len(text) {
 		match := pattern.FindStringIndex(text[offset:])
 		if match == nil {
-			return false
+			return 0, false
 		}
 		start, end := offset+match[0], offset+match[1]
 		if keywordBoundaryMatch(text, start, end) &&
 			(start == 0 || text[start-1] != '_') && (end == len(text) || text[end] != '_') {
-			return true
+			return end, true
 		}
 		_, size := utf8.DecodeRuneInString(text[start:])
 		offset = start + size
 	}
-	return false
+	return 0, false
+}
+
+// occurrences counts the places the rule's keywords occur in text and lists
+// the keywords that occur.
+func (r preppedKeywordRule) occurrences(text string) (int, []string) {
+	count := 0
+	var found []string
+	for index, pattern := range regexpsForRule(r) {
+		if occurrences := countKeywordPattern(text, r, index, pattern); occurrences > 0 {
+			count += occurrences
+			found = append(found, r.OriginalKeywords[index])
+		}
+	}
+	return count, found
 }

@@ -23,7 +23,7 @@ def check(rendered_path: str) -> None:
     assert (
         actual["global"]["model_catalog"] == expected["global"]["model_catalog"]
     ), "model catalog changed"
-    assert actual["routing"] == expected["routing"], "default bindings changed"
+    assert actual["entrypoints"] == expected["entrypoints"], "entrypoints changed"
     assert actual["recipes"] == expected["recipes"], "recipe bindings changed"
 
 

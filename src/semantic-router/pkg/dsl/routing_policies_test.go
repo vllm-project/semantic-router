@@ -39,7 +39,7 @@ ENTRYPOINT {model_names: ["secondary"] recipe: secondary}
 	if err != nil {
 		t.Fatal(err)
 	}
-	parsed, err := config.ParseYAMLBytes(append([]byte("version: v0.3\n"), data...))
+	parsed, err := config.ParseYAMLBytes(append([]byte("version: v0.5\n"), data...))
 	if err != nil {
 		t.Fatal(err)
 	}

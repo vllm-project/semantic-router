@@ -117,7 +117,6 @@ type RetrieveOptions struct {
 }
 
 // DefaultMemoryConfig returns a default memory configuration.
-// EmbeddingModel is intentionally omitted - let router auto-detect from embedding_models config.
 func DefaultMemoryConfig() config.MemoryConfig {
 	return config.MemoryConfig{
 		Milvus: config.MemoryMilvusConfig{

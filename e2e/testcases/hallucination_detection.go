@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,26 +17,19 @@ import (
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
-// responseWarningsHeader is the consolidated response-quality warnings header
-// (v0.4). It carries the "hallucination" code when the detector flags the
-// response. Kept as a literal to match the e2e convention of not importing the
-// router module for header names.
-const responseWarningsHeader = "x-vsr-response-warnings"
-
+// hallucinationWarningCode is the x-vsr-warnings code of a response the
+// detector flags.
 const hallucinationWarningCode = "hallucination"
 
-// hallucinationMatchedHeader names, under x-vsr-debug, the hallucination rules
-// that matched once the answer was checked; hallucinationRuleName is the rule
-// the profile declares, so a warning that arrives without it came from the
-// plugin classifying the answer itself rather than from the signal.
-const (
-	hallucinationMatchedHeader = "x-vsr-matched-hallucination"
-	hallucinationRuleName      = "ungrounded_claims"
-)
+// hallucinationRuleName is the rule the profile declares. The trace's
+// signals name it once the answer was checked, so a warning that arrives
+// without it came from the plugin classifying the answer itself rather than
+// from the signal.
+const hallucinationRuleName = "ungrounded_claims"
 
 func init() {
 	pkgtestcases.Register("hallucination-detection", pkgtestcases.TestCase{
-		Description: "Test the pluggable hallucination detector endpoint backend end-to-end",
+		Description: "Test the hallucination signal on a remote systemone deployment end-to-end",
 		Tags:        []string{"kubernetes", "hallucination"},
 		Fn:          testHallucinationDetection,
 	})
@@ -43,7 +37,7 @@ func init() {
 
 // HallucinationTestCase is a factual query paired with the tool context that
 // grounds it. The tool context makes the router run hallucination detection on
-// the response, and the mock endpoint detector flags the answer.
+// the response, and the System One fixture flags the answer.
 type HallucinationTestCase struct {
 	Description string `json:"description"`
 	Question    string `json:"question"`
@@ -56,7 +50,7 @@ type HallucinationResult struct {
 	Question            string
 	SelectedDecision    string
 	WarningsHeader      string
-	MatchedHeader       string
+	MatchedSignals      string
 	HallucinationWarned bool
 	RuleMatched         bool
 	Error               string
@@ -64,7 +58,7 @@ type HallucinationResult struct {
 
 func testHallucinationDetection(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] Testing hallucination detector endpoint backend")
+		fmt.Println("[Test] Testing the hallucination signal on a remote systemone deployment")
 	}
 
 	localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)
@@ -99,8 +93,10 @@ func testHallucinationDetection(ctx context.Context, client *kubernetes.Clientse
 
 	printHallucinationResults(results, warnedCount)
 
-	// The mock endpoint detector deterministically flags every non-empty answer,
-	// so every case must surface the warning. Anything less means routing, tool
+	// The System One fixture flags the first sentence of an answer that its
+	// grounding context lacks, and the mock backend's answer, an echo of the
+	// request without its tool result, always has one, so every case must
+	// surface the warning. Anything less means routing, tool
 	// context propagation, or warning emission is broken for the missing cases.
 	if warnedCount < len(testCases) {
 		var failures []string
@@ -110,9 +106,9 @@ func testHallucinationDetection(ctx context.Context, client *kubernetes.Clientse
 			}
 			detail := result.Error
 			if detail == "" {
-				detail = fmt.Sprintf("no %q warning from rule %q (decision=%q, warnings=%q, %s=%q)",
+				detail = fmt.Sprintf("no %q warning from rule %q (decision=%q, warnings=%q, hallucination signals=%q)",
 					hallucinationWarningCode, hallucinationRuleName, result.SelectedDecision, result.WarningsHeader,
-					hallucinationMatchedHeader, result.MatchedHeader)
+					result.MatchedSignals)
 			}
 			failures = append(failures, fmt.Sprintf("%s: %s", result.Description, detail))
 		}
@@ -157,12 +153,12 @@ func testSingleHallucinationDetection(ctx context.Context, testCase Hallucinatio
 	}
 
 	result.SelectedDecision = response.Headers.Get("x-vsr-selected-decision")
-	result.WarningsHeader = response.Headers.Get(responseWarningsHeader)
-	result.MatchedHeader = response.Headers.Get(hallucinationMatchedHeader)
-	result.RuleMatched = headerListContains(result.MatchedHeader, hallucinationRuleName)
+	result.WarningsHeader = response.Headers.Get(warningsHeader)
+	result.MatchedSignals = matchedSignals(response.Headers, "hallucination")
+	result.RuleMatched = headerListContains(result.MatchedSignals, hallucinationRuleName)
 	// The warning counts only when the declared rule produced it: the plugin
 	// enforces on the signal, it does not classify the answer itself.
-	result.HallucinationWarned = headerListContains(result.WarningsHeader, hallucinationWarningCode) && result.RuleMatched
+	result.HallucinationWarned = slices.Contains(responseWarnings(response.Headers), hallucinationWarningCode) && result.RuleMatched
 
 	if verbose {
 		if result.HallucinationWarned {
@@ -188,7 +184,7 @@ const hallucinationToolCallID = "call-grounding-context"
 // result carrying the grounding context, buffered or streamed. The tool message
 // is what makes the router run hallucination detection (HasToolsForFactCheck +
 // tool context), and the answer returned by the mock backend is then checked by
-// the endpoint detector.
+// the System One fixture.
 func sendHallucinationChatCompletion(
 	ctx context.Context,
 	localPort string,
@@ -261,7 +257,7 @@ func detectionRate(matched, total int) float64 {
 func printHallucinationResults(results []HallucinationResult, warnedCount int) {
 	separator := "================================================================================"
 	fmt.Println("\n" + separator)
-	fmt.Println("HALLUCINATION DETECTION TEST RESULTS (endpoint backend)")
+	fmt.Println("HALLUCINATION DETECTION TEST RESULTS (systemone deployment)")
 	fmt.Println(separator)
 	fmt.Printf("Total Tests: %d\n", len(results))
 	fmt.Printf("Responses Warned: %d\n", warnedCount)

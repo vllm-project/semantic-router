@@ -24,7 +24,7 @@ Click a diagram to open its full-size SVG.
 | --- | --- |
 | **Frontend** | Accept requests, enforce listener access, and adapt API protocols. |
 | **Decision Engine** | Resolve a routing entrypoint to its recipe, evaluate signals and decisions, and coordinate Chat or native decision-model backends. |
-| **Serving Engine / model runtime** | Serve decision, classifier, embedding, and reranking models through managed or attached workers. |
+| **Serving Engine / model runtime** | Serve decision, classifier, and embedding models through managed or attached workers. |
 | **Chat backends** | Generate responses using your vLLM, Ollama, or provider services. |
 
 The native System One API is available in both startup modes when the listener
@@ -73,7 +73,7 @@ its own typed request handler. A concrete native model ID bypasses recipe
 routing; an explicitly published native entrypoint enters its System One
 recipe. Concrete Chat backend IDs also bypass recipe signals, decisions, and
 plugins. Native recipes support a narrower set of signals and algorithms than
-Chat recipes; see the [cascade guide](../tutorials/algorithm/native/cascade.md).
+Chat recipes; see the [escalate guide](../tutorials/algorithm/looper/escalate.md#on-system-one).
 
 ### Keep public and worker APIs distinct
 
@@ -131,7 +131,7 @@ flowchart LR
     Request["System One request"] --> Frontend["Frontend codec + listener grant"]
     Frontend -->|"concrete model"| Backends
     Frontend -->|"native entrypoint"| Recipe["Recipe: signals → decision"]
-    Recipe --> Algorithm["Bounded cascade"]
+    Recipe --> Algorithm["Bounded escalate stages"]
     Algorithm --> Backends
     subgraph Backends["Declared model backends"]
         Local["Local model runtime"]
@@ -146,19 +146,19 @@ flowchart LR
 ```
 
 An explicit `api: systemone` entrypoint selects an isolated native recipe.
-Its signals and decisions choose an experimental `cascade` algorithm. Each
-cascade keeps a Choice / Score / Noul question bundle together and calls
-declared decision-model backends. Signals and the selected cascade share one
+Its signals and decisions choose an `escalate` algorithm, whose
+`escalate.stages` keep a Choice / Score / Noul question bundle together and call
+declared decision-model backends. Signals and the selected escalation share one
 request deadline and physical-call ledger. The selected decision's budget
 tightens both limits, while signal-specific timeouts remain upper bounds. A
 backend can be a local deployment, a separate
 vLLM-SR Engine service, or a compatible external System One API.
 
 The recipe chooses between models; each deployment separately chooses among
-its replicas. A cascade first tries its fast stage, then advances only when
+its replicas. An escalation first tries its fast stage, then advances only when
 its acceptance conditions require another answer. An optional LLM judge can
 select an intact earlier candidate or abstain; it cannot manufacture native
-probabilities. See [System One cascade](../tutorials/algorithm/native/cascade.md).
+probabilities. See [Escalate on System One](../tutorials/algorithm/looper/escalate.md#on-system-one).
 
 Native discovery distinguishes concrete models (`routing: false`) from
 published native recipes (`routing: true`). Both require an explicit listener

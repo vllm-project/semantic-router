@@ -32,7 +32,7 @@ func TestWireRecordsThroughAPassThroughGateway(t *testing.T) {
 	target, _ := url.Parse(backendServer.URL)
 	proxy := httputil.NewSingleHostReverseProxy(target)
 	gateway := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Header.Set("x-selected-model", "model-a")
+		r.Header.Set("x-vsr-route-model", "model-a")
 		proxy.ServeHTTP(w, r)
 	}))
 	defer gateway.Close()
@@ -92,8 +92,7 @@ func TestConfigWithBackendPointsEveryProviderAtTheFake(t *testing.T) {
 		for _, ref := range model.BackendRefs {
 			refs++
 			endpoint, _ := ref["endpoint"].(string)
-			baseURL, _ := ref["base_url"].(string)
-			if endpoint != "127.0.0.1:19999" && !strings.HasPrefix(baseURL, "http://127.0.0.1:19999/") {
+			if endpoint != "127.0.0.1:19999" && !strings.HasPrefix(endpoint, "http://127.0.0.1:19999/") {
 				t.Fatalf("backend ref not rewritten: %v", ref)
 			}
 		}

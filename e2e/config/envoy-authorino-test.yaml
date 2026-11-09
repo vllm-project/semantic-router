@@ -36,7 +36,7 @@ static_resources:
                   upstream_host: "%UPSTREAM_HOST%"
                   upstream_cluster: "%UPSTREAM_CLUSTER%"
                   request_id: "%REQ(X-REQUEST-ID)%"
-                  selected_model: "%REQ(X-SELECTED-MODEL)%"
+                  selected_model: "%REQ(X-VSR-ROUTE-MODEL)%"
           route_config:
             name: local_route
             virtual_hosts:
@@ -47,7 +47,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: x-selected-model
+                  - name: x-vsr-route-model
                     string_match:
                       prefix: "claude-"
                 route:
@@ -58,7 +58,7 @@ static_resources:
               - match:
                   prefix: "/"
                   headers:
-                  - name: x-selected-model
+                  - name: x-vsr-route-model
                     string_match:
                       safe_regex:
                         regex: "^(gpt-|o1-|o3-|chatgpt-).*"

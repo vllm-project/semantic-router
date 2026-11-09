@@ -151,8 +151,9 @@ listeners:
 - `trust_headers` keeps the `x-authz-*` headers (`x-authz-user-id`,
   `x-authz-user-groups`, `x-authz-team-id`, `x-authz-tenant-id`) and the names
   `global.services.authz.identity` sets. A standalone Router also keeps the
-  `global.services.authz.gateway_credential` header; the `--gateway extproc`
-  listener removes a client's copy of it either way.
+  `global.services.authz.delegated_credential` header, for Chat and System One
+  requests alike; the `--gateway extproc` listener removes a client's copy of
+  it either way.
 - `trusted_peers` (CIDRs) keeps them only when the connection's peer address is
   in one of the networks; the Router never reads `X-Forwarded-For` for this.
   Empty, every peer of a trusting listener is trusted. Only standalone mode
@@ -164,10 +165,9 @@ listeners:
 - No identity header reaches a model provider, in either mode: the Router and
   the generated Envoy listener remove them from every upstream request.
 
-Memory, router replay and the per-user selection algorithms (`gmtrouter`,
-`rl_driven`) record the user of each request. Without a trusting listener they
-still load and treat every request as anonymous, and the Router logs one
-warning at startup that names them.
+Memory and router replay record the user of each request. Without a trusting
+listener they still load and treat every request as anonymous, and the Router
+logs one warning at startup that names them.
 
 ### What needs `extproc`
 
@@ -218,8 +218,8 @@ or GPU compute. `--platform rocm` and `--platform cuda` fail there with a clear
 message. GPU support through the host is tracked in
 [#4636](https://github.com/vllm-project/semantic-router/issues/4636).
 
-- **Comfortable on the CPU:** the 307M Vela task models (domain, PII, jailbreak
-  and safety guards, embeddings, reranking), Vela Omni Nano, and the
+- **Comfortable on the CPU:** vela3-fast, the default decision model (about
+  7 GB once loaded), the 307M Vela embedding model, Vela Omni Nano, and the
   Decision 2.0 Kai-0.6B and Eos-0.8B decision models.
 - **Larger models:** a model needs about 4 bytes per parameter on the CPU, so a
   2B decision model needs about 8 GB. Raise the memory of Docker's VM (Docker

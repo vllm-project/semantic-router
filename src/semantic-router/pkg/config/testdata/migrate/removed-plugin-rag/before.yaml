@@ -1,0 +1,35 @@
+# A rag plugin becomes the rag source of the decision's context plugin, its
+# injection mode the plugin's injection; a disabled one is dropped.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: docs
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: system_prompt
+            configuration: {enabled: true, system_prompt: Answer from the documents.}
+          - type: rag
+            configuration:
+              enabled: true
+              backend: milvus
+              backend_config: {collection: docs, reuse_cache_connection: true, content_field: content}
+              max_context_length: 6000
+              injection_mode: system_prompt
+              on_failure: warn
+              cache_results: true
+              cache_ttl_seconds: 300
+      - name: parked
+        priority: 50
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: rag
+            configuration: {enabled: false, backend: vectorstore, backend_config: {vector_store_id: vs_old}}

@@ -42,15 +42,6 @@ func decodeSavedConfig(t *testing.T, response *httptest.ResponseRecorder) savedC
 	return body
 }
 
-func hasConfigWarning(warnings []routerconfig.ConfigWarning, code, field string) bool {
-	for _, warning := range warnings {
-		if warning.Code == code && warning.Field == field && warning.Message != "" {
-			return true
-		}
-	}
-	return false
-}
-
 // forEverySave saves config through each save path that persists model
 // resources: the full update, the global patch, the raw global block and a
 // DSL deploy merged into it.
@@ -70,17 +61,18 @@ func forEverySave(t *testing.T, config map[string]any, check func(*testing.T, *h
 			t.Fatal(err)
 		}
 	}
-	deploy, err := json.Marshal(DeployRequest{YAML: `routing:
-  decisions:
-    - name: deployed-default
-      priority: 5
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
+	deploy, err := json.Marshal(DeployRequest{YAML: `recipes:
+  - name: default
+    decisions:
+      - name: deployed-default
+        priority: 5
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
 `})
 	if err != nil {
 		t.Fatal(err)
@@ -125,50 +117,33 @@ func forEverySave(t *testing.T, config map[string]any, check func(*testing.T, *h
 
 func withRoutingBindings(bindings map[string]any) map[string]any {
 	config := canonicalConfigBody("127.0.0.1:8000")
-	config["routing"].(map[string]interface{})["model_bindings"] = bindings
+	config["recipes"].([]map[string]interface{})[0]["model_bindings"] = bindings
 	return config
 }
 
-func TestConfigSavesReturnTheRouterWarningForADeprecatedBindingField(t *testing.T) {
+func TestConfigSavesRefuseARemovedBindingField(t *testing.T) {
 	applyWithoutRuntime(t)
 	config := withRoutingBindings(map[string]any{
-		"pii": map[string]any{"deployment": "primary", "contract": "token_spans.v1"},
+		"pii": map[string]any{"deployment": "primary", "contract": "decision.v1"},
 	})
 	forEverySave(t, config, func(t *testing.T, response *httptest.ResponseRecorder) {
-		body := decodeSavedConfig(t, response)
-		if !hasConfigWarning(body.Warnings, "deprecated_model_field", "routing.model_bindings.pii") {
-			t.Fatalf("warnings = %+v, want the Router's deprecation of the binding contract", body.Warnings)
+		if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "contract") {
+			t.Fatalf("save answered %d: %s, want the binding's contract refused", response.Code, response.Body.String())
 		}
 	})
 }
 
-func TestConfigSavesReturnTheRouterWarningForADeprecatedSystemLine(t *testing.T) {
-	applyWithoutRuntime(t)
-	config := canonicalConfigBody("127.0.0.1:8000")
-	config["global"] = map[string]any{"model_catalog": map[string]any{"system": map[string]any{
-		"pii_classifier": "models/Vela-1.0-Encoder-307M-PII",
-	}}}
-	forEverySave(t, config, func(t *testing.T, response *httptest.ResponseRecorder) {
-		body := decodeSavedConfig(t, response)
-		if !hasConfigWarning(body.Warnings, "deprecated_model_field", "global.model_catalog.system.pii_classifier") {
-			t.Fatalf("warnings = %+v, want the Router's deprecation of the system line", body.Warnings)
-		}
-	})
-}
-
-func TestConfigSavesDoNotDeprecateABindingWrittenAsADeploymentName(t *testing.T) {
+func TestConfigSavesKeepABindingWrittenAsADeploymentName(t *testing.T) {
 	applyWithoutRuntime(t)
 	forEverySave(t, withRoutingBindings(map[string]any{"pii": "primary"}), func(t *testing.T, response *httptest.ResponseRecorder) {
-		for _, warning := range decodeSavedConfig(t, response).Warnings {
-			if warning.Code == "deprecated_model_field" {
-				t.Fatalf("a binding written as a deployment name was deprecated: %+v", warning)
-			}
+		if warnings := decodeSavedConfig(t, response).Warnings; len(warnings) > 0 {
+			t.Fatalf("a binding written as a deployment name saved with warnings: %+v", warnings)
 		}
 	})
 }
 
 func TestGlobalPatchRemovesKeysSetToNull(t *testing.T) {
-	existing := []byte(`version: v0.3
+	existing := []byte(`version: v0.5
 global:
   router:
     strategy: priority

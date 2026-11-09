@@ -7,6 +7,8 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 const (
@@ -23,22 +25,23 @@ const (
 // Anthropic, custom names via provider profiles), so a verbatim dump of the
 // ext_proc header mutation would otherwise leak it (CWE-532).
 var sensitiveHeaderKeys = map[string]bool{
-	"authorization":       true,
+	headers.Authorization: true,
 	"proxy-authorization": true,
-	"x-api-key":           true,
-	"api-key":             true,
-	"x-goog-api-key":      true,
+	headers.XAPIKey:       true,
+	headers.APIKey:        true,
+	headers.XGoogAPIKey:   true,
 }
 
 // isSensitiveHeaderKey reports whether a header's value should be redacted from
-// logs. It matches the explicit credential headers above and, defensively, any
+// logs. It matches every header the registry marks secret, the bring-your-own
+// keys among them, the explicit credential headers above and, defensively, any
 // header whose name carries a credential by convention (a "*-key" suffix or a
 // name containing "api-key", "token", "secret", or "credential") so custom
 // provider auth headers and the gateway credential header are covered without
 // enumerating every one.
 func isSensitiveHeaderKey(key string) bool {
 	k := strings.ToLower(strings.TrimSpace(key))
-	if sensitiveHeaderKeys[k] {
+	if header, ok := headers.Lookup(k); sensitiveHeaderKeys[k] || ok && header.Sensitivity == headers.SensitivitySecret {
 		return true
 	}
 	return strings.HasSuffix(k, "-key") ||

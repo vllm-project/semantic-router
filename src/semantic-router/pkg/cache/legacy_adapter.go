@@ -12,10 +12,10 @@ import (
 // LegacyBackendAdapter confines the old backend API to one migration boundary.
 // Request paths and management APIs depend on TypedCacheStore instead.
 type LegacyBackendAdapter struct {
-	backend           CacheBackend
-	capabilities      BackendCapabilities
-	embeddingModel    string
-	embeddingProvider embedding.Provider
+	backend             CacheBackend
+	capabilities        BackendCapabilities
+	embeddingDeployment string
+	embeddingProvider   embedding.Provider
 }
 
 func NewLegacyBackendAdapter(
@@ -30,8 +30,8 @@ func NewLegacyBackendAdapter(
 	}
 }
 
-func (a *LegacyBackendAdapter) WithEmbeddingModel(model string) *LegacyBackendAdapter {
-	a.embeddingModel = normalizeEmbeddingModel(model)
+func (a *LegacyBackendAdapter) WithEmbeddingDeployment(name string) *LegacyBackendAdapter {
+	a.embeddingDeployment = name
 	return a
 }
 
@@ -120,31 +120,36 @@ func (a *LegacyBackendAdapter) StoreExact(ctx context.Context, write CacheWrite)
 func (a *LegacyBackendAdapter) LookupSemantic(
 	ctx context.Context,
 	lookup SemanticLookup,
-) (CacheResult, error) {
+) (SemanticRecall, error) {
 	if a.truncatesSemanticQuery(ctx, lookup.Identity.SemanticQuery) {
-		return CacheResult{HitKind: HitKindMiss}, nil
+		return SemanticRecall{}, nil
 	}
-	result, err := a.backend.LookupSimilarWithThreshold(
+	entries, err := a.backend.LookupSimilar(
 		ctx,
 		lookup.Identity.SemanticPartitionKey(),
 		lookup.Identity.SemanticQuery,
-		lookup.Threshold,
+		lookup.Bounds,
 	)
 	if err != nil {
-		return CacheResult{}, err
+		return SemanticRecall{}, err
 	}
-	age, ageKnown := resultAge(result)
-	return CacheResult{
-		ResponseBody:  result.ResponseBody,
-		Found:         result.Found,
-		HitKind:       HitKindSemantic,
-		Source:        CacheSourceL2,
-		Similarity:    result.Similarity,
-		NegationGuard: result.NegationGuard,
-		Age:           age,
-		AgeKnown:      ageKnown,
-		ExpiresAt:     result.ExpiresAt,
-	}, nil
+	recall := SemanticRecall{Closest: entries.Closest}
+	for _, hit := range entries.Hits {
+		age, ageKnown := resultAge(hit)
+		recall.Candidates = append(recall.Candidates, CacheResult{
+			ResponseBody:  hit.ResponseBody,
+			Found:         true,
+			HitKind:       HitKindSemantic,
+			Source:        CacheSourceL2,
+			Similarity:    hit.Similarity,
+			Query:         hit.Query,
+			NegationGuard: hit.NegationGuard,
+			Age:           age,
+			AgeKnown:      ageKnown,
+			ExpiresAt:     hit.ExpiresAt,
+		})
+	}
+	return recall, nil
 }
 
 func resultAge(result LookupResult) (time.Duration, bool) {

@@ -37,18 +37,10 @@ const minimalPermissionUser = {
 }
 
 const configResponse = {
-  version: 'v0.3',
+  version: 'v0.5',
   listeners: [{ name: 'public', address: '0.0.0.0', port: 8801 }],
   providers: {
-    defaults: {
-      default_model: 'test-model',
-      reasoning_families: {
-        qwen3: {
-          type: 'reasoning_effort',
-          parameter: 'reasoning_effort',
-        },
-      },
-    },
+    defaults: { model: 'test-model' },
     models: [
       {
         name: 'test-model',
@@ -63,71 +55,64 @@ const configResponse = {
       },
     ],
   },
-  routing: {
-    modelCards: [{ name: 'test-model' }],
-    signals: {
-      domains: [
-        { name: 'business', description: 'Business' },
-        { name: 'economics', description: 'Economics' },
-      ],
-      embeddings: [
+  recipes: [
+    {
+      name: 'default',
+      signals: {
+        domains: [
+          { name: 'business', description: 'Business' },
+          { name: 'economics', description: 'Economics' },
+        ],
+        keywords: [
+          {
+            name: 'business_analysis',
+            operator: 'OR',
+            keywords: ['revenue', 'margin'],
+            case_sensitive: false,
+          },
+        ],
+        context: [{ name: 'long_context', min_tokens: '4K' }],
+        complexity: [{ name: 'general_reasoning' }],
+      },
+      decisions: [
         {
-          name: 'business_analysis',
-          threshold: 0.72,
-          candidates: ['business'],
-          aggregation_method: 'max',
+          name: 'medium_business',
+          priority: 215,
+          rules: {
+            operator: 'AND',
+            conditions: [
+              {
+                operator: 'OR',
+                conditions: [
+                  { type: 'domain', name: 'business' },
+                  { type: 'domain', name: 'economics' },
+                ],
+              },
+              {
+                operator: 'OR',
+                conditions: [
+                  { type: 'keyword', name: 'business_analysis' },
+                  { type: 'complexity', name: 'general_reasoning:easy' },
+                  { type: 'complexity', name: 'general_reasoning:medium' },
+                  { type: 'context', name: 'long_context' },
+                ],
+              },
+            ],
+          },
+          modelRefs: [{ model: 'test-model', use_reasoning: true, reasoning_effort: 'medium' }],
         },
-      ],
-      preferences: [
         {
-          name: 'structured_delivery',
-          threshold: 0.55,
-          examples: ['Use a structured answer'],
+          name: 'business-route',
+          priority: 1,
+          rules: {
+            operator: 'AND',
+            conditions: [{ type: 'domain', name: 'business' }],
+          },
+          modelRefs: [{ model: 'test-model' }],
         },
-      ],
-      complexity: [
-        { name: 'general_reasoning:easy', threshold: 0.25 },
-        { name: 'general_reasoning:medium', threshold: 0.5 },
       ],
     },
-    decisions: [
-      {
-        name: 'medium_business',
-        priority: 215,
-        rules: {
-          operator: 'AND',
-          conditions: [
-            {
-              operator: 'OR',
-              conditions: [
-                { type: 'domain', name: 'business' },
-                { type: 'domain', name: 'economics' },
-              ],
-            },
-            {
-              operator: 'OR',
-              conditions: [
-                { type: 'embedding', name: 'business_analysis' },
-                { type: 'complexity', name: 'general_reasoning:easy' },
-                { type: 'complexity', name: 'general_reasoning:medium' },
-                { type: 'preference', name: 'structured_delivery' },
-              ],
-            },
-          ],
-        },
-        modelRefs: [{ model: 'test-model', use_reasoning: true, reasoning_effort: 'medium' }],
-      },
-      {
-        name: 'business-route',
-        priority: 1,
-        rules: {
-          operator: 'AND',
-          conditions: [{ type: 'domain', name: 'business' }],
-        },
-        modelRefs: [{ model: 'test-model' }],
-      },
-    ],
-  },
+  ],
   global: {
     router: { strategy: 'priority' },
     services: {
@@ -674,7 +659,6 @@ test.describe('Layout top navigation', () => {
     await buildMenu.getByRole('tab', { name: /Outcomes/ }).click()
     await expect(buildMenu.getByRole('link', { name: 'Insights' })).toBeVisible()
     await expect(buildMenu.getByRole('link', { name: 'Evaluation' })).toBeVisible()
-    await expect(buildMenu.getByRole('link', { name: 'ML Setup' })).toBeVisible()
 
     await operateTrigger.click()
     const operateMenu = page.getByRole('navigation', { name: 'System' })
@@ -1051,7 +1035,7 @@ test.describe('Layout top navigation', () => {
     await expect(decisionNode).toContainText('OR')
     await expect(decisionNode).toContainText('Domain: Business')
     await expect(decisionNode).toContainText('Domain: Economics')
-    await expect(decisionNode).toContainText('Embedding: Business Analysis')
+    await expect(decisionNode).toContainText('Keyword: Business Analysis')
     await expect(decisionNode.getByText('Referenced signals not configured')).toHaveCount(0)
   })
 
@@ -1084,15 +1068,11 @@ test.describe('Layout top navigation', () => {
     await expect(page.getByRole('heading', { name: 'MCP Servers', exact: true })).toBeVisible()
   })
 
-  test('hides ML Setup for read users and redirects direct access back to the dashboard', async ({
-    page,
-  }) => {
+  test('hides admin pages from read users', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await mockCommon(page, { user: readUser })
 
     await page.goto('/dashboard')
-
-    await expect(page.getByRole('button', { name: 'ML Setup', exact: true })).toHaveCount(0)
 
     const workflowGroup = page.getByRole('group', { name: 'Workflow navigation' })
     await workflowGroup.getByRole('button', { name: 'System' }).click()
@@ -1106,13 +1086,7 @@ test.describe('Layout top navigation', () => {
     await workflowGroup.getByRole('button', { name: 'Build' }).click()
     const buildMenu = page.getByRole('navigation', { name: 'Build' })
     await buildMenu.getByRole('tab', { name: /Outcomes/ }).click()
-    await expect(buildMenu.getByRole('link', { name: 'ML Setup' })).toHaveCount(0)
     await expect(buildMenu.getByRole('link', { name: 'MCP Servers' })).toHaveCount(0)
-
-    await page.goto('/ml-setup')
-
-    await expect(page).toHaveURL(/\/dashboard$/)
-    await expect(page.getByRole('button', { name: 'ML Setup', exact: true })).toHaveCount(0)
   })
 
   test('opens an anchored account dropdown and allows logging out from the header', async ({

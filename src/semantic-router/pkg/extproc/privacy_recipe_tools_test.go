@@ -10,11 +10,10 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
-// Run the actual tools plugin with the shipped decision configuration. No
-// semantic retrieval or backend is needed for this route's static tool policy.
+// Run the actual tools plugin with the shipped decision configuration: its
+// policy is static, so no decision model is asked.
 func TestPrivacyRecipeToolsRespectLocalBoundary(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "config", "recipes", "privacy", "config.yaml"))
 	if err != nil {
@@ -24,18 +23,12 @@ func TestPrivacyRecipeToolsRespectLocalBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Tools.Enabled {
-		t.Fatal("this policy fixture requires its default disabled retrieval database")
-	}
-	router := &OpenAIRouter{Config: cfg, ToolsDatabase: tools.NewToolsDatabase(tools.ToolsDatabaseOptions{})}
+	router := &OpenAIRouter{Config: cfg}
 	for _, d := range cfg.Decisions {
 		t.Run(d.Name, func(t *testing.T) {
 			request := &llmprotocol.Request{Generation: 1, Tools: []llmprotocol.Tool{makeTool("local_search"), makeTool("local_read"), makeTool("external_upload")}, ToolChoice: llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceAuto}}
 			ctx := &RequestContext{SemanticRequest: request, VSRSelectedDecision: &d}
-			var response *ext_proc.ProcessingResponse
-			if err := router.handleToolSelection(request, "A neutral item.", nil, &response, ctx); err != nil {
-				t.Fatal(err)
-			}
+			router.applyToolsPlugin(request, &ext_proc.ProcessingResponse{}, ctx)
 			var names []string
 			for _, tool := range ctx.SemanticRequest.Tools {
 				names = append(names, tool.Name)

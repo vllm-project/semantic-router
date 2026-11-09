@@ -3,16 +3,10 @@ package handlers
 // Setup imports contain routing intent, even when their destination is already
 // the runtime-owned path. Realize that candidate before publication; the normal
 // sync path intentionally leaves an already-realized runtime file untouched.
-func realizeSetupCandidateConfig(configPath string, candidate *setupConfigFile, skipKBBootstrap bool) (*setupConfigFile, error) {
+// The caller validates the realized output before publishing it.
+func realizeSetupCandidateConfig(configPath string, candidate *setupConfigFile) (*setupConfigFile, error) {
 	if !managedSplitManagementReachabilityRequired() {
 		return candidate, nil
-	}
-	// Check source references before the CLI can bootstrap their KB assets.
-	// The caller also validates the realized output before publishing it.
-	if !skipKBBootstrap {
-		if err := validateSetupCandidate(configPath, candidate); err != nil {
-			return nil, err
-		}
 	}
 	// The typed global holds effective Router defaults. Only the authored
 	// override may become CLI input, or its absent listener becomes explicit
@@ -21,7 +15,7 @@ func realizeSetupCandidateConfig(configPath string, candidate *setupConfigFile, 
 	if err != nil {
 		return nil, err
 	}
-	realized, err := realizeRuntimeConfigWithCLI(raw, configPath, runtimeMaterialization{managedListener: true, skipKBBootstrap: skipKBBootstrap})
+	realized, err := realizeRuntimeConfigWithCLI(raw, configPath, runtimeMaterialization{managedListener: true})
 	if err != nil {
 		return nil, err
 	}

@@ -13,7 +13,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -192,7 +191,7 @@ func batchClassificationConfigCases() []batchClassificationConfigCase {
 func TestBatchClassificationMaxBatchSizeFollowsRuntimeConfig(t *testing.T) {
 	apiServer := newBatchClassificationTestServer(batchClassificationMaxBatchSizeConfig(0))
 	live := batchClassificationMaxBatchSizeConfig(3)
-	apiServer.runtimeConfig = newLiveRuntimeConfig(nil, func() *config.RouterConfig { return live }, nil)
+	apiServer.runtimeConfig = newLiveRuntimeConfig(nil, func() *config.RouterConfig { return live })
 
 	runBatchClassificationHTTPCase(t, apiServer, batchClassificationHTTPCase{
 		name:           "Resolver config bounds the batch",
@@ -298,8 +297,8 @@ func batchAllUnifiedResponse() *services.UnifiedBatchResponse {
 		},
 		SecurityResults: []classification.SecurityResult{
 			{IsJailbreak: true, ThreatType: "jailbreak", Confidence: 0.75, ScoresAvailable: batchBoolPtr(true)},
-			// Categorical guard: decision detail is present while the score stays null.
-			{IsJailbreak: false, ThreatType: "benign", Decision: &tasks.LabelDecision{Label: "benign", SourceLabel: "safe", Categories: []string{"prompt_injection"}}},
+			// Scores unavailable: the confidence stays null.
+			{IsJailbreak: false, ThreatType: "benign"},
 			// Explicitly available zero score must stay 0, not null.
 			{IsJailbreak: false, ThreatType: "benign", Confidence: 0, ScoresAvailable: batchBoolPtr(true)},
 		},
@@ -386,7 +385,7 @@ func TestBatchClassificationAllWireFormat(t *testing.T) {
 		`"security":{"is_jailbreak":true,"threat_type":"jailbreak","confidence":0.75,"scores_available":true}},` +
 		`{"category":"law","confidence":0.25,"processing_time_ms":10,` +
 		`"pii":{"has_pii":true,"pii_types":["PERSON"],"confidence":null,"scores_available":false},` +
-		`"security":{"is_jailbreak":false,"threat_type":"benign","confidence":null,"decision":{"label":"benign","source_label":"safe","categories":["prompt_injection"]}}},` +
+		`"security":{"is_jailbreak":false,"threat_type":"benign","confidence":null}},` +
 		`{"category":"math","confidence":0.75,"processing_time_ms":10,` +
 		`"pii":{"has_pii":false,"confidence":0.125,"scores_available":true},` +
 		`"security":{"is_jailbreak":false,"threat_type":"benign","confidence":0,"scores_available":true}}` +
@@ -532,7 +531,7 @@ func TestHandleBatchClassificationReturnsResultsPerTaskType(t *testing.T) {
 		`"security":{"is_jailbreak":true,"threat_type":"jailbreak","confidence":0.75,"scores_available":true}},` +
 		`{"category":"law","confidence":0.25,"processing_time_ms":10,` +
 		`"pii":{"has_pii":true,"pii_types":["PERSON"],"confidence":null,"scores_available":false},` +
-		`"security":{"is_jailbreak":false,"threat_type":"benign","confidence":null,"decision":{"label":"benign","source_label":"safe","categories":["prompt_injection"]}}},` +
+		`"security":{"is_jailbreak":false,"threat_type":"benign","confidence":null}},` +
 		`{"category":"math","confidence":0.75,"processing_time_ms":10,` +
 		`"pii":{"has_pii":false,"confidence":0.125,"scores_available":true},` +
 		`"security":{"is_jailbreak":false,"threat_type":"benign","confidence":0,"scores_available":true}}` +
