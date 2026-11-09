@@ -1,0 +1,103 @@
+package sessiontelemetry
+
+import (
+	"errors"
+	"fmt"
+	"sync/atomic"
+	"time"
+)
+
+var (
+	// ErrSessionBudgetExceeded means the reservation would take the session
+	// past its token limit.
+	ErrSessionBudgetExceeded = errors.New("session token budget exceeded")
+	// ErrSessionReservationsFull means the session already has the allowed
+	// number of open reservations.
+	ErrSessionReservationsFull = errors.New("session has too many open token reservations")
+)
+
+// lastReservation numbers reservations across sessions, so an id from an
+// evicted session never matches a later one.
+var lastReservation atomic.Uint64
+
+// SessionReservationParams sizes one turn's reservation against its session's
+// token limit.
+type SessionReservationParams struct {
+	SessionID string
+	// Tokens is the turn's demand: the prompt estimate plus the output reserve.
+	Tokens int64
+	// Limit caps the session's prompt plus completion tokens.
+	Limit int64
+	// MaxInFlight caps the session's open reservations; zero means no cap.
+	MaxInFlight int
+	Timestamp   time.Time
+}
+
+// ReserveSessionTokens holds tokens for one turn before dispatch. Recorded
+// usage and open reservations both count against the limit, and the check and
+// the hold happen under the session memory lock, so concurrent turns of one
+// session cannot pass the limit with their reservations. The returned id is
+// closed once, by RecordSessionUsage (SessionUsageParams.Reservation) or by
+// ReleaseSessionTokens. Reservations stay in this process: they are not part
+// of RouterSessionSnapshot.
+func ReserveSessionTokens(p SessionReservationParams) (uint64, error) {
+	if p.SessionID == "" || p.Tokens < 0 || p.Limit <= 0 || p.MaxInFlight < 0 {
+		return 0, fmt.Errorf("invalid session token reservation for %q: tokens %d, limit %d, max in flight %d",
+			p.SessionID, p.Tokens, p.Limit, p.MaxInFlight)
+	}
+	s := globalRouterSessionMemory
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := p.Timestamp
+	if now.IsZero() {
+		now = s.nowFn()
+	}
+	s.evictExpiredLocked(now)
+	st := s.sessions[p.SessionID]
+	if st != nil && now.Sub(st.lastSeen) > routerMemoryTTL {
+		st = nil // expired but not swept yet: sessionLocked starts it over
+	}
+	var used int64
+	if st != nil {
+		if p.MaxInFlight > 0 && len(st.reservations) >= p.MaxInFlight {
+			return 0, ErrSessionReservationsFull
+		}
+		used = st.cumulativePrompt + st.cumulativeCompletion + st.reservedTokens
+	}
+	if p.Tokens > p.Limit-used {
+		return 0, ErrSessionBudgetExceeded
+	}
+	if st == nil {
+		st = s.sessionLocked(p.SessionID, now)
+	}
+	if st.reservations == nil {
+		st.reservations = make(map[uint64]int64)
+	}
+	id := lastReservation.Add(1)
+	st.reservations[id] = p.Tokens
+	st.reservedTokens += p.Tokens
+	st.lastSeen = now
+	return id, nil
+}
+
+// ReleaseSessionTokens closes a reservation without charging it, for a turn
+// that ends with no usage to record. A reservation that is already closed is
+// ignored.
+func ReleaseSessionTokens(sessionID string, reservation uint64) {
+	s := globalRouterSessionMemory
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if st := s.sessions[sessionID]; st != nil {
+		st.closeReservation(reservation)
+	}
+}
+
+func (st *routerSessionState) closeReservation(id uint64) {
+	tokens, ok := st.reservations[id]
+	if !ok {
+		return
+	}
+	delete(st.reservations, id)
+	st.reservedTokens -= tokens
+}
