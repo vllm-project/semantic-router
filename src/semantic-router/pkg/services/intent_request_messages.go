@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
@@ -52,6 +53,7 @@ type intentConversationHistory struct {
 	hasAssistantReply   bool
 	conversationFacts   classification.ConversationFacts
 	inputModality       classification.InputModalityFacts
+	routingInput        routinginput.Outcome
 }
 
 type intentMessageImageURL struct {
@@ -83,7 +85,14 @@ type intentMessageContentPart struct {
 	ImageURL *intentMessageImageURL `json:"image_url,omitempty"`
 }
 
+// resolveSignalInput resolves the request as sent, ignoring routing_input.
 func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
+	return req.resolveSignalInputWith(nil)
+}
+
+// resolveSignalInputWith applies routing_input through selector exactly as the
+// data plane does, so a preview scores the same text as live routing.
+func (req IntentRequest) resolveSignalInputWith(selector *routinginput.Selector) (intentSignalInput, error) {
 	if req.PreviewContext != nil {
 		for _, identity := range []string{req.PreviewContext.SessionID, req.PreviewContext.ConversationID} {
 			if len(identity) > 1024 || strings.ContainsAny(identity, "\r\n\x00") {
@@ -99,7 +108,7 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 
 	toolDefinitionCount := len(req.Tools) + len(req.Functions)
 	toolChoiceFacts := classification.ResolveOpenAIToolChoiceFacts(req.ToolChoice, req.FunctionCall)
-	if input, ok := resolveIntentSignalInputFromMessages(req.Messages, toolDefinitionCount); ok {
+	if input, ok := resolveIntentSignalInputFromMessages(req.Messages, toolDefinitionCount, selector); ok {
 		input.conversationFacts.ToolChoiceRequired = toolChoiceFacts.Required
 		input.conversationFacts.ToolChoiceNone = toolChoiceFacts.None
 		useTopLevelTextFallback := rawText != "" && strings.TrimSpace(input.evaluationText) == ""
@@ -111,12 +120,13 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 		if err != nil {
 			return intentSignalInput{}, err
 		}
-		inputModality := input.requestFacts.InputModality
+		inputModality, routing := input.requestFacts.InputModality, input.requestFacts.RoutingInput
 		input.requestFacts = requestFactsForIntent(
 			req.Metadata,
 			contextEstimate,
 		)
 		input.requestFacts.InputModality = inputModality
+		input.requestFacts.RoutingInput = routing
 		if useTopLevelTextFallback && text != "" && input.requestFacts.InputModality.TextContentCount == 0 {
 			// req.Text supplied user text the message walk could not see.
 			// Promoted system/assistant text must not count: it is not user
@@ -176,6 +186,7 @@ func requestFactsForIntent(
 		ContextTextBytes:       estimate.TextBytes,
 		ContextEquivalentBytes: estimate.EquivalentBytes,
 		ContextHasNonText:      estimate.HasNonText,
+		ContextReserveTokens:   estimate.ReserveTokens,
 	}
 }
 
@@ -271,12 +282,12 @@ func applyTopLevelTextFallback(input intentSignalInput, rawText string) intentSi
 	return input
 }
 
-func resolveIntentSignalInputFromMessages(messages []IntentMessage, toolDefinitionCount int) (intentSignalInput, bool) {
+func resolveIntentSignalInputFromMessages(messages []IntentMessage, toolDefinitionCount int, selector *routinginput.Selector) (intentSignalInput, bool) {
 	if len(messages) == 0 {
 		return intentSignalInput{}, false
 	}
 
-	history := extractIntentConversationHistory(messages, toolDefinitionCount)
+	history := extractIntentConversationHistory(messages, toolDefinitionCount, selector)
 	input := intentSignalInput{
 		evaluationText:    history.currentUserMessage,
 		contextText:       strings.Join(history.nonUserMessages, " "),
@@ -286,7 +297,7 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage, toolDefiniti
 		hasAssistantReply: history.hasAssistantReply,
 		imageURL:          history.currentUserImageURL,
 		conversationFacts: history.conversationFacts,
-		requestFacts:      classification.RequestFacts{InputModality: history.inputModality},
+		requestFacts:      classification.RequestFacts{InputModality: history.inputModality, RoutingInput: history.routingInput},
 	}
 
 	// Promote system/assistant text only with no user text AND no image; the
@@ -330,17 +341,26 @@ func hasIntentConversationFacts(facts classification.ConversationFacts) bool {
 		facts.HasDeveloperMessage
 }
 
-func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCount int) intentConversationHistory {
+func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCount int, selector *routinginput.Selector) intentConversationHistory {
 	history := intentConversationHistory{
 		conversationFacts: classification.ConversationFacts{
 			ToolDefinitionCount: toolDefinitionCount,
 		},
 	}
 	previousWasToolResult := false
+	routing := selector.Walk()
 
-	for _, msg := range messages {
+	for index, msg := range messages {
 		role := strings.ToLower(strings.TrimSpace(msg.Role))
 		rawText := extractIntentMessageRawText(msg.Content)
+		if role == "user" {
+			textOnly := selector != nil && intentMessageTextOnly(msg.Content)
+			routed, skipped := routing.UserMessage(index, rawText, textOnly)
+			if skipped {
+				continue
+			}
+			rawText = routed
+		}
 		text := strings.TrimSpace(rawText)
 		if role == "user" {
 			if rawText != "" {
@@ -367,8 +387,38 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 		}
 		recordIntentNonUserMessage(&history, role, text)
 	}
+	history.routingInput = routing.Outcome()
 
 	return history
+}
+
+// intentMessageTextOnly reports whether message content is nothing but text,
+// the only kind of message routing_input may skip.
+func intentMessageTextOnly(raw json.RawMessage) bool {
+	raw = bytesTrimSpace(raw)
+	if len(raw) == 0 || string(raw) == "null" {
+		return true
+	}
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		return true
+	}
+	var parts []intentMessageContentPart
+	if json.Unmarshal(raw, &parts) != nil {
+		var part intentMessageContentPart
+		if json.Unmarshal(raw, &part) != nil {
+			return false
+		}
+		parts = []intentMessageContentPart{part}
+	}
+	for _, part := range parts {
+		switch strings.ToLower(strings.TrimSpace(part.Type)) {
+		case "", "text", "input_text":
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func observeIntentConversationMessage(

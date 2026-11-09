@@ -22,7 +22,7 @@ func TestModelRuntimeCRDAndSample(t *testing.T) {
 			t.Fatal(err)
 		}
 		config := crd.Spec.Versions[0].Schema.OpenAPIV3Schema.Properties["spec"].Properties["config"]
-		for _, name := range []string{"model_deployments", "model_admission", "routing"} {
+		for _, name := range []string{"model_deployments", "model_bindings", "model_admission", "routing"} {
 			field := config.Properties[name]
 			if field.Type != "object" || field.XPreserveUnknownFields == nil || !*field.XPreserveUnknownFields {
 				t.Fatalf("%s prunes router-owned %s", path, name)

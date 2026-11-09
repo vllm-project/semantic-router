@@ -188,7 +188,7 @@ func TestBuiltInSignalQuestionsShareOneCall(t *testing.T) {
 	var domainOut, guardOut tasks.LabelDistribution
 	var spans tasks.TokenClassificationResult
 	errs := make([]error, 3)
-	for i, call := range []func() error{
+	callers := []func() error{
 		func() (err error) {
 			domainOut, err = domain.Call(ctx, string(config.DefaultRecipeName), text)
 			return err
@@ -198,14 +198,20 @@ func TestBuiltInSignalQuestionsShareOneCall(t *testing.T) {
 			return err
 		},
 		func() (err error) { spans, err = pii.Call(ctx, string(config.DefaultRecipeName), text); return err },
-	} {
-		leave := bundle.Join()
+	}
+	leaves := make([]func(), len(callers))
+	for i := range callers {
+		leaves[i] = bundle.Join()
+	}
+	// A bundle may flush when all registered participants are waiting, so
+	// register everyone before starting any caller.
+	for i, call := range callers {
 		wg.Add(1)
-		go func(i int, call func() error) {
+		go func(i int, call func() error, leave func()) {
 			defer wg.Done()
 			defer leave()
 			errs[i] = call()
-		}(i, call)
+		}(i, call, leaves[i])
 	}
 	wg.Wait()
 	if err := errors.Join(errs...); err != nil || len(domainOut.Probabilities) != 14 || len(guardOut.Probabilities) != 2 || len(spans.Entities) != 1 {

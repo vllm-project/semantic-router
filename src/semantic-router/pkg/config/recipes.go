@@ -277,10 +277,15 @@ func (c *RouterConfig) ConfigForRecipe(recipe *RoutingRecipe) *RouterConfig {
 		ReasoningConfig:       c.ReasoningConfig,
 	}
 	scoped.KnowledgeBases = knowledgeBasesForRoutingProfile(c.KnowledgeBases, recipe.Profile)
+	scoped.scopedBindings = cloneModelMap(recipe.Profile.ModelBindings)
+	if scoped.scopedBindings == nil {
+		scoped.scopedBindings = map[string]ModelBinding{}
+	}
 	// A scoped config represents exactly one routing profile. Keeping the full
 	// recipe list here would make helpers such as AllRoutingDecisions escape the
 	// selected recipe again.
 	scoped.Recipes = nil
+	scoped.applyModuleThresholds()
 	return &scoped
 }
 

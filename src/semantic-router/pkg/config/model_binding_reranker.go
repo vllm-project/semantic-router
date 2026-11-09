@@ -16,14 +16,26 @@ type PairScorerSelection struct {
 
 // RAGRerankConfig opts structured vectorstore hits into neural pair scoring.
 // RAG.top_k remains the candidate count. TopK limits the reordered context.
+// Deployment names the deployment that scores the pairs, at the pair-scorer
+// exit Layer and Dimension select (zero: the model's full depth and width);
+// without one, the recipe's deprecated rag.reranker binding applies.
 type RAGRerankConfig struct {
-	TopK *int `json:"top_k,omitempty" yaml:"top_k,omitempty"`
+	TopK       *int   `json:"top_k,omitempty" yaml:"top_k,omitempty"`
+	Deployment string `json:"deployment,omitempty" yaml:"deployment,omitempty"`
+	Layer      int    `json:"layer,omitempty" yaml:"layer,omitempty"`
+	Dimension  int    `json:"dimension,omitempty" yaml:"dimension,omitempty"`
 }
 
 func validateRerankerBinding(decl ModelBinding, deployment ModelDeployment) error {
+	if deployment.Provider == RerankProvider {
+		if decl.PairScorer != nil && (decl.PairScorer.Layer != 0 || decl.PairScorer.Dimension != 0) {
+			return fmt.Errorf("rerank.layer and rerank.dimension select an early exit of a model_runtime reranker; a rerank deployment answers at its own depth, so remove them")
+		}
+		return nil
+	}
 	runtimeDefault := deployment.IsModelRuntime() && decl.Adapter == ""
-	if deployment.Provider == "http" || (decl.Adapter != "vela_reranker" && !runtimeDefault) {
-		return fmt.Errorf("reranker requires a local vela_reranker adapter")
+	if !deployment.IsModelRuntime() || (decl.Adapter != "vela_reranker" && !runtimeDefault) {
+		return fmt.Errorf("reranker requires a model_runtime deployment with the vela_reranker adapter, or a rerank deployment")
 	}
 	if decl.MappingPath != "" {
 		return fmt.Errorf("reranker returns raw relevance logits and has no label mapping")

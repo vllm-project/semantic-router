@@ -122,8 +122,8 @@ func assertExportedAuthoredModel(t *testing.T, exported *CanonicalConfig) {
 	if reasoning.Family != "" || len(reasoning.Levels) != 3 {
 		t.Fatalf("exported inline reasoning changed shape: %#v", reasoning)
 	}
-	if got := exported.Providers.Models[0].BackendRefs[0].APIKeyEnv; got != "PRIVATE_MODEL_API_KEY" {
-		t.Fatalf("exported api_key_env = %q", got)
+	if ref := exported.Providers.Models[0].BackendRefs[0]; ref.APIKeyEnv != "" || ref.Auth == nil || ref.Auth.APIKeyEnv != "PRIVATE_MODEL_API_KEY" {
+		t.Fatalf("exported backend ref = %#v, want auth.api_key_env", ref)
 	}
 }
 

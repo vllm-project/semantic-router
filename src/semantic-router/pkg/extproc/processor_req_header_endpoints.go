@@ -37,6 +37,13 @@ func (r *OpenAIRouter) handleResponseAPIRequestHeaders(
 	if !strings.HasPrefix(path, "/v1/responses") && !isAzureResponsesCollection(path) {
 		return nil, nil
 	}
+	if r.ResponseAPIFilter == nil && r.Config != nil && r.Config.ResponseAPI.Enabled {
+		// Enabled in config, but the store failed to start (see
+		// response_api_store_init_failed). A 404 would read as a missing route.
+		ctx.ImmediateProtocolError = llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "response_store_unavailable",
+			"the Responses API is enabled but its store failed to start, check global.services.response_api", nil)
+		return r.createErrorResponse(503, ctx.ImmediateProtocolError.Message), nil
+	}
 
 	switch method {
 	case "GET":

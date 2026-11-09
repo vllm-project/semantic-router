@@ -45,8 +45,8 @@ explicitly whenever the served checkpoint uses another name.
 Model Card metadata can also include publisher, presentation, distribution,
 and LoRAs. It must not contain credentials, prices, or evaluation records. Put
 prices under `providers.models[].pricing`, records under top-level
-`evaluation.records[]`, and credentials under the backend binding, preferably
-through `api_key_env`.
+`evaluation.records[]`, and credentials in the backend ref's `auth`, through
+`auth.api_key_env`.
 
 ## Add evaluation evidence
 

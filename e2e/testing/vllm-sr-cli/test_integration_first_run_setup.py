@@ -66,7 +66,7 @@ class TestFirstRunSetup(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
                                 "name": "primary",
                                 "provider": "openai",
                                 "weight": 100,
-                                "base_url": f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
+                                "endpoint": f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
                             }
                         ],
                     }

@@ -47,39 +47,29 @@ type llmLabelClassifier struct {
 
 func newLLMLabelClassifier(
 	rule config.ClassifierSignalRule,
-	external *config.ExternalModelConfig,
+	spec config.ResolvedModelBinding,
 	reasoning *reasoningRequestControl,
-	models ...*classifierModelRuntime,
+	runtime *classifierModelRuntime,
 ) (labelClassifier, error) {
-	if external == nil {
-		return nil, fmt.Errorf("external model %q is not configured", rule.Model)
-	}
-	client := newVLLMClientFromConfig(external)
+	client := newVLLMClientForDeployment(spec.Deployment)
 	if client.initErr != nil {
 		return nil, client.initErr
 	}
-	timeout := config.DurationFromSeconds(external.TimeoutSeconds)
-	if timeout <= 0 {
-		timeout = 5 * time.Second
-	}
-	maxTokens := external.MaxTokens
-	if maxTokens <= 0 {
-		maxTokens = defaultLLMLabelClassifierMaxTokens
+	maxTokens := defaultLLMLabelClassifierMaxTokens
+	if legacy := spec.Deployment.LegacyExternal(); legacy != nil && legacy.MaxTokens > 0 {
+		maxTokens = legacy.MaxTokens
 	}
 	classifier := &llmLabelClassifier{
 		client:           client,
-		model:            external.ModelName,
+		model:            spec.Deployment.Model,
 		labels:           append([]string(nil), rule.Labels...),
 		instructions:     rule.Instructions,
 		disableRationale: rule.DisableRationale,
-		timeout:          timeout,
+		timeout:          spec.Deployment.TimeoutOr(5 * time.Second),
 		maxTokens:        maxTokens,
 		reasoning:        reasoning,
 	}
-	runtime := consumerModelRuntime(models)
-	backendCfg := &config.RemoteClassifierBackend{Model: external.Name, Protocol: config.RemoteClassifierProtocolHTTPChat, Contract: config.RemoteClassifierContractLabelDistribution}
-	spec := runtime.remoteSpec("classifier."+rule.Name, backendCfg)
-	handle, err := remoteTaskBinding(context.Background(), runtime, spec, external, client, classifier.classify, func(_ string, out labelClassification) error {
+	handle, err := remoteTaskBinding(context.Background(), runtime, spec, client, classifier.classify, func(_ string, out labelClassification) error {
 		_, err := validateLLMLabelScores(classifier.labels, out.Scores)
 		return err
 	})
@@ -278,44 +268,36 @@ func (b *classifierOptionBuilder) buildGenericClassifiersOption() (option, error
 		return nil, nil
 	}
 	classifiers := make(map[string]labelClassifier, len(b.cfg.ClassifierRules))
+	runtime := b.runtime()
 	for _, rule := range b.cfg.ClassifierRules {
 		var (
 			classifier labelClassifier
+			spec       config.ResolvedModelBinding
+			resolved   bool
 			err        error
 		)
-		switch rule.Type {
-		case config.ClassifierSignalTypeLocal:
-			classifier, err = prepareDecisionLabelClassifier(b.models, rule)
-			if err == nil && classifier == nil {
-				classifier, err = newLocalLabelClassifier(rule, b.models)
+		spec, resolved, err = runtime.task("classifier." + rule.Name)
+		if err == nil && !resolved {
+			err = fmt.Errorf("no deployment answers the rule")
+		}
+		if err == nil {
+			switch config.ClassifierRuleKind(spec.Deployment) {
+			case config.ClassifierSignalTypeLLM:
+				var reasoning *reasoningRequestControl
+				reasoning, err = resolveExternalModelReasoningControl(b.cfg.ReasoningFamilies, deploymentReasoning(spec.Deployment))
+				if err != nil {
+					err = fmt.Errorf("deployment %q: %w", spec.Binding.Deployment, err)
+					break
+				}
+				classifier, err = newLLMLabelClassifier(rule, spec, reasoning, runtime)
+			case config.ClassifierSignalTypeSequenceClassifier:
+				classifier, err = newSequenceLabelClassifier(rule, spec, runtime)
+			default:
+				classifier, err = prepareDecisionLabelClassifier(b.models, rule)
+				if err == nil && classifier == nil {
+					classifier, err = newLocalLabelClassifier(rule, b.models)
+				}
 			}
-		case config.ClassifierSignalTypeLLM:
-			external := b.cfg.FindExternalModelByName(rule.Model)
-			reasoning, reasoningErr := resolveExternalModelReasoningControl(
-				b.cfg.ReasoningFamilies,
-				external,
-			)
-			if reasoningErr != nil {
-				err = fmt.Errorf("external model %q: %w", rule.Model, reasoningErr)
-				break
-			}
-			classifier, err = newLLMLabelClassifier(
-				rule,
-				external,
-				reasoning,
-				b.models,
-			)
-		case config.ClassifierSignalTypeSequenceClassifier:
-			classifier, err = newSequenceLabelClassifier(
-				rule,
-				b.cfg.FindExternalModelByName(rule.Model),
-				b.models,
-			)
-		default:
-			// Config validation rejects unknown types, so reaching here means a
-			// rule bypassed it. Fail instead of storing a nil classifier that
-			// silently drops the signal at request time.
-			err = fmt.Errorf("unsupported type %q", rule.Type)
 		}
 		if err != nil {
 			closeLabelClassifiers(classifiers)

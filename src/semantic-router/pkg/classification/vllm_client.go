@@ -20,45 +20,40 @@ import (
 
 // VLLMClient handles communication with vLLM REST API for classifiers
 type VLLMClient struct {
-	connector        *connector.Client
-	initErr          error
-	endpoint         *config.ClassifierVLLMEndpoint
-	timeout          time.Duration
-	transportOptions connector.Options
-	accessKey        string
+	connector  *connector.Client
+	initErr    error
+	endpoint   config.ClassifierVLLMEndpoint
+	timeout    time.Duration
+	deployment config.ModelDeployment
 }
 
 // NewVLLMClient creates a new vLLM REST API client for classifiers
 func NewVLLMClient(endpoint *config.ClassifierVLLMEndpoint) *VLLMClient {
-	return newVLLMClient(endpoint, "", config.DefaultClassifyMaxResponseBytes, time.Duration(config.DefaultClassifierTimeoutSeconds)*time.Second)
+	return NewVLLMClientWithAuth(endpoint, "")
 }
 
 // NewVLLMClientWithAuth creates a new vLLM REST API client with access key
 func NewVLLMClientWithAuth(endpoint *config.ClassifierVLLMEndpoint, accessKey string) *VLLMClient {
-	return newVLLMClient(endpoint, accessKey, config.DefaultClassifyMaxResponseBytes, time.Duration(config.DefaultClassifierTimeoutSeconds)*time.Second)
-}
-
-func newVLLMClientFromConfig(cfg *config.ExternalModelConfig) *VLLMClient {
-	return newVLLMClientWithLimits(&cfg.ModelEndpoint, cfg.AccessKey, cfg.GetMaxRequestBytes(), cfg.GetMaxResponseBytes(), cfg.GetTimeout())
-}
-
-func newVLLMClient(endpoint *config.ClassifierVLLMEndpoint, accessKey string, maxResponseBytes int64, timeout time.Duration) *VLLMClient {
-	return newVLLMClientWithLimits(endpoint, accessKey, config.DefaultClassifyMaxRequestBytes, maxResponseBytes, timeout)
-}
-
-func newVLLMClientWithLimits(endpoint *config.ClassifierVLLMEndpoint, accessKey string, maxRequestBytes, maxResponseBytes int64, timeout time.Duration) *VLLMClient {
 	if endpoint == nil {
 		return &VLLMClient{initErr: fmt.Errorf("classifier endpoint is required")}
 	}
-	endpointCopy := *endpoint
-	scheme := endpointCopy.Protocol
-	if scheme == "" {
-		scheme = "http"
+	return newVLLMClientFromConfig(&config.ExternalModelConfig{ModelEndpoint: *endpoint, AccessKey: accessKey})
+}
+
+func newVLLMClientFromConfig(cfg *config.ExternalModelConfig) *VLLMClient {
+	return newVLLMClientForDeployment(config.ExternalModelDeployment(*cfg, config.OpenAIChatProvider))
+}
+
+// newVLLMClientForDeployment asks an openai_chat deployment through its
+// connection block: POST <endpoint>/chat/completions, 30 s and no retry
+// unless the deployment sets its own timeout_ms and max_retries.
+func newVLLMClientForDeployment(deployment config.ModelDeployment) *VLLMClient {
+	client := &VLLMClient{timeout: deployment.TimeoutOr(time.Duration(config.DefaultClassifierTimeoutSeconds) * time.Second), deployment: deployment}
+	if legacy := deployment.LegacyExternal(); legacy != nil {
+		client.endpoint = legacy.ModelEndpoint
 	}
-	baseURL := fmt.Sprintf("%s://%s:%d", scheme, endpointCopy.Address, endpointCopy.Port)
-	options := connector.Options{AttemptTimeout: timeout, MaxRequestBytes: maxRequestBytes, MaxResponseBytes: maxResponseBytes, MaxErrorBytes: maxClassifyErrorBodyBytes}
-	transport, err := connector.New(baseURL, bearerAuthorizer(accessKey), options)
-	return &VLLMClient{connector: transport, initErr: err, endpoint: &endpointCopy, timeout: timeout, transportOptions: options, accessKey: accessKey}
+	client.connector, client.initErr = remoteConnector(deployment, client.timeout, 0, maxClassifyErrorBodyBytes)
+	return client
 }
 
 // vllmChatCompletionRequest extends openai.ChatCompletionNewParams with
@@ -192,6 +187,14 @@ func (c *VLLMClient) generateWithMessages(
 		}
 	}
 
+	if generation := c.deployment.Generation; generation != nil {
+		if generation.MaxTokens > 0 {
+			req.MaxTokens = generation.MaxTokens
+		}
+		if generation.Temperature != nil {
+			req.Temperature = *generation.Temperature
+		}
+	}
 	if req.MaxTokens == 0 {
 		req.MaxTokens = 512
 	}
@@ -204,7 +207,7 @@ func (c *VLLMClient) generateWithMessages(
 	if c.initErr != nil {
 		return nil, c.initErr
 	}
-	body, err := c.connector.Do(ctx, connector.Operation{Name: "http_chat", Method: http.MethodPost, Path: "/v1/chat/completions"}, jsonData)
+	body, err := c.connector.Do(ctx, connector.Operation{Name: "http_chat", Method: http.MethodPost, Path: "/chat/completions"}, jsonData)
 	if err != nil {
 		var remoteErr *connector.Error
 		if errors.As(err, &remoteErr) && remoteErr.StatusCode != 0 {

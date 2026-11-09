@@ -2020,8 +2020,8 @@ func TestFallbackVendorDecoratedCandidateResponseDecodedSuccessfully(t *testing.
 	if resp.GetImmediateResponse().GetStatus().GetCode() != typev3.StatusCode_OK {
 		t.Fatalf("expected HTTP 200, got: %v", resp.GetImmediateResponse().GetStatus().GetCode())
 	}
-	if ctx.ResponseVendor != llmprotocol.ResponseVendorAzure {
-		t.Errorf("ctx.ResponseVendor = %q, want %q", ctx.ResponseVendor, llmprotocol.ResponseVendorAzure)
+	if ctx.ResponseVendor != "" {
+		t.Errorf("ctx.ResponseVendor = %q, want the canonical failure envelope", ctx.ResponseVendor)
 	}
 	if ctx.SemanticResponse == nil {
 		t.Fatal("expected ctx.SemanticResponse to be populated")
@@ -2032,8 +2032,8 @@ func TestFallbackVendorDecoratedCandidateResponseDecodedSuccessfully(t *testing.
 	if ctx.SemanticResponse.Model != "gpt-4o" {
 		t.Errorf("expected SemanticResponse.Model gpt-4o, got: %s", ctx.SemanticResponse.Model)
 	}
-	if !ctx.ResponseVendorExtensions {
-		t.Errorf("expected vendor extensions to be recorded in ctx.ResponseVendorExtensions")
+	if !ctx.ResponseUnknownFields {
+		t.Errorf("expected the dropped members to be recorded in ctx.ResponseUnknownFields")
 	}
 }
 

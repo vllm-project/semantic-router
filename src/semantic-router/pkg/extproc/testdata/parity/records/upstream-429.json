@@ -47,10 +47,12 @@
           ],
           "remove": [
             "x-vsr-fusion-depth",
+            "x-vsr-gateway-credential",
             "x-vsr-internal-auth",
             "x-vsr-looper-decision",
             "x-vsr-looper-iteration",
             "x-vsr-looper-request",
+            "x-vsr-protection-release",
             "x-vsr-selected-recipe"
           ]
         }
@@ -85,7 +87,8 @@
             "x-user-gemini-key",
             "x-user-minimax-key",
             "x-user-openai-key",
-            "x-user-vertex-ai-key"
+            "x-user-vertex-ai-key",
+            "x-vsr-gateway-credential"
           ]
         },
         "body": {

@@ -130,20 +130,13 @@ func setResponsesReasoningDelta(event *llmprotocol.Event, delta string, scope ll
 }
 
 func applyResponsesContentPart(event *llmprotocol.Event, part *responsesContentWire) error {
-	if part == nil {
-		return invalidProviderResponse("stream_content_part_required", "Responses content part event is incomplete")
+	interpreted, err := interpretResponsesContentPart(part)
+	if err != nil {
+		return err
 	}
-	event.Type = llmprotocol.EventOutputTextDelta
-	switch part.Type {
-	case "output_text":
-		event.Delta = part.Text
-		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentText, Text: part.Text}
-	case "refusal":
-		event.Delta = part.Refusal
-		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: part.Refusal}
-	default:
-		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_stream_content_part", "Responses stream content part is unsupported", nil)
-	}
+	event.Type = interpreted.eventType
+	event.Delta = interpreted.content.Text
+	event.Content = &interpreted.content
 	return nil
 }
 
@@ -165,8 +158,13 @@ func applyResponsesReasoningPart(event *llmprotocol.Event, part *responsesConten
 func responsesEventWireContentKey(wire responsesEventWire) (responsesWireContentKey, bool) {
 	key := responsesWireContentKey{item: responsesWireOutputIndex(wire)}
 	switch wire.Type {
-	case "response.content_part.added", "response.content_part.done",
-		"response.output_text.delta", "response.output_text.done", "response.output_text.annotation.added",
+	case "response.content_part.added", "response.content_part.done":
+		part, err := interpretResponsesContentPart(wire.Part)
+		if err != nil || wire.ContentIndex == nil {
+			return responsesWireContentKey{}, false
+		}
+		key.scope, key.index = part.scope, *wire.ContentIndex
+	case "response.output_text.delta", "response.output_text.done", "response.output_text.annotation.added",
 		"response.refusal.delta", "response.refusal.done":
 		if wire.ContentIndex == nil {
 			return responsesWireContentKey{}, false
@@ -225,11 +223,11 @@ func (decoder *responsesStreamDecoder) validateResponsesContentStart(
 ) (bool, error) {
 	switch wire.Type {
 	case "response.content_part.added":
-		kind, text, err := responsesMessagePartEvidence(wire.Part)
+		part, err := interpretResponsesContentPart(wire.Part)
 		if err != nil {
 			return true, err
 		}
-		return true, decoder.startResponsesContent(key, kind, text)
+		return true, decoder.startResponsesContentPart(key, part.kind, part.content.Text)
 	case "response.reasoning_summary_part.added":
 		return true, decoder.startResponsesReasoningSummary(key, wire.Part)
 	default:
@@ -271,11 +269,11 @@ func (decoder *responsesStreamDecoder) validateResponsesContentDone(
 	case "response.reasoning_text.done":
 		return true, decoder.finishResponsesContentText(key, "reasoning_text", wire.Text, true)
 	case "response.content_part.done":
-		kind, text, err := responsesMessagePartEvidence(wire.Part)
+		part, err := interpretResponsesContentPart(wire.Part)
 		if err != nil {
 			return true, err
 		}
-		return true, decoder.finishResponsesContentPart(key, kind, text, wire.Part)
+		return true, decoder.finishResponsesContentPart(key, part.kind, part.content.Text, wire.Part)
 	case "response.reasoning_summary_part.done":
 		return true, decoder.finishResponsesReasoningSummary(key, wire.Part)
 	default:
@@ -290,7 +288,7 @@ func (decoder *responsesStreamDecoder) startResponsesReasoningSummary(
 	if part == nil || part.Type != "summary_text" {
 		return invalidProviderResponse("stream_reasoning_part_kind", "Responses reasoning summary part must use summary_text")
 	}
-	return decoder.startResponsesContent(key, "summary_text", part.Text)
+	return decoder.startResponsesContentPart(key, "summary_text", part.Text)
 }
 
 func (decoder *responsesStreamDecoder) appendResponsesAnnotation(
@@ -318,23 +316,16 @@ func (decoder *responsesStreamDecoder) finishResponsesReasoningSummary(
 	return decoder.finishResponsesContentPart(key, "summary_text", part.Text, part)
 }
 
-func responsesMessagePartEvidence(part *responsesContentWire) (string, string, error) {
-	if part == nil {
-		return "", "", invalidProviderResponse("stream_content_part_required", "Responses content part event is incomplete")
+func (decoder *responsesStreamDecoder) startResponsesContentPart(
+	key responsesWireContentKey,
+	kind string,
+	initial string,
+) error {
+	if err := decoder.startResponsesContent(key, kind, initial); err != nil {
+		return err
 	}
-	switch part.Type {
-	case "output_text":
-		return part.Type, part.Text, nil
-	case "refusal":
-		return part.Type, part.Refusal, nil
-	default:
-		return "", "", llmprotocol.NewError(
-			llmprotocol.ErrorUnsupportedFeature,
-			"unsupported_stream_content_part",
-			"Responses stream content part is unsupported",
-			nil,
-		)
-	}
+	decoder.contentLifecycle[key].explicitPartStart = true
+	return nil
 }
 
 func (decoder *responsesStreamDecoder) startResponsesContent(
@@ -458,12 +449,12 @@ func (decoder *responsesStreamDecoder) validateCompletedResponsesItemLifecycle(w
 	index := responsesWireOutputIndex(wire)
 	switch item.Type {
 	case "message":
-		return decoder.validateResponsesFinalContent(index, responsesContentMessage, item.Content, true)
+		return decoder.validateResponsesFinalContent(index, responsesContentMessage, item.Content)
 	case "reasoning":
-		if err := decoder.validateResponsesFinalContent(index, responsesContentReasoningSummary, item.Summary, true); err != nil {
+		if err := decoder.validateResponsesFinalContent(index, responsesContentReasoningSummary, item.Summary); err != nil {
 			return err
 		}
-		return decoder.validateResponsesFinalContent(index, responsesContentReasoningText, item.Content, false)
+		return decoder.validateResponsesFinalContent(index, responsesContentReasoningText, item.Content)
 	case "function_call", "custom_tool_call":
 		if !decoder.toolArgumentsDone[index] {
 			return invalidProviderResponse(
@@ -491,7 +482,6 @@ func (decoder *responsesStreamDecoder) validateResponsesFinalContent(
 	itemIndex int,
 	scope responsesContentScope,
 	raw json.RawMessage,
-	requirePartDone bool,
 ) error {
 	var parts []responsesContentWire
 	if len(raw) > 0 && !bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
@@ -504,7 +494,7 @@ func (decoder *responsesStreamDecoder) validateResponsesFinalContent(
 		return invalidProviderResponse("stream_item_content_mismatch", "Responses completed item content does not match streamed content blocks")
 	}
 	for index, part := range parts {
-		if err := decoder.validateResponsesFinalPart(itemIndex, scope, index, part, requirePartDone); err != nil {
+		if err := decoder.validateResponsesFinalPart(itemIndex, scope, index, part); err != nil {
 			return err
 		}
 	}
@@ -516,10 +506,9 @@ func (decoder *responsesStreamDecoder) validateResponsesFinalPart(
 	scope responsesContentScope,
 	index int,
 	part responsesContentWire,
-	requirePartDone bool,
 ) error {
 	state := decoder.contentLifecycle[responsesWireContentKey{item: itemIndex, scope: scope, index: index}]
-	if state == nil || !state.textDone || requirePartDone && !state.partDone {
+	if state == nil || !state.textDone || state.explicitPartStart && !state.partDone {
 		return invalidProviderResponse("stream_item_content_incomplete", "Responses output item completed with unfinished content")
 	}
 	kind, text, err := responsesFinalPartEvidence(scope, part)
@@ -545,14 +534,16 @@ func responsesPartAnnotations(part responsesContentWire) []responsesAnnotationWi
 
 func responsesFinalPartEvidence(scope responsesContentScope, part responsesContentWire) (string, string, error) {
 	switch scope {
-	case responsesContentMessage:
-		return responsesMessagePartEvidence(&part)
+	case responsesContentMessage, responsesContentReasoningText:
+		interpreted, err := interpretResponsesContentPart(&part)
+		if err != nil {
+			return "", "", err
+		}
+		if interpreted.scope == scope {
+			return interpreted.kind, interpreted.content.Text, nil
+		}
 	case responsesContentReasoningSummary:
 		if part.Type == "summary_text" {
-			return part.Type, part.Text, nil
-		}
-	case responsesContentReasoningText:
-		if part.Type == "reasoning_text" {
 			return part.Type, part.Text, nil
 		}
 	}

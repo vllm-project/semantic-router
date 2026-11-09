@@ -26,11 +26,12 @@ providers:
         completion_per_1m: 3.5
       backend_refs:
         - name: openrouter
-          base_url: https://openrouter.ai/api/v1
+          endpoint: https://openrouter.ai/api/v1
           provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: OPENROUTER_API_KEY
+          auth:
+            header: Authorization
+            prefix: Bearer
+            api_key_env: OPENROUTER_API_KEY
           weight: 1
     - name: kimi-k27-code-solver-b
       provider_model_id: moonshotai/kimi-k2.7-code
@@ -42,11 +43,12 @@ providers:
         completion_per_1m: 3.5
       backend_refs:
         - name: openrouter
-          base_url: https://openrouter.ai/api/v1
+          endpoint: https://openrouter.ai/api/v1
           provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: OPENROUTER_API_KEY
+          auth:
+            header: Authorization
+            prefix: Bearer
+            api_key_env: OPENROUTER_API_KEY
           weight: 1
     - name: kimi-k27-code-solver-c
       provider_model_id: moonshotai/kimi-k2.7-code
@@ -58,11 +60,12 @@ providers:
         completion_per_1m: 3.5
       backend_refs:
         - name: openrouter
-          base_url: https://openrouter.ai/api/v1
+          endpoint: https://openrouter.ai/api/v1
           provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: OPENROUTER_API_KEY
+          auth:
+            header: Authorization
+            prefix: Bearer
+            api_key_env: OPENROUTER_API_KEY
           weight: 1
     - name: kimi-k27-code-finalizer
       provider_model_id: moonshotai/kimi-k2.7-code
@@ -74,11 +77,12 @@ providers:
         completion_per_1m: 3.5
       backend_refs:
         - name: openrouter
-          base_url: https://openrouter.ai/api/v1
+          endpoint: https://openrouter.ai/api/v1
           provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: OPENROUTER_API_KEY
+          auth:
+            header: Authorization
+            prefix: Bearer
+            api_key_env: OPENROUTER_API_KEY
           weight: 1
 evaluation:
   records:

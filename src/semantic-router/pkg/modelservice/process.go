@@ -28,6 +28,15 @@ type processPlan struct {
 	members  map[string]string
 	// threads is a CPU process's stable budget within the router's cores.
 	threads int
+	// connection is an attached runtime's auth, headers, tls and timeout_ms.
+	connection config.ModelDeployment
+}
+
+// attachedClientKey identifies the client an attached plan calls through:
+// its endpoint and connection settings.
+func (p *processPlan) attachedClientKey() string {
+	connection, _ := json.Marshal(p.connection)
+	return p.endpoint + "\x00" + string(connection)
 }
 
 // modelEntry is one model of a --models file; unset engine arguments keep the runtime's defaults.
@@ -41,6 +50,7 @@ type modelEntry struct {
 	BatchWindowMS       *float64 `json:"batch_window_ms,omitempty"`
 	Dtype               string   `json:"dtype,omitempty"`
 	EnableSharedContext *bool    `json:"enable_shared_context,omitempty"`
+	MaxModelLen         *int     `json:"max_model_len,omitempty"`
 }
 
 // planProcesses assigns every logical deployment worker its own process. The
@@ -67,6 +77,11 @@ func planProcesses(deployments map[string]config.ModelDeployment, command []stri
 				servedName = name
 			}
 			plan := &processPlan{logical: name, pool: len(deployment.Replicas) > 0, replica: id, name: name + "-" + id, endpoint: placement.Endpoint, members: map[string]string{memberName: servedName}}
+			var connection interface{}
+			if placement.Endpoint != "" {
+				plan.connection = config.ModelDeployment{Auth: deployment.Auth, Headers: deployment.Headers, TLS: deployment.TLS, TimeoutMs: deployment.TimeoutMs}
+				connection = plan.connection
+			}
 			if placement.Endpoint == "" {
 				device := placement.Device
 				if device == autoDevice && auto == "cpu" {
@@ -75,7 +90,7 @@ func planProcesses(deployments map[string]config.ModelDeployment, command []stri
 				plan.models = []modelEntry{{
 					Model: deployment.Artifact, Revision: deployment.Revision, Name: name, Device: device,
 					MaxNumSeqs: deployment.MaxNumSeqs, MaxNumBatchedTokens: deployment.MaxNumBatchedTokens, BatchWindowMS: deployment.BatchWindowMS,
-					Dtype: deployment.Dtype, EnableSharedContext: deployment.EnableSharedContext,
+					Dtype: deployment.Dtype, EnableSharedContext: deployment.EnableSharedContext, MaxModelLen: deployment.MaxModelLen,
 				}}
 				if device == "cpu" {
 					plan.threads = cpuThreads(cores)
@@ -87,7 +102,8 @@ func planProcesses(deployments map[string]config.ModelDeployment, command []stri
 				Command                            []string
 				CacheDir                           string
 				Threads                            int
-			}{name, id, placement.Endpoint, servedName, plan.models, command, cacheDir, plan.threads})
+				Connection                         interface{}
+			}{name, id, placement.Endpoint, servedName, plan.models, command, cacheDir, plan.threads, connection})
 			digest := sha256.Sum256(identity)
 			prefix := "managed"
 			if placement.Endpoint != "" {

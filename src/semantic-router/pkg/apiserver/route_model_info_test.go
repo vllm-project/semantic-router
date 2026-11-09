@@ -122,12 +122,26 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 }
 
 func TestClassifierModelInfoReportsHowTheModuleRuns(t *testing.T) {
-	if got := localModelType(nil); got != config.ModelRuntimeProvider {
+	if got := consumerModelType(&config.RouterConfig{}, "domain_classifier"); got != config.ModelRuntimeProvider {
 		t.Fatalf("local module type = %q, want %q", got, config.ModelRuntimeProvider)
 	}
-	remote := &config.RemoteClassifierBackend{Protocol: config.RemoteClassifierProtocolHTTPClassify}
-	if got := localModelType(remote); got != config.RemoteClassifierProtocolHTTPClassify {
-		t.Fatalf("remote module type = %q, want its protocol", got)
+	bound := &config.RouterConfig{}
+	bound.ModelDeployments = map[string]config.ModelDeployment{"svc": {Provider: config.ClassifyProvider, Endpoint: "http://127.0.0.1:8080"}}
+	bound.GlobalModelBindings = map[string]config.ModelBinding{"domain_classifier": {Deployment: "svc"}}
+	// The Router reads a deprecated module backend as a deployment, so the
+	// module keeps no backend to report.
+	deprecated := &config.RouterConfig{ExternalModels: []config.ExternalModelConfig{{
+		Name:          "domain-service",
+		ModelRole:     config.ModelRoleClassification,
+		ModelName:     "domain",
+		ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8080},
+	}}}
+	deprecated.CategoryMappingPath = "mapping"
+	deprecated.CategoryModel.Backend = &config.RemoteClassifierBackend{Protocol: config.RemoteClassifierProtocolHTTPClassify, Model: "domain-service"}
+	for name, cfg := range map[string]*config.RouterConfig{"binding": bound, "module backend": deprecated} {
+		if got := consumerModelType(cfg, "domain_classifier"); got != config.RemoteClassifierProtocolHTTPClassify {
+			t.Fatalf("%s: remote module type = %q, want its protocol", name, got)
+		}
 	}
 }
 

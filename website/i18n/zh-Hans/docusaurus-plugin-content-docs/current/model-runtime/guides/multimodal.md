@@ -21,14 +21,14 @@ Vela 1.0 Omni 把文本、图像和音频嵌进同一个向量空间，所以图
 
 ## 打开它 {#turn-it-on}
 
-选多模态嵌入模型，加一个读图像的信号：
+选多模态嵌入模型，加一个读图像的信号。`embeddings.multimodal` 指定它的部署，不改的话就是预先声明的 `omni-nano`（Vela 1.0 Omni Nano）：
 
 ```yaml
 global:
   model_catalog:
     embeddings:
+      multimodal: omni-nano
       semantic:
-        multimodal_model_path: models/vela-1.0-omni-nano
         embedding_config:
           model_type: multimodal
 routing:
@@ -53,7 +53,7 @@ routing:
         - model: private-vision-model
 ```
 
-Omni 由 router 在 runtime 里跑在 CPU 上。[图像路由包](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/embedding/image-routing.yaml) 的阈值是按 Omni Nano 校准的；换 Mini 之后，在自己的图像上重测一遍。
+Omni 由 router 在 runtime 里跑在 CPU 上。要用 Mini，就声明一个 `vllm-sr/Vela-1.0-Omni-Mini` 的 `model_runtime` 部署，并在 `embeddings.multimodal` 中指定它。[图像路由包](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/embedding/image-routing.yaml) 的阈值是按 Omni Nano 校准的；换 Mini 之后，在自己的图像上重测一遍。
 
 ## 验一下 {#check-it}
 

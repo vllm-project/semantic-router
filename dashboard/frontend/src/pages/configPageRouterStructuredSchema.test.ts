@@ -19,6 +19,10 @@ import {
 function expectGeneratedChildrenRendered(generated: FieldSchema, rendered: RouterStructuredSchema) {
   if (generated.type === 'object') {
     for (const child of generated.fields ?? []) {
+      if (rendered.omit?.includes(child.key)) {
+        expect(rendered.fields?.[child.key], `omitted field ${child.key}`).toBeUndefined()
+        continue
+      }
       const renderedChild = rendered.fields?.[child.key]
       expect(renderedChild, `missing generated field ${child.key}`).toBeDefined()
       expectGeneratedChildrenRendered(child, renderedChild!)
@@ -41,6 +45,7 @@ describe('router defaults structured schemas', () => {
       capture_request_body: false,
       capture_response_body: true,
       capture_personal_data: false,
+      capture_tool_results: false,
       max_body_bytes: 0,
       max_tool_trace_steps: 0,
     }
@@ -58,6 +63,7 @@ describe('router defaults structured schemas', () => {
         'capture_request_body',
         'capture_response_body',
         'capture_personal_data',
+        'capture_tool_results',
       ]),
     )
     expect(card.save(card.editData)).toMatchObject({
@@ -104,7 +110,7 @@ describe('router defaults structured schemas', () => {
     expect(patch.router).not.toHaveProperty('auto_model_names')
   })
 
-  it('saves external models that omit the optional provider', () => {
+  it('shows deprecated external models without offering to declare more', () => {
     const external = [
       {
         name: 'external-safety',
@@ -123,12 +129,10 @@ describe('router defaults structured schemas', () => {
       toolsLoading: false,
       toolsError: null,
     })
-    const externalModels = cards.find((card) => card.key === 'external_models')
-    const patch = externalModels?.save(externalModels.editData) as {
-      model_catalog?: { external?: unknown }
-    }
+    const externalModels = cards.find((card) => card.key === 'external_models')!
 
-    expect(patch.model_catalog?.external).toEqual(external)
+    expect(externalModels.summary).toContainEqual({ label: 'Configured models', value: '3' })
+    expect(externalModels.deprecation).toMatch(/classify, openai_chat or openai_embeddings/)
   })
 
   it('round-trips nested provider and rule object arrays', () => {
@@ -334,19 +338,24 @@ describe('router defaults structured schemas', () => {
       embedding_config: { target_dimension: 1536 },
     }) as {
       model_catalog?: {
-        embeddings?: { semantic?: Record<string, unknown> }
+        deployments?: Record<string, Record<string, unknown>>
+        embeddings?: { default?: string; semantic?: Record<string, unknown> }
       }
     }
+    expect(embeddingPatch.model_catalog?.deployments?.['remote-embed']).toEqual(
+      expect.objectContaining({
+        provider: 'openai_embeddings',
+        endpoint: 'https://embedding.example.com/v1',
+        model: 'text-embedding-3-small',
+        auth: { api_key_env: 'OPENAI_API_KEY' },
+        capabilities: { dimensions: 1536 },
+      }),
+    )
+    expect(embeddingPatch.model_catalog?.embeddings?.default).toBe('remote-embed')
     expect(embeddingPatch.model_catalog?.embeddings?.semantic).toEqual(
       expect.objectContaining({
-        embedding_config: expect.objectContaining({
-          backend: 'openai_compatible',
-          model_type: 'remote',
-        }),
-        endpoint: expect.objectContaining({
-          base_url: 'https://embedding.example.com/v1',
-          model: 'text-embedding-3-small',
-        }),
+        embedding_config: expect.objectContaining({ backend: null, model_type: null }),
+        endpoint: null,
       }),
     )
   })
@@ -372,9 +381,11 @@ describe('router defaults structured schemas', () => {
     expect(
       cards.find((card) => card.key === 'management_api')?.editFields.map((field) => field.name),
     ).toEqual(expect.arrayContaining(['bind_address', 'port', 'remote_exposure', 'auth']))
-    expect(
-      cards.find((card) => card.key === 'complexity')?.editFields.map((field) => field.name),
-    ).toEqual(expect.arrayContaining(['prototype_scoring', 'backend']))
+    const complexityFields =
+      cards.find((card) => card.key === 'complexity')?.editFields.map((field) => field.name) ?? []
+    expect(complexityFields).toContain('prototype_scoring')
+    // A remote complexity model is a deployment its binding names.
+    expect(complexityFields).not.toContain('backend')
 
     const admission = cards.find((card) => card.key === 'admission')
     expect(admission?.save({ value: { default: { max_concurrency: 16 } } })).toEqual({
@@ -383,8 +394,12 @@ describe('router defaults structured schemas', () => {
 
     const renderedPaths = new Set(cards.map((card) => card.path.join('.')))
     expect(renderedPaths).not.toContain('model_catalog.kbs')
+    expect(renderedPaths).not.toContain('model_catalog.bindings')
+    expect(
+      cards.find((card) => card.key === 'system_models')?.editFields.map((field) => field.name),
+    ).toContain('binding:domain')
     for (const section of ROUTER_CONFIG_EXTENSION.global_sections) {
-      if (section.path.join('.') === 'model_catalog.kbs') continue
+      if (['model_catalog.kbs', 'model_catalog.bindings'].includes(section.path.join('.'))) continue
       expect(renderedPaths).toContain(section.path.join('.'))
     }
   })

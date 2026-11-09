@@ -113,6 +113,8 @@ var DashboardContract = []string{
 // OpenAI-shaped backends because they assert on Anthropic-specific
 // behaviour such as cache-token synthesis and stop-reason mapping.
 var ProviderProtocolsContract = []string{
+	"provider-cache-cost-breakdown",
+	"provider-cache-net-savings",
 	"prompt-compression-json-routing",
 	// Chat clients must receive Chat Completions even though the selected
 	// backend speaks Anthropic Messages.
@@ -133,6 +135,8 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-buffered-matrix",
 	"protocol-codec-anthropic-backend-streaming-matrix",
 	"protocol-codec-anthropic-response-diagnostics",
+	// Gateway fields in Anthropic usage need no backend setting (issue #5841)
+	"protocol-codec-anthropic-gateway-fields",
 	"protocol-codec-responses-verbosity-anthropic",
 	"protocol-codec-prompt-cache-key-anthropic",
 	"protocol-codec-anthropic-per-message-effort-backend",

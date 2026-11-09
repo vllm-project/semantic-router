@@ -50,6 +50,9 @@ func (d ModelDeployment) ServedModel(name string) string {
 	if d.Artifact != "" || !d.IsModelRuntime() || d.Managed() {
 		return d.Artifact
 	}
+	if d.Model != "" {
+		return d.Model
+	}
 	if d.ServedName != "" {
 		return d.ServedName
 	}
@@ -67,6 +70,7 @@ func ModelRuntimeDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment 
 	if cfg == nil {
 		return used
 	}
+	cfg = cfg.withModelResources()
 	mark := func(name string) {
 		if name == "" {
 			if shared, deployment, ok, err := cfg.DecisionModelDeployment(); ok && err == nil {
@@ -139,7 +143,7 @@ func modelRuntimeTaskDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeploym
 		return used
 	}
 	for name, spec := range plan.global {
-		if spec.Deployment.IsModelRuntime() && TaskConsumerInUse(cfg, GlobalModelScope, name) {
+		if spec.Deployment.IsModelRuntime() && spec.Deployment.MissingLocalModel() == nil && TaskConsumerInUse(cfg, GlobalModelScope, name) {
 			used[spec.Binding.Deployment] = spec.Deployment
 		}
 	}
@@ -150,12 +154,12 @@ func modelRuntimeTaskDeploymentsInUse(cfg *RouterConfig) map[string]ModelDeploym
 			continue
 		}
 		for name, spec := range bindings {
-			if spec.Deployment.IsModelRuntime() && TaskConsumerInUse(scoped, recipe, name) {
+			if spec.Deployment.IsModelRuntime() && spec.Deployment.MissingLocalModel() == nil && TaskConsumerInUse(scoped, recipe, name) {
 				used[spec.Binding.Deployment] = spec.Deployment
 			}
 		}
 	}
-	for name, deployment := range implicitTaskDeploymentsInUse(cfg, plan) {
+	for name, deployment := range resolvedTaskDeploymentsInUse(cfg) {
 		used[name] = deployment
 	}
 	return used
@@ -203,20 +207,23 @@ func TaskConsumerInUse(scoped *RouterConfig, scope RecipeName, name string) bool
 		return EmbeddingModelsNeeded(services, primary, true)[primary]
 	}
 	switch name {
+	// A module switched off (enabled: false) runs no model, as its
+	// classifier does not.
 	case "domain_classifier":
-		return scoped.UsesSignalTypeInReachableRouting(SignalTypeDomain)
+		return scoped.CategoryModel.Active() && scoped.UsesSignalTypeInReachableRouting(SignalTypeDomain)
 	case "prompt_guard":
-		return scoped.UsesJailbreakClassifierInReachableRouting()
+		return scoped.PromptGuard.Enabled && scoped.UsesJailbreakClassifierInReachableRouting()
 	case "pii_classifier":
-		return scoped.UsesSignalTypeInReachableRouting(SignalTypePII)
+		return scoped.PIIModel.Active() && scoped.UsesSignalTypeInReachableRouting(SignalTypePII)
 	case "fact_check_classifier":
-		return scoped.UsesSignalTypeInReachableRouting(SignalTypeFactCheck) ||
-			(scoped.ownsDefaultAPIConsumer() && (scoped.HallucinationMitigation.Enabled || len(scoped.RoutingProfileSignals().FactCheckRules) > 0))
+		return scoped.HallucinationMitigation.FactCheckModel.Active() &&
+			(scoped.UsesSignalTypeInReachableRouting(SignalTypeFactCheck) ||
+				(scoped.ownsDefaultAPIConsumer() && (scoped.HallucinationMitigation.Enabled || len(scoped.RoutingProfileSignals().FactCheckRules) > 0)))
 	case "feedback_detector":
 		return scoped.UsesSignalTypeInReachableRouting(SignalTypeUserFeedback) ||
 			(scoped.ownsDefaultAPIConsumer() && len(scoped.RoutingProfileSignals().UserFeedbackRules) > 0)
 	case "modality_detector":
-		return scoped.UsesSignalTypeInReachableRouting(SignalTypeModality)
+		return scoped.ModalityDetector.Enabled && scoped.UsesSignalTypeInReachableRouting(SignalTypeModality)
 	case "preference":
 		return scoped.UsesSignalTypeInReachableRouting(SignalTypePreference) && scoped.PreferenceUsesDecisionTask()
 	case "reask":
@@ -251,6 +258,16 @@ func TaskConsumerInUse(scoped *RouterConfig, scope RecipeName, name string) bool
 		return scoped.UsesSignalTypeInReachableRouting(SignalTypeClassifier)
 	case strings.HasPrefix(name, "safety."):
 		return scoped.UsesSignalTypeInReachableRouting(SignalTypeSafety)
+	case strings.HasPrefix(name, "complexity."):
+		// A complexity rule asks its model unless it scores its examples.
+		if !scoped.UsesSignalTypeInReachableRouting(SignalTypeComplexity) {
+			return false
+		}
+		for _, rule := range scoped.ComplexityRules {
+			if name == "complexity."+rule.Name {
+				return !scoped.ComplexityRuleUsesPrototypes(rule)
+			}
+		}
 	}
 	return false
 }
@@ -283,6 +300,20 @@ func (d ModelDeployment) validateModelRuntime() error {
 	if err := d.validateReplicas(); err != nil {
 		return err
 	}
+	if err := d.validateAttachedConnection(); err != nil {
+		return err
+	}
+	if d.Generation != nil {
+		return fmt.Errorf("generation applies to openai_chat deployments")
+	}
+	if d.OperatingPoint != nil {
+		if !d.Managed() {
+			return fmt.Errorf("operating_point pins the policy a managed deployment's package serves; an attached runtime reports its own")
+		}
+		if err := d.OperatingPoint.Validate(); err != nil {
+			return err
+		}
+	}
 	if !d.Managed() && len(d.Replicas) == 0 {
 		return nil
 	}
@@ -297,6 +328,44 @@ func (d ModelDeployment) validateModelRuntime() error {
 		return fmt.Errorf("revision applies only to Hub repositories")
 	}
 	return nil
+}
+
+// validateAttachedConnection checks the connection block of a model_runtime
+// deployment: it applies to its attached endpoints, never to a worker the
+// Router starts.
+func (d ModelDeployment) validateAttachedConnection() error {
+	if d.Capabilities != nil || len(d.QuestionTypes) > 0 {
+		return fmt.Errorf("a model_runtime deployment's capabilities come from its model card; capabilities and question_types apply to remote deployments")
+	}
+	attached := false
+	var endpoint *url.URL
+	for _, placement := range d.Placements() {
+		if placement.Endpoint == "" {
+			continue
+		}
+		attached = true
+		if parsed, err := url.Parse(placement.Endpoint); err == nil && parsed.Scheme != "unix" {
+			endpoint = parsed
+		}
+	}
+	if !attached {
+		if d.hasConnectionBlock() {
+			return fmt.Errorf("model, auth, headers, timeout_ms, max_retries, tls and limits apply to an attached endpoint, not to a worker the Router starts")
+		}
+		return nil
+	}
+	// The runtime contract answers each call once and bounds its own
+	// bodies; a retry could repeat a batched call.
+	if d.MaxRetries != nil || d.Limits != nil {
+		return fmt.Errorf("max_retries and limits apply to remote providers; an attached model_runtime takes endpoint, model, auth, headers, timeout_ms and tls")
+	}
+	if d.Model != "" && d.ServedName != "" && d.Model != d.ServedName {
+		return fmt.Errorf("model and served_name name the same served model; set one")
+	}
+	if d.TLS != nil && endpoint == nil {
+		return fmt.Errorf("tls applies to an https:// endpoint")
+	}
+	return d.validateConnection(endpoint, MaxRemoteTimeoutMs)
 }
 
 func validateModelRuntimeEndpoint(endpoint string) error {
@@ -321,7 +390,7 @@ func validateModelRuntimeEndpoint(endpoint string) error {
 
 // HasEngineArgs reports whether the deployment sets any engine argument.
 func (d ModelDeployment) HasEngineArgs() bool {
-	return d.MaxNumSeqs != nil || d.MaxNumBatchedTokens != nil || d.BatchWindowMS != nil || d.Dtype != "" || d.EnableSharedContext != nil
+	return d.MaxNumSeqs != nil || d.MaxNumBatchedTokens != nil || d.BatchWindowMS != nil || d.Dtype != "" || d.EnableSharedContext != nil || d.MaxModelLen != nil
 }
 
 func (d ModelDeployment) validateEngineArgs() error {
@@ -336,6 +405,12 @@ func (d ModelDeployment) validateEngineArgs() error {
 	}
 	if d.Dtype != "" && !modelRuntimeDtypes[d.Dtype] {
 		return fmt.Errorf("dtype must be one of auto, float32, bfloat16 or float16")
+	}
+	if d.MaxModelLen != nil && *d.MaxModelLen < 1 {
+		return fmt.Errorf("max_model_len must be at least 1")
+	}
+	if d.MaxModelLen != nil && (d.Endpoint != "" || len(d.Replicas) > 0) {
+		return fmt.Errorf("max_model_len applies only to a managed worker, not to an attached endpoint or replicas")
 	}
 	return nil
 }

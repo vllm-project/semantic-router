@@ -109,10 +109,11 @@ const redisSchema = object('Redis Backend', {
   }),
 })
 
-const modelModule = (label: string, detector = false): RouterStructuredSchema =>
-  object(label, {
-    model_ref: text('Model Ref'),
-    model_id: text('Model ID'),
+/** Module fields that chose a model before bindings and deployments did. */
+export const DEPRECATED_MODULE_MODEL_FIELDS = ['model_id', 'model_ref', 'backend'] as const
+
+const modelModule = (label: string, detector = false): RouterStructuredSchema => ({
+  ...object(label, {
     threshold: number('Threshold', { min: 0, max: 1, step: 0.01 }),
     use_cpu: boolean('Use CPU'),
     ...(detector
@@ -122,7 +123,9 @@ const modelModule = (label: string, detector = false): RouterStructuredSchema =>
           context_window_size: number('Context Window Size', { min: 1 }),
         }
       : {}),
-  })
+  }),
+  omit: DEPRECATED_MODULE_MODEL_FIELDS,
+})
 
 const prototypeScoringSchema = object('Prototype Scoring', {
   enabled: boolean('Enabled'),
@@ -140,17 +143,17 @@ const prototypeScoringSchema = object('Prototype Scoring', {
 const classifierModelSchema = (
   label: string,
   mappingField?: 'category_mapping_path' | 'pii_mapping_path',
-): RouterStructuredSchema =>
-  object(label, {
-    model_ref: text('Model Ref'),
-    model_id: text('Model ID'),
+): RouterStructuredSchema => ({
+  ...object(label, {
     threshold: number('Threshold', { min: 0, max: 1, step: 0.01 }),
     use_cpu: boolean('Use CPU'),
     ...(mappingField ? { [mappingField]: text('Mapping Path') } : {}),
     ...(mappingField === 'category_mapping_path'
       ? { fallback_category: text('Fallback Category') }
       : {}),
-  })
+  }),
+  omit: DEPRECATED_MODULE_MODEL_FIELDS,
+})
 
 const tracingSchema = object('Tracing', {
   enabled: boolean('Enabled'),
@@ -184,14 +187,6 @@ const metricsSchema = object('Metrics', {
 export const ROUTER_STRUCTURED_FIELDS: Partial<
   Record<RouterSystemKey, Record<string, RouterStructuredFieldDefinition>>
 > = {
-  system_models: {
-    decision_model: {
-      label: 'Default Decision Deployment',
-      description:
-        'Reference a declared deployment. Models and task overrides are managed in System One → Decision Models.',
-      schema: object('Decision Model', { deployment: text('Deployment', { required: true }) }),
-    },
-  },
   router_core: {
     streamed_body: {
       label: 'Streamed Body',
@@ -431,12 +426,14 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
   classifier: {
     domain: {
       label: 'Domain Module',
-      description: 'Domain classifier binding, threshold, mapping, and fallback.',
+      description:
+        'Domain classifier threshold, mapping, and fallback. Bind the domain signal in Decision Model & Bindings to choose its model.',
       schema: classifierModelSchema('Domain Module', 'category_mapping_path'),
     },
     pii: {
       label: 'PII Module',
-      description: 'PII classifier binding, threshold, and type mapping.',
+      description:
+        'PII classifier threshold and type mapping. Bind the pii signal in Decision Model & Bindings to choose its model.',
       schema: classifierModelSchema('PII Module', 'pii_mapping_path'),
     },
     mcp: {
@@ -470,12 +467,13 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
   hallucination_mitigation: {
     fact_check: {
       label: 'Fact Check Module',
-      description: 'Fact-check model binding and threshold.',
+      description: 'Fact-check threshold. Bind the fact_check signal to choose its model.',
       schema: modelModule('Fact Check Module'),
     },
     detector: {
       label: 'Detector Module',
-      description: 'Hallucination detector model and span thresholds.',
+      description:
+        'Hallucination detector span thresholds. Bind the hallucination signal to choose its model.',
       schema: modelModule('Detector Module', true),
     },
   },

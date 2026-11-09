@@ -59,7 +59,7 @@ func TestAnthropicTelemetryDecodesWithoutWeakeningUnknownFieldChecks(t *testing.
 		t.Fatalf("same-format response lost telemetry or omission evidence: body=%s diagnostics=%+v", result.Body, result.Diagnostics)
 	}
 	unknown := bytes.Replace(body, []byte(`"iterations":`), []byte(`"unmodeled_usage":0,"iterations":`), 1)
-	_, err = engine.TranslateResponse(llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1, unknown, nil)
+	_, err = conformanceEngine().TranslateResponse(llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1, unknown, nil)
 	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json")
 }
 

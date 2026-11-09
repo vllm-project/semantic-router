@@ -14,8 +14,8 @@ the vLLM Semantic Router in a production environment.
 | Channel | Tag pattern | Updated on | Use case |
 |---------|-------------|------------|----------|
 | **Versioned** | `v0.4.0` / `0.4.0` | Tagged releases only | Production release identifier; verify and pin a digest where immutability is required |
-| **Nightly** | `nightly-YYYYMMDD` | Date-stamped builds | Pre-release testing |
-| **Latest** | `latest` | Affected image changes on `main` + releases | Development only |
+| **Nightly** | `nightly-YYYYMMDD` | Daily, from the newest `main` commit that passes full qualification | Pre-release testing |
+| **Latest** | `latest` | Explicit `main` publications + releases | Development only |
 
 :::tip Recommendation
 Use a **versioned** release in production, then record the resolved artifact
@@ -288,7 +288,13 @@ helm upgrade semantic-router \
 ## 5. Nightly Builds
 
 Nightly images use `nightly-YYYYMMDD`; nightly chart versions use
-`0.0.0-nightly.YYYYMMDD`. They are intended for pre-release testing only, and
+`0.0.0-nightly.YYYYMMDD`. Every day at 02:00 UTC the newest `main` commit is
+qualified with the complete CPU suite and, if it passes, published under that
+day's date. A day without new commits, or whose commit fails qualification,
+publishes no new date. A published date never changes: another qualification on
+the same date publishes nothing, and its commit appears under a later date, so
+the images and chart you pinned stay the ones you tested. They are intended for
+pre-release testing only, and
 older dates may no longer be retained. Discover an available date before
 pinning it:
 

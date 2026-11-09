@@ -26,6 +26,22 @@ func newClassifierOptionBuilder(cfg *config.RouterConfig, options []option) *cla
 	return &classifierOptionBuilder{cfg: cfg, options: options}
 }
 
+// runtime is the model runtime the builder's consumers prepare on: the
+// recipe's, else one over the builder's own configuration.
+func (b *classifierOptionBuilder) runtime() *classifierModelRuntime {
+	if b.models != nil {
+		return b.models
+	}
+	standalone := standaloneModelRuntime()
+	if b.cfg != nil {
+		standalone.cfg = config.WithModelResources(b.cfg)
+		if b.cfg.RoutingScope != "" {
+			standalone.recipe = b.cfg.RoutingScope
+		}
+	}
+	return standalone
+}
+
 func (b *classifierOptionBuilder) build(categoryMapping *CategoryMapping) ([]option, error) {
 	if err := b.prepareEmbeddingSet(); err != nil {
 		return nil, err

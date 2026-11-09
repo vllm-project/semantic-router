@@ -22,11 +22,21 @@ func parseModelBindings(value Value) (map[string]config.ModelBinding, error) {
 	if err != nil {
 		return nil, err
 	}
-	var bindings map[string]config.ModelBinding
+	var authored map[string]config.ModelBinding
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&bindings); err != nil {
+	if err := decoder.Decode(&authored); err != nil {
 		return nil, err
+	}
+	// A signal-type key and the consumer name of earlier releases bind the
+	// same consumer.
+	bindings := make(map[string]config.ModelBinding, len(authored))
+	for key, binding := range authored {
+		consumer := config.BindingConsumer(key)
+		if _, both := bindings[consumer]; both {
+			return nil, fmt.Errorf("%s and %s bind the same signal; keep %s", key, config.BindingKey(consumer), config.BindingKey(consumer))
+		}
+		bindings[consumer] = binding
 	}
 	return bindings, nil
 }

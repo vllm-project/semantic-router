@@ -123,6 +123,46 @@ Each `spec.vllmEndpoints` entry uses one backend type:
 After changing discovery behavior, test missing, ambiguous, and cross-namespace
 references as well as the successful path.
 
+## Model deployments and the decision model
+
+`spec.config.model_deployments`, `model_bindings` and `decision_model` become
+`global.model_catalog.deployments`, `bindings` and `system.decision_model`.
+The Operator decodes the first two strictly against the Router's types, so a
+misspelled field fails reconciliation. The decision model must be a
+`model_runtime` or `systemone` deployment.
+
+The Operator writes no other system line and no module threshold that the
+resource doesn't set. A built-in signal that no binding names follows the
+decision model. An unset threshold comes from the deployment that answers the
+module: calibrated values for a built-in model, 0.5 for a remote `systemone`
+model.
+
+A remote deployment's key never goes in the resource. `auth.api_key_env` names
+a `spec.env` variable filled from a Secret:
+
+```yaml
+spec:
+  env:
+    - name: SYSTEMONE_KEY
+      valueFrom:
+        secretKeyRef: {name: systemone-credentials, key: api-key}
+  config:
+    model_deployments:
+      d3-remote:
+        provider: systemone
+        endpoint: https://systemone.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth: {api_key_env: SYSTEMONE_KEY}
+        timeout_ms: 1500
+      local-vela: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu}
+    decision_model: {deployment: d3-remote}
+    model_bindings:
+      pii: local-vela
+```
+
+The Operator mounts no Secret into the Router Pod, so `auth.api_key_file` is
+not available here.
+
 ## Develop and validate
 
 ```bash
