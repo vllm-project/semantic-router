@@ -305,6 +305,24 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "BackendTelemetryConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "poll_interval": {
+          "type": "string"
+        },
+        "request_timeout": {
+          "type": "string"
+        },
+        "ttl": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "BatchClassificationConfig": {
       "properties": {
         "max_batch_size": {
@@ -529,6 +547,18 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "CanonicalBackendMetrics": {
+      "properties": {
+        "port": {
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "CanonicalBackendRef": {
       "properties": {
         "name": {
@@ -581,6 +611,19 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "engine": {
+          "type": "string",
+          "enum": [
+            "",
+            "vllm",
+            "sglang",
+            "atom",
+            "tensorrt-llm"
+          ]
+        },
+        "metrics": {
+          "$ref": "#/$defs/CanonicalBackendMetrics"
         }
       },
       "additionalProperties": false,
@@ -5510,6 +5553,9 @@
         },
         "profiling": {
           "$ref": "#/$defs/ProfilingConfig"
+        },
+        "backend_telemetry": {
+          "$ref": "#/$defs/BackendTelemetryConfig"
         }
       },
       "additionalProperties": false,
@@ -6050,7 +6096,13 @@
     "ProviderReliability": {
       "properties": {
         "lb_policy": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "",
+            "round_robin",
+            "least_request",
+            "load_aware"
+          ]
         },
         "retry_count": {
           "type": "integer"

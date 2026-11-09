@@ -19,3 +19,15 @@ export const DECISION_SIGNAL_TYPES = [
 ]
 export const ALGORITHM_TYPES = ROUTER_CONFIG_EXTENSION.algorithms.map((surface) => surface.type)
 export const PLUGIN_TYPES = ROUTER_CONFIG_EXTENSION.plugins.map((surface) => surface.type)
+
+export type BackendEngine = 'vllm' | 'sglang' | 'atom' | 'tensorrt-llm'
+export type ProviderLBPolicy = 'round_robin' | 'least_request' | 'load_aware'
+
+export const BACKEND_ENGINES =
+  ROUTER_CONFIG_SCHEMA.$defs.CanonicalBackendRef.properties.engine.enum.filter(
+    (value): value is BackendEngine => value !== '',
+  )
+export const PROVIDER_LB_POLICIES =
+  ROUTER_CONFIG_SCHEMA.$defs.ProviderReliability.properties.lb_policy.enum.filter(
+    (value): value is ProviderLBPolicy => value !== '',
+  )

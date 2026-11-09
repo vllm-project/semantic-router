@@ -609,6 +609,7 @@ func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fal
 	if len(profile.ExtraHeaders) > 0 {
 		ref.Headers = copyStringMap(profile.ExtraHeaders)
 	}
+	applyEndpointTelemetryToBackendRef(&ref, endpoint.Telemetry)
 	return ref
 }
 

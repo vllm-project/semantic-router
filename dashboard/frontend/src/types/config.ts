@@ -12,6 +12,8 @@
 // PROVIDERS - Model and endpoint configuration
 // =============================================================================
 
+import type { BackendEngine, ProviderLBPolicy } from '../generated/routerConfigContract'
+
 export interface ProviderEndpoint {
   name: string
   weight: number
@@ -21,6 +23,8 @@ export interface ProviderEndpoint {
   provider?: string
   api_key?: string
   api_key_env?: string
+  engine?: BackendEngine
+  metrics?: { port?: number; path?: string }
 }
 
 export interface ProviderModel {
@@ -42,7 +46,7 @@ export interface ProviderModel {
     completion_per_1m?: number
   }
   reliability?: {
-    lb_policy?: 'round_robin' | 'least_request'
+    lb_policy?: ProviderLBPolicy
     retry_count?: number
     retry_on?: string
     consecutive_5xx?: number
