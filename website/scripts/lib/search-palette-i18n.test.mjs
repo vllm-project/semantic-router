@@ -48,3 +48,20 @@ test('search palette keeps the trigger and empty-result text translatable', () =
   )
   assert.match(source, /id: 'theme\.SearchBar\.noResults'/)
 })
+
+test('zh-Hans no-results message keeps the query interpolation contract', () => {
+  const source = readFileSync(searchBarPath, 'utf8')
+  const catalog = JSON.parse(readFileSync(zhHansCatalogPath, 'utf8'))
+  const message = catalog['theme.SearchBar.noResults']?.message ?? ''
+
+  assert.match(
+    message,
+    /\{term\}/,
+    'the zh-Hans noResults message must keep the {term} placeholder',
+  )
+  assert.match(
+    source,
+    /id: 'theme\.SearchBar\.noResults'[\s\S]*?\}\s*,\s*\{\s*term\s*\}\s*,?\s*\)/,
+    'the noResults translation must receive the query as { term }',
+  )
+})
