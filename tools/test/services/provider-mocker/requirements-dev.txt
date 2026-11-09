@@ -6,14 +6,14 @@ anyio==4.15.1
     # via
     #   httpx
     #   starlette
-certifi==2026.7.22
+certifi==2026.10.18
     # via
     #   httpcore
     #   httpx
 click==8.5.0
     # via uvicorn
 fastapi==0.115.0
-    # via -r tools/test/services/provider-mocker/requirements.in
+    # via -r requirements.in
 h11==0.16.0
     # via
     #   httpcore
@@ -21,7 +21,7 @@ h11==0.16.0
 httpcore==1.0.9
     # via httpx
 httpx==0.27.2
-    # via -r tools/test/services/provider-mocker/requirements-dev.in
+    # via -r requirements-dev.in
 idna==3.20
     # via
     #   anyio
@@ -34,7 +34,7 @@ pluggy==1.6.0
     # via pytest
 pydantic==2.9.2
     # via
-    #   -r tools/test/services/provider-mocker/requirements.in
+    #   -r requirements.in
     #   fastapi
 pydantic-core==2.23.4
     # via pydantic
@@ -42,12 +42,12 @@ pygments==2.21.0
     # via pytest
 pytest==9.0.3
     # via
-    #   -r tools/test/services/provider-mocker/requirements-dev.in
+    #   -r requirements-dev.in
     #   pytest-asyncio
 pytest-asyncio==1.4.0
-    # via -r tools/test/services/provider-mocker/requirements-dev.in
+    # via -r requirements-dev.in
 ruff==0.12.12
-    # via -r tools/test/services/provider-mocker/requirements-dev.in
+    # via -r requirements-dev.in
 sniffio==1.3.1
     # via httpx
 starlette==0.38.6
@@ -58,5 +58,6 @@ typing-extensions==4.16.0
     #   fastapi
     #   pydantic
     #   pydantic-core
+    #   pytest-asyncio
 uvicorn==0.30.6
-    # via -r tools/test/services/provider-mocker/requirements.in
+    # via -r requirements.in
