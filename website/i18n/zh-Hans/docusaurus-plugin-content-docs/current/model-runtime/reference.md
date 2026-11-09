@@ -134,7 +134,7 @@ Server-Timing: parse;dur=0.021, tokenize;dur=0.153, queue;dur=0.008, forward;dur
 
 这些 token 和读完整文本给出的是一样的，所以答案相同。runtime 第一次用一个分词器时，会在探针文本上检查每一种切法，切法检查不过关的文本整本读。会丢字符或折叠字符的分词器——比如 WordPiece 丢空白、把超过 100 字符的词当一个未知 token——从不在连续串内部切：这样的串整本读，好在串本身只有几个 token，代价很小。只读了一部分的输入，其 usage 按读到的 token 计（会超过预算），并加 `"tokens_lower_bound": true`。
 
-按窗口读输入的模型，读到扫描预算为止，单位 token。`overflow: window` 的分类最多读 `max_tokens`。Vela 2.0 的问题把长的 state 部分在窗口里整读，上限是它卡片上的 `limits.max_scan_tokens`：CPU 上四个输入（Vela 2.0 0.3B 是 32,768 token），GPU 上 32 个。决策请求的 `options.max_tokens`，或 models 文件选项 `max_scan_tokens`，设另一个值。带 `overflow: truncate` 的问题只读该部分的前 `limits.truncate_tokens`：CPU 上一个输入，一次前向。两类问题共享它们的模型输入，和没有 `overflow` 时一样，除非某部分必须按窗口读。超过扫描预算的输入直接失败，不读：
+按窗口读输入的模型，读到扫描预算为止，单位 token。`overflow: window` 的分类最多读 `max_tokens`。Vela 2.0 的问题把长的 state 部分在窗口里整读，上限是它卡片上的 `limits.max_scan_tokens`：CPU 上四个输入（Vela 2.0 0.3B 是 32,768 token），GPU 上 32 个。决策请求的 `options.max_tokens`，或 models 文件选项 `max_scan_tokens`，设另一个值。带 `overflow: truncate` 的问题只读该部分的前 `limits.truncate_tokens`：CPU 上一个输入，一次前向。Vela 3.0 的 evidence span 问题改为截到它自己的 32,768 token 窗口。两类问题共享它们的模型输入，和没有 `overflow` 时一样，除非某部分必须按窗口读。超过扫描预算的输入直接失败，不读：
 
 | 条目错误 | 含义 |
 | --- | --- |
