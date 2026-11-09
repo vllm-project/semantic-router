@@ -12,13 +12,15 @@ import { ArticleFigure } from '@site/src/components/ArticleMedia';
 {/* DRAFT SKELETON. Each section has a note on what it covers and the facts it can use.
     Measured numbers stay as ⟦placeholders⟧ until a real run fills them. Pick up any section in the PR. */}
 
-{/* 1. THE PROBLEM. Open on the workload, not the tool. A coding agent fans out into subagents,
-    reads whatever files it is pointed at, and runs shell commands. Three costs follow:
-    frontier-model prices on easy subagent tasks, secrets and personal data in what it reads,
-    and commands nobody looked at. Close on the one-line answer: one small decision model on
-    your machine makes all of those calls, and your requests still go to Claude as usual. */}
+A coding agent does three things all day: it hands work to subagents, it reads files, and it runs commands. Each one carries a cost that the session never shows you.
 
-A coding agent does three things all day: it hands work to subagents, it reads files, and it runs commands. ⟦Opening paragraph: the cost and risk in each of those three, told as one short scene.⟧
+**Subagents run at your model's price.** A general-purpose subagent starts on your session's model. Listing files, counting lines or renaming a variable costs the same as a hard design question, because nothing asks how hard the task is before the subagent starts.
+
+**Reads carry more than code.** The agent reads what it is pointed at: a support ticket with a customer's email and card number, a config file with an API key, a vendored README with an instruction to AI agents hidden in a comment. Whatever it reads becomes part of the conversation, and what a file says can steer what the agent does next.
+
+**Commands blur together.** A long session runs dozens of Bash commands, and almost all of them are harmless. A `git reset --hard` chained with a force push is not, yet in a long run of prompts, or in auto mode with none at all, it looks like the rest.
+
+Each of these is a routing question: which model should take this task, what in this output should the model never see, which command needs a person. vLLM Semantic Router answers questions like these for every request at the gateway. vSR asks them inside the coding agent, at the moment each one happens.
 
 **vSR** is a Claude Code plugin that puts vLLM Semantic Router's decision model inside the harness. One small model, vela3-lite, answers the questions a router would ask: how hard is this task, is there personal data in this output, is this file trying to instruct the agent, does this command need a person. Your requests still go to Claude as usual.
 
@@ -172,16 +174,27 @@ Then, in a Claude Code session:
 /vsr:setup
 ```
 
-{/* 6. Setup looks at the machine and recommends a runtime: local GPU, local CPU, or a remote
-    runtime you host. It installs into ~/.local/share/vsr without sudo, turns on five apps
-    (check stays off), shows the settings it will write, and probes each app.
-    CPU note: on a CPU without native bf16, setup times a bf16 and a float32 matmul and serves
-    in float32 when bf16 is clearly slower. Measured on ⟦CPU model⟧: ⟦bf16 per-call latency⟧
-    vs ⟦float32 per-call latency⟧, same verdicts, same memory. Numbers from a real run only. */}
+Setup looks at the machine first and installs nothing until you choose. The recommended path picks a runtime for you: it keeps a runtime that already answers, or installs vela3-lite on this machine's GPU, or on its CPU when there is no GPU. It turns on five apps with measured defaults (check stays off), shows the settings it will write, and asks each app one question against the runtime before it finishes. Run `/reload-plugins`, then `/vsr`, and the pane shows the runtime, the apps and their waits.
 
-- ⟦Local or remote: which to pick.⟧
-- ⟦Running on CPU: the dtype choice and the measured numbers.⟧
-- ⟦After setup: `/reload-plugins`, then `/vsr`.⟧
+### Local or remote
+
+A **local runtime** keeps every decision on your machine. It installs into `~/.local/share/vsr` without sudo, and needs about 2.3 GB of RAM on CPU or about 2 GB of GPU memory. The model and its base, about 1.8 GB together, go to the Hugging Face cache. Setup checks the free disk before it installs, so a full disk stops it before the download instead of halfway through.
+
+A **remote runtime** puts the decision model on a GPU you host, and one runtime can serve a whole team. Everything the apps classify then goes to that host: `Read` and Bash output (with secrets already hidden when redact is on), fetched pages, prompts, subagent tasks, Bash commands and, with check on, Claude's answers. Setup says so before it connects, warns when the URL is plain `http`, and keeps the runtime's token in Claude Code's secure storage, never in `settings.json`.
+
+### Running on CPU
+
+vela3-lite serves in bf16 by default. CPUs without native bf16 support emulate it, and on those machines every decision slows to the point where the apps step aside. Setup measures this instead of guessing: before it starts the runtime, it times a bf16 and a float32 matrix multiply on your CPU, and serves in float32 when bf16 is more than 1.5 times slower.
+
+| | bf16 (emulated) | float32 |
+| --- | --- | --- |
+| Time per decision | 2 to 29 s | 0.7 to 2.4 s |
+| Decided within the default waits | none | redact, shield, guard |
+| Verdicts | same | same |
+
+<small>Measured with vela3-lite on an Intel Core i5-1135G7 (no native bf16), CPU only, Linux. float32 used no more memory than bf16.</small>
+
+On a CPU, each app's wait is the dial. Redact, shield and guard wait 3, 2 and 3 s by default, and step aside with a `SKIPPED` line when the model is slower than that. Set a wait to `until done` at the top of `/vsr` when you would rather wait than let anything through unchecked. Check stays off on CPU: it reads Claude's whole answer, and a long answer takes longer than its 3 s limit.
 
 ## What's next
 
