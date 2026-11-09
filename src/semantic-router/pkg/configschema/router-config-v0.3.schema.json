@@ -261,6 +261,9 @@
             "$ref": "#/$defs/AuthzProviderConfig"
           },
           "type": "array"
+        },
+        "gateway_credential": {
+          "$ref": "#/$defs/GatewayCredentialConfig"
         }
       },
       "additionalProperties": false,
@@ -572,6 +575,9 @@
         },
         "api_key_env": {
           "type": "string"
+        },
+        "trusted_gateway": {
+          "type": "boolean"
         },
         "auth": {
           "$ref": "#/$defs/DeploymentAuth"
@@ -3539,6 +3545,18 @@
         },
         "max_completion_tokens": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "GatewayCredentialConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "header": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
