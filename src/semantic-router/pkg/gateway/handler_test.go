@@ -675,3 +675,20 @@ func TestHandlerWritesAnAccessRecord(t *testing.T) {
 		t.Fatalf("record = %+v", r)
 	}
 }
+
+func TestHandlerReportsActualEndpointToRouting(t *testing.T) {
+	p := &fakeProcessor{}
+	u := &fakeUpstream{resp: func() *upstream.Response {
+		return &upstream.Response{
+			StatusCode: 200,
+			Header:     http.Header{"X-Vsr-Upstream-Host": {"spoofed:8000"}},
+			Body:       io.NopCloser(strings.NewReader("hello")),
+			Endpoint:   upstream.EndpointSpec{Host: "192.0.2.10", Port: 8000},
+		}
+	}}
+	h := newTestHandler(t, p, u)
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader("ping")))
+	if got := p.headers[1].Get("x-vsr-upstream-host"); got != "192.0.2.10:8000" {
+		t.Fatalf("routing saw endpoint %q", got)
+	}
+}

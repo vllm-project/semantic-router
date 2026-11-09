@@ -69,6 +69,38 @@ class MapperRuntimeTests(unittest.TestCase):
         )
         torch.testing.assert_close(mapped.float(), source[0] + source[1] + 1)
 
+    def test_loaded_weights_are_reused_without_reopening_artifact(self) -> None:
+        artifact = MapperArtifact.open(self.path, self.compat)
+        (self.path / "weights.safetensors").unlink()
+        source = {0: torch.ones(2, 2, 2), 1: torch.ones(2, 2, 2) * 2}
+        for channel in ("k", "v", "k"):
+            mapped = artifact.apply_layer(
+                0, channel, source, device="cpu", dtype=torch.bfloat16
+            )
+            torch.testing.assert_close(mapped.float(), source[0] + source[1] + 1)
+
+    def test_long_prefix_chunk_preserves_absolute_rope_positions(self) -> None:
+        artifact = MapperArtifact.open(self.path, self.compat)
+        positions = torch.arange(2051)
+        first = torch.ones(2051, 2, 2) / 4
+        second = torch.ones_like(first) / 8
+        source = {
+            0: (qwen3_rope(first, positions, theta=1_000_000), first),
+            1: (qwen3_rope(second, positions, theta=1_000_000), second),
+        }
+        mapped = map_source_cache(
+            artifact,
+            source,
+            positions,
+            source_rope_theta=1_000_000,
+            target_rope_theta=1_000_000,
+            device="cpu",
+            dtype=torch.float32,
+        )
+        expected_key = qwen3_rope(first + second + 1, positions, theta=1_000_000)
+        torch.testing.assert_close(mapped[0][0], expected_key, atol=1e-5, rtol=1e-5)
+        torch.testing.assert_close(mapped[0][1], first + second + 1)
+
     def test_rejects_wrong_tensor_shape_and_precision(self) -> None:
         bad = dict(self.tensors)
         bad["target.0.k.W"] = np.zeros((4, 4), dtype=np.float32)

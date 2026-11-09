@@ -576,6 +576,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		return nil
 	})
 
+	router.initializeKVHandoff()
 	return router
 }
 

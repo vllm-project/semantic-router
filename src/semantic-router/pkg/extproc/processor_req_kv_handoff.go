@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/kvtransfer"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -65,6 +67,8 @@ func (r *OpenAIRouter) encodeKVHandoff(body []byte, format llmprotocol.WireForma
 	if r == nil || r.KVHandoff == nil || ctx == nil || format != llmprotocol.OpenAIChatV1 {
 		return body, nil
 	}
+	ctx.KVSourceCacheID = ""
+	ctx.KVSourceIdentity = nil
 	var wire map[string]json.RawMessage
 	if err := json.Unmarshal(body, &wire); err != nil {
 		return nil, err
@@ -74,11 +78,11 @@ func (r *OpenAIRouter) encodeKVHandoff(body []byte, format llmprotocol.WireForma
 	_, hadHint := wire["kv_transfer_params"]
 	delete(wire, "kv_transfer_params")
 	var hint *kvtransfer.Hint
-	if !ctx.LooperRequest && ctx.AuthenticatedPrincipal != "" && ctx.SessionID != "" &&
-		(ctx.SessionProvenance == SessionProvenanceHeader || ctx.SessionProvenance == SessionProvenanceResponseAPI) &&
-		ctx.PreviousModel != "" && ctx.PreviousModel != ctx.RequestModel {
+	// The tenant-scoped registry owns source identity, not shared last-model telemetry.
+	if !ctx.LooperRequest && !ctx.ExpectStreamingResponse && ctx.AuthenticatedPrincipal != "" && ctx.SessionID != "" &&
+		(ctx.SessionProvenance == SessionProvenanceHeader || ctx.SessionProvenance == SessionProvenanceResponseAPI) {
 		hint, _ = r.KVHandoff.PlanDispatch(selectionRequestContext(ctx), KVDispatch{
-			Principal: ctx.AuthenticatedPrincipal, SessionID: ctx.SessionID,
+			Principal: ctx.AuthenticatedPrincipal, SessionID: routingSessionStateKey(ctx),
 			SessionProvenance: string(ctx.SessionProvenance), PreviousModel: ctx.PreviousModel,
 			TargetModel: ctx.RequestModel, BackendName: ctx.primaryBackendName, Turn: ctx.TurnIndex,
 		})
@@ -86,6 +90,23 @@ func (r *OpenAIRouter) encodeKVHandoff(body []byte, format llmprotocol.WireForma
 	if hint != nil && (hint.Namespace != cache.UserScopeNamespace(ctx.AuthenticatedPrincipal) ||
 		!cache.UserScopeSecretConfigured() || hint.CacheID == "" || hint.MapperID == "") {
 		hint = nil
+	}
+	if hint == nil && !ctx.LooperRequest && !ctx.ExpectStreamingResponse && routingSessionStateKey(ctx) != "" &&
+		ctx.AuthenticatedPrincipal != "" && cache.UserScopeSecretConfigured() &&
+		isTrustedStickySessionProvenance(ctx.SessionProvenance) &&
+		r.Config != nil && r.Config.KVTransfer != nil && r.Config.KVTransfer.Enabled {
+		backends := configuredKVBackends{backends: r.Config.KVTransfer.Backends}
+		identity, export, _, ok := backends.ResolveKVTarget(ctx.RequestModel, ctx.primaryBackendName)
+		if ok && export {
+			ctx.KVSourceCacheID = uuid.NewString()
+			ctx.KVSourceIdentity = &identity
+			value, err := json.Marshal(map[string]string{"namespace": cache.UserScopeNamespace(ctx.AuthenticatedPrincipal), "cache_id": ctx.KVSourceCacheID})
+			if err != nil {
+				return nil, err
+			}
+			wire["kv_transfer_params"] = value
+			return json.Marshal(wire)
+		}
 	}
 	if hint == nil {
 		if !hadHint {
@@ -97,6 +118,7 @@ func (r *OpenAIRouter) encodeKVHandoff(body []byte, format llmprotocol.WireForma
 	if err != nil {
 		return nil, err
 	}
+	ctx.KVTransferAttempted = true
 	wire["kv_transfer_params"] = value
 	return json.Marshal(wire)
 }

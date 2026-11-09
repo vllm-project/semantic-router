@@ -90,12 +90,16 @@ func kvAddressRecordFromContext(ctx *RequestContext) (kvtransfer.AddressRecord, 
 		turnCount = 1
 	}
 	return kvtransfer.AddressRecord{
-		SessionID: sessionKey,
-		SourcePod: ctx.UpstreamBackendAddress,
-		Model:     ctx.RequestModel,
-		Namespace: kvAddressNamespace(ctx),
-		TurnCount: turnCount,
-		UpdatedAt: time.Now().UTC(),
+		BackendName: ctx.primaryBackendName,
+		CacheID:     ctx.KVSourceCacheID,
+		Identity:    ctx.KVSourceIdentity,
+		ExpiresAt:   kvSourceExpiry(ctx),
+		SessionID:   sessionKey,
+		SourcePod:   ctx.UpstreamBackendAddress,
+		Model:       ctx.RequestModel,
+		Namespace:   kvAddressNamespace(ctx),
+		TurnCount:   turnCount,
+		UpdatedAt:   time.Now().UTC(),
 	}, true
 }
 
@@ -104,4 +108,11 @@ func kvAddressNamespace(ctx *RequestContext) string {
 		return ""
 	}
 	return cache.UserScopeNamespace(ctx.AuthenticatedPrincipal)
+}
+
+func kvSourceExpiry(ctx *RequestContext) time.Time {
+	if ctx.KVSourceCacheID == "" || ctx.KVSourceIdentity == nil {
+		return time.Time{}
+	}
+	return time.Now().Add(kvSourceCandidateTTL)
 }
