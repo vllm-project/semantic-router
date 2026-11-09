@@ -63,6 +63,8 @@ global:
     memory:
       enabled: true
       auto_store: false
+      query_rewrite:
+        deployment: memory-rewriter
       milvus:
         address: host.docker.internal:19530
         collection: memory_test_ci
@@ -85,20 +87,9 @@ global:
         embedding_config:
           model_type: mmbert
           target_dimension: 768
-    external:
-      - llm_provider: vllm
-        model_role: memory_rewrite
-        llm_endpoint:
-          address: host.docker.internal
-          port: 8000
-          protocol: http
-        llm_model_name: qwen3
-        llm_timeout_seconds: 30
-      - llm_provider: vllm
-        model_role: memory_extraction
-        llm_endpoint:
-          address: host.docker.internal
-          port: 8000
-          protocol: http
-        llm_model_name: qwen3
-        llm_timeout_seconds: 30
+    deployments:
+      memory-rewriter:
+        provider: openai_chat
+        endpoint: http://host.docker.internal:8000/v1
+        model: qwen3
+        timeout_ms: 30000

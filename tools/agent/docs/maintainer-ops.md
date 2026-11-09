@@ -230,8 +230,12 @@ contract without making roadmap, priority, or close decisions:
 - `/accept` lets a collaborator with write, maintain, or admin permission accept
   an issue that already has exactly one recognized owner: one Workgroup for
   project work or `owner/maintainers` for repository governance; each exact
-  `/accept` event runs a paginated repository-wide reconciliation so earlier
-  valid decisions recover from queued, failed, or interrupted workflow runs;
+  `/accept` event reconciles only that issue and refreshes the open pull
+  requests that reference it. An hourly sweep in `community-labels.yml`
+  revisits open `needs-acceptance` issues updated in the last three days (a
+  manual dispatch sweeps all of them) and stops before the Actions token's
+  remaining API budget falls below a reserve, so earlier valid decisions
+  recover from queued, failed, or interrupted workflow runs;
 - `accepted`, `ready-for-dev`, contributor-ready labels, priority, assignment,
   and milestones cannot bypass their prerequisites;
 - assignment moves accepted work to `in-progress`;

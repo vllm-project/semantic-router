@@ -89,6 +89,32 @@ Operator 始终渲染规范的 v0.3 Router 文档。其配置表面分为两部�
 
 已弃用的 `semantic_cache` 适配器为兼容性保留；`response_cache` 是规范字段。不要同时设置两者。
 
+### 模型部署与决策模型 {#model-deployments-and-the-decision-model}
+
+`config.model_deployments`、`config.model_bindings` 和 `config.decision_model` 分别变为 `global.model_catalog.deployments`、`global.model_catalog.bindings` 和 `global.model_catalog.system.decision_model`。它们的写法与本地配置相同；见[模型目录参考](../installation/model-catalog.md)。决策模型必须是 `model_runtime` 或 `systemone` 部署，没有绑定指定的内置信号使用它。
+
+远程部署的密钥从不写在资源中：`auth.api_key_env` 指定一个由 Secret 填充的 `spec.env` 变量。Operator 不会把 Secret 文件挂载进 Router Pod，因此不能使用 `auth.api_key_file`。
+
+```yaml
+spec:
+  env:
+    - name: SYSTEMONE_KEY
+      valueFrom:
+        secretKeyRef: {name: systemone-credentials, key: api-key}
+  config:
+    model_deployments:
+      d3-remote:
+        provider: systemone
+        endpoint: https://systemone.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth: {api_key_env: SYSTEMONE_KEY}
+        timeout_ms: 1500
+      local-vela: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu}
+    decision_model: {deployment: d3-remote}
+    model_bindings:
+      pii: local-vela
+```
+
 ## 状态 {#status}
 
 `status` 报告观察到的 generation、副本数、conditions、phase、网关模式以及检测到的 OpenShift 特性。控制器和自动化应使用 conditions 和 `status.observedGeneration`，而不仅仅是 phase。

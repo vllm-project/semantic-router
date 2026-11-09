@@ -8,6 +8,7 @@ import type {
   TopicContinuitySignal,
 } from '../types/config'
 import type { BuiltInModelCatalog, CatalogBenchmark, CatalogIndex } from '../types/modelCatalog'
+import type { ModelBindings } from './modelBindings'
 
 export type ListenerConfig = Listener
 
@@ -165,6 +166,14 @@ export interface ModelConfigEntry {
   modality?: string
 }
 
+/** A backend's credential, the connection block a deployment uses. */
+export interface BackendRefAuth {
+  header?: string
+  prefix?: string
+  api_key_env?: string
+  api_key_file?: string
+}
+
 export interface BackendRefEntry {
   name?: string
   endpoint?: string
@@ -179,6 +188,11 @@ export interface BackendRefEntry {
   chat_path?: string
   api_key?: string
   api_key_env?: string
+  auth?: BackendRefAuth
+  headers?: Record<string, string>
+  // The backend receives the request's deployment-injected gateway credential
+  // instead of a static key (global.services.authz.gateway_credential).
+  trusted_gateway?: boolean
 }
 
 export interface ModelReasoningConfig {
@@ -323,7 +337,7 @@ export type RoutingStrategy = (typeof ROUTING_STRATEGIES)[number]
 export const DEFAULT_ROUTING_STRATEGY: RoutingStrategy = 'priority'
 
 export interface RoutingConfig {
-  model_bindings?: Record<string, Record<string, string>>
+  model_bindings?: ModelBindings
   modelCards?: RoutingModelCard[]
   signals?: ConfigSignals
   projections?: ConfigProjections
@@ -337,7 +351,7 @@ export interface EntrypointConfig {
 }
 
 export interface RecipeRoutingConfig {
-  model_bindings?: Record<string, Record<string, string>>
+  model_bindings?: ModelBindings
   signals?: ConfigSignals
   projections?: ConfigProjections
   decisions?: DecisionConfig[]
@@ -434,6 +448,7 @@ export interface RouterReplayConfig {
   capture_request_body?: boolean
   capture_response_body?: boolean
   capture_personal_data?: boolean
+  capture_tool_results?: boolean
   max_records?: number
   max_body_bytes?: number
   max_tool_trace_bytes?: number
@@ -473,14 +488,18 @@ export interface SemanticCacheConfig {
 }
 
 export interface FactCheckModelModuleConfig {
+  /** @deprecated Bind the fact_check signal to a deployment instead. */
   model_id?: string
+  /** @deprecated Bind the fact_check signal to a deployment instead. */
   model_ref?: string
   threshold?: number
   use_cpu?: boolean
 }
 
 export interface HallucinationDetectorModuleConfig {
+  /** @deprecated Bind the hallucination signal to a deployment instead. */
   model_id?: string
+  /** @deprecated Bind the hallucination signal to a deployment instead. */
   model_ref?: string
   threshold?: number
   use_cpu?: boolean
@@ -497,6 +516,7 @@ export interface HallucinationMitigationConfig {
 
 export interface FeedbackDetectorConfig {
   enabled?: boolean
+  /** @deprecated Bind the user_feedback signal to a deployment instead. */
   model_id?: string
   threshold?: number
   use_cpu?: boolean
@@ -677,7 +697,12 @@ export interface ExternalModelEndpointConfig {
   prompt_template?: string
 }
 
+/**
+ * @deprecated The Router reads each external model as a deployment with
+ * provider classify, openai_chat or openai_embeddings; declare that instead.
+ */
 export interface ExternalModelConfig {
+  name?: string
   llm_provider: string
   model_role: string
   llm_endpoint?: ExternalModelEndpointConfig
@@ -710,16 +735,24 @@ export interface AdvancedToolFilteringConfig {
   block_tools?: string[]
 }
 
-export interface CanonicalSystemModels {
+/** Model paths a deprecated system line names, by line; read-only in the Dashboard. */
+export type DeprecatedSystemModelLines = Partial<
+  Record<
+    | 'safety'
+    | 'hazard'
+    | 'prompt_guard'
+    | 'domain_classifier'
+    | 'pii_classifier'
+    | 'fact_check_classifier'
+    | 'hallucination_detector'
+    | 'feedback_detector',
+    string
+  >
+>
+
+export interface CanonicalSystemModels extends DeprecatedSystemModelLines {
+  /** The deployment that answers question-type signals without a binding. */
   decision_model?: { deployment: string }
-  safety?: string
-  hazard?: string
-  prompt_guard?: string
-  domain_classifier?: string
-  pii_classifier?: string
-  fact_check_classifier?: string
-  hallucination_detector?: string
-  feedback_detector?: string
 }
 
 export interface ModelSelectionConfig {
@@ -761,8 +794,10 @@ export interface ModelSelectionConfig {
 }
 
 export interface CanonicalClassifierConfig {
+  /** model_id and model_ref are deprecated: bind the domain signal instead. */
   domain?: ModelConfig & { model_ref?: string; fallback_category?: string }
   mcp?: MCPCategoryModel
+  /** model_id and model_ref are deprecated: bind the pii signal instead. */
   pii?: ModelConfig & { model_ref?: string }
   preference?: {
     use_contrastive?: boolean
@@ -777,6 +812,11 @@ export interface CanonicalHallucinationModuleConfig {
 }
 
 export interface CanonicalEmbeddingCatalogConfig {
+  /** The deployment that embeds text. */
+  default?: string
+  /** The deployment that embeds images. */
+  multimodal?: string
+  /** Embedding settings; its model paths and endpoint are the deprecated way to choose the models. */
   semantic?: EmbeddingModelsConfig
 }
 
@@ -789,6 +829,7 @@ export interface RouterCoreConfig {
   skip_processing?: { enabled?: boolean }
   model_selection?: ModelSelectionConfig
   learning?: RouterLearningConfig
+  allow_lossy_translation?: string[]
 }
 
 export interface CanonicalServiceGlobalConfig {
@@ -825,38 +866,122 @@ export interface CanonicalIntegrationGlobalConfig {
 }
 
 export interface CanonicalModelModulesConfig {
+  safety?: Record<string, unknown>
   prompt_compression?: PromptCompressionConfig
+  /** model_id and model_ref are deprecated: bind the jailbreak signal instead. */
   prompt_guard?: ModelConfig & { enabled?: boolean; model_ref?: string; use_vllm?: boolean }
   classifier?: CanonicalClassifierConfig
   complexity?: Record<string, unknown>
   hallucination_mitigation?: CanonicalHallucinationModuleConfig
+  /** model_ref is deprecated: bind the user_feedback signal instead. */
   feedback_detector?: FeedbackDetectorConfig & { model_ref?: string }
   modality_detector?: ModalityDetectorConfig
 }
 
+/** The API the Router speaks to a deployment. */
+export type ModelDeploymentProvider =
+  | 'model_runtime'
+  | 'systemone'
+  | 'openai_embeddings'
+  | 'classify'
+  | 'openai_chat'
+  | 'rerank'
+
+/** A credential read from an environment variable or a file, never written inline. */
+export interface DeploymentAuth {
+  header?: string
+  /** An empty prefix sends the bare key. */
+  prefix?: string
+  api_key_env?: string
+  api_key_file?: string
+}
+
+export interface DeploymentTLS {
+  ca_file?: string
+  server_name?: string
+  cert_file?: string
+  key_file?: string
+  insecure_skip_verify?: boolean
+}
+
+export interface DeploymentLimits {
+  max_request_bytes?: number
+  max_response_bytes?: number
+}
+
+export interface DeploymentCapabilities {
+  /** systemone only. */
+  question_types?: string[]
+  /** systemone only. */
+  presets?: string[]
+  /** openai_embeddings only. */
+  dimensions?: number
+}
+
+export interface ModelReplica {
+  device?: string
+  endpoint?: string
+  /** The served model an attached worker answers with. */
+  model?: string
+  /** @deprecated Use model. */
+  served_name?: string
+}
+
+/**
+ * A model the Router starts (artifact, device, engine arguments, replicas) or
+ * attaches, or a remote API. An attached endpoint and every remote provider
+ * take the connection block: endpoint, model, auth, headers, timeout_ms,
+ * max_retries, tls, limits and capabilities.
+ */
 export interface CanonicalModelDeployment {
+  /** `http` with external_model is the deprecated form of classify, openai_chat or openai_embeddings. */
+  provider?: ModelDeploymentProvider | 'http'
   artifact?: string
   revision?: string
-  external_model?: string
-  provider?: string
   device?: string
   input?: { max_tokens?: number; overflow?: 'reject' | 'truncate' | 'window' }
-  profile?: string
-  endpoint?: string
-  replicas?: Array<{ device?: string; endpoint?: string; served_name?: string }>
+  max_num_seqs?: number
+  max_num_batched_tokens?: number
+  batch_window_ms?: number
+  dtype?: 'auto' | 'float32' | 'bfloat16' | 'float16'
+  enable_shared_context?: boolean
+  max_model_len?: number
+  /** A managed model_runtime deployment's calibrated operating points. */
+  operating_point?: { path: string; sha256: string }
+  replicas?: ModelReplica[]
+  /** @deprecated Use model. */
   served_name?: string
   public_name?: string
+  endpoint?: string
+  /** The remote model ID; on an attached model_runtime endpoint, the served model. */
+  model?: string
+  /** openai_chat only: how the chat model generates its answer. */
+  generation?: { max_tokens?: number; temperature?: number }
+  auth?: DeploymentAuth
+  /** Non-secret headers; a credential header belongs in auth. */
+  headers?: Record<string, string>
+  timeout_ms?: number
+  max_retries?: number
+  tls?: DeploymentTLS
+  limits?: DeploymentLimits
+  capabilities?: DeploymentCapabilities
+  /** @deprecated Use capabilities.question_types. */
+  question_types?: string[]
+  /** @deprecated Declare a classify, openai_chat or openai_embeddings deployment. */
+  external_model?: string
 }
 
 export interface CanonicalModelCatalogConfig {
-  bindings?: Record<string, { deployment: string; contract: string }>
+  bindings?: ModelBindings
   deployments?: Record<string, CanonicalModelDeployment>
   embeddings?: CanonicalEmbeddingCatalogConfig
   system?: CanonicalSystemModels
+  /** @deprecated Declare a deployment with provider classify, openai_chat or openai_embeddings. */
   external?: ExternalModelConfig[]
   kbs?: Array<Record<string, unknown>>
   modules?: CanonicalModelModulesConfig
   admission?: Record<string, Record<string, unknown>>
+  signal_timeout_ms?: number
 }
 
 export interface RouterLearningConfig {
@@ -873,6 +998,7 @@ export interface RouterLearningConfig {
       headers?: {
         session?: string
         conversation?: string
+        agent?: string
       }
     }
     tuning?: {
@@ -880,6 +1006,11 @@ export interface RouterLearningConfig {
       min_turns_before_switch?: number
       switch_margin?: number
       stability_weight?: number
+    }
+    release?: {
+      enabled?: boolean
+      header?: string
+      min_user_turns_between?: number
     }
   }
   state_store?: {
@@ -1116,12 +1247,18 @@ export interface MetadataSignal {
 export interface ClassifierSignal {
   name: string
   description?: string
-  type: 'local' | 'llm' | 'sequence_classifier'
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
+  /** @deprecated Name a deployment instead. */
+  type?: 'local' | 'llm' | 'sequence_classifier'
+  /** @deprecated Name a deployment instead. */
   model?: string
+  /** @deprecated Name a deployment instead. */
   model_path?: string
   labels: string[]
   instructions?: string
   disable_rationale?: boolean
+  /** @deprecated Name a deployment instead. */
   use_cpu?: boolean
 }
 
@@ -1310,6 +1447,8 @@ export interface ConversationSignal {
 
 export interface ComplexitySignal {
   name: string
+  /** The deployment that answers this rule; without one, its binding or the decision model does. */
+  deployment?: string
   threshold?: number
   hard_above?: number
   easy_below?: number

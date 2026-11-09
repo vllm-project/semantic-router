@@ -1,13 +1,15 @@
 """The Router's own verdict on a config file, for `vllm-sr config validate`.
 
 The CLI's offline checks cover the document's structure and the rules the CLI
-owns. The rules the Router applies when it loads a document -- cross-field
-contracts such as a modality decision's models, or a module's required
-settings -- live in the Router alone, so `config validate` asks the Router:
-the stack's Router image, run once with `-validate-config` and no network, or
-a running Router through its management API (`--endpoint`). Either way one set
-of rules decides what `vllm-sr serve` and `vllm-sr config apply` accept, and
-the answer carries the warnings the Router logs when it loads the document.
+owns. The rules the Router applies when it loads a document -- its model
+deployments and bindings, and cross-field contracts such as a modality
+decision's models or a module's required settings -- live in the Router
+alone, so `config validate` and `config migrate` ask the Router: a local
+Router binary (`--router-binary` or VLLM_SR_ROUTER_BINARY), or the stack's
+Router image, run once with `-validate-config` and no network, or a running
+Router through its management API (`--endpoint`). Either way one set of rules
+decides what `vllm-sr serve` and `vllm-sr config apply` accept, and the
+answer carries the warnings the Router logs when it loads the document.
 """
 
 from __future__ import annotations
@@ -30,8 +32,10 @@ from cli.router_management_client import RouterManagementClient, RouterManagemen
 from cli.runtime_stack import resolve_runtime_stack
 
 ROUTER_BINARY = "/usr/local/bin/router"
+ROUTER_BINARY_ENV = "VLLM_SR_ROUTER_BINARY"
 VALIDATION_TIMEOUT_SECONDS = 120
 _UNKNOWN_FLAG = "flag provided but not defined: -validate-config"
+_UNKNOWN_MIGRATE_FLAG = "flag provided but not defined: -migrate-config"
 
 
 @dataclass(frozen=True)
@@ -49,10 +53,69 @@ class RouterVerdict:
     valid: bool
     error: str = ""
     warnings: tuple[RouterWarning, ...] = field(default_factory=tuple)
+    # With migrate: the document with its deprecated model fields in the forms
+    # that replace them, the deprecated fields that have none, and why the
+    # Router could not write it.
+    migrated: str = ""
+    kept: tuple[RouterWarning, ...] = field(default_factory=tuple)
+    migration_error: str = ""
 
 
 class RouterValidationUnavailableError(Exception):
     """The Router's validation could not run; the message says why."""
+
+
+def local_router_verdict(
+    config_path: Path,
+    *,
+    gateway: str,
+    models_dir: Path | None = None,
+    image: str | None = None,
+    binary: str | None = None,
+    migrate: bool = False,
+) -> RouterVerdict:
+    """The verdict of a Router on this host: a local binary, or an image.
+
+    An explicit binary wins, then an explicit image, then the binary
+    VLLM_SR_ROUTER_BINARY names, then the images `vllm-sr serve` would run.
+    With migrate, the verdict also carries the migrated document.
+    """
+
+    executable = router_binary(binary) if binary or not image else None
+    if executable:
+        return validate_with_binary(
+            config_path,
+            executable,
+            gateway=gateway,
+            models_dir=models_dir,
+            migrate=migrate,
+        )
+    return validate_with_image(
+        config_path,
+        validation_image(image),
+        gateway=gateway,
+        models_dir=models_dir,
+        migrate=migrate,
+    )
+
+
+def router_binary(explicit: str | None = None) -> str | None:
+    """The local Router executable to validate with, or None when none is named.
+
+    A name that is not an executable is an error, never a reason to fall
+    back to an image.
+    """
+
+    name = (explicit or os.getenv(ROUTER_BINARY_ENV) or "").strip()
+    if not name:
+        return None
+    path = shutil.which(name)
+    if path is None:
+        source = "--router-binary" if explicit else ROUTER_BINARY_ENV
+        raise RouterValidationUnavailableError(
+            f"{source} names {name}, which is not an executable"
+        )
+    return os.path.abspath(path)
 
 
 def validation_image(explicit: str | None = None) -> str:
@@ -113,7 +176,12 @@ def _present_image(explicit: str | None) -> str:
 
 
 def validate_with_image(
-    config_path: Path, image: str, *, gateway: str, models_dir: Path | None = None
+    config_path: Path,
+    image: str,
+    *,
+    gateway: str,
+    models_dir: Path | None = None,
+    migrate: bool = False,
 ) -> RouterVerdict:
     """Run the image's Router once on the file, without network access.
 
@@ -133,14 +201,55 @@ def validate_with_image(
     ]
     if models_dir is not None and models_dir.is_dir():
         command += ["-v", f"{models_dir.resolve()}:/app/models:ro,z"]
-    command += [
-        image,
-        "-validate-config",
-        "-config",
-        "/dev/stdin",
-        "-gateway",
-        gateway,
-    ]
+    command += [image, *_validate_arguments(gateway, migrate)]
+    return _run_validation(
+        command,
+        config_path,
+        subject=f"the Router image {image}",
+        source=f"the Router in {image}",
+    )
+
+
+def validate_with_binary(
+    config_path: Path,
+    binary: str,
+    *,
+    gateway: str,
+    models_dir: Path | None = None,
+    migrate: bool = False,
+) -> RouterVerdict:
+    """Run a local Router binary once on the file, which goes in on stdin.
+
+    It runs where the models directory `serve` mounts at /app/models lies,
+    so relative model paths resolve as they do in the Router's container.
+    """
+
+    workdir = (
+        models_dir.parent if models_dir is not None and models_dir.is_dir() else None
+    )
+    subject = f"the Router binary {binary}"
+    return _run_validation(
+        [binary, *_validate_arguments(gateway, migrate)],
+        config_path,
+        subject=subject,
+        source=subject,
+        cwd=workdir,
+    )
+
+
+def _validate_arguments(gateway: str, migrate: bool = False) -> list[str]:
+    arguments = ["-validate-config", "-config", "/dev/stdin", "-gateway", gateway]
+    return [*arguments, "-migrate-config"] if migrate else arguments
+
+
+def _run_validation(
+    command: list[str],
+    config_path: Path,
+    *,
+    subject: str,
+    source: str,
+    cwd: Path | None = None,
+) -> RouterVerdict:
     try:
         result = subprocess.run(
             command,
@@ -148,27 +257,31 @@ def validate_with_image(
             capture_output=True,
             timeout=VALIDATION_TIMEOUT_SECONDS,
             check=False,
+            cwd=cwd,
         )
     except (OSError, subprocess.SubprocessError) as error:
         raise RouterValidationUnavailableError(
-            f"the Router image {image} could not run: {error}"
+            f"{subject} could not run: {error}"
         ) from error
     stderr = result.stderr.decode("utf-8", "replace")
     if _UNKNOWN_FLAG in stderr:
-        raise RouterValidationUnavailableError(
-            f"the Router image {image} predates `-validate-config`"
-        )
+        raise RouterValidationUnavailableError(f"{subject} predates `-validate-config`")
+    if _UNKNOWN_MIGRATE_FLAG in stderr:
+        raise RouterValidationUnavailableError(f"{subject} predates `-migrate-config`")
     report = _report(result.stdout.decode("utf-8", "replace"))
     if report is None or result.returncode not in (0, 1):
         detail = stderr.strip().splitlines()[-1:] or [f"exit {result.returncode}"]
         raise RouterValidationUnavailableError(
-            f"the Router image {image} gave no verdict: {detail[0]}"
+            f"{subject} gave no verdict: {detail[0]}"
         )
     return RouterVerdict(
-        source=f"the Router in {image}",
+        source=source,
         valid=bool(report.get("valid")),
         error=str(report.get("error") or ""),
         warnings=_warnings(report.get("warnings")),
+        migrated=str(report.get("migrated") or ""),
+        kept=_warnings(report.get("kept")),
+        migration_error=str(report.get("migration_error") or ""),
     )
 
 

@@ -23,10 +23,13 @@ func (c *Classifier) buildPolicySignalDispatchers(
 		history     []string
 		historyOnce sync.Once
 	)
+	// Only the safety signals below read this history, so it keeps the user
+	// messages routing_input left out.
+	routing := requestFacts.RoutingInput
 	historyForSignals := func() []string {
 		historyOnce.Do(func() {
 			history = historyForHistoryAwareSignals(
-				priorUserMessages,
+				safetyPriorUserMessages(priorUserMessages, routing),
 				nonUserMessages,
 			)
 		})
@@ -36,7 +39,7 @@ func (c *Classifier) buildPolicySignalDispatchers(
 		{
 			config.SignalTypeSafety, "Safety",
 			func(ctx context.Context) {
-				c.evaluateSafetySignals(ctx, results, mu, textForSignal(config.SignalTypeSafety), usedSignals)
+				c.evaluateSafetySignals(ctx, results, mu, safetyText(textForSignal(config.SignalTypeSafety), routing), usedSignals)
 			},
 		},
 		{
@@ -47,11 +50,11 @@ func (c *Classifier) buildPolicySignalDispatchers(
 						jailbreakInputTexts(input.Current), jailbreakInputTexts(input.History))
 					return
 				}
-				c.evaluateJailbreakSignal(
+				c.evaluateJailbreakSignalPieces(
 					ctx,
 					results,
 					mu,
-					textForSignal(config.SignalTypeJailbreak),
+					safetyPieces(textForSignal(config.SignalTypeJailbreak), routing),
 					historyForSignals(),
 				)
 			},
@@ -59,11 +62,11 @@ func (c *Classifier) buildPolicySignalDispatchers(
 		{
 			config.SignalTypePII, "PII",
 			func(ctx context.Context) {
-				c.evaluatePIISignalWithToolResults(
+				c.evaluatePIISignalPieces(
 					ctx,
 					results,
 					mu,
-					textForSignal(config.SignalTypePII),
+					safetyPieces(textForSignal(config.SignalTypePII), routing),
 					historyForSignals(),
 					toolResultTexts,
 					toolResultScanIncomplete,

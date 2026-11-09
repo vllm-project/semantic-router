@@ -242,6 +242,7 @@ global:
         batch_window_ms: 0.5
         dtype: bfloat16
         enable_shared_context: false
+        max_model_len: 32000
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -250,6 +251,9 @@ global:
 	if d.MaxNumSeqs == nil || *d.MaxNumSeqs != 64 || d.MaxNumBatchedTokens == nil || *d.MaxNumBatchedTokens != 16384 ||
 		d.BatchWindowMS == nil || *d.BatchWindowMS != 0.5 || d.Dtype != "bfloat16" || d.EnableSharedContext == nil || *d.EnableSharedContext {
 		t.Fatalf("engine arguments = %+v", d)
+	}
+	if d.MaxModelLen == nil || *d.MaxModelLen != 32000 {
+		t.Fatalf("max_model_len = %v", d.MaxModelLen)
 	}
 }
 

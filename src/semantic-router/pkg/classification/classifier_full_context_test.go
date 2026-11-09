@@ -83,13 +83,13 @@ func TestExplicitBindingInputPolicyUsesSelectedRecipeDeployment(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.CategoryModel.MaxSequenceLength = 32768
 	cfg.ModelBindings = map[string]config.ModelBinding{"domain_classifier": {Deployment: "selected"}}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"other": {Provider: "candle", Input: config.ModelInputBudget{MaxTokens: 32768}}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"other": {Provider: config.ModelRuntimeProvider, Input: config.ModelInputBudget{MaxTokens: 32768}}}
 	c := &Classifier{Config: cfg}
 	for _, tc := range []struct {
 		provider string
 		limit    int
 		want     bool
-	}{{"candle", 0, false}, {"candle", 512, false}, {"ort", 32768, true}, {"http", 32768, false}} {
+	}{{config.ModelRuntimeProvider, 0, false}, {config.ModelRuntimeProvider, 512, false}, {config.ModelRuntimeProvider, 32768, true}, {config.ClassifyProvider, 32768, false}} {
 		cfg.ModelDeployments["selected"] = config.ModelDeployment{Provider: tc.provider, Input: config.ModelInputBudget{MaxTokens: tc.limit}}
 		if got := c.hasLongContextClassifier(config.SignalTypeDomain); got != tc.want {
 			t.Fatalf("%+v got full-context=%v", tc, got)

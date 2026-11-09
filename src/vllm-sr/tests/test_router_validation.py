@@ -239,18 +239,21 @@ def test_config_validate_prints_the_routers_warnings(monkeypatch, tmp_path):
     assert "the modality signal never matches" in result.stderr
 
 
-def test_config_validate_says_when_only_the_cli_checked(tmp_path):
+def test_config_validate_says_when_only_the_structural_checks_ran(tmp_path):
     config = tmp_path / "config.yaml"
     config.write_text(CONFIG, encoding="utf-8")
 
     result = CliRunner().invoke(main, ["config", "validate", "--config", str(config)])
 
     assert result.exit_code == 0, result.output
-    assert "Only the CLI's own checks ran" in result.stdout
+    assert (
+        "Only the CLI's structural checks ran: Router image validation is off"
+        in result.stdout
+    )
+    assert "--router-binary" in result.stdout
     assert result.stderr == ""
     offline = CliRunner().invoke(
         main, ["config", "validate", "--config", str(config), "--offline"]
     )
-    assert (
-        offline.exit_code == 0 and "Only the CLI's own checks ran" not in offline.output
-    )
+    assert offline.exit_code == 0
+    assert "Only the CLI's structural checks ran (--offline)" in offline.stdout

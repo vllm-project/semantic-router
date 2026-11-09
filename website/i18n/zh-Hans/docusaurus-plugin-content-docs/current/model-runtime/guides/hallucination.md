@@ -55,7 +55,7 @@ FactCheck 和 Halu 都由 router 跑在 CPU 上。Halu 合起来最多读 8,192 
 
 ## 选它跑在哪 {#choose-where-it-runs}
 
-绑定名叫 `hallucination_detector`，读答案的文本片段（`token_spans.v1`）：
+绑定键是 `hallucination`，信号读答案的文本片段：
 
 ```yaml
 global:
@@ -69,9 +69,7 @@ global:
           max_tokens: 8192
           overflow: reject
     bindings:
-      hallucination_detector:
-        deployment: vela-halu
-        contract: token_spans.v1
+      hallucination: vela-halu
 ```
 
 ## 验一下 {#check-it}

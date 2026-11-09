@@ -125,6 +125,78 @@ Keep these rules in mind:
 - keep model choice separate; that belongs in `algorithm/`
 - keep route-side behavior separate; that belongs in `plugin/`
 
+## Choose the User Text Signals Read
+
+Signals read the last user message that has text. Some clients put text there
+that is not the user's question, and `global.router.routing_input` tells the
+Router to leave it out:
+
+```yaml
+global:
+  router:
+    routing_input:
+      # A user message whose text matches one of these RE2 patterns is never
+      # routing text.
+      skip_user_messages_matching:
+        - '(?s)^\s*OpenClaw runtime context:.*End OpenClaw runtime context\.\s*$'
+      # Spans between these literal markers are cut from the routing text.
+      strip_blocks:
+        - start: '<relevant-memories>'
+          end: '</relevant-memories>'
+        - start: '<recalled-memories>'
+          end: '</recalled-memories>'
+```
+
+- OpenClaw 2026.10.4 and later end every turn, including tool-result turns,
+  with a separate user message that holds only runtime metadata. Without the
+  skip pattern, every request routes on that metadata.
+- OpenClaw memory plugins prepend recalled memories to the user's prompt on
+  every turn: memory-lancedb-pro wraps them in `<relevant-memories>`, mem0's
+  plugin in `<relevant-memories>` or `<recalled-memories>`. Stripping the blocks
+  keeps them from drowning out the question and spares learned signals from
+  reading them.
+
+The routing text is the last user message that is not skipped and still has
+text after stripping. It takes the place of the last user message for:
+
+- every routing signal, and the conversation facts they read;
+- the semantic-cache lookup query;
+- tool selection;
+- the RAG query;
+- memory: the retrieval query, the history its query rewriting reads, and the
+  user message it stores;
+- the query that model-selection algorithms read;
+- the question the hallucination check reads;
+- Replay's prompt;
+- the routing preview, classify and eval APIs.
+
+A skipped message is not counted as a user turn, so a runtime-context turn
+after a tool result leaves the request a tool-loop turn, and user-feedback and
+re-ask signals do not fire on it. The request sent to the model is unchanged,
+and context-length estimates still count all of it.
+
+Jailbreak, PII and content-safety signals keep scanning skipped messages and
+stripped blocks along with the routing text, and tool-result checks are
+unaffected, so a client cannot hide content from them inside a fake memory block
+or a fake runtime-context turn. Every other signal, keyword rules included,
+reads only the routing text.
+
+- Patterns use Go RE2 syntax and match anywhere in the text unless anchored with
+  `^` and `$`. A pattern that matches empty text is rejected when the config
+  loads.
+- Only a message whose content is all text can be skipped. A message that also
+  carries images, audio or tool results always routes.
+- Markers are literal and case-sensitive. Blocks are cut left to right and do
+  not nest: a block ends at the first end marker after its start marker. A start
+  marker with no end marker after it stays in the routing text.
+- When every user message is skipped, routing proceeds as for a request without
+  user text.
+- The semantic cache compares the routing text, but skipped messages and
+  stripped blocks must still match before a cached answer is reused.
+- `llm_routing_input_removed_total` counts skipped messages and stripped blocks,
+  and Replay's route diagnostics record both counts per request. The removed
+  text is never logged.
+
 ## Next Steps
 
 - Read [Projections](../projection/overview) when you need `PROJECTION partition`, weighted score aggregation, or named routing bands.

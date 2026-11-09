@@ -364,7 +364,12 @@ func (d *decompiler) decompileClassifierSignals() {
 		if rule.Description != "" {
 			d.write("  description: %q\n", rule.Description)
 		}
-		d.write("  type: %q\n", rule.Type)
+		if rule.Deployment != "" {
+			d.write("  deployment: %q\n", rule.Deployment)
+		}
+		if rule.Type != "" {
+			d.write("  type: %q\n", rule.Type)
+		}
 		if rule.Model != "" {
 			d.write("  model: %q\n", rule.Model)
 		}
@@ -413,6 +418,9 @@ func (d *decompiler) decompileComplexitySignals() {
 		}
 		if comp.Description != "" {
 			d.write("  description: %q\n", comp.Description)
+		}
+		if comp.Deployment != "" {
+			d.write("  deployment: %q\n", comp.Deployment)
 		}
 		if comp.Composer != nil {
 			d.write("  composer: %s\n", decompileComposerObj(comp.Composer))

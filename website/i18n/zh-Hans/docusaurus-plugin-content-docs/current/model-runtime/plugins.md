@@ -105,7 +105,7 @@ example_host = "vllm_sr_example.accelerator:HostAccelerator"
 
 ## 从 router 用它 {#use-it-from-the-router}
 
-把插件装在 router 所用的 runtime 旁边，然后把一个功能绑到你模型的部署上。runtime 你自己跑的话，挂上去：
+把插件装在 router 所用的 runtime 旁边，然后在信号用到它的地方指定你模型的部署。runtime 你自己跑的话，挂上去：
 
 ```yaml
 global:
@@ -113,11 +113,11 @@ global:
     deployments:
       ticket-topics:
         provider: model_runtime
-        endpoint: http://runtime.internal:8100
-        served_name: keywords
+        endpoint: http://runtime.example.com:8100
+        model: keywords
 ```
 
-自定义分类器信号随后就能读它的标签；见[分类请求](./guides/classify.md#use-your-own-classifier)。router 会把绑定和模型在 `/v1/models` 里报告的标签对一遍。部署用 `device` 点名你的加速器，方式一样；router 只查格式，名字没有对应插件，runtime 拒绝并列出它有的一些。
+自定义分类器信号随后就能把 `ticket-topics` 写成自己的 `deployment` 并读它的标签；见[分类请求](./guides/classify.md#use-your-own-classifier)。router 会把规则和模型在 `/v1/models` 里报告的标签对一遍。部署用 `device` 点名你的加速器，方式一样；router 只查格式，名字没有对应插件，runtime 拒绝并列出它有的一些。
 
 ## 插件的规矩 {#rules-for-plugins}
 

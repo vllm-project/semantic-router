@@ -44,9 +44,10 @@ global:
 
 ## Choose where it runs
 
-The binding is `embedding` and reads vectors (`embedding.v1`). Every service
-that needs embeddings (caches, memory, vector stores, tools) uses the global
-binding, so declare it once:
+`global.model_catalog.embeddings.default` names the deployment that embeds
+text, the pre-declared `vela-embedding` unless you change it. Every service
+that needs embeddings (caches, memory, vector stores, tools) uses it. To change
+its device or input budget, declare the deployment under the same name:
 
 ```yaml
 global:
@@ -59,10 +60,8 @@ global:
         input:
           max_tokens: 8192
           overflow: truncate
-    bindings:
-      embedding:
-        deployment: vela-embedding
-        contract: embedding.v1
+    embeddings:
+      default: vela-embedding
 ```
 
 Different features may read different views of the same model, for example
@@ -73,23 +72,24 @@ own vector space and is stored separately.
 ## Use an external embedding service
 
 Any OpenAI-compatible `/embeddings` endpoint, for example `vllm serve` with an
-embedding model, can replace the local model for text. It replaces the
-`embedding` binding above, so leave that binding out:
+embedding model, can replace the local model for text. Declare it as an
+`openai_embeddings` deployment and name it in `embeddings.default`; the Router
+posts to `<endpoint>/embeddings`:
 
 ```yaml alternative
 global:
   model_catalog:
+    deployments:
+      remote-embed:
+        provider: openai_embeddings
+        endpoint: https://embedding.example.com/v1
+        model: BAAI/bge-m3
+        auth: {api_key_env: EMBEDDING_API_KEY}
+        timeout_ms: 5000
+        max_retries: 2
+        capabilities: {dimensions: 1024}
     embeddings:
-      semantic:
-        embedding_config:
-          backend: openai_compatible
-          model_type: remote
-          target_dimension: 1024
-        endpoint:
-          base_url: https://embedding.example.com/v1
-          model: BAAI/bge-m3
-          api_key_env: EMBEDDING_API_KEY
-          dimensions: 1024
+      default: remote-embed
 ```
 
 The service receives the text being embedded. Features that need images,

@@ -18,18 +18,32 @@ type configValidationReport struct {
 	Valid    bool                   `json:"valid"`
 	Error    string                 `json:"error,omitempty"`
 	Warnings []config.ConfigWarning `json:"warnings"`
+	// Migrated is the file with its deprecated model fields in the forms
+	// that replace them (-migrate-config); Kept are its notes: the deprecated
+	// fields that have no replacement and stay, and what an operator must do
+	// (migration_action); MigrationError is why it could not be written.
+	Migrated       string                 `json:"migrated,omitempty"`
+	Kept           []config.ConfigWarning `json:"kept,omitempty"`
+	MigrationError string                 `json:"migration_error,omitempty"`
 }
 
 // validateConfigFile validates the file as the Router loads it, with
 // environment references left unresolved, and returns the exit status: 0 when
 // it would load, 1 when it wouldn't.
-func validateConfigFile(path string, gateway config.GatewayMode, out io.Writer) int {
+func validateConfigFile(path string, gateway config.GatewayMode, migrate bool, out io.Writer) int {
 	report := configValidationReport{Warnings: []config.ConfigWarning{}}
-	err := validateConfigInto(&report, path, gateway)
+	// The file may be a pipe (-config /dev/stdin): it is read once.
+	data, err := os.ReadFile(path)
+	if err == nil {
+		err = validateConfigInto(&report, data, gateway)
+	}
 	if err != nil {
 		report.Error = err.Error()
 	}
 	report.Valid = err == nil
+	if migrate && report.Valid {
+		migrateConfigInto(&report, data)
+	}
 	encoded, encodeErr := json.Marshal(report)
 	if encodeErr != nil {
 		fmt.Fprintf(os.Stderr, "encode the validation report: %v\n", encodeErr)
@@ -42,12 +56,18 @@ func validateConfigFile(path string, gateway config.GatewayMode, out io.Writer) 
 	return 0
 }
 
-func validateConfigInto(report *configValidationReport, path string, gateway config.GatewayMode) error {
-	mode, err := config.ParseGatewayMode(string(gateway))
+// migrateConfigInto writes the file's migration into the report.
+func migrateConfigInto(report *configValidationReport, data []byte) {
+	migrated, kept, err := config.MigrateModelResources(data)
 	if err != nil {
-		return err
+		report.MigrationError = err.Error()
+		return
 	}
-	data, err := os.ReadFile(path)
+	report.Migrated, report.Kept = string(migrated), kept
+}
+
+func validateConfigInto(report *configValidationReport, data []byte, gateway config.GatewayMode) error {
+	mode, err := config.ParseGatewayMode(string(gateway))
 	if err != nil {
 		return err
 	}

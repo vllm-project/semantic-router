@@ -32,6 +32,7 @@ Halu is the Router's specialist hallucination detector, and Omni serves its
 multimodal embeddings; see [Check answers against context](../../model-runtime/guides/hallucination.md)
 and [Images and audio](../../model-runtime/guides/multimodal.md).
 See the [Vela 1.0 release announcement](/blog/vela-models) for the full family.
+See [Vela 3.0](#vela-30) for the current routing-model family.
 
 ## What Problem Does It Solve?
 
@@ -129,15 +130,45 @@ and [matched instruction comparison](https://huggingface.co/vllm-sr/Vela-1.0-Omn
 for measurement identities, all tasks and regressions. These panels do not
 establish full multilingual or image coverage, latency, or memory performance.
 
+## Vela 3.0
+
+[Vela 3.0](https://huggingface.co/collections/vllm-sr/vela-30-6ad1c430eb1718eb4754edcd)
+is the current routing-model family: six open models, 0.3B to 27B, that answer
+the router's decisions and return the spans you name in one call. The default
+router, **vela3-fast**, is a 380M UltraBERT encoder (0.4B with the adapter a
+question runs on) that answers the built-in Domain, Guard, Safety, FactCheck,
+Feedback and Modality signals, with PII and hallucination span presets, and
+reads up to 32K tokens for a decision (8,192 per window for router questions
+and most spans; evidence spans read one window up to 32K).
+
+| Model | Size | Best for |
+| --- | ---: | --- |
+| [vela3-fast](https://huggingface.co/vllm-sr/vela3-fast) | 0.4B | The default router: decisions and spans per question, English, up to 32K tokens |
+| [vela3-fast-vision](https://huggingface.co/vllm-sr/vela3-fast-vision) | 0.3B | Images on CPU: image decisions, region pointing, OCR check, image hallucination spans |
+| [vela3-lite](https://huggingface.co/vllm-sr/vela3-lite) | 0.8B | Small GPUs, low latency, multilingual |
+| [vela3-mini](https://huggingface.co/vllm-sr/vela3-mini) | 4B | A balance of accuracy and speed |
+| [vela3-flash](https://huggingface.co/vllm-sr/vela3-flash) | 9B | High-accuracy routing |
+| [vela3-turbo](https://huggingface.co/vllm-sr/vela3-turbo) | 27B | The reference model |
+
+The 0.4B is the backbone plus the adapter a question runs on; the deployment
+loads its adapters, 1.5B parameters, about 7 GB.
+The model runtime serves **vela3-fast** and the four larger sizes
+([Choose a model](../../model-runtime/choose-a-model.md)); vela3-fast-vision
+runs through its own package for now.
+See the [Vela 3.0 launch announcement](/blog/vela-3-0-name-it-vela-finds-it) for
+benchmarks and the fast-vision package.
+
 ## Defaults and input budgets
 
 With no model configured, the built-in Domain, Guard, Safety, PII, FactCheck,
-Feedback, Modality and hallucination signals run on Vela 2.0 0.3B, with compatible questions grouped by deployment, input and execution stage ([Choose a model](../../model-runtime/choose-a-model.md#vela-20)).
-Semantic Embedding and the Reranker use Vela 1.0. The built-in Vela 1.0
-Hazard deployment is an explicit specialist binding; its presence in the
-catalog does not enable a Safety-to-Hazard cascade. Naming a Vela 1.0 task
-model in `global.model_catalog.system` selects that specialist. Only models required by
-a recipe are loaded. The base encoder is a training parent and is not loaded as
+Feedback, Modality and hallucination signals run on **vela3-fast** (Vela 3.0),
+with compatible questions grouped by deployment, input and execution stage ([Choose a model](../../model-runtime/choose-a-model.md#built-in-signals)).
+Semantic Embedding and the Reranker use Vela 1.0. The pre-declared `hazard`
+deployment (Vela 1.0 Hazard) answers a safety rule's `hazard` part; its
+presence in the catalog does not enable a Safety-to-Hazard cascade. A binding
+to a deployment of a Vela 1.0 task model selects that specialist
+([Choose a model for a signal](../../installation/choose-a-model-for-a-signal.md)).
+Only models required by a recipe are loaded. The base encoder is a training parent and is not loaded as
 an additional routing signal.
 
 A module running a Vela 1.0 task model without a threshold of its own uses
@@ -156,17 +187,16 @@ silently shortened.
 
 ## Configuration
 
-Every Vela model runs in the [model runtime](../../model-runtime/overview.md),
-so the defaults need no configuration. The following excerpt binds Domain to
+Every Vela model the Router serves runs in the
+[model runtime](../../model-runtime/overview.md), so the defaults need no
+configuration. The following excerpt binds Domain to
 an explicit CPU deployment with a 32K budget. Apply it to an existing
 configuration containing providers, signals and decisions.
 
 ```yaml
 routing:
   model_bindings:
-    domain_classifier:
-      deployment: vela-domain
-      contract: label_distribution.v1
+    domain: vela-domain
 
 global:
   model_catalog:
@@ -180,14 +210,17 @@ global:
           overflow: reject
 ```
 
-Use the same deployment and consumer-binding structure for other classifiers.
-PII returns `token_spans.v1`, Embedding `embedding.v1` and Reranker
-`relevance_scores.v1`. The runtime reads each model's architecture from its
-package, so these bindings need no adapter. See
-[Run it with the router](../../model-runtime/deploy.md) for the full contract.
+Bind the other shared-answer signals the same way, by signal type. Embeddings
+name their deployment in `global.model_catalog.embeddings.default`, and the
+reranker in the RAG plugin's `rerank.deployment`. The signal decides what each
+model returns (PII spans, embedding vectors, relevance scores), and the runtime
+reads each model's architecture from its package, so no contract or adapter is
+written. See [Run it with the router](../../model-runtime/deploy.md) for the
+full picture.
 
-For Hazard, bind the independent classifier contract `label_scores.v1` and pin
-`operating_point.json` with its SHA-256. The policy binds the weights, tokenizer,
+For Hazard as an independent classifier, declare its deployment with
+`operating_point` pinning `operating_point.json` and its SHA-256, and name that
+deployment on a classifier rule. The policy binds the weights, tokenizer,
 overlapping windows and twelve thresholds. Decisions select labels without
 replacing those thresholds. The reference configuration includes this complete
 pattern.
@@ -250,8 +283,8 @@ curl --fail 'http://localhost:8080/api/v1/routing/preview?trace=true' \
 Use the public model name declared by your entrypoint. Check `/ready` before
 sending requests and inspect the returned signal values and evaluation trace.
 
-Reranking executes inside the vectorstore RAG plugin after routing. Bind
-`rag.reranker` and enable `rerank` as described in
+Reranking executes inside the vectorstore RAG plugin after routing. Name the
+reranker deployment in the plugin's `rerank` block as described in
 [neural reranking](/docs/tutorials/plugin/rag#neural-reranking). Verify it through
 a real chat request with indexed documents. Its request trace records candidate
 count, reranker identity, relevance scores and reranking latency; routing Preview
@@ -259,9 +292,11 @@ does not execute the RAG plugin.
 
 ## Preserve an earlier deployment
 
-Explicit older model paths and aliases retain their original repositories.
-Select the matching mapping file, threshold and input policy when reproducing
-an earlier classifier. Upgrading to Vela does not rewrite explicit model choices.
+A deployment that names an older model keeps its original repository. Select
+the matching mapping file, threshold and input policy when reproducing an
+earlier classifier. Upgrading to Vela does not change the deployments you
+declared. [Migrate model resources](../../installation/model-resource-migration.md)
+shows how earlier model fields map to deployments and bindings.
 
 Changing embedding weights or representation changes the vector space. Response
 caches and memory isolate data by representation identity. Existing vector stores

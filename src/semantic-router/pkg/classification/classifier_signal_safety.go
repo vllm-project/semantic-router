@@ -42,21 +42,28 @@ func (b *classifierOptionBuilder) buildSafetyClassifiersOption() (option, error)
 			return nil, err
 		}
 	}
-	prepare := func(consumer, model string, labels []string, multiLabel bool) (labelClassifier, string, error) {
+	prepare := func(consumer string, labels []string, multiLabel bool) (labelClassifier, string, error) {
 		window := b.cfg.SafetyModels.Safety.Window
 		if multiLabel {
 			window = b.cfg.SafetyModels.Hazard.Window
 		}
-		if model == "" && window == nil {
-			judgment, err := prepareDecisionSafety(runtime, consumer, labels, multiLabel)
-			if err != nil {
-				return nil, "", err
+		spec, ok, err := runtime.task(consumer)
+		if err != nil {
+			return nil, "", err
+		}
+		if !ok {
+			return nil, "", fmt.Errorf("no deployment answers %s", consumer)
+		}
+		if !remoteTask(spec) && window == nil {
+			judgment, judgmentErr := prepareDecisionSafety(runtime, consumer, labels, multiLabel)
+			if judgmentErr != nil {
+				return nil, "", judgmentErr
 			}
 			if judgment != nil {
 				return judgment, consumer, nil
 			}
 		}
-		spec, window, err := b.safetySpec(runtime, consumer, model, multiLabel)
+		spec, window, err = b.safetySpec(runtime, consumer, multiLabel)
 		if err != nil {
 			return nil, "", err
 		}
@@ -68,9 +75,9 @@ func (b *classifierOptionBuilder) buildSafetyClassifiersOption() (option, error)
 		detector := &safetyDetector{}
 		models[rule.Name] = detector
 		var err error
-		detector.binary, detector.binaryKey, err = prepare("safety."+rule.Name, rule.Model, rule.EffectiveLabels(), false)
+		detector.binary, detector.binaryKey, err = prepare("safety."+rule.Name, rule.EffectiveLabels(), false)
 		if err == nil && rule.Hazard != nil {
-			detector.hazard, detector.hazardKey, err = prepare("safety."+rule.Name+".hazard", rule.Hazard.Model, rule.Hazard.Labels, true)
+			detector.hazard, detector.hazardKey, err = prepare("safety."+rule.Name+".hazard", rule.Hazard.Labels, true)
 		}
 		if err != nil {
 			for _, prepared := range models {
@@ -82,51 +89,45 @@ func (b *classifierOptionBuilder) buildSafetyClassifiersOption() (option, error)
 	return func(c *Classifier) { c.safetyClassifiers = models }, nil
 }
 
-func (b *classifierOptionBuilder) safetySpec(models *classifierModelRuntime, consumer, model string, multiLabel bool) (config.ResolvedModelBinding, *config.SequenceHeadWindowConfig, error) {
+func (b *classifierOptionBuilder) safetySpec(models *classifierModelRuntime, consumer string, multiLabel bool) (config.ResolvedModelBinding, *config.SequenceHeadWindowConfig, error) {
 	local := b.cfg.SafetyModels.Safety
-	contract := config.RemoteClassifierContractLabelDistribution
+	contract, module := config.RemoteClassifierContractLabelDistribution, "safety"
 	if multiLabel {
 		local = b.cfg.SafetyModels.Hazard
-		contract = config.RemoteClassifierContractLabelScores
+		contract, module = config.RemoteClassifierContractLabelScores, "hazard"
 	}
-	var spec config.ResolvedModelBinding
-	if model != "" {
-		spec = models.remoteSpec(consumer, &config.RemoteClassifierBackend{Model: model, Protocol: config.RemoteClassifierProtocolHTTPClassify, Contract: contract})
-	} else {
-		var err error
-		spec, err = models.localSpec(consumer, local.ModelID, "modernbert", contract, local.UseCPU, local.MaxSequenceLength)
-		if err != nil {
+	spec, _, err := models.task(consumer)
+	if err != nil {
+		return spec, nil, err
+	}
+	remote := remoteTask(spec)
+	if !remote {
+		if spec, err = models.localSpec(consumer, "modernbert", contract, local.MaxSequenceLength); err != nil {
 			return spec, nil, err
 		}
-		if _, declared := models.plan.Lookup(models.recipe, consumer); !declared {
-			module := "safety"
-			if multiLabel {
-				module = "hazard"
+		if _, keyed := b.cfg.ModelAdmission[spec.Binding.Deployment]; !keyed {
+			if admission, legacy := b.cfg.ModelAdmission[module]; legacy {
+				spec.Admission = admission
 			}
-			spec.Admission = b.cfg.ModelAdmission[module]
 		}
 	}
 	if spec.Binding.Contract != contract {
 		return spec, nil, fmt.Errorf("safety head has incompatible result contract")
 	}
 	var window *config.SequenceHeadWindowConfig
-	if model == "" && local.Window != nil {
+	if !remote && local.Window != nil {
 		copy := *local.Window
 		window = &copy
-	}
-	if spec.Deployment.Provider == "http" && window != nil {
-		return spec, nil, fmt.Errorf("remote safety head cannot use local token windows")
 	}
 	return spec, window, nil
 }
 
 func (b *classifierOptionBuilder) prepareSafetyClassifier(models *classifierModelRuntime, spec config.ResolvedModelBinding, window *config.SequenceHeadWindowConfig, labels []string, multiLabel bool) (labelClassifier, error) {
-	if spec.Deployment.Provider == "http" {
-		external, err := config.ResolveRemoteClassifierBackend(b.cfg, &config.RemoteClassifierBackend{Model: spec.Deployment.ExternalModel, Protocol: spec.Binding.Adapter, Contract: spec.Binding.Contract}, config.ModelRoleClassification, spec.Binding.Contract)
-		if err != nil {
-			return nil, err
+	if remoteTask(spec) {
+		if spec.Binding.Adapter != config.RemoteClassifierProtocolHTTPClassify {
+			return nil, fmt.Errorf("safety deployment %q: a safety head reads the classify API", spec.Binding.Deployment)
 		}
-		return prepareRemoteSafetyClassifier(models, spec, external, labels, multiLabel)
+		return prepareRemoteSafetyClassifier(models, spec, labels, multiLabel)
 	}
 	return newOwnedSafetyClassifier(models, spec, labels, multiLabel, window), nil
 }

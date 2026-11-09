@@ -12,7 +12,7 @@ import (
 func ToolsDBHandler(toolsDBPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Only allow GET requests
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}

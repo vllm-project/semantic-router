@@ -10,13 +10,12 @@ import (
 
 // IsCategoryEnabled checks if category classification is properly configured.
 func (c *Classifier) IsCategoryEnabled() bool {
-	modelConfigured := c.Config.CategoryModel.ModelID != "" || c.Config.CategoryModel.Backend != nil
-	return c.Config.CategoryModel.Active() && modelConfigured && c.CategoryMapping != nil
+	return c.Config.CategoryModel.Active() && moduleConfigured(c.Config, "domain_classifier") && c.CategoryMapping != nil
 }
 
 // initializeCategoryClassifier initializes the category classification model.
 func (c *Classifier) initializeCategoryClassifier() error {
-	if c.Config.CategoryModel.Backend != nil {
+	if remoteModule(c.Config, "domain_classifier") {
 		// Remote inference is fully constructed during classifier assembly and has
 		// no local model lifecycle to execute.
 		return nil
@@ -30,13 +29,13 @@ func (c *Classifier) initializeCategoryClassifier() error {
 		return fmt.Errorf("not enough categories for classification, need at least 2, got %d", numClasses)
 	}
 
+	deployment := moduleDeploymentName(c.Config, "domain_classifier")
 	logging.ComponentEvent("classifier", "category_classifier_init_started", map[string]interface{}{
-		"model_ref": c.Config.CategoryModel.ModelID,
-		"classes":   numClasses,
-		"use_cpu":   c.Config.CategoryModel.UseCPU,
+		"deployment": deployment,
+		"classes":    numClasses,
 	})
 
-	return c.categoryInitializer.Init(c.Config.CategoryModel.ModelID, c.Config.CategoryModel.UseCPU, numClasses)
+	return c.categoryInitializer.Init(deployment, c.Config.CategoryModel.UseCPU, numClasses)
 }
 
 // IsJailbreakEnabled checks if jailbreak detection is enabled and properly configured.
@@ -45,11 +44,11 @@ func (c *Classifier) IsJailbreakEnabled() bool {
 		return false
 	}
 
-	if c.Config.PromptGuard.Backend != nil {
+	if remoteModule(c.Config, "prompt_guard") {
 		return c.Config.PromptGuard.JailbreakMappingPath != "" && c.jailbreakInference != nil
 	}
 
-	return c.Config.PromptGuard.ModelID != ""
+	return moduleConfigured(c.Config, "prompt_guard")
 }
 
 // initializeJailbreakClassifier initializes the jailbreak classification model.
@@ -62,7 +61,7 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 		return err
 	}
 
-	if c.Config.PromptGuard.Backend != nil {
+	if remoteModule(c.Config, "prompt_guard") {
 		return nil
 	}
 
@@ -75,14 +74,14 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 		return fmt.Errorf("not enough jailbreak types for classification, need at least 2, got %d", numClasses)
 	}
 
+	deployment := moduleDeploymentName(c.Config, "prompt_guard")
 	logging.ComponentEvent("classifier", "jailbreak_detector_init_started", map[string]interface{}{
-		"mode":      "model_runtime",
-		"model_ref": c.Config.PromptGuard.ModelID,
-		"classes":   numClasses,
-		"use_cpu":   c.Config.PromptGuard.UseCPU,
+		"mode":       "model_runtime",
+		"deployment": deployment,
+		"classes":    numClasses,
 	})
 
-	return c.jailbreakInitializer.Init(c.Config.PromptGuard.ModelID, c.Config.PromptGuard.UseCPU, numClasses)
+	return c.jailbreakInitializer.Init(deployment, c.Config.PromptGuard.UseCPU, numClasses)
 }
 
 // CheckForJailbreak analyzes the given text for jailbreak attempts.
@@ -194,13 +193,12 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(ctx context.Context
 
 // IsPIIEnabled checks if PII detection is properly configured.
 func (c *Classifier) IsPIIEnabled() bool {
-	modelConfigured := c.Config.PIIModel.ModelID != "" || c.Config.PIIModel.Backend != nil
-	return c.Config.PIIModel.Active() && modelConfigured && c.PIIMapping != nil
+	return c.Config.PIIModel.Active() && moduleConfigured(c.Config, "pii_classifier") && c.PIIMapping != nil
 }
 
 // initializePIIClassifier initializes the PII token classification model.
 func (c *Classifier) initializePIIClassifier() error {
-	if c.Config.PIIModel.Backend != nil {
+	if remoteModule(c.Config, "pii_classifier") {
 		// Remote inference is fully constructed during classifier assembly and has
 		// no local model lifecycle to execute.
 		return nil
@@ -214,11 +212,11 @@ func (c *Classifier) initializePIIClassifier() error {
 		return fmt.Errorf("not enough PII types for classification, need at least 2, got %d", numPIIClasses)
 	}
 
+	deployment := moduleDeploymentName(c.Config, "pii_classifier")
 	logging.ComponentEvent("classifier", "pii_detector_init_started", map[string]interface{}{
-		"model_ref": c.Config.PIIModel.ModelID,
-		"classes":   numPIIClasses,
-		"use_cpu":   c.Config.PIIModel.UseCPU,
+		"deployment": deployment,
+		"classes":    numPIIClasses,
 	})
 
-	return c.piiInitializer.Init(c.Config.PIIModel.ModelID, c.Config.PIIModel.UseCPU, numPIIClasses)
+	return c.piiInitializer.Init(deployment, c.Config.PIIModel.UseCPU, numPIIClasses)
 }

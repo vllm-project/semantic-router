@@ -144,6 +144,8 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer routerInsta
 			"image.repository": imageRepo,
 			"image.tag":        imageTag,
 			"image.pullPolicy": "Never",
+			// embedding-signal-image-routing asserts the matched-embeddings debug header.
+			"config.global.router.headers.debug": "any",
 		},
 		Wait:    false, // The initial CR generation must be published before readiness.
 		Timeout: "30m",

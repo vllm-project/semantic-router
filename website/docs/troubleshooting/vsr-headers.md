@@ -26,8 +26,10 @@ The router splits headers across two surfaces:
   even when a hot reload activates another one while it runs.
 - **Debug surface** — intermediate classification details, matched signals,
   tool-selection metrics, and `x-vsr-retention-*` directives appear inline
-  only when the request sets `x-vsr-debug: true`. When replay is enabled, the
-  same diagnostic context remains available through `x-vsr-replay-id`.
+  only when the request sets `x-vsr-debug: true` and
+  [`global.router.headers.debug`](#who-may-turn-on-the-debug-headers) allows
+  the caller. It allows nobody by default. When replay is enabled, the same
+  diagnostic context remains available through `x-vsr-replay-id`.
 
 Decision and matched-signal headers additionally require all of the following:
 
@@ -37,6 +39,36 @@ Decision and matched-signal headers additionally require all of the following:
 
 Cache-hit responses can emit cache headers, but they do not re-run routing and therefore do not attach fresh matched-signal headers.
 
+## Who may turn on the debug headers
+
+The debug headers name the signal and guard rules a request matched, the
+decision ranking and the Router Learning reasons, so a client can't turn them
+on by itself. `global.router.headers.debug` decides who may; the Router ignores
+`x-vsr-debug` from everyone else.
+
+| `debug` | Who gets the debug headers |
+| ------- | -------------------------- |
+| `none` (default) | Nobody. |
+| `any` | Every client that sends `x-vsr-debug: true`. Use it for development and tests, or behind a gateway that removes the header from untrusted clients. |
+| `authenticated` | Only the users and groups in `debug_principals`, as the identity headers your authenticator sets assert them (`global.services.authz.identity`). |
+
+```yaml
+global:
+  router:
+    headers:
+      debug: authenticated
+      debug_principals:
+        users: [oncall-bot]
+        groups: [platform-sre]
+```
+
+`authenticated` trusts the identity headers. A standalone Router keeps them only
+on a listener with `identity.trust_headers`, and refuses `authenticated` when no
+listener trusts them. Behind an Envoy-based gateway, the gateway must remove the
+identity headers that clients send. The Dashboard Playground,
+`vllm-sr route --debug` and sr-bench ask for the debug headers; when the caller
+isn't allowed, they show the default surface only.
+
 ## Request headers
 
 | Header | Direction | Description |
@@ -44,9 +76,10 @@ Cache-hit responses can emit cache headers, but they do not re-run routing and t
 | `x-session-id` | request | Stable client-provided session identifier for Chat Completions. Router Learning protection uses this, together with the configured conversation identity, to reason about stay-vs-switch decisions across turns. |
 | `x-conversation-id` | request | Stable client-provided conversation or agent-run identifier. Router Learning protection uses this by default when `scope: conversation`. |
 | `x-claude-code-session-id` | request | Conversation identifier supplied by Claude Code on Messages API requests. `x-session-id` takes precedence when both are present. |
+| `x-vsr-protection-release` | request | Asks Router Learning protection for a fresh decision on this request's protection key without changing session identity. Any non-empty value; honored only at a user turn and with at least `min_user_turns_between` user turns between honored releases. Removed before the backend. Name configurable via `global.router.learning.protection.release.header`. |
 | `x-disable-router-memory` | request | Set to `true` when the client already injects memory and router-managed memory would duplicate it. |
 | `x-vsr-skip-processing` | request | Opts a request out of router processing when `global.router.skip_processing.enabled` is enabled. Use value `true`. |
-| `x-vsr-debug` | request | Opts the request into verbose/debug response headers — headers the contract otherwise omits or demotes to replay are emitted inline for that request. Use value `true`. |
+| `x-vsr-debug` | request | Asks for the debug response headers — headers the contract otherwise omits or demotes to replay are emitted inline for that request. Honored only when `global.router.headers.debug` allows the caller; ignored otherwise. Use value `true`. |
 
 ## Protocol and replay headers
 
@@ -236,7 +269,7 @@ x-vsr-replay-id: replay_01J...
 record was persisted. With replay disabled, or when persistence fails, the
 response carries the other headers and omits this one.
 
-With `x-vsr-debug: true` on the request, the demoted intermediate details and matched signals are emitted inline as well:
+With `x-vsr-debug: true` on the request from a caller that `global.router.headers.debug` allows, the demoted intermediate details and matched signals are emitted inline as well:
 
 ```http
 HTTP/1.1 200 OK
@@ -252,6 +285,22 @@ x-vsr-matched-context: long-context
 x-vsr-matched-projections: use-reasoning-model
 x-vsr-replay-id: replay_01J...
 ```
+
+## Identity headers
+
+An authenticator in front of the Router sets these, and the Router reads them
+for role bindings, rate limits, memory, and the user, team and tenant
+response-cache scopes. A listener drops the ones a client sends unless it
+trusts identity headers (see
+[Gateway modes](../installation/gateway-modes#identity-headers)), and no
+identity header reaches a model provider.
+
+| Header | Description |
+| ------ | ----------- |
+| `x-authz-user-id` | The authenticated user. `global.services.authz.identity.user_id_header` names another header. |
+| `x-authz-user-groups` | The user's groups, comma-separated. `global.services.authz.identity.user_groups_header` names another header. |
+| `x-authz-team-id` | The team, for the `team` response-cache scope. |
+| `x-authz-tenant-id` | The tenant, for the `tenant` response-cache scope. |
 
 ## Compatibility and interpretation
 

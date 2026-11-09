@@ -12,8 +12,8 @@ import (
 
 const servedLabelsSource = "served labels"
 
-func (m *classifierModelRuntime) servedLabels(consumer, artifact, contract string, useCPU bool) ([]string, error) {
-	spec, err := m.localSpec(consumer, artifact, "auto", contract, useCPU)
+func (m *classifierModelRuntime) servedLabels(consumer, contract string) ([]string, error) {
+	spec, err := m.localSpec(consumer, "auto", contract)
 	if err != nil {
 		return nil, err
 	}
@@ -65,6 +65,9 @@ func jailbreakMappingFromLabels(labels []string) (*JailbreakMapping, error) {
 	}
 	if _, collides := mapping.GetIndexForJailbreakType(JailbreakUnscannedType); collides {
 		return nil, fmt.Errorf("jailbreak %s: label %q is reserved for content the model did not read", servedLabelsSource, JailbreakUnscannedType)
+	}
+	if _, collides := mapping.GetIndexForJailbreakType(JailbreakExplicitPatternType); collides {
+		return nil, fmt.Errorf("jailbreak %s: label %q is reserved for explicit pattern matches", servedLabelsSource, JailbreakExplicitPatternType)
 	}
 	return mapping, nil
 }

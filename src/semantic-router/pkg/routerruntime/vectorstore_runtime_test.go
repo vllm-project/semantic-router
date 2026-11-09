@@ -18,6 +18,59 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
+// The vector store embeds with the openai_embeddings deployment
+// embeddings.default names, as it did with the deprecated endpoint block.
+func TestVectorStoreEmbedsWithTheEmbeddingsDefaultDeployment(t *testing.T) {
+	var requests []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Model string   `json:"model"`
+			Input []string `json:"input"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+			return
+		}
+		requests = append(requests, request.Model)
+		data := make([]map[string]any, len(request.Input))
+		for i := range data {
+			data[i] = map[string]any{"index": i, "embedding": []float32{0, 1}}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+	}))
+	defer server.Close()
+
+	cfg := &config.RouterConfig{VectorStore: &config.VectorStoreConfig{
+		Enabled: true, BackendType: "memory", EmbeddingModel: "mmbert", EmbeddingDimension: 2,
+		FileStorageDir: t.TempDir(), MetadataStore: "memory",
+	}}
+	cfg.EmbeddingConfig = config.HNSWConfig{TargetDimension: 2}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"remote-embed": {
+		Provider: config.OpenAIEmbeddingsProvider, Endpoint: server.URL, Model: "bge-m3",
+		Capabilities: &config.DeploymentCapabilities{Dimensions: 2},
+	}}
+	cfg.EmbeddingDeployment = "remote-embed"
+	if copied := vectorStoreEmbeddingConfig(cfg); !copied.UsesRemoteEmbeddings() || copied.EmbeddingDeployment != "remote-embed" {
+		t.Fatalf("the vector store's configuration lost embeddings.default: %q", copied.EmbeddingDeployment)
+	}
+	runtime, err := NewVectorStoreRuntime(cfg, nil, nil)
+	if err != nil {
+		t.Fatalf("the vector store did not prepare the embeddings.default deployment: %v", err)
+	}
+	t.Cleanup(func() {
+		if shutdownErr := runtime.Shutdown(); shutdownErr != nil {
+			t.Error(shutdownErr)
+		}
+	})
+	vector, err := runtime.Embedder.Embed(context.Background(), "ingestion query")
+	if err != nil || !reflect.DeepEqual(vector, []float32{0, 1}) {
+		t.Fatalf("embedded %v (err %v), want the remote deployment's vector", vector, err)
+	}
+	if len(requests) == 0 || requests[len(requests)-1] != "bge-m3" {
+		t.Fatalf("the remote deployment was not asked: %v", requests)
+	}
+}
+
 func TestVectorStorePreparesEmbeddingWithoutRecipeClassifierBindings(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request struct {

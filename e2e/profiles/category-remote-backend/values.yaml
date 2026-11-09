@@ -52,24 +52,20 @@ config:
       strategy: priority
     model_catalog:
       kbs: []
-      external:
-        - name: e2e-category-classifier
-          model_role: classification
-          llm_endpoint:
-            address: mock-category-classifier.default.svc.cluster.local
-            port: 8000
-            protocol: http
-          llm_model_name: category-service
-          llm_timeout_seconds: 5
+      deployments:
+        # A classify deployment answers the domain signal with
+        # label_distribution.v1: POST <endpoint>/classify.
+        e2e-category-classifier:
+          provider: classify
+          endpoint: http://mock-category-classifier.default.svc.cluster.local:8000
+          model: category-service
+          timeout_ms: 5000
+      bindings:
+        domain: e2e-category-classifier
       modules:
         classifier:
           domain:
             category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
-            backend:
-              protocol: http_classify
-              contract: label_distribution.v1
-              model: e2e-category-classifier
-              deadline_ms: 5000
     services:
       response_api:
         enabled: true

@@ -88,11 +88,14 @@ func TestDefaultPIIWindowRespectsArtifactSelection(t *testing.T) {
 			if !reflect.DeepEqual(cfg.PIIModel, original) {
 				t.Fatal("runtime preparation changed the source policy")
 			}
+			// The runtime's copy reads model_id as the module's deployment.
+			unchanged := original
+			unchanged.ModelID = ""
 			if test.windowed {
 				if resolved.MaxSequenceLength != registered.MaxContextLength || resolved.Window == nil {
 					t.Fatalf("default artifact lost its window policy: %+v", resolved)
 				}
-			} else if !reflect.DeepEqual(resolved, original) {
+			} else if !reflect.DeepEqual(resolved, unchanged) {
 				t.Fatalf("custom artifact inherited the default model's policy: %+v", resolved)
 			}
 			_, inference, err := buildPIIDependencies(models.cfg, nil, models)

@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strings"
 	"testing"
@@ -14,15 +16,30 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 )
 
 type nativeRoutingDecider func(context.Context, string, modelservice.Request) (modelservice.Response, error)
+
+type delayedReader struct {
+	reader io.Reader
+	delay  time.Duration
+	waited bool
+}
+
+func (r *delayedReader) Read(buffer []byte) (int, error) {
+	if !r.waited {
+		time.Sleep(r.delay)
+		r.waited = true
+	}
+	return r.reader.Read(buffer)
+}
 
 func (f nativeRoutingDecider) Decide(ctx context.Context, deployment string, request modelservice.Request) (modelservice.Response, error) {
 	return f(ctx, deployment, request)
 }
 
-func TestSystemOneDecisionBudgetStartsAfterSignalsAndVariesByDecision(t *testing.T) {
+func TestSystemOneBudgetIncludesSignalsAndVariesByDecision(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
 listeners:
   - name: native
@@ -61,7 +78,7 @@ recipes:
           modelRefs: [{model: kai}]
           algorithm:
             type: cascade
-            budget: {deadline: 500ms, max_calls: 1}
+            budget: {deadline: 150ms, max_calls: 2}
             quality: &quality
               type: uncalibrated
               acceptance:
@@ -72,7 +89,7 @@ recipes:
           modelRefs: [{model: kai}, {model: vega}]
           algorithm:
             type: cascade
-            budget: {deadline: 1s, max_calls: 2}
+            budget: {deadline: 200ms, max_calls: 3}
             quality: *quality
             stages:
               - name: fast
@@ -100,13 +117,20 @@ recipes:
 	}
 	router := &OpenAIRouter{Config: cfg, RecipeClassifiers: classifiers, nativeExecutors: executors}
 	for _, tc := range []struct {
-		name      string
-		wantCalls []string
-		cancel    bool
+		name        string
+		decision    string
+		deadline    time.Duration
+		wantCalls   []string
+		signalCalls int
+		cancel      bool
+		waitSignal  bool
 	}{
-		{name: "simple", wantCalls: []string{"kai"}},
-		{name: "hard", wantCalls: []string{"kai", "vega"}},
-		{name: "canceled", cancel: true},
+		{name: "simple", decision: "simple", deadline: 150 * time.Millisecond, wantCalls: []string{"kai"}, signalCalls: 1},
+		{name: "hard", decision: "hard", deadline: 200 * time.Millisecond, wantCalls: []string{"kai", "vega"}, signalCalls: 1},
+		{name: "signals exhaust request budget", decision: "hard", signalCalls: 3},
+		{name: "signals exhaust the selected decision budget", decision: "simple", deadline: 150 * time.Millisecond, signalCalls: 2},
+		{name: "canceled", decision: "simple", signalCalls: 1, cancel: true},
+		{name: "deadline during signal evaluation", decision: "hard", waitSignal: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
@@ -116,14 +140,18 @@ recipes:
 					t.Error("signal did not receive the original native task")
 				}
 				deadline, bounded := signalCtx.Deadline()
-				if !bounded || time.Until(deadline) <= time.Second {
-					t.Error("algorithm deadline replaced the signal's own timeout")
+				if !bounded || time.Until(deadline) <= 0 || time.Until(deadline) > 200*time.Millisecond {
+					t.Error("signals did not inherit the request deadline")
 				}
-				// A model-backed signal may perform physical exchanges, but none
-				// belongs to the subsequently selected algorithm's call ledger.
-				for range 3 {
+				if tc.waitSignal {
+					<-signalCtx.Done()
+					return modelservice.Response{}, signalCtx.Err()
+				}
+				for range tc.signalCalls {
 					if consumeErr := budget.Consume(signalCtx); consumeErr != nil {
-						t.Error("signal consumed algorithm budget", consumeErr)
+						if tc.name != "signals exhaust request budget" {
+							t.Error("signal unexpectedly exhausted request budget", consumeErr)
+						}
 					}
 				}
 				if tc.cancel {
@@ -131,7 +159,7 @@ recipes:
 					return modelservice.Response{}, context.Canceled
 				}
 				return modelservice.Response{Answers: map[string]modelservice.Answer{
-					"task_kind": {Type: "choice", Choice: tc.name, Probabilities: map[string]float64{"simple": 0.5, "hard": 0.5}},
+					"task_kind": {Type: "choice", Choice: tc.decision, Probabilities: map[string]float64{"simple": 0.5, "hard": 0.5}},
 				}}, nil
 			}))
 			var calls []string
@@ -139,6 +167,9 @@ recipes:
 			status, body, routeErr := router.RouteSystemOne(ctx, "vllm-sr/auto", request, func(callCtx context.Context, model string, original json.RawMessage) (int, []byte, error) {
 				if string(original) != string(request) {
 					t.Error("routing replaced the original native question")
+				}
+				if deadline, bounded := callCtx.Deadline(); !bounded || time.Until(deadline) > tc.deadline {
+					t.Error("selected algorithm did not retain its request-relative deadline")
 				}
 				if consumeErr := budget.Consume(callCtx); consumeErr != nil {
 					return 0, nil, consumeErr
@@ -152,6 +183,21 @@ recipes:
 				}
 				return
 			}
+			if tc.waitSignal {
+				var exhausted *systemone.BudgetExhaustedError
+				if !errors.As(routeErr, &exhausted) || exhausted.Reason != "deadline" || status != http.StatusGatewayTimeout || len(calls) != 0 {
+					t.Fatalf("signal deadline did not stop the request: status=%d calls=%v err=%v", status, calls, routeErr)
+				}
+				return
+			}
+			if strings.HasPrefix(tc.name, "signals exhaust") {
+				var exhausted *systemone.BudgetExhaustedError
+				if !errors.As(routeErr, &exhausted) || exhausted.Reason != "max_calls" || exhausted.Calls != tc.signalCalls ||
+					status != http.StatusServiceUnavailable || len(calls) != 0 {
+					t.Fatalf("signals did not stop at the applicable call budget: status=%d calls=%v err=%v", status, calls, routeErr)
+				}
+				return
+			}
 			if routeErr != nil || status != http.StatusOK || !reflect.DeepEqual(calls, tc.wantCalls) {
 				t.Fatalf("status=%d calls=%v err=%v", status, calls, routeErr)
 			}
@@ -161,9 +207,36 @@ recipes:
 					Calls    int    `json:"model_calls"`
 				} `json:"routing"`
 			}
-			if json.Unmarshal(body, &response) != nil || response.Routing.Decision != tc.name || response.Routing.Calls != len(tc.wantCalls) {
+			if json.Unmarshal(body, &response) != nil || response.Routing.Decision != tc.decision || response.Routing.Calls != len(tc.wantCalls)+tc.signalCalls {
 				t.Fatalf("wrong decision or budget accounting: %s", body)
 			}
 		})
 	}
+
+	t.Run("deadline starts before public request body read", func(t *testing.T) {
+		var signalCalls, backendCalls int
+		classifier.SetDecisionDecider(nativeRoutingDecider(func(ctx context.Context, _ string, _ modelservice.Request) (modelservice.Response, error) {
+			if err := budget.Consume(ctx); err != nil {
+				return modelservice.Response{}, err
+			}
+			signalCalls++
+			return modelservice.Response{}, nil
+		}))
+		listener := &cfg.Listeners[0]
+		handler := systemone.Handler(cfg, listener, func(ctx context.Context, target string, body json.RawMessage) (int, []byte, error) {
+			return router.RouteSystemOne(ctx, target, body, func(context.Context, string, json.RawMessage) (int, []byte, error) {
+				backendCalls++
+				return http.StatusOK, []byte(`{"answers":{}}`), nil
+			})
+		})
+		request := httptest.NewRequest(http.MethodPost, "/v1/systemone", nil)
+		request.Body = io.NopCloser(&delayedReader{reader: strings.NewReader(`{"model":"vllm-sr/auto","state":"original task","questions":{"needs_reasoning":{"type":"noul"}}}`), delay: 250 * time.Millisecond})
+		response := httptest.NewRecorder()
+		handler(response, request)
+		if response.Code != http.StatusGatewayTimeout || signalCalls != 0 || backendCalls != 0 ||
+			!strings.Contains(response.Body.String(), `"code":"systemone_budget_exhausted"`) ||
+			!strings.Contains(response.Body.String(), `"model_calls":0`) {
+			t.Fatalf("body read escaped the request deadline: status=%d signals=%d backend=%d body=%s", response.Code, signalCalls, backendCalls, response.Body.String())
+		}
+	})
 }

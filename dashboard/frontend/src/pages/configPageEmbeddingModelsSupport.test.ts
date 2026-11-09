@@ -2,11 +2,33 @@ import { describe, expect, it } from 'vitest'
 
 import {
   embeddingModelsBadges,
-  embeddingModelsCatalogValue,
   embeddingModelsEditData,
   embeddingModelsFields,
+  embeddingModelsPatch,
   embeddingModelsSummary,
+  embeddingModelsView,
 } from './configPageEmbeddingModelsSupport'
+
+type Patch = {
+  deployments?: Record<string, Record<string, unknown>>
+  embeddings: Record<string, unknown> & { semantic: Record<string, unknown> }
+}
+
+const save = (data: Parameters<typeof embeddingModelsPatch>[0]) => embeddingModelsPatch(data) as Patch
+
+// The card's view after a save: the saved embeddings block with the saved
+// deployments, nulls dropped as the Router's merge patch drops them.
+function afterSave(patch: Patch): Record<string, unknown> | undefined {
+  const dropNulls = (value: unknown): unknown =>
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.entries(value)
+            .filter(([, item]) => item !== null)
+            .map(([key, item]) => [key, dropNulls(item)]),
+        )
+      : value
+  return embeddingModelsView(dropNulls(patch.embeddings), dropNulls(patch.deployments ?? {}))
+}
 
 const localCatalog = {
   semantic: {
@@ -46,7 +68,7 @@ describe('embedding models config support', () => {
     })
 
     expect(editData.provider_type).toBe('local')
-    expect(() => embeddingModelsCatalogValue(editData)).toThrow(/candle is retired.*vllm-sr config migrate/)
+    expect(() => embeddingModelsPatch(editData)).toThrow(/candle is retired.*vllm-sr config migrate/)
   })
 
   it('offers only the embedding families the model runtime serves', () => {
@@ -55,7 +77,7 @@ describe('embedding models config support', () => {
     expect(names).toEqual(expect.arrayContaining(['qwen3_model_path', 'mmbert_model_path', 'multimodal_model_path']))
     expect(names).not.toContain('gemma_model_path')
     expect(names).not.toContain('bert_model_path')
-    expect(embeddingModelsCatalogValue(embeddingModelsEditData(localCatalog))).not.toHaveProperty('bert')
+    expect(save(embeddingModelsEditData(localCatalog)).embeddings).not.toHaveProperty('bert')
   })
 
   it('shows provider-specific fields for local and remote modes', () => {
@@ -72,17 +94,19 @@ describe('embedding models config support', () => {
     expect(apiProtocol?.shouldHide?.({ provider_type: 'remote' })).toBe(false)
   })
 
-  it('switches local config to a canonical remote provider without losing extensions', () => {
+  it('saves a remote provider as an openai_embeddings deployment that embeddings.default names', () => {
     const editData = embeddingModelsEditData(localCatalog)
-    const saved = embeddingModelsCatalogValue({
+    const saved = save({
       ...editData,
       provider_type: 'remote',
       remote_backend: 'openai_compatible',
       endpoint: {
         ...(editData.endpoint as Record<string, unknown>),
-        base_url: ' https://embedding.example.com/v1 ',
+        base_url: ' https://embedding.example.com/v1/ ',
         model: ' text-embedding-3-small ',
         api_key_env: ' OPENAI_API_KEY ',
+        timeout_seconds: 5,
+        max_retries: 2,
       },
       embedding_config: {
         ...(editData.embedding_config as Record<string, unknown>),
@@ -90,57 +114,91 @@ describe('embedding models config support', () => {
       },
     })
 
-    expect(saved).toEqual(
+    expect(saved.deployments).toEqual({
+      'remote-embed': {
+        provider: 'openai_embeddings',
+        endpoint: 'https://embedding.example.com/v1',
+        model: 'text-embedding-3-small',
+        auth: { api_key_env: 'OPENAI_API_KEY' },
+        timeout_ms: 5000,
+        max_retries: 2,
+        limits: null,
+        capabilities: { dimensions: 1536 },
+      },
+    })
+    expect(saved.embeddings).toEqual(
       expect.objectContaining({
+        default: 'remote-embed',
         future_catalog_option: { enabled: true },
         semantic: expect.objectContaining({
           future_semantic_option: true,
+          endpoint: null,
           embedding_config: expect.objectContaining({
-            backend: 'openai_compatible',
-            model_type: 'remote',
+            backend: null,
+            model_type: null,
             target_dimension: 1536,
             future_optimizer: 'preserved',
-          }),
-          endpoint: expect.objectContaining({
-            base_url: 'https://embedding.example.com/v1',
-            model: 'text-embedding-3-small',
-            api_key_env: 'OPENAI_API_KEY',
-            dimensions: 1536,
-            future_header_mode: 'preserved',
           }),
         }),
       }),
     )
   })
 
-  it('switches back to local inference while preserving the remote endpoint for reuse', () => {
-    const remote = embeddingModelsCatalogValue({
+  it('edits the deployment embeddings.default names', () => {
+    const view = embeddingModelsView(
+      { default: 'bge', semantic: { embedding_config: { target_dimension: 1024 } } },
+      {
+        bge: {
+          provider: 'openai_embeddings',
+          endpoint: 'https://embedding.example.com/v1',
+          model: 'BAAI/bge-m3',
+          auth: { api_key_env: 'EMBEDDING_API_KEY' },
+          timeout_ms: 5000,
+          capabilities: { dimensions: 1024 },
+        },
+      },
+    )
+    const editData = embeddingModelsEditData(view)
+
+    expect(editData.provider_type).toBe('remote')
+    expect(editData.endpoint).toEqual({
+      base_url: 'https://embedding.example.com/v1',
+      model: 'BAAI/bge-m3',
+      api_key_env: 'EMBEDDING_API_KEY',
+      timeout_seconds: 5,
+      dimensions: 1024,
+    })
+    const saved = save(editData)
+    expect(Object.keys(saved.deployments ?? {})).toEqual(['bge'])
+    expect(saved.embeddings.default).toBe('bge')
+    expect(saved.embeddings).not.toHaveProperty('__deployments')
+  })
+
+  it('switches back to local inference and keeps the remote deployment for reuse', () => {
+    const remote = save({
       ...embeddingModelsEditData(localCatalog),
       provider_type: 'remote',
       remote_backend: 'openai_compatible',
       endpoint: localCatalog.semantic.endpoint as Record<string, unknown>,
       embedding_config: { target_dimension: 1536 },
     })
-    const local = embeddingModelsCatalogValue({
-      ...embeddingModelsEditData(remote),
+    const local = save({
+      ...embeddingModelsEditData(afterSave(remote)),
       provider_type: 'local',
       model_type: 'mmbert',
     })
 
-    expect((local.semantic as Record<string, unknown>).embedding_config).toEqual(
+    expect(local.deployments).toBeUndefined()
+    expect(local.embeddings.default).toBeNull()
+    expect(local.embeddings.semantic.endpoint).toBeNull()
+    expect(local.embeddings.semantic.embedding_config).toEqual(
       expect.objectContaining({ backend: 'model_runtime', model_type: 'mmbert' }),
-    )
-    expect((local.semantic as Record<string, unknown>).endpoint).toEqual(
-      expect.objectContaining({
-        base_url: 'https://embedding.example.com/v1',
-        model: 'text-embedding-3-small',
-      }),
     )
   })
 
   it('rejects remote dimensions that disagree with the shared target dimension', () => {
     expect(() =>
-      embeddingModelsCatalogValue({
+      embeddingModelsPatch({
         ...embeddingModelsEditData(localCatalog),
         provider_type: 'remote',
         remote_backend: 'openai_compatible',
@@ -152,7 +210,7 @@ describe('embedding models config support', () => {
 
   it('accepts the endpoint dimension when the target requests the full model dimension', () => {
     expect(() =>
-      embeddingModelsCatalogValue({
+      embeddingModelsPatch({
         ...embeddingModelsEditData(localCatalog),
         provider_type: 'remote',
         remote_backend: 'openai_compatible',
@@ -163,17 +221,15 @@ describe('embedding models config support', () => {
   })
 
   it('saves the Router default top_k of 0, which keeps every accepted match', () => {
-    const saved = embeddingModelsCatalogValue(
-      embeddingModelsEditData({ semantic: { embedding_config: { top_k: 0 } } }),
-    )
+    const saved = save(embeddingModelsEditData({ semantic: { embedding_config: { top_k: 0 } } }))
 
-    expect((saved.semantic as Record<string, unknown>).embedding_config).toEqual(
+    expect(saved.embeddings.semantic.embedding_config).toEqual(
       expect.objectContaining({ top_k: 0 }),
     )
   })
 
   it('summarizes provider mode and remote model without exposing credentials', () => {
-    const remote = embeddingModelsCatalogValue({
+    const remote = afterSave(save({
       ...embeddingModelsEditData(localCatalog),
       provider_type: 'remote',
       remote_backend: 'openai_compatible',
@@ -184,7 +240,7 @@ describe('embedding models config support', () => {
         dimensions: 1536,
       },
       embedding_config: { target_dimension: 1536 },
-    })
+    }))
 
     expect(embeddingModelsSummary(remote)).toEqual([
       { label: 'Provider', value: 'Remote / OpenAI compatible' },

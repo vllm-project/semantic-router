@@ -27,11 +27,23 @@ func assertReferenceConfigProviderCoverage(t testingT, root map[string]interface
 		reflect.TypeOf(CanonicalReasoning{}),
 		"providers.models[].reasoning",
 	)
+	backendRefs := collectNestedSliceItems(t, models, "backend_refs", "providers.models")
+	// base_url, api_key, api_key_env, auth_header, auth_prefix and
+	// extra_headers are the deprecated spellings of endpoint, auth and headers.
 	assertSliceUnionCoversStructFields(
 		t,
-		collectNestedSliceItems(t, models, "backend_refs", "providers.models"),
+		backendRefs,
 		reflect.TypeOf(CanonicalBackendRef{}),
 		"providers.models[].backend_refs",
+		"base_url", "api_key", "api_key_env", "auth_header", "auth_prefix", "extra_headers",
+	)
+	// A backend reads its key from api_key_env only.
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, backendRefs, "auth", "providers.models[].backend_refs"),
+		reflect.TypeOf(DeploymentAuth{}),
+		"providers.models[].backend_refs[].auth",
+		"api_key_file",
 	)
 }
 
@@ -75,12 +87,16 @@ func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{
 		reflect.TypeOf(LoRAAdapter{}),
 		"routing.modelCards[].loras",
 	)
-	assertReferenceConfigSignalCoverage(t, mustMapAt(t, routing, "signals"))
+	assertReferenceConfigSignalCoverage(t, mustMapAt(t, routing, "signals"), collectChildMapsFromSlice(t, profiles, "signals", "routing profiles"))
 	assertReferenceConfigProjectionCoverage(t, mustMapAt(t, routing, "projections"))
 	assertReferenceConfigDecisionCoverage(t, referenceRecipeDecisions(t, root))
+	recipeBindings := collectChildMapsFromSlice(t, profiles, "model_bindings", "routing profiles")
+	for _, bindings := range recipeBindings {
+		assertReferenceConfigBindingsBySignalType(t, bindings, "routing profiles[].model_bindings")
+	}
 }
 
-func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interface{}) {
+func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interface{}, profileSignals []map[string]interface{}) {
 	assertMapCoversStructFields(t, signals, reflect.TypeOf(CanonicalSignals{}), "routing.signals")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "keywords"), reflect.TypeOf(KeywordRule{}), "routing.signals.keywords")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "embeddings"), reflect.TypeOf(EmbeddingRule{}), "routing.signals.embeddings")
@@ -98,7 +114,11 @@ func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interfac
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "language"), reflect.TypeOf(LanguageRule{}), "routing.signals.language")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "context"), reflect.TypeOf(ContextRule{}), "routing.signals.context")
 	assertReferenceConfigStructureCoverage(t, mustSliceAt(t, signals, "structure"))
-	assertReferenceConfigComplexityCoverage(t, mustSliceAt(t, signals, "complexity"))
+	// The rules the default routing profile reads score their hard and easy
+	// candidates; a rule that names a deployment lives in a recipe whose
+	// decisions do not read it.
+	assertReferenceConfigComplexityCoverage(t, collectNestedSliceItems(t, profileSignals, "complexity", "routing profiles[].signals"))
+	assertReferenceConfigModelRuleCoverage(t, signals)
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "modality"), reflect.TypeOf(ModalityRule{}), "routing.signals.modality")
 	assertReferenceConfigRoleBindingCoverage(t, mustSliceAt(t, signals, "role_bindings"))
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "jailbreak"), reflect.TypeOf(JailbreakRule{}), "routing.signals.jailbreak")
@@ -168,6 +188,24 @@ func assertReferenceConfigComplexityCoverage(t testingT, complexity []interface{
 		reflect.TypeOf(ComplexityCandidates{}),
 		"routing.signals.complexity[].easy",
 	)
+}
+
+// assertReferenceConfigModelRuleCoverage covers the rules that ask their own
+// question and name the deployment that answers it. A classifier rule's type,
+// model, model_path and use_cpu, and a safety rule's or hazard part's model,
+// are the deprecated way to choose that deployment.
+func assertReferenceConfigModelRuleCoverage(t testingT, signals map[string]interface{}) {
+	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "classifiers"), reflect.TypeOf(ClassifierSignalRule{}), "routing.signals.classifiers", "type", "model", "model_path", "use_cpu")
+	safety := mustSliceAt(t, signals, "safety")
+	assertSliceUnionCoversStructFields(t, safety, reflect.TypeOf(SafetyRule{}), "routing.signals.safety", "model")
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, safety, "hazard", "routing.signals.safety"),
+		reflect.TypeOf(SafetyHazardRule{}),
+		"routing.signals.safety[].hazard",
+		"model",
+	)
+	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "decision"), reflect.TypeOf(DecisionSignalRule{}), "routing.signals.decision")
 }
 
 func assertReferenceConfigStructureCoverage(t testingT, structure []interface{}) {
