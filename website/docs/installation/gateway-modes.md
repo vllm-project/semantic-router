@@ -47,7 +47,8 @@ See the [release note](../release-notes/standalone-mode).
 ## What a standalone Router does
 
 - **Listeners:** each entry of `listeners` is served with HTTP/1.1 and HTTP/2
-  (h2c in cleartext), with its `timeout` as the idle timeout, a 500 MiB request
+  (h2c in cleartext), with its `timeout` bounding a whole call including its
+  streamed response, a stalled stream, and an idle connection, a 500 MiB request
   body limit and at most 50,000 connections, the limits of the Envoy template.
 - **API keys:** with `api_keys` set, a client sends one of them as
   `Authorization: Bearer <key>` or `api-key: <key>`; other requests get an
@@ -149,7 +150,9 @@ listeners:
 
 - `trust_headers` keeps the `x-authz-*` headers (`x-authz-user-id`,
   `x-authz-user-groups`, `x-authz-team-id`, `x-authz-tenant-id`) and the names
-  `global.services.authz.identity` sets.
+  `global.services.authz.identity` sets. A standalone Router also keeps the
+  `global.services.authz.gateway_credential` header; the `--gateway extproc`
+  listener removes a client's copy of it either way.
 - `trusted_peers` (CIDRs) keeps them only when the connection's peer address is
   in one of the networks; the Router never reads `X-Forwarded-For` for this.
   Empty, every peer of a trusting listener is trusted. Only standalone mode

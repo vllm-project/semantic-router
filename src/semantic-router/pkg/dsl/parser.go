@@ -37,10 +37,52 @@ var rawParser = participle.MustBuild[rawProgram](
 	participle.UseLookahead(3),
 )
 
+// maxNestingDepth bounds parenthesis nesting before the participle parser
+// runs. The grammar is recursive (BoolFactor -> BoolExprTop -> BoolFactor), so
+// every level costs one stack frame; a 400 KB input with 200k levels ends in an
+// unrecoverable "fatal error: stack overflow" that takes the whole process down.
+// Real policies nest a handful of levels, so the cap stays far above legitimate
+// input while keeping a request from deciding how much stack to burn.
+const maxNestingDepth = 256
+
+// exceedsNestingDepth reports whether parentheses nest deeper than limit.
+// String literals and comments are skipped so their contents cannot trip it.
+func exceedsNestingDepth(input string, limit int) bool {
+	depth := 0
+	for i := 0; i < len(input); i++ {
+		switch input[i] {
+		case '"':
+			for i++; i < len(input) && input[i] != '"'; i++ {
+				if input[i] == '\\' {
+					i++
+				}
+			}
+		case '#':
+			for i < len(input) && input[i] != '\n' {
+				i++
+			}
+		case '(':
+			depth++
+			if depth > limit {
+				return true
+			}
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		}
+	}
+	return false
+}
+
 // Parse tokenizes and parses a DSL source string into a Program AST.
 // If the input has syntax errors, Parse attempts error recovery by
 // splitting the input into top-level blocks and parsing each independently.
 func Parse(input string) (*Program, []error) {
+	if exceedsNestingDepth(input, maxNestingDepth) {
+		return nil, []error{fmt.Errorf("dsl: parentheses nest deeper than %d levels", maxNestingDepth)}
+	}
+
 	raw, err := rawParser.ParseString("", input)
 	if err == nil {
 		return rawToProgram(raw)

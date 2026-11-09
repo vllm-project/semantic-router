@@ -130,6 +130,23 @@ def test_native_deployments_become_model_runtime_deployments():
     assert not any(note.action_required for note in notes)
 
 
+def test_a_provider_model_deployment_survives_migration():
+    migrated, _ = _migrate(
+        _config(
+            providers={
+                "models": [
+                    {
+                        "name": "native-kai",
+                        "api_format": "systemone",
+                        "deployment": "decision-kai",
+                    }
+                ]
+            }
+        )
+    )
+    assert migrated["providers"]["models"][0]["deployment"] == "decision-kai"
+
+
 def test_fp16_precision_keeps_the_published_precision_and_names_dtype():
     migrated, notes = _migrate(
         _config(
@@ -337,6 +354,37 @@ def test_graph_heads_and_the_explainer_binding_leave_task_bindings():
     paths = _note_paths(notes)
     assert "global.model_catalog.bindings.hallucination_explainer" in paths
     assert "recipes[0].routing.model_bindings.domain_classifier.head" in paths
+
+
+def test_provider_model_naming_a_retired_explainer_deployment_asks_for_a_new_one():
+    migrated, notes = _migrate(
+        _config(
+            {
+                "model_catalog": {
+                    "deployments": {
+                        "nli": {
+                            "provider": "candle",
+                            "artifact": "models/mom-halugate-explainer",
+                        },
+                    },
+                },
+            },
+            providers={
+                "models": [
+                    {
+                        "name": "general",
+                        "api_format": "openai_chat",
+                        "deployment": "nli",
+                    },
+                ],
+            },
+        )
+    )
+
+    assert "nli" not in _catalog(migrated)["deployments"]
+    actions = {note.path: note for note in notes if note.action_required}
+    assert "providers.models[0].deployment" in actions
+    assert "nli" in actions["providers.models[0].deployment"].message
 
 
 def test_system_models_and_module_models_move_to_vela_without_legacy_label_maps():
@@ -898,6 +946,10 @@ def test_runtime_migration_is_idempotent_and_quiet_the_second_time():
     second, notes = _migrate(first)
 
     assert second == first
+    # The shipped config already has the canonical shape, so a field the copy list
+    # forgets is lost on the first pass and would be invisible to the comparison
+    # above, which only holds one migrated copy against another.
+    assert first["providers"]["models"] == source["providers"]["models"]
     # No value records that a RAG collection was re-embedded, so its reminder repeats.
     assert [note.path for note in notes if not _is_reembed_reminder(note)] == []
     assert all(note.path.endswith(".configuration.backend") for note in notes)

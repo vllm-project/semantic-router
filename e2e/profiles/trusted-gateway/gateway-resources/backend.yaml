@@ -1,0 +1,161 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trusted-gateway-system
+---
+# The trusted upstream gateway. It accepts only the credential the stand-in
+# authenticator issues for alice, and refuses a request that still carries the
+# gateway credential header.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trusted-gateway
+  namespace: trusted-gateway-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trusted-gateway
+  template:
+    metadata:
+      labels:
+        app: trusted-gateway
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+      containers:
+        - name: provider-mocker
+          image: semantic-router-ci/provider-mocker:e2e-test
+          imagePullPolicy: Never
+          env:
+            - name: PROVIDER_MOCKER_EXPECT_AUTHORIZATION
+              value: gw-virtual-key-alice
+            - name: PROVIDER_MOCKER_FORBIDDEN_HEADERS
+              value: x-vsr-gateway-credential
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 50m
+            limits:
+              memory: 256Mi
+              cpu: 500m
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trusted-gateway
+  namespace: trusted-gateway-system
+spec:
+  selector:
+    app: trusted-gateway
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+# An ordinary backend on a static key. A gateway credential forwarded here
+# would replace the static key and fail the canary.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: static-backend
+  namespace: trusted-gateway-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: static-backend
+  template:
+    metadata:
+      labels:
+        app: static-backend
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsNonRoot: true
+      containers:
+        - name: provider-mocker
+          image: semantic-router-ci/provider-mocker:e2e-test
+          imagePullPolicy: Never
+          env:
+            - name: PROVIDER_MOCKER_EXPECT_AUTHORIZATION
+              value: static-key-e2e
+            - name: PROVIDER_MOCKER_FORBIDDEN_HEADERS
+              value: x-vsr-gateway-credential
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 50m
+            limits:
+              memory: 256Mi
+              cpu: 500m
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: static-backend
+  namespace: trusted-gateway-system
+spec:
+  selector:
+    app: static-backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: trusted-gateway
+  namespace: default
+spec:
+  endpoints:
+    - fqdn:
+        hostname: trusted-gateway.trusted-gateway-system.svc.cluster.local
+        port: 8000
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: static-backend
+  namespace: default
+spec:
+  endpoints:
+    - fqdn:
+        hostname: static-backend.trusted-gateway-system.svc.cluster.local
+        port: 8000
