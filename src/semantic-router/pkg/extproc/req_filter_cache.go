@@ -442,6 +442,9 @@ func applyRequestIdentityWithoutCache(ctx *RequestContext) {
 	}
 	ctx.RequestModel = ctx.SemanticRequest.Model
 	ctx.RequestQuery = cache.SemanticRequestQuery(*ctx.SemanticRequest)
+	if ctx.RoutingInput.Changed() {
+		ctx.RequestQuery = ctx.UserContent
+	}
 	ctx.CacheRequestModel = ctx.RequestModel
 	ctx.CacheQuery = ctx.RequestQuery
 }
@@ -449,6 +452,11 @@ func applyRequestIdentityWithoutCache(ctx *RequestContext) {
 func cacheIdentityForContext(ctx *RequestContext) (cache.RequestIdentity, error) {
 	if ctx == nil || ctx.SemanticRequest == nil {
 		return cache.RequestIdentity{}, fmt.Errorf("neutral request is unavailable")
+	}
+	if routing := ctx.RoutingInput; routing.Changed() {
+		return cache.BuildRoutedRequestIdentity(*ctx.SemanticRequest, cache.RoutedQuery{
+			Text: ctx.UserContent, MessageIndex: routing.MessageIndex, Retained: routing.Stripped,
+		})
 	}
 	return cache.BuildSemanticRequestIdentity(*ctx.SemanticRequest)
 }

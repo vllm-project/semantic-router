@@ -1,0 +1,171 @@
+{
+  "cases": [
+    {
+      "name": "openrouter_nvidia_recorded_tool_turn",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "reasoning_content": "The user is asking for the current weather in Paris and wants me to use the tool. I need to call the get_weather function with city set to \"Paris\". Let me do that.",
+                "reasoning_details": [
+                  {
+                    "format": "unknown",
+                    "index": 0,
+                    "text": "The user is asking for the current weather in Paris and wants me to use the tool. I need to call the get_weather function with city set to \"Paris\". Let me do that.",
+                    "type": "reasoning.text"
+                  }
+                ],
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"city\":\"Paris\"}",
+                      "name": "get_weather"
+                    },
+                    "id": "call_1",
+                    "type": "function"
+                  }
+                ]
+              }
+            }
+          ],
+          "created": 100,
+          "id": "gen-openrouter-1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 65,
+            "completion_tokens_details": {
+              "reasoning_tokens": 41
+            },
+            "prompt_tokens": 282,
+            "prompt_tokens_details": {
+              "cache_write_tokens": 0,
+              "cached_tokens": 0
+            },
+            "total_tokens": 347
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "choices.message.tool_calls.index",
+            "action": "dropped"
+          },
+          {
+            "field": "choices.native_finish_reason",
+            "action": "dropped"
+          },
+          {
+            "field": "provider",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.completion_tokens_details.image_tokens",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.cost",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.cost_details",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.is_byok",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.prompt_tokens_details.video_tokens",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "openrouter_all_detail_variants",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "choices": [
+            {
+              "finish_reason": "tool_calls",
+              "index": 0,
+              "message": {
+                "reasoning_content": "Plan the lookup. Use the tool.",
+                "reasoning_details": [
+                  {
+                    "format": "openai-responses-v1",
+                    "id": null,
+                    "index": 0,
+                    "summary": "Plan the lookup.",
+                    "type": "reasoning.summary"
+                  },
+                  {
+                    "format": "anthropic-claude-v1",
+                    "id": null,
+                    "index": 1,
+                    "signature": "c2lnbmF0dXJl",
+                    "text": " Use the tool.",
+                    "type": "reasoning.text"
+                  },
+                  {
+                    "data": "c2lnbmF0dXJl",
+                    "format": "openai-responses-v1",
+                    "id": "rs_1",
+                    "index": 2,
+                    "type": "reasoning.encrypted"
+                  },
+                  {
+                    "arguments": "{\"query\":\"Paris weather\"}",
+                    "format": "unknown",
+                    "id": "srvtool_1",
+                    "index": 3,
+                    "result": "{\"status\":\"ok\"}",
+                    "tool_call_id": null,
+                    "tool_name": "openrouter:web_search",
+                    "type": "reasoning.server_tool_call"
+                  }
+                ],
+                "role": "assistant",
+                "tool_calls": [
+                  {
+                    "function": {
+                      "arguments": "{\"city\":\"Paris\"}",
+                      "name": "get_weather"
+                    },
+                    "id": "call_9",
+                    "type": "function"
+                  }
+                ]
+              }
+            }
+          ],
+          "created": 100,
+          "id": "gen-openrouter-1",
+          "model": "routed-model",
+          "object": "chat.completion",
+          "usage": {
+            "completion_tokens": 30,
+            "prompt_tokens": 20,
+            "total_tokens": 50
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "choices.native_finish_reason",
+            "action": "dropped"
+          },
+          {
+            "field": "provider",
+            "action": "dropped"
+          }
+        ]
+      }
+    }
+  ]
+}

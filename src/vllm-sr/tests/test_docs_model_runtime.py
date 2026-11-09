@@ -62,6 +62,13 @@ REQUEST_SCHEMAS = {
 }
 # Fragments that are not router configuration documents.
 NON_ROUTER_TITLES = {"legacy.yaml", "legacy.migrated.yaml", "models.yaml"}
+# What this CLI's own migration writes for the page's legacy.yaml; the Router
+# then rewrites its model fields, and its test checks that the result is the
+# page's legacy.migrated.yaml.
+ENGINE_MIGRATED = (
+    REPO_ROOT
+    / "src/semantic-router/pkg/config/testdata/model_runtime_migration/legacy.engine.yaml"
+)
 
 
 @dataclass(frozen=True)
@@ -444,6 +451,7 @@ def test_vllm_srun_commands_use_real_options():
 
 def test_migration_example_is_what_the_tool_writes():
     legacy = yaml.safe_load(_block("model-runtime/migrate.md", "legacy.yaml").text)
+    engine_migrated = yaml.safe_load(ENGINE_MIGRATED.read_text(encoding="utf-8"))
     documented = yaml.safe_load(
         _block("model-runtime/migrate.md", "legacy.migrated.yaml").text
     )
@@ -451,8 +459,9 @@ def test_migration_example_is_what_the_tool_writes():
 
     migrated = migrate_config_data(legacy, notes)
 
-    assert migrated == documented
+    assert migrated == engine_migrated
     assert migrate_config_data(migrated) == migrated
+    assert migrate_config_data(documented) == documented
     page = (DOCS / "model-runtime/migrate.md").read_text()
     for note in notes:
         if note.path.endswith("vela-domain") or note.path.endswith(

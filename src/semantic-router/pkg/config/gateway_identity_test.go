@@ -49,6 +49,14 @@ func TestStandaloneRefusesPolicyOnGatewayAssertedIdentity(t *testing.T) {
 			path: "global.services.authz.providers",
 			want: "resolve per-user API keys",
 		},
+		{
+			name: "debug headers for authenticated principals",
+			cfg: &RouterConfig{RouterOptions: RouterOptions{Headers: RouterHeadersConfig{
+				Debug: DebugHeadersAuthenticated, DebugPrincipals: DebugPrincipals{Groups: []string{"sre"}},
+			}}},
+			path: "global.router.headers.debug",
+			want: "global.router.headers.debug: authenticated",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

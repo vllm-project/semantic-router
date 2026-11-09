@@ -436,7 +436,13 @@ def _probe_assertions(
 @click.option(
     "--target", default=None, help="Deployment target used for URL resolution."
 )
-@click.option("--debug/--no-debug", default=True, show_default=True)
+@click.option(
+    "--debug/--no-debug",
+    default=True,
+    show_default=True,
+    help="Ask for the debug response headers. The Router sends them only when "
+    "global.router.headers.debug allows this caller.",
+)
 @click.option("--expect-status", type=int, default=HTTPStatus.OK, show_default=True)
 @click.option("--expect-recipe", default=None)
 @click.option("--expect-decision", default=None)

@@ -7,6 +7,7 @@ import (
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // CanonicalConfigVersion identifies the steady-state public configuration
@@ -160,6 +161,15 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	if err := validateCanonicalContract(canonical); err != nil {
 		return nil, err
 	}
+	backendWarnings := backendConnectionWarnings(canonical.Providers.Models)
+	if err := normalizeBackendConnections(canonical); err != nil {
+		return nil, err
+	}
+	bindingWarnings, err := checkCanonicalBindingKeys(canonical)
+	if err != nil {
+		return nil, err
+	}
+	backendWarnings = append(backendWarnings, bindingWarnings...)
 
 	input, err := canonicalCatalogInput(canonical)
 	if err != nil {
@@ -191,6 +201,11 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	if err := applyEffectiveModelRegistry(&cfg, effective, canonical.Providers.Models); err != nil {
 		return nil, err
 	}
+	if err := cfg.translateModelResources(); err != nil {
+		return nil, err
+	}
+	cfg.ModelResourceWarnings = append(cfg.ModelResourceWarnings, backendWarnings...)
+	cfg.applyModuleThresholds()
 	cfg.EffectiveModelRegistry = effective
 	cfg.Evaluation = cloneCanonicalEvaluation(canonical.Evaluation)
 	if err := validateNativeRoutingConfig(&cfg); err != nil {
@@ -230,6 +245,9 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 	if err := validateCanonicalFallback(canonical); err != nil {
 		return err
 	}
+	if err := validateCanonicalTrustedGateways(canonical); err != nil {
+		return err
+	}
 	modelsByName, err := canonicalModelCardIndex(canonical.Routing)
 	if err != nil {
 		return err
@@ -245,6 +263,66 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 		return err
 	}
 	return validateCanonicalDecisions(canonical.Routing.Decisions, aliases, modelsByName)
+}
+
+// validateCanonicalTrustedGateways checks every backend_ref that opts into
+// the request's trusted gateway credential: the authz contract that supplies
+// the credential must be enabled, and the backend must not also carry a
+// static key, which would otherwise stand in silently for a missing one.
+func validateCanonicalTrustedGateways(canonical *CanonicalConfig) error {
+	enabled := false
+	if canonical.Global != nil {
+		authz := canonical.Global.Services.Authz
+		if err := validateGatewayCredentialHeader(authz.GatewayCredential, authz.Identity); err != nil {
+			return err
+		}
+		enabled = authz.GatewayCredential.Enabled
+	}
+	for _, model := range canonical.Providers.Models {
+		for index, backend := range model.BackendRefs {
+			if !backend.TrustedGateway {
+				continue
+			}
+			if !enabled {
+				return fmt.Errorf(
+					"providers.models[%s].backend_refs[%d].trusted_gateway requires global.services.authz.gateway_credential.enabled: true",
+					model.Name, index,
+				)
+			}
+			// Contract validation runs before auth is normalized, so a key set
+			// through auth.api_key_env is still under backend.Auth here.
+			if backend.APIKey != "" || backend.APIKeyEnv != "" ||
+				(backend.Auth != nil && backend.Auth.APIKeyEnv != "") {
+				return fmt.Errorf(
+					"providers.models[%s].backend_refs[%d].trusted_gateway cannot combine with api_key, api_key_env or auth.api_key_env: the request supplies the credential",
+					model.Name, index,
+				)
+			}
+		}
+	}
+	return nil
+}
+
+// validateGatewayCredentialHeader keeps the gateway credential off a header
+// that carries a client credential or an identity: the Router must never
+// forward a client's raw credential, nor read one authentication output as
+// another.
+func validateGatewayCredentialHeader(credential GatewayCredentialConfig, identity IdentityConfig) error {
+	header := credential.GetHeader()
+	reserved := IsShadowCredentialHeader(header)
+	for _, name := range []string{
+		identity.GetUserIDHeader(), identity.GetUserGroupsHeader(),
+		headers.AuthzUserID, headers.AuthzUserGroups, headers.AuthzTeamID, headers.AuthzTenantID,
+	} {
+		reserved = reserved || strings.EqualFold(header, strings.TrimSpace(name))
+	}
+	if reserved {
+		return fmt.Errorf(
+			"global.services.authz.gateway_credential.header %q carries a client credential or an identity; name a dedicated header the authenticator sets, such as %s",
+			header, DefaultGatewayCredentialHeader,
+		)
+	}
+	return nil
 }
 
 func validateCanonicalVersion(canonical *CanonicalConfig) error {

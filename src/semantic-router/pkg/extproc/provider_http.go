@@ -75,6 +75,9 @@ func configuredProviderAuthorizer(
 	if err != nil {
 		return nil, err
 	}
+	if profile != nil && profile.TrustedGateway {
+		return nil, errTrustedGatewayRouterInitiated
+	}
 	if cfg == nil {
 		return nil, nil
 	}

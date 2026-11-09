@@ -163,11 +163,26 @@ def config_schema(
     is_flag=True,
     help="Overwrite the output file if it already exists.",
 )
+@click.option(
+    "--offline",
+    is_flag=True,
+    help="Check the output with only the CLI's structural checks, without the Router's validation.",
+)
 @exit_with_logged_error(log)
-def config_migrate(config_path: str, output: str | None, force: bool) -> None:
-    """Migrate a legacy or mixed config file to canonical v0.3 YAML."""
+def config_migrate(
+    config_path: str, output: str | None, force: bool, offline: bool
+) -> None:
+    """Migrate a legacy or mixed config file to canonical v0.3 YAML.
 
-    migrate_config_command(config_path=config_path, output_path=output, force=force)
+    The output is written only when the Router's own validation accepts it: a
+    local Router binary ($VLLM_SR_ROUTER_BINARY) or the Router in its local
+    image. With --offline, or when no Router can run, only the CLI's
+    structural checks run.
+    """
+
+    migrate_config_command(
+        config_path=config_path, output_path=output, force=force, offline=offline
+    )
 
 
 @config.command("propose")
@@ -216,7 +231,16 @@ def config_propose(
 @click.option(
     "--endpoint",
     default=None,
-    help="Validate with this running Router instead of the local Router image.",
+    help="Validate with this running Router instead of a local Router.",
+)
+@click.option(
+    "--router-binary",
+    default=None,
+    metavar="PATH",
+    help=(
+        "Local Router executable whose own validation to run, preferred over "
+        f"the image (default: ${router_validation.ROUTER_BINARY_ENV})."
+    ),
 )
 @click.option(
     "--image",
@@ -232,7 +256,7 @@ def config_propose(
 @click.option(
     "--offline",
     is_flag=True,
-    help="Run only the CLI's own checks, without the Router's validation.",
+    help="Run only the CLI's structural checks, without the Router's validation.",
 )
 @click.option("--timeout", type=float, default=15, show_default=True)
 @click.option("--token-env", default="VSR_MGMT_TOKEN", show_default=True)
@@ -240,6 +264,7 @@ def config_propose(
 def config_validate(
     config: str,
     endpoint: str | None,
+    router_binary: str | None,
     image: str | None,
     gateway: str | None,
     offline: bool,
@@ -249,14 +274,17 @@ def config_validate(
     """
     Validate configuration file.
 
-    The CLI's own checks run first. The Router's validation then decides, as
-    it does when `vllm-sr serve` or `vllm-sr config apply` loads the file: the
-    Router in its local image (never pulled), or the running Router --endpoint
-    names.
+    The Router's own validation decides, as it does when `vllm-sr serve` or
+    `vllm-sr config apply` loads the file: a local Router binary
+    (--router-binary or $VLLM_SR_ROUTER_BINARY), the Router in its local image
+    (never pulled), or the running Router --endpoint names. The CLI checks the
+    file's structure and the rules it owns as well. With --offline, or when no
+    Router can run, only the CLI's structural checks run.
 
     Examples:
         vllm-sr config validate
         vllm-sr config validate --config my-config.yaml
+        vllm-sr config validate --router-binary bin/router
         vllm-sr config validate --endpoint http://localhost:8080
     """
     config_path = Path(config)
@@ -271,11 +299,12 @@ def config_validate(
     else:
 
         def router_verdict():
-            return router_validation.validate_with_image(
+            return router_validation.local_router_verdict(
                 config_path,
-                router_validation.validation_image(image),
                 gateway=resolve_gateway(gateway or os.getenv(GATEWAY_ENV)),
                 models_dir=Path(resolve_state_root_dir(config)) / "models",
+                image=image,
+                binary=router_binary,
             )
 
     validate_command(config, router_verdict=router_verdict)

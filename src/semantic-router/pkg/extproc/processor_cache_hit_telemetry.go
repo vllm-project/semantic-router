@@ -64,6 +64,9 @@ func (r *OpenAIRouter) buildCacheHitReplayUsage(
 	usage responseUsageMetrics,
 ) routerreplay.UsageCost {
 	replayUsage := r.buildReplayUsageCost(ctx, usage)
+	// The cached body's usage describes the original provider request; this
+	// hit made no provider request, so it has no provider prompt-cache cost.
+	replayUsage.ProviderCache = nil
 	replayUsage.ActualCost = replayFloat64Ptr(0)
 	if replayUsage.BaselineCost != nil {
 		replayUsage.CostSavings = replayFloat64Ptr(*replayUsage.BaselineCost)

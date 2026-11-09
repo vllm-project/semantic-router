@@ -80,15 +80,15 @@ const JAILBREAK_SIGNAL_FIELDS: FieldSchema[] = [
     key: 'jailbreak_patterns',
     label: 'Jailbreak Patterns',
     type: 'string[]',
-    placeholder: 'Add jailbreak example...',
-    description: 'Contrastive mode: example jailbreak prompts',
+    placeholder: 'Add hard-block pattern...',
+    description: 'Deterministic hard-block patterns using case-insensitive, whitespace-normalized substring matching.',
   },
   {
     key: 'benign_patterns',
     label: 'Benign Patterns',
     type: 'string[]',
     placeholder: 'Add benign example...',
-    description: 'Contrastive mode: example benign prompts',
+    description: 'Benign examples used for contrastive scoring; not explicit allow rules.',
   },
 ]
 

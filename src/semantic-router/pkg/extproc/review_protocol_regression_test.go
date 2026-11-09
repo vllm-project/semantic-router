@@ -44,17 +44,16 @@ func TestReviewBufferedPolicyBodyRewriteReportsCacheWarningOnce(t *testing.T) {
 	}
 }
 
-func TestReviewAzureTransportErrorReportsLateDiagnostic(t *testing.T) {
+func TestReviewDecoratedTransportErrorReportsLateDiagnostic(t *testing.T) {
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{
 		SourceFormat:       llmprotocol.AnthropicMessagesV1,
 		TargetFormat:       llmprotocol.OpenAIChatV1,
-		ResponseVendor:     llmprotocol.ResponseVendorAzure,
 		UpstreamStatusCode: 429,
 		RequestID:          "request_1",
 		RequestModel:       "public-model",
 	}
-	const reason = "provider vendor extension field is not part of the canonical response contract"
+	const reason = "upstream field is not part of the wire contract; a same-format reply forwards it unchanged"
 	counter := metrics.TranslationLossyTotal.WithLabelValues("anthropic", "openai", "dropped", reason)
 	before := testutil.ToFloat64(counter)
 	body := []byte(`{"error":{"type":"invalid_request_error","code":"content_filter","message":"blocked","param":null,"innererror":{"content_filter_result":{"hate":{"filtered":true}}}}}`)

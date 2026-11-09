@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
@@ -67,8 +68,17 @@ func prependSemanticOutputText(output []llmprotocol.OutputItem, prefix string) b
 }
 
 // extractSemanticRequestSignals derives routing facts from the neutral request
-// accepted at ingress. Wire-specific JSON walkers are confined to codecs.
+// as sent, ignoring routing_input.
 func extractSemanticRequestSignals(request *llmprotocol.Request) *requestSignalSnapshot {
+	return extractSemanticRequestSignalsWith(request, nil)
+}
+
+// extractSemanticRequestSignalsWith derives routing facts from the neutral
+// request accepted at ingress. Wire-specific JSON walkers are confined to
+// codecs. The selector applies routing_input: user text and conversation facts
+// describe the routing view, while the jailbreak input and the context
+// estimate keep the request as sent.
+func extractSemanticRequestSignalsWith(request *llmprotocol.Request, selector *routinginput.Selector) *requestSignalSnapshot {
 	result := &requestSignalSnapshot{
 		Model: request.Model, Stream: request.Stream,
 		JailbreakInput: extractJailbreakInput(request),
@@ -94,15 +104,24 @@ func extractSemanticRequestSignals(request *llmprotocol.Request) *requestSignalS
 		}
 		recordNonUserSignalMessage(result, string(instruction.Role), text)
 	}
-	for _, message := range request.Messages {
+	routing := selector.Walk()
+	for index, message := range request.Messages {
+		if message.Role == llmprotocol.RoleUser && selector != nil {
+			var skipped bool
+			if message, skipped = routedUserMessage(routing, index, message); skipped {
+				continue
+			}
+		}
 		consumeSemanticMessage(result, message)
 	}
+	result.RoutingInput = routing.Outcome()
 	result.ToolDefinitionCount = len(request.Tools)
 	estimate := llmprotocol.EstimateInput(request)
 	result.ContextTokenFloor = estimate.Tokens
 	result.ContextTextBytes = estimate.TextBytes
 	result.ContextEquivalentBytes = estimate.EquivalentBytes
 	result.ContextHasNonText = estimate.HasNonText
+	result.ContextReserveTokens = estimate.ReserveTokens
 	return result
 }
 

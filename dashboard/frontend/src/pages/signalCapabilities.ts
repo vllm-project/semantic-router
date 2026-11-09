@@ -1,12 +1,18 @@
 import { QUESTION_TYPES } from './systemOnePlayground'
 import type { FieldSchema } from '../lib/dslSchemas'
 import type { DecisionTasks } from './useDecisionTasks'
+import { bindingDeployment, bindingKey, bindingSpellings } from './modelBindings'
 
-export type SignalBindings = Record<string, { deployment?: string; contract?: string }>
+interface BoundResource {
+  deployment?: string
+  contract?: string
+  explicit?: boolean
+}
+export type SignalBindings = Record<string, BoundResource>
 export interface SignalCapabilityScope {
   recipe: string
-  bindings?: SignalBindings
-  globalBindings?: SignalBindings
+  bindings?: Record<string, unknown>
+  globalBindings?: Record<string, unknown>
   defaultDeployment?: string
 }
 export interface SignalAvailability {
@@ -15,15 +21,52 @@ export interface SignalAvailability {
 }
 const available: SignalAvailability = { supported: true }
 
-function selectedResource(data: DecisionTasks, scope: SignalCapabilityScope, key: string) {
+function isHazardKey(key: string) {
+  return key.startsWith('safety.') && key.endsWith('.hazard')
+}
+
+function boundResource(value: unknown): BoundResource | undefined {
+  const deployment = bindingDeployment(value)
+  if (!deployment) return undefined
+  const contract =
+    value && typeof value === 'object' ? (value as { contract?: unknown }).contract : undefined
+  return { deployment, contract: typeof contract === 'string' ? contract : undefined }
+}
+
+// Older configurations bound a rule by its rule key (classifier.<rule>,
+// safety.<rule>, ...); the Router still reads it after the rule's deployment.
+function explicitResource(bindings: Record<string, unknown> | undefined, key: string) {
+  for (const candidate of bindingSpellings(key)) {
+    const resource = boundResource(bindings?.[candidate])
+    if (resource) return { ...resource, explicit: true }
+  }
+  return undefined
+}
+
+function selectedResource(
+  data: DecisionTasks,
+  scope: SignalCapabilityScope,
+  key: string,
+): BoundResource | undefined {
   const explicit =
-    scope.bindings?.[key] ??
-    (scope.globalBindings === undefined ? data.global_bindings?.[key] : scope.globalBindings[key])
+    explicitResource(scope.bindings, key) ??
+    explicitResource(
+      scope.globalBindings === undefined ? data.global_bindings : scope.globalBindings,
+      key,
+    )
   if (explicit) return explicit
-  const inherited = data.default_bindings?.[key]
+  const inherited = boundResource(data.default_bindings?.[key])
   return inherited?.deployment === data.default_deployment && scope.defaultDeployment
     ? { ...inherited, deployment: scope.defaultDeployment }
     : inherited
+}
+
+// Rules that ask a question of their own may name the deployment that answers it.
+function ruleDeployment(key: string, fields: Record<string, unknown>): string | undefined {
+  const owner = isHazardKey(key) ? fields.hazard : fields
+  return owner && typeof owner === 'object'
+    ? bindingDeployment((owner as { deployment?: unknown }).deployment)
+    : undefined
 }
 
 export function decisionQuestionTypes(
@@ -84,16 +127,27 @@ export function signalAvailability(
       (item) => item.kind === 'signal' && item.type === signalType,
     )
     const key = consumer?.binding?.split('{name}').join(name) ?? ''
-    const binding = key ? selectedResource(data, scope, key) : undefined
+    const own = key ? ruleDeployment(key, fields) : undefined
     const observed = data.bindings.find(
       (item) =>
-        item.recipe === scope.recipe && item.task_id === task.id && (!key || item.consumer === key),
+        item.recipe === scope.recipe &&
+        item.task_id === task.id &&
+        (!key || bindingKey(item.consumer) === bindingKey(key)),
     )
-    const resource = binding ?? (!key ? observed?.binding : undefined)
-    // Specialist contracts implement their own task; they are not native decision questions.
+    const resource: BoundResource | undefined = own
+      ? { deployment: own, explicit: true }
+      : key
+        ? selectedResource(data, scope, key)
+        : boundResource(observed?.binding)
     const deployment = resource?.deployment || scope.defaultDeployment || data.default_deployment
     const target = data.deployments.find((item) => item.deployment === deployment)
-    if (!target && resource?.deployment && resource.contract && resource.contract !== 'decision.v1')
+    // A deployment the task catalog does not list answers through its own
+    // head or API; the Router checks that it can when the config is saved.
+    if (
+      !target &&
+      resource?.deployment &&
+      (resource.explicit || (resource.contract && resource.contract !== 'decision.v1'))
+    )
       continue
     const capability = target?.tasks.find((item) => item.task_id === task.id)
     if (!capability?.supported)
@@ -129,20 +183,13 @@ export function signalCapabilitySchema(schema: FieldSchema[], types: string[]): 
   )
 }
 
+/** Bindings written as a deployment name or an object, keyed as written. */
 export function signalBindings(value: unknown): SignalBindings | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   return Object.fromEntries(
     Object.entries(value).flatMap(([key, item]) => {
-      if (!item || typeof item !== 'object' || typeof item.deployment !== 'string') return []
-      return [
-        [
-          key,
-          {
-            deployment: item.deployment,
-            contract: typeof item.contract === 'string' ? item.contract : undefined,
-          },
-        ],
-      ]
+      const resource = boundResource(item)
+      return resource ? [[key, resource]] : []
     }),
   )
 }

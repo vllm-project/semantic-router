@@ -45,7 +45,7 @@ deployment 及其状态：
 curl -s localhost:8080/startup-status
 ```
 
-离线的附加运行时不会阻塞自定义 `decision` 问题或显式 `decision.v1` 任务绑定的准备；当前能力信息就绪且兼容之前，这些任务不可用。隐式绑定和原生任务头仍可能需要在启动时读取模型元数据。见[部署就绪规则](./deploy#when-a-model-is-not-ready)。
+离线的挂接运行时不会阻塞自定义 `decision` 问题的准备；当前能力信息就绪且兼容之前，这些问题不可用。它作为决策模型回答的信号、或通过选择头的绑定回答的信号，仍可能需要在启动时读取模型元数据。见[部署就绪规则](./deploy#when-a-model-is-not-ready)。
 
 首次启动要下载模型，因此比之后的启动更久。等待在 `VLLM_SRUN_READY_TIMEOUT`（默认 10 分钟）后结束，
 并报告 `did not become ready within 10m0s`；再次启动即可从缓存继续下载，或在路由器的环境中调大该超时。
@@ -99,7 +99,7 @@ curl -s localhost:8080/startup-status
 ## 运行时报告 `failed` {#the-runtime-reports-failed}
 
 `GET /v1/models` 会给出每个模型失败的原因。由路由器运行模型时，路由器日志会带有同样的原因，例如
-`model runtime is not ready: model @domain_classifier failed to load: ...`。
+`model runtime is not ready: model vela-domain failed to load: ...`，其中给出部署名。
 路由器运行的某个运行时进程中所有模型都加载失败时，路由器会重启该进程（首次等待 1 秒，之后最长间隔 60 秒），
 因此 GPU 被占用、磁盘已满这类暂时性原因消除后，模型会自行恢复。与仍在服务的模型同处一个进程的模型加载失败时，由运行时自己重试，该进程会继续运行。路由器托管的模型重试三次仍然失败时，路由器无法启动；配置重新加载时，新配置会被拒绝，上一份配置继续服务。常见原因：
 

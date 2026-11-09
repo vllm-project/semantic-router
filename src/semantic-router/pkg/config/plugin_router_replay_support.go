@@ -82,6 +82,13 @@ func (p *RouterReplayPluginConfig) CapturesPersonalData() bool {
 	return p == nil || p.CapturePersonalData == nil || *p.CapturePersonalData
 }
 
+// CapturesToolResults reports whether client tool-result text is stored.
+// Configuration loading refuses it without personal-data capture; requiring
+// both here keeps a policy built outside that path redacted.
+func (p *RouterReplayPluginConfig) CapturesToolResults() bool {
+	return p != nil && p.CaptureToolResults && p.CapturesPersonalData()
+}
+
 func (c RouterReplayConfig) captureDefaults() RouterReplayPluginConfig {
 	base := DefaultRouterReplayPluginConfig()
 	base.Enabled = c.Enabled
@@ -94,6 +101,9 @@ func (c RouterReplayConfig) captureDefaults() RouterReplayPluginConfig {
 	if c.CapturePersonalData != nil {
 		value := *c.CapturePersonalData
 		base.CapturePersonalData = &value
+	}
+	if c.CaptureToolResults != nil {
+		base.CaptureToolResults = *c.CaptureToolResults
 	}
 	if c.MaxRecords != nil {
 		base.MaxRecords = *c.MaxRecords

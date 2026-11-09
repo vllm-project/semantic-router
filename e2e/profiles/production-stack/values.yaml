@@ -293,6 +293,16 @@ config:
   global:
     model_catalog:
       kbs: []
+      # The built-in signals run on Vela 2.0 0.3B here, not the default
+      # vela3-fast: this profile scales the Router to two replicas on one CI
+      # node, and two vela3-fast deployments (about 7 GB each) do not fit
+      # there. The jailbreak and PII rule thresholds above are the 0.3B's.
+      deployments:
+        primary:
+          provider: model_runtime
+          artifact: vllm-sr/Vela-2.0-0.3B
+          revision: a3209a50dc3ebd7e3b7520440d8fba666000f4c4
+          device: cpu
     router:
       clear_route_cache: true
       strategy: priority

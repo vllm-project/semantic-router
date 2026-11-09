@@ -29,7 +29,7 @@ choice is about cost, latency or load.
 ## Configuration
 
 Without a `deployment`, the Router's decision model chooses
-(`global.model_catalog.system.decision_model`, Vela 2.0 0.3B unless you
+(`global.model_catalog.system.decision_model`, Vela 3.0 vela3-fast unless you
 [choose a size](../../../model-runtime/choose-a-model.md#choose-a-size)). It is the
 model that already answers the request's built-in signals and its `decision`
 questions that name no deployment, so choosing the model needs no second copy
@@ -137,7 +137,10 @@ routing:
           timeout_ms: 1000
 ```
 
-A named deployment must use `provider: model_runtime`. The decision needs 2–255
+A named deployment must use `provider: model_runtime`, or `provider: systemone`
+for a [remote System One API](../../signal/learned/decision.md#ask-a-remote-system-one-model);
+a selector without its own `timeout_ms` then takes the deployment's. The
+decision needs 2–255
 different `modelRefs`, and `candidates` may describe only those models; a
 model without a description uses its configured description. When the model
 is not ready, answers late, is overloaded or returns an invalid answer, the

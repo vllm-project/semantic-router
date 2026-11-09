@@ -39,7 +39,7 @@ Vela PII 由 router 跑在 CPU 上。整个请求最多 32,768 个 token，按 5
 
 ## 选它跑在哪 {#choose-where-it-runs}
 
-绑定名叫 `pii_classifier`，读的是文本片段（`token_spans.v1`）：
+绑定键是 `pii`，信号读的是文本片段：
 
 ```yaml
 global:
@@ -53,9 +53,7 @@ global:
           max_tokens: 32768
           overflow: window
     bindings:
-      pii_classifier:
-        deployment: vela-pii
-        contract: token_spans.v1
+      pii: vela-pii
     modules:
       classifier:
         pii:
@@ -68,7 +66,7 @@ PII 就用 `overflow: window`：模型把整个请求按 512 token 的窗口读�
 
 ### 关于 Vela 2.0
 
-Vela 2.0 用它的 router span 头找出同样的 17 种类型，作为一个现成的问题。把 `pii_classifier` 绑到一个 Vela 2.0 部署上：PII 问题与请求就同一文本问该部署的[决策问题](model-runtime/guides/decisions.md)在同一次调用里发出。
+Vela 2.0 用它的 router span 头找出同样的 17 种类型，作为一个现成的问题。把 `pii` 绑到一个 Vela 2.0 部署上：PII 问题与请求就同一文本问该部署的[决策问题](model-runtime/guides/decisions.md)在同一次调用里发出。
 
 ```yaml alternative
 global:
@@ -79,9 +77,7 @@ global:
         artifact: vllm-sr/Vela-2.0-0.3B
         device: cpu
     bindings:
-      pii_classifier:
-        deployment: vela2
-        contract: token_spans.v1
+      pii: vela2
 ```
 
 模型自己读整个请求，所以部署不带 `input`，PII 模块也不带 `window`。规则阈值如何作用于它的片段，见[`pii` 信号](../../tutorials/signal/learned/pii.md)。

@@ -12,7 +12,7 @@ translation:
 
 `fact-check` 判断提示是否应视为证据敏感流量。在 `routing.signals.fact_check` 下定义其标签。
 
-该族为学习型：依赖 `global.model_catalog.modules.hallucination_mitigation.fact_check` 下的事实核查分类路径。
+该族为学习型：除非 `fact_check` 绑定指定了其他部署，否则由决策模型回答它（[为信号选择模型](../../../installation/choose-a-model-for-a-signal.md)）。`global.model_catalog.modules.hallucination_mitigation.fact_check` 保存它的设置。
 
 ## 主要优势 {#key-advantages}
 

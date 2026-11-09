@@ -97,9 +97,9 @@ and
 
 ## Neural reranking
 
-The `vectorstore` backend can rerank its structured search hits with a local
-Vela pair scorer before formatting the context. Declare the deployment and
-the recipe-local `rag.reranker` binding, then opt the route into `rerank`:
+The `vectorstore` backend can rerank its structured search hits with a Vela
+pair scorer before formatting the context. Declare the reranker as a
+deployment:
 
 ```yaml
 global:
@@ -112,17 +112,9 @@ global:
         input:
           max_tokens: 4096
           overflow: reject
-routing:
-  model_bindings:
-    rag.reranker:
-      deployment: document-ranker
-      contract: relevance_scores.v1
-      pair_scorer:
-        layer: 22
-        dimension: 768
 ```
 
-Add this plugin to a decision in the same recipe:
+Then name it in the `rerank` block of the plugin on a decision:
 
 ```yaml
 plugins:
@@ -134,9 +126,18 @@ plugins:
         vector_store_id: vs-your-documents
       top_k: 10
       rerank:
+        deployment: document-ranker
         top_k: 3
+        layer: 22
+        dimension: 768
       on_failure: block
 ```
+
+`rerank.deployment` can also name a `rerank` deployment (a remote service the
+Router posts to `<endpoint>/rerank`) or an attached model runtime; see the
+[model catalog reference](../../installation/model-catalog.md#r2-attached-reranker-named-where-it-is-used).
+The RAG plugins of one recipe name the same reranker, layer and dimension;
+`layer` and `dimension` apply to a model runtime reranker only.
 
 `top_k` retrieves candidates; `rerank.top_k` limits the reordered hits injected
 into the prompt. Omit the latter to retain every candidate. Higher raw relevance
@@ -146,13 +147,15 @@ uncalibrated and do not replace the embedding similarity threshold.
 
 The scorer uses the tokenizer's query/document pair template. The token budget
 includes both texts and special tokens; overflow is rejected without truncating
-either text. Loading validates the selected trained layer and dimension; zero
-selects the artifact's actual full depth or width. CPU cost grows with candidate
-count and pair length, so choose an explicit deployment budget.
+either text. Loading validates the selected trained `layer` and `dimension`;
+zero, or leaving them out, selects the artifact's actual full depth or width.
+CPU cost grows with candidate count and pair length, so choose an explicit
+deployment budget.
 
-The reranker runs in the [model runtime](../../model-runtime/guides/rerank.md).
+A local reranker runs in the [model runtime](../../model-runtime/guides/rerank.md).
 At startup the router checks that the model declares the selected exit, so a
-`pair_scorer` the model was not trained for is refused before traffic arrives.
+`layer` and `dimension` the model was not trained for are refused before
+traffic arrives.
 
 Only reachable recipes with an enabled `rerank` plugin load a scorer. Missing
 models, invalid scores and input-limit failures follow the existing RAG

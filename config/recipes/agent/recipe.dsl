@@ -169,10 +169,10 @@ ROUTE domain_legal_health (description = "Law and health (domain: legal_health) 
   }
 }
 
-ROUTE domain_code_complex (description = "Hard software work (domain: code, difficulty 2.5 or more) goes to the strongest technical models.", on_unknown = "no_match") {
+ROUTE domain_code_complex (description = "Hard software work (domain: code, difficulty 1.75 or more) goes to the strongest technical models.", on_unknown = "no_match") {
   PRIORITY 255
   TIER 3
-  WHEN decision("domain", label: "code") AND decision("difficulty", predicate: { gte: 2.5 })
+  WHEN decision("domain", label: "code") AND decision("difficulty", predicate: { gte: 1.75 })
   MODEL "google/gemini-3.1-pro" (reasoning = false),
         "openai/gpt5.4" (reasoning = false)
   PLUGIN router_replay {
@@ -182,10 +182,10 @@ ROUTE domain_code_complex (description = "Hard software work (domain: code, diff
   }
 }
 
-ROUTE domain_code (description = "Other software work that needs some reasoning (domain: code, difficulty 1 to 2.5) goes to the code model.", on_unknown = "no_match") {
+ROUTE domain_code (description = "Other software work that needs some reasoning (domain: code, difficulty 1 to 1.75) goes to the code model.", on_unknown = "no_match") {
   PRIORITY 250
   TIER 3
-  WHEN decision("domain", label: "code") AND decision("difficulty") AND NOT decision("difficulty", predicate: { gte: 2.5 })
+  WHEN decision("domain", label: "code") AND decision("difficulty") AND NOT decision("difficulty", predicate: { gte: 1.75 })
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false),
         "google/gemini-3.1-pro" (reasoning = false)
   PLUGIN router_replay {
@@ -220,10 +220,10 @@ ROUTE domain_business (description = "Business and product questions (domain: bu
   }
 }
 
-ROUTE complex_general (description = "Any other request that needs deep reasoning (difficulty 2.5 or more, domain not code or math_science) goes to the stronger models.", on_unknown = "no_match") {
+ROUTE complex_general (description = "Any other request that needs deep reasoning (difficulty 1.75 or more, domain not code or math_science) goes to the stronger models.", on_unknown = "no_match") {
   PRIORITY 190
   TIER 4
-  WHEN decision("difficulty", predicate: { gte: 2.5 }) AND NOT decision("domain", label: "code") AND NOT decision("domain", label: "math_science")
+  WHEN decision("difficulty", predicate: { gte: 1.75 }) AND NOT decision("domain", label: "code") AND NOT decision("domain", label: "math_science")
   MODEL "google/gemini-3.1-pro" (reasoning = false),
         "openai/gpt5.4" (reasoning = false)
   PLUGIN router_replay {
@@ -233,10 +233,10 @@ ROUTE complex_general (description = "Any other request that needs deep reasonin
   }
 }
 
-ROUTE medium_general (description = "Any other request that needs some reasoning (difficulty 1 to 2.5) goes to the medium model.", on_unknown = "no_match") {
+ROUTE medium_general (description = "Any other request that needs some reasoning (difficulty 1 to 1.75) goes to the medium model.", on_unknown = "no_match") {
   PRIORITY 150
   TIER 5
-  WHEN decision("difficulty") AND NOT decision("difficulty", predicate: { gte: 2.5 })
+  WHEN decision("difficulty") AND NOT decision("difficulty", predicate: { gte: 1.75 })
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false)
 }
 

@@ -33,8 +33,9 @@ var sensitiveHeaderKeys = map[string]bool{
 // isSensitiveHeaderKey reports whether a header's value should be redacted from
 // logs. It matches the explicit credential headers above and, defensively, any
 // header whose name carries a credential by convention (a "*-key" suffix or a
-// name containing "api-key", "token", or "secret") so custom provider auth
-// headers are covered without enumerating every one.
+// name containing "api-key", "token", "secret", or "credential") so custom
+// provider auth headers and the gateway credential header are covered without
+// enumerating every one.
 func isSensitiveHeaderKey(key string) bool {
 	k := strings.ToLower(strings.TrimSpace(key))
 	if sensitiveHeaderKeys[k] {
@@ -43,7 +44,8 @@ func isSensitiveHeaderKey(key string) bool {
 	return strings.HasSuffix(k, "-key") ||
 		strings.Contains(k, "api-key") ||
 		strings.Contains(k, "token") ||
-		strings.Contains(k, "secret")
+		strings.Contains(k, "secret") ||
+		strings.Contains(k, "credential")
 }
 
 // redactResponseForLog returns a deep copy of response with credential header

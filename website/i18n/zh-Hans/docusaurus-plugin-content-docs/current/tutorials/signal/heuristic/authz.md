@@ -42,13 +42,13 @@ translation:
 routing:
   signals:
     role_bindings:
-      - name: admin
+      - name: platform-admins-binding
         description: Requests from platform administrators.
         role: admin
         subjects:
           - kind: Group
             name: platform-admins
-      - name: premium_user
+      - name: premium-tier-binding
         description: Requests from paid end users.
         role: premium_user
         subjects:
@@ -56,7 +56,26 @@ routing:
             name: premium-tier
 ```
 
+当调用方的用户 ID 或其所属的某个组出现在绑定的 `subjects` 中时，该绑定匹配请求，并将其 `role` 作为 `authz` 信号发出。绑定的 `name` 仅用于在日志中标识该绑定；多个绑定可以授予同一角色。
+
 当信号应来自已认证身份与策略元数据，而非提示内容时，使用 `role_bindings`。
+
+## 决策示例 {#example-decision}
+
+决策引用的是角色，而不是绑定的名称：
+
+```yaml
+routing:
+  decisions:
+    - name: route_admins
+      description: Route platform administrators to the strongest model.
+      priority: 200
+      rules:
+        type: authz
+        name: admin
+      modelRefs:
+        - model: strong-model
+```
 
 ## 依赖与限制 {#dependencies-and-limitations}
 

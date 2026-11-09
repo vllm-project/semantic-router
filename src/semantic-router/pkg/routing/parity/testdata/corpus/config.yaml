@@ -123,3 +123,12 @@ recipes:
 entrypoints:
   - model_names: ["vllm-sr/support"]
     recipe: support
+
+global:
+  router:
+    routing_input:
+      skip_user_messages_matching:
+        - '(?s)^\s*OpenClaw runtime context:.*End OpenClaw runtime context\.\s*$'
+      strip_blocks:
+        - start: '<relevant-memories>'
+          end: '</relevant-memories>'

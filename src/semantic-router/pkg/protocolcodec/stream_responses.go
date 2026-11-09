@@ -64,11 +64,12 @@ type responsesOutputContentKey struct {
 }
 
 type responsesDecodedContentLifecycle struct {
-	kind        string
-	text        strings.Builder
-	annotations []responsesAnnotationWire
-	textDone    bool
-	partDone    bool
+	explicitPartStart bool
+	kind              string
+	text              strings.Builder
+	annotations       []responsesAnnotationWire
+	textDone          bool
+	partDone          bool
 }
 
 type responsesStreamEncoder struct {
@@ -280,25 +281,19 @@ func (decoder *responsesStreamDecoder) decodeResponsesWireFrame(
 	frame []byte,
 ) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	var wire responsesEventWire
-	_, vendorExtensions, err := decodeProviderWireVendorAware(data, &wire, decoder.policy)
+	_, unknownFields, err := decodeProviderWireTolerant(data, &wire, decoder.policy)
 	if err != nil {
 		return nil, nil, err
 	}
 	var diagnostics llmprotocol.Diagnostics
-	appendVendorExtensionDiagnostics(&diagnostics, decoder.policy, llmprotocol.OpenAIResponsesV1, vendorExtensions)
+	decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIResponsesV1, unknownFields)
 	if len(wire.Item) > 0 {
-		itemVendorExtensions, itemErr := responsesItemVendorExtensions(wire.Item, decoder.policy)
-		appendResponsesVendorExtensionDiagnostics(&diagnostics, decoder.policy, "output[]", itemVendorExtensions)
-		if itemErr != nil {
-			return nil, diagnostics, itemErr
-		}
+		decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIResponsesV1,
+			prefixedUnknownFieldPaths("output[]", responsesItemUnknownFields(wire.Item, decoder.policy)))
 	}
 	if wire.Response != nil {
-		outputVendorExtensions, outputErr := responsesOutputVendorExtensions(wire.Response.Output, decoder.policy)
-		appendVendorExtensionDiagnostics(&diagnostics, decoder.policy, llmprotocol.OpenAIResponsesV1, outputVendorExtensions)
-		if outputErr != nil {
-			return nil, diagnostics, outputErr
-		}
+		decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIResponsesV1,
+			responsesOutputUnknownFields(wire.Response.Output, decoder.policy))
 		for _, diagnostic := range responsesProviderDecorationDiagnostics(*wire.Response, decoder.policy, "stream.response.") {
 			if decoder.reportedProviderDecorations[diagnostic.Field] {
 				continue
@@ -384,8 +379,13 @@ func (decoder *responsesStreamDecoder) validateResponsesEventItemType(wire respo
 	}
 	expected := ""
 	switch wire.Type {
-	case "response.content_part.added", "response.content_part.done",
-		"response.output_text.delta", "response.output_text.done", "response.output_text.annotation.added",
+	case "response.content_part.added", "response.content_part.done":
+		part, err := interpretResponsesContentPart(wire.Part)
+		if err != nil {
+			return err
+		}
+		expected = part.itemType
+	case "response.output_text.delta", "response.output_text.done", "response.output_text.annotation.added",
 		"response.refusal.delta", "response.refusal.done":
 		expected = "message"
 	case "response.reasoning_summary_part.added", "response.reasoning_summary_part.done",

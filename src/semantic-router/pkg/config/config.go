@@ -1,6 +1,8 @@
 package config
 
 import (
+	"strings"
+
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
@@ -141,6 +143,35 @@ type AuthzConfig struct {
 	FailOpen  bool                  `yaml:"fail_open,omitempty"`
 	Identity  IdentityConfig        `yaml:"identity,omitempty"`
 	Providers []AuthzProviderConfig `yaml:"providers,omitempty"`
+	// GatewayCredential names the trusted authentication result header that
+	// carries a dedicated credential for trusted upstream gateways.
+	GatewayCredential GatewayCredentialConfig `yaml:"gateway_credential,omitempty"`
+}
+
+// GatewayCredentialConfig declares the dedicated downstream-gateway credential
+// a deployment authenticator attaches to an authenticated request. The Router
+// trusts it exactly as it trusts the identity headers: the gateway in front
+// removes client-supplied copies, and a standalone listener drops them unless
+// it trusts identity headers. The value is forwarded only to a backend_ref
+// marked trusted_gateway, under that backend's auth header, and never to any
+// other upstream. Disabled by default.
+type GatewayCredentialConfig struct {
+	Enabled bool `yaml:"enabled,omitempty"`
+	// Header is the request header the authenticator sets; default
+	// x-vsr-gateway-credential.
+	Header string `yaml:"header,omitempty"`
+}
+
+// DefaultGatewayCredentialHeader is the header read when the contract is
+// enabled without a header name.
+const DefaultGatewayCredentialHeader = "x-vsr-gateway-credential" // #nosec G101 -- header name, not a credential
+
+// GetHeader returns the configured header name, lowercased, or the default.
+func (c GatewayCredentialConfig) GetHeader() string {
+	if header := strings.ToLower(strings.TrimSpace(c.Header)); header != "" {
+		return header
+	}
+	return DefaultGatewayCredentialHeader
 }
 
 // IdentityConfig controls how the router reads user identity from request headers.
@@ -215,8 +246,9 @@ type Listener struct {
 	SystemOne *ListenerSystemOne `yaml:"systemone,omitempty"`
 	// TLS, when set, makes a standalone Router serve this listener over TLS.
 	TLS *ListenerTLS `yaml:"tls,omitempty"`
-	// Identity, when set, decides whether a standalone Router keeps the client
-	// identity headers that requests on this listener carry.
+	// Identity, when set, decides whether the listener keeps the client
+	// identity headers its requests carry: a standalone Router does, and so
+	// does the Envoy listener the CLI generates for --gateway extproc.
 	Identity *ListenerIdentity `yaml:"identity,omitempty"`
 }
 
@@ -228,9 +260,9 @@ type ListenerSystemOne struct {
 	MaxDeadlineMs *int `yaml:"max_deadline_ms,omitempty"`
 }
 
-// ListenerIdentity names the identity sources a standalone listener trusts.
-// It trusts none by default: with no authenticator in front of the Router,
-// a client could claim any identity, so its identity headers are dropped.
+// ListenerIdentity names the identity sources a listener trusts. It trusts
+// none by default: with no authenticator in front of the Router, a client
+// could claim any identity, so its identity headers are dropped.
 type ListenerIdentity struct {
 	// TrustHeaders keeps the identity headers (the x-authz-* set and the
 	// names global.services.authz.identity sets) that an authenticating proxy
@@ -238,7 +270,8 @@ type ListenerIdentity struct {
 	TrustHeaders bool `yaml:"trust_headers,omitempty"`
 	// TrustedPeers, when set, keeps those headers only on connections whose
 	// peer address is in one of these CIDRs; X-Forwarded-For is never read.
-	// Empty, every peer of a listener that trusts headers is trusted.
+	// Empty, every peer of a listener that trusts headers is trusted. Only a
+	// standalone Router checks it; the CLI refuses it for --gateway extproc.
 	TrustedPeers []string `yaml:"trusted_peers,omitempty"`
 }
 
@@ -266,6 +299,9 @@ type RouterOptions struct {
 	MaxStreamedBodyBytes   int64                `yaml:"max_streamed_body_bytes,omitempty"`
 	StreamedBodyTimeoutSec int                  `yaml:"streamed_body_timeout_sec,omitempty"`
 	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+	AllowLossyTranslation  []string             `yaml:"allow_lossy_translation,omitempty"`
+	RoutingInput           RoutingInputConfig   `yaml:"routing_input,omitempty"`
+	Headers                RouterHeadersConfig  `yaml:"headers,omitempty"`
 }
 
 // RoutingEnabled controls the recipe pipeline independently of the frontend
@@ -302,6 +338,32 @@ type InlineModels struct {
 	// DecisionModel is global.model_catalog.system.decision_model, resolved
 	// to its canonical name.
 	DecisionModel string `yaml:"decision_model,omitempty"`
+	// EmbeddingDeployment and MultimodalEmbeddingDeployment are
+	// global.model_catalog.embeddings.default and .multimodal.
+	EmbeddingDeployment           string `yaml:"embedding_deployment,omitempty"`
+	MultimodalEmbeddingDeployment string `yaml:"multimodal_embedding_deployment,omitempty"`
+	// ModelResourceWarnings are the deprecated model fields the
+	// configuration was read with, and what they were read as.
+	ModelResourceWarnings []ConfigWarning `yaml:"-" json:"-"`
+	// AuthoredThresholds are the module thresholds the configuration sets;
+	// the others follow the model that answers (model_thresholds.go).
+	AuthoredThresholds map[string]bool `yaml:"-" json:"-"`
+
+	// modelResourcesTranslated is set once deprecated model fields were
+	// read as deployments and bindings (model_resource_translation.go).
+	modelResourcesTranslated bool
+	// modelResourceErrors fail the consumers whose deprecated model names
+	// no model when they run.
+	modelResourceErrors map[string]error
+	// legacyModelSources names the deprecated field a module's model came
+	// from, for its warning.
+	legacyModelSources map[string]string
+	// noModel are the modules model_ref: "" turned off: no decision model
+	// answers them.
+	noModel map[string]bool
+	// scopedBindings are a recipe scope's own bindings, before the global
+	// ones (ConfigForRecipe); nil outside a recipe scope.
+	scopedBindings map[string]ModelBinding
 }
 
 // IntelligentRouting captures user-facing signal and decision configuration.

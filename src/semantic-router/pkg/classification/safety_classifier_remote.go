@@ -26,19 +26,19 @@ func (c *remoteSafetyScores) Classify(ctx context.Context, text string) (labelCl
 }
 func (c *remoteSafetyScores) Close() error { return c.handle.Close() }
 
-func prepareRemoteSafetyClassifier(models *classifierModelRuntime, spec config.ResolvedModelBinding, external *config.ExternalModelConfig, labels []string, multiLabel bool) (labelClassifier, error) {
-	transport, transportErr := NewHTTPClassifierInference(external, newDeclaredLabelMapping(labels))
+func prepareRemoteSafetyClassifier(models *classifierModelRuntime, spec config.ResolvedModelBinding, labels []string, multiLabel bool) (labelClassifier, error) {
+	transport, transportErr := NewHTTPClassifierInference(spec.Deployment, newDeclaredLabelMapping(labels))
 	if transportErr != nil {
 		return nil, transportErr
 	}
 	if !multiLabel {
-		owned, err := prepareRemoteSequence(models, spec, external, transport)
+		owned, err := prepareRemoteSequence(models, spec, transport)
 		if err != nil {
 			return nil, err
 		}
 		return &sequenceLabelClassifier{backend: owned, labels: append([]string(nil), labels...)}, nil
 	}
-	handle, err := remoteTaskBinding(context.Background(), models, spec, external, transport,
+	handle, err := remoteTaskBinding(context.Background(), models, spec, transport,
 		func(ctx context.Context, text string) (tasks.LabelScores, error) {
 			wire, err := transport.fetchLabelScores(ctx, text)
 			if err != nil {

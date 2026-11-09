@@ -229,7 +229,7 @@ providers:
       backend_refs:
         - name: primary
           provider: openai
-          api_key_env: OPENAI_API_KEY
+          auth: {api_key_env: OPENAI_API_KEY}
 
 routing:
   decisions:
@@ -286,7 +286,7 @@ providers:
       backend_refs:
         - name: primary
           provider: provider-id
-          api_key_env: PROVIDER_API_KEY
+          auth: {api_key_env: PROVIDER_API_KEY}
 ```
 
 Built-in cards do not require `routing.modelCards`. An intentional override

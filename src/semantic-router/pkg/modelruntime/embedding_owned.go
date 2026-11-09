@@ -4,22 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
-	"strconv"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
-
-// embeddingModels are the embedding model types the model runtime serves,
-// with the configuration path that names each one's package.
-var embeddingModels = map[string]func(*config.RouterConfig) string{
-	"mmbert":     func(cfg *config.RouterConfig) string { return cfg.MmBertModelPath },
-	"qwen3":      func(cfg *config.RouterConfig) string { return cfg.Qwen3ModelPath },
-	"multimodal": func(cfg *config.RouterConfig) string { return cfg.MultiModalModelPath },
-}
 
 // PrepareOwnedEmbeddings prepares a candidate generation's recipe consumers;
 // the service-owned cache, tools, memory and ingestion consumers are prepared
@@ -33,6 +23,7 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *s
 	if cfg == nil {
 		return nil, fmt.Errorf("embedding configuration is required")
 	}
+	cfg = config.WithModelResources(cfg)
 	if runtime == nil {
 		runtime = serving.New(nil, nil)
 	}
@@ -68,27 +59,47 @@ func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *s
 	if len(needed) == 0 {
 		return embedding.NewSet(providers, primary), nil
 	}
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() && !hasExplicit {
+	if hasExplicit && explicit.Deployment.Provider == config.OpenAIEmbeddingsProvider && cfg.UsesRemoteEmbeddings() {
+		// A remote default embedding model serves every text embedding model
+		// keyword, as embeddings.semantic.endpoint did. embeddings.multimodal
+		// names the multimodal model, which the deprecated endpoint served too.
+		ownMultimodal := !explicit.Deployment.Translated() && needed["multimodal"]
 		for _, requirement := range requirements {
+			if ownMultimodal && requirement.Model == "multimodal" {
+				continue
+			}
 			if err := remoteEmbeddingRequirement(requirement); err != nil {
 				return fail(err)
 			}
 		}
-		endpoint := cfg.EmbeddingModels.Endpoint
-		spec := config.ResolvedModelBinding{Recipe: recipe, Name: "embedding", Binding: config.ModelBinding{Deployment: "embedding:remote", Contract: "embedding.v1", Adapter: "openai_compatible"}, Deployment: config.ModelDeployment{Provider: "http"}, Admission: cfg.ModelAdmission["embedding:remote"]}
-		provider, err := runtime.RemoteEmbedding(ctx, spec, embedding.OpenAICompatibleConfig{BaseURL: endpoint.BaseURL, Model: endpoint.Model, APIKeyEnv: endpoint.APIKeyEnv, TimeoutSeconds: float64(endpoint.TimeoutSeconds), MaxRetries: endpoint.MaxRetries, MaxResponseBytes: endpoint.MaxResponseBytes, Dimensions: endpoint.Dimensions, ExpectedDimension: cfg.EmbeddingConfig.TargetDimension})
+		provider, err := prepareRemoteEmbedding(ctx, cfg, runtime, explicit)
 		if err != nil {
 			return fail(err)
 		}
+		closers = append(closers, provider)
 		for model := range needed {
 			providers[model] = provider
 		}
 		providers[primary] = provider
+		if ownMultimodal {
+			spec, err := implicitEmbeddingSpec(cfg, recipe, "multimodal")
+			if err != nil {
+				return fail(err)
+			}
+			if recipe == config.GlobalModelScope {
+				spec.Name = globalEmbeddingConsumerName(cfg, "multimodal", primary)
+			}
+			multimodal, err := runtime.Embedding(ctx, spec, 0, 0)
+			if err != nil {
+				return fail(fmt.Errorf("prepare multimodal embedding: %w", err))
+			}
+			providers["multimodal"] = multimodal
+			closers = append(closers, multimodal)
+		}
 		if err := validatePreparedEmbeddings(ctx, requirements, providers); err != nil {
-			_ = provider.Close()
 			return fail(err)
 		}
-		return embedding.NewSet(providers, primary, provider), nil
+		return embedding.NewSet(providers, primary, closers...), nil
 	}
 	for _, model := range []string{"qwen3", "gemma", "mmbert", "multimodal", "bert"} {
 		if !needed[model] || (hasExplicit && model == primary) {
@@ -133,49 +144,44 @@ type embeddingProvider interface {
 }
 
 // prepareExplicitEmbedding serves an explicit embedding binding: a
-// model_runtime deployment, or an external OpenAI-compatible model.
+// model_runtime deployment, or an openai_embeddings one.
 func prepareExplicitEmbedding(ctx context.Context, cfg *config.RouterConfig, runtime *serving.Runtime, spec config.ResolvedModelBinding, view embedding.Options) (embeddingProvider, error) {
-	if spec.Deployment.Provider != "http" {
+	if spec.Deployment.Provider != config.OpenAIEmbeddingsProvider {
 		return runtime.Embedding(ctx, spec, view.Dimension, view.Layer)
 	}
-	external := cfg.FindExternalModelByName(spec.Deployment.ExternalModel)
-	if external == nil {
-		return nil, fmt.Errorf("embedding external_model %q is unavailable", spec.Deployment.ExternalModel)
-	}
-	address := external.ModelEndpoint.Address
-	if external.ModelEndpoint.Port > 0 {
-		address = net.JoinHostPort(address, strconv.Itoa(external.ModelEndpoint.Port))
-	}
-	if !strings.Contains(address, "://") {
-		protocol := external.ModelEndpoint.Protocol
-		if protocol == "" {
-			protocol = "http"
-		}
-		address = protocol + "://" + address
-	}
-	return runtime.RemoteEmbedding(ctx, spec, embedding.OpenAICompatibleConfig{BaseURL: address, Model: external.ModelName, APIKey: external.AccessKey, TimeoutSeconds: external.TimeoutSeconds, MaxResponseBytes: external.MaxResponseBytes, ExpectedDimension: cfg.EmbeddingConfig.TargetDimension})
+	return prepareRemoteEmbedding(ctx, cfg, runtime, spec)
 }
 
-// implicitEmbeddingSpec is the module-default deployment of an embedding model
-// type: the configured package served by the model runtime as
-// "@embedding.<model>", on CPU unless use_cpu is false, at the default exact
-// profile. Inputs over budget are truncated, as embeddings always were.
-// Concurrent requests still share forwards: exact batches queued requests
-// together on a model that loads batch-invariant.
+// prepareRemoteEmbedding serves an openai_embeddings deployment through its
+// connection block.
+func prepareRemoteEmbedding(ctx context.Context, cfg *config.RouterConfig, runtime *serving.Runtime, spec config.ResolvedModelBinding) (*serving.RemoteEmbeddingProvider, error) {
+	deployment := spec.Deployment
+	if _, keyed := cfg.ModelAdmission[spec.Binding.Deployment]; !keyed {
+		if admission, legacy := cfg.ModelAdmission["embedding:remote"]; legacy {
+			spec.Admission = admission
+		}
+	}
+	return runtime.RemoteEmbedding(ctx, spec, embedding.OpenAICompatibleConfig{
+		BaseURL: deployment.Endpoint, Model: deployment.Model,
+		TimeoutSeconds: float64(deployment.TimeoutMs) / 1000, MaxRetries: deployment.RetryCount(0),
+		MaxResponseBytes: deployment.ResponseLimitOr(0), Dimensions: deployment.DeclaredDimensions(),
+		ExpectedDimension: cfg.EmbeddingConfig.TargetDimension, Deployment: &deployment,
+	})
+}
+
+// implicitEmbeddingSpec is the deployment of an embedding model keyword
+// (config.RouterConfig.EmbeddingModelDeployment), at the default exact
+// profile. Concurrent requests still share forwards: exact batches queued
+// requests together on a model that loads batch-invariant.
 func implicitEmbeddingSpec(cfg *config.RouterConfig, recipe config.RecipeName, model string) (config.ResolvedModelBinding, error) {
-	path, served := embeddingModels[model]
-	if !served {
-		return config.ResolvedModelBinding{}, fmt.Errorf("embedding model %q is not served by the model runtime; use mmbert, qwen3 or multimodal, or an OpenAI-compatible endpoint (vllm-sr config migrate rewrites legacy settings)", model)
-	}
-	deployment, err := config.ImplicitModelRuntimeDeployment(path(cfg), cfg.EmbeddingModels.UseCPU)
+	name, deployment, err := cfg.EmbeddingModelDeployment(model)
 	if err != nil {
-		return config.ResolvedModelBinding{}, fmt.Errorf("embedding model %s: %w", model, err)
+		return config.ResolvedModelBinding{}, err
 	}
-	deployment.Input.Overflow = "truncate"
 	return config.ResolvedModelBinding{
 		Recipe: recipe, Name: "embedding",
-		Binding:    config.ModelBinding{Deployment: "@embedding." + model, Contract: "embedding.v1"},
-		Deployment: deployment, Admission: cfg.ModelAdmission["embedding:"+model],
+		Binding:    config.ModelBinding{Deployment: name, Contract: "embedding.v1"},
+		Deployment: deployment, Admission: cfg.EmbeddingAdmission(name, model),
 	}, nil
 }
 

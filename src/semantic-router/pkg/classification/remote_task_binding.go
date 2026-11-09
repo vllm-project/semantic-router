@@ -14,7 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
-func remoteTaskBinding[I, O any](ctx context.Context, models *classifierModelRuntime, spec config.ResolvedModelBinding, external *config.ExternalModelConfig, closer io.Closer, infer func(context.Context, I) (O, error), validate func(I, O) error) (*binding.Resolved[I, O], error) {
+func remoteTaskBinding[I, O any](ctx context.Context, models *classifierModelRuntime, spec config.ResolvedModelBinding, closer io.Closer, infer func(context.Context, I) (O, error), validate func(I, O) error) (*binding.Resolved[I, O], error) {
 	if models == nil {
 		models = standaloneModelRuntime()
 	}
@@ -22,12 +22,10 @@ func remoteTaskBinding[I, O any](ctx context.Context, models *classifierModelRun
 		_ = closer.Close()
 		return nil, fmt.Errorf("remote adapter cannot enforce a local tokenizer input budget")
 	}
-	// Credentials participate in compatibility without appearing in the resource
-	// key, diagnostics, or serialized public config.
-	secret := sha256.Sum256([]byte(external.AccessKey))
 	// Per-binding timeouts, byte limits and catalog aliases do not create a
-	// second physical deployment or a second admission allowance.
-	endpoint, selectedModel, identityErr := remoteOperationIdentity(spec.Binding.Adapter, external)
+	// second physical deployment or a second admission allowance; credentials
+	// participate without appearing in the resource key or diagnostics.
+	endpoint, selectedModel, identityErr := remoteOperationIdentity(spec.Binding.Adapter, spec.Deployment)
 	if identityErr != nil {
 		_ = closer.Close()
 		return nil, identityErr
@@ -36,7 +34,7 @@ func remoteTaskBinding[I, O any](ctx context.Context, models *classifierModelRun
 		Endpoint   string
 		Model      string
 		Credential string
-	}{endpoint, selectedModel, hex.EncodeToString(secret[:])})
+	}{endpoint, selectedModel, credentialFingerprint(spec.Deployment)})
 	fingerprint := sha256.Sum256(description)
 	// A declared local revision does not change the remote deployment actually
 	// addressed by the connector, so it cannot create another admission gate.
@@ -71,16 +69,4 @@ func remoteTaskBinding[I, O any](ctx context.Context, models *classifierModelRun
 	}
 	bound.Ready()
 	return bound, nil
-}
-
-func (m *classifierModelRuntime) remoteSpec(name string, backend *config.RemoteClassifierBackend) config.ResolvedModelBinding {
-	if declared, ok := m.plan.Lookup(m.recipe, name); ok {
-		return declared
-	}
-	return config.ResolvedModelBinding{
-		Recipe: m.recipe, Name: name,
-		Binding:    config.ModelBinding{Deployment: name, Contract: backend.Contract, Adapter: backend.Protocol},
-		Deployment: config.ModelDeployment{Provider: "http", ExternalModel: backend.Model},
-		Admission:  m.cfg.ModelAdmission[name],
-	}
 }

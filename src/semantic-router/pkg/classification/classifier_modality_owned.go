@@ -46,7 +46,7 @@ func (m *ownedModalityClassifier) Classify(ctx context.Context, text string) (Mo
 }
 
 func (b *classifierOptionBuilder) buildModalityClassifierOption() (option, error) {
-	models := consumerModelRuntime([]*classifierModelRuntime{b.models})
+	models := b.runtime()
 	return buildOwnedModalityOption(b.cfg, models, models.runtime.Sequence)
 }
 
@@ -61,16 +61,18 @@ func buildOwnedModalityOption(
 	if len(cfg.ModalityRules) == 0 || !md.Enabled || md.GetMethod() == config.ModalityDetectionKeyword {
 		return nil, nil
 	}
-	_, explicit := models.plan.Lookup(models.recipe, "modality_detector")
-	path, useCPU, ok := cfg.ModalityClassifierModel()
-	if !explicit && !ok {
+	bound, inPlan := models.plan.Lookup(models.recipe, "modality_detector")
+	if _, _, ok := cfg.ModalityClassifierModel(); !inPlan && !ok {
 		return nil, nil
 	}
+	// A deployment a deprecated model_path declared keeps the module's
+	// keyword fallback; one the configuration names does not.
+	explicit := inPlan && !bound.Deployment.Translated()
 	limit := 0
 	if md.Classifier != nil {
 		limit = md.Classifier.MaxSequenceLength
 	}
-	spec, err := models.localSpec("modality_detector", path, "mmbert32k", config.RemoteClassifierContractLabelDistribution, useCPU, limit)
+	spec, err := models.localSpec("modality_detector", "mmbert32k", config.RemoteClassifierContractLabelDistribution, limit)
 	var handle *binding.Resolved[string, tasks.LabelDistribution]
 	if err == nil {
 		handle, err = load(context.Background(), spec)

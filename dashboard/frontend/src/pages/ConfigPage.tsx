@@ -6,7 +6,9 @@ import ViewModal, { ViewSection } from '../components/ViewModal'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { useAuth } from '../contexts/AuthContext'
 import { canRunEvaluation, canWriteConfig } from '../utils/accessControl'
+import ConfigSaveWarnings from '../components/ConfigSaveWarnings'
 import ProductLoadingState from '../components/ProductLoadingState'
+import { responseConfigWarnings, type RouterConfigWarning } from '../utils/configSaveWarnings'
 import {
   canonicalizeConfigForManagerSave,
   projectCanonicalConfigForManager,
@@ -55,6 +57,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const [routerDefaults, setRouterDefaults] = useState<CanonicalGlobalConfig | null>(null)
 
   // Tools database state
+  const [saveWarnings, setSaveWarnings] = useState<RouterConfigWarning[]>([])
   const [toolsData, setToolsData] = useState<Tool[]>([])
   const [toolsLoading, setToolsLoading] = useState(false)
   const [toolsError, setToolsError] = useState<string | null>(null)
@@ -190,6 +193,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
     }
 
     try {
+      setSaveWarnings([])
       const canonicalConfig = canonicalizeConfigForManagerSave(updatedConfig as ConfigData)
       const response = await fetch('/api/router/config/update', {
         method: 'POST',
@@ -202,6 +206,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       if (!response.ok) {
         throw new Error(await responseErrorMessage(response))
       }
+      setSaveWarnings(await responseConfigWarnings(response))
 
       // Refresh config after save
       await fetchConfig()
@@ -408,6 +413,7 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
 
         {!isMCPSection && config && !pageLoading && !error && (
           <div className={styles.contentArea}>
+            <ConfigSaveWarnings warnings={saveWarnings} />
             <Suspense fallback={<ProductLoadingState label="Loading configuration" />}>
               {renderActiveSection()}
             </Suspense>

@@ -8,6 +8,7 @@ import {
   isSyntheticDefaultRecipe,
   listRecipeProfiles,
   normalizeEntrypointModelNames,
+  requireEntrypointModelNames,
   validateEntrypointForm,
   validateRecipeForm,
 } from './configPageEntrypointsRecipesSupport'
@@ -68,6 +69,16 @@ describe('entrypoints and recipes support', () => {
         ' vllm-sr/mom-v1-flash,\nvllm-sr/mom-v1-flash\nvllm-sr/mom-v1-vault ',
       ),
     ).toEqual(['vllm-sr/mom-v1-flash', 'vllm-sr/mom-v1-vault'])
+  })
+
+  it('requires at least one public model name', () => {
+    expect(requireEntrypointModelNames([' my/vault ', 'my/vault', 'vault'])).toEqual([
+      'my/vault',
+      'vault',
+    ])
+    expect(() => requireEntrypointModelNames([' '])).toThrow(
+      'Add at least one request-facing model name.',
+    )
   })
 
   it('rejects duplicate mappings but allows former special names as ordinary aliases', () => {

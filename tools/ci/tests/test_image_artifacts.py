@@ -43,6 +43,59 @@ def archive_image(path, architectures=("amd64",)):
 
 
 class ImageArtifactTests(unittest.TestCase):
+    def test_native_router_definition_keeps_its_platform_without_multiarch(self):
+        for multiarch in (False, True):
+            with tempfile.TemporaryDirectory() as tmp:
+                output = Path(tmp) / "outputs"
+                argv = [
+                    "image_artifacts.py",
+                    "definition",
+                    "--image",
+                    "vllm-sr-riscv64",
+                ]
+                if multiarch:
+                    argv.append("--multiarch")
+                with (
+                    patch.object(sys, "argv", argv),
+                    patch.dict(os.environ, {"GITHUB_OUTPUT": str(output)}),
+                ):
+                    images.main()
+                values = output.read_text()
+                self.assertIn("platforms=linux/riscv64\n", values)
+                self.assertIn("target=vllm-sr-attached\n", values)
+
+    def test_native_router_seal_accepts_only_riscv64_content(self):
+        for architecture in ("riscv64", "amd64"):
+            with tempfile.TemporaryDirectory() as tmp:
+                directory = Path(tmp)
+                archive_image(directory / "image.tar", (architecture,))
+                with (
+                    patch.object(images, "source_sha", return_value="a" * 40),
+                    patch.dict(os.environ, {"CI_IMAGE_BUILD_ARGS": ""}),
+                    patch.object(
+                        sys,
+                        "argv",
+                        [
+                            "image_artifacts.py",
+                            "seal",
+                            "--image",
+                            "vllm-sr-riscv64",
+                            "--directory",
+                            tmp,
+                        ],
+                    ),
+                ):
+                    if architecture == "amd64":
+                        with self.assertRaisesRegex(ValueError, "platform inventory"):
+                            images.main()
+                    else:
+                        images.main()
+                        receipt = images.verify(directory, "vllm-sr-riscv64")
+                        self.assertEqual(receipt["target"], "vllm-sr-attached")
+                        self.assertEqual(
+                            receipt["images"][0]["platform"], "linux/riscv64"
+                        )
+
     def test_multiarchitecture_inventory_is_actual_oci_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "image.tar"
