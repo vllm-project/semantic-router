@@ -14,8 +14,10 @@ from cli.consts import (  # noqa: E402
     VLLM_SR_CONTAINER_IMAGE_ROCM,
     VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
     VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT,
+    image_tag_for_cli_build,
     image_tag_for_cli_version,
 )
+from cli.source_revision import SOURCE_REVISION  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -52,9 +54,24 @@ def test_a_release_build_runs_its_release_images():
     )
 
 
+def test_a_development_package_runs_the_images_of_its_commit():
+    commit = "61c9e248d8b055bd4c07e1e80d8b36ec6048dc7c"
+    assert image_tag_for_cli_build("0.5.0.dev20261014021837", commit) == commit
+    assert image_tag_for_cli_build("0.5.0.dev20261014021837", "") == "latest"
+    assert image_tag_for_cli_build("0.5.0", "") == "latest"
+    assert (
+        image_tag_for_cli_build("0.5.0", commit, released={"v0.5"}.__contains__)
+        == "v0.5.0"
+    )
+
+
+def test_a_source_checkout_records_no_commit():
+    assert SOURCE_REVISION == ""
+
+
 def test_default_runtime_images_match_installed_cli_release(monkeypatch):
     monkeypatch.setattr(container_images, "_ensure_image_available", lambda *_: None)
-    expected_tag = image_tag_for_cli_version(__version__)
+    expected_tag = image_tag_for_cli_build(__version__, SOURCE_REVISION)
 
     for platform, repository in (
         ("cpu", "vllm-sr"),
@@ -120,6 +137,55 @@ def test_get_runtime_images_prefers_service_specific_env_overrides(monkeypatch):
         ("base:latest", "ifnotpresent"),
         ("envoy:separate", "ifnotpresent"),
     ]
+
+
+@pytest.mark.parametrize(
+    ("options", "environment"),
+    [
+        ({}, {}),
+        ({"platform": "rocm"}, {}),
+        ({"image": "custom:dev"}, {"VLLM_SR_ROUTER_IMAGE": "ignored:dev"}),
+        ({"image": VLLM_SR_CONTAINER_IMAGE_DEFAULT, "platform": "cuda"}, {}),
+        ({"image": "base:dev", "router_image": "router:dev"}, {}),
+        ({}, {"VLLM_SR_IMAGE": "pinned:dev", "VLLM_SR_ROUTER_IMAGE": "router:dev"}),
+        ({}, {"VLLM_SR_IMAGE": "pinned:dev", "VLLM_SR_PLATFORM": "rocm"}),
+    ],
+)
+def test_the_router_image_serve_checks_with_is_the_one_it_starts(
+    monkeypatch, options, environment
+):
+    ensured = []
+    monkeypatch.setattr(
+        container_images,
+        "_ensure_image_available",
+        lambda image, pull_policy: ensured.append((image, pull_policy)),
+    )
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+
+    started = container_images.get_runtime_images(pull_policy="never", **options)
+    ensured.clear()
+    checked = container_images.get_router_image(pull_policy="never", **options)
+
+    assert checked == started["router"]
+    assert ensured == [(checked, "never")]
+
+
+def test_always_pulls_an_image_once_per_command(monkeypatch):
+    pulled = []
+    monkeypatch.setattr(container_images, "_PULLED_IMAGES", set())
+    monkeypatch.setattr(container_images, "container_image_exists", lambda _: True)
+    monkeypatch.setattr(
+        container_images,
+        "container_pull_image",
+        lambda image: pulled.append(image) or True,
+    )
+
+    container_images.get_router_image(image="router:new", pull_policy="always")
+    container_images.get_runtime_images(image="router:new", pull_policy="always")
+
+    assert pulled.count("router:new") == 1
+    assert len(pulled) == len(set(pulled))
 
 
 def test_minimal_runtime_keeps_candidate_router_separate_from_prepared_envoy(

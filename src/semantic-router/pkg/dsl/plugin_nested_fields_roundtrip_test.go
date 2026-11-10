@@ -9,58 +9,71 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestMemoryAndToolSelectionPluginFieldsSurviveRoundTrip(t *testing.T) {
-	for _, fallbackToEmpty := range []bool{false, true} {
-		t.Run(fmt.Sprintf("fallback_to_empty=%v", fallbackToEmpty), func(t *testing.T) {
+func TestMemoryAndToolsPluginFieldsSurviveRoundTrip(t *testing.T) {
+	for mode, selectFields := range map[string]string{
+		"filter": "preserve_count: 2\n                on_error: strip",
+		"add":    "tools_db_path: config/tools_db.json\n                on_error: skip",
+	} {
+		t.Run(mode, func(t *testing.T) {
 			cfg := mustParseRoutingPluginConfigTest(t, fmt.Sprintf(`
-version: v0.3
-routing:
-  modelCards:
+version: v0.5
+providers:
+  models:
     - name: "test-model"
-  signals:
-    domains:
-      - name: test
-        description: test
-  decisions:
-    - name: plugin_route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: test
-      modelRefs:
-        - model: test-model
-      plugins:
-        - type: memory
-          configuration:
-            enabled: true
-            retrieval_limit: 6
-            hybrid_search: true
-            hybrid_mode: weighted
-            reflection:
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: test
+          labels: [other]
+          description: test
+    decisions:
+      - name: plugin_route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: test
+        modelRefs:
+          - model: test-model
+        plugins:
+          - type: context
+            configuration:
               enabled: true
-              algorithm: heuristic
-              max_inject_tokens: 384
-              block_patterns: ["api key", "password"]
-        - type: tool_selection
-          configuration:
-            enabled: true
-            mode: add
-            top_k: 5
-            fallback_to_empty: %v
-            advanced_filtering:
+              sources:
+                - type: memory
+                  match:
+                    recall: {method: embedding, top_k: 6, min_similarity: 0.5}
+                  hybrid_search: true
+                  hybrid_mode: weighted
+                  reflection:
+                    enabled: true
+                    algorithm: heuristic
+                    max_inject_tokens: 384
+                    block_patterns: ["api key", "password"]
+          - type: tools
+            configuration:
               enabled: true
-              candidate_pool_size: 30
-              min_combined_score: 0.4
-`, fallbackToEmpty))
+              policy:
+                mode: filtered
+                block_tools: [admin.delete]
+              select:
+                mode: %s
+                %s
+                match:
+                  judge: {preset: tool_rank, top_k: 5, min_ratio: 0.2}
+                need_threshold: 0.4
+                input: {history: true}
+                timeout_ms: 800
+`, mode, selectFields))
 
 			dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
-			if count := strings.Count(dslText, "fallback_to_empty:"); count != 1 {
-				t.Fatalf("decompiled DSL has %d fallback_to_empty fields, want 1:\n%s", count, dslText)
+			if count := strings.Count(dslText, "need_threshold:"); count != 1 {
+				t.Fatalf("decompiled DSL has %d need_threshold fields, want 1:\n%s", count, dslText)
 			}
 			compiled := mustCompileRoutingPluginConfigTest(t, dslText)
-			for _, pluginType := range []string{"memory", "tool_selection"} {
+			for _, pluginType := range []string{"context", "tools"} {
 				want := pluginConfigMapForTest(t, findDecisionPluginForTest(t, cfg.Decisions[0], pluginType))
 				got := pluginConfigMapForTest(t, findDecisionPluginForTest(t, compiled.Decisions[0], pluginType))
 				if !reflect.DeepEqual(got, want) {
@@ -78,14 +91,14 @@ ROUTE memory_route {
   PRIORITY 100
   WHEN domain("test")
   MODEL "m:1b"
-  PLUGIN memory {
+  PLUGIN context {
     enabled: true
-    reflection: true
+    sources: [{ type: "memory", reflection: true }]
   }
 }
 `)
-	if len(errs) == 0 || !strings.Contains(fmt.Sprint(errs), `plugin field "reflection" must be an object`) {
-		t.Fatalf("compile errors = %v, want a reflection object error", errs)
+	if len(errs) == 0 || !strings.Contains(fmt.Sprint(errs), "failed to decode plugin fields") {
+		t.Fatalf("compile errors = %v, want a reflection decode error", errs)
 	}
 }
 

@@ -87,7 +87,7 @@ func remotePolarityFixture(t *testing.T, backend string, docs []remotePolarityDo
 		cfg.Index.VectorField.MetricType = "COSINE"
 		cfg.Search.TopK = 4
 		return &RedisCache{
-			enabled: true, config: cfg, embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(),
+			enabled: true, config: cfg, embeddingDeployment: "qwen3-embedding", embeddingProvider: cacheTestEmbeddingProvider(),
 			searchFn: func(_ context.Context, _ string, query string, options *redis.FTSearchOptions) (redis.FTSearchResult, error) {
 				require.Equal(t, partitionedKNNQuery(expectedPartition(), 4, "embedding"), query)
 				var result redis.FTSearchResult
@@ -107,7 +107,7 @@ func remotePolarityFixture(t *testing.T, backend string, docs []remotePolarityDo
 	cfg.Index.VectorField.MetricType = "COSINE"
 	cfg.Search.TopK = 4
 	return &ValkeyCache{
-		enabled: true, config: cfg, embeddingModel: "qwen3", embeddingProvider: cacheTestEmbeddingProvider(),
+		enabled: true, config: cfg, embeddingDeployment: "qwen3-embedding", embeddingProvider: cacheTestEmbeddingProvider(),
 		searchFn: func(_ context.Context, command []string) (any, error) {
 			require.Equal(t, partitionedKNNQuery(expectedPartition(), 4, "embedding"), command[2])
 			values := map[string]interface{}{}
@@ -138,7 +138,7 @@ func TestRedisValkeyServicePolarity(t *testing.T) {
 					SemanticQuery: "How do I enable dark mode?",
 				}
 				partition[0] = service.ResolveIdentity(identity).SemanticPartitionKey()
-				result, err := service.LookupSemantic(context.Background(), SemanticLookup{Identity: identity, Threshold: .8})
+				result, err := semanticHit(service.LookupSemantic(context.Background(), SemanticLookup{Identity: identity, Bounds: atThreshold(.8)}))
 				require.NoError(t, err)
 				require.Equal(t, fallback, result.Found)
 				if fallback {
@@ -183,7 +183,7 @@ func runRedisValkeyStoredPolarityCases(t *testing.T, backend LegacyCacheBackend,
 			require.Empty(t, miss.ResponseBody)
 			require.GreaterOrEqual(t, miss.Similarity, float32(.8))
 			identity.SemanticQuery = "How do I enable dark mode?"
-			publicMiss, err := service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Threshold: .8})
+			publicMiss, err := semanticHit(service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Bounds: atThreshold(.8)}))
 			require.NoError(t, err)
 			require.False(t, publicMiss.Found)
 			require.Empty(t, publicMiss.ResponseBody)
@@ -198,7 +198,7 @@ func runRedisValkeyStoredPolarityCases(t *testing.T, backend LegacyCacheBackend,
 			require.True(t, found)
 			require.Equal(t, "PARAPHRASE", string(body))
 			identity.SemanticQuery = "How do I enable dark mode?"
-			publicHit, err := service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Threshold: .8})
+			publicHit, err := semanticHit(service.LookupSemantic(ctx, SemanticLookup{Identity: identity, Bounds: atThreshold(.8)}))
 			require.NoError(t, err)
 			require.True(t, publicHit.Found)
 			require.Equal(t, "PARAPHRASE", string(publicHit.ResponseBody))
@@ -232,7 +232,7 @@ func TestRedisValkeySemanticPolaritySearchContract(t *testing.T) {
 	_, err := redisCache.LookupSimilarWithThreshold(context.Background(), "recipe::model", "Enable dark mode", .8)
 	require.NoError(t, err)
 	valkeyCache := remotePolarityFixture(t, "valkey", nil, nil).(*ValkeyCache)
-	command := valkeyCache.buildKNNSearchCmd("recipe::model", nil)
+	command := valkeyCache.buildKNNSearchCmd("recipe::model", nil, 1)
 	joined := strings.Join(command, " ")
 	require.Contains(t, joined, "RETURN 5 vector_distance response_body query timestamp ttl_seconds DIALECT")
 }

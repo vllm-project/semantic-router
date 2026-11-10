@@ -27,6 +27,8 @@ def test_serve_arguments_map_to_the_config():
             "--dtype",
             "bfloat16",
             "--no-enable-shared-context",
+            "--max-model-len",
+            "32000",
             "--accept-licence",
             "cc-by-4.0",
         ]
@@ -46,6 +48,7 @@ def test_serve_arguments_map_to_the_config():
         batch_window_ms=0.5,
         dtype="bfloat16",
         enable_shared_context=False,
+        max_model_len=32000,
     )
     assert config.engine_args == expected
     assert model.engine_args(config.engine_args) == expected
@@ -53,12 +56,21 @@ def test_serve_arguments_map_to_the_config():
 
 def test_engine_arguments_default_to_merging_requests():
     config = config_from_args(build_parser().parse_args(["serve", "m"]))
+    # The batch limits are left to the runtime, which picks them by the device.
     assert config.engine_args == EngineArgs(
-        max_num_seqs=8_192,
-        max_num_batched_tokens=65_536,
+        max_num_seqs=None,
+        max_num_batched_tokens=None,
         batch_window_ms=2.0,
         dtype="auto",
         enable_shared_context=None,
+        max_model_len=None,
+    )
+    assert config.media_workers is None
+    assert (
+        config_from_args(
+            build_parser().parse_args(["serve", "m", "--media-workers", "0"])
+        ).media_workers
+        == 0
     )
     assert config_from_args(
         build_parser().parse_args(["serve", "m", "--enable-shared-context"])
@@ -96,6 +108,7 @@ def test_removed_flags_name_their_replacements(capsys, argv, message):
             "--max-num-batched-tokens must be at least 8",
         ),
         (["--batch-window-ms", "-1"], "--batch-window-ms must be between 0 and 1000"),
+        (["--max-model-len", "0"], "--max-model-len must be at least 1"),
     ],
 )
 def test_invalid_engine_arguments_are_refused(argv, message):
@@ -197,7 +210,7 @@ def test_a_models_file_lists_each_model(tmp_path):
     assert config.models[1].options == {"head": "default"}
     assert config.served_models() == config.models
     kai, pii = (model.engine_args(config.engine_args) for model in config.models)
-    assert (kai.max_num_seqs, kai.batch_window_ms, kai.dtype) == (8_192, 1.0, "auto")
+    assert (kai.max_num_seqs, kai.batch_window_ms, kai.dtype) == (None, 1.0, "auto")
     assert (pii.max_num_seqs, pii.batch_window_ms, pii.dtype) == (1, 1.0, "float32")
 
 

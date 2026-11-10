@@ -57,7 +57,7 @@ var _ = Describe("Cache Package", func() {
 						SimilarityThreshold: 0.8,
 						MaxEntries:          1000,
 						TTLSeconds:          3600,
-						EmbeddingModel:      "qwen3",
+						EmbeddingDeployment: "qwen3-embedding",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -74,7 +74,7 @@ var _ = Describe("Cache Package", func() {
 						SimilarityThreshold: 0.8,
 						MaxEntries:          1000,
 						TTLSeconds:          3600,
-						EmbeddingModel:      "qwen3",
+						EmbeddingDeployment: "qwen3-embedding",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -91,7 +91,7 @@ var _ = Describe("Cache Package", func() {
 						SimilarityThreshold: 0.8,
 						MaxEntries:          500,
 						TTLSeconds:          1800,
-						EmbeddingModel:      "qwen3",
+						EmbeddingDeployment: "qwen3-embedding",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -112,11 +112,11 @@ var _ = Describe("Cache Package", func() {
 						MaxMemoryEntries:    500,
 						HNSWM:               16,
 						HNSWEfConstruction:  200,
-						EmbeddingModel:      "mmbert",
+						EmbeddingDeployment: "vela-embedding",
 					}
 
 					options := hybridCacheOptionsFromConfig(cacheConfig)
-					Expect(options.EmbeddingModel).To(Equal("mmbert"))
+					Expect(options.EmbeddingDeployment).To(Equal("vela-embedding"))
 					Expect(options.MaxMemoryEntries).To(Equal(500))
 				})
 			})
@@ -174,7 +174,7 @@ development:
 						SimilarityThreshold: 0.85,
 						TTLSeconds:          7200,
 						Milvus:              milvusConfig,
-						EmbeddingModel:      "qwen3",
+						EmbeddingDeployment: "qwen3-embedding",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -206,7 +206,7 @@ development:
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
 						Milvus:              milvusConfig,
-						EmbeddingModel:      "qwen3",
+						EmbeddingDeployment: "qwen3-embedding",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -260,7 +260,7 @@ development:
 						SimilarityThreshold: 0.85,
 						TTLSeconds:          7200,
 						Milvus:              milvusConfig,
-						EmbeddingModel:      "qwen3",
+						EmbeddingDeployment: "qwen3-embedding",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -330,7 +330,7 @@ development:
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
 						Redis:               redisConfig,
-						EmbeddingModel:      "qwen3",
+						EmbeddingDeployment: "qwen3-embedding",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -360,7 +360,7 @@ development:
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
 						Redis:               redisConfig,
-						EmbeddingModel:      "qwen3",
+						EmbeddingDeployment: "qwen3-embedding",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -420,7 +420,7 @@ development:
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
 						Redis:               redisConfig,
-						EmbeddingModel:      "qwen3",
+						EmbeddingDeployment: "qwen3-embedding",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -532,7 +532,7 @@ development:
 						Enabled:             true,
 						SimilarityThreshold: 0.8,
 						TTLSeconds:          3600,
-						EmbeddingModel:      "qwen3",
+						EmbeddingDeployment: "qwen3-embedding",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -551,7 +551,7 @@ development:
 						SimilarityThreshold: -0.8, // invalid
 						MaxEntries:          10,
 						TTLSeconds:          -1, // invalid
-						EmbeddingModel:      "qwen3",
+						EmbeddingDeployment: "qwen3-embedding",
 					}
 
 					backend, err := NewCacheBackend(config)
@@ -572,7 +572,7 @@ development:
 					SimilarityThreshold: 0.8,
 					MaxEntries:          1000,
 					TTLSeconds:          3600,
-					EmbeddingModel:      "qwen3",
+					EmbeddingDeployment: "qwen3-embedding",
 					EvictionPolicy:      "lru",
 				}
 
@@ -601,7 +601,7 @@ development:
 					SimilarityThreshold: 1.5, // Invalid: > 1.0
 					MaxEntries:          1000,
 					TTLSeconds:          3600,
-					EmbeddingModel:      "qwen3",
+					EmbeddingDeployment: "qwen3-embedding",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -617,7 +617,7 @@ development:
 					SimilarityThreshold: -0.1, // Invalid: < 0.0
 					MaxEntries:          1000,
 					TTLSeconds:          3600,
-					EmbeddingModel:      "qwen3",
+					EmbeddingDeployment: "qwen3-embedding",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -633,7 +633,7 @@ development:
 					SimilarityThreshold: 0.8,
 					MaxEntries:          1000,
 					TTLSeconds:          -1, // Invalid: negative TTL
-					EmbeddingModel:      "qwen3",
+					EmbeddingDeployment: "qwen3-embedding",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -649,7 +649,7 @@ development:
 					SimilarityThreshold: 0.8,
 					MaxEntries:          -1, // Invalid: negative max entries
 					TTLSeconds:          3600,
-					EmbeddingModel:      "qwen3",
+					EmbeddingDeployment: "qwen3-embedding",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -665,7 +665,7 @@ development:
 					SimilarityThreshold: 0.8,
 					MaxEntries:          1000,
 					TTLSeconds:          3600,
-					EmbeddingModel:      "qwen3",
+					EmbeddingDeployment: "qwen3-embedding",
 					EvictionPolicy:      "random", // unsupported
 				}
 
@@ -681,7 +681,7 @@ development:
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
 					TTLSeconds:          3600,
-					EmbeddingModel:      "qwen3",
+					EmbeddingDeployment: "qwen3-embedding",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -696,7 +696,7 @@ development:
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
 					TTLSeconds:          3600,
-					EmbeddingModel:      "qwen3",
+					EmbeddingDeployment: "qwen3-embedding",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -711,7 +711,7 @@ development:
 					Enabled:             true,
 					SimilarityThreshold: 0.8,
 					TTLSeconds:          3600,
-					EmbeddingModel:      "qwen3",
+					EmbeddingDeployment: "qwen3-embedding",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -741,7 +741,7 @@ development:
 					SimilarityThreshold: 1.0, // Valid: maximum threshold
 					MaxEntries:          10000,
 					TTLSeconds:          86400,
-					EmbeddingModel:      "qwen3",
+					EmbeddingDeployment: "qwen3-embedding",
 				}
 
 				err := ValidateCacheConfig(config)
@@ -812,7 +812,7 @@ development:
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
 				TTLSeconds:          300,
-				EmbeddingModel:      "qwen3",
+				EmbeddingDeployment: "qwen3-embedding",
 			}
 			inMemoryCache = NewInMemoryCache(options)
 		})
@@ -839,7 +839,7 @@ development:
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
 				TTLSeconds:          300,
-				EmbeddingModel:      "qwen3",
+				EmbeddingDeployment: "qwen3-embedding",
 			}
 			disabledCache := NewInMemoryCache(disabledOptions)
 			defer disabledCache.Close()
@@ -909,7 +909,7 @@ development:
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
 				TTLSeconds:          1,
-				EmbeddingModel:      "qwen3",
+				EmbeddingDeployment: "qwen3-embedding",
 			})
 
 			err := inMemoryCache.AddPendingRequest("expired-request-id", "test-model", "stale query", []byte("request"), -1)
@@ -934,7 +934,7 @@ development:
 				SimilarityThreshold: 0.99, // Very high threshold
 				MaxEntries:          100,
 				TTLSeconds:          300,
-				EmbeddingModel:      "qwen3",
+				EmbeddingDeployment: "qwen3-embedding",
 			}
 			highThresholdCache := NewInMemoryCache(highThresholdOptions)
 			defer highThresholdCache.Close()
@@ -986,7 +986,7 @@ development:
 				SimilarityThreshold: 0.1,
 				MaxEntries:          10,
 				TTLSeconds:          1,
-				EmbeddingModel:      "qwen3",
+				EmbeddingDeployment: "qwen3-embedding",
 			})
 			defer ttlCache.Close()
 
@@ -1027,7 +1027,7 @@ development:
 				SimilarityThreshold: 0.8,
 				MaxEntries:          100,
 				TTLSeconds:          300,
-				EmbeddingModel:      "qwen3",
+				EmbeddingDeployment: "qwen3-embedding",
 			}
 			disabledCache := NewInMemoryCache(disabledOptions)
 			defer disabledCache.Close()
@@ -1067,7 +1067,7 @@ development:
 				HNSWM:               4,
 				HNSWEfConstruction:  8,
 				HNSWEfSearch:        8,
-				EmbeddingModel:      "qwen3",
+				EmbeddingDeployment: "qwen3-embedding",
 			})
 			defer cacheWithHNSW.Close()
 
@@ -1111,7 +1111,7 @@ development:
 				SimilarityThreshold: 0.9,
 				MaxEntries:          2000,
 				TTLSeconds:          7200,
-				EmbeddingModel:      "qwen3",
+				EmbeddingDeployment: "qwen3-embedding",
 				Milvus:              &config.MilvusConfig{},
 			}
 
@@ -1801,12 +1801,12 @@ func TestMilvusCacheOptionsFromHybridOptionsPreservesEmbeddingModel(t *testing.T
 		Enabled:             true,
 		SimilarityThreshold: 0.8,
 		TTLSeconds:          300,
-		EmbeddingModel:      "mmbert",
+		EmbeddingDeployment: "vela-embedding",
 		Milvus:              &config.MilvusConfig{},
 	})
 
-	if options.EmbeddingModel != "mmbert" {
-		t.Fatalf("expected embedding model mmbert, got %q", options.EmbeddingModel)
+	if options.EmbeddingDeployment != "vela-embedding" {
+		t.Fatalf("expected embedding deployment vela-embedding, got %q", options.EmbeddingDeployment)
 	}
 	if options.Config == nil {
 		t.Fatal("expected inline Milvus config to be preserved")
@@ -1852,7 +1852,7 @@ func waitForHybridCacheHit(t *testing.T, cache *HybridCache, model, query string
 func TestHybridCacheGenerateEmbeddingRequiresPreparedProvider(t *testing.T) {
 	cache := &HybridCache{
 		milvusCache: &MilvusCache{
-			embeddingModel: "unsupported",
+			embeddingDeployment: "unprepared",
 		},
 	}
 

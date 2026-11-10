@@ -333,6 +333,9 @@ def _execute_serve(
                 available_devices=available_devices,
                 model_options=model_options,
                 observability=observability,
+                image=image,
+                router_image=router_image,
+                image_pull_policy=image_pull_policy,
             )
         )
         validate_setup_mode_flags(setup_mode, minimal, readonly)
@@ -585,8 +588,8 @@ def _execute_serve(
     help=(
         "Most rows one model forward holds, across requests: one per question of "
         "a decision request, one per input or window otherwise; 1 runs every row "
-        "alone. The runtime default (8192) never binds at the default "
-        "--max-num-batched-tokens."
+        "alone. Unset, the runtime picks it by the device (256 on GPUs with 160 GB "
+        "or more, fewer on smaller ones, 8192 on the CPU)."
     ),
 )
 @click.option(
@@ -594,8 +597,10 @@ def _execute_serve(
     type=click.IntRange(min=8),
     default=None,
     help=(
-        "Padded tokens one model forward may hold: its rows times its longest row "
-        "(runtime default 65536)."
+        "Tokens one model forward may hold: the sum of its rows for models that "
+        "pack merged rows, else its rows times its longest row. Unset, the runtime "
+        "picks it by the device and a short startup calibration (at most 32768 on "
+        "GPUs with 160 GB or more, 65536 on the CPU)."
     ),
 )
 @click.option(

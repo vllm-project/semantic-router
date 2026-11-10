@@ -19,18 +19,17 @@ const (
 	minBaselinePIIDetectionRate             = 65.0
 	minBaselineJailbreakDetectionRate       = 70.0
 	minBaselineDecisionPriorityAccuracy     = 75.0
-	minBaselineRuleConditionAccuracy        = 80.0
 	minBaselineDecisionFallbackAccuracy     = 85.0
-	minBaselinePluginChainAccuracy          = 60.0
-	minBaselinePluginConfigAccuracy         = 80.0
 	minBaselineSequentialStressSuccessRate  = 95.0
-	minBaselineProgressiveStressOverallRate = 75.0
+	// Progressive stress requests wait out the gateway's deadline, so an
+	// unanswered request is a gateway or Router failure, not slow inference.
+	minBaselineProgressiveStressOverallRate = 100.0
 )
 
 var progressiveStressStageFloors = []progressiveStressFloor{
-	{qps: 10, minimum: 95.0},
-	{qps: 20, minimum: 85.0},
-	{qps: 50, minimum: 60.0},
+	{qps: 10, minimum: 100.0},
+	{qps: 20, minimum: 100.0},
+	{qps: 50, minimum: 100.0},
 }
 
 type acceptanceContract func(details map[string]interface{}) error
@@ -92,14 +91,6 @@ var baselineAcceptanceContracts = map[string]acceptanceContract{
 		minimum:        minBaselineDecisionPriorityAccuracy,
 		metricName:     "correct priority selections",
 	}),
-	"rule-condition-logic": applyFlatRateContract(flatRateContract{
-		actualKey:      "accuracy_rate",
-		minimumKey:     "minimum_accuracy_rate",
-		numeratorKey:   "correct_tests",
-		denominatorKey: "total_tests",
-		minimum:        minBaselineRuleConditionAccuracy,
-		metricName:     "correct rule-condition evaluations",
-	}),
 	"decision-fallback-behavior": applyFlatRateContract(flatRateContract{
 		actualKey:      "accuracy_rate",
 		minimumKey:     "minimum_accuracy_rate",
@@ -107,22 +98,6 @@ var baselineAcceptanceContracts = map[string]acceptanceContract{
 		denominatorKey: "total_tests",
 		minimum:        minBaselineDecisionFallbackAccuracy,
 		metricName:     "correct fallback behaviors",
-	}),
-	"plugin-chain-execution": applyFlatRateContract(flatRateContract{
-		actualKey:      "accuracy_rate",
-		minimumKey:     "minimum_accuracy_rate",
-		numeratorKey:   "correct_tests",
-		denominatorKey: "total_tests",
-		minimum:        minBaselinePluginChainAccuracy,
-		metricName:     "correct plugin-chain behaviors",
-	}),
-	"plugin-config-variations": applyFlatRateContract(flatRateContract{
-		actualKey:      "accuracy_rate",
-		minimumKey:     "minimum_accuracy_rate",
-		numeratorKey:   "correct_tests",
-		denominatorKey: "total_tests",
-		minimum:        minBaselinePluginConfigAccuracy,
-		metricName:     "correct plugin configurations",
 	}),
 	"chat-completions-stress-request": applyFlatRateContract(flatRateContract{
 		actualKey:      "success_rate",

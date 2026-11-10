@@ -82,7 +82,7 @@ response's top-level `signal_values`, rather than the plural families in
 ```yaml
 expected_signal_values:
   embedding:informational: {gte: -1, lte: 1}
-  structure:question_count: {gte: 2}
+  keyword:question_count: {gte: 2}
 ```
 
 Each interval needs at least one inclusive `gte` or `lte` bound. Bounds must be
@@ -209,7 +209,7 @@ recipe to its catalog entrypoint and supplies explicit Preview-only backend
 fixtures, including capabilities, context limits, pricing, and synthetic
 benchmark records for model selection. It preserves every authored decision,
 signal, projection, algorithm, plugin, and probe. The current MoM bundle runs
-all five entrypoints and all 315 authored probes; counts are checked against the
+all five entrypoints and all 366 authored probes; counts are checked against the
 discovered inventory rather than used to select a smaller sample. These fixtures
 do not measure backend LLM quality or call external providers.
 
@@ -221,10 +221,21 @@ the ignored `models/` cache. Use `VLLM_SR_PORT_OFFSET` to separate host ports wh
 running concurrent stacks. Missing reports, zero probes, and incomplete probe
 execution fail the selected CPU gate.
 
+A recipe whose probes take too long for one CPU job sets `evaluation.shards` in
+`probes.yaml`. The planner then emits one live job per probe shard, named
+`<source>-<recipe>-<index>`, and splits the probes by estimated read cost: a
+decision question reads at most the model's first 16,384 tokens, so longer
+inputs weigh the same. Run one shard with
+`RECIPE_CONFORMANCE_PROBE_SHARD=<index>/<count>`; it writes its report under
+`<recipe>/shards/<index>/`. The report step merges a recipe's shards into its
+`eval-report.json` only when every shard reported, then applies the tag policy
+and the execution check to the whole manifest. MoM V1 uses 16 shards because
+its decision model reads long inputs slowly on a CPU.
+
 ### Policy and deployment scope
 
-Live evaluation uses routing Preview. It runs the configured router classifiers
-and embeddings, evaluates decisions and the model selector, and returns the
+Live evaluation uses routing Preview. It asks the decision model the configured
+signals' questions, evaluates decisions and the model selector, and returns the
 trace without calling a backend LLM. The default `--scope deployment` checks
 both policy evidence and the expected selection result against the actual
 assigned models. It does not certify backend answer quality or multi-model
@@ -259,7 +270,7 @@ For deployment qualification, bind the intended recipe entrypoints and real
 model metadata, then run deployment scope and backend execution checks. Input
 capacity includes retained messages and media plus the effective output limit.
 The router's neutral token estimate is not an exact tokenizer or media bound.
-Router-classifier input limits are separate: an inference or HTTP failure fails
+Decision-model input limits are separate: an inference or HTTP failure fails
 both scopes and cannot be reclassified as a successful capacity rejection.
 
 CI publishes coverage in the job summary and uploads the consolidated

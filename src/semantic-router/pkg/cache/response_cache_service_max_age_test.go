@@ -162,11 +162,11 @@ func TestResponseCacheServiceSemanticMaxAgeAgainstL2(t *testing.T) {
 	require.NoError(t, err, "StoreSemantic")
 
 	maxAge := 60 * time.Second
-	result, err := service.LookupSemantic(ctx, SemanticLookup{
-		Identity:  identity,
-		Threshold: 0.8,
-		MaxAge:    &maxAge,
-	})
+	result, err := semanticHit(service.LookupSemantic(ctx, SemanticLookup{
+		Identity: identity,
+		Bounds:   atThreshold(0.8),
+		MaxAge:   &maxAge,
+	}))
 	require.NoError(t, err, "LookupSemantic")
 	assert.True(t, result.Found, "expected HIT from L2")
 	assert.Equal(t, HitKindSemantic, result.HitKind)
@@ -207,11 +207,11 @@ func TestResponseCacheServiceSemanticMaxAgeStaleMissAgainstL2(t *testing.T) {
 
 	time.Sleep(2 * time.Millisecond)
 	maxAge := time.Nanosecond
-	result, err := service.LookupSemantic(ctx, SemanticLookup{
-		Identity:  identity,
-		Threshold: 0.8,
-		MaxAge:    &maxAge,
-	})
+	result, err := semanticHit(service.LookupSemantic(ctx, SemanticLookup{
+		Identity: identity,
+		Bounds:   atThreshold(0.8),
+		MaxAge:   &maxAge,
+	}))
 	require.NoError(t, err, "LookupSemantic")
 	assert.False(t, result.Found, "expected MISS due to max-age bound exceeded")
 	assert.Equal(t, HitKindMiss, result.HitKind)
@@ -229,8 +229,8 @@ func (s *semanticUnknownAgeTestStore) LookupExact(context.Context, ExactLookup) 
 	return CacheResult{HitKind: HitKindMiss}, nil
 }
 func (s *semanticUnknownAgeTestStore) StoreExact(context.Context, CacheWrite) error { return nil }
-func (s *semanticUnknownAgeTestStore) LookupSemantic(context.Context, SemanticLookup) (CacheResult, error) {
-	return s.result, nil
+func (s *semanticUnknownAgeTestStore) LookupSemantic(context.Context, SemanticLookup) (SemanticRecall, error) {
+	return SemanticRecall{Candidates: []CacheResult{s.result}}, nil
 }
 
 func (s *semanticUnknownAgeTestStore) StoreSemantic(context.Context, CacheWrite) error { return nil }
@@ -260,16 +260,16 @@ func TestResponseCacheServiceSemanticMaxAgeUnknownAgeStaleMiss(t *testing.T) {
 	service := NewResponseCacheService(store, ResponseCacheServiceOptions{})
 
 	maxAge := 10 * time.Second
-	result, err := service.LookupSemantic(ctx, SemanticLookup{
+	result, err := semanticHit(service.LookupSemantic(ctx, SemanticLookup{
 		Identity: CacheIdentity{
 			Partition: CachePartition{
 				RequestModel: "model-a",
 				Protocol:     "openai:body",
 			},
 		},
-		Threshold: 0.8,
-		MaxAge:    &maxAge,
-	})
+		Bounds: atThreshold(0.8),
+		MaxAge: &maxAge,
+	}))
 	require.NoError(t, err, "LookupSemantic")
 	assert.False(t, result.Found, "expected MISS due to unknown age when max-age bound is set")
 	assert.Equal(t, HitKindMiss, result.HitKind)

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 路由范围：为何 Router 保持逐查询，以及容量归属何处
 description: 记录语义路由为何保持逐查询，而容量管理留在服务与负载均衡层。
 created: 2026-07-14

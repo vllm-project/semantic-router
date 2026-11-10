@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: Milvus 向量库
 sidebar_label: Milvus 向量库
 description: 将 Milvus 用作响应缓存和其他 Router 存储功能的持久向量后端。
@@ -54,18 +55,15 @@ kubectl wait --for=condition=Ready pod \
 
 ## 配置响应缓存
 
-使用 canonical `response_cache` 键。`semantic_cache` 是仅保留用于迁移兼容性的已弃用输入别名。
+使用 `response_cache` 键。仍写 `semantic_cache` 的配置无法加载；`vllm-sr config migrate` 会将其改名。store 只提供后端，[`response_cache` 插件](../tutorials/plugin/response-cache)负责开启缓存并设置召回的 `min_similarity`。
 
 ```yaml
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: milvus
-      similarity_threshold: 0.86
       max_entries: 50000
       ttl_seconds: 7200
-      embedding_model: mmbert
       milvus:
         connection:
           host: milvus.milvus.svc.cluster.local
@@ -94,27 +92,29 @@ global:
           auto_create_collection: true
 ```
 
-将 `dimension` 设置为 `embedding_model` 的输出维度。不匹配会导致插入或搜索失败。
+将 `dimension` 设置为缓存嵌入出的向量大小：用 `embeddings.default` 指定的 Vela Embedding 时是 768；库指定了别的部署时，就是它的 `embedding.dimension`。不匹配会导致插入或搜索失败。
 
 在可能读取或填充缓存的决策上启用路由插件：
 
 ```yaml
-routing:
-  decisions:
-    - name: general-chat
-      description: General requests that may use response cache.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: local/general
-      plugins:
-        - type: response_cache
-          configuration:
-            enabled: true
-            semantic:
-              similarity_threshold: 0.86
+recipes:
+  - name: default
+    decisions:
+      - name: general-chat
+        description: General requests that may use response cache.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local/general
+        plugins:
+          - type: response_cache
+            configuration:
+              enabled: true
+              semantic:
+                match:
+                  recall: {top_k: 3, min_similarity: 0.86}
 ```
 
 在发布前运行配置校验：

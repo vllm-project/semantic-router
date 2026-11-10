@@ -14,7 +14,7 @@ from cli.validator import validate_user_config
 
 def _write_config(tmp_path, aliases, address="127.0.0.1"):
     document = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "local", "address": address, "port": 8899}],
         "providers": {
             "defaults": {"model": aliases[0]},
@@ -28,7 +28,7 @@ def _write_config(tmp_path, aliases, address="127.0.0.1"):
                 for index, alias in enumerate(aliases)
             ],
         },
-        "routing": {},
+        "recipes": [{"name": "default"}],
     }
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(document))
@@ -46,7 +46,7 @@ def _model_routes(rendered):
         header["string_match"]["exact"]: route["route"]["cluster"]
         for route in _routes(rendered)
         for header in route["match"].get("headers", [])
-        if header["name"] == "x-selected-model"
+        if header["name"] == "x-vsr-route-model"
     }
 
 
@@ -185,3 +185,149 @@ def test_bridge_listener_is_reachable_without_widening_host_publication(
         ]
         == "0.0.0.0"
     )
+
+
+@pytest.mark.parametrize(
+    ("configured", "stripped"),
+    [
+        (None, ["x-vsr-delegated-credential"]),
+        (
+            " X-Gateway-Token ",
+            ["x-vsr-delegated-credential", "x-gateway-token"],
+        ),
+    ],
+)
+def test_delegated_credential_is_stripped_ahead_of_extproc(
+    tmp_path, configured, stripped
+):
+    path = _write_config(tmp_path, ["model-a"])
+    document = yaml.safe_load(path.read_text())
+    document["listeners"][0]["api_keys"] = ["listener-key"]
+    if configured is not None:
+        document["global"] = {
+            "services": {"authz": {"delegated_credential": {"header": configured}}}
+        }
+    path.write_text(yaml.safe_dump(document))
+    config = parse_user_config(str(path))
+    output = tmp_path / "envoy.yaml"
+    generate_envoy_config_from_user_config(config, str(output))
+    rendered = yaml.safe_load(output.read_text())
+    hcm = rendered["static_resources"]["listeners"][0]["filter_chains"][0]["filters"][
+        0
+    ]["typed_config"]
+    filters = hcm["http_filters"]
+    extproc = next(
+        index
+        for index, item in enumerate(filters)
+        if item["name"] == "envoy.filters.http.ext_proc"
+    )
+    # A filter ahead of ext_proc removes every client copy, so the Router never
+    # reads one; the route-level removal runs only at the router filter.
+    strip = filters[extproc - 1]["typed_config"]["inline_code"]
+    for header in stripped:
+        assert f'request_handle:headers():remove("{header}")' in strip
+    removed = hcm["route_config"]["virtual_hosts"][0]["request_headers_to_remove"]
+    assert set(stripped) <= set(removed)
+
+
+def test_delegated_credential_header_must_be_a_plain_name(tmp_path):
+    path = _write_config(tmp_path, ["model-a"])
+    document = yaml.safe_load(path.read_text())
+    document["global"] = {
+        "services": {"authz": {"delegated_credential": {"header": 'x-a")..evil'}}}
+    }
+    path.write_text(yaml.safe_dump(document))
+    config = parse_user_config(str(path))
+    with pytest.raises(ValueError, match="plain header name"):
+        generate_envoy_config_from_user_config(config, str(tmp_path / "envoy.yaml"))
+
+
+IDENTITY_HEADERS = [
+    "x-authz-user-id",
+    "x-authz-user-groups",
+    "x-authz-team-id",
+    "x-authz-tenant-id",
+]
+
+
+def _render(tmp_path, document):
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(document))
+    config = parse_user_config(str(path))
+    assert not validate_user_config(config, log_summary=False)
+    output = tmp_path / "envoy.yaml"
+    generate_envoy_config_from_user_config(config, str(output))
+    return yaml.safe_load(output.read_text())
+
+
+def _connection_manager(rendered, index):
+    listener = rendered["static_resources"]["listeners"][index]
+    return listener["filter_chains"][0]["filters"][0]["typed_config"]
+
+
+def test_listener_removes_client_identity_before_any_filter(tmp_path):
+    document = yaml.safe_load(_write_config(tmp_path, ["model-a"]).read_text())
+    document["listeners"].append(
+        {
+            "name": "behind-proxy",
+            "address": "127.0.0.1",
+            "port": 8900,
+            "identity": {"trust_headers": True},
+        }
+    )
+    document["global"] = {
+        "services": {
+            "authz": {
+                "identity": {
+                    "user_id_header": "X-JWT-Sub",
+                    "user_groups_header": "x-jwt-groups",
+                }
+            }
+        }
+    }
+    rendered = _render(tmp_path, document)
+    want = [*IDENTITY_HEADERS, "x-jwt-sub", "x-jwt-groups"]
+
+    untrusted = _connection_manager(rendered, 0)["http_filters"]
+    assert untrusted[0]["name"] == "strip-client-identity"
+    mutations = untrusted[0]["typed_config"]["mutations"]["request_mutations"]
+    assert [mutation["remove"] for mutation in mutations] == want
+    names = [item["name"] for item in untrusted]
+    assert names.index("strip-client-identity") < names.index(
+        "envoy.filters.http.ext_proc"
+    )
+
+    trusted = _connection_manager(rendered, 1)["http_filters"]
+    assert "strip-client-identity" not in [item["name"] for item in trusted]
+
+    # No provider receives them, whichever listener the request came through.
+    for index in (0, 1):
+        virtual_host = _connection_manager(rendered, index)["route_config"][
+            "virtual_hosts"
+        ][0]
+        assert set(want) <= set(virtual_host["request_headers_to_remove"])
+
+
+def test_extproc_listener_refuses_trusted_peers(tmp_path):
+    document = yaml.safe_load(_write_config(tmp_path, ["model-a"]).read_text())
+    document["listeners"][0]["identity"] = {
+        "trust_headers": True,
+        "trusted_peers": ["10.0.0.0/8"],
+    }
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(document))
+    config = parse_user_config(str(path))
+    with pytest.raises(ValueError, match=r"identity\.trusted_peers"):
+        generate_envoy_config_from_user_config(config, str(tmp_path / "envoy.yaml"))
+
+
+def test_identity_header_names_must_be_removable(tmp_path):
+    document = yaml.safe_load(_write_config(tmp_path, ["model-a"]).read_text())
+    document["global"] = {
+        "services": {"authz": {"identity": {"user_id_header": "x user"}}}
+    }
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(document))
+    config = parse_user_config(str(path))
+    with pytest.raises(ValueError, match="user_id_header"):
+        generate_envoy_config_from_user_config(config, str(tmp_path / "envoy.yaml"))

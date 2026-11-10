@@ -20,6 +20,9 @@ DEFAULT_PORT = 8100
 # that follows on the same cores.
 ONNX_RUNTIME_SPIN_COUNT = "10000"
 DTYPES = ("auto", "float32", "bfloat16", "float16")
+# The batch limits of a model that leaves them to the runtime on a device
+# without a class of its own (the CPU); GPUs take theirs from
+# ``scheduler.calibration.DEVICE_CLASSES``.
 DEFAULT_MAX_NUM_BATCHED_TOKENS = 65_536
 # Every row costs at least this many padded tokens (planner.padded).
 MIN_ROW_TOKENS = 8
@@ -44,35 +47,45 @@ class EngineArgs:
     ``max_num_seqs`` is the most rows one forward holds, across requests: a
     decision request takes one row per question, the other surfaces one per
     input or window; 1 runs every row alone. ``max_num_batched_tokens`` bounds
-    a forward in padded tokens: its rows times its longest row.
-    ``batch_window_ms`` is how long the scheduler waits after the first
-    request to collect more (``max_num_seqs`` above 1 only). ``dtype`` is the
-    precision the backbone computes in; ``auto`` is the one the model was
-    published in. ``enable_shared_context`` runs the shared state of a
-    multi-question request once; None leaves it to the model's family.
+    a forward in tokens: the sum of its rows (each rounded up to 8) for a
+    model that packs merged rows into one sequence, else its rows times its
+    longest row. None leaves either to the runtime, which picks it by the
+    device's class and, on a GPU, adjusts it with a short startup calibration
+    (``scheduler.calibration``). ``batch_window_ms`` is how long the scheduler
+    waits after the first request to collect more (``max_num_seqs`` above 1
+    only). ``dtype`` is the precision the backbone computes in; ``auto`` is
+    the one the model was published in. ``enable_shared_context`` runs the
+    shared state of a multi-question request once; None leaves it to the
+    model's family. ``max_model_len`` is the most input tokens one question of
+    a Decision model may have: it lowers the package's limit, never raises it,
+    and a longer question fails with ``max_length_exceeded`` before any
+    forward; None keeps the package's limit.
     """
 
-    max_num_seqs: int = DEFAULT_MAX_NUM_SEQS
-    max_num_batched_tokens: int = DEFAULT_MAX_NUM_BATCHED_TOKENS
+    max_num_seqs: int | None = None
+    max_num_batched_tokens: int | None = None
     batch_window_ms: float = DEFAULT_BATCH_WINDOW_MS
     dtype: str = "auto"
     enable_shared_context: bool | None = None
+    max_model_len: int | None = None
 
     def __post_init__(self) -> None:
-        if isinstance(self.max_num_seqs, bool) or not isinstance(
-            self.max_num_seqs, int
-        ):
-            raise ValueError("max_num_seqs must be an integer")
-        if self.max_num_seqs < 1:
-            raise ValueError("max_num_seqs must be at least 1")
-        if isinstance(self.max_num_batched_tokens, bool) or not isinstance(
-            self.max_num_batched_tokens, int
-        ):
-            raise ValueError("max_num_batched_tokens must be an integer")
-        if self.max_num_batched_tokens < MIN_ROW_TOKENS:
-            raise ValueError(
-                f"max_num_batched_tokens must be at least {MIN_ROW_TOKENS}"
-            )
+        if self.max_num_seqs is not None:
+            if isinstance(self.max_num_seqs, bool) or not isinstance(
+                self.max_num_seqs, int
+            ):
+                raise ValueError("max_num_seqs must be an integer")
+            if self.max_num_seqs < 1:
+                raise ValueError("max_num_seqs must be at least 1")
+        if self.max_num_batched_tokens is not None:
+            if isinstance(self.max_num_batched_tokens, bool) or not isinstance(
+                self.max_num_batched_tokens, int
+            ):
+                raise ValueError("max_num_batched_tokens must be an integer")
+            if self.max_num_batched_tokens < MIN_ROW_TOKENS:
+                raise ValueError(
+                    f"max_num_batched_tokens must be at least {MIN_ROW_TOKENS}"
+                )
         if isinstance(self.batch_window_ms, bool) or not isinstance(
             self.batch_window_ms, (int, float)
         ):
@@ -87,6 +100,13 @@ class EngineArgs:
             self.enable_shared_context, bool
         ):
             raise ValueError("enable_shared_context must be a boolean")
+        if self.max_model_len is not None:
+            if isinstance(self.max_model_len, bool) or not isinstance(
+                self.max_model_len, int
+            ):
+                raise ValueError("max_model_len must be an integer")
+            if self.max_model_len < 1:
+                raise ValueError("max_model_len must be at least 1")
 
     def describe(self, shared_context: bool) -> dict[str, Any]:
         """The arguments as ``/v1/models`` reports them, with shared context resolved."""
@@ -96,6 +116,7 @@ class EngineArgs:
             "batch_window_ms": float(self.batch_window_ms),
             "dtype": self.dtype,
             "enable_shared_context": shared_context,
+            "max_model_len": self.max_model_len,
         }
 
 
@@ -133,6 +154,7 @@ class ModelConfig:
     batch_window_ms: float | None = None
     dtype: str | None = None
     enable_shared_context: bool | None = None
+    max_model_len: int | None = None
 
     def engine_args(self, defaults: EngineArgs) -> EngineArgs:
         """This model's engine arguments: its own where it sets them, else ``defaults``."""
@@ -146,7 +168,13 @@ class ModelConfig:
 
 @dataclass(frozen=True)
 class ServeConfig:
-    """Process options; ``memory_budget_gib`` and ``engine_args`` apply to the models that set none."""
+    """Process options; ``memory_budget_gib`` and ``engine_args`` apply to the models that set none.
+
+    ``media_workers`` is how many worker processes decode and resize request
+    images and videos for the process's models, off the threads that plan
+    requests next to the device worker; 0 decodes in the planning threads, None
+    picks a count from the CPUs the process may use (``media.auto_workers``).
+    """
 
     models: tuple[ModelConfig, ...] = ()
     host: str = "127.0.0.1"
@@ -169,6 +197,15 @@ class ServeConfig:
     log_level: str = "info"
     autotune_cache: str | None = None
     exit_on_device_error: bool = True
+    media_workers: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.media_workers is not None and (
+            isinstance(self.media_workers, bool)
+            or not isinstance(self.media_workers, int)
+            or self.media_workers < 0
+        ):
+            raise ValueError("media_workers must be a non-negative integer")
 
     def served_models(self) -> tuple[ModelConfig, ...]:
         """The models this process serves, in load order."""

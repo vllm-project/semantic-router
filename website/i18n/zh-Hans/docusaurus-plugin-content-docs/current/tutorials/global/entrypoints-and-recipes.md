@@ -1,10 +1,11 @@
 ---
+is_mtpe: false
 title: 虚拟模型
 description: 在同一 Semantic Router 部署中，为客户端提供由隔离路由策略支撑的稳定虚拟模型名。
 translation:
   source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
   source_file: "docs/tutorials/global/entrypoints-and-recipes.md"
-  outdated: false
+  outdated: true
 ---
 
 # 虚拟模型
@@ -31,8 +32,8 @@ request model name -> entrypoint -> recipe -> decision -> algorithm -> backend
 
 当请求的 `model` 匹配某个 `entrypoints[].model_names` 值时，Router 只评估映射的配方。虚拟模型名随后会被该配方选出的后端替换。
 
-顶层 `routing` 块是 `default` 配方，默认发布为 `vllm-sr/auto`。
-显式声明 `recipe: default` 的入口会替换这个内置名称；如果客户端仍需使用
+只有一个配方的文档将它发布为 `vllm-sr/auto`，不需要入口点。有多个配方时，恰好一个 chat 入口标记 `default: true`，其配方就是默认配方。
+默认配方的显式入口会替换这个内置名称；如果客户端仍需使用
 `vllm-sr/auto`，请把它写入该入口的 `model_names`。`auto`、`vllm-sr/flow`
 等名称只有显式声明后才可用；算法由所选配方的决策决定。
 若所选配方没有匹配的决策，Router 使用 `providers.defaults.model`。
@@ -41,48 +42,47 @@ request model name -> entrypoint -> recipe -> decision -> algorithm -> backend
 
 ## 配置
 
-模型目录是共享的。每个命名配方拥有自己的信号、投影、决策、策略、算法和路由局部插件。
+模型目录是共享的。每个配方拥有自己的信号、投影、决策、策略、算法和路由局部插件。
 
 ```yaml
-routing:
-  modelCards:
-    - name: fast-model
-    - name: accurate-model
-
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/mom-v1-flash]
     recipe: flash
   - model_names: [vllm-sr/mom-v1-ultra]
     recipe: ultra
-
 recipes:
+  - name: default
   - name: flash
     description: Prefer the lowest-latency eligible backend.
-    routing:
-      strategy: priority
-      decisions:
-        - name: fast-path
-          description: Serve requests with the fast model.
-          priority: 100
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: fast-model
-
+    strategy: priority
+    decisions:
+      - name: fast-path
+        description: Serve requests with the fast model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: fast-model
   - name: ultra
     description: Prefer the highest-quality eligible backend.
-    routing:
-      strategy: priority
-      decisions:
-        - name: quality-path
-          description: Serve requests with the accurate model.
-          priority: 100
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: accurate-model
+    strategy: priority
+    decisions:
+      - name: quality-path
+        description: Serve requests with the accurate model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: accurate-model
+providers:
+  models:
+    - name: fast-model
+    - name: accurate-model
 ```
 
 客户端可通过 `/v1/models` 发现入口名称。已路由的响应包含 `x-vsr-selected-recipe`，运维人员可据此确认由哪条策略处理了请求，而无需向客户端暴露后端选择契约。
@@ -126,8 +126,10 @@ recipes:
 输出上限，并启用工具调用。保持图像输入和推理设置关闭。
 
 ```yaml
-routing:
-  modelCards:
+recipes:
+  - name: default
+providers:
+  models:
     - name: local-coder
       context_window_size: 32768
       max_output_tokens: 8192
@@ -153,7 +155,7 @@ routing:
 
 ## 何时使用
 
-当一个部署必须暴露多个路由目标、策略边界或发布轨道时，使用命名入口和配方。当所有客户端应遵循同一策略时，保持单个顶层 `routing` 配置即可；现有 auto-model 流程无需额外配置。
+当一个部署必须暴露多个路由目标、策略边界或发布轨道时，使用入口点和多个配方。当所有客户端应遵循同一策略时，保持单个配方即可；其 `vllm-sr/auto` 入口无需额外配置。
 
 继续阅读：
 

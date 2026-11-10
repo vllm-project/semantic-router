@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
 )
 
 // RequestFacts carries untrusted request-envelope facts used by signal
@@ -20,6 +21,10 @@ type RequestFacts struct {
 	// from the general routing text. Nil preserves flat-text classifier callers.
 	JailbreakInput *JailbreakInput
 
+	// RoutingInput is what routing_input removed from the routing text. The
+	// safety signals still scan the removed text.
+	RoutingInput routinginput.Outcome
+
 	// ContextTokenFloor and the related scalar fields carry the content-free,
 	// request-envelope estimate used by the context signal. They account for
 	// prompt-bearing request components that are intentionally absent from the
@@ -30,10 +35,19 @@ type RequestFacts struct {
 	ContextTextBytes       int
 	ContextEquivalentBytes int
 	ContextHasNonText      bool
+	ContextReserveTokens   int
 
 	// InputModality carries structural input-modality presence counts for the
 	// input_modality signal family.
 	InputModality InputModalityFacts
+
+	// Turns are the user and assistant turns before the current user turn,
+	// and Images and Videos the inline (base64 data URL) media parts of the
+	// current user turn; systemone rules read them as their input asks.
+	// Remote media are never fetched.
+	Turns  []ConversationTurn
+	Images []string
+	Videos []string
 }
 
 // InputModalityFacts counts content parts per input modality across the

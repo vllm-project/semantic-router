@@ -1,0 +1,36 @@
+# The top-level routing block, its model_bindings included, is the recipe
+# named default; beside other recipes, the entrypoint that served it is marked
+# default: true.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+global:
+  model_catalog:
+    deployments:
+      remote-judge:
+        provider: systemone
+        endpoint: http://127.0.0.1:8090/v1/systemone
+        model: vllm-sr/d3-turbo
+entrypoints:
+  - {model_names: [vllm-sr/support], recipe: support}
+  - {model_names: [vllm-sr/auto], recipe: default, default: true}
+recipes:
+  - name: default
+    model_bindings:
+      domain: remote-judge
+    signals:
+      keywords:
+        - {name: urgent, operator: OR, keywords: [urgent, asap]}
+    decisions:
+      - name: urgent
+        priority: 100
+        rules: {type: keyword, name: urgent}
+        modelRefs: [{model: general}]
+  - name: support
+    decisions:
+      - name: everything
+        rules: {}
+        modelRefs: [{model: general}]

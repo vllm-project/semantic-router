@@ -58,7 +58,7 @@ func getRAGCacheInstance() *RAGResultCache {
 // getRAGCache retrieves a cached RAG result if available and not expired.
 // Cache hits use RLock only; the LRU position is updated lazily on the next
 // write to avoid promoting a write lock on every read.
-func (r *OpenAIRouter) getRAGCache(recipe config.RecipeName, query string, ragConfig *config.RAGPluginConfig) (string, bool) {
+func (r *OpenAIRouter) getRAGCache(recipe config.RecipeName, query string, ragConfig *config.ContextSource) (string, bool) {
 	if !ragConfig.CacheResults {
 		return "", false
 	}
@@ -103,7 +103,7 @@ func (r *OpenAIRouter) getRAGCache(recipe config.RecipeName, query string, ragCo
 }
 
 // setRAGCache stores a RAG result. Evicts the LRU entry when the cache is full.
-func (r *OpenAIRouter) setRAGCache(recipe config.RecipeName, query string, context string, ragConfig *config.RAGPluginConfig) {
+func (r *OpenAIRouter) setRAGCache(recipe config.RecipeName, query string, context string, ragConfig *config.ContextSource) {
 	if !ragConfig.CacheResults || context == "" {
 		return
 	}
@@ -148,29 +148,28 @@ func (r *OpenAIRouter) evictLRUEntry(cache *RAGResultCache) {
 	logging.Debugf("Evicted LRU RAG cache entry: %s", item.key)
 }
 
-// buildRAGCacheKey builds a cache key from query and config.
-func (r *OpenAIRouter) buildRAGCacheKey(recipe config.RecipeName, query string, ragConfig *config.RAGPluginConfig) string {
+// buildRAGCacheKey builds a cache key from the query, the source and the
+// match that keeps its documents: different vector-store IDs, file filters,
+// endpoints, bounds or judges must never share retrieved text just because
+// queries match.
+func (r *OpenAIRouter) buildRAGCacheKey(recipe config.RecipeName, query string, ragConfig *config.ContextSource) string {
 	identity, compatible := r.ragCacheRepresentation(ragConfig)
 	if !compatible {
 		return ""
 	}
-	rerankerIdentity := ""
-	if ragConfig.Rerank != nil {
-		scorer := r.rerankers[recipe]
-		if scorer == nil || scorer.CacheIdentity() == "" {
-			return ""
-		}
-		rerankerIdentity = scorer.CacheIdentity()
+	block := config.MatchRAG.Effective(ragConfig.Match)
+	judgeDeployment := ""
+	if block.Judge != nil && r.Config != nil {
+		judgeDeployment = r.Config.MatchJudgeDeployment(*block.Judge)
 	}
-	// Include backend configuration: different vector-store IDs, file filters,
-	// and endpoints must never share retrieved text just because queries match.
 	key, err := json.Marshal(struct {
-		Recipe            config.RecipeName       `json:"recipe"`
-		RerankerIdentity  string                  `json:"reranker_identity,omitempty"`
-		Query             string                  `json:"query"`
-		Config            *config.RAGPluginConfig `json:"config"`
-		EmbeddingIdentity string                  `json:"embedding_identity"`
-	}{recipe, rerankerIdentity, query, ragConfig, identity})
+		Recipe            config.RecipeName     `json:"recipe"`
+		Query             string                `json:"query"`
+		Config            *config.ContextSource `json:"config"`
+		Match             config.MatchConfig    `json:"match"`
+		JudgeDeployment   string                `json:"judge_deployment,omitempty"`
+		EmbeddingIdentity string                `json:"embedding_identity"`
+	}{recipe, query, ragConfig, block, judgeDeployment, identity})
 	if err != nil {
 		return ""
 	}
@@ -181,7 +180,7 @@ func (r *OpenAIRouter) buildRAGCacheKey(recipe config.RecipeName, query string, 
 // A cached result cannot bypass model compatibility checks. An incompatible
 // hybrid child disables caching, while normal retrieval can still use its
 // configured fallback backend.
-func (r *OpenAIRouter) ragCacheRepresentation(cfg *config.RAGPluginConfig) (string, bool) {
+func (r *OpenAIRouter) ragCacheRepresentation(cfg *config.ContextSource) (string, bool) {
 	switch cfg.Backend {
 	case "vectorstore":
 		store, err := cfg.VectorStoreBackendConfig()
@@ -195,11 +194,11 @@ func (r *OpenAIRouter) ragCacheRepresentation(cfg *config.RAGPluginConfig) (stri
 		if err != nil || hybrid == nil {
 			return "", false
 		}
-		primary, ok := r.ragCacheRepresentation(&config.RAGPluginConfig{Backend: hybrid.Primary, BackendConfig: hybrid.PrimaryConfig})
+		primary, ok := r.ragCacheRepresentation(&config.ContextSource{Backend: hybrid.Primary, BackendConfig: hybrid.PrimaryConfig})
 		if !ok {
 			return "", false
 		}
-		fallback, ok := r.ragCacheRepresentation(&config.RAGPluginConfig{Backend: hybrid.Fallback, BackendConfig: hybrid.FallbackConfig})
+		fallback, ok := r.ragCacheRepresentation(&config.ContextSource{Backend: hybrid.Fallback, BackendConfig: hybrid.FallbackConfig})
 		return primary + ":" + fallback, ok
 	default:
 		return "", true

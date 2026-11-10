@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 3
 description: 分步指南：用 Ollama 服务本地模型，并通过设置控制面板或 YAML 配置将其连接到 vLLM Semantic Router。
 translation:
@@ -199,8 +200,7 @@ JSON 聊天补全响应表示 Ollama 已正确接入。
 如果希望直接编辑 YAML 而不是使用控制面板，添加类似这样的模型条目：
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   defaults:
     model: llama3.2:3b
@@ -214,20 +214,18 @@ providers:
           protocol: http
           provider: ollama
           weight: 100
-
-routing:
-  modelCards:
-    - name: llama3.2:3b
-  decisions:
-    - name: default-route
-      description: Route all requests to the local Ollama model.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: llama3.2:3b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        description: Route all requests to the local Ollama model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: llama3.2:3b
+            use_reasoning: false
 ```
 
 校验并启动服务：

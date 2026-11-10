@@ -15,7 +15,7 @@ import time
 import pytest
 import torch
 from torch import nn
-from vllm_srun.config import EngineArgs, ModelConfig, ServeConfig
+from vllm_srun.config import DEFAULT_MAX_NUM_SEQS, ModelConfig, ServeConfig
 from vllm_srun.families.decision1 import package as pkg
 from vllm_srun.families.decision1 import qwen, vela
 from vllm_srun.families.decision1.questions import KINDS
@@ -191,6 +191,39 @@ def test_vela_physical_batches_sort_by_type(runtimes):
     assert [len(batch) for batch in model.exact_batches(plan.items)] == [8, 3]
 
 
+def test_vela_exact_run_encodes_each_present_kind_once(runtimes):
+    """Issue #4633: the released-shapes forward runs one encode per question
+    type present, no more — the runtime adds no forwards around the math."""
+    model = model_of(runtimes["vela"])
+    engine = model.engine_model
+    encode, calls = engine.encode, []
+
+    def counting(batch):
+        calls.append(batch.branch)
+        return encode(batch)
+
+    engine.encode = counting
+    try:
+        items = model.plan(STATE, QUESTIONS).items
+        assert {item.task_type for item in items} == set(KINDS)
+        model.run(items)
+        assert sorted(calls, key=str) == sorted(
+            [vela.BRANCH[kind] for kind in KINDS], key=str
+        )
+        del calls[:]
+        only = {
+            "pick": {
+                "type": "choice",
+                "instructions": "Which area?",
+                "criteria": {"code": "Programming", "math": None},
+            }
+        }
+        model.run(model.plan(STATE, only).items)
+        assert calls == [vela.BRANCH["choice"]]
+    finally:
+        engine.encode = encode
+
+
 def test_the_golden_reference_runs_the_released_physical_batches(runtimes):
     model = model_of(runtimes["vela"])
     plan = model.plan(STATE, MANY)
@@ -215,7 +248,7 @@ def test_vela_coalesces_within_the_cpu_budget_while_the_reference_keeps_its_batc
         Job(items=plan.items, deadline=None, enqueued=time.monotonic())
         for _ in range(4)
     ]
-    for batch in coalesced(jobs[1:], budget, EngineArgs().max_num_seqs):
+    for batch in coalesced(jobs[1:], budget, DEFAULT_MAX_NUM_SEQS):
         rows = batch.items()
         assert len(rows) * padded(max(len(row.ids) for row in rows)) <= budget
     batches = reference(model, jobs[:1], budget)

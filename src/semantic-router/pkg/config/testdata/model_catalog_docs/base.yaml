@@ -1,0 +1,24 @@
+# The base each model catalog documentation example is merged onto: the
+# request models a configuration needs, and the deployments the examples
+# refer to without declaring. The examples' own fields win.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: general, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+    - name: small
+      backend_refs: [{name: small, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
+global:
+  model_catalog:
+    deployments:
+      kai:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
+        device: auto
+      d3-remote:
+        provider: systemone
+        endpoint: https://app.vllm-sr.ai/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth: {api_key_env: VSR_APP_KEY}

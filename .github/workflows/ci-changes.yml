@@ -9,6 +9,9 @@ on:
       full:
         type: boolean
         default: false
+      publish:
+        type: boolean
+        default: false
       draft:
         type: boolean
         default: false
@@ -17,6 +20,8 @@ on:
         type: string
         default: ''
     outputs:
+      publisher_ready:
+        value: ${{ jobs.plan.outputs.publisher_ready }}
       plan:
         value: ${{ jobs.plan.outputs.plan }}
       dispatch:
@@ -53,6 +58,8 @@ on:
         value: ${{ jobs.plan.outputs.storage }}
       dashboard:
         value: ${{ jobs.plan.outputs.dashboard }}
+      operator-source:
+        value: ${{ jobs.plan.outputs.operator-source }}
       operator:
         value: ${{ jobs.plan.outputs.operator }}
       local:
@@ -76,12 +83,16 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  issues: read
+  pull-requests: read
 
 jobs:
   plan:
     name: Resolve Contracts
     runs-on: ubuntu-24.04
     outputs:
+      publisher_ready: ${{ steps.publisher.outputs.ready }}
       plan: ${{ steps.plan.outputs.plan }}
       dispatch: ${{ steps.plan.outputs.dispatch }}
       worker_labels: ${{ steps.plan.outputs.worker_labels }}
@@ -100,6 +111,7 @@ jobs:
       core: ${{ steps.plan.outputs.core }}
       storage: ${{ steps.plan.outputs.storage }}
       dashboard: ${{ steps.plan.outputs.dashboard }}
+      operator-source: ${{ steps.plan.outputs.operator-source }}
       operator: ${{ steps.plan.outputs.operator }}
       local: ${{ steps.plan.outputs.local }}
       recipes: ${{ steps.plan.outputs.recipes }}
@@ -126,15 +138,42 @@ jobs:
             sha="$EVENT_BEFORE"
           fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - id: publisher
+        name: Check whether the trusted base can publish PR status
+        run: |
+          ready=false
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            base="$(git rev-parse --verify "$GITHUB_SHA^1")"
+            if git cat-file -e "$base:.github/workflows/ci-status.yml" 2>/dev/null \
+              && git cat-file -e "$base:tools/ci/pr_ci_status.py" 2>/dev/null; then
+              ready=true
+            fi
+          fi
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+      - name: Resolve committer authorization for this exact PR source
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: |
+          mkdir -p .agent-harness/ci
+          python3 tools/ci/manual_ci.py resolve --event "$GITHUB_EVENT_PATH" \
+            --source "$GITHUB_SHA" --base "$BASE_SHA" \
+            --output .agent-harness/ci/authorization.json
       - id: plan
         env:
           PROFILE: ${{ inputs.profile }}
           BASE_SHA: ${{ steps.base.outputs.sha }}
           FULL: ${{ inputs.full }}
+          PUBLISH: ${{ inputs.publish }}
           DRAFT: ${{ inputs.draft }}
           VERIFICATION: ${{ inputs.verification }}
         run: |
           flags=()
+          if [[ "$PUBLISH" == true ]]; then flags+=(--publish); fi
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            flags+=(--require-approval --authorization .agent-harness/ci/authorization.json)
+          fi
           if [[ "$FULL" == true ]]; then flags+=(--full); fi
           if [[ "$DRAFT" == true ]]; then flags+=(--draft); fi
           if [[ -n "$VERIFICATION" ]]; then flags+=(--verification "$VERIFICATION"); fi
@@ -143,6 +182,7 @@ jobs:
             --output .agent-harness/ci/plan.json --github-output "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: ci-plan
           path: .agent-harness/ci/plan.json
           include-hidden-files: true

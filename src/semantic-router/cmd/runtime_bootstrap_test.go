@@ -1,15 +1,20 @@
+//go:build !windows
+
 package main
 
 import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
+	"math/rand/v2"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -138,17 +143,46 @@ func startProfilingForTest(t *testing.T, cfg *config.RouterConfig, opts runtimeO
 	return hooks
 }
 
+// givenPorts are the ports freePort has returned in this test binary.
+var givenPorts sync.Map
+
+// freePort returns a port that is free on every address and that freePort
+// has not returned before. The Router binds it later, so it comes from
+// outside the kernel's ephemeral range: a released ephemeral port can be
+// given to any other socket on the host, such as another test package's
+// listener or outgoing connection, before the Router binds it.
 func freePort(t *testing.T) int {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to reserve a free port: %v", err)
+	low, high := nonEphemeralPorts()
+	for range 100 {
+		port := low + rand.IntN(high-low+1)
+		if _, given := givenPorts.LoadOrStore(port, struct{}{}); given {
+			continue
+		}
+		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err != nil {
+			continue
+		}
+		if err := listener.Close(); err != nil {
+			t.Fatalf("failed to release the reserved port: %v", err)
+		}
+		return port
 	}
-	port := listener.Addr().(*net.TCPAddr).Port
-	if err := listener.Close(); err != nil {
-		t.Fatalf("failed to release the reserved port: %v", err)
+	t.Fatalf("no free port between %d and %d", low, high)
+	return 0
+}
+
+// nonEphemeralPorts is a port range the kernel does not assign to sockets
+// on its own: above Linux's ip_local_port_range, or below the IANA dynamic
+// range that other systems assign from.
+func nonEphemeralPorts() (low, high int) {
+	if data, err := os.ReadFile("/proc/sys/net/ipv4/ip_local_port_range"); err == nil {
+		var first, last int
+		if _, err := fmt.Sscan(string(data), &first, &last); err == nil && last < 64536 {
+			return last + 1, 65535
+		}
 	}
-	return port
+	return 32768, 49151
 }
 
 func TestRunShutdownHooksCompletesInRegistrationOrder(t *testing.T) {
@@ -192,14 +226,14 @@ func TestStartupRejectsInvalidKubernetesGlobals(t *testing.T) {
 		global string
 		want   string
 	}{
-		{"cache", "  stores: {response_cache: {enabled: true, similarity_threshold: 1.5}}", "similarity_threshold"},
+		{"cache", "  plugins: [{type: response_cache, configuration: {enabled: true, semantic: {match: {recall: {top_k: 1, min_similarity: 1.5}}}}}]", "min_similarity"},
 		{"memory", "  stores: {memory: {default_similarity_threshold: 1.5}}", "default_similarity_threshold"},
-		{"admission", "  model_catalog: {admission: {prompt_guard: {max_concurrency: 1, max_queue: -1}}}", "max_queue"},
+		{"admission", "  model_catalog: {admission: {primary: {max_concurrency: 1, max_queue: -1}}}", "max_queue"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.yaml")
-			raw := "version: v0.3\nglobal:\n  router: {config_source: kubernetes}\n" + tc.global + "\n"
+			raw := "version: v0.5\nglobal:\n  router: {config_source: kubernetes}\n" + tc.global + "\n"
 			if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
 				t.Fatal(err)
 			}

@@ -92,7 +92,7 @@ func TestTypedWireValuesRejectCaseFoldedFieldNames(t *testing.T) {
 			var value envelopeWire
 			var err error
 			if test.provider {
-				err = decodeProviderWire([]byte(test.body), &value, llmprotocol.DefaultPolicy())
+				err = decodeProviderWire([]byte(test.body), &value, conformancePolicy())
 			} else {
 				err = decodeWire([]byte(test.body), &value, llmprotocol.DefaultPolicy())
 			}

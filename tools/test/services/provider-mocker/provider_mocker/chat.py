@@ -1,6 +1,5 @@
 """Native Chat Completions HTTP boundary and fixture selection."""
 
-import json
 import time
 from typing import Any
 
@@ -41,40 +40,6 @@ CUSTOM_TOOL_KIND_STREAM_MARKERS = {
     "__mock_custom_kind_function_to_custom__": "function_to_custom",
     "__mock_custom_kind_valid_custom__": "valid_custom",
 }
-
-
-def is_hallucination_detection_request(req: ChatRequest) -> bool:
-    if not req.response_format or req.response_format.get("type") != "json_schema":
-        return False
-    schema = req.response_format.get("json_schema", {})
-    return schema.get("name") == "hallucination_detection"
-
-
-def extract_answer_under_review(req: ChatRequest) -> str:
-    for m in req.messages:
-        if (
-            m.role == "user"
-            and isinstance(m.content, str)
-            and "Answer to verify:\n" in m.content
-        ):
-            return m.content.split("Answer to verify:\n")[-1]
-    return ""
-
-
-def build_hallucination_detection_content(req: ChatRequest) -> str:
-    answer = extract_answer_under_review(req)
-    flagged_text = answer[:80] if answer else "mocked hallucination"
-    return json.dumps(
-        {
-            "hallucinated_spans": [
-                {
-                    "text": flagged_text,
-                    "category": "unsupported_addition",
-                    "subcategory": "claim",
-                }
-            ]
-        }
-    )
 
 
 _chat_control = workflow_chat.ChatControlHelpers(
@@ -118,7 +83,18 @@ async def chat_completions(request: Request):
     scenario_response = await respond_to_scenario(request, req, created_ts)
     if scenario_response is not None:
         return scenario_response
-    if chat_contains(req, openrouter_fixture.MARKER):
+    if chat_contains(req, openrouter_fixture.MARKER) or chat_contains(
+        req, openrouter_fixture.REASONING_MARKER
+    ):
+        if (
+            openrouter_fixture.reasoning_turn(req)
+            and any(message.role == "tool" for message in req.messages)
+            and not openrouter_fixture.reasoning_follow_up_valid(req)
+        ):
+            return invalid_request_response(
+                "OpenRouter reasoning continuity blocks were lost or changed",
+                "messages.reasoning_details",
+            )
         if req.stream:
             return StreamingResponse(
                 openrouter_fixture.streamed_reply(req, created_ts),
@@ -129,6 +105,9 @@ async def chat_completions(request: Request):
     vllm_reasoning = vllm_fixture.reasoning_answer_reply(req, created_ts)
     if vllm_reasoning is not None:
         return vllm_reasoning
+    vllm_error = vllm_fixture.error_reply(req, created_ts)
+    if vllm_error is not None:
+        return vllm_error
     vllm_stop = vllm_fixture.matched_stop(req)
     if vllm_stop and chat_contains(req, vllm_fixture.MARKER):
         if req.stream:
@@ -183,8 +162,6 @@ async def chat_completions(request: Request):
         if shadow_response is not None:
             return shadow_response
         content = f"Hello from {req.model}."
-    elif is_hallucination_detection_request(req):
-        content = build_hallucination_detection_content(req)
     else:
         content = build_chat_content(req)
     usage = build_chat_usage(req, content)

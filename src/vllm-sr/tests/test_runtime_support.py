@@ -206,7 +206,9 @@ def test_config_env_references_reads_api_key_env_and_interpolations(tmp_path):
         yaml.safe_dump(
             {
                 "providers": {"models": [{"api_key_env": "MISTRAL_API_KEY"}]},
-                "embedding_models": {"endpoint": {"api_key_env": "EMBEDDING_API_KEY"}},
+                "deployments": {
+                    "remote-embedding": {"auth": {"api_key_env": "EMBEDDING_API_KEY"}}
+                },
                 "note": "uses ${REDIS_AUTH_TOKEN} at runtime",
                 "bare": "postgres://$DATABASE_PASSWORD@db",
                 "fallback": "${OPTIONAL_TOKEN:-development}",

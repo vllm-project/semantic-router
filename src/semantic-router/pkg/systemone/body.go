@@ -9,27 +9,54 @@ import (
 // maxNesting is encoding/json's nesting limit: a deeper document is invalid there too.
 const maxNesting = 10000
 
-// requestModel reads a native request body as json.Unmarshal reads it into a
+// scannedRequest is what the public handler reads of a native request body:
+// its model and where its options are.
+type scannedRequest struct {
+	// model is the last top-level "model" member decoded as a string, and empty
+	// when that member is absent, null or not a string.
+	model string
+	// options is the value of the top-level "options" member (nil when absent)
+	// and body[optionsStart:optionsEnd] its place; repeatedOptions reports a
+	// body with more than one such member.
+	options                  []byte
+	optionsStart, optionsEnd int
+	repeatedOptions          bool
+}
+
+// scanRequest reads a native request body as json.Unmarshal reads it into a
 // map[string]json.RawMessage, without decoding the media it carries. ok is
-// false unless the body is one JSON object with the syntax json.Valid accepts;
-// model is the last top-level "model" member decoded as a string, and empty when
-// that member is absent, null or not a string. Strings are scanned a word at a
-// time, so megabytes of base64 images or videos cost a memory scan instead of
-// encoding/json's byte-at-a-time state machine.
-func requestModel(body []byte) (model string, ok bool) {
+// false unless the body is one JSON object with the syntax json.Valid accepts.
+// Strings are scanned a word at a time, so megabytes of base64 images or
+// videos cost a memory scan instead of encoding/json's byte-at-a-time state
+// machine.
+func scanRequest(body []byte) (request scannedRequest, ok bool) {
 	s := bodyScanner{data: body}
 	start := s.space(0)
 	if start >= len(body) || body[start] != '{' {
-		return "", false
+		return scannedRequest{}, false
 	}
 	end := s.object(start)
 	if end < 0 || s.space(end) != len(body) {
-		return "", false
+		return scannedRequest{}, false
 	}
-	if s.model != nil && json.Unmarshal(s.model, &model) != nil {
-		model = ""
+	if s.model != nil && json.Unmarshal(s.model, &request.model) != nil {
+		request.model = ""
 	}
-	return model, true
+	request.options, request.optionsStart, request.optionsEnd = s.options, s.optionsStart, s.optionsEnd
+	request.repeatedOptions = s.optionsCount > 1
+	return request, true
+}
+
+// withOptions returns body with the value of its options member replaced by
+// options, or body itself when it has no options or they are already options.
+func (r scannedRequest) withOptions(body, options []byte) []byte {
+	if r.options == nil || bytes.Equal(r.options, options) {
+		return body
+	}
+	replaced := make([]byte, 0, len(body)-len(r.options)+len(options))
+	replaced = append(replaced, body[:r.optionsStart]...)
+	replaced = append(replaced, options...)
+	return append(replaced, body[r.optionsEnd:]...)
 }
 
 type bodyScanner struct {
@@ -37,6 +64,11 @@ type bodyScanner struct {
 	depth int
 	// model is the value of the last top-level "model" member.
 	model []byte
+	// options is the value of the last top-level "options" member, at
+	// data[optionsStart:optionsEnd]; optionsCount counts those members.
+	options                  []byte
+	optionsStart, optionsEnd int
+	optionsCount             int
 }
 
 func (s *bodyScanner) space(i int) int {
@@ -104,8 +136,12 @@ func (s *bodyScanner) object(i int) int {
 		if valueEnd < 0 {
 			return -1
 		}
-		if top && isModelKey(key) {
+		if top && isKey(key, "model") {
 			s.model = s.data[valueStart:valueEnd]
+		}
+		if top && isKey(key, "options") {
+			s.options, s.optionsStart, s.optionsEnd = s.data[valueStart:valueEnd], valueStart, valueEnd
+			s.optionsCount++
 		}
 		i = s.space(valueEnd)
 		if i < len(s.data) && s.data[i] == ',' {
@@ -237,13 +273,13 @@ func (s *bodyScanner) number(i int) int {
 	return i
 }
 
-// isModelKey reports whether a quoted, already validated key decodes to "model".
-func isModelKey(quoted []byte) bool {
+// isKey reports whether a quoted, already validated key decodes to name.
+func isKey(quoted []byte, name string) bool {
 	if bytes.IndexByte(quoted, '\\') < 0 {
-		return string(quoted) == `"model"`
+		return len(quoted) == len(name)+2 && string(quoted[1:len(quoted)-1]) == name
 	}
 	var key string
-	return json.Unmarshal(quoted, &key) == nil && key == "model"
+	return json.Unmarshal(quoted, &key) == nil && key == name
 }
 
 // hasControl reports whether b holds a byte below 0x20, which a JSON string must escape.

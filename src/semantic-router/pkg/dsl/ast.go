@@ -150,16 +150,23 @@ type rawDecisionTreeItem struct {
 	Algorithm    *rawAlgoSpec         `parser:"| 'ALGORITHM' @@"`
 	Plugin       *rawPluginRef        `parser:"| 'PLUGIN' @@"`
 	CandidateFor *rawCandidateForDecl `parser:"| @@"`
-	Emit         *rawEmitDecl         `parser:"| @@"`
+	Retention    *rawRetentionDecl    `parser:"| @@"`
+	Output       *rawOutputDecl       `parser:"| @@"`
 }
 
-// rawEmitDecl: EMIT <kind> { fields... }. Currently only kind="retention" is
-// recognized by the validator, but the grammar accepts any identifier so the
-// validator can emit a friendly error rather than a parse error.
-type rawEmitDecl struct {
+// rawRetentionDecl: RETENTION { fields... }, the decision's retention. The
+// grammar accepts any field so the validator can name an unknown one.
+type rawRetentionDecl struct {
 	Pos    lexer.Position
-	Kind   string        `parser:"'EMIT' @Ident"`
-	Fields []*FieldEntry `parser:"'{' @@* '}'"`
+	Fields []*FieldEntry `parser:"'RETENTION' '{' @@* '}'"`
+}
+
+// rawOutputDecl: OUTPUT { kind: ..., action: ... }, the decision's output
+// contract. The grammar accepts any field so the validator can name an
+// unknown one.
+type rawOutputDecl struct {
+	Pos    lexer.Position
+	Fields []*FieldEntry `parser:"'OUTPUT' '{' @@* '}'"`
 }
 
 // rawModelDecl: MODEL <name> { fields... }
@@ -188,7 +195,8 @@ type rawRouteItem struct {
 	Description  *string              `parser:"| 'DESCRIPTION' @String"`
 	Action       *rawActionDecl       `parser:"| 'ACTION' @@"`
 	CandidateFor *rawCandidateForDecl `parser:"| @@"`
-	Emit         *rawEmitDecl         `parser:"| @@"`
+	Retention    *rawRetentionDecl    `parser:"| @@"`
+	Output       *rawOutputDecl       `parser:"| @@"`
 }
 
 // rawActionDecl: ACTION <type> <destination>, e.g. ACTION route "safe-model".
@@ -330,23 +338,29 @@ type ArrayVal struct {
 type Program struct {
 	CandidateRequirements *config.CandidateRequirements
 	ModelBindings         map[string]config.ModelBinding
-	Strategy              string
-	Entrypoints           []*EntrypointDecl
-	Recipes               []*RecipeDecl
-	Signals               []*SignalDecl
-	ProjectionPartitions  []*ProjectionPartitionDecl
-	ProjectionScores      []*ProjectionScoreDecl
-	ProjectionMappings    []*ProjectionMappingDecl
-	Routes                []*RouteDecl
-	Models                []*ModelDecl
-	Plugins               []*PluginDecl
-	TestBlocks            []*TestBlockDecl
+	// RecipePlugins are ROUTING plugins: the plugins every decision of the
+	// scope's recipe defaults to.
+	RecipePlugins        []config.DecisionPlugin
+	Strategy             string
+	Entrypoints          []*EntrypointDecl
+	Recipes              []*RecipeDecl
+	Signals              []*SignalDecl
+	ProjectionPartitions []*ProjectionPartitionDecl
+	ProjectionScores     []*ProjectionScoreDecl
+	ProjectionMappings   []*ProjectionMappingDecl
+	Routes               []*RouteDecl
+	Models               []*ModelDecl
+	Plugins              []*PluginDecl
+	TestBlocks           []*TestBlockDecl
 }
 
 // EntrypointDecl is the DSL form of one request-facing recipe binding.
+// Default marks the entrypoint of the default recipe.
 type EntrypointDecl struct {
+	API        string
 	ModelNames []string
 	Recipe     string
+	Default    bool
 	Pos        Position
 }
 
@@ -384,8 +398,6 @@ type ProjectionScoreDecl struct {
 type ProjectionScoreInputDecl struct {
 	SignalType  string
 	SignalName  string
-	KB          string
-	Metric      string
 	Weight      float64
 	ValueSource string
 	Match       float64
@@ -454,8 +466,20 @@ type RouteDecl struct {
 	Algorithm           *AlgoSpec
 	Plugins             []*PluginRef
 	CandidateIterations []*CandidateIterationDecl
-	Emits               []*EmitDecl
+	Retention           *RetentionDecl
+	Output              *OutputDecl
 	Pos                 Position
+}
+
+// OutputDecl is the resolved AST node for a route's OUTPUT block: the kinds
+// its answers carry and its action, as written.
+type OutputDecl struct {
+	Kind   []string
+	Action string
+	// RawFields keep the parsed entries, so the validator and compiler report
+	// an unknown or wrong-typed field instead of reading it as unset.
+	RawFields []*FieldEntry
+	Pos       Position
 }
 
 // ActionDecl is the resolved AST node for a route ACTION statement.
@@ -465,28 +489,20 @@ type ActionDecl struct {
 	Pos         Position
 }
 
-// EmitDecl is the resolved AST node for an EMIT block. The Retention pointer
-// is populated when Kind == "retention". Future Kind values (e.g. "log",
-// "metric") will add their own typed payload fields here.
-type EmitDecl struct {
-	Kind      string
-	Retention *RetentionDirective
-	// RawFields preserves the parsed EMIT payload for validation. The typed
-	// Retention field intentionally drops unknown or wrong-typed entries; the
-	// validator/compiler still need the raw entries so authoring mistakes are
-	// reported instead of being silently treated as an empty directive.
-	RawFields []*FieldEntry
-	Pos       Position
-}
-
-// RetentionDirective is the DSL-resolved form of an EMIT retention block.
+// RetentionDecl is the resolved AST node for a route's RETENTION block.
 // Pointer fields preserve tri-state semantics so we can tell "unset" apart
 // from "explicitly false / 0".
-type RetentionDirective struct {
+type RetentionDecl struct {
 	Drop                  *bool
 	TTLTurns              *int
 	KeepCurrentModel      *bool
 	PreferPrefixRetention *bool
+	// RawFields preserves the parsed payload for validation. The typed fields
+	// drop unknown or wrong-typed entries; the validator and compiler still
+	// need the raw entries so authoring mistakes are reported instead of being
+	// silently treated as an empty block.
+	RawFields []*FieldEntry
+	Pos       Position
 }
 
 // CandidateIterationDecl represents a bounded FOR ... IN block over candidate

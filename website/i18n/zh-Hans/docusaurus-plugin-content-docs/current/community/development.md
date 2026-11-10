@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 开发指南
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"

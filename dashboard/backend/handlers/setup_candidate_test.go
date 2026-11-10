@@ -74,66 +74,34 @@ func activateSetupRoundTrip(t *testing.T, configPath, root string, configJSON js
 	return active
 }
 
-func TestSetupSparsePIIRoundTripPreservesOmittedAndExplicitEmptyMapping(t *testing.T) {
-	for _, clear := range []bool{false, true} {
-		name := "omitted"
-		if clear {
-			name = "explicit-empty"
-		}
-		t.Run(name, func(t *testing.T) {
-			configPath, root, _ := setupActivationRegressionRuntime(t)
-			patch := createValidSetupPatch()
-			pii := map[string]interface{}{"use_cpu": false}
-			if clear {
-				pii["pii_mapping_path"] = ""
-			}
-			global := map[string]interface{}{"model_catalog": map[string]interface{}{
-				"modules": map[string]interface{}{"classifier": map[string]interface{}{"pii": pii}},
-			}}
-			patch["global"] = global
-			imported := importSetupRoundTrip(t, configPath, patch)
-			if !reflect.DeepEqual(imported["global"], global) {
-				t.Fatalf("import authored omitted global fields: %#v", imported["global"])
-			}
-			returned := validateSetupRoundTrip(t, configPath, imported)
-			var decoded map[string]interface{}
-			if err := json.Unmarshal(returned, &decoded); err != nil {
-				t.Fatal(err)
-			}
-			assertManagedSetupAuthoredGlobal(t, global, returned)
-			resolvedGlobal := decoded["global"].(map[string]interface{})
-			if !reflect.DeepEqual(resolvedGlobal["model_catalog"], global["model_catalog"]) {
-				t.Fatalf("validation changed the authored model catalog: %#v", resolvedGlobal["model_catalog"])
-			}
-			// The local model serves its own labels, so neither form names a mapping.
-			active := activateSetupRoundTrip(t, configPath, root, returned)
-			if active.PIIModel.UseCPU || active.PIIMappingPath != "" {
-				t.Fatalf("sparse PII override changed inherited settings: %+v", active.PIIModel)
-			}
-			if active.ManagementAPI.BindAddress != "0.0.0.0" {
-				t.Fatalf("omitted management listener became authored: %+v", active.ManagementAPI)
-			}
-		})
-	}
-}
-
-func TestSetupSparseDomainRoundTripUsesCanonicalBackendResolution(t *testing.T) {
+func TestSetupSparseGlobalRoundTripPreservesOmittedFields(t *testing.T) {
 	configPath, root, _ := setupActivationRegressionRuntime(t)
 	patch := createValidSetupPatch()
-	patch["global"] = map[string]interface{}{"model_catalog": map[string]interface{}{
-		"external": []map[string]interface{}{{
-			"name": "named-category", "model_role": "classification", "llm_model_name": "category-service",
-			"llm_endpoint": map[string]interface{}{"address": "127.0.0.1", "port": 8080},
-		}},
-		"modules": map[string]interface{}{"classifier": map[string]interface{}{"domain": map[string]interface{}{
-			"backend": map[string]interface{}{"protocol": "http_classify", "contract": "label_distribution.v1", "model": "named-category"},
-		}}},
+	global := map[string]interface{}{"stores": map[string]interface{}{
+		"response_cache": map[string]interface{}{"max_entries": 2048},
 	}}
-	returned := validateSetupRoundTrip(t, configPath, patch)
+	patch["global"] = global
+	imported := importSetupRoundTrip(t, configPath, patch)
+	if !reflect.DeepEqual(imported["global"], jsonValue(t, global)) {
+		t.Fatalf("import authored omitted global fields: %#v", imported["global"])
+	}
+	returned := validateSetupRoundTrip(t, configPath, imported)
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(returned, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	assertManagedSetupAuthoredGlobal(t, global, returned)
+	resolvedGlobal := decoded["global"].(map[string]interface{})
+	if !reflect.DeepEqual(resolvedGlobal["stores"], jsonValue(t, global["stores"])) {
+		t.Fatalf("validation changed the authored stores: %#v", resolvedGlobal["stores"])
+	}
 	active := activateSetupRoundTrip(t, configPath, root, returned)
-	category := active.CategoryModel
-	if category.Backend == nil || category.Backend.Model != "named-category" {
-		t.Fatalf("sparse remote backend did not resolve: %+v", category)
+	defaults := routerconfig.DefaultGlobalConfig().SemanticCache
+	if active.SemanticCache.MaxEntries != 2048 || active.SemanticCache.TTLSeconds != defaults.TTLSeconds || active.SemanticCache.BackendType != defaults.BackendType {
+		t.Fatalf("sparse store override changed inherited settings: %+v", active.SemanticCache)
+	}
+	if active.ManagementAPI.BindAddress != "0.0.0.0" {
+		t.Fatalf("omitted management listener became authored: %+v", active.ManagementAPI)
 	}
 }
 
@@ -144,8 +112,8 @@ func TestSetupCandidatePreservesGlobalReplacementAndBootstrapInheritance(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	baseGlobal := map[string]interface{}{"model_catalog": map[string]interface{}{
-		"modules": map[string]interface{}{"classifier": map[string]interface{}{"pii": map[string]interface{}{"use_cpu": false}}},
+	baseGlobal := map[string]interface{}{"stores": map[string]interface{}{
+		"response_cache": map[string]interface{}{"max_entries": 2048},
 	}}
 	globalYAML, err := marshalYAMLBytes(map[string]interface{}{"global": baseGlobal})
 	if err != nil {
@@ -158,7 +126,7 @@ func TestSetupCandidatePreservesGlobalReplacementAndBootstrapInheritance(t *test
 		patch := createValidSetupPatch()
 		want := baseGlobal
 		if replace {
-			want = map[string]interface{}{"model_catalog": map[string]interface{}{}}
+			want = map[string]interface{}{"stores": map[string]interface{}{}}
 			patch["global"] = want
 		}
 		returned := validateSetupRoundTrip(t, configPath, patch)
@@ -166,10 +134,20 @@ func TestSetupCandidatePreservesGlobalReplacementAndBootstrapInheritance(t *test
 		if err := json.Unmarshal(returned, &decoded); err != nil {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(decoded["global"], want) {
+		if !reflect.DeepEqual(decoded["global"], jsonValue(t, want)) {
 			t.Fatalf("whole-global replacement=%v changed semantics: %#v", replace, decoded["global"])
 		}
 	}
+}
+
+// jsonValue is value as a JSON response decodes it: numbers become float64.
+func jsonValue(t *testing.T, value interface{}) interface{} {
+	t.Helper()
+	var decoded interface{}
+	if err := json.Unmarshal(mustJSONRaw(t, value), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	return decoded
 }
 
 func TestSetupCandidateRepeatedSerializationPreservesAuthoredManagement(t *testing.T) {
@@ -177,7 +155,7 @@ func TestSetupCandidateRepeatedSerializationPreservesAuthoredManagement(t *testi
 	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", configPath)
 	for _, listener := range []interface{}{map[string]interface{}{}, nil, map[string]interface{}{"bind_address": "127.0.0.1"}} {
 		global := map[string]interface{}{"services": map[string]interface{}{"management_api": listener}}
-		candidate, err := decodeStrictSetupConfig(mustJSONRaw(t, map[string]interface{}{"version": "v0.3", "global": global}))
+		candidate, err := decodeStrictSetupConfig(mustJSONRaw(t, map[string]interface{}{"version": "v0.5", "global": global}))
 		if err != nil {
 			t.Fatal(err)
 		}

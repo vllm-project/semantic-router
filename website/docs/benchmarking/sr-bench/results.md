@@ -51,10 +51,10 @@ compare both modes on the same tasks, include a target of each mode against the
 same Router.
 
 Subject call receipts include `phase` and `phase_source`. For MoM targets,
-sr-bench requests the Router debug response headers to read its session policy
-phase. A `router` source means the response contained `x-vsr-session-phase`; a
+sr-bench requests the Router's `x-vsr-trace` to read its session policy
+phase. A `router` source means the trace contained `session_phase`; a
 `request` source means sr-bench derived `tool_loop` or `user_turn` from the
-latest messages because that header was absent. An unsupported nonempty Router
+latest messages because the trace had none. An unsupported nonempty Router
 phase is stored as `unknown` with `phase_source: "router"`.
 `model_switches_by_phase` counts a switch under the phase of the later request.
 Provider cache fields retain their presence separately from their numeric values:

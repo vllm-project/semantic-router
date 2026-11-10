@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "9fbd7d85183341c61c25dfc526160eb0599434f8"
   source_file: "docs/tutorials/signal/heuristic/conversation.md"
@@ -9,7 +10,7 @@ translation:
 
 ## 概览 {#overview}
 
-`conversation` 按聊天结构与协议事实路由，例如消息数量、开发者指令、可用工具、显式工具使用约束，或正在进行的工具循环。在 `routing.signals.conversation` 下定义这些规则。
+`conversation` 按聊天结构与协议事实路由，例如消息数量、开发者指令、可用工具、显式工具使用约束，或正在进行的工具循环。在 `recipes[].signals.conversation` 下定义这些规则。
 
 该族为启发式：检查请求的 `messages[]` 与 `tools[]` 数组，不做任何模型推理。
 
@@ -36,35 +37,34 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    conversation:
-      - name: multi_turn_user
-        description: At least two user messages.
-        feature:
-          type: count
-          source:
-            type: message
-            role: user
-        predicate:
-          gte: 2
-
-      - name: has_developer_message
-        description: Request includes a developer message.
-        feature:
-          type: exists
-          source:
-            type: message
-            role: developer
-
-      - name: tool_heavy
-        description: Three or more tool definitions.
-        feature:
-          type: count
-          source:
-            type: tool_definition
-        predicate:
-          gte: 3
+recipes:
+  - name: default
+    signals:
+      conversation:
+        - name: multi_turn_user
+          description: At least two user messages.
+          feature:
+            type: count
+            source:
+              type: message
+              role: user
+          predicate:
+            gte: 2
+        - name: has_developer_message
+          description: Request includes a developer message.
+          feature:
+            type: exists
+            source:
+              type: message
+              role: developer
+        - name: tool_heavy
+          description: Three or more tool definitions.
+          feature:
+            type: count
+            source:
+              type: tool_definition
+          predicate:
+            gte: 3
 ```
 
 ## 特征类型 {#feature-types}
@@ -86,25 +86,27 @@ routing:
 | `assistant_tool_cycle` | — | 统计 `tool` 角色消息（已完成的工具结果）。 |
 | `active_tool_loop` | — | 请求尾部仍在继续工具循环时返回 1：最后一条 assistant 消息请求工具、最后一条消息是工具结果，或最近用户轮次紧跟工具结果。更早未匹配或已完成的调用不会让后续轮次保持在工具循环中。 |
 | `flow_tool_state` | — | 仅当请求以携带可恢复工作流状态的 Router Flow 工具结果结尾时返回 1。历史 Flow 工具结果不匹配。 |
-| `image_content` | — | 独立统计图像内容部分，无论本地嵌入模型能否解码该图像。 |
+
+要按请求中的图像路由，请使用 `modality: image` 的 [`input_modality`](./input-modality) 规则。
 
 ## 决策用法 {#decision-usage}
 
 ```yaml
-routing:
-  decisions:
-    - name: agentic_routing
-      description: Send tool-heavy chats to an agent-capable model.
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: conversation
-            name: tool_heavy
-          - type: conversation
-            name: multi_turn_user
-      modelRefs:
-        - model: gpt-4o
+recipes:
+  - name: default
+    decisions:
+      - name: agentic_routing
+        description: Send tool-heavy chats to an agent-capable model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: conversation
+              name: tool_heavy
+            - type: conversation
+              name: multi_turn_user
+        modelRefs:
+          - model: gpt-4o
 ```
 
 ## 依赖与限制 {#dependencies-and-limitations}

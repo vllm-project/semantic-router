@@ -1,6 +1,10 @@
 package config
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+)
 
 const (
 	// RouterLearningScopeConversation protects one agent conversation while
@@ -28,8 +32,9 @@ const (
 )
 
 const (
-	routerLearningDefaultSessionHeader      = "x-session-id"
-	routerLearningDefaultConversationHeader = "x-conversation-id"
+	routerLearningDefaultConversationHeader = headers.XConversationID
+
+	defaultProtectionReleaseMinUserTurnsBetween = 2
 )
 
 // RouterLearningConfig is the public cross-request routing intelligence
@@ -67,14 +72,24 @@ type RouterLearningAdaptationConfig struct {
 
 // RouterLearningProtectionConfig configures online stability protection.
 type RouterLearningProtectionConfig struct {
-	Enabled  *bool                          `yaml:"enabled,omitempty"`
-	Scope    string                         `yaml:"scope,omitempty"`
-	Identity RouterLearningIdentityConfig   `yaml:"identity,omitempty"`
-	Tuning   RouterLearningProtectionTuning `yaml:"tuning,omitempty"`
+	Enabled  *bool                                 `yaml:"enabled,omitempty"`
+	Scope    string                                `yaml:"scope,omitempty"`
+	Identity RouterLearningIdentityConfig          `yaml:"identity,omitempty"`
+	Tuning   RouterLearningProtectionTuning        `yaml:"tuning,omitempty"`
+	Release  RouterLearningProtectionReleaseConfig `yaml:"release,omitempty"`
+}
+
+// RouterLearningProtectionReleaseConfig lets a client ask, on one request, for
+// a fresh decision on its protection key without changing session identity.
+type RouterLearningProtectionReleaseConfig struct {
+	Enabled             *bool   `yaml:"enabled,omitempty"`
+	Header              *string `yaml:"header,omitempty"`
+	MinUserTurnsBetween *int    `yaml:"min_user_turns_between,omitempty"`
 }
 
 // RouterLearningIdentityConfig declares where protection reads stable client
-// identity. The runtime currently uses the session and conversation keys.
+// identity. The runtime uses the session and conversation keys, and the agent
+// key when one is configured.
 type RouterLearningIdentityConfig struct {
 	Headers RouterLearningIdentityHeadersConfig `yaml:"headers,omitempty"`
 }
@@ -84,8 +99,15 @@ type RouterLearningIdentityConfig struct {
 // runtime; future identity needs should add typed fields instead of accepting
 // arbitrary header keys.
 type RouterLearningIdentityHeadersConfig struct {
+	// Session names the header protection reads the session id from. Unset,
+	// protection keys on the session id the request pins: x-vsr-session-id,
+	// or a header global.router.headers.session_id_headers accepts.
 	Session      *string `yaml:"session,omitempty"`
 	Conversation *string `yaml:"conversation,omitempty"`
+	// Agent names an optional header that identifies one agent inside a
+	// session, such as a delegated subagent. Requests that carry it are held
+	// per agent; requests without it keep the session or conversation key.
+	Agent *string `yaml:"agent,omitempty"`
 }
 
 // RouterLearningProtectionTuning exposes the stable protection knobs.
@@ -218,6 +240,26 @@ func (cfg RouterLearningProtectionConfig) EffectiveScope() string {
 	return cfg.Scope
 }
 
+func (cfg RouterLearningProtectionReleaseConfig) EffectiveEnabled() bool {
+	return cfg.Enabled == nil || *cfg.Enabled
+}
+
+func (cfg RouterLearningProtectionReleaseConfig) EffectiveHeader() string {
+	if cfg.Header != nil {
+		if value := strings.ToLower(strings.TrimSpace(*cfg.Header)); value != "" {
+			return value
+		}
+	}
+	return headers.VSRProtectionRelease
+}
+
+func (cfg RouterLearningProtectionReleaseConfig) EffectiveMinUserTurnsBetween() int {
+	if cfg.MinUserTurnsBetween != nil {
+		return *cfg.MinUserTurnsBetween
+	}
+	return defaultProtectionReleaseMinUserTurnsBetween
+}
+
 func (cfg RouterLearningProtectionConfig) HeaderName(key string) string {
 	switch key {
 	case "session":
@@ -226,7 +268,7 @@ func (cfg RouterLearningProtectionConfig) HeaderName(key string) string {
 				return value
 			}
 		}
-		return routerLearningDefaultSessionHeader
+		return ""
 	case "conversation":
 		if cfg.Identity.Headers.Conversation != nil {
 			if value := strings.TrimSpace(*cfg.Identity.Headers.Conversation); value != "" {
@@ -234,6 +276,11 @@ func (cfg RouterLearningProtectionConfig) HeaderName(key string) string {
 			}
 		}
 		return routerLearningDefaultConversationHeader
+	case "agent":
+		if cfg.Identity.Headers.Agent != nil {
+			return strings.TrimSpace(*cfg.Identity.Headers.Agent)
+		}
+		return ""
 	default:
 		return ""
 	}

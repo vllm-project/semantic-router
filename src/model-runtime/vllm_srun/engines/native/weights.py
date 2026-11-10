@@ -34,7 +34,11 @@ def iter_tensors(
 
 
 def set_parameter(
-    root: nn.Module, name: str, tensor: torch.Tensor, dtype: torch.dtype = torch.float32
+    root: nn.Module,
+    name: str,
+    tensor: torch.Tensor,
+    dtype: torch.dtype = torch.float32,
+    private: bool = True,
 ) -> None:
     """Replace a (possibly meta) parameter with a loaded tensor in the process's own memory, FP32 by default.
 
@@ -42,21 +46,31 @@ def set_parameter(
     FP32 tensor would keep: GEMMs then read file-backed pages, a short CPU
     forward 8-11% slower than on a private copy. ``dtype`` is the dtype the
     engine holds the parameter in; reading a checkpoint straight into it gives
-    the values an FP32 read and a cast would.
+    the values an FP32 read and a cast would. A model bound for a GPU passes
+    ``private=False``: a tensor already in ``dtype`` stays the mapping's view,
+    so placing the model stages one tensor at a time in host memory (page
+    cache) instead of a second copy of the whole model.
     """
     owner_name, _, leaf = name.rpartition(".")
     owner = root.get_submodule(owner_name) if owner_name else root
     owner._parameters[leaf] = nn.Parameter(
-        tensor.to(dtype, copy=True).contiguous(), requires_grad=False
+        tensor.to(dtype, copy=private).contiguous(), requires_grad=False
     )
 
 
-def set_buffer(root: nn.Module, name: str, tensor: torch.Tensor) -> None:
-    """Replace a (possibly meta) persistent buffer with a loaded tensor, FP32 when floating."""
+def set_buffer(
+    root: nn.Module, name: str, tensor: torch.Tensor, private: bool = True
+) -> None:
+    """Replace a (possibly meta) persistent buffer with a loaded tensor, FP32 when floating (FP8 weights stay FP8).
+
+    ``private`` is ``set_parameter``'s: a model bound for a GPU keeps a buffer
+    it does not widen (FP8 and packed int4 weights) as the mapping's view.
+    """
     owner_name, _, leaf = name.rpartition(".")
     owner = root.get_submodule(owner_name) if owner_name else root
-    dtype = torch.float32 if tensor.is_floating_point() else tensor.dtype
-    owner._buffers[leaf] = tensor.to(dtype, copy=True).contiguous()
+    widen = tensor.is_floating_point() and tensor.element_size() > 1
+    dtype = torch.float32 if widen else tensor.dtype
+    owner._buffers[leaf] = tensor.to(dtype, copy=private).contiguous()
 
 
 def persistent_buffers(module: nn.Module) -> dict[str, torch.Tensor]:
@@ -84,8 +98,9 @@ def load_backbone(
     *,
     strict: bool = False,
     dtype: torch.dtype = torch.float32,
+    private: bool = True,
 ) -> None:
-    """Load every parameter (in ``dtype``) and persistent buffer of ``module``; ``renames`` maps checkpoint name prefixes to module ones."""
+    """Load every parameter (in ``dtype``, ``set_parameter``) and persistent buffer of ``module``; ``renames`` maps checkpoint name prefixes to module ones."""
     parameters = dict(module.named_parameters())
     buffers = persistent_buffers(module)
     expected = set(parameters) | set(buffers)
@@ -103,9 +118,9 @@ def load_backbone(
                 f"{name}: checkpoint shape {tuple(tensor.shape)} != {tuple(target.shape)}"
             )
         if name in parameters:
-            set_parameter(module, name, tensor, dtype)
+            set_parameter(module, name, tensor, dtype, private)
         else:
-            set_buffer(module, name, tensor)
+            set_buffer(module, name, tensor, private)
         seen.add(name)
     missing = sorted(expected - seen)
     if missing:

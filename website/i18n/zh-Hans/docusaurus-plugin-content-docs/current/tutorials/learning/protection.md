@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "ee350c76c2d43e884fe8db7af1ba1aba539588c3"
   source_file: "docs/tutorials/learning/protection.md"
-  outdated: false
+  outdated: true
 ---
 
 # 防护
@@ -90,15 +91,16 @@ switch if proposal_gain >= switch_margin + stability_weight * switch_cost
 大多数决策不需要局部配置。硬策略边界使用 `bypass`：
 
 ```yaml
-routing:
-  decisions:
-    - name: local_privacy_policy
-      description: Keep privacy-sensitive traffic on the local model.
-      priority: 200
-      modelRefs:
-        - model: local-private-model
-      adaptations:
-        mode: bypass
+recipes:
+  - name: default
+    decisions:
+      - name: local_privacy_policy
+        description: Keep privacy-sensitive traffic on the local model.
+        priority: 200
+        modelRefs:
+          - model: local-private-model
+        adaptations:
+          mode: bypass
 ```
 
 使用 `observe` 收集诊断而不更改最终模型：
@@ -112,10 +114,7 @@ adaptations:
 ## 诊断 {#diagnostics}
 
 ```http
-x-vsr-learning-methods: protection
-x-vsr-learning-actions: protection=hold_current
-x-vsr-learning-scopes: protection=conversation
-x-vsr-learning-reasons: protection=cache_cost_high
+x-vsr-trace: session_phase=user_turn, learning=(protection;action=hold_current;scope=conversation;reason=cache_cost_high)
 ```
 
 客户端 UI 应将原始 action 翻译成面向用户的文本。例如，`hold_current` 可显示为“保持运行模型”，`allow_switch` 为“允许切换”，`rescue_switch` 为“救援切换”，`bypass` 为“已绕过学习”。

@@ -117,3 +117,19 @@ def test_no_graph_is_captured_past_the_memory_budget(tmp_path):
         model.tree(batch)
     stats = model.receipt()["graphs"]
     assert stats["captures"] == 0 and stats["full"] > 0, stats
+
+
+def test_eager_memory_does_not_spend_the_graph_budget(tmp_path):
+    """Memory an eager forward holds between captures is not charged to the graphs."""
+    (model,) = load(tmp_path, (True,))
+    model.graphs.max_bytes = 256 << 20
+    generator = torch.Generator().manual_seed(5)
+    first, second = (forest(*case, generator) for case in FORESTS[:2])
+    for _ in range(3):
+        model.tree(first)
+    held = torch.empty(512 << 20, dtype=torch.uint8, device="cuda")
+    for _ in range(3):
+        model.tree(second)
+    del held
+    stats = model.receipt()["graphs"]
+    assert stats["captures"] == 2 and stats["full"] == 0, stats

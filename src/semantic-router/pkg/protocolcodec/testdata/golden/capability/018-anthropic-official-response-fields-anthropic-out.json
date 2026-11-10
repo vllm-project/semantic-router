@@ -506,8 +506,8 @@
           "type": "message",
           "usage": {
             "cache_creation": {
-              "ephemeral_1h_input_tokens": 0,
-              "ephemeral_5m_input_tokens": 3
+              "ephemeral_1h_input_tokens": 1,
+              "ephemeral_5m_input_tokens": 2
             },
             "cache_creation_input_tokens": 3,
             "cache_read_input_tokens": 4,
@@ -526,10 +526,6 @@
         },
         "diagnostics": [
           {
-            "field": "usage.cache_creation",
-            "action": "dropped"
-          },
-          {
             "field": "usage.inference_geo",
             "action": "dropped"
           },
@@ -539,6 +535,10 @@
           },
           {
             "field": "usage.service_tier",
+            "action": "dropped"
+          },
+          {
+            "field": "usage.speed",
             "action": "dropped"
           }
         ]

@@ -32,6 +32,7 @@ sys.path.insert(0, str(ROOT))
 from vllm_srun.accel.autotune import KernelChoices  # noqa: E402
 from vllm_srun.accel.cpu import CPUAccelerator  # noqa: E402
 from vllm_srun.accel.cuda import CUDAAccelerator  # noqa: E402
+from vllm_srun.accel.npu import NPUAccelerator  # noqa: E402
 from vllm_srun.accel.rocm import ROCmAccelerator  # noqa: E402
 from vllm_srun.engines.native.engine import NativeEngine  # noqa: E402
 from vllm_srun.families.decision2.family import Decision2Family  # noqa: E402
@@ -49,7 +50,12 @@ from vllm_srun.scheduler.batching import (  # noqa: E402
     reference,
 )
 
-ACCELERATORS = {"cpu": CPUAccelerator, "cuda": CUDAAccelerator, "rocm": ROCmAccelerator}
+ACCELERATORS = {
+    "cpu": CPUAccelerator,
+    "cuda": CUDAAccelerator,
+    "npu": NPUAccelerator,
+    "rocm": ROCmAccelerator,
+}
 
 
 def canonical(value: Any) -> str:

@@ -134,3 +134,40 @@ func TestToolResultErrorEncodeRequestBoundedDiagnostics(t *testing.T) {
 		}
 	}
 }
+
+// Claude Code marks a command that exits nonzero as a failed tool result and
+// keeps the command output as its content.
+func failedCommandHistory(flag string) []byte {
+	return []byte(`{"model":"m","max_tokens":64,"messages":[
+		{"role":"user","content":"List /nope"},
+		{"role":"assistant","content":[{"type":"tool_use","id":"call_1","name":"Bash","input":{"command":"ls /nope"}}]},
+		{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_1","content":"Exit code 2\nls: cannot access '/nope': No such file or directory"` + flag + `}]}]}`)
+}
+
+func TestToolResultErrorOptInKeepsOtherLossesStrict(t *testing.T) {
+	policy := llmprotocol.DefaultPolicy()
+	policy.AllowedLossyFields = llmprotocol.OptInLossyFields()
+	engine, err := NewEngine(NewBuiltinRegistry(), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contextEdits := []byte(`{"model":"m","max_tokens":64,"messages":[{"role":"user","content":"hello"}],"context_management":{"edits":[{"type":"clear_thinking_20251015","keep":"last"}]}}`)
+	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1} {
+		_, strictErr := NewBuiltinEngine().TranslateRequest(llmprotocol.AnthropicMessagesV1, target, failedCommandHistory(`,"is_error":true`), nil)
+		assertProtocolError(t, strictErr, llmprotocol.ErrorUnsupportedFeature, "lossy_translation")
+
+		success, err := engine.TranslateRequest(llmprotocol.AnthropicMessagesV1, target, failedCommandHistory(""), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		failed, err := engine.TranslateRequest(llmprotocol.AnthropicMessagesV1, target, failedCommandHistory(`,"is_error":true`), nil)
+		if err != nil || !hasDiagnostic(failed.Diagnostics, llmprotocol.LossyFieldToolResultError, llmprotocol.DiagnosticApproximated) {
+			t.Fatalf("%s: opted-in loss not translated with a diagnostic: diagnostics=%+v error=%v", target, failed.Diagnostics, err)
+		}
+		if !bytes.Equal(failed.Body, success.Body) || !bytes.Contains(failed.Body, []byte("No such file or directory")) {
+			t.Fatalf("%s: opt-in changed the command output sent to the backend: %s", target, failed.Body)
+		}
+		_, err = engine.TranslateRequest(llmprotocol.AnthropicMessagesV1, target, contextEdits, nil)
+		assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "lossy_translation")
+	}
+}

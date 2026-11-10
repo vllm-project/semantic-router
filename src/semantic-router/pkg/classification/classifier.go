@@ -2,80 +2,21 @@ package classification
 
 import (
 	"fmt"
-	"sort"
 	"sync"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
-// PreloadKnowledgeBases materializes every KB referenced by this classifier.
-// Stable ordering makes startup diagnostics deterministic.
-func (c *Classifier) PreloadKnowledgeBases() error {
-	if c == nil || len(c.kbClassifiers) == 0 {
-		return nil
-	}
-	names := make([]string, 0, len(c.kbClassifiers))
-	for name := range c.kbClassifiers {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		if err := c.kbClassifiers[name].Preload(); err != nil {
-			return fmt.Errorf("preload knowledge base %q: %w", name, err)
-		}
-	}
-	return nil
-}
-
-// HasPreparedKnowledgeBases reports whether KB consumers have their own prepared
-// embedding providers. Other recipe or global providers cannot satisfy this.
-func (c *Classifier) HasPreparedKnowledgeBases() bool {
-	if c == nil || len(c.kbClassifiers) == 0 {
-		return false
-	}
-	for _, kb := range c.kbClassifiers {
-		if kb == nil || kb.provider == nil {
-			return false
-		}
-	}
-	return true
-}
-
-// Classifier handles text classification, model selection, and jailbreak detection functionality
+// Classifier evaluates a recipe's signals.
 type Classifier struct {
 	closeOnce         sync.Once
 	closeErr          error
-	modalityInference *ownedModalityClassifier
-	embeddingProvider embedding.Provider
 	embeddingSet      *embedding.Set
 	ownsEmbeddingSet  bool
 	models            *classifierModelRuntime
-	// Dependencies - In-tree classifiers
-	categoryInitializer        CategoryInitializer
-	categoryInference          CategoryInference
-	jailbreakInitializer       JailbreakInitializer
-	jailbreakInference         SequenceClassifierBackend
-	piiInitializer             PIIInitializer
-	piiInference               PIIInference
-	keywordClassifier          *KeywordClassifier
-	keywordEmbeddingClassifier *EmbeddingClassifier
-
-	// Dependencies - MCP-based classifiers
-	mcpCategoryInitializer MCPCategoryInitializer
-	mcpCategoryInference   MCPCategoryInference
-
-	// Hallucination mitigation classifiers
-	factCheckClassifier           *FactCheckClassifier
-	hallucinationDetector         *HallucinationDetector
-	endpointHallucinationDetector *EndpointHallucinationDetector
-	feedbackDetector              *FeedbackDetector
-	reaskClassifier               *ReaskClassifier
-
-	// Preference classifier for route matching via external LLM
-	preferenceClassifier *PreferenceClassifier
+	keywordClassifier *KeywordClassifier
 
 	// Language classifier
 	languageClassifier *LanguageClassifier
@@ -83,40 +24,23 @@ type Classifier struct {
 	// Context classifier for token count-based routing
 	contextClassifier *ContextClassifier
 
-	admissionRegistry *admission.Registry
-	// decisionDecider answers decision signals; nil uses the process-wide model runtime manager.
+	// decisionDecider answers systemone and application signals; nil uses
+	// the process-wide model runtime manager.
 	decisionDecider modelservice.Decider
+	// systemOneDecider answers the signals asked of systemone deployments;
+	// nil uses the signal runtime's remote System One clients.
+	systemOneDecider modelservice.Remote
 	// Immutable cards captured while preparing this classifier generation.
 	decisionCards map[string]modelservice.ModelCard
+	// applicationRules are the configuration's application signal rules,
+	// compiled into the systemone rules they ask.
+	applicationRules []config.ApplicationRule
 	// tokenCalibrator learns provider-specific prompt token ratios for context routing.
 	tokenCalibrator *CalibratedTokenCounter
-
-	// Structure classifier for request-shape routing signals
-	structureClassifier *StructureClassifier
-
-	// Complexity classifier for complexity-based routing using embedding similarity
-	complexityClassifier *ComplexityClassifier
-
-	// Remote complexity backends. At most one is set, and its presence means
-	// the local prototype path is not taken: score for score.v1, labels for
-	// label_distribution.v1.
-	complexityScoreBackend ScoringBackend
-	complexityLabelBackend SequenceClassifierBackend
-
-	// Event classifier for event-driven request routing
-	eventClassifier *EventClassifier
-
-	// Contrastive jailbreak classifiers keyed by rule name.
-	// Only populated for JailbreakRules with Method == "contrastive".
-	contrastiveJailbreakClassifiers map[string]*ContrastiveJailbreakClassifier
 
 	// Authz classifier for user-level authorization signal classification
 	authzClassifier *AuthzClassifier
 
-	// Knowledge-base classifiers keyed by configured KB name.
-	kbClassifiers      map[string]*KnowledgeBaseClassifier
-	genericClassifiers map[string]labelClassifier
-	safetyClassifiers  map[string]*safetyDetector
 	// Identity header names resolved from authz.identity config (or defaults).
 	// Used by EvaluateAllSignalsWithHeaders to read user identity from requests.
 	authzUserIDHeader     string
@@ -124,101 +48,14 @@ type Classifier struct {
 	// authzFailOpen: cfg.Authz.FailOpen; see applyAuthzFailOpenOnClassifyError.
 	authzFailOpen bool
 
-	Config           *config.RouterConfig
-	CategoryMapping  *CategoryMapping
-	PIIMapping       *PIIMapping
-	JailbreakMapping *JailbreakMapping
-
-	// Category name mapping layer to support generic categories in config
-	// Maps MMLU-Pro category names -> generic category names (as defined in config.Categories)
-	MMLUToGeneric map[string]string
-	// Maps generic category names -> MMLU-Pro category names
-	GenericToMMLU map[string][]string
+	Config *config.RouterConfig
 }
 
 type option func(*Classifier)
 
-func withCategory(categoryMapping *CategoryMapping, categoryInitializer CategoryInitializer, categoryInference CategoryInference) option {
-	return func(c *Classifier) {
-		c.CategoryMapping = categoryMapping
-		c.categoryInitializer = categoryInitializer
-		c.categoryInference = categoryInference
-	}
-}
-
-func withJailbreak(jailbreakMapping *JailbreakMapping, jailbreakInitializer JailbreakInitializer, jailbreakInference SequenceClassifierBackend) option {
-	return func(c *Classifier) {
-		c.JailbreakMapping = jailbreakMapping
-		c.jailbreakInitializer = jailbreakInitializer
-		c.jailbreakInference = jailbreakInference
-	}
-}
-
-func withPII(piiMapping *PIIMapping, piiInitializer PIIInitializer, piiInference PIIInference) option {
-	return func(c *Classifier) {
-		c.PIIMapping = piiMapping
-		c.piiInitializer = piiInitializer
-		c.piiInference = piiInference
-	}
-}
-
 func withKeywordClassifier(keywordClassifier *KeywordClassifier) option {
 	return func(c *Classifier) {
 		c.keywordClassifier = keywordClassifier
-	}
-}
-
-func withKeywordEmbeddingClassifier(keywordEmbeddingClassifier *EmbeddingClassifier) option {
-	return func(c *Classifier) {
-		c.keywordEmbeddingClassifier = keywordEmbeddingClassifier
-	}
-}
-
-func withReaskClassifier(reaskClassifier *ReaskClassifier) option {
-	return func(c *Classifier) {
-		c.reaskClassifier = reaskClassifier
-	}
-}
-
-func withKBClassifiers(classifiers map[string]*KnowledgeBaseClassifier) option {
-	return func(c *Classifier) {
-		c.kbClassifiers = classifiers
-	}
-}
-
-func withStructureClassifier(structureClassifier *StructureClassifier) option {
-	return func(c *Classifier) {
-		c.structureClassifier = structureClassifier
-	}
-}
-
-func withComplexityScoreBackend(backend ScoringBackend) option {
-	return func(c *Classifier) {
-		c.complexityScoreBackend = backend
-	}
-}
-
-func withComplexityLabelBackend(backend SequenceClassifierBackend) option {
-	return func(c *Classifier) {
-		c.complexityLabelBackend = backend
-	}
-}
-
-func withComplexityClassifier(complexityClassifier *ComplexityClassifier) option {
-	return func(c *Classifier) {
-		c.complexityClassifier = complexityClassifier
-	}
-}
-
-func withEventClassifier(eventClassifier *EventClassifier) option {
-	return func(c *Classifier) {
-		c.eventClassifier = eventClassifier
-	}
-}
-
-func withContrastiveJailbreakClassifiers(classifiers map[string]*ContrastiveJailbreakClassifier) option {
-	return func(c *Classifier) {
-		c.contrastiveJailbreakClassifiers = classifiers
 	}
 }
 
@@ -234,7 +71,7 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 		return nil, fmt.Errorf("config is nil")
 	}
 
-	classifier := &Classifier{Config: cfg}
+	classifier := &Classifier{Config: cfg, applicationRules: cfg.ApplicationRules()}
 
 	// Resolve identity header names from authz.identity config (or defaults).
 	classifier.authzUserIDHeader = cfg.Authz.Identity.GetUserIDHeader()
@@ -244,11 +81,6 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 	for _, option := range options {
 		option(classifier)
 	}
-
-	classifier.applyAdmissionGates()
-
-	// Build category name mappings to support generic categories in config
-	classifier.buildCategoryNameMappings()
 
 	return classifier, nil
 }

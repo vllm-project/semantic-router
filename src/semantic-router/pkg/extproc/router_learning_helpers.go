@@ -18,6 +18,18 @@ func selectionDecisionStateKey(selCtx *selection.SelectionContext) string {
 	return config.RoutingDecisionKey(selCtx.RecipeName, selCtx.DecisionName)
 }
 
+// selectionDecisionDrift reports whether the session was last routed under a
+// different decision state than the one now admitting the request. Drift is a
+// continuity boundary: locks created under the previous decision state do not
+// outlive it.
+func selectionDecisionDrift(selCtx *selection.SelectionContext) bool {
+	if selCtx == nil || selCtx.AgenticSession == nil {
+		return false
+	}
+	session := selCtx.AgenticSession
+	return session.LastDecisionName != "" && session.LastDecisionName != selectionDecisionStateKey(selCtx)
+}
+
 func requestDecisionStateKey(ctx *RequestContext) string {
 	if ctx == nil {
 		return ""
@@ -131,7 +143,7 @@ func (r *OpenAIRouter) eligibleLearningModelRefs(refs []config.ModelRef, ctx *Re
 			!r.configuredBackendModel(ref.Model) ||
 			(ctx != nil && !decisionUsesAutomaticOutput(request, ctx.VSRSelectedDecision) && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) ||
 			(ctx != nil && ctx.VSRPolicyEligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSRPolicyEligibleModelRefs)) ||
-			(ctx != nil && r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, r.candidateRequirements(ctx), ctx.AutomaticCandidateDemands) != nil) {
+			(ctx != nil && r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, r.candidateRequirements(ctx), ctx.AutomaticCandidateDemands, contextReservesCounted(ctx)) != nil) {
 			continue
 		}
 		eligible = append(eligible, ref)

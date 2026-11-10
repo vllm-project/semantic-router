@@ -130,6 +130,7 @@ func (p *Profile) GetTestCases() []string {
 		"standalone-chat-completions",
 		"standalone-models",
 		"standalone-fallback",
+		"standalone-debug-headers-default-off",
 		"routing-error-codes",
 		"standalone-decision-model",
 		"standalone-config-rollout",

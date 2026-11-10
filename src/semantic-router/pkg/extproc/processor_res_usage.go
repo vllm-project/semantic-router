@@ -19,6 +19,10 @@ type responseUsageMetrics struct {
 	cachedPromptTokensReported bool
 	cacheWriteTokens           int
 	cacheWriteTokensReported   bool
+	cacheWrite5mTokens         int
+	cacheWrite5mTokensReported bool
+	cacheWrite1hTokens         int
+	cacheWrite1hTokensReported bool
 	completionTokens           int
 	completionTokensReported   bool
 	totalTokens                int
@@ -223,6 +227,7 @@ func (r *OpenAIRouter) recordResponseCost(
 			eventFields["pricing_prompt_per_1m"] = pricing.PromptPer1M
 			eventFields["pricing_cached_input_per_1m"] = pricing.CachedInputPer1M
 			eventFields["pricing_cache_write_per_1m"] = effectiveCacheWriteRate(pricing)
+			eventFields["pricing_cache_write_1h_per_1m"] = effectiveCacheWrite1hRate(pricing)
 			eventFields["pricing_completion_per_1m"] = pricing.CompletionPer1M
 			logging.LogEvent("llm_usage", eventFields)
 			return replayUsage

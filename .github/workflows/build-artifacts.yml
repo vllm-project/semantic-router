@@ -15,6 +15,10 @@ on:
       tag:
         type: string
         default: ''
+      date:
+        description: The run's publication date (YYYYMMDD); empty uses the day of the build.
+        type: string
+        default: ''
       multiarch:
         type: boolean
         default: false
@@ -50,6 +54,7 @@ jobs:
           IMAGE: ${{ matrix.image }}
           MULTIARCH: ${{ inputs.multiarch }}
           MODE: ${{ inputs.mode }}
+          CI_RUN_DATE: ${{ inputs.date }}
         run: |
           args=()
           if [[ "$MULTIARCH" == true ]]; then args+=(--multiarch); fi
@@ -95,6 +100,7 @@ jobs:
             --directory .agent-harness/image-output --mode "$MODE" --tag "$TAG" "${args[@]}"
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: ci-image-${{ matrix.image }}
           path: .agent-harness/image-output/
           include-hidden-files: true
@@ -103,6 +109,7 @@ jobs:
           retention-days: 3
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: ci-build-image-${{ matrix.image }}
           path: .agent-harness/image-output/manifest.json
           include-hidden-files: true
@@ -125,6 +132,7 @@ jobs:
         run: python3 tools/ci/image_artifacts.py acquire --directory .agent-harness/image-output
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: ci-image-${{ fromJSON(inputs.published-images)[0].id }}
           path: .agent-harness/image-output/
           include-hidden-files: true
@@ -133,6 +141,7 @@ jobs:
           retention-days: 3
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: ci-build-image-${{ fromJSON(inputs.published-images)[0].id }}
           path: .agent-harness/image-output/manifest.json
           include-hidden-files: true

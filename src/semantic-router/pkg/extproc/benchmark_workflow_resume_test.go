@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -84,7 +85,7 @@ func TestBenchmarkWorkflowResumePreservesBindingAndFailsClosedForUntracedUsage(t
 				defer cancel()
 				reqCtx := &RequestContext{
 					TraceContext: ctx, SourceFormat: llmprotocol.OpenAIChatV1,
-					Headers:             map[string]string{headers.SRBenchExpectedConfigHash: hash},
+					Headers:             map[string]string{headers.VSRBenchExpectedConfigHash: hash, headers.VSRDebug: "true"},
 					VSRSelectedDecision: &decision, ExpectStreamingResponse: streaming,
 				}
 				if precondition := router.benchmarkConfigPrecondition(reqCtx); precondition != nil {
@@ -97,7 +98,7 @@ func TestBenchmarkWorkflowResumePreservesBindingAndFailsClosedForUntracedUsage(t
 				if immediateStatus(resp) != http.StatusOK {
 					t.Fatalf("workflow request failed: %s", immediateBody(resp))
 				}
-				router.bindBenchmarkConfigResponse(resp, reqCtx)
+				appendRoutedResponseHeaders(resp, reqCtx)
 				return resp
 			}
 			pause := route(workflowChatBody(streaming))
@@ -159,15 +160,17 @@ func TestBenchmarkUsageWorkflowHistoricalUsageFailsClosed(t *testing.T) {
 
 func assertBenchmarkWorkflowReceipt(t *testing.T, resp *ext_proc.ProcessingResponse, hash, selected string) {
 	t.Helper()
-	values := make(map[string]string)
-	for _, option := range resp.GetImmediateResponse().GetHeaders().GetSetHeaders() {
-		values[option.GetHeader().GetKey()] = string(option.GetHeader().GetRawValue())
+	set := resp.GetImmediateResponse().GetHeaders().GetSetHeaders()
+	trace := traceOf(t, set)
+	if trace[headers.TraceConfigHash] != `"`+hash+`"` || headerValuesByName(set)[headers.VSRSelectedModel] != selected {
+		t.Fatalf("incorrect generation/model identity: %v", trace)
 	}
-	if values[headers.VSRConfigHash] != hash || values[headers.VSRSelectedModel] != selected {
-		t.Fatalf("incorrect generation/model identity: %v", values)
+	usage, err := strconv.Unquote(trace[headers.TraceModelUsage])
+	if err != nil {
+		t.Fatal(err)
 	}
 	var receipt benchmarkUsageReceipt
-	if err := json.Unmarshal([]byte(values[headers.VSRModelUsage]), &receipt); err != nil {
+	if err := json.Unmarshal([]byte(usage), &receipt); err != nil {
 		t.Fatal(err)
 	}
 	if receipt.Version != 1 || receipt.Complete || len(receipt.Calls) != 0 {

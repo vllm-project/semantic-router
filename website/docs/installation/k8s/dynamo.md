@@ -6,6 +6,15 @@ description: Put Semantic Router in front of a Dynamo-managed inference fleet on
 
 # Integrate with NVIDIA Dynamo
 
+:::note Experimental integration example
+
+This integration has no maintained platform-specific E2E qualification. The
+project continuously tests standalone and the Agent Router ExtProc path. Use
+this guide as an example and qualify the exact upstream release and deployment
+you choose. See [Deployment Support](../support-matrix).
+
+:::
+
 Use this integration when NVIDIA Dynamo already owns model serving and you want
 Semantic Router to choose the model or policy before Dynamo schedules the
 request onto inference workers.

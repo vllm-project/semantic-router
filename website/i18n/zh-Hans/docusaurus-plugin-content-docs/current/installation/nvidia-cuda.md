@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: NVIDIA CUDA 部署
 description: 在 NVIDIA GPU 上运行 vLLM 后端，并可选择用 CUDA 加速 Semantic Router 的本地信号模型。
 translation:
@@ -102,7 +103,7 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml --platform cpu
 ```
 
-要在 CUDA 上运行受支持的 Router 侧本地嵌入和分类器，使用 `--platform cuda`。稳定版 CLI 会选择对应的发布镜像（例如 CLI `0.4.0` 使用 `vllm-sr-cuda:v0.4.0`）。开发版本的 CLI 默认使用 `:latest`，除非显式指定镜像：
+要在 CUDA 上运行受支持的 Router 侧本地嵌入和分类器，使用 `--platform cuda`。CUDA 已经验证（H200、A100、Tesla T4 记录）。H200 上 Vela 2.0 0.3B@32 的 p50 是已知回归；T4 的 Level 不能抵消该行。无 bit-exact 证据的融合 kernel 不进入精确配置。稳定版 CLI 会选择对应的发布镜像（例如 CLI `0.4.0` 使用 `vllm-sr-cuda:v0.4.0`），开发版本的 CLI 则选择从它自己的 `main` commit 发布、以该 commit SHA 为 tag 的镜像，除非显式指定镜像：
 
 ```bash
 vllm-sr config validate --config config.yaml
@@ -156,7 +157,7 @@ curl --fail --include http://127.0.0.1:8899/v1/chat/completions \
 
 ### Router 使用 CPU
 
-确认 `--platform cuda` 选择了 `vllm-sr-cuda` 镜像，并且未启用 `VLLM_SR_CUDA_PRESERVE_CPU`。检查生成的运行时配置和启动日志，而不仅仅是源配方。没有本地信号模型的配方没有什么可以移到 CUDA。
+确认 `--platform cuda` 选择了 `vllm-sr-cuda` 镜像。检查生成的运行时配置和启动日志，而不仅仅是源配方。没有本地信号模型的配方没有什么可以移到 CUDA。
 
 ### vLLM 或 Router 耗尽 GPU 内存
 

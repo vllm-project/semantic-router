@@ -252,7 +252,7 @@ func TestOnErrorFailAbortEmitsNoQuorumTelemetry(t *testing.T) {
 	router, requestContext, request := quorumFallbackRouter(server.URL)
 	decision := quorumFallbackDecision()
 	decision.Name = "quorum-on-error-fail-precedence"
-	decision.Algorithm.Fusion.OnError = config.FusionOnErrorFail
+	decision.Algorithm.OnError = config.FusionOnErrorFail
 
 	before := captureQuorumSeries(t, quorumFailureSeries(decision.Name, "fallback", "quorum_failed"))
 

@@ -20,15 +20,15 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
 vllm-sr serve --config config.yaml
 ```
 
-启动时会设好 `global.router.enabled`：不带 `-e` 的 `serve` 起的是 Router 模式；带 `-e` 起的是 Engine 模式，它保留已保存的路由，但不初始化它的消费方，也不初始化 Chat 后端。Dashboard 显示这个启动模式，并独立管理模型部署；它不切换模式。两种启动模式下 Dashboard 和原生 API 都可用。Listener 密钥和原生模型授权仍然有效。
+启动时会设好 `global.router.enabled`：不带 `-e` 的 `serve` 起的是 Router 模式；带 `-e` 起的是 Engine 模式，它保留已保存的路由，但不初始化它的信号，也不初始化 Chat 后端。Dashboard 显示这个启动模式，并独立管理模型部署；它不切换模式。两种启动模式下 Dashboard 和原生 API 都可用。Listener 密钥和原生模型授权仍然有效。
 
-模型资源分两种 worker：**托管** worker 由前端拉起并监管，**挂接** worker 的生命周期归别的所有者。一个逻辑部署可以有一个或多个相容的副本。任务绑定和公开模型名指向逻辑部署，与它的 worker 跑在哪无关。
+模型资源分两种 worker：**托管** worker 由前端拉起并监管，**挂接** worker 的生命周期归别的所有者。一个逻辑部署可以有一个或多个相容的副本。绑定和公开模型名指向逻辑部署，与它的 worker 跑在哪无关。
 
 ## 内置功能不用配任何东西 {#built-in-features-need-no-configuration}
 
-打开内置功能时（比如 `domain` 信号或语义缓存），router 已经知道该用哪个模型。判断类任务共用默认的 decision 部署；embeddings 和其他专门任务用它们自己配置的模型。想自己挑 CPU 或 GPU 放置，就按下面的说明配置部署的 `device` 或 `replicas`。
+打开内置功能时（比如 `domain` 信号或语义缓存），router 已经知道该用哪个模型。判断类任务共用决策模型；embedding 用自己的部署（[为信号选择模型](../installation/choose-a-model-for-a-signal.md)）。想自己挑 CPU 或 GPU 放置，就按下面的说明配置部署的 `device` 或 `replicas`。
 
-已启用消费方或已发布原生授权用到的部署才会加载。Engine 模式还会加载默认的 decision 部署；Router 模式下，默认部署等有消费方需要时才加载。其他声明不会起 worker。
+已启用的信号或功能解析到的部署、以及已发布原生授权指向的部署才会加载。Engine 模式还会加载决策模型；Router 模式下，决策模型等有东西解析到它时才加载。其他声明不会起 worker。
 
 ## 描述一个部署 {#describe-a-deployment}
 
@@ -56,27 +56,27 @@ global:
 | `provider` | 对 runtime 服务的模型来说，永远是 `model_runtime`。 |
 | `artifact` | Hugging Face 仓库，或本地副本的绝对路径。 |
 | `revision` | 要加载的 40 位 commit。内置模型已钉好版本；其他仓库需要指定。 |
-| `device` | `auto`（默认）、`cpu`、`cuda:N`、`rocm:N`、`xpu:N`、`mps`，或插件添加的加速器。 |
+| `device` | `auto`（默认）、`cpu`、`cuda:N`、`rocm:N`、`xpu:N`、`npu:N`、`mps`，或插件添加的加速器。 |
 | `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context` | 引擎参数：worker 怎么对请求做批处理、用什么精度计算。不写就用 runtime 的默认值。见[引擎参数](./engine-args.md)。 |
 | `input` | 对任务模型：最长输入（`max_tokens`，token 数），以及超长输入怎么办（`overflow`：`reject`、`truncate` 或 `window`）。 |
-| `replicas` | 给这个模型显式指定受管 `device`，或挂接的 `endpoint`/`served_name` 放置。省略时只有一个 worker。 |
+| `replicas` | 给这个模型显式指定受管 `device`，或挂接的 `endpoint`/`model` 放置。省略时只有一个 worker。 |
 | `endpoint` | 挂到一个你自己跑的 runtime，不新起进程。 |
-| `served_name` | 挂接的 runtime 同时服务多个模型时，本模型在那边叫什么（默认用部署名）。 |
+| `model` | 本模型在挂接的 runtime 上的 ID，即它的 `GET /v1/models` 列出的名字（默认用部署名）。 |
 
-然后用一个**绑定**把功能连到部署上：
+挂接的 runtime 还接受 `auth`、`headers`、`timeout_ms` 和 `tls`；[模型目录参考](../installation/model-catalog.md#connection-block)列出了全部字段。
+
+然后用一个以信号类型为键的**绑定**把信号连到部署上：
 
 ```yaml
 global:
   model_catalog:
     bindings:
-      domain_classifier:
-        deployment: vela-domain
-        contract: label_distribution.v1
+      domain: vela-domain
 ```
 
-每个功能读一种答案，也就是它的 `contract`：语义判断（`decision.v1`）、标签概率（`label_distribution.v1`）、互相独立的标签分（`label_scores.v1`）、文本片段（`token_spans.v1`）、向量（`embedding.v1`）或相关性分（`relevance_scores.v1`）。每个功能的绑定写法，看对应的任务指南。Router 会把每个绑定和模型自身的说明（它的头、标签、维度、问题类型和输入上限）对一遍，已知的不匹配会被拒绝。挂接的 runtime 离线时，自定义 `decision` 问题和显式 `decision.v1` 任务的元数据校验会推迟到观察到就绪的模型卡为止；未过检的任务接不了请求。见[就绪规则](#when-a-model-is-not-ready)。
+信号决定它读哪种答案：语义判断、标签概率、互相独立的标签分、文本片段、向量或相关性分。绑定只写部署名；每个功能读哪个信号，看对应的任务指南。Router 会把每个绑定和模型自身的说明（它的头、标签、维度、问题类型和输入上限）对一遍，已知的不匹配会被拒绝。挂接的 runtime 离线时，向它提出的自定义问题的元数据校验会推迟到观察到就绪的模型卡为止；未过检的任务接不了请求。见[就绪规则](#when-a-model-is-not-ready)。
 
-写在 `global.model_catalog.bindings` 下的绑定全局生效。配方可以在自己的 `routing.model_bindings` 下覆盖它。
+写在 `global.model_catalog.bindings` 下的绑定全局生效。配方可以在自己的 `recipes[].model_bindings` 下覆盖它。自己提问的规则（`decision`、`classifiers`、`safety`、`complexity`）在规则上指定部署；见[为信号选择模型](../installation/choose-a-model-for-a-signal.md)。
 
 ## 放置与扩容副本 {#place-and-scale-replicas}
 
@@ -114,7 +114,7 @@ global:
 
 用不同的 GPU 加算力。显式重复同一设备就在该 GPU 上起多个 worker；每个 worker 要为自己的模型留显存。选布局前，用你的输入长度和并发实测吞吐和尾延迟。在一个 worker 内，并发请求的行本来就共用前向（[引擎参数](./engine-args.md)）。副本不做权重分片，也不是张量或流水并行。
 
-`replicas` 不要和部署级的 `device`、`endpoint` 或 `served_name` 一起用。省略 `replicas` 保留单 worker 简写，调度和状态契约与显式单副本相同。单 worker 部署保留前端结果缓存；多副本用各自独立的 worker 缓存。副本的放置与绑定无关，路由消费方的变化不会改动 worker 身份。重配先准备好兼容的池再发布，退场的 worker 会排空已有请求。
+`replicas` 不要和部署级的 `device` 或 `endpoint` 一起用；挂接的副本用它自己的 `model` 指定所服务的模型。省略 `replicas` 保留单 worker 简写，调度和状态契约与显式单副本相同。单 worker 部署保留前端结果缓存；多副本用各自独立的 worker 缓存。副本的放置与绑定无关，使用该部署的信号发生变化时，worker 身份不变。重配先准备好兼容的池再发布，退场的 worker 会排空已有请求。
 
 池子每个 worker 最多接纳 32 个在途 HTTP 请求，没有池级等待队列。就绪副本全满时返回过载。这个上限不是 GPU 前向并发；前向已经开始的，调用方超时后它仍可继续。清单报告期望与就绪副本数、各 worker 的就绪情况、在途请求和重启次数。降级的池仍能靠健康副本继续服务。
 
@@ -126,7 +126,7 @@ global:
 VLLM_SRUN_CPU_THREADS=8 vllm-sr serve --platform cpu --config config.yaml
 ```
 
-该设置受可用 CPU 预算封顶，它不设 worker 数。每个部署或副本仍各有独立的 worker，模式变化不在活跃消费方之间重新分配线程。从默认值开始，用实际输入长度和并发对比延迟和吞吐。几个 CPU 模型都忙时，少些线程能减少争抢；专用核上的长输入可能适合更高的覆盖值。这是每 worker 上限，几个忙 worker 仍可能争同一批核。共享宿主机时给其他服务留核。通过 `endpoint` 挂接的 runtime 自管线程。
+该设置受可用 CPU 预算封顶，它不设 worker 数。每个部署或副本仍各有独立的 worker，模式变化不在活跃 worker 之间重新分配线程。从默认值开始，用实际输入长度和并发对比延迟和吞吐。几个 CPU 模型都忙时，少些线程能减少争抢；专用核上的长输入可能适合更高的覆盖值。这是每 worker 上限，几个忙 worker 仍可能争同一批核。共享宿主机时给其他服务留核。通过 `endpoint` 挂接的 runtime 自管线程。
 
 ## 发布原生 API {#publish-a-native-api}
 
@@ -160,9 +160,11 @@ global:
       gpu-lux:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Lux-9B
-        endpoint: http://gpu-runtime.internal:8100
-        served_name: vllm-sr/Decision-2.0-Lux-9B
+        endpoint: http://gpu-runtime.example.com:8100
+        model: Decision-2.0-Lux-9B
 ```
+
+`model` 是 runtime 在 `GET /v1/models` 里列出的 ID。已发布的模型以去掉组织名的仓库名列出，这里是 `Decision-2.0-Lux-9B`，除非用 `--served-model-name` 另起名字。不写 `model` 时 router 按部署名去找。runtime 不提供的名字会让这个部署一直不可用。
 
 `endpoint` 收 `http://host:port`、`https://host:port` 或 Unix socket（`unix:///path/to/runtime.sock`）。挂接的 runtime  router 不启动、不重启、不停——它只探活，runtime 挂了就当作不可用。
 
@@ -221,9 +223,9 @@ spec:
 
 ## 模型还没就绪的时候 {#when-a-model-is-not-ready}
 
-router 只有把它为这个配置跑的模型都加载好了，才开始伺候这个配置。启动时它等每一个托管部署：路由用到的任务模型（domain、PII、guard、safety、fact-check、feedback 和 hallucination 模型，以及你自己的分类器），加上 `decision` 信号和 `decision` 选择算法问的决策模型。指向挂接 runtime 的隐式绑定和原生任务头绑定，准备阶段也需要模型元数据，所以要赶在 Router 前面起那些 runtime。等的时候，`/health` 应声，`/ready` 返 `503`；`/startup-status` 逐个托管部署列它的状态（`starting`、`loading`、`warming`、`ready`……），`vllm-sr serve` 打印它还在等的那些。这次等待——含首次下载——由 `VLLM_SRUN_READY_TIMEOUT` 兜底（默认 10 分钟）。有模型加载失败或没能及时就绪，router 就不启动；它的日志和它最后的启动状态（`phase: error`）会点出部署和原因（见[故障排查](model-runtime/troubleshooting.md#the-runtime-reports-failed)）。
+router 只有把它为这个配置跑的模型都加载好了，才开始伺候这个配置。启动时它等每一个托管部署：路由用到的任务模型（domain、PII、guard、safety、fact-check、feedback 和 hallucination 模型，以及你自己的分类器），加上 `systemone` 信号和 `systemone` 选择算法问的决策模型。挂接的 runtime 作为决策模型回答的信号、或通过选择头的绑定回答的信号，准备阶段也需要模型元数据，所以要赶在 Router 前面起那些 runtime。等的时候，`/health` 应声，`/ready` 返 `503`；`/startup-status` 逐个托管部署列它的状态（`starting`、`loading`、`warming`、`ready`……），`vllm-sr serve` 打印它还在等的那些。这次等待——含首次下载——由 `VLLM_SRUN_READY_TIMEOUT` 兜底（默认 10 分钟）。有模型加载失败或没能及时就绪，router 就不启动；它的日志和它最后的启动状态（`phase: error`）会点出部署和原因（见[故障排查](model-runtime/troubleshooting.md#the-runtime-reports-failed)）。
 
-自定义 `decision` 问题和显式 `contract: decision.v1` 任务绑定可以指向离线的挂接 runtime，不阻塞启动。它们一直未知，直到当前模型卡就绪且支持所需的任务。恢复不绕过能力检查：就绪但不兼容的卡会拒绝该任务。原生任务头绑定仍然需要它们自己的元数据；就绪不会把 PII 片段检测器悄悄换成只判断有无。
+自定义 `systemone` 问题可以指向离线的挂接 runtime，不阻塞启动。它们一直未知，直到当前模型卡就绪且支持所需的任务。恢复不绕过能力检查：就绪但不兼容的卡会拒绝该任务。选择头的绑定仍然需要它们自己的元数据；就绪不会把 PII 片段检测器悄悄换成只判断有无。
 
 声明了但没人用的部署永远不会启动，也不拖住启动。
 
@@ -240,7 +242,7 @@ router 开始服务后，请求绝不会等一个答不上来的模型：
 | 一个进程里的模型全部加载失败 | 未知；router 按同样的退避重启该进程，直到模型加载成功 |
 | 输入超过部署允许的长度且 `overflow: reject` | 这条输入报错 |
 
-未知的信号不参与匹配。决策的 `rules.on_unknown` 决定未知信号对这条路由意味着什么（默认 `no_match`，或 `fail_request`），guard 和 PII 模块有 `on_error: allow | block`。`decision` 选择算法回退到 `modelRefs` 里的第一个模型。
+未知的信号不参与匹配。决策的 `rules.on_unknown` 决定未知信号对这条路由意味着什么（默认 `no_match`，或 `fail_request`），guard 和 PII 模块有 `on_error: allow | block`。`systemone` 选择算法回退到 `modelRefs` 里的第一个模型。
 
 ## 看看什么在跑 {#check-what-is-running}
 

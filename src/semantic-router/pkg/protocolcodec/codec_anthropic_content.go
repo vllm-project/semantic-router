@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -109,12 +110,15 @@ func validateAnthropicContentVariant(body json.RawMessage, typeName string, prov
 
 func requireAnthropicContentFields(object map[string]json.RawMessage, typeName string, providerOutput bool) error {
 	requiredByType := map[string][]string{
-		"text":        {"text"},
-		"thinking":    {"thinking"},
-		"image":       {"source"},
-		"document":    {"source"},
-		"tool_use":    {"id", "input", "name"},
-		"tool_result": {"content", "tool_use_id"},
+		"text":     {"text"},
+		"thinking": {"thinking"},
+		"image":    {"source"},
+		"document": {"source"},
+		"tool_use": {"id", "input", "name"},
+		// content is optional for tool_result, matching the official SDK
+		// contract: only type and tool_use_id are required. Omitted content
+		// decodes to an empty tool result.
+		"tool_result": {"tool_use_id"},
 	}
 	for _, name := range requiredByType[typeName] {
 		if _, present := object[name]; present {
@@ -387,6 +391,9 @@ func invalidAnthropicMediaSource(message string) error {
 }
 
 func (AnthropicMessagesCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	if err := rejectReasoningContinuity(llmprotocol.AnthropicMessagesV1, llmprotocol.RequiredCapabilities(request)); err != nil {
+		return nil, nil, err
+	}
 	if envelope.CanReplay(llmprotocol.AnthropicMessagesV1, request.Generation, policy, false) {
 		return append([]byte(nil), envelope.Request...), nil, nil
 	}
@@ -448,7 +455,7 @@ func buildAnthropicRequestWire(
 	if instructionErr := encodeAnthropicInstructions(&wire, request); instructionErr != nil {
 		return anthropicRequestWire{}, diagnostics, instructionErr
 	}
-	if messagesErr := appendAnthropicMessages(&wire, request.Messages); messagesErr != nil {
+	if messagesErr := appendAnthropicMessages(&wire, responsesAssistantTurns(request)); messagesErr != nil {
 		return anthropicRequestWire{}, diagnostics, messagesErr
 	}
 	if toolsErr := appendAnthropicTools(&wire, request.Tools); toolsErr != nil {
@@ -467,6 +474,9 @@ func anthropicRequestDiagnostics(request llmprotocol.Request, policy llmprotocol
 	}
 	if request.ReasoningSummary != "" {
 		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "reasoning.summary", "Messages cannot request a reasoning summary")
+	}
+	if hasParticipantNames(request) {
+		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "messages[].name", "Messages has no participant names")
 	}
 	if err := appendAnthropicContentDiagnostics(&diagnostics, request, policy); err != nil {
 		return diagnostics, err
@@ -504,7 +514,7 @@ func appendAnthropicStateDiagnostics(
 	request llmprotocol.Request,
 	policy llmprotocol.Policy,
 ) error {
-	if request.PreviousResponseID != "" || request.ConversationID != "" || request.Store != nil || request.Truncation != "" {
+	if request.PreviousResponseID != "" || request.ConversationID != "" || request.Store != nil || request.Truncation == llmprotocol.TruncationAuto {
 		return appendLossy(diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.AnthropicMessagesV1, "conversation_state", "Messages has no stateful response reference")
 	}
 	return nil
@@ -557,7 +567,8 @@ func encodeAnthropicBaseRequest(request llmprotocol.Request) (anthropicRequestWi
 			Target: llmprotocol.AnthropicMessagesV1,
 			Field:  "max_tokens",
 			Action: llmprotocol.DiagnosticGenerated,
-			Reason: "Anthropic Messages requires an explicit output limit; the source request omitted one",
+			Reason: fmt.Sprintf("Anthropic Messages requires an explicit output limit; the source request omitted one, so %d was sent; "+
+				"request_params.default_max_tokens sets this value", defaultAnthropicMaxOutputTokens),
 		})
 	} else {
 		wire.MaxTokens = llmprotocol.Int64(*request.Sampling.MaxOutputTokens)

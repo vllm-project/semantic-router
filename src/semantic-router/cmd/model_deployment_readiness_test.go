@@ -1,3 +1,5 @@
+//go:build !windows
+
 package main
 
 import (
@@ -149,11 +151,11 @@ func readinessDocument(ports readinessPorts, backend string, deployments ...stri
       rules:
         operator: AND
         on_unknown: no_match
-        conditions: [{type: decision, name: hard_0}]
+        conditions: [{type: systemone, name: hard_0}]
       modelRefs: [{model: a}]
 `)
 	}
-	document := fmt.Sprintf(`version: v0.3
+	document := fmt.Sprintf(`version: v0.5
 listeners:
   - name: http
     address: 127.0.0.1
@@ -164,18 +166,17 @@ providers:
   models:
     - name: a
       backend_refs: [{endpoint: %s, protocol: http, provider: vllm}]
-routing:
-  modelCards:
-    - name: a
 `, ports.listener, strings.TrimPrefix(backend, "http://"))
+	recipe := ""
 	if signals.Len() > 0 {
-		document += "  signals:\n    decision:\n" + signals.String()
+		recipe += "  signals:\n    systemone:\n" + signals.String()
 	}
-	document += "  decisions:\n" + decision.String() + `    - name: default-route
+	recipe += "  decisions:\n" + decision.String() + `    - name: default-route
       priority: 100
       rules: {operator: AND, conditions: []}
       modelRefs: [{model: a}]
-global:
+`
+	document += "recipes:\n  - name: default\n  " + strings.ReplaceAll(strings.TrimSuffix(recipe, "\n"), "\n", "\n  ") + "\n" + `global:
   services:
     management_api:
       bind_address: 127.0.0.1
@@ -186,9 +187,6 @@ global:
     observability:
       tracing:
         enabled: false
-  stores:
-    semantic_cache:
-      enabled: false
 `
 	if catalog.Len() > 0 {
 		document += "  model_catalog:\n    deployments:\n" + catalog.String()

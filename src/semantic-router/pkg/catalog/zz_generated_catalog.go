@@ -193,6 +193,56 @@ const builtInCatalogJSON = `{
     },
     {
       "default_profile": "published-agent",
+      "display_name": "Terminal-Bench 4.0",
+      "domain": "agentic_systems",
+      "id": "harbor/terminal-bench@4.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "resolved",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Terminal-Bench 4.0 result with the agent and harness retained on the evaluation record; separate from the 2.1 default index component.",
+          "display_name": "Published agent",
+          "id": "published-agent"
+        }
+      ],
+      "source": "https://github.com/harbor-framework/terminal-bench/releases/tag/v4.0.0"
+    },
+    {
+      "default_profile": "published-agent",
+      "display_name": "CyberGym",
+      "domain": "cybersecurity",
+      "id": "sunblaze-ucb/cybergym@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "success_rate",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published CyberGym vulnerability-reproduction success rate with the agent and context budget retained on the evaluation record.",
+          "display_name": "Published agent",
+          "id": "published-agent"
+        }
+      ],
+      "source": "https://github.com/sunblaze-ucb/cybergym"
+    },
+    {
+      "default_profile": "published-agent",
       "display_name": "SWE-bench Pro",
       "domain": "software_engineering",
       "id": "swe-bench/pro@1.0.0",
@@ -1186,6 +1236,11 @@ const builtInCatalogJSON = `{
           "description": "Prompt-level loose accuracy on IFBench, with model-side reasoning and generation settings retained on the record.",
           "display_name": "Prompt-level loose accuracy",
           "id": "prompt-loose"
+        },
+        {
+          "description": "Vendor-published IFBench result whose accuracy level (prompt or instruction, loose or strict) is not stated by the source; kept separate from prompt-level loose records.",
+          "display_name": "Published setup unspecified",
+          "id": "published-unspecified"
         }
       ],
       "source": "https://github.com/allenai/IFBench"
@@ -1386,6 +1441,11 @@ const builtInCatalogJSON = `{
           "description": "Accuracy on MATH using the source-published evaluation setup.",
           "display_name": "Published standard",
           "id": "published-standard"
+        },
+        {
+          "description": "Vendor-published result labeled MATH-Hard by the source; the hard-subset definition and harness are not stated by the source and it is never compared with full-set MATH records.",
+          "display_name": "Published hard subset",
+          "id": "published-hard-subset"
         },
         {
           "description": "Accuracy over valid generated outputs in the EACL 2026 RMCB test protocol; filtering counts and generation settings remain on the evaluation record.",
@@ -1618,6 +1678,11 @@ const builtInCatalogJSON = `{
       ],
       "profiles": [
         {
+          "description": "Vendor-published BIG-Bench Hard accuracy; prompt format, shot count, and harness are retained on the evaluation record when the source states them.",
+          "display_name": "Published standard",
+          "id": "published-standard"
+        },
+        {
           "description": "Accuracy over valid generated outputs in the EACL 2026 RMCB test protocol; filtering counts and dataset revision remain on the evaluation record.",
           "display_name": "RMCB EACL 2026 valid-output test",
           "id": "rmcb-eacl-2026-valid-output-test"
@@ -1799,6 +1864,205 @@ const builtInCatalogJSON = `{
         }
       ],
       "source": "https://ernie.baidu.com/blog/posts/ernie-5.1-0508-release/"
+    },
+    {
+      "default_profile": "published-unspecified",
+      "display_name": "GPQA",
+      "domain": "scientific_reasoning",
+      "id": "idavidrein/gpqa@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "accuracy",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published GPQA accuracy whose subset (main, extended, or diamond) is not stated by the source; kept separate from GPQA Diamond records and excluded from the default index.",
+          "display_name": "Published subset unspecified",
+          "id": "published-unspecified"
+        }
+      ],
+      "source": "https://arxiv.org/abs/2311.12022"
+    },
+    {
+      "default_profile": "published-8-needle",
+      "display_name": "OpenAI MRCR",
+      "domain": "long_context",
+      "id": "openai/mrcr@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published score on the 8-needle OpenAI MRCR task; the context-length bins covered are not stated by the source.",
+          "display_name": "Published 8-needle",
+          "id": "published-8-needle"
+        }
+      ],
+      "source": "https://huggingface.co/datasets/openai/mrcr"
+    },
+    {
+      "default_profile": "published-full-instruct",
+      "display_name": "BigCodeBench",
+      "domain": "software_engineering",
+      "id": "bigcode/bigcodebench@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "pass_at_1",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published Pass@1 on the BigCodeBench Full split, Instruct variant; calibration and decoding settings are not stated by the source.",
+          "display_name": "Published Full Instruct",
+          "id": "published-full-instruct"
+        }
+      ],
+      "source": "https://bigcode-bench.github.io/"
+    },
+    {
+      "default_profile": "published-unspecified",
+      "display_name": "Finance Agent (owner and version unstated)",
+      "domain": "financial_reasoning",
+      "id": "unattributed/finance-agent@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published result labeled only \"Finance Agent\" by the source; benchmark owner, version, and run setup are not stated, so it is never merged with Vals Finance Agent records.",
+          "display_name": "Published setup unspecified",
+          "id": "published-unspecified"
+        }
+      ]
+    },
+    {
+      "default_profile": "published-unspecified",
+      "display_name": "FinanceQA",
+      "domain": "financial_reasoning",
+      "id": "afterquery/financeqa@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published FinanceQA score; grader, prompt protocol, and dataset revision are not stated by the source.",
+          "display_name": "Published setup unspecified",
+          "id": "published-unspecified"
+        }
+      ],
+      "source": "https://huggingface.co/datasets/AfterQuery/FinanceQA"
+    },
+    {
+      "default_profile": "published-unspecified",
+      "display_name": "FinanceBench",
+      "domain": "financial_reasoning",
+      "id": "patronusai/financebench@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published FinanceBench score; retrieval configuration, grader, and dataset revision are not stated by the source.",
+          "display_name": "Published setup unspecified",
+          "id": "published-unspecified"
+        }
+      ],
+      "source": "https://huggingface.co/datasets/PatronusAI/financebench"
+    },
+    {
+      "default_profile": "published-unspecified",
+      "display_name": "BFCL Core",
+      "domain": "agentic_systems",
+      "id": "gorilla/bfcl-core@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published score labeled \"BFCL Core\" by the source; the BFCL version and the category composition behind \"Core\" are not stated by the source and are not defined by the public leaderboard.",
+          "display_name": "Published setup unspecified",
+          "id": "published-unspecified"
+        }
+      ],
+      "source": "https://gorilla.cs.berkeley.edu/leaderboard.html"
+    },
+    {
+      "default_profile": "published-unspecified",
+      "display_name": "MCP Atlas",
+      "domain": "agentic_systems",
+      "id": "scale/mcp-atlas@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "score",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published MCP Atlas score; leaderboard revision, tool-call budget, and judge configuration are not stated by the source.",
+          "display_name": "Published setup unspecified",
+          "id": "published-unspecified"
+        }
+      ],
+      "source": "https://labs.scale.com/leaderboard/mcp_atlas"
     },
     {
       "default_profile": "operator",
@@ -17273,6 +17537,132 @@ const builtInCatalogJSON = `{
         "source_kind": "official_technical_report",
         "table": "Table 2",
         "variant": "Phi-4-reasoning-plus"
+      }
+    },
+    {
+      "benchmark": "zapier/automation-bench@1.0.6",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md",
+        "verification": "claimed"
+      },
+      "id": "minimax/minimax-m3.1-flash-model-card-automation-bench@1.0.0",
+      "metrics": {
+        "score": 0.628
+      },
+      "model": "minimax/minimax-m3.1-flash",
+      "observed_at": "2026-10-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "revision": "262ae6830934f3512211081b8a3f16425b93a239",
+        "source_kind": "official_model_card",
+        "tasks": 600,
+        "variant": "MiniMax-M3.1-Flash"
+      }
+    },
+    {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md",
+        "verification": "claimed"
+      },
+      "id": "minimax/minimax-m3.1-flash-model-card-deep-swe@1.0.0",
+      "metrics": {
+        "resolved": 0.737
+      },
+      "model": "minimax/minimax-m3.1-flash",
+      "observed_at": "2026-10-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "agent": "mini-SWE-agent",
+        "agent_version": "2.4.5",
+        "context_window": "512K",
+        "revision": "262ae6830934f3512211081b8a3f16425b93a239",
+        "source_kind": "official_model_card",
+        "variant": "MiniMax-M3.1-Flash"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "text-only",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md",
+        "verification": "claimed"
+      },
+      "id": "minimax/minimax-m3.1-flash-model-card-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.434
+      },
+      "model": "minimax/minimax-m3.1-flash",
+      "observed_at": "2026-10-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "questions": 2158,
+        "revision": "262ae6830934f3512211081b8a3f16425b93a239",
+        "source_kind": "official_model_card",
+        "tools": false,
+        "variant": "MiniMax-M3.1-Flash"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md",
+        "verification": "claimed"
+      },
+      "id": "minimax/minimax-m3.1-flash-model-card-terminal-bench@4.0.0",
+      "metrics": {
+        "resolved": 0.381
+      },
+      "model": "minimax/minimax-m3.1-flash",
+      "observed_at": "2026-10-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "agent": "Codex",
+        "agent_version": "0.149.1",
+        "revision": "262ae6830934f3512211081b8a3f16425b93a239",
+        "source_kind": "official_model_card",
+        "variant": "MiniMax-M3.1-Flash"
+      }
+    },
+    {
+      "benchmark": "sunblaze-ucb/cybergym@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md",
+        "verification": "claimed"
+      },
+      "id": "minimax/minimax-m3.1-flash-model-card-cybergym@1.0.0",
+      "metrics": {
+        "success_rate": 0.822
+      },
+      "model": "minimax/minimax-m3.1-flash",
+      "observed_at": "2026-10-27",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "agent": "Claude Code",
+        "agent_version": "2.1.263",
+        "context_window": "1M",
+        "revision": "262ae6830934f3512211081b8a3f16425b93a239",
+        "source_kind": "official_model_card",
+        "variant": "MiniMax-M3.1-Flash"
       }
     },
     {
@@ -35558,6 +35948,364 @@ const builtInCatalogJSON = `{
         "model_revision": "unspecified_by_source",
         "source_kind": "official_model_card",
         "variant": "Falcon H1 34B Instruct"
+      }
+    },
+    {
+      "benchmark": "unattributed/finance-agent@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://dev.writer.com/home/models",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x6-model-catalog-finance-agent@1.0.0",
+      "metrics": {
+        "score": 0.753
+      },
+      "model": "writer/palmyra-x6",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "raw model, not WRITER Agent, per source",
+        "source_kind": "official_model_card",
+        "source_label": "Finance Agent",
+        "source_model_slug": "palmyra-x6",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X6"
+      }
+    },
+    {
+      "benchmark": "afterquery/financeqa@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://dev.writer.com/home/models",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x6-model-catalog-financeqa@1.0.0",
+      "metrics": {
+        "score": 0.673
+      },
+      "model": "writer/palmyra-x6",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "raw model, not WRITER Agent, per source",
+        "source_kind": "official_model_card",
+        "source_label": "FinanceQA",
+        "source_model_slug": "palmyra-x6",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X6"
+      }
+    },
+    {
+      "benchmark": "patronusai/financebench@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://dev.writer.com/home/models",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x6-model-catalog-financebench@1.0.0",
+      "metrics": {
+        "score": 0.855
+      },
+      "model": "writer/palmyra-x6",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "raw model, not WRITER Agent, per source",
+        "source_kind": "official_model_card",
+        "source_label": "FinanceBench",
+        "source_model_slug": "palmyra-x6",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X6"
+      }
+    },
+    {
+      "benchmark": "gorilla/bfcl-core@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/abs/2608.16620",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x6-technical-report-bfcl-core@1.0.0",
+      "metrics": {
+        "score": 0.785
+      },
+      "model": "writer/palmyra-x6",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "source_document": "arXiv:2608.16620v1",
+        "source_kind": "official_technical_report",
+        "source_label": "BFCL Core",
+        "source_model_slug": "palmyra-x6",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra x6"
+      }
+    },
+    {
+      "benchmark": "allenai/ifbench@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/abs/2608.16620",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x6-technical-report-ifbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.737
+      },
+      "model": "writer/palmyra-x6",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "reported_in": "Figure 2 bar label",
+        "source_document": "arXiv:2608.16620v1",
+        "source_kind": "official_technical_report",
+        "source_label": "IFBench",
+        "source_model_slug": "palmyra-x6",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra x6"
+      }
+    },
+    {
+      "benchmark": "scale/mcp-atlas@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/abs/2608.16620",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x6-technical-report-mcp-atlas@1.0.0",
+      "metrics": {
+        "score": 0.771
+      },
+      "model": "writer/palmyra-x6",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "reported_in": "Figure 2 bar label",
+        "source_document": "arXiv:2608.16620v1",
+        "source_kind": "official_technical_report",
+        "source_label": "MCP-Atlas",
+        "source_model_slug": "palmyra-x6",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra x6"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://dev.writer.com/home/models",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x5-model-catalog-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.6502
+      },
+      "model": "writer/palmyra-x5",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "source_label": "MMLU_PRO",
+        "source_model_slug": "palmyra-x5",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X5"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://dev.writer.com/home/models",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x5-model-catalog-gpqa@1.0.0",
+      "metrics": {
+        "accuracy": 0.472
+      },
+      "model": "writer/palmyra-x5",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "dataset_subset": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "source_label": "GPQA",
+        "source_model_slug": "palmyra-x5",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X5"
+      }
+    },
+    {
+      "benchmark": "maveriq/bigbenchhard@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://dev.writer.com/home/models",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x5-model-catalog-bbh@1.0.0",
+      "metrics": {
+        "accuracy": 0.7099
+      },
+      "model": "writer/palmyra-x5",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "source_label": "BBH (Big-Bench Hard)",
+        "source_model_slug": "palmyra-x5",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X5"
+      }
+    },
+    {
+      "benchmark": "hendrycks/math@1.0.0",
+      "benchmark_profile": "published-hard-subset",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://dev.writer.com/home/models",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x5-model-catalog-math-hard@1.0.0",
+      "metrics": {
+        "accuracy": 0.7157
+      },
+      "model": "writer/palmyra-x5",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "dataset_subset": "hard subset as labeled by source, definition unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "source_label": "MATH_HARD",
+        "source_model_slug": "palmyra-x5",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X5"
+      }
+    },
+    {
+      "benchmark": "openai/mrcr@1.0.0",
+      "benchmark_profile": "published-8-needle",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://writer.com/blog/long-context-palmyra-x5/",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x5-launch-openai-mrcr-8-needle@1.0.0",
+      "metrics": {
+        "score": 0.191
+      },
+      "model": "writer/palmyra-x5",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "needles": 8,
+        "source_kind": "official_launch_evaluation",
+        "source_label": "OpenAI MRCR 8-needle",
+        "source_model_slug": "palmyra-x5",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X5"
+      }
+    },
+    {
+      "benchmark": "bigcode/bigcodebench@1.0.0",
+      "benchmark_profile": "published-full-instruct",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://writer.com/blog/long-context-palmyra-x5/",
+        "verification": "claimed"
+      },
+      "id": "writer/palmyra-x5-launch-bigcodebench-full-instruct@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.487
+      },
+      "model": "writer/palmyra-x5",
+      "observed_at": "2026-09-11",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "unspecified_by_source",
+        "context_length": "unspecified_by_source",
+        "dataset_split": "full",
+        "dataset_variant": "instruct",
+        "endpoint": "unspecified_by_source",
+        "harness": "unspecified_by_source",
+        "source_kind": "official_launch_evaluation",
+        "source_label": "BigCodeBench (Full, Instruct)",
+        "source_model_slug": "palmyra-x5",
+        "tool_policy": "unspecified_by_source",
+        "variant": "Palmyra X5"
       }
     },
     {
@@ -63011,6 +63759,942 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "text-only",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "evaluation": "minimax/minimax-m3.1-flash-model-card-humanitys-last-exam@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.434,
+          "status": "available",
+          "value": 0.434,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [
+        "minimax/minimax-m3.1-flash-model-card-humanitys-last-exam@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "minimax/minimax-m3.1-flash",
+      "provenance": [
+        "minimax/minimax-m3.1-flash-model-card-humanitys-last-exam@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "minimax/minimax-m3",
       "provenance": [],
       "reasoning_effort": "disabled",
@@ -89824,6 +91508,635 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "writer/palmyra-x6",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "writer/palmyra-x5-model-catalog-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.6502,
+          "status": "available",
+          "value": 0.6502,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 65.02
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [
+        "writer/palmyra-x5-model-catalog-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 65.02,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.6502,
+          "status": "available",
+          "value": 0.6502,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "writer/palmyra-x5",
+      "provenance": [
+        "writer/palmyra-x5-model-catalog-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "xai/grok-4.7",
       "provenance": [],
       "reasoning_effort": "low",
@@ -99757,6 +102070,62 @@ const builtInCatalogJSON = `{
         "chat",
         "reasoning",
         "tools",
+        "vision",
+        "video",
+        "long_context"
+      ],
+      "description": "Open-weight multimodal MiniMax model for coding and agentic workloads with tunable reasoning depth.",
+      "display_name": "MiniMax M3.1 Flash",
+      "distribution": {
+        "license": "MiniMax-Community-License",
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash",
+        "type": "open_weights"
+      },
+      "family": "minimax-m3.1",
+      "id": "minimax/minimax-m3.1-flash",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "428B (23B active)",
+      "presentation": {
+        "logo": "package:minimax",
+        "monochrome": false,
+        "monogram": "M"
+      },
+      "publisher": "MiniMax",
+      "reasoning_family": "minimax-m3.1-flash",
+      "released_at": "2026-10-19",
+      "revision": "262ae6830934f3512211081b8a3f16425b93a239",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "moe",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "MiniMax",
+        "source": "https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/blob/262ae6830934f3512211081b8a3f16425b93a239/README.md",
+        "status": "claimed",
+        "verified_at": "2026-10-27"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
         "structured_output",
         "vision",
         "video",
@@ -101897,8 +104266,9 @@ const builtInCatalogJSON = `{
       "description": "StepFun flagship multimodal MoE preview for agentic software engineering and knowledge work.",
       "display_name": "Step 5 Preview",
       "distribution": {
-        "source": "https://platform.stepfun.ai/docs/en/guides/models/step-5-preview",
-        "type": "proprietary_api"
+        "license": "StepFun Model License 1.0",
+        "source": "https://huggingface.co/stepfun-ai/Step-5-Preview",
+        "type": "open_weights"
       },
       "family": "step-5",
       "id": "stepfun/step-5-preview",
@@ -101927,7 +104297,7 @@ const builtInCatalogJSON = `{
       "reasoning_family": "step-3.7",
       "released_at": "2026-09-18",
       "tags": [
-        "proprietary",
+        "open_weights",
         "reasoning",
         "multimodal",
         "agentic",
@@ -101936,9 +104306,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "StepFun",
-        "source": "https://www.stepfun.com/step-5-preview",
+        "source": "https://huggingface.co/stepfun-ai/Step-5-Preview",
         "status": "claimed",
-        "verified_at": "2026-09-24"
+        "verified_at": "2026-10-18"
       }
     },
     {
@@ -102575,6 +104945,104 @@ const builtInCatalogJSON = `{
         "source": "https://huggingface.co/tiiuae/Falcon-H1-34B-Instruct",
         "status": "claimed",
         "verified_at": "2026-09-27"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "tools",
+        "structured_output",
+        "long_context"
+      ],
+      "description": "Writer's flagship agentic Palmyra model for long-horizon enterprise workflows, sub-agents, and MCP tool use.",
+      "display_name": "Palmyra X6",
+      "distribution": {
+        "source": "https://dev.writer.com/home/models",
+        "type": "proprietary_api"
+      },
+      "family": "palmyra-x6",
+      "id": "writer/palmyra-x6",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1000000,
+        "max_output_tokens": 8192
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "W"
+      },
+      "publisher": "Writer",
+      "released_at": "2026-08-13",
+      "tags": [
+        "proprietary",
+        "agentic",
+        "enterprise"
+      ],
+      "verification": {
+        "authority": "Writer",
+        "source": "https://dev.writer.com/home/models",
+        "status": "claimed",
+        "verified_at": "2026-09-20"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "tools",
+        "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "Writer's general-purpose Palmyra model with a 1M token context window, adaptive reasoning, and vision input; Writer has scheduled it for deprecation on 2026-12-14 with migration to Palmyra X6.",
+      "display_name": "Palmyra X5",
+      "distribution": {
+        "source": "https://dev.writer.com/home/models",
+        "type": "proprietary_api"
+      },
+      "family": "palmyra-x5",
+      "id": "writer/palmyra-x5",
+      "kind": "physical",
+      "lifecycle": "deprecated",
+      "limits": {
+        "context_window_size": 1000000,
+        "max_output_tokens": 8192
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "W"
+      },
+      "publisher": "Writer",
+      "released_at": "2025-04-28",
+      "tags": [
+        "proprietary",
+        "multimodal",
+        "enterprise"
+      ],
+      "verification": {
+        "authority": "Writer",
+        "source": "https://dev.writer.com/home/models",
+        "status": "claimed",
+        "verified_at": "2026-09-20"
       }
     },
     {
@@ -103227,7 +105695,7 @@ const builtInCatalogJSON = `{
         "tools",
         "multimodal"
       ],
-      "description": "Balances measured quality, latency, and cost across reasoning, simple, and general requests.",
+      "description": "Spends reasoning only where a request needs it; one decision-model call per request selects one of ten lanes, from thinking off to maximum effort.",
       "display_name": "MoM V1 Blend",
       "distribution": {
         "source": "https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1",
@@ -103248,7 +105716,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103259,7 +105727,93 @@ const builtInCatalogJSON = `{
       "roles": [
         {
           "minimum_candidates": 1,
-          "name": "reasoning",
+          "name": "long_context",
+          "recommended_pool": [
+            "zai/glm-5.3-flash",
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "long_context"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "vision",
+          "recommended_pool": [
+            "zai/glm-5.3-flash"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "vision"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "recovery",
+          "recommended_pool": [
+            "zai/glm-5.3-flash",
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "reasoning"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "agentic",
+          "recommended_pool": [
+            "zai/glm-5.3-flash",
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "reasoning",
+            "tools"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "facts",
+          "recommended_pool": [
+            "zai/glm-5.3-flash",
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
+          ],
+          "required": true,
+          "traits": [
+            "chat"
+          ]
+        },
+        {
+          "minimum_candidates": 2,
+          "name": "frontier",
+          "recommended_pool": [
+            "zai/glm-5.3-flash",
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "reasoning"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "code",
           "recommended_pool": [
             "deepseek/deepseek-v4-flash",
             "deepseek/deepseek-v4-pro",
@@ -103273,7 +105827,7 @@ const builtInCatalogJSON = `{
         },
         {
           "minimum_candidates": 1,
-          "name": "simple",
+          "name": "hard",
           "recommended_pool": [
             "deepseek/deepseek-v4-flash",
             "deepseek/deepseek-v4-pro",
@@ -103281,12 +105835,27 @@ const builtInCatalogJSON = `{
           ],
           "required": true,
           "traits": [
-            "chat"
+            "chat",
+            "reasoning"
           ]
         },
         {
           "minimum_candidates": 1,
-          "name": "medium",
+          "name": "standard",
+          "recommended_pool": [
+            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
+            "zai/glm-5.1"
+          ],
+          "required": true,
+          "traits": [
+            "chat",
+            "reasoning"
+          ]
+        },
+        {
+          "minimum_candidates": 1,
+          "name": "fast",
           "recommended_pool": [
             "deepseek/deepseek-v4-flash",
             "deepseek/deepseek-v4-pro",
@@ -103306,7 +105875,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:38b073a10e11052333a0e3f3cb3db2b0fa95f063de74ea626e18257b5171de11",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -103338,7 +105907,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103396,7 +105965,7 @@ const builtInCatalogJSON = `{
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:38b073a10e11052333a0e3f3cb3db2b0fa95f063de74ea626e18257b5171de11",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -103430,7 +105999,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103489,7 +106058,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:38b073a10e11052333a0e3f3cb3db2b0fa95f063de74ea626e18257b5171de11",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -103524,7 +106093,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103601,7 +106170,7 @@ const builtInCatalogJSON = `{
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:38b073a10e11052333a0e3f3cb3db2b0fa95f063de74ea626e18257b5171de11",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -103633,7 +106202,7 @@ const builtInCatalogJSON = `{
           "text"
         ]
       },
-      "policy_version": "3.0.0",
+      "policy_version": "4.0.0",
       "presentation": {
         "logo": "package:vllm",
         "monochrome": false,
@@ -103671,7 +106240,7 @@ const builtInCatalogJSON = `{
         "private_deployment"
       ],
       "verification": {
-        "asset_sha256": "sha256:420be3b24e76e5fe93be17ef37e69c83a9110c314873f9c61c5fa5a84843991a",
+        "asset_sha256": "sha256:38b073a10e11052333a0e3f3cb3db2b0fa95f063de74ea626e18257b5171de11",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -103749,6 +106318,27 @@ const builtInCatalogJSON = `{
         }
       ],
       "wire_format": "openai.responses.v1"
+    },
+    {
+      "capabilities": [
+        "image_generation"
+      ],
+      "default_base_path": "/v1",
+      "display_name": "OpenAI Images",
+      "id": "openai/images@1",
+      "operations": [
+        {
+          "id": "create",
+          "method": "POST",
+          "path": "/v1/images/generations"
+        },
+        {
+          "id": "list_models",
+          "method": "GET",
+          "path": "/v1/models"
+        }
+      ],
+      "wire_format": "openai.images.v1"
     },
     {
       "capabilities": [
@@ -105162,13 +107752,73 @@ const builtInCatalogJSON = `{
       },
       "category": "model_api",
       "conformance": {
-        "status": "unverified"
+        "status": "live_verified",
+        "verified_at": "2026-09-22"
       },
       "default_base_url": "https://api.groq.com/openai/v1",
       "default_protocol": "openai/chat-completions@1",
       "description": "Low-latency hosted inference.",
       "display_name": "Groq",
       "id": "groq",
+      "models": [
+        {
+          "catalog": "openai/gpt-oss-120b",
+          "id": "openai/gpt-oss-120b",
+          "lifecycle": "active",
+          "pricing": {
+            "completion_per_1m": 0.6,
+            "currency": "USD",
+            "prompt_per_1m": 0.15
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "reproduced",
+            "verified_at": "2026-09-22"
+          }
+        },
+        {
+          "catalog": "openai/gpt-oss-20b",
+          "id": "openai/gpt-oss-20b",
+          "lifecycle": "active",
+          "pricing": {
+            "completion_per_1m": 0.3,
+            "currency": "USD",
+            "prompt_per_1m": 0.075
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "reproduced",
+            "verified_at": "2026-09-22"
+          }
+        },
+        {
+          "catalog": "qwen/qwen3.8-27b",
+          "id": "qwen/qwen3.8-27b",
+          "lifecycle": "experimental",
+          "pricing": {
+            "completion_per_1m": 4.0,
+            "currency": "USD",
+            "prompt_per_1m": 0.8
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "reproduced",
+            "verified_at": "2026-09-22"
+          }
+        }
+      ],
       "presentation": {
         "logo": "package:groq",
         "monochrome": true,
@@ -105433,6 +108083,39 @@ const builtInCatalogJSON = `{
       "display_name": "MiniMax",
       "id": "minimax",
       "models": [
+        {
+          "catalog": "minimax/minimax-m3.1-flash",
+          "id": "MiniMax-M3.1-Flash",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.015,
+            "completion_per_1m": 0.6,
+            "currency": "USD",
+            "prompt_per_1m": 0.15
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_modes": [
+            "adaptive"
+          ],
+          "reasoning_transport": "top_level_effort",
+          "relationship": "first_party",
+          "restrictions": {
+            "context_window_size": 1000000,
+            "max_output_tokens": 524288,
+            "unsupported_request_fields": {
+              "openai/chat-completions@1": [
+                "service_tier"
+              ]
+            }
+          },
+          "verification": {
+            "source": "https://platform.minimax.io/docs/api-reference/text-openai-api",
+            "status": "claimed",
+            "verified_at": "2026-10-23"
+          }
+        },
         {
           "catalog": "minimax/minimax-m2.5",
           "id": "MiniMax-M2.5",
@@ -105851,14 +108534,17 @@ const builtInCatalogJSON = `{
       },
       "protocols": [
         "openai/chat-completions@1",
-        "openai/responses@1"
+        "openai/responses@1",
+        "openai/images@1"
       ],
       "support_tier": "compatible",
       "supported_operations": [
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
-        "openai/responses@1#list_models"
+        "openai/responses@1#list_models",
+        "openai/images@1#create",
+        "openai/images@1#list_models"
       ]
     },
     {
@@ -106046,7 +108732,8 @@ const builtInCatalogJSON = `{
       },
       "protocols": [
         "openai/chat-completions@1",
-        "openai/responses@1"
+        "openai/responses@1",
+        "openai/images@1"
       ],
       "reasoning_transport": "top_level_effort",
       "support_tier": "native",
@@ -106054,7 +108741,9 @@ const builtInCatalogJSON = `{
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
-        "openai/responses@1#list_models"
+        "openai/responses@1#list_models",
+        "openai/images@1#create",
+        "openai/images@1#list_models"
       ]
     },
     {
@@ -107924,6 +110613,28 @@ const builtInCatalogJSON = `{
           }
         },
         {
+          "catalog": "minimax/minimax-m3.1-flash",
+          "id": "MiniMaxAI/MiniMax-M3.1-Flash",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_modes": [
+            "adaptive"
+          ],
+          "reasoning_transport": "chat_template_kwargs",
+          "relationship": "self_hosted",
+          "restrictions": {
+            "minimum_vllm_version": "0.33.0",
+            "nightly_required": true
+          },
+          "verification": {
+            "source": "https://github.com/vllm-project/vllm/blob/eff8a5689681ea9db3c6390e5e4415d6dca42431/recipes/models/MiniMaxAI/MiniMax-M3.1-Flash.yaml",
+            "status": "claimed",
+            "verified_at": "2026-10-23"
+          }
+        },
+        {
           "catalog": "minimax/minimax-m2.5",
           "id": "MiniMaxAI/MiniMax-M2.5",
           "lifecycle": "experimental",
@@ -108815,14 +111526,20 @@ const builtInCatalogJSON = `{
       },
       "protocols": [
         "openai/chat-completions@1",
-        "openai/responses@1"
+        "openai/responses@1",
+        "openai/images@1",
+        "anthropic/messages@1"
       ],
       "support_tier": "runtime",
       "supported_operations": [
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
-        "openai/responses@1#list_models"
+        "openai/responses@1#list_models",
+        "openai/images@1#create",
+        "openai/images@1#list_models",
+        "anthropic/messages@1#create",
+        "anthropic/messages@1#list_models"
       ]
     },
     {
@@ -108919,7 +111636,46 @@ const builtInCatalogJSON = `{
       "description": "Palmyra enterprise models through the Writer chat API.",
       "display_name": "Writer",
       "id": "writer",
-      "models": [],
+      "models": [
+        {
+          "catalog": "writer/palmyra-x6",
+          "id": "palmyra-x6",
+          "lifecycle": "active",
+          "pricing": {
+            "completion_per_1m": 8.0,
+            "currency": "USD",
+            "prompt_per_1m": 2.0
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://dev.writer.com/home/models",
+            "status": "claimed",
+            "verified_at": "2026-09-20"
+          }
+        },
+        {
+          "catalog": "writer/palmyra-x5",
+          "id": "palmyra-x5",
+          "lifecycle": "deprecated",
+          "pricing": {
+            "completion_per_1m": 6.0,
+            "currency": "USD",
+            "prompt_per_1m": 0.6
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://dev.writer.com/home/models",
+            "status": "claimed",
+            "verified_at": "2026-09-20"
+          }
+        }
+      ],
       "path_overrides": {
         "openai/chat-completions@1#create": "/v1/chat"
       },
@@ -109657,6 +112413,23 @@ const builtInCatalogJSON = `{
       ],
       "modes": [
         "enabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "default": "max",
+      "default_mode": "adaptive",
+      "id": "minimax-m3.1-flash",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "modes": [
+        "adaptive"
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"

@@ -3,14 +3,17 @@ package modelservice
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
-	"strconv"
-	"strings"
+	"slices"
 	"sync/atomic"
+	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
 
@@ -32,16 +35,33 @@ type Client struct {
 	// scanning holds the served models whose card reports a scan budget, the
 	// only ones that take a decisions request's max_tokens and overflow.
 	scanning atomic.Pointer[map[string]bool]
-	// apiMinor is the minor version of the contract the runtime serves, as
-	// /v1/models last reported it (-1 until then).
-	apiMinor atomic.Int64
 }
 
 // NewClient builds a client for unix:///path, http://host:port or https://host:port.
 func NewClient(endpoint string) (*Client, error) {
-	base, httpClient, err := newHTTPClient(endpoint)
+	return NewAttachedClient(endpoint, config.ModelDeployment{})
+}
+
+// NewAttachedClient builds a client for a runtime the Router attaches to,
+// through the deployment's connection block: its auth and headers on every
+// call, its tls for an https endpoint, and timeout_ms for each call.
+func NewAttachedClient(endpoint string, connection config.ModelDeployment) (*Client, error) {
+	var tlsConfig *tls.Config
+	if connection.TLS != nil {
+		var err error
+		if tlsConfig, err = connection.TLS.ClientConfig(); err != nil {
+			return nil, err
+		}
+	}
+	base, httpClient, err := newHTTPClient(endpoint, tlsConfig)
 	if err != nil {
 		return nil, err
+	}
+	if connection.Auth != nil || len(connection.Headers) > 0 {
+		httpClient.Transport = authorizingTransport{next: httpClient.Transport, authorize: connector.DeploymentAuthorizer(connection.Auth, connection.Headers)}
+	}
+	if connection.TimeoutMs > 0 {
+		httpClient.Timeout = time.Duration(connection.TimeoutMs) * time.Millisecond
 	}
 	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	physical := budgetTransport{next: httpClient}
@@ -51,7 +71,6 @@ func NewClient(endpoint string) (*Client, error) {
 	}
 	client := &Client{endpoint: endpoint, base: base, httpClient: physical, api: generated}
 	client.bundleTasks.Store(DefaultBundleTasks)
-	client.apiMinor.Store(-1)
 	return client, nil
 }
 
@@ -86,7 +105,6 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	if limit := response.JSON200.Limits.MaxBundleTasks; limit > 0 {
 		c.bundleTasks.Store(int64(limit))
 	}
-	c.apiMinor.Store(contractMinor(response.JSON200.ApiVersion))
 	inputs := make(map[string]int, len(response.JSON200.Data))
 	scanning := make(map[string]bool, len(response.JSON200.Data))
 	for _, card := range response.JSON200.Data {
@@ -98,24 +116,6 @@ func (c *Client) Models(ctx context.Context) ([]api.ModelCard, error) {
 	c.maxInputs.Store(&inputs)
 	c.scanning.Store(&scanning)
 	return response.JSON200.Data, nil
-}
-
-// contractMinor is the minor version of a contract version "3.<minor>.<patch>"
-// of the major this client speaks, or -1.
-func contractMinor(version string) int64 {
-	major, rest, _ := strings.Cut(version, ".")
-	minor, _, _ := strings.Cut(rest, ".")
-	value, err := strconv.ParseInt(minor, 10, 64)
-	if major != RuntimeAPIMajor || err != nil || value < 0 {
-		return -1
-	}
-	return value
-}
-
-// takesStates reports whether the runtime answers a decisions call about
-// several states (DecisionRequest.states).
-func (c *Client) takesStates() bool {
-	return c.apiMinor.Load() >= statesMinor
 }
 
 // boundedRead is the request a model without a scan budget takes: it reads one
@@ -212,6 +212,14 @@ func encodeDecisionRequest(ctx context.Context, request Request) (api.DecisionRe
 		Questions: make(map[string]api.Question, len(request.Questions)),
 		Options:   &api.RequestOptions{DeadlineMs: deadline},
 	}
+	if len(request.Images) > 0 {
+		images := slices.Clone(request.Images)
+		body.Images = &images
+	}
+	if len(request.Videos) > 0 {
+		videos := slices.Clone(request.Videos)
+		body.Videos = &videos
+	}
 	if request.MaxTokens > 0 {
 		body.Options.MaxTokens = &request.MaxTokens
 	}
@@ -272,6 +280,10 @@ func encodeQuestion(question Question) api.Question {
 	if question.RequireFullInput {
 		required := true
 		encoded.RequireFullInput = &required
+	}
+	if question.DecisionAdapter {
+		adapter := true
+		encoded.DecisionAdapter = &adapter
 	}
 	if len(question.Labels) > 0 {
 		var criteria interface{} = labelCriteria(question.Labels)

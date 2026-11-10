@@ -22,7 +22,7 @@ func systemOneManager(t *testing.T, invoke http.HandlerFunc) *Manager {
 	t.Helper()
 	fake := runtimetest.New(runtimetest.Model{ID: "served"})
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/systemone" {
+		if r.URL.Path == "/v1/decisions" {
 			invoke(w, r)
 			return
 		}
@@ -32,8 +32,8 @@ func systemOneManager(t *testing.T, invoke http.HandlerFunc) *Manager {
 	manager := NewManager()
 	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
 	cfg := &config.RouterConfig{}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"test-systemone": {Provider: config.ModelRuntimeProvider, Endpoint: upstream.URL, ServedName: "served"}}
-	cfg.DecisionRules = []config.DecisionSignalRule{{Name: "test", Deployment: "test-systemone", Question: config.DecisionQuestion{Type: "noul", Instructions: "test?"}}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"test-systemone": {Provider: config.ModelRuntimeProvider, Endpoint: upstream.URL, Model: "served"}}
+	cfg.SystemOneRules = []config.SystemOneRule{{Name: "test", Deployment: "test-systemone", Question: config.SystemOneQuestion{Type: "noul", Instructions: "test?"}}}
 	if err := manager.Reconcile(cfg); err != nil {
 		t.Fatal(err)
 	}
