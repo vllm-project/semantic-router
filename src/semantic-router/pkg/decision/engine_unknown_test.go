@@ -347,3 +347,56 @@ func TestOperatingPointLabelMatchesKeepUnknownAndLegacyErrorPolicy(t *testing.T)
 		t.Fatalf("legacy on_error lost: %+v %v", result, err)
 	}
 }
+
+// A guard rule that matches by policy, because its model could not read the
+// whole input or gave no answer and the rule fails closed, carries no value.
+// A condition's own predicate then resolves it as the condition without one.
+func TestAPredicateConditionKeepsAGuardsPolicyMatch(t *testing.T) {
+	plain := config.RuleNode{Type: config.SignalTypeJailbreak, Name: "guard"}
+	strict := plain
+	strict.Predicate = &config.NumericPredicate{GTE: float64Ptr(0.95)}
+	failClosed := &SignalMatches{
+		JailbreakRules:     []string{"guard"},
+		SignalErrors:       map[string]string{"jailbreak:guard": "systemone_unavailable"},
+		SignalErrorMatches: map[string]bool{"jailbreak:guard": true},
+	}
+	for name, signals := range map[string]*SignalMatches{
+		"unscanned":   {JailbreakRules: []string{"guard"}},
+		"fail closed": failClosed,
+	} {
+		for _, rule := range []config.RuleNode{plain, strict} {
+			engine := NewDecisionEngine([]config.Decision{{Name: "block", Rules: rule}}, config.RoutingStrategyPriority)
+			if result, err := engine.EvaluateDecisionsWithSignals(signals); err != nil || result == nil {
+				t.Errorf("%s, predicate %v: result = %#v, error = %v", name, rule.Predicate != nil, result, err)
+			}
+		}
+	}
+	engine := NewDecisionEngine([]config.Decision{{Name: "block", Rules: strict}}, config.RoutingStrategyPriority)
+	if result, _ := engine.EvaluateDecisionsWithSignals(&SignalMatches{
+		JailbreakRules: []string{"guard"},
+		SignalValues:   map[string]float64{"jailbreak:guard": 0.9},
+	}); result != nil {
+		t.Fatalf("a reported value below the predicate does not match: %#v", result)
+	}
+	strict.OnUnknown = config.RuleOnUnknownFailRequest
+	engine = NewDecisionEngine([]config.Decision{{Name: "block", Rules: strict}}, config.RoutingStrategyPriority)
+	if _, err := engine.EvaluateDecisionsWithSignals(failClosed); !errors.Is(err, ErrDecisionUnresolved) {
+		t.Fatalf("a fail-closed match stays unknown under rules.on_unknown: %v", err)
+	}
+}
+
+// NOT reverses a known result only: over a signal that failed, a decision
+// without rules.on_unknown does not match.
+func TestNOTOverAFailedSignalDoesNotMatchWithoutOnUnknown(t *testing.T) {
+	rule := config.RuleNode{Operator: "NOT", Conditions: []config.RuleNode{{Type: config.SignalTypeJailbreak, Name: "prompt_injection"}}}
+	engine := NewDecisionEngine([]config.Decision{{Name: "safe_only_route", Rules: rule}}, config.RoutingStrategyPriority)
+	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
+		SignalErrors: map[string]string{"jailbreak:prompt_injection": "systemone_unavailable"},
+	})
+	if err != nil || result != nil {
+		t.Fatalf("result = %#v, error = %v", result, err)
+	}
+	if result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{}); err != nil || result == nil {
+		t.Fatalf("a known negative still matches: result = %#v, error = %v", result, err)
+	}
+}

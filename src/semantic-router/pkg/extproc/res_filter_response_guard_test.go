@@ -128,6 +128,31 @@ func TestResponseGuardAnnotationWithoutDetailsKeepsTheBody(t *testing.T) {
 	}
 }
 
+// A rule over several response-stage signals names the one that matched: an
+// ungrounded answer is not reported as a jailbreak.
+func TestResponseGuardNamesTheSignalThatMatched(t *testing.T) {
+	when := config.RuleNode{Operator: config.RuleOperatorOr, Conditions: []config.RuleNode{
+		{Type: config.SignalTypeJailbreak, Name: responseStageRuleName},
+		{Type: config.SignalTypeHallucination, Name: hallucinationRuleName},
+	}}
+	guard := func(action string, details bool) config.ResponseGuardPluginConfig {
+		return config.ResponseGuardPluginConfig{Rules: []config.ResponseGuardRule{{When: when, Action: action, Details: details}}}
+	}
+	decider := &responseStageDecider{jailbreak: 0.01, spans: []string{"450 meters"}}
+	router, ctx := newHallucinationSignalRouter(t, decider, guard(config.ResponseGuardBlock, false), responseStageRule())
+	assertBlockedWith(t, guardAnswer(t, router, ctx, hallucinationAnswer), "not supported by its grounding context")
+	if codes := ctx.ResponseGuard.rules[0].codes; !slices.Equal(codes, []string{headers.WarningHallucination}) {
+		t.Fatalf("codes = %v, want [%s]", codes, headers.WarningHallucination)
+	}
+
+	router, ctx = newHallucinationSignalRouter(t, decider, guard(config.ResponseGuardAnnotate, true), responseStageRule())
+	response := hallucinationAssistantResponse(hallucinationAnswer)
+	assertDelivered(t, ctx, guardResponse(t, router, ctx, response), headers.WarningHallucination)
+	if text := semanticAssistantContent(response); strings.Contains(text, "[Safety Warning]") || !strings.Contains(text, "[Hallucination Warning]") {
+		t.Fatalf("answer = %s, want only the hallucination note", text)
+	}
+}
+
 // AND stops at its first false condition: a request that needs no fact
 // checking never reaches the detector.
 func TestResponseGuardEvaluatesResponseSignalsOnlyWhenARuleNeedsThem(t *testing.T) {

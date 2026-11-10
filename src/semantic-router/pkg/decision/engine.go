@@ -385,11 +385,18 @@ func (e *DecisionEngine) evalLeaf(
 		return nodeEvaluation{state: evaluationFalse}
 	}
 	matched := slices.Contains(rules, node.Name)
-	if node.Predicate != nil {
-		return evaluatePredicateLeaf(node, normalizedType, signals, policy)
-	}
 	if node.Label != "" {
 		matched = slices.Contains(rules, node.Name+":"+node.Label)
+	}
+	if node.Predicate != nil {
+		// A model's rule that matched without a value matched by policy (it
+		// was unscanned or fails closed): the predicate has nothing to read,
+		// so the condition resolves as it does without one.
+		_, available := signalPredicateValue(signals, normalizedType, node.Name, node.Label)
+		modelRule := normalizedType == config.SignalTypeSystemOne || config.IsApplicationSignalType(normalizedType)
+		if available || !matched || !modelRule {
+			return evaluatePredicateLeaf(node, normalizedType, signals, policy)
+		}
 	}
 	unresolved := signalFailed(signals, normalizedType, node.Name) &&
 		(!matched || signalErrorMatch(signals, normalizedType, node.Name))
@@ -771,7 +778,12 @@ func (e *DecisionEngine) evalNOT(
 	var evaluation nodeEvaluation
 	switch childEvaluation.state {
 	case evaluationFalse:
-		evaluation = nodeEvaluation{state: evaluationTrue, confidence: 1, matchedRules: childEvaluation.matchedRules, onError: childEvaluation.onError}
+		// A False a failed signal produced is not a known negative, so NOT
+		// keeps it False, as it keeps Unknown.
+		evaluation = nodeEvaluation{state: evaluationTrue, confidence: 1, matchedRules: childEvaluation.matchedRules}
+		if childEvaluation.onError {
+			evaluation = nodeEvaluation{state: evaluationFalse, onError: true}
+		}
 	case evaluationUnknown:
 		evaluation = nodeEvaluation{state: evaluationUnknown}
 	default:

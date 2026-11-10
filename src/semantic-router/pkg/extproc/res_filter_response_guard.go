@@ -80,7 +80,7 @@ func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string) *res
 		case decision.RuleUnknown:
 			ruleRun.action = guard.EffectiveOnUnknown()
 		}
-		ruleRun.codes = responseGuardCodes(cfg, rule.When, ruleRun.state)
+		ruleRun.codes = responseGuardCodes(cfg, rule.When, ruleRun.state, ruleRun.matchedRules)
 		run.rules = append(run.rules, ruleRun)
 		if ruleRun.action == config.ResponseGuardBlock {
 			break
@@ -124,10 +124,11 @@ func (ctx *RequestContext) responseInput(answer string) classification.ResponseI
 }
 
 // responseGuardCodes are the codes an annotating rule adds to
-// x-vsr-warnings, one per response-stage signal type the rule reads:
+// x-vsr-warnings, one per response-stage signal type of the conditions that
+// matched, or of every condition the rule reads when it is unknown:
 // hallucination (unverified_factual when the answer could not be checked),
 // response_jailbreak, and response_guard for any other rule.
-func responseGuardCodes(cfg *config.RouterConfig, when config.RuleNode, state decision.RuleState) []string {
+func responseGuardCodes(cfg *config.RouterConfig, when config.RuleNode, state decision.RuleState, matchedRules []string) []string {
 	var codes []string
 	var walk func(node *config.RuleNode)
 	walk = func(node *config.RuleNode) {
@@ -139,6 +140,13 @@ func responseGuardCodes(cfg *config.RouterConfig, when config.RuleNode, state de
 		}
 		signalType := strings.ToLower(strings.TrimSpace(node.Type))
 		if cfg.SignalStageOf(signalType, node.Name) != config.SignalStageResponse {
+			return
+		}
+		reference := signalKey(node.Type, node.Name)
+		if node.Label != "" {
+			reference += ":" + node.Label
+		}
+		if state == decision.RuleTrue && !slices.Contains(matchedRules, reference) {
 			return
 		}
 		code := headers.WarningGuard

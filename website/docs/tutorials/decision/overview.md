@@ -68,7 +68,8 @@ as `Unknown`, not `False`. `NOT Unknown` remains
 `Unknown`; `False AND Unknown` is `False`, and `True OR Unknown` is `True`.
 When the final result is still unknown, `rules.on_unknown` chooses `no_match`,
 `match`, or `fail_request`. If omitted, a failed signal's condition evaluates
-as `False`; a `systemone` condition can set its own `on_error` (`match` or
+as `False`, and a `NOT` over it stays `False`; a `systemone` condition can set
+its own `on_error` (`match` or
 `no_match`), and the router warns at startup about a `systemone` condition
 when neither is set. Applied policies
 appear in the `on_unknown` member of `x-vsr-trace` and the

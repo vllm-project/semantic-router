@@ -114,7 +114,7 @@ global:
 | `set` | 有计入的标签匹配 | 该标签的概率满足 `predicate`；不设置时，模型选中了该标签 |
 | `span` | 有计入的标签匹配 | 带该标签的某个 span 概率满足 `predicate`；不设置时，模型找到了带该标签的 span |
 
-`set` 或 `span` 规则计入 `labels`（不写时为问题的所有标签），再减去 `ignore_labels`。条件可以加上自己的 `predicate`；带 `label` 的条件读取该标签的值。以下情况配置会被拒绝：`label`、`labels` 或 `ignore_labels` 中的某项不是问题的选项；条件指定了被忽略的标签；不带 label 的条件指定了没有 `labels` 的 `choice` 规则。
+`set` 或 `span` 规则计入 `labels`（不写时为问题的所有标签），再减去 `ignore_labels`。条件可以加上自己的 `predicate`；带 `label` 的条件读取该标签的值。以下情况配置会被拒绝：`label`、`labels` 或 `ignore_labels` 中的某项不是问题的选项；条件指定了 `set` 或 `span` 规则不计入的标签（被忽略的标签，或不在其 `labels` 中的标签）；不带 label 的条件指定了没有 `labels` 的 `choice` 规则。
 
 规则发布以下值，供条件的 `predicate` 和[投影得分](../projection/scores)读取：
 
@@ -122,7 +122,7 @@ global:
 | --- | --- | --- |
 | `noul` | P(是) | — |
 | `score` | 期望等级 | — |
-| `choice` | P(选中) | 每个选项的 P(key) |
+| `choice` | `labels` 中最高的 P；没有 `labels` 的规则为 P(选中) | 每个选项的 P(key) |
 | `set` | 计入标签中最高的 P | 每个标签的 P(key) |
 | `span` | 计入标签中最高的概率 | 该标签最可能的 span（没有时为 0） |
 

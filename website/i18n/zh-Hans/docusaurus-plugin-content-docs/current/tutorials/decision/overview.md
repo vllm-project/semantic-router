@@ -63,7 +63,7 @@ recipes:
 `decision "billing": rules.conditions[1]: NOT requires exactly one child condition, got 2`。
 
 设置了 `rules.on_unknown` 时，失败或超时作答的信号会评估为 `Unknown`，而不是 `False`。`NOT Unknown` 仍是 `Unknown`；`False AND Unknown` 是 `False`，`True OR Unknown` 是 `True`。
-当最终结果仍未知时，`rules.on_unknown` 选择 `no_match`、`match` 或 `fail_request`。如果省略，失败信号的条件评估为 `False`；`systemone` 条件可以设置自己的 `on_error`（`match` 或 `no_match`），两者都未设置时，路由器会在启动时对该 `systemone` 条件发出警告。已应用的策略出现在 `x-vsr-trace` 的 `on_unknown` 成员和 `llm_decision_unknown_total{decision, policy}` 指标中。`fail_request` 的 503 带有原因码 [`decision_unresolved`](../../api/router.md#routing-errors)，Router 为它记录的日志会点名修复方式。
+当最终结果仍未知时，`rules.on_unknown` 选择 `no_match`、`match` 或 `fail_request`。如果省略，失败信号的条件评估为 `False`，其上的 `NOT` 仍为 `False`；`systemone` 条件可以设置自己的 `on_error`（`match` 或 `no_match`），两者都未设置时，路由器会在启动时对该 `systemone` 条件发出警告。已应用的策略出现在 `x-vsr-trace` 的 `on_unknown` 成员和 `llm_decision_unknown_total{decision, policy}` 指标中。`fail_request` 的 503 带有原因码 [`decision_unresolved`](../../api/router.md#routing-errors)，Router 为它记录的日志会点名修复方式。
 
 决策匹配与以下内容保持分离：
 
