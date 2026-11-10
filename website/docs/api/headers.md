@@ -133,7 +133,7 @@ Highest priority first:
 | `ranking` | routing | The matched decision the selected one beat, with the `reason` that settled it. |
 | `truncated` | response_contract | Present when members were left out to keep the trace within 4 KB. |
 
-- `confidence` is absent when the decision rests on policy leaves, aggregates several evidence leaves, or resolves through an error policy.
+- `confidence` is absent when the decision rests on policy leaves, aggregates several evidence leaves, resolves through an error policy, or is a catch-all.
 - `fallback_attempts` counts the same way in both gateway modes and is omitted when the primary answered.
 - `ranking` is omitted when only one decision matched; parse `decision_ranking` in Router Replay for the full ranking.
 - `learning` lists the Router Learning methods with their `action`. Show the actions as user-facing phrases such as `tool/protocol pinned`, `model switched`, or `learning bypassed`; fresh conversation or session-start diagnostics are usually useful only in debug views, as neutral status text.
