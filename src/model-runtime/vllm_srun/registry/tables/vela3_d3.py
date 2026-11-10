@@ -10,7 +10,7 @@ public; the pins are the revisions the records measured.
 
 from __future__ import annotations
 
-from .common import ORG, BuiltinModel
+from .common import ORG, BuiltinModel, with_recorded
 
 
 def _vela(
@@ -129,4 +129,7 @@ MODELS: tuple[BuiltinModel, ...] = (
             "vela3_config.json": "7d37c276ba35b15aab9a91ff2cdb5bf5eb57973b07e7bef187b5b551ca39c8b0",
         },
     ),
+)
+MODELS = with_recorded(
+    MODELS, "golden_answers_vela3_d3.json", "answers", "golden_answers"
 )
