@@ -4,7 +4,7 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -16,55 +16,56 @@ config:
             provider: vllm
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    decisions:
-      - name: skip_on_classifier_error
-        description: Skips the decision when the guardrail classifier is unreachable
-        priority: 110
-        rules:
-          operator: OR
-          on_unknown: no_match
-          conditions:
-            - type: jailbreak
-              name: guardrail_unreachable
-        plugins:
-          - type: fast_response
-            configuration:
-              message: This response must not be selected.
-      # #2918: PromptGuardOnErrorBlock forces every request to match this
-      # rule, because prompt_guard.backend points at an endpoint nothing
-      # listens on (127.0.0.1:1 inside the router pod) - the classify call
-      # always errors, and on_error: block treats that as a positive
-      # detection instead of silently letting the request through.
-      - name: block_on_classifier_error
-        description: Blocks every request because the guardrail classifier is unreachable and on_error is block
-        priority: 100
-        rules:
-          operator: OR
-          conditions:
-            - type: jailbreak
-              name: guardrail_unreachable
-        plugins:
-          - type: fast_response
-            configuration:
-              message: Your request has been declined due to a policy violation.
-      - name: default_decision
-        description: Default catch-all decision (should not be reached - on_error:block always matches first)
-        priority: 1
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: openai/mock-model
-            use_reasoning: false
-    signals:
-      jailbreak:
-        - name: guardrail_unreachable
-          threshold: 0.5
-          include_history: false
-          description: Signal rule bound to the deliberately-unreachable guardrail endpoint
-    modelCards:
-      - name: openai/mock-model
+  recipes:
+    - name: default
+      decisions:
+        - name: skip_on_classifier_error
+          description: Skips the decision when the guardrail classifier is unreachable
+          priority: 110
+          rules:
+            operator: OR
+            on_unknown: no_match
+            conditions:
+              - type: jailbreak
+                name: guardrail_unreachable
+          plugins:
+            - type: fast_response
+              configuration:
+                message: This response must not be selected.
+        # #2918: every request matches this decision, because the jailbreak
+        # rule's deployment points at an endpoint nothing listens on
+        # (127.0.0.1:1 inside the router pod) - the call always fails, and the
+        # rule's on_unknown: match makes it match without an answer instead of
+        # silently letting the request through.
+        - name: block_on_classifier_error
+          description: Blocks every request because the guardrail deployment is unreachable
+          priority: 100
+          rules:
+            operator: OR
+            conditions:
+              - type: jailbreak
+                name: guardrail_unreachable
+          plugins:
+            - type: fast_response
+              configuration:
+                message: Your request has been declined due to a policy violation.
+        - name: default_decision
+          description: Default catch-all decision (should not be reached - the blocking decision always matches first)
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/mock-model
+              use_reasoning: false
+      signals:
+        jailbreak:
+          - name: guardrail_unreachable
+            description: Signal rule bound to the deliberately-unreachable guardrail endpoint
+            predicate:
+              gte: 0.5
+            # The contract under test: a guardrail that gives no answer blocks.
+            on_unknown: match
   global:
     router:
       strategy: priority
@@ -72,8 +73,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: false
@@ -82,68 +81,20 @@ config:
       observability:
         tracing:
           enabled: false
-    stores:
-      # Caching is unrelated to on_error, so it stays off - this profile only
-      # needs the jailbreak signal path.
-      #
-      # Note this does NOT stop the startup embedding-model download: that is
-      # gated only on !EmbeddingModels.UsesRemoteEmbeddingBackend() and the
-      # model_catalog.embeddings *_model_path values
-      # (pkg/modeldownload/feature_gates.go), which never consult
-      # stores.response_cache. See the resources comment below.
-      response_cache:
-        enabled: false
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
-      vector_store:
-        embedding_model: mmbert
     integrations: {}
     model_catalog:
-      kbs: []
       deployments:
         # Deliberately unreachable: nothing listens on 127.0.0.1:1 inside the
-        # router pod, so every /classify call fails with a connection
-        # error - this profile exists to exercise on_error: block against a
-        # real classify failure, not to exercise a working classifier.
+        # router pod, so every System One call fails with a connection
+        # error - this profile exists to exercise the fail-closed jailbreak
+        # signal against a real call failure, not a working guardrail.
         unreachable-guardrail:
-          provider: classify
-          endpoint: http://127.0.0.1:1
+          provider: systemone
+          endpoint: http://127.0.0.1:1/v1/systemone
           model: unreachable-guardrail
           timeout_ms: 5000
       bindings:
         jailbreak: unreachable-guardrail
-      modules:
-        prompt_guard:
-          enabled: true
-          on_error: block
-          threshold: 0.5
-          positive_labels: [jailbreak]
-          jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-        classifier:
-          domain:
-            enabled: false
-            category_mapping_path: ""
-          pii:
-            enabled: false
-            pii_mapping_path: ""
-        hallucination_mitigation:
-          enabled: false
-# The router requires a jailbreak_type_mapping.json on disk even when a
-# classify deployment answers the jailbreak signal (IsJailbreakEnabled and
-# LoadJailbreakMapping don't special-case it) - this profile deliberately
-# never runs a local model, so a minimal stand-in mapping
-# (from the ConfigMap in jailbreak-mapping-configmap.yaml, applied as a
-# prerequisite) is enough; no need to bake/download the real model.
-extraVolumes:
-  - name: jailbreak-mapping
-    configMap:
-      name: jailbreak-onerror-mapping
-extraVolumeMounts:
-  - name: jailbreak-mapping
-    mountPath: /app/models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-    subPath: jailbreak_type_mapping.json
-    readOnly: true
 
 resources:
   # 2Gi (copied from the hallucination profile) OOMKilled the router

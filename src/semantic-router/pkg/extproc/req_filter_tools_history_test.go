@@ -58,7 +58,7 @@ func TestStripSemanticToolPolicyCanKeepHistory(t *testing.T) {
 
 func TestApplyPreDispatchToolsPolicyMutatesNeutralRequestOnce(t *testing.T) {
 	payload, err := config.NewStructuredPayload(config.ToolsPluginConfig{
-		Enabled: true, Mode: config.ToolsPluginModeNone, StripToolHistory: true,
+		Enabled: true, Policy: &config.ToolsPolicyConfig{Mode: config.ToolsPolicyModeNone, StripToolHistory: true},
 	})
 	if err != nil {
 		t.Fatal(err)

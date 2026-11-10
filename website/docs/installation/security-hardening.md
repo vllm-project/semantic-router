@@ -49,11 +49,13 @@ examples include:
 request_headers_to_remove:
   - x-authz-user-id
   - x-authz-user-groups
+  - x-vsr-delegated-credential
 ```
 
 Do not expose Router management, metrics, ExtProc, or backing-store ports as
 public inference endpoints. Terminate client authentication at a trusted
-boundary and allow only that component to supply identity headers.
+boundary and allow only that component to supply identity headers and the
+delegated credential described below.
 
 Relevant Dashboard permissions include:
 
@@ -82,24 +84,168 @@ api_key: ${MODEL_API_KEY}
 Do not commit literal API keys, passwords, authorization headers, credential
 query parameters, or URLs containing user information.
 
-For `vllm-sr serve --target kubernetes`, the CLI places sensitive environment values
-in an immutable Secret revision scoped to the namespace and Helm release. Helm
-values and the Deployment reference the Secret by name; they do not contain
-the credential value. A failed upgrade keeps the previous workload and Secret
-active. Release-owned old revisions are removed only after they are no longer
-referenced.
+For `vllm-sr serve --target kubernetes`, the CLI places sensitive environment
+values in an immutable Secret revision, scoped to the namespace and Helm
+release:
+
+- **By name only.** Helm values and the Deployment reference the Secret by
+  name; they don't contain the credential value.
+- **Safe upgrades.** A failed upgrade keeps the previous workload and Secret
+  active.
+- **Cleanup.** Release-owned old revisions are removed only once nothing
+  references them.
 
 Existing chart-native Secret references, such as a Dashboard JWT Secret, remain
 external objects and are not copied into the CLI-managed Secret. Use the same
 namespace and release ownership discipline for every manually managed Secret.
 
+### Delegate the user's credential to an upstream
+
+Some upstreams authorize each user themselves: a LiteLLM, one-api or similar
+relay issuing per-user virtual keys, or a decision-model API metered per user.
+When the Router sits behind an authenticating deployment layer, let the
+authenticator hand the Router the credential it issued that user, and mark the
+upstream's auth `credential: delegated`.
+
+The credential that authenticates the client to the deployment and the
+credential meant for the upstream are separate trust objects: the Router never
+forwards the client's raw `Authorization` header.
+
+```yaml
+global:
+  services:
+    authz:
+      delegated_credential:
+        enabled: true
+        header: x-vsr-delegated-credential   # default; set by the authenticator
+  model_catalog:
+    deployments:
+      team-decisions:
+        provider: systemone
+        endpoint: https://decisions.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth:
+          credential: delegated              # a decision-model deployment
+providers:
+  models:
+    - name: gpt-4o
+      provider_model_id: gpt-4o
+      api_format: openai
+      backend_refs:
+        - name: litellm
+          endpoint: https://litellm.internal/v1
+          provider: openai-compatible
+          auth:
+            credential: delegated            # a provider backend
+```
+
+Every upstream the Router calls takes one `auth` block of the same shape: a
+provider backend, a decision-model or remote embedding deployment, the judge
+model of an `escalate` stage and an `api_format: systemone` target alike. It
+has one of three modes:
+
+| Mode | Set with | Calls carry |
+| --- | --- | --- |
+| Static key | `auth.api_key_env` or `auth.api_key_file`, or a backend's `api_key` | the Router's own key |
+| Delegated | `credential: delegated` | the requesting user's credential |
+| None | neither | no credential |
+
+The delegated contract is disabled by default. Once it's enabled, the rules
+below apply.
+
+#### Where the credential comes from
+
+The delegated credential is an authentication output, like the identity
+headers:
+
+- **The shipped Envoy configurations** (`vllm-sr serve --gateway extproc` and
+  `deploy/local/envoy.yaml`) remove a client-supplied copy in a filter ahead
+  of ext_proc. The `vllm-sr` template removes a custom `header` too;
+  `deploy/local/envoy.yaml` names only the default.
+- **Your authenticator goes after that filter.** Neither configuration runs an
+  authenticator, so a deployment that issues the credential places its
+  authenticator after that filter and before ext_proc, as the
+  `delegated-credential` E2E profile does.
+- **A custom gateway** must do the same: `request_headers_to_remove` runs only
+  after ext_proc.
+- **A standalone listener** drops the header, from Chat and System One
+  requests alike, unless `identity.trust_headers` is set.
+- **The user must be known.** The Router keeps the value only when the request
+  also carries the authenticated user
+  (`global.services.authz.identity.user_id_header`).
+- **A dedicated header.** Configuration rejects a `header` that carries a
+  client credential (`Authorization`, `api-key`, `x-api-key` and similar) or
+  an identity header.
+
+#### Where it goes
+
+- **Removed from every other request.** The Router removes the header from
+  every upstream request, on every branch, and redacts it from logs.
+- **An internal secret.** It's the one `x-vsr-*` request header the Router
+  reads from the authenticator instead of dropping, and the header registry
+  records it as an internal secret: no response, `x-vsr-trace` member, Router
+  Replay record or cache key carries it.
+- **Only delegated upstreams receive it,** under that upstream's auth header
+  with its prefix (`Authorization: Bearer <credential>` for an
+  OpenAI-compatible backend or a System One API), replacing whatever the
+  client sent there.
+- **No other client credential.** The client's other credential headers are
+  removed, so a backend that authenticates on `x-api-key` doesn't also receive
+  the client's `Authorization`.
+
+#### Which calls carry it
+
+The principal is a property of the call:
+
+- **Calls made for a client request** carry that request's credential: primary
+  dispatch, fallback attempts, Looper hops, System One decision-model calls,
+  `escalate` judges, `api_format: systemone` targets, response checks and
+  recall embeddings. When the request carries none, the Router answers `401`
+  before the call, and a fallback chain or Looper run that reaches such a call
+  ends with that `401` instead of another model's answer. A guard that keeps
+  true streaming makes its check only after the client received the answer, so
+  a refused check does not refuse that answer, but no response cache, memory or
+  stored Responses object keeps it.
+- **Calls the Router makes on its own behalf** never carry it, and a delegated
+  upstream refuses them: probes, model listings, `router_replay.shadow`
+  copies, automatic-output render, store building and management diagnostics.
+
+#### What configuration rejects
+
+- a delegated upstream that also names a static key, so a shared key can never
+  stand in silently;
+- a delegated upstream without the contract enabled;
+- a delegated upstream that only the Router's own calls reach, or that a
+  Router-own call must reach: vector store ingestion, memory storage, a
+  `model_runtime` endpoint's health checks and preparation,
+  `router_replay.shadow`, automatic output;
+- a delegated `openai_embeddings` deployment without
+  `capabilities.dimensions`;
+- a delegated and a static backend in one cluster.
+
+#### Answers stay with their user
+
+- **No sharing across users.** An answer obtained with one user's credential is
+  served back only to that user. While any upstream is delegated, every
+  `response_cache` keeps its default `scope: user`, and the Router keeps no
+  decision-model answer or embedding of a delegated deployment for another
+  request.
+- **One request per call.** The Router never puts two client requests in one
+  upstream call, so a batched System One call carries one request's questions
+  and that request's credential.
+- **Policy stays upstream.** Caller attribution and any tenant, quota, budget
+  or spend policy stay with the upstream.
+
 ### Isolate sr-bench credentials
 
-The Dashboard proxies a server-owned sr-bench origin and forwards authenticated
-user ownership. `SR_BENCH_TOKEN_ENV` names the service token environment variable
-(default `SR_BENCH_TOKEN`). Keep this token separate from model API credentials
-and Router management credentials. Browser manifests cannot change registered
-target endpoints, prices, credential references or execution harness options.
+The Dashboard proxies a server-owned sr-bench origin and forwards
+authenticated user ownership:
+
+- **The service token.** `SR_BENCH_TOKEN_ENV` names its environment variable
+  (default `SR_BENCH_TOKEN`). Keep it separate from model API credentials and
+  Router management credentials.
+- **Fixed targets.** Browser manifests can't change registered target
+  endpoints, prices, credential references or execution harness options.
 
 The managed core worker receives only the registered model credential references
 and its service token through inherited environment variables, not command-line
@@ -107,11 +253,11 @@ values. Its private store and adjacent token file live outside the common Router
 and Dashboard mounts; the worker has no Docker socket or GPU passthrough.
 Dashboard receives the service token but not model credential values.
 
-For code/agent evaluation, use an independently prepared worker host and set
-`SR_BENCH_URL` to an authenticated origin reachable by the Dashboard. The
-standalone service binds loopback by default and requires a service token for
-non-loopback binding. Keep its source, sandbox and model credentials confined to
-that host. See [sr-bench 1.0](../benchmarking/sr-bench) for setup and limits.
+For code and agent evaluation, use an independently prepared worker host, and
+set `SR_BENCH_URL` to an authenticated origin the Dashboard can reach. The
+standalone service binds loopback by default and needs a service token to bind
+anything else; keep its source, sandbox and model credentials on that host.
+See [sr-bench 1.0](../benchmarking/sr-bench) for setup and limits.
 
 ## Secure the local stack's storage credentials
 
@@ -132,13 +278,17 @@ unreachable by other users. The Redis config is `0644` on purpose: the Redis
 image drops to an unprivileged user before reading it, and the bind mount
 resolves inside the container without traversing the host's private parent.
 
-The values reach their consumers without entering any shared surface. Postgres
-reads its password from the mounted file via `POSTGRES_PASSWORD_FILE`; Redis
-reads `requirepass` from its mounted config; Router receives the values as
-inherited environment names and the generated runtime config carries only
-`${VLLM_SR_STACK_POSTGRES_PASSWORD}` and `${VLLM_SR_STACK_REDIS_PASSWORD}`.
-They do not appear in a `docker` command line, a generated config file, a log
-record, or a report artifact. Dashboard is not given them.
+The values reach their consumers without entering any shared surface:
+
+| Consumer | Gets the value from |
+| --- | --- |
+| Postgres | The mounted password file, via `POSTGRES_PASSWORD_FILE` |
+| Redis | `requirepass` in its mounted config |
+| Router | Inherited environment names; the generated runtime config carries only `${VLLM_SR_STACK_POSTGRES_PASSWORD}` and `${VLLM_SR_STACK_REDIS_PASSWORD}` |
+| Dashboard | Never gets them |
+
+They never appear in a `docker` command line, a generated config file, a log
+record or a report artifact.
 
 These credentials authenticate network peers. They do not constrain a caller
 that can reach the container runtime directly: the Postgres image trusts local
@@ -157,10 +307,12 @@ The local stack runs on two bridge networks.
 | Envoy, Dashboard | yes | no |
 | Jaeger, Prometheus, Grafana | yes | no |
 
-Router is the only container on both. Requests reach it over the application
-network; it reaches the stores over the data network. A named stack prefixes
-both names, so two stacks share neither. Milvus joins the data network even
-though it has no credentials of its own yet.
+- **Router is the only container on both.** Requests reach it over the
+  application network, and it reaches the stores over the data network.
+- **Per stack.** A named stack prefixes both network names, so two stacks
+  share neither.
+- **Milvus** joins the data network, even though it has no credentials of its
+  own yet.
 
 This closes east-west reachability. A container on the application network,
 such as a sidecar, cannot
@@ -189,10 +341,12 @@ The command is scoped to one stack and follows `VLLM_SR_STACK_NAME`, like
 cross-stack mode, because a partial failure would leave some stacks revoked and
 others not.
 
-Rotation has a short degradation window. Postgres changes its role password in
-place, so existing connections continue but new ones fail until Router
-restarts. Redis is rebuilt against its named volume. Plan the rotation for a
-moment when a brief Router restart is acceptable.
+Rotation has a short degradation window, so plan it for a moment when a brief
+Router restart is acceptable:
+
+- **Postgres** changes its role password in place: existing connections
+  continue, but new ones fail until the Router restarts.
+- **Redis** is rebuilt against its named volume.
 
 ### Recover
 
@@ -290,15 +444,47 @@ Recipe Model Cards describe the checked-in replay and cache behavior for each
 maintained recipe. See [Data and Storage](storage-overview) for deployment
 guides.
 
+## Review what the decision model reads
+
+Every routing judgment is a question to the decision model, so the model a
+question resolves to sees the parts of the request the question reads:
+
+- **Local by default.** With nothing configured, every question asks the
+  local `primary` deployment, and personal-data rules run there. A binding or
+  a rule's `deployment` moves a question elsewhere; bind `pii` and
+  `hallucination` explicitly when the decision model is remote.
+- **Remote models receive what they judge.** A `systemone` deployment receives
+  the state parts its questions read: the request, the earlier turns, the
+  tool results, the model's answer, a candidate, and the images of image
+  questions. [What leaves the host](../system-one/deploy/deployments#what-leaves-the-host)
+  lists them per signal. A remote embedding provider receives the text it
+  embeds.
+- **Guards can fail open or closed.** A `jailbreak` or `pii` rule whose model
+  gives no answer does not match unless it sets `on_unknown: match`; text the
+  model could not read counts as an attack or as personal data.
+- **Masking covers the final request.** The `masking` plugin replaces personal
+  data in every text position of the provider-bound request, including
+  retrieved documents and tool results, and fails closed when it cannot get
+  spans.
+- **Router-owned headers are protected.** `header_mutation` cannot write
+  Router-owned headers or the route key, internal headers a client sends are
+  dropped, and debug detail reaches only the callers
+  `global.router.headers.debug` allows.
+- **Authorization is a signal.** `role_bindings` conditions decide who may
+  reach which route and tools, from identity the gateway asserts; client-sent
+  identity headers are trusted only with `identity.trust_headers: true`.
+
 ## Limit container-runtime access
 
 `vllm-sr serve` is the only part of the local stack that uses the container
 runtime. It creates, recreates and stops the stack's containers, and applies
-every change saved in the Dashboard that needs them created anew. No stack
-container mounts the runtime socket, and the Dashboard image contains no
-container CLI. The Dashboard runs as a non-root user and reads service status
-from the Router's and Envoy's HTTP probes and the files the CLI keeps beside
-the runtime config, and service logs from the bounded log spool.
+every change saved in the Dashboard that needs them created anew.
+
+- **No socket in the stack.** No stack container mounts the runtime socket,
+  and the Dashboard image contains no container CLI.
+- **The Dashboard runs as a non-root user.** It reads service status from the
+  Router's and Envoy's HTTP probes and the files the CLI keeps beside the
+  runtime config, and service logs from the bounded log spool.
 
 Treat access to the runtime as administrator access to the stack. A caller who
 can reach it can read container environments, including the management
@@ -307,19 +493,16 @@ administrators, and do not mount it into a stack container.
 
 ## Production checklist
 
-- [ ] Authenticate the public inference listener and the management surface.
-- [ ] Strip internal control and identity headers at the trusted proxy.
-- [ ] Bind Router management, ExtProc, metrics, and store ports to private
-      interfaces.
-- [ ] Restrict model access and rate limits by role or tenant.
-- [ ] Keep provider and store credentials in a secret manager or Kubernetes
-      Secret.
-- [ ] Review every route's provider locality, tools, and data-retention behavior.
-- [ ] Grant replay detail, logs, and configuration writes only to trusted
-      operators.
-- [ ] Set strict failure behavior where bypassing a policy is unacceptable.
-- [ ] Rotate the local stack's storage credentials on the same schedule as
-      every other credential.
-- [ ] Test backup, restore, credential rotation, upgrade, and rollback.
-- [ ] Keep the container-runtime socket out of every stack container; only
-      `vllm-sr serve` uses the runtime.
+| Check | How | Details |
+| --- | --- | --- |
+| Authenticate the public inference listener and the management surface | Listener API keys; bearer authentication on the management API | [Protect the public listener](#protect-the-public-listener) |
+| Strip internal control and identity headers at the trusted proxy | `request_headers_to_remove`; remove the delegated credential ahead of ext_proc | [Delegate the user's credential](#delegate-the-users-credential-to-an-upstream) |
+| Bind Router management, ExtProc, metrics and store ports to private interfaces | Expose only the inference listener | [Protect the public listener](#protect-the-public-listener) |
+| Restrict model access and rate limits by role or tenant | Chat model allowlists, native model grants, `role_bindings` | [Gateway Modes](gateway-modes) |
+| Keep provider and store credentials in a secret manager or Kubernetes Secret | `${ENV}` references in YAML | [Keep credentials out of configuration](#keep-credentials-out-of-configuration) |
+| Review every route's provider locality, tools and data retention | Where each question's decision model runs; which stores each route writes | [Review what the decision model reads](#review-what-the-decision-model-reads), [Review stored request data](#review-stored-request-data) |
+| Grant replay detail, logs and configuration writes only to trusted operators | `replay.read`, `logs.read`, configuration-write access | [Protect the public listener](#protect-the-public-listener) |
+| Set strict failure behavior where bypassing a policy is unacceptable | `on_unknown: match` on `jailbreak` and `pii` rules | [Review what the decision model reads](#review-what-the-decision-model-reads) |
+| Rotate the local stack's storage credentials with every other credential | `vllm-sr storage rotate` | [Rotate](#rotate) |
+| Test backup, restore, credential rotation, upgrade and rollback | A rehearsal before each production change | [Upgrade and Rollback](upgrade-rollback) |
+| Keep the container-runtime socket out of every stack container | Only `vllm-sr serve` uses the runtime | [Limit container-runtime access](#limit-container-runtime-access) |

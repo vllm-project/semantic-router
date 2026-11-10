@@ -14,18 +14,19 @@ from http import HTTPStatus
 
 import requests
 
+from cli.vsr_trace import TRACE_HEADER, parse_trace
+
 from . import native_output
 from .activity import CHECKPOINT_SECONDS
 
 MAX_USAGE_RECEIPT_BYTES = 12288
 MAX_RECEIPT_CALLS = 256
-SESSION_PHASE_HEADER = "x-vsr-session-phase"
 USER_TURN_PHASE = "user_turn"
 TOOL_LOOP_PHASE = "tool_loop"
 PROVIDER_STATE_PHASE = "provider_state"
 UNKNOWN_PHASE = "unknown"
 SESSION_PHASES = frozenset({USER_TURN_PHASE, TOOL_LOOP_PHASE, PROVIDER_STATE_PHASE})
-SESSION_ID_HEADER = "x-session-id"
+SESSION_ID_HEADER = "x-vsr-session-id"
 CONVERSATION_ID_HEADER = "x-conversation-id"
 
 
@@ -71,11 +72,20 @@ def request_phase(messages: list[dict]) -> str:
     return USER_TURN_PHASE
 
 
+def router_receipts(response_headers: Mapping[str, str] | None) -> dict[str, str]:
+    """The Router's receipts in x-vsr-trace: the config hash, inference calls and
+    model usage of a config-bound request, the session phase and the
+    automatic-output budget. The Router sends the trace only to a caller its
+    global.router.headers.debug allows."""
+    trace = parse_trace((response_headers or {}).get(TRACE_HEADER))
+    return {name: member.value for name, member in trace.items()}
+
+
 def session_phase(
     messages: list[dict], response_headers: Mapping[str, str] | None = None
 ) -> tuple[str, str]:
     """Prefer the Router phase while retaining a bounded request fallback."""
-    value = (response_headers or {}).get(SESSION_PHASE_HEADER)
+    value = router_receipts(response_headers).get("session_phase")
     if isinstance(value, str) and value.strip():
         phase = value.strip()
         return (phase if phase in SESSION_PHASES else UNKNOWN_PHASE), "router"
@@ -167,7 +177,8 @@ def mom_usage(
     cache_write_reported: bool | None = None,
 ):
     """Account every traced child call; never price MoM tokens as its final model."""
-    raw = response_headers.get("x-vsr-model-usage")
+    receipts = router_receipts(response_headers)
+    raw = receipts.get("model_usage")
     if raw:
         if len(raw.encode()) > MAX_USAGE_RECEIPT_BYTES:
             raise CallFailure("MoM usage receipt exceeds bounded contract")
@@ -238,7 +249,7 @@ def mom_usage(
             "cache_read_reported": None,
             "cache_write_reported": None,
         }
-    if response_headers.get("x-vsr-inference-call-count") == "1":
+    if receipts.get("inference_calls") == "1":
         selected = response_headers.get("x-vsr-selected-model")
         if selected:
             return {
@@ -317,9 +328,9 @@ def chat(
             raise CallFailure("Target credential environment variable is not set")
         headers["Authorization"] = "Bearer " + key
     if target.get("config_hash"):
-        headers["X-SR-Bench-Expected-Config-Hash"] = target["config_hash"]
+        headers["X-VSR-Bench-Expected-Config-Hash"] = target["config_hash"]
     if target.get("max_inference_calls"):
-        headers["X-SR-Bench-Max-Inference-Calls"] = str(target["max_inference_calls"])
+        headers["X-VSR-Bench-Max-Inference-Calls"] = str(target["max_inference_calls"])
     content = ""
     reasoning = ""
     usage = None
@@ -578,9 +589,7 @@ def chat(
         else:
             result["inference_call_count"] = 1
         result["cost_complete"] = result["cost_usd"] is not None
-        result["config_hash"] = response.headers.get(
-            "x-sr-bench-config-hash"
-        ) or response.headers.get("x-vsr-config-hash")
+        result["config_hash"] = router_receipts(response.headers).get("config_hash")
         result["selected_model"] = response.headers.get("x-vsr-selected-model") or model
         result["decision"] = response.headers.get("x-vsr-selected-decision")
         if target.get("config_hash") and result["config_hash"] != target["config_hash"]:

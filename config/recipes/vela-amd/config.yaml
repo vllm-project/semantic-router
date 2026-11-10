@@ -1,285 +1,330 @@
 # Explicit AMD deployments: the built-in model runtime serves every model on rocm:0.
 # All-signals Preview is limited to 8192 tokens; task-specific budgets include special tokens.
 # Replace vs_your_documents after creating and indexing a vector store for RAG.
-version: v0.3
+version: v0.5
 listeners:
-- name: vela-http
-  address: 0.0.0.0
-  port: 8899
+  - name: vela-http
+    address: 0.0.0.0
+    port: 8899
 providers:
   defaults:
     model: vela-default
   models:
-  - name: vela-default
-    provider_model_id: vela-default
-    backend_refs:
-    - name: vllm
-      endpoint: vllm:8000
-      protocol: http
-      provider: vllm
-routing:
-  model_bindings:
-    domain: domain-amd
-    pii: pii-amd
-    jailbreak: guard-amd
-    user_feedback: feedback-amd
-    fact_check: factcheck-amd
-    modality: modality-amd
-    embedding: embedding-amd
-  signals:
-    domains:
-    - name: biology
-      mmlu_categories:
-      - biology
-      description: Observe biology using the published Vela model.
-    - name: business
-      mmlu_categories:
-      - business
-      description: Observe business using the published Vela model.
-    - name: chemistry
-      mmlu_categories:
-      - chemistry
-      description: Observe chemistry using the published Vela model.
-    - name: computer science
-      mmlu_categories:
-      - computer science
-      description: Observe computer science using the published Vela model.
-    - name: economics
-      mmlu_categories:
-      - economics
-      description: Observe economics using the published Vela model.
-    - name: engineering
-      mmlu_categories:
-      - engineering
-      description: Observe engineering using the published Vela model.
-    - name: health
-      mmlu_categories:
-      - health
-      description: Observe health using the published Vela model.
-    - name: history
-      mmlu_categories:
-      - history
-      description: Observe history using the published Vela model.
-    - name: law
-      mmlu_categories:
-      - law
-      description: Observe law using the published Vela model.
-    - name: math
-      mmlu_categories:
-      - math
-      description: Observe math using the published Vela model.
-    - name: other
-      mmlu_categories:
-      - other
-      description: Observe other using the published Vela model.
-    - name: philosophy
-      mmlu_categories:
-      - philosophy
-      description: Observe philosophy using the published Vela model.
-    - name: physics
-      mmlu_categories:
-      - physics
-      description: Observe physics using the published Vela model.
-    - name: psychology
-      mmlu_categories:
-      - psychology
-      description: Observe psychology using the published Vela model.
-    pii:
-    - name: sensitive
-      threshold: 0.9
-      include_history: true
-      pii_types_allowed: []
-    jailbreak:
-    - name: prompt-attack
-      threshold: 0.5
-      include_history: false
-    safety:
-    - name: unsafe-content
-      deployment: safety-amd
-      labels:
-      - safe
-      - unsafe
-      unsafe_labels:
-      - unsafe
-      threshold: 0.5
-    fact_check:
-    - name: needs_fact_check
-      description: Observe needs_fact_check using the published Vela model.
-    - name: no_fact_check_needed
-      description: Observe no_fact_check_needed using the published Vela model.
-    user_feedbacks:
-    - name: wrong_answer
-      description: Observe wrong_answer using the published Vela model.
-    - name: need_clarification
-      description: Observe need_clarification using the published Vela model.
-    - name: want_different
-      description: Observe want_different using the published Vela model.
-    - name: satisfied
-      description: Observe satisfied using the published Vela model.
-    modality:
-    - name: AR
-    - name: DIFFUSION
-    - name: BOTH
-    embeddings:
-    - name: semantic-code
-      threshold: 0.65
-      aggregation_method: max
-      candidates:
-      - Debug this Python program and fix its error.
-    classifiers:
-    - name: content-risk
-      deployment: hazard-amd
-      labels:
-      - violence
-      - criminal_activity
-      - sexual_content
-      - child_exploitation
-      - hate
-      - harassment_abuse
-      - regulated_substances
-      - weapons
-      - self_harm
-      - privacy
-      - specialized_advice
-      - misinformation
-    keywords:
-    - name: knowledge-query
-      operator: OR
+    - name: vela-default
+      provider_model_id: vela-default
+      backend_refs:
+        - name: vllm
+          endpoint: vllm:8000
+          protocol: http
+          provider: vllm
+      capabilities:
+        - text
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: biology
+          labels:
+            - biology
+          description: Observe biology using the published Vela model.
+          predicate:
+            gte: 0.5
+        - name: business
+          labels:
+            - business
+          description: Observe business using the published Vela model.
+          predicate:
+            gte: 0.5
+        - name: chemistry
+          labels:
+            - chemistry
+          description: Observe chemistry using the published Vela model.
+          predicate:
+            gte: 0.5
+        - name: computer science
+          labels:
+            - computer science
+          description: Observe computer science using the published Vela model.
+          predicate:
+            gte: 0.5
+        - name: economics
+          labels:
+            - economics
+          description: Observe economics using the published Vela model.
+          predicate:
+            gte: 0.5
+        - name: engineering
+          labels:
+            - engineering
+          description: Observe engineering using the published Vela model.
+          predicate:
+            gte: 0.5
+        - name: health
+          labels:
+            - health
+          description: Observe health using the published Vela model.
+          predicate:
+            gte: 0.5
+        - name: history
+          labels:
+            - history
+          description: Observe history using the published Vela model.
+          predicate:
+            gte: 0.5
+        - name: law
+          labels:
+            - law
+          description: Observe law using the published Vela model.
+          predicate:
+            gte: 0.5
+        - name: math
+          labels:
+            - math
+          description: Observe math using the published Vela model.
+          predicate:
+            gte: 0.5
+        - name: other
+          labels:
+            - other
+          description: Observe other using the published Vela model.
+          predicate:
+            gte: 0.5
+        - name: philosophy
+          labels:
+            - philosophy
+          description: Observe philosophy using the published Vela model.
+          predicate:
+            gte: 0.5
+        - name: physics
+          labels:
+            - physics
+          description: Observe physics using the published Vela model.
+          predicate:
+            gte: 0.5
+        - name: psychology
+          labels:
+            - psychology
+          description: Observe psychology using the published Vela model.
+          predicate:
+            gte: 0.5
+      pii:
+        - name: sensitive
+          predicate:
+            gte: 0.9
+          input:
+            history: true
+      jailbreak:
+        - name: prompt-attack
+          predicate:
+            gte: 0.5
+      safety:
+        - name: unsafe-content
+          predicate:
+            gte: 0.5
+      fact_check:
+        - name: needs_fact_check
+          description: Observe needs_fact_check using the published Vela model.
+          predicate:
+            gte: 0.95
+        - name: no_fact_check_needed
+          description: Observe no_fact_check_needed using the published Vela model.
+          labels:
+            - NO_FACT_CHECK_NEEDED
+          predicate:
+            gt: 0.05
+      user_feedbacks:
+        - name: wrong_answer
+          description: Observe wrong_answer using the published Vela model.
+          labels:
+            - WRONG_ANSWER
+          predicate:
+            gte: 0.7
+        - name: need_clarification
+          description: Observe need_clarification using the published Vela model.
+          labels:
+            - NEED_CLARIFICATION
+          predicate:
+            gte: 0.7
+        - name: want_different
+          description: Observe want_different using the published Vela model.
+          labels:
+            - WANT_DIFFERENT
+          predicate:
+            gte: 0.7
+        - name: satisfied
+          description: Observe satisfied using the published Vela model.
+          labels:
+            - SAT
+          predicate:
+            gte: 0.7
+      modality:
+        - name: AR
+          labels:
+            - text
+        - name: DIFFUSION
+          labels:
+            - image
+        - name: BOTH
+          labels:
+            - text_image
       keywords:
-      - Search my documents
-  decisions:
-  - name: knowledge
-    priority: 200
-    rules:
-      operator: AND
-      on_unknown: fail_request
-      conditions:
-      - type: keyword
-        name: knowledge-query
-    algorithm:
-      type: static
-    modelRefs:
-    - model: vela-default
-      use_reasoning: false
-    plugins:
-    - type: rag
-      configuration:
-        enabled: true
-        backend: vectorstore
-        top_k: 3
-        similarity_threshold: 0.0
-        rerank:
-          deployment: reranker-amd
-          top_k: 2
-          layer: 22
-          dimension: 768
-        max_context_length: 4096
-        injection_mode: tool_role
-        on_failure: block
-        backend_config:
-          vector_store_id: vs_your_documents
-    description: Retrieve indexed documents and rerank the candidates before generation.
-  - name: observe
-    description: Inspect Vela signals and send the request to the connected backend.
-    priority: 100
-    rules:
-      operator: OR
-      on_unknown: fail_request
-      conditions:
-      - type: jailbreak
-        name: prompt-attack
-      - type: safety
-        name: unsafe-content
-      - type: pii
-        name: sensitive
-      - type: classifier
-        name: content-risk
-        label: violence
-      - type: classifier
-        name: content-risk
-        label: criminal_activity
-      - type: classifier
-        name: content-risk
-        label: sexual_content
-      - type: classifier
-        name: content-risk
-        label: child_exploitation
-      - type: classifier
-        name: content-risk
-        label: hate
-      - type: classifier
-        name: content-risk
-        label: harassment_abuse
-      - type: classifier
-        name: content-risk
-        label: regulated_substances
-      - type: classifier
-        name: content-risk
-        label: weapons
-      - type: classifier
-        name: content-risk
-        label: self_harm
-      - type: classifier
-        name: content-risk
-        label: privacy
-      - type: classifier
-        name: content-risk
-        label: specialized_advice
-      - type: classifier
-        name: content-risk
-        label: misinformation
-      - type: fact_check
-        name: needs_fact_check
-      - type: user_feedback
-        name: wrong_answer
-      - type: user_feedback
-        name: need_clarification
-      - type: user_feedback
-        name: want_different
-      - type: user_feedback
-        name: satisfied
-      - type: modality
-        name: AR
-      - type: embedding
-        name: semantic-code
-      - type: domain
-        name: biology
-      - type: domain
-        name: business
-      - type: domain
-        name: chemistry
-      - type: domain
-        name: computer science
-      - type: domain
-        name: economics
-      - type: domain
-        name: engineering
-      - type: domain
-        name: health
-      - type: domain
-        name: history
-      - type: domain
-        name: law
-      - type: domain
-        name: math
-      - type: domain
-        name: other
-      - type: domain
-        name: philosophy
-      - type: domain
-        name: physics
-      - type: domain
-        name: psychology
-    algorithm:
-      type: static
-    modelRefs:
-    - model: vela-default
-      use_reasoning: false
-  modelCards:
-  - name: vela-default
-    modality: ar
-    capabilities:
-    - text
+        - name: knowledge-query
+          operator: OR
+          keywords:
+            - Search my documents
+      systemone:
+        - name: content-risk
+          question:
+            type: choice
+            instructions: Which of these labels applies to the request?
+            choices:
+              - key: violence
+              - key: criminal_activity
+              - key: sexual_content
+              - key: child_exploitation
+              - key: hate
+              - key: harassment_abuse
+              - key: regulated_substances
+              - key: weapons
+              - key: self_harm
+              - key: privacy
+              - key: specialized_advice
+              - key: misinformation
+        - name: semantic-code
+          question:
+            type: noul
+            instructions: 'Is the request about any of these: Debug this Python program and fix its error.?'
+    decisions:
+      - name: knowledge
+        priority: 200
+        rules:
+          operator: AND
+          on_unknown: fail_request
+          conditions:
+            - type: keyword
+              name: knowledge-query
+        algorithm:
+          type: static
+        modelRefs:
+          - model: vela-default
+            use_reasoning: false
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: vectorstore
+                  match:
+                    recall:
+                      method: embedding
+                      top_k: 3
+                      min_similarity: 0.0
+                    judge:
+                      preset: relevance
+                      top_k: 2
+                      min_score: 0.5
+                  max_context_length: 4096
+                  on_failure: block
+                  backend_config:
+                    vector_store_id: vs_your_documents
+        description: Retrieve indexed documents and keep the ones the decision model judges relevant before generation.
+      - name: observe
+        description: Inspect Vela signals and send the request to the connected backend.
+        priority: 100
+        rules:
+          operator: OR
+          on_unknown: fail_request
+          conditions:
+            - type: jailbreak
+              name: prompt-attack
+            - type: safety
+              name: unsafe-content
+            - type: pii
+              name: sensitive
+            - type: systemone
+              name: content-risk
+              label: violence
+            - type: systemone
+              name: content-risk
+              label: criminal_activity
+            - type: systemone
+              name: content-risk
+              label: sexual_content
+            - type: systemone
+              name: content-risk
+              label: child_exploitation
+            - type: systemone
+              name: content-risk
+              label: hate
+            - type: systemone
+              name: content-risk
+              label: harassment_abuse
+            - type: systemone
+              name: content-risk
+              label: regulated_substances
+            - type: systemone
+              name: content-risk
+              label: weapons
+            - type: systemone
+              name: content-risk
+              label: self_harm
+            - type: systemone
+              name: content-risk
+              label: privacy
+            - type: systemone
+              name: content-risk
+              label: specialized_advice
+            - type: systemone
+              name: content-risk
+              label: misinformation
+            - type: fact_check
+              name: needs_fact_check
+            - type: user_feedback
+              name: wrong_answer
+            - type: user_feedback
+              name: need_clarification
+            - type: user_feedback
+              name: want_different
+            - type: user_feedback
+              name: satisfied
+            - type: modality
+              name: AR
+            - type: systemone
+              name: semantic-code
+            - type: domain
+              name: biology
+            - type: domain
+              name: business
+            - type: domain
+              name: chemistry
+            - type: domain
+              name: computer science
+            - type: domain
+              name: economics
+            - type: domain
+              name: engineering
+            - type: domain
+              name: health
+            - type: domain
+              name: history
+            - type: domain
+              name: law
+            - type: domain
+              name: math
+            - type: domain
+              name: other
+            - type: domain
+              name: philosophy
+            - type: domain
+              name: physics
+            - type: domain
+              name: psychology
+        algorithm:
+          type: static
+        modelRefs:
+          - model: vela-default
+            use_reasoning: false
 global:
   router:
     model_selection:
@@ -292,74 +337,29 @@ global:
         request_timeout_seconds: 120
         max_concurrency: 16
   stores:
-    response_cache:
-      enabled: false
     vector_store:
       enabled: true
       backend_type: memory
-      embedding_model: mmbert
-      embedding_dimension: 768
+      embedding:
+        dimension: 768
       file_storage_dir: /app/.vllm-sr/files
       metadata_store: memory
       ingestion_workers: 1
   model_catalog:
+    system:
+      decision_model:
+        deployment: decision-amd
+    embeddings:
+      default: {deployment: embedding-amd}
     deployments:
-      domain-amd:
+      decision-amd:
         provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
-        revision: f6354f54adcf38770f635ad903be2b00577f6c11
+        artifact: vllm-sr/vela3-fast
+        revision: 7cbefd4b92b57234bd0ffb9872451e81abcdac79
         device: rocm:0
         input:
           max_tokens: 8192
-          overflow: reject
-      pii-amd:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-PII
-        revision: 6d3300c4bd7975f30a664503f6c725cf1fbbad48
-        device: rocm:0
-        input:
-          max_tokens: 8192
-          overflow: reject
-      guard-amd:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Guard
-        revision: 087f9e401012df839c83717b746967ac7aebfa3e
-        device: rocm:0
-        input:
-          max_tokens: 8192
-          overflow: reject
-      feedback-amd:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Feedback
-        revision: 47434a7fd7c245c0c7c17564a000b3c56ccfec41
-        device: rocm:0
-        input:
-          max_tokens: 8192
-          overflow: reject
-      factcheck-amd:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-FactCheck
-        revision: 99ede1aba1563e59e416f744d25b3f6b7e9d8274
-        device: rocm:0
-        input:
-          max_tokens: 8192
-          overflow: reject
-      modality-amd:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Modality
-        revision: 5384b8997e3cbb79ca3a670e869577f4e4f4997e
-        device: rocm:0
-        input:
-          max_tokens: 8192
-          overflow: reject
-      safety-amd:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Safety
-        revision: 6e70e725a5f4d86da10f5be5e4dfd1da0358bb85
-        device: rocm:0
-        input:
-          max_tokens: 8192
-          overflow: reject
+          overflow: window
       embedding-amd:
         provider: model_runtime
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
@@ -368,65 +368,6 @@ global:
         input:
           max_tokens: 32768
           overflow: reject
-      reranker-amd:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
-        revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
-        device: rocm:0
-        input:
-          max_tokens: 32768
-          overflow: reject
-      hazard-amd:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Hazard
-        revision: 5dd25f2cc3c98f338e6a79b667662d60f936a28d
-        device: rocm:0
-        input:
-          max_tokens: 32768
-          overflow: reject
-        operating_point:
-          path: operating_point.json
-          sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5
-    embeddings:
-      semantic:
-        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-        embedding_config:
-          model_type: mmbert
-          preload_embeddings: true
-          target_layer: 22
-          target_dimension: 768
-          full_context: true
-    modules:
-      classifier:
-        domain:
-          enabled: true
-          threshold: 0.5
-          fallback_category: other
-          category_mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
-        pii:
-          enabled: true
-          threshold: 0.9
-          pii_mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
-          on_error: block
-      prompt_guard:
-        enabled: true
-        threshold: 0.5
-        positive_labels:
-        - jailbreak
-        jailbreak_mapping_path: models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json
-        on_error: block
-      feedback_detector:
-        enabled: true
-        threshold: 0.7
-      hallucination_mitigation:
-        enabled: false
-        fact_check:
-          threshold: 0.95
-      modality_detector:
-        enabled: true
-        method: classifier
-        confidence_threshold: 0.7
-
 entrypoints:
-- model_names: ["vela-auto"]
-  recipe: default
+  - model_names: ["vela-auto"]
+    recipe: default

@@ -3,6 +3,9 @@ import Link from '@docusaurus/Link'
 import Translate from '@docusaurus/Translate'
 import useBaseUrl from '@docusaurus/useBaseUrl'
 import ThemedImage from '@theme/ThemedImage'
+import { SectionLabel } from '@site/src/components/site/Chrome'
+import duo from '@site/src/components/duo/duo.module.css'
+import foundations from './openSourceFoundations.json'
 import styles from './EcosystemSection.module.css'
 
 type Organization = {
@@ -11,6 +14,13 @@ type Organization = {
   width: number
   caption?: boolean
   light?: boolean
+}
+
+type Project = {
+  id: string
+  name: string
+  logo: string
+  url: string
 }
 
 const organizations: Organization[] = [
@@ -40,35 +50,21 @@ const organizations: Organization[] = [
   { id: 'nutanix', name: 'Nutanix', width: 155, light: true },
 ]
 
+const projects: Project[] = foundations.projects
+
 export default function EcosystemSection(): React.JSX.Element {
   const assetPath = useBaseUrl('/img/ecosystem/')
 
   return (
     <section id="ecosystem" className={styles.section} aria-labelledby="ecosystem-title">
-      <div
-        className={styles.atmosphere}
-        style={{ backgroundImage: `url(${assetPath}atmosphere.webp)` }}
-        aria-hidden="true"
-      />
-      <div className="site-shell-container">
-        <header className={styles.header}>
-          <h2 className={styles.title} id="ecosystem-title">
+      <div className={styles.wrap}>
+        <header className="site-section-intro">
+          <SectionLabel>
+            <Translate id="homepage.ecosystem.label">Industry & research</Translate>
+          </SectionLabel>
+          <h2 id="ecosystem-title">
             <Translate id="homepage.ecosystem.title">Ecosystem & partnerships</Translate>
           </h2>
-          <p className={styles.subtitle}>
-            <Translate
-              id="homepage.ecosystem.description"
-              values={{
-                decisionLayer: (
-                  <strong>
-                    <Translate id="homepage.ecosystem.decisionLayer">decision layer</Translate>
-                  </strong>
-                ),
-              }}
-            >
-              {'An open, programmable {decisionLayer} for models and compute.'}
-            </Translate>
-          </p>
         </header>
 
         <ul className={styles.organizations}>
@@ -95,15 +91,50 @@ export default function EcosystemSection(): React.JSX.Element {
           ))}
         </ul>
 
+        <div className={styles.foundations}>
+          <div className={styles.foundationsIntro}>
+            <SectionLabel>
+              <Translate id="acknowledgements.label">Open-source foundations</Translate>
+            </SectionLabel>
+            <h3 className={styles.foundationsTitle} id="foundations-title">
+              <Translate id="acknowledgements.title">Built with open source</Translate>
+            </h3>
+            <p className={styles.foundationsLede}>
+              <Translate id="acknowledgements.subtitle">
+                The libraries and platforms beneath vLLM Semantic Router.
+              </Translate>
+            </p>
+          </div>
+
+          <ul className={styles.projects} aria-labelledby="foundations-title">
+            {projects.map(project => (
+              <li key={project.id}>
+                <a
+                  className={styles.project}
+                  href={project.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-project-id={project.id}
+                >
+                  <span className={styles.projectLogo}>
+                    <img src={project.logo} alt="" loading="lazy" decoding="async" />
+                  </span>
+                  <span className={styles.projectName}>{project.name}</span>
+                  <span className={styles.projectArrow} aria-hidden="true">↗</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+
         <div className={styles.footer}>
           <p>
             <Translate id="homepage.ecosystem.growing">
               And an open community still growing.
             </Translate>
           </p>
-          <Link to="/docs/community/overview">
+          <Link className={duo.more} to="/docs/community/overview">
             <Translate id="homepage.ecosystem.cta">Build with us</Translate>
-            <span aria-hidden="true">↗</span>
           </Link>
         </div>
       </div>

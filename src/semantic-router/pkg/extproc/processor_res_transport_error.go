@@ -51,13 +51,12 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 		}
 		translated.Body = encoded
 	}
-	diagnosticsBeforeBody := len(ctx.ProtocolDiagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, translated.Diagnostics...)
 	response := buildResponseBodyContinueResponse(nil, nil)
 	setResponseBodyMutation(response, translated.Body)
 	setResponseContentType(response, "application/json")
-	if warning, ok := recordBufferedProtocolDiagnostics(ctx, diagnosticsBeforeBody); ok {
-		setResponseBodyHeaderOverwrite(response, headers.VSRProtocolWarnings, warning)
+	if warnings, ok := bufferedWarnings(ctx); ok {
+		setResponseBodyHeaderOverwrite(response, headers.VSRWarnings, warnings)
 	}
 	r.attachRouterReplayResponse(ctx, translated.Body, true)
 	return response

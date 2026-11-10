@@ -153,6 +153,7 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 		recordSessionTurnOutcome(ctx, responseUsageMetrics{})
 		logging.Debugf("Streaming response aborted before completion, will not cache")
 	}
+	r.recordHeldStreamOverMessageLimit(ctx, err)
 	if ctx.InflightToken != 0 {
 		releaseInflightAdmission(ctx)
 	}
@@ -357,9 +358,7 @@ func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (
 	if ctx != nil {
 		ctx.ImmediateProtocolError = protocolError
 	}
-	response := r.createErrorResponse(http.StatusBadRequest, protocolError.Message)
-	addPromptCacheReceiptToImmediateResponse(response, ctx)
-	return response, true
+	return r.createErrorResponse(http.StatusBadRequest, protocolError.Message), true
 }
 
 func (r *OpenAIRouter) processResponseHeaders(

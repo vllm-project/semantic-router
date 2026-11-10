@@ -310,7 +310,7 @@ Teams standing up internal model serving and wanting Cursor-style Auto mode can 
 ## Get Started
 
 - [Install with agentgateway](/docs/installation/k8s/agentgateway) — Kubernetes integration guide
-- [Router DC selection algorithm](/docs/tutorials/algorithm/selection/router-dc) — prompt-to-model-description routing
+- [Router DC selection algorithm](/docs/v0.4/tutorials/algorithm/selection/router-dc) — prompt-to-model-description routing
 - [Giving AgentGateway a Semantic Brain](/blog/agentgateway-semantic-brain-homelab) — homelab walkthrough with ExtProc routing
 - [Ollama local setup](/docs/installation/ollama) — run local models behind the gateway
 

@@ -46,8 +46,8 @@ def test_router_default_and_explicit_engine_share_serve(monkeypatch, args, engin
 
 def test_no_engine_flag_enables_routing_without_discarding_saved_policy():
     document = {
-        "version": "v0.3",
-        "routing": {"decisions": [{"name": "saved"}]},
+        "version": "v0.5",
+        "recipes": [{"name": "default", "decisions": [{"name": "saved"}]}],
         "listeners": [{"name": "public", "models": ["router/auto"]}],
     }
     original = deepcopy(document)
@@ -56,12 +56,12 @@ def test_no_engine_flag_enables_routing_without_discarding_saved_policy():
     assert apply_instance_options(document)
     assert document["global"]["router"]["enabled"] is True
     assert not apply_instance_options(document)
-    assert document["routing"] == original["routing"]
+    assert document["recipes"] == original["recipes"]
     assert document["listeners"] == original["listeners"]
 
 
 def test_engine_bootstrap_has_native_grant_and_no_invented_provider():
-    document = {"version": "v0.3", "setup": {"mode": True}}
+    document = {"version": "v0.5", "setup": {"mode": True}}
     apply_instance_options(document, engine=True, model_options=options(MODEL))
     assert "setup" not in document
     assert "providers" not in document and "routing" not in document
@@ -83,7 +83,7 @@ def test_a_state_once_d3_serves_at_its_built_in_release_without_the_hub(
         raise AssertionError("a built-in model resolves without the Hub")
 
     monkeypatch.setattr(HfApi, "model_info", no_hub)
-    document = {"version": "v0.3", "setup": {"mode": True}}
+    document = {"version": "v0.5", "setup": {"mode": True}}
     apply_instance_options(
         document, engine=True, model_options=options(model), platform="rocm"
     )
@@ -217,7 +217,7 @@ def test_saved_revision_off_the_release_pin_names_the_pin(monkeypatch):
 
 
 def test_new_multi_gpu_workers_use_available_devices():
-    document = {"version": "v0.3"}
+    document = {"version": "v0.5"}
     apply_instance_options(
         document,
         model_options=options(MODEL, data_parallel_size=2),
@@ -341,7 +341,7 @@ def test_engine_flags_set_the_default_deployments_engine_args(monkeypatch):
         "dtype": "bfloat16",
         "enable_shared_context": False,
     }
-    document = {"version": "v0.3"}
+    document = {"version": "v0.5"}
     apply_instance_options(document, model_options=calls[0]["model_options"])
     primary = document["global"]["model_catalog"]["deployments"]["primary"]
     assert {name: primary[name] for name in ENGINE_ARGUMENTS} == {
@@ -391,7 +391,7 @@ def test_help_and_instance_commands_have_no_mode_bypass():
 def test_routing_enabled_is_strictly_boolean(enabled):
     with pytest.raises(ValueError, match="enabled must be a boolean"):
         UserConfig.model_validate(
-            {"version": "v0.3", "global": {"router": {"enabled": enabled}}}
+            {"version": "v0.5", "global": {"router": {"enabled": enabled}}}
         )
 
 
@@ -409,9 +409,9 @@ def test_startup_mode_preserves_source_and_resets_engine_without_flag(
     source.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [{"name": "private", "address": "0.0.0.0", "port": 8899}],
-                "routing": {"strategy": "confidence"},
+                "recipes": [{"name": "default", "strategy": "confidence"}],
                 "global": {
                     "services": {"observability": {"tracing": {"enabled": False}}}
                 },
@@ -431,7 +431,7 @@ def test_startup_mode_preserves_source_and_resets_engine_without_flag(
     assert prepare(True)["global"]["router"]["enabled"] is False
     router = prepare()
     assert router["global"]["router"]["enabled"] is True
-    assert router["routing"]["strategy"] == "confidence"
+    assert router["recipes"][0]["strategy"] == "confidence"
     assert "systemone" not in router["listeners"][0]
     assert source.read_bytes() == before
 
@@ -458,7 +458,7 @@ def test_serve_projects_host_ids_once_and_forwards_the_existing_mask(
     source.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "private", "address": "127.0.0.1", "port": 8899}
                 ],

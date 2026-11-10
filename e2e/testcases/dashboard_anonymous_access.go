@@ -30,17 +30,18 @@ func init() {
 // session check. The safe-failure case sends an invalid fragment
 // anonymously, which validation would have stopped anyway; this one would
 // have applied.
-const anonymousProbeFragment = `routing:
-  decisions:
-    - name: e2e-anonymous-probe
-      description: Deployable probe that must never land without a session
-      priority: 2
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: base-model
-          use_reasoning: false
+const anonymousProbeFragment = `recipes:
+  - name: default
+    decisions:
+      - name: e2e-anonymous-probe
+        description: Deployable probe that must never land without a session
+        priority: 2
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
 `
 
 // forgedDashboardSession is shaped like a session but was never issued by

@@ -39,7 +39,7 @@ ENTRYPOINT {model_names: ["secondary"] recipe: secondary}
 	if err != nil {
 		t.Fatal(err)
 	}
-	parsed, err := config.ParseYAMLBytes(append([]byte("version: v0.3\n"), data...))
+	parsed, err := config.ParseYAMLBytes(append([]byte("version: v0.5\n"), data...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,6 +190,38 @@ func TestRequestParamsDefaultRoundTrip(t *testing.T) {
 	for _, value := range []string{"0", "-1", "1.5", `"4096"`} {
 		if _, errs := Compile(strings.Replace(source, "default_max_tokens: 4096", "default_max_tokens: "+value, 1)); len(errs) == 0 {
 			t.Errorf("accepted invalid default %s", value)
+		}
+	}
+}
+
+// A route that turns an inherited fast_response off keeps enabled: false
+// through the DSL, which would otherwise answer every request it routes.
+func TestFastResponseEnabledRoundTrip(t *testing.T) {
+	source := `ROUTE open {
+ PRIORITY 1
+ MODEL "local"
+ PLUGIN fast_response {enabled: false}
+}`
+	cfg, errs := Compile(source)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	output, err := DecompileConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, errs := Compile(output)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	ast := DecompileRoutingToAST(cfg)
+	astCfg, errs := CompileAST(ast)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	for name, decision := range map[string]config.Decision{"compiled": cfg.Decisions[0], "text": again.Decisions[0], "ast": astCfg.Decisions[0]} {
+		if !decision.HasPlugin(config.DecisionPluginFastResponse) || decision.GetFastResponseConfig() != nil {
+			t.Fatalf("%s: fast_response is not turned off: %s", name, output)
 		}
 	}
 }

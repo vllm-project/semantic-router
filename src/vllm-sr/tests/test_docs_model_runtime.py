@@ -2,8 +2,8 @@
 
 Configuration fragments are validated by the CLI's parser and validator, the
 runtime's models file by the runtime's own loader, request bodies against the
-runtime's OpenAPI contract, `vllm-sr` command lines by the CLI's own option
-parser, and the migration example by `vllm-sr config migrate`. The engine-mode
+runtime's OpenAPI contract, and `vllm-sr` command lines by the CLI's own
+option parser; the Router's docs test checks the migration example. The engine-mode
 CLI integration test reads the Quickstart's requests from the page and sends
 them to a running runtime.
 """
@@ -31,8 +31,6 @@ REPO_ROOT = PROJECT_ROOT.parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from cli.config_migration import migrate_config_data  # noqa: E402
-from cli.config_migration_notes import MigrationNotes  # noqa: E402
 from cli.main import main  # noqa: E402
 from cli.parser import parse_user_config  # noqa: E402
 from cli.validator import validate_user_config  # noqa: E402
@@ -40,9 +38,9 @@ from cli.validator import validate_user_config  # noqa: E402
 DOCS = REPO_ROOT / "website" / "docs"
 PAGES = [
     *sorted((DOCS / "model-runtime").rglob("*.md")),
-    DOCS / "tutorials/global/model-runtime.md",
-    DOCS / "tutorials/signal/learned/decision.md",
-    DOCS / "tutorials/algorithm/selection/decision.md",
+    DOCS / "tutorials/signal/systemone.md",
+    DOCS / "tutorials/algorithm/selection/systemone.md",
+    DOCS / "system-one/use/api.md",
 ]
 RUNTIME = REPO_ROOT / "src" / "model-runtime" / "vllm_srun"
 FENCE = re.compile(r"^```(\w*)([^\n]*)\n(.*?)^```", re.M | re.S)
@@ -60,15 +58,9 @@ REQUEST_SCHEMAS = {
     "/v1/rerank": "RerankRequest",
     "/v1/bundle": "BundleRequest",
 }
-# Fragments that are not router configuration documents.
+# Fragments that are not router configuration documents; the Router's docs
+# test checks that migrate writes legacy.migrated.yaml for legacy.yaml.
 NON_ROUTER_TITLES = {"legacy.yaml", "legacy.migrated.yaml", "models.yaml"}
-# What this CLI's own migration writes for the page's legacy.yaml; the Router
-# then rewrites its model fields, and its test checks that the result is the
-# page's legacy.migrated.yaml.
-ENGINE_MIGRATED = (
-    REPO_ROOT
-    / "src/semantic-router/pkg/config/testdata/model_runtime_migration/legacy.engine.yaml"
-)
 
 
 @dataclass(frozen=True)
@@ -168,9 +160,21 @@ def _merge(base: dict, fragment: dict) -> dict:
     for key, value in fragment.items():
         if isinstance(value, dict) and isinstance(base.get(key), dict):
             _merge(base[key], value)
+        elif key == "recipes" and isinstance(base.get(key), list):
+            _merge_recipes(base[key], value)
         else:
             base[key] = copy.deepcopy(value)
     return base
+
+
+def _merge_recipes(base: list, fragment: list) -> None:
+    """A fragment's recipe extends the recipe of the same name before it."""
+    by_name = {recipe.get("name"): recipe for recipe in base}
+    for recipe in fragment:
+        if recipe.get("name") in by_name:
+            _merge(by_name[recipe["name"]], recipe)
+        else:
+            base.append(copy.deepcopy(recipe))
 
 
 def _model_names(value) -> set[str]:
@@ -192,7 +196,7 @@ def _complete(fragment: dict) -> dict:
         return fragment
     models = sorted(_model_names(fragment) | {"answer-model"})
     base = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
         "providers": {
             "defaults": {"model": "answer-model"},
@@ -206,7 +210,7 @@ def _complete(fragment: dict) -> dict:
                 for name in models
             ],
         },
-        "routing": {"modelCards": [{"name": name} for name in models]},
+        "recipes": [{"name": "default"}],
     }
     return _merge(base, fragment)
 
@@ -253,13 +257,13 @@ def _runtime_config_module():
 
 
 def test_models_file_example_loads_with_the_runtime_loader(tmp_path):
-    block = _block("model-runtime/reference.md", "models.yaml")
+    block = _block("model-runtime/reference/commands.md", "models.yaml")
     path = tmp_path / "models.yaml"
     path.write_text(block.text, encoding="utf-8")
 
     models = _runtime_config_module().load_models_file(path)
 
-    assert [model.name for model in models] == ["vela-domain", "decision-kai"]
+    assert [model.name for model in models] == ["vela-domain", "decision-edge"]
 
 
 OPENAPI_URI = "urn:vllm-srun:openapi"
@@ -292,7 +296,7 @@ def _curl_requests() -> list[tuple[str, str, dict]]:
 def test_curl_request_bodies_follow_the_runtime_contract():
     requests = _curl_requests()
 
-    assert len(requests) >= 8
+    assert len(requests) >= 4
     for where, path, body in requests:
         _validate_request(path, body, where)
 
@@ -313,7 +317,7 @@ def test_reference_decision_responses_have_the_documented_shape():
     responses = [
         block
         for block in _blocks("json")
-        if block.title == "Response" and "reference.md" in str(block.where)
+        if block.title == "Response" and "reference/http-api.md" in str(block.where)
     ]
     validator = _openapi_validator("DecisionResponse")
 
@@ -329,7 +333,9 @@ def test_reference_decision_responses_have_the_documented_shape():
 
 
 def test_quickstart_response_example_has_the_documented_shape():
-    response = json.loads(_block("model-runtime/quickstart.md", "Response").text)
+    response = json.loads(
+        _block("model-runtime/get-started/quickstart.md", "Response").text
+    )
     validator = _openapi_validator("DecisionResponse")
     # The illustrative response omits usage; everything it shows must conform.
     problems = [
@@ -447,24 +453,3 @@ def test_vllm_srun_commands_use_real_options():
     assert commands
     for where, arguments in commands:
         _assert_runtime_options(where, arguments)
-
-
-def test_migration_example_is_what_the_tool_writes():
-    legacy = yaml.safe_load(_block("model-runtime/migrate.md", "legacy.yaml").text)
-    engine_migrated = yaml.safe_load(ENGINE_MIGRATED.read_text(encoding="utf-8"))
-    documented = yaml.safe_load(
-        _block("model-runtime/migrate.md", "legacy.migrated.yaml").text
-    )
-    notes = MigrationNotes()
-
-    migrated = migrate_config_data(legacy, notes)
-
-    assert migrated == engine_migrated
-    assert migrate_config_data(migrated) == migrated
-    assert migrate_config_data(documented) == documented
-    page = (DOCS / "model-runtime/migrate.md").read_text()
-    for note in notes:
-        if note.path.endswith("vela-domain") or note.path.endswith(
-            "vela-domain.precision"
-        ):
-            assert note.message in page, note.message

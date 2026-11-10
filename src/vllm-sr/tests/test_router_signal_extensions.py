@@ -10,15 +10,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from cli.algorithms import (  # noqa: E402
-    AlgorithmConfig,
-    ModelRef,
-    PromptSelectionConfig,
-)
 from cli.models import (  # noqa: E402
-    ClassifierSignal,
     Condition,
-    Decision,
     MetadataPredicate,
     MetadataRule,
     Rules,
@@ -50,130 +43,9 @@ def test_numeric_predicate_rejects_nan():
         )
 
 
-def test_classifier_signal_llm_shape():
-    signal = ClassifierSignal(
-        name="risk",
-        type="llm",
-        model="risk-judge",
-        labels=["SAFE", "RISKY"],
-        instructions="Choose a label.",
-    )
-    assert signal.labels == ["SAFE", "RISKY"]
-
-
-def test_classifier_signal_local_shape():
-    signal = ClassifierSignal(
-        name="risk",
-        type="local",
-        model_path="models/risk",
-        labels=["SAFE", "RISKY"],
-    )
-    assert signal.model_path == "models/risk"
-
-
-def test_classifier_signal_sequence_shape():
-    signal = ClassifierSignal(
-        name="risk",
-        type="sequence_classifier",
-        model="risk-classifier",
-        labels=["SAFE", "RISKY"],
-    )
-    assert signal.model == "risk-classifier"
-
-
-@pytest.mark.parametrize(
-    "fields",
-    [
-        {"type": "sequence_classifier", "model": "risk", "labels": ["RISKY"]},
-        {"type": "sequence_classifier", "model": "risk", "use_cpu": True},
-        {"type": "local", "model": "risk-judge", "model_path": "models/risk"},
-    ],
-)
-def test_the_router_judges_a_classifiers_deprecated_model_selection(fields):
-    signal = ClassifierSignal(**{"name": "risk", "labels": ["SAFE", "RISKY"], **fields})
-    assert signal.type == fields["type"]
-
-
-def test_classifier_signal_rejects_whitespace_name():
-    with pytest.raises(ValidationError):
-        ClassifierSignal(
-            name=" risk ",
-            type="local",
-            model_path="models/risk",
-            labels=["SAFE", "RISKY"],
-        )
-
-
-def test_user_config_allows_recipe_local_classifier_names():
-    config = UserConfig.model_validate(
-        {
-            "version": "v0.3",
-            "routing": {
-                "signals": {
-                    "classifiers": [
-                        {
-                            "name": "Risk",
-                            "type": "local",
-                            "model_path": "models/risk",
-                            "labels": ["SAFE", "RISKY"],
-                        }
-                    ]
-                }
-            },
-            "recipes": [
-                {
-                    "name": "other",
-                    "routing": {
-                        "signals": {
-                            "classifiers": [
-                                {
-                                    "name": "risk",
-                                    "type": "llm",
-                                    "model": "judge",
-                                    "labels": ["SAFE", "RISKY"],
-                                    "instructions": "Classify.",
-                                }
-                            ]
-                        }
-                    },
-                }
-            ],
-        }
-    )
-    assert config.recipes[0].routing.signals.classifiers[0].name == "risk"
-
-
-def test_user_config_rejects_case_colliding_classifier_names_within_recipe():
-    with pytest.raises(ValidationError):
-        UserConfig.model_validate(
-            {
-                "version": "v0.3",
-                "routing": {
-                    "signals": {
-                        "classifiers": [
-                            {
-                                "name": "Risk",
-                                "type": "local",
-                                "model_path": "models/risk",
-                                "labels": ["SAFE", "RISKY"],
-                            },
-                            {
-                                "name": "risk",
-                                "type": "llm",
-                                "model": "judge",
-                                "labels": ["SAFE", "RISKY"],
-                                "instructions": "Classify.",
-                            },
-                        ]
-                    }
-                },
-            }
-        )
-
-
-def test_classifier_condition_score_shape():
+def test_systemone_condition_score_shape():
     condition = Condition(
-        type="classifier",
+        type="systemone",
         name="risk",
         label="RISKY",
         predicate={"gte": 0.5},
@@ -182,17 +54,12 @@ def test_classifier_condition_score_shape():
     assert condition.predicate.gte == 0.5
 
 
-def test_classifier_condition_requires_label_and_predicate():
+def test_unlabeled_condition_type_rejects_label():
     with pytest.raises(ValidationError):
-        Condition(type="classifier", name="risk")
+        Condition(type="structure", name="bytes", label="RISKY")
 
 
-def test_non_classifier_condition_rejects_label():
-    with pytest.raises(ValidationError):
-        Condition(type="embedding", name="risk", label="RISKY")
-
-
-def test_non_classifier_condition_rejects_on_error():
+def test_non_systemone_condition_rejects_on_error():
     with pytest.raises(ValidationError):
         Condition(
             type="structure",
@@ -202,10 +69,10 @@ def test_non_classifier_condition_rejects_on_error():
         )
 
 
-def test_bare_classifier_leaf_preserves_predicate_fields():
+def test_bare_systemone_leaf_preserves_predicate_fields():
     rules = Rules.model_validate(
         {
-            "type": "classifier",
+            "type": "systemone",
             "name": "risk",
             "label": "RISKY",
             "predicate": {"gte": 0.8},
@@ -221,7 +88,7 @@ def test_bare_classifier_leaf_preserves_predicate_fields():
 def test_rules_accept_terminal_on_unknown():
     rules = Rules.model_validate(
         {
-            "type": "classifier",
+            "type": "systemone",
             "name": "risk",
             "label": "RISKY",
             "predicate": {"gte": 0.8},
@@ -238,7 +105,7 @@ def test_nested_condition_rejects_on_unknown():
                 "operator": "AND",
                 "conditions": [
                     {
-                        "type": "classifier",
+                        "type": "systemone",
                         "name": "risk",
                         "label": "RISKY",
                         "predicate": {"gte": 0.8},
@@ -249,219 +116,102 @@ def test_nested_condition_rejects_on_unknown():
         )
 
 
-def test_prompt_decision_rejects_duplicate_base_models():
-    with pytest.raises(ValidationError):
-        Decision(
-            name="prompt-route",
-            description="duplicate candidates",
-            priority=1,
-            rules=Rules(),
-            modelRefs=[
-                ModelRef(model="model-a"),
-                ModelRef(model="model-a", lora_name="specialist"),
-            ],
-            algorithm=AlgorithmConfig(
-                type="prompt",
-                prompt=PromptSelectionConfig(
-                    model="router-small",
-                    instructions="Choose.",
-                ),
-            ),
-        )
-
-
 def test_user_config_accepts_recipe_entrypoints():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "entrypoints": [
-                {
-                    "model_names": ["vllm-sr/privacy"],
-                    "recipe": "privacy",
-                }
+                {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True},
+                {"model_names": ["vllm-sr/privacy"], "recipe": "privacy"},
             ],
             "recipes": [
+                {"name": "default"},
                 {
                     "name": "privacy",
-                    "routing": {
-                        "signals": {
-                            "metadata": [
-                                {
-                                    "name": "consent-denied",
-                                    "key": "consent",
-                                    "predicate": {"equals": "denied"},
-                                }
-                            ]
-                        }
+                    "signals": {
+                        "metadata": [
+                            {
+                                "name": "consent-denied",
+                                "key": "consent",
+                                "predicate": {"equals": "denied"},
+                            }
+                        ]
                     },
-                }
+                },
             ],
         }
     )
-    assert config.entrypoints[0].recipe == "privacy"
-    assert config.recipes[0].routing.signals.metadata[0].name == "consent-denied"
+    assert config.entrypoints[1].recipe == "privacy"
+    assert config.recipes[1].signals.metadata[0].name == "consent-denied"
 
 
 def test_user_config_rejects_unknown_recipe_entrypoint():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "entrypoints": [
-                {
-                    "model_names": ["vllm-sr/missing"],
-                    "recipe": "missing",
-                }
-            ],
+            "version": "v0.5",
+            "entrypoints": [{"model_names": ["vllm-sr/missing"], "recipe": "missing"}],
         }
     )
     errors = validate_user_config(config)
     assert any("unknown recipe" in error.message.lower() for error in errors)
 
 
-def test_prompt_dependency_validation_covers_recipes():
-    config = UserConfig.model_validate(
-        {
-            "version": "v0.3",
-            "providers": {
-                "models": [
-                    {"name": "model-a"},
-                    {"name": "model-b"},
-                ]
-            },
-            "recipes": [
-                {
-                    "name": "prompt-recipe",
-                    "routing": {
-                        "decisions": [
-                            {
-                                "name": "prompt-route",
-                                "description": "prompt",
-                                "priority": 1,
-                                "rules": {},
-                                "modelRefs": [
-                                    {"model": "model-a"},
-                                    {"model": "model-b"},
-                                ],
-                                "algorithm": {
-                                    "type": "prompt",
-                                    "prompt": {
-                                        "model": "missing-helper",
-                                        "instructions": "Choose.",
-                                    },
-                                },
-                            }
-                        ]
-                    },
-                }
-            ],
-        }
-    )
-    errors = validate_user_config(config)
-    fields = {error.field for error in errors}
-    assert (
-        "recipes.prompt-recipe.decisions.prompt-route.algorithm.prompt.model" in fields
-    )
-    # The helper call runs in process, so no Looper endpoint is required.
-    assert "recipes.prompt-recipe.decisions.prompt-route.algorithm.prompt" not in fields
-
-
-def test_prompt_dependency_validation_rejects_anthropic_helper():
-    config = UserConfig.model_validate(
-        {
-            "version": "v0.3",
-            "providers": {
-                "models": [
-                    {"name": "model-a"},
-                    {"name": "model-b"},
-                    {"name": "helper", "api_format": "AnThRoPiC"},
-                ]
-            },
-            "routing": {
-                "decisions": [
-                    {
-                        "name": "prompt-route",
-                        "description": "prompt",
-                        "priority": 1,
-                        "rules": {},
-                        "modelRefs": [
-                            {"model": "model-a"},
-                            {"model": "model-b"},
-                        ],
-                        "algorithm": {
-                            "type": "prompt",
-                            "prompt": {
-                                "model": "helper",
-                                "instructions": "Choose.",
-                            },
-                        },
-                    }
-                ]
-            },
-            "global": {
-                "integrations": {
-                    "looper": {"endpoint": "http://envoy:8899/v1/chat/completions"}
-                }
-            },
-        }
-    )
-    errors = validate_user_config(config)
-    assert any("OpenAI-compatible" in error.message for error in errors)
-
-
 def test_general_validators_cover_recipe_decisions():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "providers": {"models": [{"name": "model-a"}]},
-            "routing": {"modelCards": [{"name": "model-a"}]},
             "recipes": [
+                {"name": "default"},
                 {
                     "name": "invalid-recipe",
-                    "routing": {
-                        "decisions": [
-                            {
-                                "name": "invalid-route",
-                                "description": "invalid",
-                                "priority": 1,
-                                "rules": {
-                                    "operator": "AND",
-                                    "conditions": [{"type": "latency", "name": "p95"}],
-                                },
-                                "modelRefs": [{"model": "missing-model"}],
-                                "algorithm": {
-                                    "type": "static",
-                                    "hybrid": {
-                                        "elo_weight": 1,
-                                        "router_dc_weight": 0,
-                                        "automix_weight": 0,
-                                    },
-                                },
-                            }
-                        ]
-                    },
-                }
+                    "decisions": [
+                        {
+                            "name": "invalid-route",
+                            "description": "invalid",
+                            "priority": 1,
+                            "rules": {
+                                "operator": "AND",
+                                "conditions": [{"type": "latency", "name": "p95"}],
+                            },
+                            "modelRefs": [{"model": "missing-model"}],
+                            "algorithm": {
+                                "type": "static",
+                                "multi_factor": {"weights": {"quality": 1}},
+                            },
+                        }
+                    ],
+                },
+            ],
+            "entrypoints": [
+                {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True}
             ],
         }
     )
     errors = validate_user_config(config)
     fields = {error.field for error in errors}
     assert "recipes.invalid-recipe.decisions.invalid-route.modelRefs" in fields
-    assert "recipes.invalid-recipe.decisions.invalid-route.algorithm.hybrid" in fields
     assert (
-        "recipes.invalid-recipe.routing.decisions.invalid-route.rules.conditions"
+        "recipes.invalid-recipe.decisions.invalid-route.algorithm.multi_factor"
         in fields
     )
+    assert "recipes.invalid-recipe.decisions.invalid-route.rules.conditions" in fields
 
 
 def test_user_config_rejects_recipe_owned_model_cards():
     with pytest.raises(ValidationError):
         UserConfig.model_validate(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "recipes": [
+                    {"name": "default"},
+                    {"name": "with-models", "modelCards": [{"name": "model-a"}]},
+                ],
+                "entrypoints": [
                     {
-                        "name": "with-models",
-                        "routing": {"modelCards": [{"name": "model-a"}]},
+                        "model_names": ["vllm-sr/auto"],
+                        "recipe": "default",
+                        "default": True,
                     }
                 ],
             }
@@ -471,64 +221,61 @@ def test_user_config_rejects_recipe_owned_model_cards():
 def test_user_config_allows_recipe_local_decision_names():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "routing": {
-                "decisions": [
-                    {
-                        "name": "shared-name",
-                        "description": "default",
-                        "priority": 1,
-                        "rules": {},
-                        "modelRefs": [],
-                    }
-                ]
-            },
+            "version": "v0.5",
             "recipes": [
                 {
+                    "name": "default",
+                    "decisions": [
+                        {
+                            "name": "shared-name",
+                            "description": "default",
+                            "priority": 1,
+                            "rules": {},
+                            "modelRefs": [],
+                        }
+                    ],
+                },
+                {
                     "name": "other",
-                    "routing": {
-                        "decisions": [
-                            {
-                                "name": "shared-name",
-                                "description": "recipe",
-                                "priority": 1,
-                                "rules": {},
-                                "modelRefs": [],
-                            }
-                        ]
-                    },
-                }
+                    "decisions": [
+                        {
+                            "name": "shared-name",
+                            "description": "recipe",
+                            "priority": 1,
+                            "rules": {},
+                            "modelRefs": [],
+                        }
+                    ],
+                },
+            ],
+            "entrypoints": [
+                {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True}
             ],
         }
     )
-    assert config.recipes[0].routing.decisions[0].name == "shared-name"
+    assert config.recipes[0].decisions[0].name == "shared-name"
 
 
 def test_user_config_accepts_recipes_only_default_profile():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "recipes": [
                 {
                     "name": "default",
-                    "routing": {
-                        "signals": {
-                            "metadata": [
-                                {
-                                    "name": "canary",
-                                    "key": "cohort",
-                                    "predicate": {"equals": "canary"},
-                                }
-                            ]
-                        }
+                    "signals": {
+                        "metadata": [
+                            {
+                                "name": "canary",
+                                "key": "cohort",
+                                "predicate": {"equals": "canary"},
+                            }
+                        ]
                     },
                 }
             ],
             "entrypoints": [
-                {
-                    "model_names": ["vllm-sr/default-route"],
-                    "recipe": "default",
-                }
+                {"model_names": ["vllm-sr/default-route"], "recipe": "default"}
             ],
         }
     )
@@ -543,53 +290,52 @@ def test_user_config_allows_identical_signal_redeclaration():
     }
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "routing": {"signals": {"metadata": [metadata]}},
+            "version": "v0.5",
             "recipes": [
-                {
-                    "name": "other",
-                    "routing": {"signals": {"metadata": [metadata]}},
-                }
+                {"name": "default", "signals": {"metadata": [metadata]}},
+                {"name": "other", "signals": {"metadata": [metadata]}},
             ],
         }
     )
-    assert config.recipes[0].routing.signals.metadata[0].name == "canary"
+    assert config.recipes[0].signals.metadata[0].name == "canary"
 
 
 def test_user_config_allows_conflicting_names_across_isolated_recipes():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "routing": {
-                "signals": {
-                    "metadata": [
-                        {
-                            "name": "canary",
-                            "key": "cohort",
-                            "predicate": {"equals": "canary"},
-                        }
-                    ]
-                }
-            },
+            "version": "v0.5",
             "recipes": [
                 {
-                    "name": "other",
-                    "routing": {
-                        "signals": {
-                            "metadata": [
-                                {
-                                    "name": "canary",
-                                    "key": "cohort",
-                                    "predicate": {"equals": "beta"},
-                                }
-                            ]
-                        }
+                    "name": "default",
+                    "signals": {
+                        "metadata": [
+                            {
+                                "name": "canary",
+                                "key": "cohort",
+                                "predicate": {"equals": "canary"},
+                            }
+                        ]
                     },
-                }
+                },
+                {
+                    "name": "other",
+                    "signals": {
+                        "metadata": [
+                            {
+                                "name": "canary",
+                                "key": "cohort",
+                                "predicate": {"equals": "beta"},
+                            }
+                        ]
+                    },
+                },
+            ],
+            "entrypoints": [
+                {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True}
             ],
         }
     )
-    predicate = config.recipes[0].routing.signals.metadata[0].predicate
+    predicate = config.recipes[1].signals.metadata[0].predicate
     assert predicate.equals == "beta"
 
 
@@ -602,17 +348,14 @@ def test_user_config_allows_recipe_local_projection_names():
     }
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "routing": {"projections": {"partitions": [partition]}},
+            "version": "v0.5",
             "recipes": [
-                {
-                    "name": "other",
-                    "routing": {"projections": {"partitions": [partition]}},
-                }
+                {"name": "default", "projections": {"partitions": [partition]}},
+                {"name": "other", "projections": {"partitions": [partition]}},
             ],
         }
     )
-    assert config.recipes[0].routing.projections.partitions[0].name == "difficulty"
+    assert config.recipes[0].projections.partitions[0].name == "difficulty"
 
 
 @pytest.mark.parametrize(
@@ -622,16 +365,11 @@ def test_user_config_allows_recipe_local_projection_names():
 def test_user_config_rejects_entrypoint_name_collisions(model_name):
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "providers": {"models": [{"name": "model-a"}]},
-            "routing": {
-                "modelCards": [
-                    {
-                        "name": "model-a",
-                        "loras": [{"name": "adapter-a"}],
-                    }
-                ]
+            "version": "v0.5",
+            "providers": {
+                "models": [{"name": "model-a", "loras": [{"name": "adapter-a"}]}]
             },
+            "recipes": [{"name": "default"}],
             "entrypoints": [{"model_names": [model_name], "recipe": "default"}],
         }
     )
@@ -642,7 +380,7 @@ def test_user_config_rejects_entrypoint_name_collisions(model_name):
 def test_user_config_normalizes_entrypoint_names():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "entrypoints": [
                 {
                     "model_names": [" virtual-route ", "virtual-route", ""],
@@ -659,18 +397,7 @@ def test_user_config_rejects_empty_entrypoint_names():
     with pytest.raises(ValidationError):
         UserConfig.model_validate(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "entrypoints": [{"model_names": [], "recipe": "default"}],
             }
         )
-
-
-def test_local_classifier_can_use_default_decision_deployment():
-    signal = ClassifierSignal(
-        name="task",
-        type="local",
-        labels=["coding", "other"],
-        instructions="Choose the request category.",
-    )
-    assert signal.model_path is None
-    assert signal.instructions == "Choose the request category."
