@@ -28,7 +28,7 @@ readiness from its host controller.
 A new Engine instance publishes the selected model on port 8899. Discover its
 public model ID with `GET /v1/systemone/models`, then send questions to
 `POST /v1/systemone` or its alias `POST /v1/decisions`. Follow the
-[quickstart](../../website/docs/model-runtime/quickstart.md) for a complete
+[quickstart](../../website/docs/model-runtime/get-started/quickstart.md) for a complete
 request and response.
 
 `--engine` (`-e`) selects Engine mode for that start. Every `serve` command
@@ -188,7 +188,7 @@ about 127,000 tokens in 32 seconds, 213,000 in 142 and 262,000 in 203, with
 154 GiB of its memory in use at that length.
 
 Use canonical YAML for additional deployments, task bindings, attached workers
-and Kubernetes placement. See the [deployment guide](../../website/docs/model-runtime/deploy.md).
+and Kubernetes placement. See the [deployment guide](../../website/docs/model-runtime/deploy/connect-the-router.md).
 Model placement and replica count apply in either mode.
 
 ## Publish native models
@@ -204,7 +204,7 @@ Update the allowlist deliberately when publishing a new model. Check
 `/v1/systemone/models` for publication and `vllm-sr instance models` for actual
 readiness. Worker APIs such as classify, embeddings, rerank and bundle belong
 to directly operated `vllm-srun` workers; see the
-[runtime reference](../../website/docs/model-runtime/reference.md).
+[runtime reference](../../website/docs/model-runtime/reference/http-api.md).
 
 ## Troubleshooting
 

@@ -4,7 +4,7 @@
 
 `hallucination` finds the claims in the model's answer that its grounding context does not support.
 It asks the `hallucination`
-[preset](../../../system-one/reference#preset-catalog), a span question
+[preset](../../../system-one/reference/presets#preset-catalog), a span question
 over the answer, with the label `unsupported`, at the response stage. The
 grounding context is the documents RAG retrieved and the request's tool
 results.
@@ -97,7 +97,7 @@ records the result when it ends. See
 
 The decision model answers every hallucination rule, unless the
 `hallucination` binding or the rule's `deployment` names another; see
-[Choose a deployment](../../../system-one/deployments). The question needs
+[Choose a deployment](../../../system-one/deploy/deployments). The question needs
 spans: vela3-fast (the default), the Vela 3.0 d3 sizes and Vela 2.0 answer it
 with their own hallucination question. A rule that resolves to a deployment
 without span answers, such as a d3 model, fails to load with

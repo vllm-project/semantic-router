@@ -12,8 +12,8 @@ most applications.
   application signals, your own questions, the System One selector, guards and
   judges. A new routing question needs no training: write it as a
   [`systemone` rule](../tutorials/signal/systemone) and tune its predicate
-  ([Write custom questions](../system-one/custom-questions)). A larger
-  [decision model](../system-one/deployments) is the next step when a
+  ([Write custom questions](../system-one/use/custom-questions)). A larger
+  [decision model](../system-one/deploy/deployments) is the next step when a
   question needs more accuracy.
 - **The embedding model** serves recall only: the response cache, memory and
   RAG find their candidates with it, and no decision reads it. Train an

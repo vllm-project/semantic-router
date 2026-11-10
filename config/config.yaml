@@ -2703,9 +2703,19 @@ global:
           - device: cpu
           - endpoint: http://decision-worker:8100
             model: decision-kai
+        # A replica whose exchanges run out of their deadline 3 times in a
+        # row, while another replica answers, leaves dispatch for 30 s (twice
+        # as long each further time in a row, up to 5 min); at most half the
+        # replicas are out at once. These are the defaults;
+        # consecutive_timeouts: 0 turns ejection off.
+        outlier_detection:
+          consecutive_timeouts: 3
+          base_ejection_ms: 30000
+          max_ejection_ms: 300000
+          max_ejection_percent: 50
       # Engine arguments tune batching, precision, shared context and a
       # Decision model's input limit; each one left out keeps the runtime's
-      # default (website/docs/model-runtime/engine-args.md).
+      # default (website/docs/model-runtime/deploy/engine-args.md).
       decision-kai-tuned:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B

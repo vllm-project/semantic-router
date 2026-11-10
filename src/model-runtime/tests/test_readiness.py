@@ -255,6 +255,34 @@ def test_accelerator_selects_the_cpu_instruction_set_reference(
     assert CPUAccelerator().golden_reference(DeviceInfo("cpu", None, "unknown")) is None
 
 
+@pytest.mark.parametrize(
+    ("variable", "cap", "key"),
+    [
+        ("ONEDNN_MAX_CPU_ISA", "AVX2", "cpu:x86_64:avx2:bf16_emulated"),
+        ("DNNL_MAX_CPU_ISA", "avx2", "cpu:x86_64:avx2:bf16_emulated"),
+        ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE", "cpu:x86_64:avx2:bf16_emulated"),
+        ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16", "cpu:x86_64:avx2:bf16_native"),
+        ("ONEDNN_MAX_CPU_ISA", "ALL", "cpu:x86_64:avx2:bf16_native"),
+    ],
+)
+def test_onednn_capped_below_bf16_selects_the_emulated_reference(
+    monkeypatch, variable, cap, key
+):
+    """An AVX-512 BF16 host run with ``ATEN_CPU_CAPABILITY=avx2 ONEDNN_MAX_CPU_ISA=AVX2`` answers as an AVX2 host does."""
+    from vllm_srun.accel.cpu import CPUAccelerator
+
+    monkeypatch.setattr(torch.cpu, "_is_avx512_bf16_supported", lambda: True)
+    monkeypatch.setattr(torch.cpu, "_is_amx_tile_supported", lambda: False)
+    monkeypatch.setattr(torch.backends.cpu, "get_cpu_capability", lambda: "AVX2")
+    monkeypatch.setattr("platform.machine", lambda: "x86_64")
+    for name in ("ONEDNN_MAX_CPU_ISA", "DNNL_MAX_CPU_ISA"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv(variable, cap)
+    accelerator = CPUAccelerator()
+    (device,) = accelerator.devices()
+    assert accelerator.golden_reference(device) == key
+
+
 def test_freeze_autotune_points_triton_at_one_cache(tmp_path, monkeypatch):
     monkeypatch.delenv("TRITON_CACHE_DIR", raising=False)
     monkeypatch.delenv("TRITON_CACHE_AUTOTUNING", raising=False)
