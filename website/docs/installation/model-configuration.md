@@ -334,8 +334,8 @@ recipes:
 | --- | --- | --- |
 | `enabled` | `false` | Whether a failed attempt moves on to the next candidate. |
 | `max_attempts` | `3` | Attempts across candidates, the first one included. |
-| `total_timeout` | `30s` | Time for the whole chain. |
-| `per_attempt_timeout` | `10s` | Time for each candidate. It cannot exceed `total_timeout`. |
+| `total_timeout` | `30s` | Time from the start of the request in which another candidate is tried. A candidate gets at most what is left, and none starts after it runs out. |
+| `per_attempt_timeout` | `10s` | Time for each candidate after the first. It cannot exceed `total_timeout`. |
 | `retryable_status_codes` | `[502, 503, 504]` | Statuses that move on to the next candidate. |
 | `circuit_breaker` | 3 failures, `30s`, 1 probe | Skips a backend that keeps failing, for a cool-down. Global and recipe policies only. |
 
@@ -363,6 +363,17 @@ refused connection or a timeout, while behind Envoy the client receives
 Envoy's reply. Such a failure counts as a `503` or `504`, so keep those
 statuses in `retryable_status_codes` to fall back on it. Nothing falls back
 once any part of the response has reached the client.
+
+Neither fallback timeout shortens the first attempt, which keeps its provider
+model's and decision's `reliability` timeouts. To fall back from a model that
+never answers, give that provider model a `reliability.per_try_timeout` in
+standalone mode:
+
+- The timeout counts as a `504`, and the next candidate is tried.
+- The candidate gets at most `per_attempt_timeout` and what is left of
+  `total_timeout`, so make `total_timeout` longer than the `per_try_timeout`.
+- A decision's own `per_try_timeout` bounds every candidate it tries, so a
+  slower candidate fails the same way.
 
 On Kubernetes, a decision takes the same `reliability` and `fallback` blocks,
 with the same field names: in an `IntelligentRoute`'s `spec.decisions[]` and in
