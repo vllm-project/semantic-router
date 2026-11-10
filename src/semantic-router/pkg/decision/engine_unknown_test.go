@@ -400,3 +400,34 @@ func TestNOTOverAFailedSignalDoesNotMatchWithoutOnUnknown(t *testing.T) {
 		t.Fatalf("a known negative still matches: result = %#v, error = %v", result, err)
 	}
 }
+
+// A condition's on_error resolves a failed signal, so NOT reverses what it
+// resolved to, alone or inside AND and OR; without on_error it stays unknown.
+func TestNOTReversesWhatAConditionsOnErrorResolved(t *testing.T) {
+	signals := &SignalMatches{SignalErrors: map[string]string{"systemone:spam": "systemone_unavailable"}}
+	for _, onError := range []string{"", "no_match", "match"} {
+		for _, predicate := range []*config.NumericPredicate{nil, {GTE: float64Ptr(0.5)}} {
+			leaf := config.RuleNode{Type: config.SignalTypeSystemOne, Name: "spam", Predicate: predicate, OnError: onError}
+			for _, child := range []config.RuleNode{
+				leaf,
+				{Operator: "AND", Conditions: []config.RuleNode{leaf}},
+				{Operator: "OR", Conditions: []config.RuleNode{leaf}},
+			} {
+				rule := config.RuleNode{Operator: "NOT", Conditions: []config.RuleNode{child}}
+				engine := NewDecisionEngine([]config.Decision{{Name: "not_spam", Rules: rule}}, config.RoutingStrategyPriority)
+				result, err := engine.EvaluateDecisionsWithSignals(signals)
+				if want := onError == "no_match"; err != nil || (result != nil) != want {
+					t.Errorf("on_error %q, predicate %t, child %q: result = %#v, error = %v, want a match %t", onError, predicate != nil, child.Operator, result, err, want)
+				}
+			}
+		}
+	}
+	unresolved := config.RuleNode{Type: config.SignalTypeSystemOne, Name: "spam"}
+	resolved := unresolved
+	resolved.OnError = "no_match"
+	rule := config.RuleNode{Operator: "NOT", Conditions: []config.RuleNode{{Operator: "AND", Conditions: []config.RuleNode{unresolved, resolved}}}}
+	engine := NewDecisionEngine([]config.Decision{{Name: "not_spam", Rules: rule}}, config.RoutingStrategyPriority)
+	if result, err := engine.EvaluateDecisionsWithSignals(signals); err != nil || result == nil {
+		t.Fatalf("a resolved False makes the AND a known negative: result = %#v, error = %v", result, err)
+	}
+}

@@ -108,7 +108,7 @@ rewrites them to `systemone`.
 | --- | --- |
 | `name` | The rule's name, which conditions and projections use. |
 | `question` | The typed question: `type`, `instructions`, and its `choices`, `levels` or `labels`. |
-| `labels` | The options a `choice`, `set` or `span` rule matches. A condition can still name any option. |
+| `labels` | The options a `choice`, `set` or `span` rule matches. A condition on a `choice` rule can still name any option; one on a `set` or `span` rule names a counted label. |
 | `ignore_labels` | `set` and `span` only: labels that never count toward the rule. |
 | `predicate` | The probability or level the answer must meet (`gt`, `gte`, `lt`, `lte`). |
 | `deployment` | The deployment that answers; without one, the decision model. |

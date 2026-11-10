@@ -92,7 +92,7 @@ global:
 | --- | --- |
 | `name` | 规则名称，供条件和投影使用。 |
 | `question` | 类型化问题：`type`、`instructions`，以及它的 `choices`、`levels` 或 `labels`。 |
-| `labels` | `choice`、`set` 或 `span` 规则匹配的选项。条件仍可以指定任意选项。 |
+| `labels` | `choice`、`set` 或 `span` 规则匹配的选项。`choice` 规则上的条件仍可以指定任意选项；`set` 或 `span` 规则上的条件只能指定计入的标签。 |
 | `ignore_labels` | 仅 `set` 和 `span`：永不计入规则的标签。 |
 | `predicate` | 答案必须满足的概率或等级（`gt`、`gte`、`lt`、`lte`）。 |
 | `deployment` | 回答问题的部署；不写时为决策模型。 |
