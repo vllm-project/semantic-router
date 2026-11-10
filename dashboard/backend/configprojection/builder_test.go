@@ -100,3 +100,16 @@ func TestBuildSnapshotRejectsInvalidYAML(t *testing.T) {
 		t.Fatal("expected invalid YAML to fail")
 	}
 }
+
+func TestBuildSnapshotDoesNotResolveProcessEnvironment(t *testing.T) {
+	const secret = "projection-env-secret-fixture"
+	t.Setenv("PROJECTION_TEST_SECRET", secret)
+	input := strings.Replace(testCanonicalYAML, "Business and management related queries", "${PROJECTION_TEST_SECRET}", 1)
+	snapshot, err := BuildSnapshot(RefreshInput{YAMLBytes: []byte(input)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(snapshot.Signals), secret) || !strings.Contains(string(snapshot.Signals), "${PROJECTION_TEST_SECRET}") {
+		t.Fatal("historical projection expanded a process environment reference")
+	}
+}

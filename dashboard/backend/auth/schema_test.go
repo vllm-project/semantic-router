@@ -7,7 +7,7 @@ import (
 func TestNewPermissionsExistInAllPermissions(t *testing.T) {
 	t.Parallel()
 
-	requiredPerms := []string{PermFeedbackSubmit, PermReplayRead}
+	requiredPerms := []string{PermFeedbackSubmit, PermReplayRead, "config.secrets.read"}
 	allSet := make(map[string]bool, len(AllPermissions))
 	for _, p := range AllPermissions {
 		allSet[p] = true
@@ -72,6 +72,15 @@ func TestDefaultRolePermissionsCoversAllSupportedRoles(t *testing.T) {
 	for _, role := range SupportedRoles {
 		if _, ok := DefaultRolePermissions[role]; !ok {
 			t.Fatalf("role %q missing from DefaultRolePermissions", role)
+		}
+	}
+}
+
+func TestConfigSecretViewIsAdminOnlyByDefault(t *testing.T) {
+	t.Parallel()
+	for _, role := range SupportedRoles {
+		if got, want := containsPermission(DefaultRolePermissions[role], "config.secrets.read"), role == RoleAdmin; got != want {
+			t.Errorf("role %s secret view = %v, want %v", role, got, want)
 		}
 	}
 }

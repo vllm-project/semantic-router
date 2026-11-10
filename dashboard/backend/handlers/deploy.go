@@ -131,6 +131,17 @@ func DeployPreviewHandler(configPath string, readonlyMode bool) http.HandlerFunc
 			return
 		}
 
+		if !callerCanViewConfigSecrets(r) {
+			currentForDiffBytes, err = redactConfigYAML(currentForDiffBytes)
+			if err == nil {
+				previewBytes, err = redactConfigYAML(previewBytes)
+			}
+			if err != nil {
+				http.Error(w, "Failed to prepare configuration preview", http.StatusInternalServerError)
+				return
+			}
+		}
+		w.Header().Set("Cache-Control", "private, no-store")
 		currentForDiff := canonicalizeYAMLForDiff(currentForDiffBytes)
 		previewForDiff := canonicalizeYAMLForDiff(previewBytes)
 
@@ -428,7 +439,7 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal merged config: %w", err)
 	}
-	return mergedYAML, nil
+	return restoreConfigSecrets(currentData, mergedYAML)
 }
 
 // mergeDSLOwnedNodes applies only the configuration surface owned by the DSL.

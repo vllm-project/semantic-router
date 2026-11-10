@@ -121,7 +121,7 @@ func currentGlobalDefaults(configPath string) (*routerconfig.CanonicalGlobal, er
 		return &defaults, nil
 	}
 
-	parsed, err := routerconfig.ParseYAMLBytes(configData)
+	parsed, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion(configData)
 	if err != nil {
 		return &defaults, nil
 	}
