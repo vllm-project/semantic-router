@@ -45,7 +45,7 @@ recipes:
     signals:
       pii:
         - name: sensitive-input
-          threshold: 0.5
+          predicate: {gte: 0.5}
     decisions:
       - name: local-sensitive-route
         description: Keep detected PII on the local backend.

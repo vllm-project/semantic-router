@@ -84,9 +84,10 @@ tool calls and non-text content are not read. It also reads what
 cannot hide in a fake memory block.
 
 It reads its whole input, in windows when the input is longer than one
-forward. Text the model did not read (over its input or scan budget,
-truncated, or not read by the signals' deadline) counts as personal data, so
-text that could not be checked cannot pass as clean.
+forward. Text the model did not read (over its input or scan budget, or
+truncated) counts as personal data, so text that could not be checked cannot
+pass as clean. A scan that misses the signals' deadline gives no answer, which
+matches only with `on_unknown: match`.
 
 A model may find a value once and miss its later copies. Every other exact,
 whole-word copy of a found value of two or more characters is reported too,

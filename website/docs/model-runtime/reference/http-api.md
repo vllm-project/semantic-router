@@ -143,10 +143,11 @@ The router reads a long request through Vela 2.0 in two ways. A routing
 question (domain, fact check, feedback, modality, `systemone` questions
 without `coverage: full`, and the `systemone` selector) truncates. A safety question (jailbreak, safety,
 PII and hallucination) reads it whole, up to the model's scan budget or the
-deployment's `input.max_tokens` with `overflow: window`. Content past it, or
-a safety scan that misses the signals' deadline
-(`global.model_catalog.signal_timeout_ms`), was not read: a jailbreak or PII
-rule matches it as `unscanned`.
+deployment's `input.max_tokens` with `overflow: window`. Content past it was
+not read: a jailbreak or PII rule matches it as `unscanned`. A safety scan
+that misses the signals' deadline (`global.model_catalog.signal_timeout_ms`)
+gives no answer: a jailbreak or PII rule then does not match unless it sets
+`on_unknown: match`.
 
 Token budgets describe input coverage, not response time. Complete long-input
 embeddings and scans can exceed the signal deadline on a CPU with few cores.
