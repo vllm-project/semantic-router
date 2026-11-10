@@ -261,9 +261,10 @@ resolve as a failed signal ([Reference](../reference/http-api.md#long-inputs)).
 
 A model-runtime signal that has not answered by the signals' deadline resolves
 through its policy, so one slow model does not fail the whole request: a
-routing signal as a failed signal (`Unknown` under `rules.on_unknown`;
-otherwise no match, or a `systemone` condition's `on_error`), a jailbreak or
-PII rule as no answer, which matches only with `on_unknown: match`. The deadline
+jailbreak or PII rule as no answer, which matches only with
+`on_unknown: match`, and any other signal as a failed signal (`Unknown` under
+`rules.on_unknown`; otherwise no match, or a `systemone` condition's
+`on_error`). The deadline
 is the request's less a tenth of the time left, or 45 s for a served request;
 set `global.model_catalog.signal_timeout_ms` to shorten it. On a CPU, Vela 2.0
 0.3B reads about 1,000 tokens a second on four cores, so a long request may

@@ -199,7 +199,7 @@ global:
 ## 请求在等待慢模型 {#a-request-waits-on-a-slow-model}
 
 在信号截止时间前没有返回的模型运行时信号会按其策略处理，因此一个慢模型不会让整个请求失败：
-路由类信号按失败的信号处理（设置了 `rules.on_unknown` 时为 `Unknown`；否则不匹配，或遵循 `systemone` 条件的 `on_error`），越狱或 PII 规则按没有答案处理，只有设置 `on_unknown: match` 时才匹配。截止时间是请求的截止时间减去剩余时间的十分之一，
+越狱或 PII 规则按没有答案处理，只有设置 `on_unknown: match` 时才匹配；其他信号都按失败的信号处理（设置了 `rules.on_unknown` 时为 `Unknown`；否则不匹配，或遵循 `systemone` 条件的 `on_error`）。截止时间是请求的截止时间减去剩余时间的十分之一，
 已部署服务的请求没有路由器可见的截止时间，则为 45 秒；设置 `global.model_catalog.signal_timeout_ms`
 可以缩短它。在 CPU 上，Vela 2.0 0.3B 用四个核每秒约读取 1,000 个 token，因此长请求可能无法在截止时间内完成安全扫描。
 
