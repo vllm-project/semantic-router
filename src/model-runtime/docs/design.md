@@ -332,14 +332,24 @@ MPS backend and run the pure-torch references; they are marked unvalidated.
 
 `Accelerator.golden_reference(device)` names an optional hardware-qualified
 golden reference. Its default is `accelerator:arch`; CPU adds PyTorch's selected
-instruction set and native or emulated BF16 capability, for example
-`cpu:x86_64:avx2:bf16_emulated`. Device inventory architecture names stay unchanged.
+instruction set and whether its kernels compute BF16 natively, for example
+`cpu:x86_64:avx2:bf16_emulated`. Native BF16 needs AVX-512 BF16 or AMX, and
+oneDNN not capped below them (`ONEDNN_MAX_CPU_ISA`): an AVX-512 BF16 host run
+with `ATEN_CPU_CAPABILITY=avx2 ONEDNN_MAX_CPU_ISA=AVX2` answers as an AVX2 host
+does and selects that host's reference. Device inventory architecture names
+stay unchanged.
 
 `tools/golden_answers.py --record` writes both the generic device-class baseline
-and any qualified reference. The first generic baseline is preserved within a
-revision; later hardware runs update only their qualified entries. A revision
-change clears all old references. Record the new revision on the intended
-baseline device before adding other hardware classes.
+and any qualified reference, with the PyTorch version each was recorded with
+(`torch`). It loads the model without comparing it to the references it
+replaces. The first generic baseline is preserved within a revision and
+PyTorch version; later hardware runs update only their qualified entries. A
+revision change clears all old references, and a PyTorch change starts a new
+baseline for its device class. Record the new revision on the intended
+baseline device before adding other hardware classes. Decision 3.0 computes in
+BF16 on CPU, where a new PyTorch can move its answers past the CPU tolerance:
+its CPU references are recorded with the PyTorch the CPU images pin, and a
+test fails when they are not.
 
 ### 5.4 Engine arguments
 
