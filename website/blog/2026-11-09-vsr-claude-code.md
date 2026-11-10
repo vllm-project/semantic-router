@@ -92,7 +92,16 @@ vSR is six small apps on one decision model. You can turn each one on or off.
 
 - ⟦Router: the two questions and the confidence rule, in prose.⟧
 - ⟦routerGoal: quality, balanced, save.⟧
-- ⟦Measured: the routing cost row from a real session, ⟦$ routed⟧ vs ⟦$ on session model⟧.⟧
+
+In one session on Opus 5.5, a subagent asked to count the lines of a file went to Haiku 5.5 at medium effort. vSR priced that turn at under $0.01, against $0.17 had it run on Opus 5.5: 97% less, at list price. In the same session the router kept "Explain calc.py briefly" on Opus 5.5, because its confidence (0.33) was under the 0.60 line.
+
+<ArticleFigure
+  src="/img/blog/vsr-claude-code/10-routed-haiku-cost.png"
+  width={1912} height={450}
+  alt="Left: a subagent counting the lines of calc.py is ROUTED to Haiku 5.5 at medium effort as an easy task. Right: the /vsr pane with a KEPT decision at confidence 0.33 and the routing row: under $0.01 for 1 subagent turn vs $0.17 on Opus 5.5, saved 97%."
+>
+  **ROUTED**: an easy subagent task runs on Haiku 5.5. The `routing` row in `/vsr` prices it against the session's model: under $0.01 instead of $0.17. **KEPT**: a task the router was not sure about stays on Opus 5.5.
+</ArticleFigure>
 
 ### Protect: redact, shield and guard
 
@@ -180,6 +189,7 @@ vSR narrows what reaches Claude and what runs. It is not a sandbox, and each app
 - **Guard's scores can be wrong in both directions.** A harmless command can be held, and a risky one can score under the line. The fixed rules are the only hard guarantee. Guard adds holds on top of Claude Code's own permissions, so keep those in place.
 - **Default waits let unchecked work through.** When the decision model is slow or offline, redact, shield and guard step aside and say so, with a `SKIPPED` line or the `model offline` tally. Set a wait to `until done` where you would rather wait or withhold.
 - **Routing savings are estimates.** The cost row prices the subagent turns vSR saw at list price. It is not your bill.
+- **On a CPU runtime the router often runs out of time.** It waits a fixed 1.5 s, and on a laptop CPU the decision model often needs about that long, so a subagent can start on your session's model with a `SKIPPED` line. In the session above, one of three subagents was routed. Routing works best on a GPU or remote runtime.
 
 ## What you see
 
