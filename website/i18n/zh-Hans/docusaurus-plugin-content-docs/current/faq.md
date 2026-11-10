@@ -13,12 +13,13 @@ translation:
 
 ## 它是 AI 网关，还是其他系统？ {#is-it-an-ai-gateway-or-something-else}
 
-它由 Frontend、可选的 Decision Engine 和模型运行时组成。Frontend 接收请求，
-Decision Engine 根据信号与策略选择模型或有界多模型工作流。默认的 standalone
-网关自行转发请求；使用 `--gateway extproc` 可接入 Envoy。
+它由三部分组成：
 
-模型运行时执行 Router 的判断、embedding 等模型任务，Chat 后端独立运行。
-TLS 终止与集群级 Pod 调度仍由部署环境负责。
+- **Frontend** 接收请求。默认的 standalone 网关自行转发请求；使用 `--gateway extproc` 可接入 Envoy。
+- **可选的 Decision Engine** 根据信号与策略选择模型或有界多模型工作流。
+- **模型运行时**执行 Router 的判断、embedding 等模型任务。
+
+Chat 后端独立运行。TLS 终止与集群级 Pod 调度仍由部署环境负责。
 
 架构见[组件架构](overview/component-architecture)，多模型执行见
 [Mixture of Models](overview/mom-model-family)。
@@ -30,10 +31,10 @@ TLS 终止与集群级 Pod 调度仍由部署环境负责。
 
 ```bash
 # Router：位置参数指定提供路由判断的模型
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --config config.yaml
+vllm-sr serve vllm-sr/vela3-fast --config config.yaml
 
 # Engine：共享 Frontend 和运行时，不启用 Chat 路由
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
+vllm-sr serve vllm-sr/d3-edge -e
 ```
 
 `serve` 默认启动 Router；只传模型不会改变模式。`--engine` 可缩写为 `-e`。
@@ -49,7 +50,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
 `api: systemone` 入口，并在 listener 中授权其 `vllm-sr/auto` 名称，运行原生 escalate。
 默认 Chat 入口不会隐式开启原生路由。配置和请求示例见
 [System One escalate 指南](tutorials/algorithm/looper/escalate#on-system-one)和
-[快速开始](model-runtime/quickstart)。
+[快速开始](./model-runtime/get-started/quickstart)。
 
 ## 如何与 Agent Harness 配合？ {#how-does-it-work-with-an-agent-harness}
 
@@ -60,7 +61,7 @@ Harness 管理 Agent 循环、工具和任务状态。它调用稳定模型入�
 
 ## 如何衡量路由准确性和业务价值？ {#how-do-we-measure-routing-accuracy-and-business-value}
 
-分类器准确率不足以回答这个问题。需要验证路由配方能否相对于强单模型基线，**保持回答质量，同时降低成本和延迟**。这需要配对证据，不能仅靠变更前后的个别观察。
+信号准确率不足以回答这个问题。需要验证路由配方能否相对于强单模型基线，**保持回答质量，同时降低成本和延迟**。这需要配对证据，不能仅靠变更前后的个别观察。
 
 仓库使用 **sr-bench**：固定用例、评分器版本、请求参数和价格；在同一批用例上运行最强单模型和当前混合模型；将质量与 `100 × (1 − candidate cost / baseline cost)` 一起阅读。解释结果时遵循两个原则：
 
@@ -122,4 +123,4 @@ signal → policy / decision → algorithm / model → plugin → endpoint sched
 
 交付、路由正确性和回答质量是三个独立结果。明确说明未测量的部分，不要据此推断成功。
 
-[CLI 参考](api/cli)说明这里使用的全部参数，[VSR 标头](troubleshooting/vsr-headers)列出回执头，[API 与可观测性](tutorials/global/api-and-observability)介绍遥测方式。
+[CLI 参考](api/cli)说明这里使用的全部参数，[VSR 标头](api/headers)列出回执头，[API 与可观测性](tutorials/global/api-and-observability)介绍遥测方式。

@@ -103,7 +103,7 @@ A late or failed answer leaves a rule unknown. The decision's
 `rules.on_unknown` (or a condition's `on_error`) says what that means; by
 default an unknown rule doesn't match, so a guard whose decision model is down
 lets traffic through. `on_unknown: match` on a `jailbreak` or `pii` rule fails
-closed. The [System One reference](https://vllm-sr.ai/docs/system-one/reference)
+closed. The [System One reference](https://vllm-sr.ai/docs/system-one/reference/presets)
 lists every preset, its labels and the calibrated thresholds.
 
 Each decision model answers some question types, and the load refuses a
