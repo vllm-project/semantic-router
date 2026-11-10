@@ -14,7 +14,7 @@ backends are already exposed as Kubernetes services, KServe
 `InferenceService`s, or Llama Stack services.
 
 The Operator does not deploy model servers. It discovers or references them and
-generates the provider bindings used by the Router.
+generates the request backends (`providers.models`) the Router uses.
 
 ## What the Operator manages
 
@@ -113,33 +113,38 @@ kubectl get deployment,service \
   -l app.kubernetes.io/instance=my-router
 ```
 
-Send a direct request with the concrete model name, or add canonical routing
-under `spec.config.routing` to expose automatic or policy-driven behavior.
+Send a direct request with the concrete model name, or add canonical recipes
+under `spec.config.recipes` to expose automatic or policy-driven behavior.
 
 ## Add routing policy
 
-`spec.config.routing` accepts the canonical routing object. The example below
-adds a catch-all decision over the discovered model:
+`spec.config.recipes` accepts canonical recipes; the fields of the recipe named
+`default` replace the Operator's default recipe's. `spec.config.entrypoints`
+and `spec.config.plugins` accept canonical `entrypoints` and `global.plugins`,
+and `spec.config.models` states the facts of a discovered model by name. The
+example below adds a catch-all decision over the discovered model:
 
 ```yaml
 spec:
   config:
-    routing:
-      strategy: priority
-      modelCards:
-        - name: local/model
-          modality: text
-          capabilities: [chat]
-      decisions:
-        - name: default-route
-          description: Route unmatched requests to the discovered local model.
-          priority: 1
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: local/model
+    models:
+      - name: local/model
+        capabilities: [chat]
+    recipes:
+      - name: default
+        strategy: priority
+        decisions:
+          - name: default-route
+            description: Route unmatched requests to the discovered local model.
+            priority: 1
+            rules:
+              operator: AND
+              conditions: []
+            modelRefs:
+              - model: local/model
 ```
+
+`spec.config.routing` is removed; a resource that sets it is refused.
 
 The remaining `spec.config` fields are Operator adapters for shared Router
 settings such as response cache, classifiers, tools, observability, and

@@ -1,5 +1,6 @@
 """Request media decoded in worker processes: the same patch rows and the same rejections as in-process decoding."""
 
+import os
 import pickle
 
 import pytest
@@ -49,6 +50,15 @@ def test_without_workers_decoding_runs_on_the_calling_thread(workers):
     assert caught.value.reason == "image_format"
 
 
+def test_stopping_the_workers_waits_for_them_to_exit(workers):
+    workers(1)
+    pid = media.outcome(media.submit(os.getpid), os.getpid)
+    assert pid != os.getpid()
+    media.stop()
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+
+
 def test_worker_processes_decode_images_bit_for_bit(workers, png_url):
     workers(1)
     value = png_url(97, 61, 5)
@@ -89,3 +99,26 @@ def test_requests_read_the_same_images_with_and_without_workers(
     for inline, worker in zip(answers[0][0], answers[2][0], strict=True):
         assert torch.equal(inline, worker)
     assert answers[0][1] == answers[2][1]
+
+
+def test_images_are_processed_on_the_cpu_device_thread(monkeypatch, png_url):
+    """One OpenMP team: preprocessing shares the thread CPU forwards run on, from any caller."""
+    import threading
+
+    from vllm_srun.accel.cpu import device_thread
+
+    threads = []
+    patches = img._patches
+
+    def recorded(*args):
+        threads.append(threading.current_thread().name)
+        return patches(*args)
+
+    monkeypatch.setattr(img, "_patches", recorded)
+    picture, digest = img.decode(png_url(97, 61, 5))
+    img.preprocess(picture, digest, SETTINGS)
+    pixels, _ = img.load(png_url(97, 61, 5), SETTINGS)
+    img.loaded(pixels, digest, SETTINGS)
+    device_thread().submit(img.preprocess, picture, digest, SETTINGS).result(timeout=60)
+    device = device_thread().submit(lambda: threading.current_thread().name).result()
+    assert threads == [device, device, device]

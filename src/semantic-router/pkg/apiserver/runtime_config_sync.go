@@ -19,8 +19,6 @@ const (
 	runtimeConfigPathEnv = configsnapshot.RuntimeConfigPathEnv
 	sourceConfigPathEnv  = configsnapshot.SourceConfigPathEnv
 	runtimeAlgorithmEnv  = "VLLM_SR_ALGORITHM_OVERRIDE"
-	runtimePlatformEnv   = "VLLM_SR_PLATFORM"
-	dashboardPlatformEnv = "DASHBOARD_PLATFORM"
 	configBaseDirEnv     = config.ConfigBaseDirEnv
 	configBackupDirEnv   = configsnapshot.HistoryDirEnv
 	defaultPythonCLIPath = "/app"
@@ -62,9 +60,7 @@ func configuredRuntimeConfigPath(sourceConfigPath string) string {
 
 func hasRuntimeOverrideEnv() bool {
 	return strings.TrimSpace(os.Getenv(runtimeConfigPathEnv)) != "" ||
-		strings.TrimSpace(os.Getenv(runtimeAlgorithmEnv)) != "" ||
-		strings.TrimSpace(os.Getenv(runtimePlatformEnv)) != "" ||
-		strings.TrimSpace(os.Getenv(dashboardPlatformEnv)) != ""
+		strings.TrimSpace(os.Getenv(runtimeAlgorithmEnv)) != ""
 }
 
 func syncRuntimeConfigForCurrentRuntime(sourceConfigPath string) (string, error) {
@@ -141,10 +137,9 @@ from cli.commands.runtime_support import sync_runtime_config
 
 config_path = Path(%q)
 algorithm = (os.getenv(%q) or "").strip() or None
-platform = (os.getenv(%q) or os.getenv(%q) or "").strip() or None
-effective = sync_runtime_config(config_path, algorithm=algorithm, platform=platform)
+effective = sync_runtime_config(config_path, algorithm=algorithm)
 print(str(effective))
-`, cliRoot, configPath, runtimeAlgorithmEnv, runtimePlatformEnv, dashboardPlatformEnv)
+`, cliRoot, configPath, runtimeAlgorithmEnv)
 }
 
 func parseRuntimeSyncOutput(output string, fallback string) string {

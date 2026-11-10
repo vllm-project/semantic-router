@@ -15,7 +15,7 @@ import (
 
 func benchmarkHeaderRequest(expected string) *ext_proc.ProcessingRequest_RequestHeaders {
 	return &ext_proc.ProcessingRequest_RequestHeaders{RequestHeaders: &ext_proc.HttpHeaders{Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
-		{Key: ":method", Value: "POST"}, {Key: ":path", Value: "/v1/chat/completions"}, {Key: headers.SRBenchExpectedConfigHash, Value: expected},
+		{Key: ":method", Value: "POST"}, {Key: ":path", Value: "/v1/chat/completions"}, {Key: headers.VSRBenchExpectedConfigHash, Value: expected},
 	}}}}
 }
 
@@ -48,36 +48,41 @@ func TestBenchmarkConfigPreconditionRejectsBeforeGeneration(t *testing.T) {
 	}
 }
 
-func TestBenchmarkReceiptUsesRequestGenerationAndOverwritesProviderValue(t *testing.T) {
-	hash := strings.Repeat("a", 64)
-	router := &OpenAIRouter{Config: &config.RouterConfig{DocumentHash: hash}}
-	ctx := &RequestContext{Headers: map[string]string{headers.SRBenchExpectedConfigHash: hash}}
-	for _, immediate := range []bool{false, true} {
-		mutation := &ext_proc.HeaderMutation{SetHeaders: []*core.HeaderValueOption{newHeaderValueOption(headers.VSRConfigHash, "forged")}}
-		response := &ext_proc.ProcessingResponse{}
-		if immediate {
-			response.Response = &ext_proc.ProcessingResponse_ImmediateResponse{ImmediateResponse: &ext_proc.ImmediateResponse{Headers: mutation}}
-		} else {
-			response.Response = &ext_proc.ProcessingResponse_ResponseHeaders{ResponseHeaders: &ext_proc.HeadersResponse{Response: &ext_proc.CommonResponse{HeaderMutation: mutation}}}
+// The receipt names the generation the request was admitted on, in the trace
+// of every response, refusals included, for a caller allowed it.
+func TestBenchmarkReceiptNamesTheAdmittedGeneration(t *testing.T) {
+	active := strings.Repeat("a", 64)
+	router := &OpenAIRouter{Config: &config.RouterConfig{DocumentHash: active}}
+	router.Config.Headers.Debug = config.DebugHeadersAny
+	for _, expected := range []string{active, strings.Repeat("b", 64)} {
+		ctx := &RequestContext{Headers: map[string]string{}, TraceContext: context.Background()}
+		request := benchmarkHeaderRequest(expected)
+		request.RequestHeaders.Headers.Headers = append(request.RequestHeaders.Headers.Headers, &core.HeaderValue{Key: headers.VSRDebug, Value: "true"})
+		response, err := router.handleRequestHeaders(request, ctx)
+		if err != nil {
+			t.Fatal(err)
 		}
-		router.bindBenchmarkConfigResponse(response, ctx)
-		count := 0
-		for _, option := range mutation.SetHeaders {
-			if option.GetHeader().GetKey() == headers.VSRConfigHash {
-				count++
-				if string(option.GetHeader().GetRawValue()) != hash || option.AppendAction != core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD {
-					t.Fatal("receipt was not overwritten with request generation")
-				}
+		if ctx.BenchmarkConfigHash != active {
+			t.Fatalf("admitted generation = %q, want the active %q", ctx.BenchmarkConfigHash, active)
+		}
+		if immediate := response.GetImmediateResponse(); immediate != nil {
+			appendRoutedResponseHeaders(response, ctx)
+			if got := traceOf(t, immediate.GetHeaders().GetSetHeaders())[headers.TraceConfigHash]; got != `"`+active+`"` {
+				t.Fatalf("refusal receipt = %s, want the active generation", got)
 			}
 		}
-		if count != 1 {
-			t.Fatalf("receipt count=%d", count)
-		}
 	}
+}
+
+// Envoy neither retries nor hedges a config-bound evaluation request, so its
+// receipt counts every provider call.
+func TestBenchmarkBindingDisablesEnvoyRetries(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{DocumentHash: strings.Repeat("a", 64)}}
+	ctx := &RequestContext{Headers: map[string]string{headers.VSRBenchExpectedConfigHash: strings.Repeat("a", 64)}}
 	response := newContinueRequestHeadersResponse()
 	router.bindBenchmarkConfigResponse(response, ctx)
-	removed := response.GetRequestHeaders().GetResponse().GetHeaderMutation().GetRemoveHeaders()
-	if len(removed) != 5 || removed[0] != headers.SRBenchExpectedConfigHash {
-		t.Fatalf("binding leaked to provider: %v", removed)
+	set := headerValuesByName(response.GetRequestHeaders().GetResponse().GetHeaderMutation().GetSetHeaders())
+	if set[headers.EnvoyMaxRetries] != "0" || set[headers.EnvoyHedgeOnPerTryTimeout] != "false" {
+		t.Fatalf("binding set %v, want no retries and no hedging", set)
 	}
 }

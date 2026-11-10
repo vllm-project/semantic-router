@@ -21,7 +21,7 @@ func TestSystemOneHTTPUsesPublishedDeploymentAndNativeTypes(t *testing.T) {
 	fake := runtimetest.New(runtimetest.Model{ID: "served"})
 	var forwarded string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/systemone" {
+		if r.URL.Path == "/v1/decisions" {
 			body, _ := io.ReadAll(r.Body)
 			forwarded = string(body)
 			w.Header().Set("Server-Timing", "total;dur=2")
@@ -34,8 +34,8 @@ func TestSystemOneHTTPUsesPublishedDeploymentAndNativeTypes(t *testing.T) {
 	manager := modelservice.NewManager()
 	defer func() { _ = manager.Shutdown(context.Background()) }()
 	cfg := &config.RouterConfig{}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"selected": {Provider: config.ModelRuntimeProvider, Endpoint: upstream.URL, ServedName: "served"}}
-	cfg.DecisionRules = []config.DecisionSignalRule{{Name: "probe", Deployment: "selected", Question: config.DecisionQuestion{Type: "noul", Instructions: "test?"}}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"selected": {Provider: config.ModelRuntimeProvider, Endpoint: upstream.URL, Model: "served"}}
+	cfg.SystemOneRules = []config.SystemOneRule{{Name: "probe", Deployment: "selected", Question: config.SystemOneQuestion{Type: "noul", Instructions: "test?"}}}
 	if err := manager.Reconcile(cfg); err != nil {
 		t.Fatal(err)
 	}

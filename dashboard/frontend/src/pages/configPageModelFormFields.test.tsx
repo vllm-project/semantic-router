@@ -28,7 +28,8 @@ describe('model form effective fields', () => {
     expect(markup).toContain('value="openai"')
     expect(markup).toContain('value="responses"')
     expect(markup).toContain('value="anthropic"')
-    expect(markup).not.toContain('value="images"')
+    expect(markup).toContain('value="images"')
+    expect(markup).not.toContain('value="speech"')
   })
 
   it('recomputes defaults from the current backend rather than freezing the opening value', () => {
@@ -68,7 +69,6 @@ describe('model form effective fields', () => {
     }
     const model = getNormalizedModels(
       { providers: { models: [{ name: 'custom-alias', backend_refs: [{ provider: 'test' }] }] } },
-      true,
       customCatalog,
     )[0]
     const form = editModelFormData(model)
@@ -96,7 +96,6 @@ describe('model form effective fields', () => {
           ],
         },
       },
-      true,
       catalog,
     )[0]
     const data = editModelFormData(model)

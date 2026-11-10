@@ -10,8 +10,11 @@ The model is served as ``vllm-srun serve`` serves it (verification,
 pinned kernel choices, readiness) and answers its family's golden requests
 alone, in their released forwards, recorded as the readiness check compares them: decision
 answers, or a surface response's numbers (``LoadedModel.golden_values``).
-``--record`` merges this device class into the file's entries, keyed by
-repository and pinned revision.
+``--record`` writes a generic device-class reference and any hardware-qualified
+reference, keyed by repository and pinned revision. Within a revision, the first
+generic baseline is retained while hardware entries are updated. A new revision
+discards the old references and starts a new baseline; record it on the intended
+baseline device before adding other hardware classes.
 """
 
 from __future__ import annotations
@@ -24,6 +27,12 @@ from typing import Any
 from vllm_srun.config import ModelConfig, ServeConfig
 from vllm_srun.registry import builtin
 from vllm_srun.runtime import Runtime
+
+# Pinned by a family table but not served yet: the vela3 image package's
+# serving path is not implemented (#5625), so Runtime.load refuses it and a
+# family-wide run would stop before recording. An explicit --model still
+# loads it and fails loudly.
+UNSERVED = frozenset({"vllm-sr/vela3-fast-vision"})
 
 
 def answers(
@@ -47,6 +56,10 @@ def answers(
         for golden in served.family.golden(served.package):
             values.update(served.golden_surface(golden["surface"], golden["body"]))
         info = served.model.info
+        goldens = {served.placement.device.accelerator: values}
+        key = served.placement.accelerator.golden_reference(served.placement.device)
+        if key is not None:
+            goldens[key] = values
         return {
             "model": info.id,
             "repo": info.repo,
@@ -54,7 +67,7 @@ def answers(
             "model_sha256": info.model_sha256,
             "device": served.placement.device.label,
             "readiness": served.health.golden.describe(),
-            "golden_answers": {served.placement.device.accelerator: values},
+            "golden_answers": goldens,
         }
     finally:
         runtime.stop()
@@ -66,7 +79,12 @@ def record(path: Path, entries: list[dict[str, Any]]) -> None:
         current = table.get(entry["repo"])
         if current is None or current.get("revision") != entry["revision"]:
             current = {"revision": entry["revision"], "answers": {}}
-        current["answers"].update(entry["golden_answers"])
+        generic = entry["device"].split(":", 1)[0]
+        for key, values in entry["golden_answers"].items():
+            if key == generic:
+                current["answers"].setdefault(key, values)
+            else:
+                current["answers"][key] = values
         table[entry["repo"]] = current
     path.write_text(
         json.dumps(table, indent=1, sort_keys=True) + "\n", encoding="utf-8"
@@ -90,7 +108,11 @@ def main() -> None:
     if bool(args.model) == bool(args.family):
         parser.error("give a model or --family")
     targets = (
-        [(m.repo_id, m.revision) for m in builtin.all_models(args.family)]
+        [
+            (m.repo_id, m.revision)
+            for m in builtin.all_models(args.family)
+            if m.repo_id not in UNSERVED
+        ]
         if args.family
         else [(args.model, args.revision)]
     )

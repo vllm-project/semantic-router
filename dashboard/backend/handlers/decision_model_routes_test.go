@@ -12,7 +12,7 @@ import (
 
 func TestDecisionRoutesUsesManagementIdentityAndPreservesNativeBody(t *testing.T) {
 	const input = `{"model":"vllm-sr/auto","request":{"state":"text","questions":{"task":{"type":"choice","criteria":{"z":"Z","a":"A"}}}}}`
-	const routes = `{"available":true,"routes":[{"model":"vllm-sr/auto","recipe":"native","algorithms":["cascade"],"question_types":["choice","score","noul"],"execution_timeout_ms":120000}]}`
+	const routes = `{"available":true,"routes":[{"model":"vllm-sr/auto","recipe":"native","algorithms":["escalate"],"question_types":["choice","score","noul"],"execution_timeout_ms":120000}]}`
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != decisionModelRoutesPath || r.URL.RawQuery != "" || r.Header.Get("Authorization") != "Bearer management" || r.Header.Get("Cookie") != "" || r.Header.Get("Api-Key") != "" {
 			t.Errorf("unexpected management request: %s %v", r.URL, r.Header)
@@ -104,5 +104,20 @@ func TestDecisionRoutesRejectsOversizedBody(t *testing.T) {
 	DecisionModelRoutesHandler("http://127.0.0.1:1")(w, httptest.NewRequest(http.MethodPost, "/api/decision-model/routes", strings.NewReader(body)))
 	if w.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("oversized body: %d", w.Code)
+	}
+}
+
+func TestDecisionRoutesHeadDiscoversWithoutExecuting(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("HEAD discovery forwarded as %s", r.Method)
+		}
+		_, _ = io.WriteString(w, `{"available":true,"routes":[]}`)
+	}))
+	defer upstream.Close()
+	response := httptest.NewRecorder()
+	DecisionModelRoutesHandler(upstream.URL)(response, httptest.NewRequest(http.MethodHead, "/api/decision-model/routes", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("HEAD returned %d: %s", response.Code, response.Body.String())
 	}
 }

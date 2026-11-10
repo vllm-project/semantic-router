@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/graph"
 )
@@ -384,7 +385,7 @@ func (l *WorkflowsLooper) startWorkflowStepWorkers(
 				return
 			}
 			defer func() { <-sem }()
-			resp, err := l.callWorkflowModel(stepCtx, stepReq, cfg, modelName, false, iterationStart+idx, req)
+			resp, err := l.callWorkflowModel(stepCtx, stepReq, cfg, modelName, llmprotocol.TrustedStageCandidate, false, iterationStart+idx, req)
 			results <- workflowModelResult{index: modelIndex, model: modelName, resp: resp, err: err}
 		}(idx, modelIndex, modelName)
 	}
@@ -477,7 +478,7 @@ func (l *WorkflowsLooper) executeWorkflowStepSequential(
 	failed := make([]FusionFailedModel, 0)
 	for modelIndex := modelStartIndex; modelIndex < len(step.Models); modelIndex++ {
 		modelName := step.Models[modelIndex]
-		resp, err := l.callWorkflowModel(stepCtx, stepReq, cfg, modelName, true, iterationStart+(modelIndex-modelStartIndex), req)
+		resp, err := l.callWorkflowModel(stepCtx, stepReq, cfg, modelName, llmprotocol.TrustedStageCandidate, true, iterationStart+(modelIndex-modelStartIndex), req)
 		if err != nil {
 			failed = append(failed, FusionFailedModel{Model: modelName, Error: modelFailureReason(err)})
 			if errors.Is(err, graph.ErrHopLimit) {
@@ -545,7 +546,7 @@ func (l *WorkflowsLooper) synthesizeWorkflowFinal(
 	finalReq := appendFusionStageMessage(req.OriginalRequest, prompt)
 	finalCtx, cancel := workflowRoundContext(ctx, cfg)
 	defer cancel()
-	resp, err := l.callWorkflowModel(finalCtx, finalReq, cfg, modelName, true, workflowFinalIteration(stepResults), req)
+	resp, err := l.callWorkflowModel(finalCtx, finalReq, cfg, modelName, llmprotocol.TrustedStageFinal, true, workflowFinalIteration(stepResults), req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("workflow final synthesis failed for model %q: %w", modelName, err)
 	}
@@ -751,6 +752,7 @@ func (l *WorkflowsLooper) callWorkflowModel(
 	req *openai.ChatCompletionNewParams,
 	cfg workflowsExecutionConfig,
 	modelName string,
+	toolStage llmprotocol.TrustedStage,
 	allowTools bool,
 	iteration int,
 	baseReq *Request,
@@ -761,7 +763,7 @@ func (l *WorkflowsLooper) callWorkflowModel(
 		baseReq,
 		callReq,
 		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(baseReq, modelName)},
-		CallOptions{DecisionName: baseReq.DecisionName, Iteration: iteration},
+		CallOptions{DecisionName: baseReq.DecisionName, Iteration: iteration, ToolStage: toolStage},
 	)
 }
 

@@ -19,8 +19,8 @@ import (
 //
 // For every override the workflow declares, the set of testcases the profile
 // selects at runtime but the override omits must equal the profile's
-// KnownCIExclusions keys in both directions (the same ratchet discipline as
-// Gate A), and the override must not name testcases the profile does not
+// KnownCIExclusions keys in both directions, and the override must not name
+// testcases the profile does not
 // select (no allowlist, the same discipline as Gate B). An exclusion table
 // for a profile with no override in force is stale as a whole.
 func TestGateDCIOverridesMatchKnownExclusions(t *testing.T) {

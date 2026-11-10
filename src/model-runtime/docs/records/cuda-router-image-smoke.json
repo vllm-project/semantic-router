@@ -1,0 +1,145 @@
+{
+  "date": "2026-10-12",
+  "hardware": "NVIDIA H200 sm_90 143771 MiB driver 575.57.08",
+  "head": "61677a464c2a1b94ef34cd9e22595bab87981b97",
+  "image": "ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest",
+  "image_digest": "sha256:2f05113e5c7399874ef2b1651ecb3745a5dafeff7ef2f9725acd01b643c06730",
+  "pod": "dq8ck6v4xloqff",
+  "profile": "exact",
+  "device": "cuda:0",
+  "chart_models": [
+    {
+      "device": "cuda:0",
+      "gid": 65532,
+      "golden_count": 7,
+      "id": "Vela-2.0-4B",
+      "load_seconds": 64.529,
+      "model": "vllm-sr/Vela-2.0-4B",
+      "readiness": {
+        "checked": 0,
+        "matched": 0,
+        "reference": null,
+        "status": "unverified"
+      },
+      "ready": true,
+      "repo": "vllm-sr/Vela-2.0-4B",
+      "revision": "c1e64d4f872cb38bc58502e6888340100bab9d55",
+      "seconds": 66.098,
+      "uid": 65532
+    },
+    {
+      "device": "cuda:0",
+      "gid": 65532,
+      "golden_count": 7,
+      "id": "Vela-2.0-0.3B",
+      "load_seconds": 9.957,
+      "model": "vllm-sr/Vela-2.0-0.3B",
+      "readiness": {
+        "checked": 0,
+        "matched": 0,
+        "reference": null,
+        "status": "unverified"
+      },
+      "ready": true,
+      "repo": "vllm-sr/Vela-2.0-0.3B",
+      "revision": "a3209a50dc3ebd7e3b7520440d8fba666000f4c4",
+      "seconds": 11.442,
+      "uid": 65532
+    },
+    {
+      "device": "cuda:0",
+      "gid": 65532,
+      "golden_count": 28,
+      "id": "Vela-1.0-Encoder-307M-Domain",
+      "load_seconds": 9.301,
+      "model": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+      "readiness": {
+        "checked": 0,
+        "matched": 0,
+        "reference": null,
+        "status": "unverified"
+      },
+      "ready": true,
+      "repo": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
+      "revision": "f6354f54adcf38770f635ad903be2b00577f6c11",
+      "seconds": 10.765,
+      "uid": 65532
+    },
+    {
+      "device": "cuda:0",
+      "gid": 65532,
+      "golden_count": 2,
+      "id": "Vela-1.0-Encoder-307M-PII",
+      "load_seconds": 11.991,
+      "model": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+      "readiness": {
+        "checked": 0,
+        "matched": 0,
+        "reference": null,
+        "status": "unverified"
+      },
+      "ready": true,
+      "repo": "vllm-sr/Vela-1.0-Encoder-307M-PII",
+      "revision": "6d3300c4bd7975f30a664503f6c725cf1fbbad48",
+      "seconds": 13.458,
+      "uid": 65532
+    },
+    {
+      "device": "cuda:0",
+      "gid": 65532,
+      "golden_count": 4,
+      "id": "Vela-1.0-Encoder-307M-Guard",
+      "load_seconds": 9.975,
+      "model": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
+      "readiness": {
+        "checked": 0,
+        "matched": 0,
+        "reference": null,
+        "status": "unverified"
+      },
+      "ready": true,
+      "repo": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
+      "revision": "087f9e401012df839c83717b746967ac7aebfa3e",
+      "seconds": 11.504,
+      "uid": 65532
+    },
+    {
+      "device": "cuda:0",
+      "gid": 65532,
+      "golden_count": 4,
+      "id": "Vela-1.0-Encoder-307M-FactCheck",
+      "load_seconds": 10.167,
+      "model": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
+      "readiness": {
+        "checked": 0,
+        "matched": 0,
+        "reference": null,
+        "status": "unverified"
+      },
+      "ready": true,
+      "repo": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
+      "revision": "99ede1aba1563e59e416f744d25b3f6b7e9d8274",
+      "seconds": 11.637,
+      "uid": 65532
+    },
+    {
+      "device": "cuda:0",
+      "gid": 65532,
+      "golden_count": 10,
+      "id": "Vela-1.0-Encoder-307M-Feedback",
+      "load_seconds": 9.094,
+      "model": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
+      "readiness": {
+        "checked": 0,
+        "matched": 0,
+        "reference": null,
+        "status": "unverified"
+      },
+      "ready": true,
+      "repo": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
+      "revision": "47434a7fd7c245c0c7c17564a000b3c56ccfec41",
+      "seconds": 10.569,
+      "uid": 65532
+    }
+  ]
+}

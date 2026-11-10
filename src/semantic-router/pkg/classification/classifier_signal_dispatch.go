@@ -2,6 +2,7 @@ package classification
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -16,74 +17,30 @@ type signalDispatch struct {
 	evaluate   func(ctx context.Context)
 }
 
-func (c *Classifier) buildSignalDispatchers(input SignalEvaluationInput, results *SignalResults, mu *sync.Mutex, textForSignal func(string) string, mediaCache *requestMediaEmbeddingCache, usedSignals map[string]bool) []signalDispatch {
-	dispatchers := c.buildPrimarySignalDispatchers(input, results, mu, textForSignal, mediaCache)
+func (c *Classifier) buildSignalDispatchers(input SignalEvaluationInput, results *SignalResults, mu *sync.Mutex, textForSignal func(string) string, usedSignals map[string]bool) []signalDispatch {
+	dispatchers := c.buildPrimarySignalDispatchers(input, results, mu, textForSignal)
 	dispatchers = append(dispatchers, c.buildRequestFactSignalDispatchers(
-		results, mu, textForSignal, input.ContextText, input.CurrentUserText,
-		input.ImageURL, mediaCache, input.RequestFacts,
+		results, mu, input.ContextText, input.RequestFacts,
 	)...)
-	return append(dispatchers, c.buildPolicySignalDispatchers(
-		results, mu, textForSignal, input.PriorUserMessages, input.NonUserMessages,
-		input.ToolResultTexts, input.ToolResultScanIncomplete,
+	dispatchers = append(dispatchers, c.buildPolicySignalDispatchers(
+		results, mu, textForSignal, input.PriorUserMessages, input.ToolResultTexts,
 		input.ConversationFacts, input.RequestFacts, usedSignals,
 	)...)
+	return append(dispatchers, c.buildApplicationSignalDispatchers(input, results, mu, textForSignal, usedSignals)...)
 }
 
-func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, results *SignalResults, mu *sync.Mutex, textForSignal func(string) string, mediaCache *requestMediaEmbeddingCache) []signalDispatch {
+func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, results *SignalResults, mu *sync.Mutex, textForSignal func(string) string) []signalDispatch {
 	return []signalDispatch{
 		{
 			config.SignalTypeKeyword, "Keyword",
-			func(context.Context) { c.evaluateKeywordSignal(results, mu, textForSignal(config.SignalTypeKeyword)) },
-		},
-		{
-			config.SignalTypeEmbedding, "Embedding",
-			func(ctx context.Context) {
-				c.evaluateEmbeddingSignal(ctx, results, mu, embeddingSignalInput{Text: textForSignal(config.SignalTypeEmbedding), Image: input.ImageURL, Audio: input.Audio}, mediaCache)
-			},
-		},
-		{
-			config.SignalTypeDomain, "Domain",
-			func(ctx context.Context) {
-				c.evaluateDomainSignal(ctx, results, mu, textForSignal(config.SignalTypeDomain))
-			},
-		},
-		{
-			config.SignalTypeFactCheck, "Fact-check",
-			func(ctx context.Context) {
-				c.evaluateFactCheckSignal(ctx, results, mu, textForSignal(config.SignalTypeFactCheck))
-			},
-		},
-		{
-			config.SignalTypeUserFeedback, "User feedback",
-			func(ctx context.Context) {
-				c.evaluateUserFeedbackSignal(
-					ctx,
-					results,
-					mu,
-					textForSignal(config.SignalTypeUserFeedback),
-					input.HasPriorAssistantReply,
-				)
-			},
-		},
-		{
-			config.SignalTypeReask, "Reask",
-			func(ctx context.Context) {
-				c.evaluateReaskSignalContext(ctx, results, mu, input.CurrentUserText, input.PriorUserMessages)
-			},
-		},
-		{
-			config.SignalTypePreference, "Preference",
-			func(ctx context.Context) {
-				c.evaluatePreferenceSignal(ctx, results, mu, textForSignal(config.SignalTypePreference))
+			func(context.Context) {
+				c.evaluateKeywordSignalWithHistory(results, mu,
+					textForSignal(config.SignalTypeKeyword), input.PriorUserMessages)
 			},
 		},
 		{
 			config.SignalTypeLanguage, "Language",
 			func(context.Context) { c.evaluateLanguageSignal(results, mu, textForSignal(config.SignalTypeLanguage)) },
-		},
-		{
-			config.SignalTypeAction, "Action",
-			func(context.Context) { c.evaluateActionSignal(results, mu, input.CurrentUserText) },
 		},
 	}
 }
@@ -91,11 +48,7 @@ func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, 
 func (c *Classifier) buildRequestFactSignalDispatchers(
 	results *SignalResults,
 	mu *sync.Mutex,
-	textForSignal func(string) string,
 	contextText string,
-	currentUserText string,
-	imgArg string,
-	imgCache *requestMediaEmbeddingCache,
 	requestFacts RequestFacts,
 ) []signalDispatch {
 	return []signalDispatch{
@@ -110,30 +63,54 @@ func (c *Classifier) buildRequestFactSignalDispatchers(
 				)
 			},
 		},
-		{
-			config.SignalTypeStructure, "Structure",
-			func(context.Context) {
-				c.evaluateStructureSignal(
-					results,
-					mu,
-					textForSignal(config.SignalTypeStructure),
-					currentUserText,
-				)
-			},
-		},
-		{
-			config.SignalTypeComplexity, "Complexity",
-			func(ctx context.Context) {
-				c.evaluateComplexitySignal(ctx, results, mu, textForSignal(config.SignalTypeComplexity), imgArg, imgCache)
-			},
-		},
-		{
-			config.SignalTypeModality, "Modality",
-			func(ctx context.Context) {
-				c.evaluateModalitySignal(ctx, results, mu, textForSignal(config.SignalTypeModality))
-			},
-		},
 	}
+}
+
+// buildApplicationSignalDispatchers asks the request-stage application
+// rules, one dispatcher per type. Every type reads the request as it came;
+// jailbreak, safety and pii also read what routing_input left out of it, and
+// the earlier user turns as the client sent them, so a client cannot hide
+// content from them; jailbreak reads the role-scoped guard content when the
+// request carries it.
+func (c *Classifier) buildApplicationSignalDispatchers(input SignalEvaluationInput, results *SignalResults, mu *sync.Mutex, textForSignal func(string) string, usedSignals map[string]bool) []signalDispatch {
+	facts := input.RequestFacts
+	reading := systemOneReading{
+		request: textForSignal(systemOneQuestionText), history: input.PriorUserMessages, turns: facts.Turns,
+		toolResults: input.ToolResultTexts, images: facts.Images, videos: facts.Videos,
+	}
+	guard := reading
+	guard.request = safetyText(reading.request, facts.RoutingInput)
+	guard.history = safetyPriorUserMessages(input.PriorUserMessages, facts.RoutingInput)
+	jailbreak := guard
+	if guardInput := facts.JailbreakInput; guardInput != nil {
+		jailbreak.request = strings.Join(jailbreakInputTexts(guardInput.Current), "\n\n")
+		jailbreak.history = jailbreakInputTexts(guardInput.History)
+	}
+	dispatch := func(signalType, name string, reading systemOneReading) signalDispatch {
+		return signalDispatch{signalType, name, func(ctx context.Context) {
+			c.evaluateApplicationSignals(ctx, results, mu, signalType, reading, usedSignals)
+		}}
+	}
+	dispatchers := []signalDispatch{
+		dispatch(config.SignalTypeDomain, "Domain", reading),
+		dispatch(config.SignalTypeFactCheck, "Fact-check", reading),
+		dispatch(config.SignalTypeComplexity, "Complexity", reading),
+		dispatch(config.SignalTypeModality, "Modality", reading),
+		dispatch(config.SignalTypeJailbreak, "Jailbreak", jailbreak),
+		dispatch(config.SignalTypeSafety, "Safety", guard),
+		dispatch(config.SignalTypePII, "PII", guard),
+	}
+	// The turn relation question relates the user turn to the turns before
+	// it, so a first turn asks none.
+	if len(facts.Turns) > 0 {
+		dispatchers = append(dispatchers, dispatch(config.SignalTypeTurnRelation, "Turn relation", reading))
+	}
+	// The feedback question judges the answer the user turn replies to, so a
+	// request without one asks none.
+	if input.HasPriorAssistantReply {
+		dispatchers = append(dispatchers, dispatch(config.SignalTypeUserFeedback, "User feedback", reading))
+	}
+	return dispatchers
 }
 
 // modelBackedSignalTypes call model deployments; their goroutines join the
@@ -141,20 +118,16 @@ func (c *Classifier) buildRequestFactSignalDispatchers(
 // so a deployment's questions are sent once all of its askers have asked.
 // Heuristic signals never delay a send.
 var modelBackedSignalTypes = map[string]bool{
+	config.SignalTypeSystemOne:    true,
 	config.SignalTypeDomain:       true,
 	config.SignalTypeFactCheck:    true,
 	config.SignalTypeUserFeedback: true,
-	config.SignalTypeModality:     true,
-	config.SignalTypeSafety:       true,
-	config.SignalTypeJailbreak:    true,
-	config.SignalTypePII:          true,
-	config.SignalTypeClassifier:   true,
-	config.SignalTypeDecision:     true,
-	config.SignalTypeEmbedding:    true,
+	config.SignalTypeTurnRelation: true,
 	config.SignalTypeComplexity:   true,
-	config.SignalTypeKB:           true,
-	config.SignalTypeReask:        true,
-	config.SignalTypePreference:   true,
+	config.SignalTypeModality:     true,
+	config.SignalTypeJailbreak:    true,
+	config.SignalTypeSafety:       true,
+	config.SignalTypePII:          true,
 }
 
 // stageBundle is the part of a request bundle the dispatchers use.

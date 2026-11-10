@@ -83,22 +83,16 @@ class KindBootstrapContractTests(unittest.TestCase):
         create = next(
             step for step in operator if "kind create cluster" in step.get("run", "")
         )
-        redis = next(
+        operator_images = next(
             step
             for step in operator
-            if "image: redis/redis-stack-server:" in step.get("run", "")
+            if step.get("uses") == "./.github/actions/load-ci-images"
         )
         self.assertLess(operator.index(operator_setup), operator.index(create))
-        self.assertLess(operator.index(create), operator.index(redis))
-        self.assertEqual(redis["if"], "matrix.cache-backend == 'redis'")
-        matrix = yaml.safe_load(WORKFLOWS[1].read_text())["jobs"]["integration-test"][
-            "strategy"
-        ]["matrix"]
-        self.assertEqual(
-            matrix,
-            {
-                "cache-backend": "${{ fromJSON(inputs.integration_matrix).*.cache-backend }}"
-            },
+        self.assertLess(operator.index(create), operator.index(operator_images))
+        self.assertNotIn(
+            "strategy",
+            yaml.safe_load(WORKFLOWS[1].read_text())["jobs"]["integration-test"],
         )
 
 

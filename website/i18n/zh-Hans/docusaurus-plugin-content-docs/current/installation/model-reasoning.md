@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型推理
 description: 继承、复用或定义模型推理契约，并从路由决策中选择其 mode 和 effort。
 translation:
@@ -88,19 +89,20 @@ Canonical v0.3 没有用户编写的全局家族注册表。旧的 `providers.de
 Model 拥有家族后，配置其决策引用：
 
 ```yaml
-routing:
-  decisions:
-    - name: complex-request
-      rules:
-        operator: AND
-        conditions:
-          - type: complexity
-            name: needs_reasoning:hard
-      modelRefs:
-        - model: private-reasoner
-          use_reasoning: true
-          reasoning_mode: enabled
-          reasoning_effort: high
+recipes:
+  - name: default
+    decisions:
+      - name: complex-request
+        rules:
+          operator: AND
+          conditions:
+            - type: complexity
+              name: needs_reasoning:hard
+        modelRefs:
+          - model: private-reasoner
+            use_reasoning: true
+            reasoning_mode: enabled
+            reasoning_effort: high
 ```
 
 effort 必须由家族列出，并且被该 Model 的每个 Provider 绑定允许。`reasoning_mode` 必须与 `use_reasoning` 一致。省略 effort 以使用家族默认值，或在需要一个有效的部署级默认值优先时设置 `providers.defaults.reasoning_effort`。

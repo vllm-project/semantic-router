@@ -1,9 +1,10 @@
 ---
+is_mtpe: false
 title: 代码风格与质量
 translation:
   source_commit: "f53d10fbf1021f9204e03afe2dd9a3374979e829"
   source_file: "docs/community/code-style.md"
-  outdated: false
+  outdated: true
 ---
 
 # 代码风格与质量

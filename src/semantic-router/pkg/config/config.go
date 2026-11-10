@@ -1,8 +1,11 @@
 package config
 
 import (
+	"strings"
+
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // ConfigSource defines where to load dynamic configuration from.
@@ -15,42 +18,21 @@ const (
 	ConfigSourceKubernetes ConfigSource = "kubernetes"
 )
 
-// Model role constants for external models.
-const (
-	ModelRoleGuardrail        = "guardrail"
-	ModelRoleClassification   = "classification"
-	ModelRoleScoring          = "scoring"
-	ModelRolePreference       = "preference"
-	ModelRoleMemoryRewrite    = "memory_rewrite"
-	ModelRoleMemoryExtraction = "memory_extraction"
-)
-
-// PromptGuardConfig.OnError values live in classifier_on_error.go as
-// OnErrorAllow/OnErrorBlock - shared with every other pluggable classifier
-// backend (CategoryModel, PIIModel, ClassifierSignalRule), not just prompt
-// guard.
-
 // Signal type constants for rule conditions.
 const (
 	SignalTypeKeyword       = "keyword"
-	SignalTypeEmbedding     = "embedding"
 	SignalTypeDomain        = "domain"
 	SignalTypeFactCheck     = "fact_check"
 	SignalTypeUserFeedback  = "user_feedback"
-	SignalTypeReask         = "reask"
-	SignalTypePreference    = "preference"
 	SignalTypeLanguage      = "language"
 	SignalTypeContext       = "context"
-	SignalTypeStructure     = "structure"
 	SignalTypeComplexity    = "complexity"
 	SignalTypeModality      = "modality"
 	SignalTypeAuthz         = "authz"
 	SignalTypeJailbreak     = "jailbreak"
 	SignalTypeHallucination = "hallucination"
 	SignalTypePII           = "pii"
-	SignalTypeKB            = "kb"
 	SignalTypeConversation  = "conversation"
-	SignalTypeEvent         = "event"
 	SignalTypeProjection    = "projection"
 )
 
@@ -91,7 +73,6 @@ type RouterConfig struct {
 	// Static global configuration.
 	RoutingDefaults  RoutingDefaults `yaml:"-" json:"-"`
 	InlineModels     `yaml:",inline"`
-	ExternalModels   []ExternalModelConfig `yaml:"external_models,omitempty"`
 	SemanticCache    `yaml:"semantic_cache"`
 	Memory           MemoryConfig            `yaml:"memory"`
 	VectorStore      *VectorStoreConfig      `yaml:"vector_store,omitempty"`
@@ -111,18 +92,20 @@ type RouterConfig struct {
 	IntelligentRouting `yaml:",inline"`
 	Entrypoints        []EntrypointMapping `yaml:"-"`
 	Recipes            []RoutingRecipe     `yaml:"-"`
+	// GlobalPlugins are global.plugins, the default plugins of every
+	// decision and of a request that matches none.
+	GlobalPlugins []DecisionPlugin `yaml:"-" json:"-"`
 	// RoutingScope is populated only on immutable recipe views.
-	RoutingScope  RecipeName `yaml:"-"`
+	RoutingScope RecipeName `yaml:"-"`
+	// defaultRecipe names the default recipe; empty is DefaultRecipeName.
+	defaultRecipe RecipeName
 	BackendModels `yaml:",inline"`
-	ToolSelection `yaml:",inline"`
 
 	Authz         AuthzConfig         `yaml:"authz,omitempty"`
 	RateLimit     RateLimitConfig     `yaml:"ratelimit,omitempty"`
 	ManagementAPI ManagementAPIConfig `yaml:"management_api,omitempty"`
 
-	// Runtime-only knowledge bases loaded from global.model_catalog.
-	KnowledgeBases []KnowledgeBaseConfig `yaml:"knowledge_bases,omitempty"`
-	ConfigBaseDir  string                `yaml:"-"`
+	ConfigBaseDir string `yaml:"-"`
 	// DocumentHash identifies the exact YAML document from which this immutable
 	// runtime snapshot was parsed. Management APIs use it to distinguish a
 	// persisted config from the config that has completed hot reload.
@@ -141,6 +124,33 @@ type AuthzConfig struct {
 	FailOpen  bool                  `yaml:"fail_open,omitempty"`
 	Identity  IdentityConfig        `yaml:"identity,omitempty"`
 	Providers []AuthzProviderConfig `yaml:"providers,omitempty"`
+	// DelegatedCredential is the source of delegated credentials: the
+	// trusted authentication result header that carries the requesting
+	// user's credential for upstreams whose auth is credential: delegated.
+	DelegatedCredential DelegatedCredentialConfig `yaml:"delegated_credential,omitempty"`
+}
+
+// DelegatedCredentialConfig declares the credential a deployment
+// authenticator issues for the user of an authenticated request. The Router
+// trusts it exactly as it trusts the identity headers: the gateway in front
+// removes client-supplied copies, and a standalone listener drops them unless
+// it trusts identity headers. The value is presented only to an upstream
+// whose auth is credential: delegated, under that upstream's auth header, by
+// a call made for the request, and never to any other upstream. Disabled by
+// default.
+type DelegatedCredentialConfig struct {
+	Enabled bool `yaml:"enabled,omitempty"`
+	// Header is the request header the authenticator sets; default
+	// x-vsr-delegated-credential.
+	Header string `yaml:"header,omitempty"`
+}
+
+// GetHeader returns the configured header name, lowercased, or the default.
+func (c DelegatedCredentialConfig) GetHeader() string {
+	if header := strings.ToLower(strings.TrimSpace(c.Header)); header != "" {
+		return header
+	}
+	return headers.VSRDelegatedCredential
 }
 
 // IdentityConfig controls how the router reads user identity from request headers.
@@ -151,14 +161,14 @@ type IdentityConfig struct {
 
 func (ic IdentityConfig) GetUserIDHeader() string {
 	if ic.UserIDHeader == "" {
-		return "x-authz-user-id"
+		return headers.AuthzUserID
 	}
 	return ic.UserIDHeader
 }
 
 func (ic IdentityConfig) GetUserGroupsHeader() string {
 	if ic.UserGroupsHeader == "" {
-		return "x-authz-user-groups"
+		return headers.AuthzUserGroups
 	}
 	return ic.UserGroupsHeader
 }
@@ -194,10 +204,6 @@ type RateLimitMatch struct {
 	Model string `yaml:"model,omitempty"`
 }
 
-type ToolSelection struct {
-	Tools ToolsConfig `yaml:"tools"`
-}
-
 type Listener struct {
 	Name    string `yaml:"name"`
 	Address string `yaml:"address"`
@@ -215,18 +221,23 @@ type Listener struct {
 	SystemOne *ListenerSystemOne `yaml:"systemone,omitempty"`
 	// TLS, when set, makes a standalone Router serve this listener over TLS.
 	TLS *ListenerTLS `yaml:"tls,omitempty"`
-	// Identity, when set, decides whether a standalone Router keeps the client
-	// identity headers that requests on this listener carry.
+	// Identity, when set, decides whether the listener keeps the client
+	// identity headers its requests carry: a standalone Router does, and so
+	// does the Envoy listener the CLI generates for --gateway extproc.
 	Identity *ListenerIdentity `yaml:"identity,omitempty"`
 }
 
 type ListenerSystemOne struct {
 	Models []string `yaml:"models"`
+	// MaxDeadlineMs bounds how long the listener waits for a model it calls
+	// directly, however long a request's options.deadline_ms asks for.
+	// Omitted, it is DefaultSystemOneMaxDeadlineMs.
+	MaxDeadlineMs *int `yaml:"max_deadline_ms,omitempty"`
 }
 
-// ListenerIdentity names the identity sources a standalone listener trusts.
-// It trusts none by default: with no authenticator in front of the Router,
-// a client could claim any identity, so its identity headers are dropped.
+// ListenerIdentity names the identity sources a listener trusts. It trusts
+// none by default: with no authenticator in front of the Router, a client
+// could claim any identity, so its identity headers are dropped.
 type ListenerIdentity struct {
 	// TrustHeaders keeps the identity headers (the x-authz-* set and the
 	// names global.services.authz.identity sets) that an authenticating proxy
@@ -234,7 +245,8 @@ type ListenerIdentity struct {
 	TrustHeaders bool `yaml:"trust_headers,omitempty"`
 	// TrustedPeers, when set, keeps those headers only on connections whose
 	// peer address is in one of these CIDRs; X-Forwarded-For is never read.
-	// Empty, every peer of a listener that trusts headers is trusted.
+	// Empty, every peer of a listener that trusts headers is trusted. Only a
+	// standalone Router checks it; the CLI refuses it for --gateway extproc.
 	TrustedPeers []string `yaml:"trusted_peers,omitempty"`
 }
 
@@ -262,6 +274,9 @@ type RouterOptions struct {
 	MaxStreamedBodyBytes   int64                `yaml:"max_streamed_body_bytes,omitempty"`
 	StreamedBodyTimeoutSec int                  `yaml:"streamed_body_timeout_sec,omitempty"`
 	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+	AllowLossyTranslation  []string             `yaml:"allow_lossy_translation,omitempty"`
+	RoutingInput           RoutingInputConfig   `yaml:"routing_input,omitempty"`
+	Headers                RouterHeadersConfig  `yaml:"headers,omitempty"`
 }
 
 // RoutingEnabled controls the recipe pipeline independently of the frontend
@@ -280,37 +295,44 @@ func (s SkipProcessingConfig) IsEnabled() bool {
 	return s.Enabled
 }
 
-// InlineModels captures built-in model families and prompt-processing settings.
+// InlineModels captures the model catalog: deployments, bindings, admission
+// and the decision and embedding models.
 type InlineModels struct {
-	EmbeddingModels         `yaml:"embedding_models"`
-	Classifier              `yaml:"classifier"`
-	ComplexityModel         ComplexityModelConfig         `yaml:"complexity_model,omitempty"`
-	PromptCompression       PromptCompressionConfig       `yaml:"prompt_compression"`
-	PromptGuard             PromptGuardConfig             `yaml:"prompt_guard"`
-	HallucinationMitigation HallucinationMitigationConfig `yaml:"hallucination_mitigation"`
-	SafetyModels            SafetyModelsConfig            `yaml:"safety_models"`
-	FeedbackDetector        FeedbackDetectorConfig        `yaml:"feedback_detector"`
-	ModalityDetector        ModalityDetectorConfig        `yaml:"modality_detector"`
-	ModelAdmission          map[string]AdmissionConfig    `yaml:"model_admission,omitempty"`
-	ModelSignalTimeoutMs    int                           `yaml:"model_signal_timeout_ms,omitempty"`
-	GlobalModelBindings     map[string]ModelBinding       `yaml:"global_model_bindings,omitempty"`
-	ModelDeployments        map[string]ModelDeployment    `yaml:"model_deployments,omitempty"`
+	ModelAdmission       map[string]AdmissionConfig `yaml:"model_admission,omitempty"`
+	ModelSignalTimeoutMs int                        `yaml:"model_signal_timeout_ms,omitempty"`
+	GlobalModelBindings  map[string]ModelBinding    `yaml:"global_model_bindings,omitempty"`
+	ModelDeployments     map[string]ModelDeployment `yaml:"model_deployments,omitempty"`
 	// DecisionModel is global.model_catalog.system.decision_model, resolved
 	// to its canonical name.
 	DecisionModel string `yaml:"decision_model,omitempty"`
+	// EmbeddingDeployment is global.model_catalog.embeddings.default's
+	// deployment.
+	EmbeddingDeployment string `yaml:"embedding_deployment,omitempty"`
+	// FormWarnings are the renamed forms the document was written in, which
+	// it was read as their canonical forms (config_forms.go).
+	FormWarnings []ConfigWarning `yaml:"-" json:"-"`
+
+	// scopedBindings are a recipe scope's own bindings, before the global
+	// ones (ConfigForRecipe); nil outside a recipe scope.
+	scopedBindings map[string]ModelBinding
 }
 
 // IntelligentRouting captures user-facing signal and decision configuration.
 type IntelligentRouting struct {
 	CandidateRequirements *CandidateRequirements  `yaml:"candidate_requirements,omitempty"`
 	ModelBindings         map[string]ModelBinding `yaml:"model_bindings,omitempty"`
-	Signals               `yaml:",inline"`
-	Projections           Projections              `yaml:"projections,omitempty"`
-	Decisions             []Decision               `yaml:"decisions,omitempty"`
-	Strategy              RoutingStrategy          `yaml:"strategy,omitempty"`
-	Fallback              *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
-	ModelSelection        ModelSelectionConfig     `yaml:"model_selection,omitempty"`
-	ReasoningConfig       `yaml:",inline"`
+	// Plugins are the recipe's declared plugins, the layer between
+	// GlobalPlugins and a decision's own; DefaultPlugins are the two layered,
+	// what a request that matches no decision runs.
+	Plugins         []DecisionPlugin `yaml:"-" json:"-"`
+	DefaultPlugins  []DecisionPlugin `yaml:"-" json:"-"`
+	Signals         `yaml:",inline"`
+	Projections     Projections              `yaml:"projections,omitempty"`
+	Decisions       []Decision               `yaml:"decisions,omitempty"`
+	Strategy        RoutingStrategy          `yaml:"strategy,omitempty"`
+	Fallback        *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	ModelSelection  ModelSelectionConfig     `yaml:"model_selection,omitempty"`
+	ReasoningConfig `yaml:",inline"`
 }
 
 // BackendModels captures configured backend endpoints and model metadata.

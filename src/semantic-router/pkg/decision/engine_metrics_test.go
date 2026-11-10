@@ -33,9 +33,7 @@ func histogramSampleCount(t *testing.T, h prometheus.Histogram) uint64 {
 // pkg/extproc/req_filter_classification_runtime.go::runDecisionEngine.
 func TestEvaluateDecisionsWithSignals_EmitsMetricsExactlyOnce(t *testing.T) {
 	engine := NewDecisionEngine(
-		nil,
-		nil,
-		nil,
+
 		[]config.Decision{
 			{
 				Name:     "catch-all",
@@ -46,8 +44,7 @@ func TestEvaluateDecisionsWithSignals_EmitsMetricsExactlyOnce(t *testing.T) {
 				},
 			},
 		},
-		"priority",
-	)
+		"priority")
 
 	latencyBefore := histogramSampleCount(t, metrics.DecisionEvaluationLatency)
 	matchesBefore := testutil.ToFloat64(metrics.DecisionMatchTotal.WithLabelValues("catch-all"))
@@ -68,18 +65,19 @@ func TestEvaluateDecisionsWithSignals_EmitsMetricsExactlyOnce(t *testing.T) {
 }
 
 func TestEvaluateDecisionsRecordsUnknownPolicy(t *testing.T) {
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "guarded", Rules: config.RuleNode{
-		Type:      config.SignalTypeClassifier,
+	engine := NewDecisionEngine([]config.Decision{{Name: "guarded", Rules: config.RuleNode{
+		Type:      config.SignalTypeSystemOne,
 		Name:      "risk",
 		Label:     "RISKY",
 		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
 		OnUnknown: config.RuleOnUnknownNoMatch,
 	}}}, config.RoutingStrategyPriority)
+
 	counter := metrics.DecisionUnknownTotal.WithLabelValues("guarded", string(config.RuleOnUnknownNoMatch))
 	before := testutil.ToFloat64(counter)
 
 	if _, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
-		SignalErrors: map[string]string{"classifier:risk": "timeout"},
+		SignalErrors: map[string]string{"systemone:risk": "timeout"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -104,10 +102,10 @@ func TestDecisionConfidenceMetricsRespectScoredStatus(t *testing.T) {
 		{
 			name: "on_unknown_match",
 			rule: config.RuleNode{
-				Type: config.SignalTypeClassifier, Name: "risk", Label: "RISKY",
+				Type: config.SignalTypeSystemOne, Name: "risk", Label: "RISKY",
 				Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)}, OnUnknown: config.RuleOnUnknownMatch,
 			},
-			signals: &SignalMatches{SignalErrors: map[string]string{"classifier:risk": "unavailable"}},
+			signals: &SignalMatches{SignalErrors: map[string]string{"systemone:risk": "unavailable"}},
 		},
 		{
 			name:    "catch_all",
@@ -117,8 +115,8 @@ func TestDecisionConfidenceMetricsRespectScoredStatus(t *testing.T) {
 		},
 		{
 			name:    "predicate",
-			rule:    config.RuleNode{Type: "structure", Name: "size", Predicate: &config.NumericPredicate{GTE: float64Ptr(1)}},
-			signals: &SignalMatches{SignalValues: map[string]float64{"structure:size": 2}},
+			rule:    config.RuleNode{Type: "keyword", Name: "size", Predicate: &config.NumericPredicate{GTE: float64Ptr(1)}},
+			signals: &SignalMatches{SignalValues: map[string]float64{"keyword:size": 2}},
 		},
 		{
 			name: "reported_zero",
@@ -132,7 +130,7 @@ func TestDecisionConfidenceMetricsRespectScoredStatus(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			name := t.Name()
-			engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: name, Rules: test.rule}}, config.RoutingStrategyPriority)
+			engine := NewDecisionEngine([]config.Decision{{Name: name, Rules: test.rule}}, config.RoutingStrategyPriority)
 			histogram := metrics.DecisionConfidence.WithLabelValues(name).(prometheus.Histogram)
 			before := histogramSampleCount(t, histogram)
 			matchesBefore := testutil.ToFloat64(metrics.DecisionMatchTotal.WithLabelValues(name))

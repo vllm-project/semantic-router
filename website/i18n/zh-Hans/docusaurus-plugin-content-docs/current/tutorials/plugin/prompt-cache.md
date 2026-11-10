@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "9649d02f2582471642196bde2e086c34ccb9c88c"
   source_file: "docs/tutorials/plugin/prompt-cache.md"
@@ -31,7 +32,7 @@ Anthropic 支持在可重用的提示词块上打显式缓存断点。用中性�
 
 ## 配置 {#configuration}
 
-插件加在 `routing.decisions[].plugins` 下：
+插件加在 `recipes[].decisions[].plugins` 下：
 
 ```yaml
 plugins:
@@ -57,6 +58,6 @@ Anthropic 一个请求支持至多四个显式缓存断点。这个插件故意�
 
 ## 可观测性 {#observability}
 
-每次评估记一条 `llm_plugin_execution_total`，`plugin_type=prompt_cache`，`status` 是 `inserted`、`preserved`、`skipped` 或 `rejected`。请求带 `x-vsr-debug: true` 时，同一个结果内联出现在 `x-vsr-prompt-cache-action`、`x-vsr-prompt-cache-reason`、`x-vsr-prompt-cache-inserted` 和 `x-vsr-prompt-cache-preserved`；见 [VSR 路由头](../../troubleshooting/vsr-headers)。这个插件不碰 Router Replay 持久化。
+每次评估记一条 `llm_plugin_execution_total`，`plugin_type=prompt_cache`，`status` 是 `inserted`、`preserved`、`skipped` 或 `rejected`。请求带 `x-vsr-debug: true` 时，同一个结果出现在 `x-vsr-trace` 的 `prompt_cache` 成员中，带有它的 `reason` 以及 `inserted` 和 `preserved` 标记计数；见 [VSR 路由头](../../troubleshooting/vsr-headers)。这个插件不碰 Router Replay 持久化。
 
 完整示例见 [`config/fragments/plugin/prompt-cache/anthropic-agent.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/prompt-cache/anthropic-agent.yaml)。

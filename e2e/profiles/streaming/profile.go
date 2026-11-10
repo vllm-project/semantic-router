@@ -12,9 +12,11 @@ import (
 const valuesFile = "e2e/profiles/streaming/values.yaml"
 
 var resourceManifests = []string{
-	"deploy/kubernetes/routing-strategies/aigw-resources/base-model.yaml",
+	"e2e/profiles/streaming/backend.yaml",
 	"deploy/kubernetes/streaming/aigw-resources/gwapi-resources.yaml",
 	"e2e/profiles/streaming/full-duplex.yaml",
+	// Serves the System One fixture the jailbreak and PII rules ask.
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 }
 
 // Profile implements the Streaming Body test profile.
@@ -35,6 +37,7 @@ func NewProfile() *Profile {
 			WaitDeployments: []helpers.DeploymentRef{
 				{Namespace: "default", Name: "full-duplex-selected"},
 				{Namespace: "default", Name: "full-duplex-default"},
+				{Namespace: "default", Name: "provider-mocker"},
 			},
 		}),
 	}

@@ -75,6 +75,10 @@ log_info "Testing Grafana Live origins in Helm and static deployments (requires 
 python3 -m unittest discover -s deploy/helm -p test_grafana_live.py -v
 echo ""
 
+log_info "Testing the Router's writable data directory..."
+python3 -m unittest discover -s deploy/helm -p test_data_volume.py -v
+echo ""
+
 # A Dashboard config edit on Kubernetes is saved to a ConfigMap and activated
 # after rollout. The backup history needed for rollback must outlive that pod.
 log_info "Testing default Dashboard backup persistence..."
@@ -147,7 +151,7 @@ fi
 
 log_info "Testing backend target compatibility rendering..."
 backend_fields=(
-    "base_url: https://provider.example/v1"
+    "endpoint: https://provider.example/v1"
     "provider_model_id: provider/model-id"
     "api_key_env: PROVIDER_API_KEY"
     "X-Tenant: production"
@@ -398,7 +402,8 @@ for expected in \
     'allowPrivilegeEscalation: false' \
     'readOnlyRootFilesystem: true' \
     'mountPath: /tmp' \
-    'mountPath: /app/models'; do
+    'mountPath: /app/models' \
+    'mountPath: /var/lib/vsr'; do
     if ! grep -q "$expected" "$TEMP_DIR/default-template.yaml"; then
         log_error "Missing hardened router pod setting: $expected"
         exit 1

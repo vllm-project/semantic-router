@@ -1,0 +1,1 @@
+providers.models[gpt-4o].backend_refs[litellm].trusted_gateway: removed_field: trusted_gateway is removed; it has no mechanical rewrite: auth: {credential: delegated}

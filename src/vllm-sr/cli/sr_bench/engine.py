@@ -63,6 +63,9 @@ class Context:
             if target.get("session_mode") == SESSION_AWARE
             else None
         )
+        # Conversation-scoped Router protection binds to a second identity
+        # header; session-aware evaluation sends both, one pair per task.
+        self.conversation_id = self.session_id
 
     def cancelled(self):
         return self._cancel.is_set() or time.monotonic() > self.deadline
@@ -85,6 +88,9 @@ class Context:
         if role not in {"subject", "judge", "simulator"}:
             raise ValueError("Unknown call role")
         session_id: str | None = self.session_id if role == "subject" else None
+        conversation_id: str | None = (
+            self.conversation_id if role == "subject" else None
+        )
         if role == "subject" and not any(
             call["role"] == "subject" for call in self.calls
         ):
@@ -165,6 +171,8 @@ class Context:
         }
         if session_id is not None:
             call_data["session_id"] = session_id
+        if conversation_id is not None:
+            call_data["conversation_id"] = conversation_id
         if role == "subject":
             call_data["phase"] = request_phase(messages)
             call_data["phase_source"] = "request"
@@ -188,6 +196,7 @@ class Context:
                 self.artifact_dir / (call_id + ".sse"),
                 activity=activity,
                 session_id=session_id,
+                conversation_id=conversation_id,
                 **(
                     {"output_policy": "native"}
                     if self.manifest["output_policy"] == "native"
@@ -383,7 +392,7 @@ class Engine:
                     headers["Authorization"] = "Bearer " + key
                 url = target["preview_url"]
                 if target.get("config_hash"):
-                    headers["X-SR-Bench-Expected-Config-Hash"] = target["config_hash"]
+                    headers["X-VSR-Bench-Expected-Config-Hash"] = target["config_hash"]
                 payload = build_preview_request(
                     {
                         "messages": case["messages"],

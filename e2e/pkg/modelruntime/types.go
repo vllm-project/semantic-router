@@ -289,6 +289,9 @@ type Question struct {
 	Criteria     map[string]string `json:"criteria,omitempty"`
 	Levels       []string          `json:"levels,omitempty"`
 	Threshold    *float64          `json:"threshold,omitempty"`
+	// Labels are a Set or Span question's labels in order, the Router's
+	// form; a label without a description sends none.
+	Labels []Choice `json:"labels,omitempty"`
 }
 
 // Choice is one option of a Choice question.

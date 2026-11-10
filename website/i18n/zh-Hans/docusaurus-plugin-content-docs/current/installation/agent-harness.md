@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 接入 Agent Harness
 description: 将 Agent Harness 接入稳定的模型 API，并明确路由策略、模型限制与会话连续性。
 translation:

@@ -12,7 +12,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
@@ -26,7 +25,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
 type routerComponents struct {
@@ -35,9 +33,9 @@ type routerComponents struct {
 	serviceEmbeddings           *embedding.Set
 	cacheEmbeddings             *embedding.Set
 	modelLease                  *modelservice.Lease
+	systemOne                   *modelservice.RemoteSystemOne
 	decisionCards               map[string]modelservice.ModelCard
 	serving                     *serving.Runtime
-	rerankers                   map[config.RecipeName]modelruntime.PairScorer
 	cfg                         *config.RouterConfig
 	categoryDescriptions        []string
 	classifier                  *classification.Classifier
@@ -46,8 +44,7 @@ type routerComponents struct {
 	semanticCache               cache.CacheBackend
 	responseCache               *cache.ResponseCacheService
 	semanticCacheIdentity       string
-	toolsDatabase               *tools.ToolsDatabase
-	toolEmbedder                *cachedToolEmbedder
+	toolCatalogs                map[string]*toolCatalog
 	responseAPIFilter           *ResponseAPIFilter
 	replayRecorder              *routerreplay.Recorder
 	replayStoreShared           bool
@@ -179,11 +176,11 @@ func buildOpenAIRouterSharingSignals(cfg *config.RouterConfig, pool *binding.Poo
 }
 
 // validateStickyToolSelectionPhaseSupport rejects any decision that enables
-// tool_selection.sticky.enabled through Phase 2 (#4517): no
+// tools.select.sticky.enabled through Phase 2 (#4517): no
 // production request path consumes ResolveStickyToolIdentity or the
 // sessiontools store yet, so accepting sticky.enabled: true here would
 // construct successfully and then silently never activate sticky selection
-// for any request. config.ToolSelectionPluginConfig.Validate() already
+// for any request. Config validation already
 // rejects this at config-admission time (config.ErrToolSelectionStickyUnsupported);
 // this is a second, router-construction-time gate over the same condition
 // via the same sentinel error, checked here too since config admission and
@@ -196,8 +193,7 @@ func validateStickyToolSelectionPhaseSupport(cfg *config.RouterConfig) error {
 		return nil
 	}
 	for _, decision := range cfg.AllRoutingDecisions() {
-		plugin := decision.GetToolSelectionConfig()
-		if plugin == nil || plugin.Sticky == nil || !plugin.Sticky.Enabled {
+		if !stickyToolSelectionEnabled(&decision) {
 			continue
 		}
 		return config.ErrToolSelectionStickyUnsupported
@@ -206,7 +202,7 @@ func validateStickyToolSelectionPhaseSupport(cfg *config.RouterConfig) error {
 }
 
 // validateStickyToolSelectionSecret requires USER_SCOPE_NAMESPACE_SECRET
-// whenever any decision enables tool_selection.sticky.enabled (issue #3347,
+// whenever any decision enables tools.select.sticky.enabled (issue #3347,
 // PL-0042 section 2.4). Retained as a construction-time guard for once
 // Phase 3 (#4519) lifts validateStickyToolSelectionPhaseSupport's rejection above —
 // sticky.enabled: true cannot reach this check today, since the
@@ -226,13 +222,19 @@ func validateStickyToolSelectionSecret(cfg *config.RouterConfig) error {
 		return nil
 	}
 	for _, decision := range cfg.AllRoutingDecisions() {
-		plugin := decision.GetToolSelectionConfig()
-		if plugin == nil || plugin.Sticky == nil || !plugin.Sticky.Enabled {
+		if !stickyToolSelectionEnabled(&decision) {
 			continue
 		}
-		return fmt.Errorf("USER_SCOPE_NAMESPACE_SECRET is required when tool_selection sticky selection is enabled")
+		return fmt.Errorf("USER_SCOPE_NAMESPACE_SECRET is required when tools.select.sticky selection is enabled")
 	}
 	return nil
+}
+
+// stickyToolSelectionEnabled reports whether a decision's tools selection
+// turns sticky selection on.
+func stickyToolSelectionEnabled(decision *config.Decision) bool {
+	plugin := decision.GetToolsConfig()
+	return plugin != nil && plugin.Select != nil && plugin.Select.Sticky != nil && plugin.Select.Sticky.Enabled
 }
 
 func validateResponseCacheScopeSecret(cfg *config.RouterConfig) error {
@@ -331,7 +333,7 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 		replayReaderForLookup = components.replayRecorder.Reader()
 	}
 	if cfg.ModelSelection.Enabled {
-		components.recipeModelSelectors, components.modelSelector, components.lookupTable, components.lookupTableCancel = createModelSelectorRegistries(cfg, replayReaderForLookup, components.recipeClassifiers)
+		components.recipeModelSelectors, components.modelSelector, components.lookupTable, components.lookupTableCancel = createModelSelectorRegistries(cfg, replayReaderForLookup)
 		registerModelSelectorResources(components.resources, components.recipeModelSelectors, components.lookupTableCancel)
 	} else {
 		logging.ComponentEvent("extproc", "model_selection_disabled", map[string]interface{}{})
@@ -415,7 +417,7 @@ func (components *routerComponents) buildEarlyResources() error {
 		components.resources.add(components.semanticCache.Close)
 	}
 
-	components.toolsDatabase, components.toolEmbedder, err = buildToolsRuntime(components.cfg, components.serviceEmbeddings)
+	components.toolCatalogs, err = loadToolCatalogs(components.cfg)
 	if err != nil {
 		return rollbackResources(components.resources, err)
 	}
@@ -423,7 +425,6 @@ func (components *routerComponents) buildEarlyResources() error {
 	// The service wraps the generation's configuration around the recipe
 	// classifiers, which the signal runtime owns.
 	components.classificationSvc = services.NewRecipeClassificationService(components.recipeClassifiers, components.cfg)
-	components.classificationSvc.SetGlobalEmbeddings(components.serviceEmbeddings)
 	components.resources.add(components.classificationSvc.Close)
 	components.responseCache, err = newResponseCacheService(components.cfg, components.semanticCache, components.semanticCacheIdentity, components.cacheEmbeddings)
 	if err != nil {
@@ -437,11 +438,11 @@ func (components *routerComponents) buildEarlyResources() error {
 func (components *routerComponents) useSignals(signals *signalRuntime) {
 	components.signals = signals
 	components.modelLease = signals.modelLease
+	components.systemOne = signals.systemOne
 	components.serving = signals.serving
 	components.embeddings = signals.embeddings
 	components.serviceEmbeddings = signals.serviceEmbeddings
 	components.cacheEmbeddings = signals.cacheEmbeddings
-	components.rerankers = signals.rerankers
 	components.recipeClassifiers = signals.recipeClassifiers
 	components.classifier = signals.classifier
 }
@@ -463,7 +464,7 @@ func createMemoryPersistenceRunner(cfg *config.RouterConfig, extractor *memory.M
 	// Workers and queue storage follow the memory store that was actually built:
 	// enablement alone still yields a nil extractor when the backend is
 	// unreachable, and every write would then be suppressed as "no_extractor".
-	if cfg == nil || extractor == nil || !isMemoryEnabled(cfg) {
+	if cfg == nil || extractor == nil || !cfg.UsesMemory() {
 		return nil
 	}
 	persistence := cfg.Memory.Persistence
@@ -500,24 +501,6 @@ func rollbackResources(resources *resourceScope, cause error) error {
 	return cause
 }
 
-func buildToolsRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (*tools.ToolsDatabase, *cachedToolEmbedder, error) {
-	// One provider serves both the tools database and the tool embedder, so a
-	// remote endpoint gets a single HTTP client/connection pool.
-	provider, providerErr := toolsEmbeddingProvider(cfg, sets...)
-	if providerErr != nil && cfg.Tools.Enabled {
-		return nil, nil, providerErr
-	}
-	database, err := createToolsDatabase(cfg, provider)
-	if err != nil {
-		return nil, nil, err
-	}
-	if providerErr != nil {
-		logging.Warnf("tool_selection: embedding provider unavailable, filter mode will use its fallback: %v", providerErr)
-		return database, nil, nil
-	}
-	return database, newToolEmbedderForConfig(cfg, provider), nil
-}
-
 func (components *routerComponents) buildRouter() *OpenAIRouter {
 	router := &OpenAIRouter{
 		signals:                     components.signals,
@@ -525,7 +508,6 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		Embeddings:                  components.embeddings,
 		serviceEmbeddings:           components.serviceEmbeddings,
 		cacheEmbeddings:             components.cacheEmbeddings,
-		rerankers:                   components.rerankers,
 		decisionCards:               components.decisionCards,
 		CategoryDescriptions:        components.categoryDescriptions,
 		Classifier:                  components.classifier,
@@ -533,8 +515,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ClassificationService:       components.classificationSvc,
 		Cache:                       components.semanticCache,
 		ResponseCache:               components.responseCache,
-		ToolsDatabase:               components.toolsDatabase,
-		toolEmbedder:                components.toolEmbedder,
+		toolCatalogs:                components.toolCatalogs,
 		ResponseAPIFilter:           components.responseAPIFilter,
 		ReplayRecorder:              components.replayRecorder,
 		ReplayStoreShared:           components.replayStoreShared,
@@ -559,6 +540,9 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 	}
 	if components.modelLease != nil {
 		router.decisionDecider = components.modelLease
+	}
+	if components.systemOne != nil {
+		router.systemOneDecider = components.systemOne
 	}
 	if components.classificationSvc != nil {
 		components.classificationSvc.SetEvalModelSelector(router)

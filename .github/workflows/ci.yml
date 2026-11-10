@@ -6,7 +6,7 @@ on:
       verification:
         description: Verification ID from tools/ci/verification_catalog.yaml (or e2e.PROFILE) to run on the selected branch or tag.
         type: string
-        default: platform.image-calibration-cpu
+        default: platform.models-cpu
         required: true
   workflow_call:
     inputs:
@@ -16,16 +16,25 @@ on:
       full:
         type: boolean
         default: false
+      publish:
+        type: boolean
+        default: false
       draft:
         type: boolean
         default: false
       tag:
         type: string
         default: ''
+      date:
+        description: The run's publication date (YYYYMMDD) for every image it builds.
+        type: string
+        default: ''
       performance-base-ref:
         type: string
         default: ''
     outputs:
+      publisher_ready:
+        value: ${{ jobs.plan.outputs.publisher_ready }}
       plan:
         value: ${{ jobs.plan.outputs.plan }}
       publish_images:
@@ -38,6 +47,8 @@ on:
 permissions:
   contents: read
   actions: read
+  issues: read
+  pull-requests: read
 
 jobs:
   plan:
@@ -45,6 +56,7 @@ jobs:
     uses: ./.github/workflows/ci-changes.yml
     with:
       profile: ${{ inputs.profile || 'pr' }}
+      publish: ${{ inputs.publish || false }}
       full: ${{ inputs.full || false }}
       draft: ${{ inputs.draft || false }}
       verification: ${{ github.event_name == 'workflow_dispatch' && inputs.verification || '' }}
@@ -59,6 +71,7 @@ jobs:
       published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-router'].published_images) }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
+      date: ${{ inputs.date }}
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
     secrets: inherit
 
@@ -72,6 +85,7 @@ jobs:
       published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-dashboard'].published_images) }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
+      date: ${{ inputs.date }}
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
     secrets: inherit
 
@@ -85,6 +99,7 @@ jobs:
       published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-operator'].published_images) }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
+      date: ${{ inputs.date }}
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
     secrets: inherit
 
@@ -98,6 +113,7 @@ jobs:
       published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-fixtures'].published_images) }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
+      date: ${{ inputs.date }}
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
     secrets: inherit
 
@@ -111,6 +127,7 @@ jobs:
       published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-distribution'].published_images) }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
+      date: ${{ inputs.date }}
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
     secrets: inherit
 
@@ -182,6 +199,15 @@ jobs:
       verification: ${{ toJSON(fromJSON(needs.plan.outputs.dashboard)[0]) }}
     secrets: inherit
 
+  operator-source:
+    name: Tests / Source / Operator
+    needs: plan
+    if: needs.plan.outputs.operator-source != '[]'
+    uses: ./.github/workflows/operator-source.yml
+    with:
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.operator-source)[0]) }}
+    secrets: inherit
+
   operator:
     name: Tests / E2E / Operator
     needs: [plan, image-router, image-operator, image-fixtures]
@@ -194,8 +220,6 @@ jobs:
     uses: ./.github/workflows/operator-ci.yml
     with:
       verification: ${{ toJSON(fromJSON(needs.plan.outputs.operator)[0]) }}
-      run_integration: true
-      integration_matrix: ${{ toJSON(fromJSON(needs.plan.outputs.operator)[0].integration_matrix) }}
     secrets: inherit
 
   local:
@@ -340,8 +364,9 @@ jobs:
 
   gate:
     name: Gate
-    if: always()
-    needs: [plan, image-router, image-dashboard, image-operator, image-fixtures, image-distribution, quality, generated, security, core, storage, dashboard, operator, local, recipes, platform, performance, package, tools, e2e-router, e2e-fixtures, e2e-dashboard]
+    # Reconcile failures while allowing cancelled runs to release concurrency.
+    if: ${{ !cancelled() }}
+    needs: [plan, image-router, image-dashboard, image-operator, image-fixtures, image-distribution, quality, generated, security, core, storage, dashboard, operator-source, operator, local, recipes, platform, performance, package, tools, e2e-router, e2e-fixtures, e2e-dashboard]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -360,6 +385,7 @@ jobs:
           path: .agent-harness/ci/results
       - name: Reconcile source, dependencies, qualified combinations and cases
         env:
+          PUBLISHER_READY: ${{ needs.plan.outputs.publisher_ready }}
           # Job outputs include the full plan and dispatch copies. Keep them out of
           # the process environment; the complete plan is downloaded above.
           EXECUTOR_RESULTS: >-
@@ -376,6 +402,7 @@ jobs:
               "core": {"result": "${{ needs.core.result }}"},
               "storage": {"result": "${{ needs.storage.result }}"},
               "dashboard": {"result": "${{ needs.dashboard.result }}"},
+              "operator-source": {"result": "${{ needs.operator-source.result }}"},
               "operator": {"result": "${{ needs.operator.result }}"},
               "local": {"result": "${{ needs.local.result }}"},
               "recipes": {"result": "${{ needs.recipes.result }}"},
@@ -388,6 +415,18 @@ jobs:
               "e2e-dashboard": {"result": "${{ needs.e2e-dashboard.result }}"}
             }
         run: |
+          flags=()
+          if [[ "$PUBLISHER_READY" == true ]]; then flags+=(--allow-deferred); fi
           python3 tools/ci/check_ci_gate.py \
             --plan .agent-harness/ci/plan.json \
-            --results .agent-harness/ci/results
+            --results .agent-harness/ci/results \
+            --output .agent-harness/ci/gate.json "${flags[@]}"
+      - name: Upload the reconciled execution outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          overwrite: true
+          name: ci-gate
+          path: .agent-harness/ci/gate.json
+          include-hidden-files: true
+          if-no-files-found: error

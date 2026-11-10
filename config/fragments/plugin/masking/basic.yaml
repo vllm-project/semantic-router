@@ -1,0 +1,13 @@
+# Masks the emails and phone numbers the pii rule contact_details detects in
+# the request as it is sent.
+plugin:
+  type: masking
+  configuration:
+    enabled: true
+    signal: contact_details
+    entity_types:
+      - EMAIL_ADDRESS
+      - PHONE_NUMBER
+    placeholders:
+      EMAIL_ADDRESS: "[EMAIL_{index}]"
+      PHONE_NUMBER: "[PHONE_{index}]"

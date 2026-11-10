@@ -1,11 +1,12 @@
 ---
+is_mtpe: false
 sidebar_position: 1
 title: 快速开始
 description: 安装 vLLM Semantic Router 并发送你的第一条已路由请求。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/installation.md"
-  outdated: false
+  outdated: true
 ---
 
 import Tabs from '@theme/Tabs'
@@ -40,9 +41,9 @@ Ollama、vLLM 服务或托管 API，你在控制面板中接入它们。
 | 主机 | 你需要 |
 | --- | --- |
 | 所有主机 | Linux、macOS 或 WSL2；Docker（Linux 也可以用 Podman）；Python 3.10 或更高版本；约 5 GB 可用磁盘放镜像，路由用到的每个内置模型另需 1–1.5 GB |
-| CPU | 无需其他。`vllm-sr` 镜像在 CPU 上运行所有内置模型；路由用到的每个 307M 任务模型约需 1.3 GB 内存 |
+| CPU | 无需其他。`vllm-sr` 镜像在 CPU 上运行内置模型。默认决策模型 vela3-fast 加载后约占 7 GB 内存，因此请给 Router 约 12 GiB；召回功能用到 307M 嵌入模型时再加约 1.3 GB |
 | AMD Instinct MI300X 或 MI325X | 主机上的 ROCm 驱动、Docker 能访问 `/dev/kfd` 和 `/dev/dri`，以及 `--platform rocm`。它使用的 `vllm-sr-rocm` 镜像下载约 6.5 GB，占用约 20 GB 磁盘 |
-| NVIDIA | NVIDIA Container Toolkit 和 `--platform cuda`（可用，尚未验证） |
+| NVIDIA | NVIDIA Container Toolkit 和 `--platform cuda`（已验证；H200、A100、Tesla T4 记录。无 bit-exact 证据的融合 kernel 不进入精确配置） |
 
 在 macOS 上，docker 目标只使用 CPU；见[网关模式](gateway-modes#macos)。
 
@@ -128,8 +129,8 @@ curl -s -D - http://localhost:8899/v1/chat/completions \
 ```
 
 `vllm-sr/auto` 让 Router 来选择。响应头说明它选了什么：`x-vsr-selected-decision` 是路由，
-`x-vsr-selected-model` 是模型；带上 `x-vsr-debug: true` 时，`x-vsr-matched-*` 响应头列出
-命中的信号。见 [Router 响应头](../troubleshooting/vsr-headers)。
+`x-vsr-selected-model` 是模型；带上 `x-vsr-debug: true`，并且 `global.router.headers.debug`
+允许该调用方时，`x-vsr-trace` 的 `signals` 成员列出命中的信号。见 [Router 响应头](../troubleshooting/vsr-headers)。
 
 ## 运维这个栈
 

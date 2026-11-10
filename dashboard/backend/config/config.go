@@ -61,24 +61,14 @@ type Config struct {
 	Platform string
 
 	// sr-bench is a separate durable service shared by CLI and Dashboard.
-	SRBenchURL               string
-	SRBenchTokenEnv          string
-	SRBenchAvailable         bool
-	SRBenchUnavailableReason string
-	PythonPath               string
+	SRBenchURL      string
+	SRBenchTokenEnv string
+	PythonPath      string
 
 	// MCP configuration
 	MCPEnabled bool
 
-	// ML Pipeline configuration
-	MLPipelineEnabled           bool
-	MLPipelineDataDir           string
-	MLPipelineAvailable         bool
-	MLPipelineUnavailableReason string
-	MLTrainingDir               string // path to src/training/model_selection/ml_model_selection
-	MLServiceURL                string // URL of the Python ML service sidecar (empty = subprocess mode)
-
-	// Durable workflow state (ML pipeline jobs, MCP servers)
+	// Durable workflow state (MCP servers, training runs)
 	WorkflowDBPath string
 	// Durable hourly availability history for the public status page.
 	StatusDBPath string
@@ -188,10 +178,6 @@ type parsedFlags struct {
 	srBenchTokenEnv        *string
 	pythonPath             *string
 	mcpEnabled             *bool
-	mlPipelineEnabled      *bool
-	mlPipelineDataDir      *string
-	mlTrainingDir          *string
-	mlServiceURL           *string
 	workflowDBPath         *string
 	statusDBPath           *string
 	configProjectionDBPath *string
@@ -238,10 +224,6 @@ func applyFeatureConfig(cfg *Config, flags parsedFlags) error {
 		return err
 	}
 	cfg.MCPEnabled = *flags.mcpEnabled
-	cfg.MLPipelineEnabled = *flags.mlPipelineEnabled
-	cfg.MLPipelineDataDir = *flags.mlPipelineDataDir
-	cfg.MLTrainingDir = *flags.mlTrainingDir
-	cfg.MLServiceURL = *flags.mlServiceURL
 	cfg.WorkflowDBPath = *flags.workflowDBPath
 	cfg.StatusDBPath = *flags.statusDBPath
 	cfg.ConfigProjectionDBPath = *flags.configProjectionDBPath
@@ -330,10 +312,6 @@ func bindFeatureFlags(flags parsedFlags) parsedFlags {
 	flags.srBenchTokenEnv = flag.String("sr-bench-token-env", env("SR_BENCH_TOKEN_ENV", "SR_BENCH_TOKEN"), "environment variable holding the sr-bench service token")
 	flags.pythonPath = flag.String("python", env("PYTHON_PATH", defaultPythonBinary()), "path to Python interpreter")
 	flags.mcpEnabled = flag.Bool("mcp", env("MCP_ENABLED", "true") == "true", "enable MCP (Model Context Protocol) feature")
-	flags.mlPipelineEnabled = flag.Bool("ml-pipeline", env("ML_PIPELINE_ENABLED", "false") == "true", "enable ML pipeline (benchmark, train, config)")
-	flags.mlPipelineDataDir = flag.String("ml-pipeline-data", env("ML_PIPELINE_DATA_DIR", "./data/ml-pipeline"), "ML pipeline data directory")
-	flags.mlTrainingDir = flag.String("ml-training-dir", env("ML_TRAINING_DIR", ""), "path to src/training/model_selection/ml_model_selection")
-	flags.mlServiceURL = flag.String("ml-service-url", env("ML_SERVICE_URL", ""), "URL of Python ML service sidecar (empty = subprocess mode)")
 	flags.workflowDBPath = flag.String("workflow-db", env("DASHBOARD_WORKFLOW_DB_PATH", "./data/workflow.sqlite"), "SQLite path for durable dashboard workflow state")
 	flags.statusDBPath = flag.String("status-db", env("DASHBOARD_STATUS_DB_PATH", ""), "SQLite path for durable hourly service history")
 	flags.configProjectionDBPath = flag.String("config-projection-db", env("DASHBOARD_CONFIG_PROJECTION_DB_PATH", "./data/config-projection.sqlite"), "SQLite path for deployed config projection state")

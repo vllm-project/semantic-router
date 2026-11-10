@@ -54,6 +54,24 @@ def test_auto_honors_visibility_before_selecting_backend(monkeypatch):
     assert platform.resolve_execution_platform("auto") == "rocm"
 
 
+@pytest.mark.parametrize(
+    "name,value,backend",
+    [
+        ("VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES", "GPU-1f2e3d4c5b6a7980", "rocm"),
+        ("ROCR_VISIBLE_DEVICES", "GPU-1f2e3d4c5b6a7980,GPU-0e5a1b7f61c0d2e9", "rocm"),
+        ("CUDA_VISIBLE_DEVICES", "GPU-5b1c4c2e-8f1d-4d38-9a0e-3f9b6c1d2e7a", "cuda"),
+    ],
+)
+def test_auto_selects_the_backend_a_uuid_mask_names(monkeypatch, name, value, backend):
+    monkeypatch.setattr(
+        platform, "_host_devices", lambda: {"rocm": (), "cuda": (), backend: (0, 1)}
+    )
+    monkeypatch.setenv(name, value)
+    assert platform.resolve_execution_platform("auto") == backend
+    with pytest.raises(ValueError, match="numeric host indices with --device-ids"):
+        platform.placement_devices(backend)
+
+
 def test_physical_gpu_ids_map_through_effective_rocm_mask(monkeypatch):
     monkeypatch.setenv("VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES", "7,3")
     monkeypatch.setenv(

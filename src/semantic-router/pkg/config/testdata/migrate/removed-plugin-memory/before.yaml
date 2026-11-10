@@ -1,0 +1,48 @@
+# A memory plugin becomes the memory source of the decision's context plugin;
+# a disabled one, which turned the global memory off, a disabled context
+# plugin. A decision whose only old plugin is rag keeps the global memory as a
+# memory source.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: personal
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: memory
+            configuration:
+              enabled: true
+              auto_store: false
+              hybrid_search: true
+              hybrid_mode: rrf
+              reflection: {enabled: true, algorithm: heuristic, max_inject_tokens: 384}
+      - name: private
+        priority: 90
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: memory
+            configuration: {enabled: false}
+      - name: docs
+        priority: 80
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: rag
+            configuration: {enabled: true, backend: vectorstore, backend_config: {vector_store_id: vs_docs}}
+global:
+  stores:
+    memory: {}
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        sources:
+          - type: memory

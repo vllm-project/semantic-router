@@ -23,12 +23,22 @@ type KeywordClassifier struct {
 }
 
 // keywordRule is one configured rule with the engine that evaluates it:
-// exactly one of regex and scored is set.
+// exactly one of regex and scored is set. A rule with a measure counts its
+// regex engine's occurrences and matches on that.
 type keywordRule struct {
-	name   string
-	method string
-	regex  *preppedKeywordRule
-	scored scoredKeywordMatcher
+	name           string
+	method         string
+	regex          *preppedKeywordRule
+	scored         scoredKeywordMatcher
+	includeHistory bool
+	measure        *keywordMeasure
+}
+
+// keywordMeasure is what a counting rule matches on: the number of its
+// keyword occurrences, or with density, occurrences per 1,000 characters.
+type keywordMeasure struct {
+	density   bool
+	predicate *config.NumericPredicate
 }
 
 // scoredKeywordMatcher is a BM25 or n-gram rule.
@@ -54,12 +64,35 @@ func NewKeywordClassifier(cfgRules []config.KeywordRule) (*KeywordClassifier, er
 	return kc, nil
 }
 
+// HasHistoryRules reports whether any rule opted into include_history, so
+// callers can skip building history text when no rule needs it.
+func (c *KeywordClassifier) HasHistoryRules() bool {
+	if c == nil {
+		return false
+	}
+	for _, rule := range c.rules {
+		if rule.includeHistory {
+			return true
+		}
+	}
+	return false
+}
+
 func newKeywordRule(rule config.KeywordRule) (keywordRule, error) {
+	if err := config.ValidateKeywordRuleContract(rule); err != nil {
+		return keywordRule{}, fmt.Errorf("keyword rule %q: %w", rule.Name, err)
+	}
 	method := strings.ToLower(rule.Method)
 	if method == "" {
 		method = "regex"
 	}
-	compiled := keywordRule{name: rule.Name, method: method}
+	compiled := keywordRule{name: rule.Name, method: method, includeHistory: rule.IncludeHistory}
+	switch {
+	case rule.Count != nil:
+		compiled.measure = &keywordMeasure{predicate: rule.Count}
+	case rule.Density != nil:
+		compiled.measure = &keywordMeasure{density: true, predicate: rule.Density}
+	}
 	scoredRule := lexical.Rule{Name: rule.Name, Operator: rule.Operator, Keywords: rule.Keywords, CaseSensitive: rule.CaseSensitive}
 	switch method {
 	case "bm25":

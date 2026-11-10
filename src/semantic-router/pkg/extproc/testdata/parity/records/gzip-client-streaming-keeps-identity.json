@@ -1,0 +1,313 @@
+{
+  "case": "gzip-client-streaming-keeps-identity",
+  "phases": [
+    {
+      "phase": "request_headers",
+      "header": [
+        {
+          "name": ":method",
+          "value": "POST"
+        },
+        {
+          "name": ":path",
+          "value": "/v1/chat/completions"
+        },
+        {
+          "name": ":authority",
+          "value": "localhost:8899"
+        },
+        {
+          "name": ":scheme",
+          "value": "http"
+        },
+        {
+          "name": "content-type",
+          "value": "application/json"
+        },
+        {
+          "name": "accept",
+          "value": "text/event-stream"
+        },
+        {
+          "name": "accept-encoding",
+          "value": "gzip"
+        },
+        {
+          "name": "content-length",
+          "value": "92"
+        },
+        {
+          "name": "x-forwarded-proto",
+          "value": "http"
+        },
+        {
+          "name": "x-request-id",
+          "value": "parity-gzip-client-streaming-keeps-identity"
+        }
+      ],
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "accept-encoding",
+              "value": ""
+            }
+          ],
+          "remove": [
+            "x-authz-team-id",
+            "x-authz-tenant-id",
+            "x-authz-user-groups",
+            "x-authz-user-id",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key",
+            "x-vsr-bench-expected-config-hash",
+            "x-vsr-bench-max-inference-calls",
+            "x-vsr-cache-control",
+            "x-vsr-compression-control",
+            "x-vsr-config-hash",
+            "x-vsr-config-version",
+            "x-vsr-cost",
+            "x-vsr-cost-currency",
+            "x-vsr-debug",
+            "x-vsr-delegated-credential",
+            "x-vsr-internal-auth",
+            "x-vsr-kv-cache-id",
+            "x-vsr-kv-mapper-id",
+            "x-vsr-kv-source-pod",
+            "x-vsr-memory",
+            "x-vsr-outcome-principal",
+            "x-vsr-outcome-source",
+            "x-vsr-protection-release",
+            "x-vsr-replay-id",
+            "x-vsr-response-path",
+            "x-vsr-route-model",
+            "x-vsr-schema-version",
+            "x-vsr-selected-decision",
+            "x-vsr-selected-model",
+            "x-vsr-selected-recipe",
+            "x-vsr-session-id",
+            "x-vsr-skip-processing",
+            "x-vsr-systemone-backend",
+            "x-vsr-trace",
+            "x-vsr-upstream-host",
+            "x-vsr-warnings"
+          ]
+        }
+      }
+    },
+    {
+      "phase": "request_body",
+      "end_of_stream": true,
+      "body": "{\"model\":\"vllm-sr/auto\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"Hello there.\"}]}",
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "x-vsr-route-model",
+              "value": "general-small"
+            },
+            {
+              "name": ":path",
+              "value": "/v1/chat/completions"
+            },
+            {
+              "name": "content-length",
+              "value": "142"
+            }
+          ],
+          "remove": [
+            "content-length",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key",
+            "x-vsr-delegated-credential"
+          ]
+        },
+        "body": {
+          "body": "{\"model\":\"general-small-instruct\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello there.\"}],\"stream\":true,\"stream_options\":{\"include_usage\":true}}"
+        },
+        "clear_route_cache": true
+      }
+    },
+    {
+      "phase": "response_headers",
+      "header": [
+        {
+          "name": ":status",
+          "value": "200"
+        },
+        {
+          "name": "content-type",
+          "value": "text/event-stream"
+        }
+      ],
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "x-vsr-schema-version",
+              "value": "3"
+            },
+            {
+              "name": "x-vsr-response-path",
+              "value": "upstream"
+            },
+            {
+              "name": "x-vsr-config-version",
+              "value": "1"
+            },
+            {
+              "name": "x-vsr-selected-recipe",
+              "value": "default"
+            },
+            {
+              "name": "x-vsr-selected-model",
+              "value": "general-small"
+            }
+          ],
+          "remove": [
+            "content-length"
+          ]
+        },
+        "response_body_mode": "streamed"
+      }
+    },
+    {
+      "phase": "response_body",
+      "body": "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n",
+      "effect": {
+        "body": {
+          "body": "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n"
+        }
+      }
+    },
+    {
+      "phase": "response_body",
+      "body": "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world.\"},\"finish_reason\":null}]}\n\n",
+      "effect": {
+        "body": {
+          "body": "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world.\"},\"finish_reason\":null}]}\n\n"
+        }
+      }
+    },
+    {
+      "phase": "response_body",
+      "body": "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":9,\"completion_tokens\":2,\"total_tokens\":11}}\n\ndata: [DONE]\n\n",
+      "effect": {
+        "body": {
+          "body": "data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"created\":0,\"id\":\"chatcmpl-parity\",\"model\":\"upstream-model\",\"object\":\"chat.completion.chunk\"}\n\n"
+        }
+      }
+    },
+    {
+      "phase": "response_body",
+      "end_of_stream": true,
+      "effect": {
+        "body": {
+          "body": "data: [DONE]\n\n"
+        }
+      }
+    }
+  ],
+  "route": "general-small",
+  "upstream": {
+    "header": [
+      {
+        "name": ":method",
+        "value": "POST"
+      },
+      {
+        "name": ":authority",
+        "value": "localhost:8899"
+      },
+      {
+        "name": ":scheme",
+        "value": "http"
+      },
+      {
+        "name": ":path",
+        "value": "/v1/chat/completions"
+      },
+      {
+        "name": "content-type",
+        "value": "application/json"
+      },
+      {
+        "name": "accept",
+        "value": "text/event-stream"
+      },
+      {
+        "name": "x-forwarded-proto",
+        "value": "http"
+      },
+      {
+        "name": "x-request-id",
+        "value": "parity-gzip-client-streaming-keeps-identity"
+      },
+      {
+        "name": "accept-encoding",
+        "value": ""
+      },
+      {
+        "name": "x-vsr-route-model",
+        "value": "general-small"
+      },
+      {
+        "name": "content-length",
+        "value": "142"
+      }
+    ],
+    "body": "{\"model\":\"general-small-instruct\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello there.\"}],\"stream\":true,\"stream_options\":{\"include_usage\":true}}"
+  },
+  "response": {
+    "status": 200,
+    "header": [
+      {
+        "name": "content-type",
+        "value": "text/event-stream"
+      },
+      {
+        "name": "x-vsr-schema-version",
+        "value": "3"
+      },
+      {
+        "name": "x-vsr-response-path",
+        "value": "upstream"
+      },
+      {
+        "name": "x-vsr-config-version",
+        "value": "1"
+      },
+      {
+        "name": "x-vsr-selected-recipe",
+        "value": "default"
+      },
+      {
+        "name": "x-vsr-selected-model",
+        "value": "general-small"
+      }
+    ],
+    "chunks": [
+      "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n",
+      "data: {\"id\":\"chatcmpl-parity\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"upstream-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world.\"},\"finish_reason\":null}]}\n\n",
+      "data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"created\":0,\"id\":\"chatcmpl-parity\",\"model\":\"upstream-model\",\"object\":\"chat.completion.chunk\"}\n\n",
+      "data: [DONE]\n\n"
+    ]
+  },
+  "evidence": {
+    "recipe": "default",
+    "model": "general-small",
+    "reasoning_mode": "off"
+  }
+}

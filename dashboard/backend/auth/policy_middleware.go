@@ -177,11 +177,13 @@ func serveWithRouteAudit(service *Service, policy RoutePolicy, w http.ResponseWr
 	rw := &auditResponseWriter{ResponseWriter: w}
 	next.ServeHTTP(rw, r)
 	ac, _ := AuthFromContext(r)
-	_ = service.AddAuditLog(context.WithoutCancel(r.Context()), AuditLog{
+	if err := service.AddAuditLog(context.WithoutCancel(r.Context()), AuditLog{
 		UserID: ac.UserID, Action: policy.AuditAction, Resource: string(policy.ResourceOwner),
 		Method: r.Method, Path: r.URL.Path, IP: r.RemoteAddr, UserAgent: r.UserAgent(),
 		StatusCode: rw.statusCodeOr200(), CreatedAt: time.Now().Unix(),
-	})
+	}); err != nil {
+		log.Printf("route audit log write failed for action %s: %v", policy.AuditAction, err)
+	}
 }
 
 func RoutePolicyFromContext(r *http.Request) (RoutePolicy, bool) {

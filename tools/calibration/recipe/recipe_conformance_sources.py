@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Any, Generic, Protocol, TypeVar
 
 BUILT_IN_LATEST_SUBDIR = Path("built-in") / "latest"
+CI_SHARDS_PER_SOURCE = 3
+MAX_PROBE_SHARDS = 16
+# A routing question reads at most its model's first 16,384 tokens, so a longer
+# text costs about as much as one of this size.
+ROUTING_READ_BYTES = 65_536
+PROBE_COST_BYTES = 4_096
 
 
 class RecipeLike(Protocol):
@@ -21,6 +27,7 @@ class RecipeLike(Protocol):
     algorithms: tuple[str, ...]
     plugins: tuple[str, ...]
     coverage: dict[str, Any]
+    probe_shard_sizes: tuple[int, ...]
 
 
 RecipeType = TypeVar("RecipeType", bound=RecipeLike)
@@ -90,6 +97,42 @@ def shard_inventory(
     return [shard for shard in shards if shard]
 
 
+def probe_shard_count(manifest: dict[str, Any]) -> int:
+    """Live CPU jobs that split one manifest's probes (evaluation.shards)."""
+    evaluation = manifest.get("evaluation")
+    raw = evaluation.get("shards", 1) if isinstance(evaluation, dict) else 1
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        raise TypeError("evaluation.shards must be an integer")
+    if not 1 <= raw <= MAX_PROBE_SHARDS:
+        raise ValueError(f"evaluation.shards must be between 1 and {MAX_PROBE_SHARDS}")
+    return raw
+
+
+def probe_cost(text_bytes: int) -> int:
+    return 1 + min(text_bytes, ROUTING_READ_BYTES) // PROBE_COST_BYTES
+
+
+def partition_probes(costs: list[tuple[str, int]], shard_count: int) -> list[list[str]]:
+    """Split probe IDs into shards of similar serial cost, each in manifest order."""
+    order = {probe_id: index for index, (probe_id, _cost) in enumerate(costs)}
+    shards: list[list[str]] = [[] for _ in range(shard_count)]
+    weights = [0] * shard_count
+    for probe_id, cost in sorted(costs, key=lambda item: (-item[1], order[item[0]])):
+        index = min(range(shard_count), key=lambda item: (weights[item], item))
+        shards[index].append(probe_id)
+        weights[index] += cost
+    return [sorted(shard, key=order.__getitem__) for shard in shards]
+
+
+def parse_probe_shard(value: str) -> tuple[int, int]:
+    index, separator, count = value.strip().partition("/")
+    if not separator or not index.isdigit() or not count.isdigit():
+        raise ValueError(f"probe shard must look like INDEX/COUNT, got {value!r}")
+    if not 0 <= int(index) < int(count):
+        raise ValueError(f"probe shard index must be below its count, got {value!r}")
+    return int(index), int(count)
+
+
 def matrix_payload(inventory: list[RecipeType], shard_count: int) -> dict[str, Any]:
     return {
         "include": [
@@ -111,15 +154,19 @@ def source_matrix_payload(
     include: list[dict[str, Any]] = []
     for source_inventory in source_inventories:
         source = source_inventory.source
+        location = {
+            "recipes_root": repo_relative_path(source.recipes_root, repo_root),
+            "report_dir": source.report_subdir.as_posix(),
+        }
+        whole = [
+            recipe
+            for recipe in source_inventory.recipes
+            if len(recipe.probe_shard_sizes) <= 1
+        ]
         if shard_count is None:
-            shards = [
-                [recipe]
-                for recipe in sorted(
-                    source_inventory.recipes, key=lambda item: item.name
-                )
-            ]
+            shards = [[recipe] for recipe in sorted(whole, key=lambda item: item.name)]
         else:
-            shards = shard_inventory(list(source_inventory.recipes), shard_count)
+            shards = shard_inventory(whole, shard_count)
         for index, shard in enumerate(shards):
             include.append(
                 {
@@ -130,11 +177,26 @@ def source_matrix_payload(
                         else f"{source.name}-{index}"
                     ),
                     "recipes": ",".join(recipe.name for recipe in shard),
+                    "probe_shard": "",
                     "variants": sum(recipe.variants for recipe in shard),
-                    "recipes_root": repo_relative_path(source.recipes_root, repo_root),
-                    "report_dir": source.report_subdir.as_posix(),
+                    **location,
                 }
             )
+        for recipe in sorted(source_inventory.recipes, key=lambda item: item.name):
+            sizes = recipe.probe_shard_sizes
+            if len(sizes) <= 1:
+                continue
+            for index, size in enumerate(sizes):
+                include.append(
+                    {
+                        "source": source.name,
+                        "shard": f"{source.name}-{recipe.name}-{index}",
+                        "recipes": recipe.name,
+                        "probe_shard": f"{index}/{len(sizes)}",
+                        "variants": size,
+                        **location,
+                    }
+                )
     return {"include": include}
 
 

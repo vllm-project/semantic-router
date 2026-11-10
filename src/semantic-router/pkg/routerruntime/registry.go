@@ -159,9 +159,11 @@ func (r *Registry) AcquireResponseCache() (*cache.ResponseCacheService, func()) 
 
 // LearningRuntime is the narrow API-server seam for Router Learning state.
 // The implementation lives with the router runtime; the API server only needs
-// to forward typed outcomes without depending on extproc internals.
+// to forward typed outcomes and read typed experience without depending on
+// extproc internals.
 type LearningRuntime interface {
 	OutcomeRuntime
+	ExperienceRuntime
 }
 
 func NewRegistry(cfg *config.RouterConfig) *Registry {
@@ -185,18 +187,7 @@ func defaultInitialMemoryStatus(cfg *config.RouterConfig) MemoryStatus {
 }
 
 func isMemoryConfigEnabled(cfg *config.RouterConfig) bool {
-	if cfg == nil {
-		return false
-	}
-	if cfg.Memory.Enabled {
-		return true
-	}
-	for _, decision := range cfg.AllRoutingDecisions() {
-		if memoryConfig := decision.GetMemoryConfig(); memoryConfig != nil && memoryConfig.Enabled {
-			return true
-		}
-	}
-	return false
+	return cfg.UsesMemory()
 }
 
 func (r *Registry) CurrentConfig() *config.RouterConfig {

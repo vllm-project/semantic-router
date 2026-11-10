@@ -13,13 +13,12 @@ from cli.container_management_listener import _managed_management_listener
 from cli.container_start import _render_split_envoy_config
 from cli.parser import ConfigParseError, parse_user_config
 from cli.runtime_stack import resolve_runtime_stack
-from cli.validator_model_runtime import validate_model_runtime_references
 
 
 def test_build_bootstrap_config_contains_setup_marker():
     config = build_bootstrap_config()
 
-    assert config["version"] == "v0.3"
+    assert config["version"] == "v0.5"
     assert config["listeners"][0]["port"] == 8899
     assert config["setup"]["mode"] is True
     assert config["setup"]["state"] == "bootstrap"
@@ -148,22 +147,13 @@ def test_bootstrap_document_parses_without_relaxing_the_router_schema(tmp_path):
 @pytest.mark.parametrize("owner", ["default", "private"])
 def test_bootstrap_metadata_preserves_typed_model_bindings(tmp_path: Path, owner):
     document = build_bootstrap_config()
-    binding = {
-        "deployment": "shared",
-        "contract": "embedding.v1",
-        "adapter": "mmbert",
-    }
-    profile = {"model_bindings": {"embedding": binding}}
-    if owner == "default":
-        document["routing"] = profile
-    else:
-        document["recipes"] = [{"name": owner, "routing": profile}]
+    document["recipes"] = [{"name": owner, "model_bindings": {"pii": "shared"}}]
     document["global"] = {
         "model_catalog": {
             "deployments": {
                 "shared": {
                     "provider": "model_runtime",
-                    "artifact": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
+                    "artifact": "vllm-sr/Vela-1.0-Encoder-307M-PII",
                 }
             }
         }
@@ -173,13 +163,9 @@ def test_bootstrap_metadata_preserves_typed_model_bindings(tmp_path: Path, owner
     path.write_text(original)
 
     parsed = parse_user_config(str(path), log_summary=False)
-    parsed_profile = parsed.routing if owner == "default" else parsed.recipes[0].routing
+    parsed_profile = parsed.recipes[0]
 
-    assert (
-        parsed_profile.model_bindings["embedding"].model_dump(exclude_none=True)
-        == binding
-    )
-    assert validate_model_runtime_references(parsed) == []
+    assert parsed_profile.model_bindings["pii"].model_dump() == "shared"
     assert parsed.global_ == document["global"]
     assert parsed.setup == document["setup"]
     assert path.read_text() == original
@@ -211,7 +197,7 @@ def test_bootstrap_document_rejects_invalid_setup_metadata(tmp_path, setup, erro
         ("version", "v0.1", "version"),
         ("unknown_root", True, "config.unknown_root"),
         ("providers", {"models": [{"name": "model", "typo": True}]}, "typo"),
-        ("signals", {}, "Deprecated config fields"),
+        ("signals", {}, "top-level signals belongs to the layout before config v0.3"),
     ],
 )
 def test_setup_envelope_does_not_bypass_canonical_validation(

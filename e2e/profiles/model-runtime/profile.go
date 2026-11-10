@@ -105,12 +105,10 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		"model-runtime-startup-readiness",
 		"model-runtime-lifecycle",
-		"model-runtime-task-signals",
-		"model-runtime-embeddings-rerank",
+		"model-runtime-embeddings",
 		"decision-runtime-routing",
 		"decision-runtime-set-span",
 		"model-runtime-bundles",
-		"model-runtime-long-history",
 		"model-runtime-fail-open",
 		"model-runtime-supervision",
 		"model-runtime-load-retry",

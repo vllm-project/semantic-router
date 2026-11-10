@@ -56,33 +56,6 @@ func TestEvaluateDecisionWithEngineForDecisionsRestrictsCandidates(t *testing.T)
 	}
 }
 
-func TestEvaluateDecisionWithEngineAppliesOnUnknown(t *testing.T) {
-	threshold := 0.5
-	classifier := &Classifier{Config: &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
-				Name: "guarded",
-				Rules: config.RuleCombination{
-					Type:      config.SignalTypeClassifier,
-					Name:      "risk",
-					Label:     "RISKY",
-					Predicate: &config.NumericPredicate{GTE: &threshold},
-					OnUnknown: config.RuleOnUnknownFailRequest,
-				},
-			}},
-		},
-	}}
-	signals := &SignalResults{SignalErrors: map[string]string{"classifier:risk": "timeout"}}
-
-	_, err := classifier.EvaluateDecisionWithEngine(signals)
-	if err == nil {
-		t.Fatal("expected fail_request error")
-	}
-	if signals.Diagnostics.AppliedUnknownPolicies["guarded"] != string(config.RuleOnUnknownFailRequest) {
-		t.Fatalf("applied policies = %v", signals.Diagnostics.AppliedUnknownPolicies)
-	}
-}
-
 func TestPIIToolResultMatchReachesDecisionEngine(t *testing.T) {
 	classifier := &Classifier{Config: &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
@@ -105,32 +78,6 @@ func TestPIIToolResultMatchReachesDecisionEngine(t *testing.T) {
 	}
 }
 
-func TestPIIToolResultErrorCanMatchConfiguredUnknownPolicy(t *testing.T) {
-	classifier := &Classifier{Config: &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Strategy: "priority",
-			Decisions: []config.Decision{{
-				Name: "fail-closed",
-				Rules: config.RuleNode{
-					Type:      config.SignalTypePII,
-					Name:      "tool_data",
-					OnUnknown: config.RuleOnUnknownMatch,
-				},
-			}},
-		},
-	}}
-
-	result, err := classifier.EvaluateDecisionWithEngine(&SignalResults{
-		SignalErrors: map[string]string{"pii:tool_data": piiEvaluationIncompleteCode},
-	})
-	if err != nil {
-		t.Fatalf("EvaluateDecisionWithEngine() error = %v", err)
-	}
-	if result == nil || result.Decision.Name != "fail-closed" {
-		t.Fatalf("result = %#v, want fail-closed decision", result)
-	}
-}
-
 func TestPIIToolResultErrorCanFailRequestWithUnknownPolicy(t *testing.T) {
 	classifier := &Classifier{Config: &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
@@ -147,7 +94,7 @@ func TestPIIToolResultErrorCanFailRequestWithUnknownPolicy(t *testing.T) {
 	}}
 
 	_, err := classifier.EvaluateDecisionWithEngine(&SignalResults{
-		SignalErrors: map[string]string{"pii:tool_data": piiEvaluationFailedCode},
+		SignalErrors: map[string]string{"pii:tool_data": systemOneSignalErrorPrefix + "timeout"},
 	})
 	if !errors.Is(err, decision.ErrDecisionUnresolved) {
 		t.Fatalf("error = %v, want ErrDecisionUnresolved", err)

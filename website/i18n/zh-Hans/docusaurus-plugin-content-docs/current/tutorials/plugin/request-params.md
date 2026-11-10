@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/tutorials/plugin/request-params.md"
-  outdated: false
+  outdated: true
 ---
 
 # 请求参数
@@ -29,7 +30,7 @@ translation:
 
 ## 配置
 
-在 `routing.decisions[].plugins` 下添加该插件：
+在 `recipes[].decisions[].plugins` 下添加该插件：
 
 ```yaml
 plugins:
