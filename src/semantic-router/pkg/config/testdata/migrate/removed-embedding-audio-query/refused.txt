@@ -1,0 +1,1 @@
+recipes[default].signals.embeddings[spoken_order]: removed_signal_type: the embedding signal is removed, and no decision model reads audio, so no question replaces a rule with an audio query; it has no mechanical rewrite: drop the rule: audio routing returns with a decision model that reads audio input

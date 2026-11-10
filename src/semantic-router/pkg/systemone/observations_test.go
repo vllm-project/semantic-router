@@ -9,38 +9,58 @@ import (
 )
 
 const (
-	mixedRequest  = `{"model":"vllm-sr/auto","state":{"request":"hi"},"questions":{"task":{"type":"choice","instructions":"Type?","criteria":{"code":"Code","chat":"Chat"}},"risk":{"type":"noul","instructions":"Unsafe?","require_full_input":true}},"states":{"second":{"state":"hello","questions":{"difficulty":{"type":"score","instructions":"Difficulty?","criteria":["easy","hard"]}}}}}`
-	mixedResponse = `{"model":"small","answers":{"task":{"type":"choice","choice":"chat","confidence":0.9,"probabilities":{"code":0.01,"chat":0.99}},"risk":{"type":"noul","noul":0.01,"input_coverage":"complete"}},"states":{"second":{"answers":{"difficulty":{"type":"score","score":0.1,"confidence":0.8,"probabilities":{"0":0.9,"1":0.1}}}}}}`
+	batchRequest  = `{"model":"vllm-sr/auto","states":{"first":{"state":{"request":"hi"},"questions":{"task":{"type":"choice","instructions":"Type?","criteria":{"code":"Code","chat":"Chat"}},"risk":{"type":"noul","instructions":"Unsafe?","require_full_input":true}}},"second":{"state":"hello","questions":{"difficulty":{"type":"score","instructions":"Difficulty?","criteria":["easy","hard"]}}}}}`
+	batchResponse = `{"model":"small","states":{"first":{"answers":{"task":{"type":"choice","choice":"chat","confidence":0.9,"probabilities":{"code":0.01,"chat":0.99}},"risk":{"type":"noul","noul":0.01,"input_coverage":"complete"}}},"second":{"answers":{"difficulty":{"type":"score","score":0.1,"confidence":0.8,"probabilities":{"0":0.9,"1":0.1}}}}}}`
 )
 
 func TestNativeObservationKeepsAllStatesAndConfidentFalse(t *testing.T) {
-	r, err := ParseNativeRequest(json.RawMessage(mixedRequest))
+	r, err := ParseNativeRequest(json.RawMessage(batchRequest))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(r.Body) != mixedRequest || len(r.Questions) != 3 || !strings.Contains(r.SignalText, "second") {
+	if string(r.Body) != batchRequest || len(r.Questions) != 3 || !strings.Contains(r.SignalText, "second") {
 		t.Fatal("request or bundle lost")
 	}
-	o := r.Observe(json.RawMessage(mixedResponse))
+	o := r.Observe(json.RawMessage(batchResponse))
 	if !complete(o) {
 		t.Fatal("complete multi-state response marked invalid")
 	}
 	threshold := 0.75
-	acceptance := &config.NativeAcceptance{Rules: []config.NativeAcceptanceRule{
-		{QuestionType: "choice", Field: "confidence", Predicate: config.NumericPredicate{GTE: &threshold}},
-		{QuestionType: "score", Field: "confidence", Predicate: config.NumericPredicate{GTE: &threshold}},
-		{QuestionType: "noul", Field: "probability_margin", Predicate: config.NumericPredicate{GTE: &threshold}},
+	acceptance := &config.EscalateAccept{Native: []config.NativeAcceptanceRule{
+		{QuestionType: "choice", Field: "confidence", NumericPredicate: config.NumericPredicate{GTE: &threshold}},
+		{QuestionType: "score", Field: "confidence", NumericPredicate: config.NumericPredicate{GTE: &threshold}},
+		{QuestionType: "noul", Field: "probability_margin", NumericPredicate: config.NumericPredicate{GTE: &threshold}},
 	}}
 	if !acceptNative(o, acceptance, true) {
 		t.Fatal("confident false should satisfy the probability margin")
 	}
 }
 
+func TestNativeRequestIsAStandardRequestOrABatch(t *testing.T) {
+	question := `{"q":{"type":"noul","instructions":"Is it?"}}`
+	entry := `{"state":"hello","questions":` + question + `}`
+	for name, body := range map[string]string{
+		"state beside states":     `{"state":"hi","states":{"a":` + entry + `}}`,
+		"questions beside states": `{"questions":` + question + `,"states":{"a":` + entry + `}}`,
+		"images beside states":    `{"images":[],"states":{"a":` + entry + `}}`,
+		"an empty batch":          `{"states":{}}`,
+		"an entry without state":  `{"states":{"a":{"questions":` + question + `}}}`,
+	} {
+		if _, err := ParseNativeRequest(json.RawMessage(body)); err == nil {
+			t.Fatalf("%s accepted: %s", name, body)
+		}
+	}
+	r, err := ParseNativeRequest(json.RawMessage(`{"states":{"a":` + entry + `,"b":` + entry + `}}`))
+	if err != nil || len(r.Questions) != 2 || r.Questions[0].State != "a" || r.Questions[1].State != "b" {
+		t.Fatalf("a batch's questions by entry: %+v, %v", r, err)
+	}
+}
+
 func TestNativeQualityCannotDropMissingOrIncompleteAnswers(t *testing.T) {
-	r, _ := ParseNativeRequest(json.RawMessage(mixedRequest))
+	r, _ := ParseNativeRequest(json.RawMessage(batchRequest))
 	for _, body := range []string{
-		`{}`, strings.Replace(mixedResponse, `"input_coverage":"complete"`, `"input_coverage":"partial"`, 1),
-		strings.Replace(mixedResponse, `"type":"score"`, `"type":"score","error":"unavailable"`, 1),
+		`{}`, strings.Replace(batchResponse, `"input_coverage":"complete"`, `"input_coverage":"partial"`, 1),
+		strings.Replace(batchResponse, `"type":"score"`, `"type":"score","error":"unavailable"`, 1),
 	} {
 		o := r.Observe(json.RawMessage(body))
 		if len(o) != 3 || complete(o) {
@@ -58,23 +78,23 @@ func TestMalformedNativeEnvelopeCannotAcceptPartiallyDecodedAnswers(t *testing.T
 }
 
 func TestNativeGateRequiresCoverageAndKnownStatistics(t *testing.T) {
-	r, _ := ParseNativeRequest(json.RawMessage(mixedRequest))
-	o := r.Observe(json.RawMessage(mixedResponse))
+	r, _ := ParseNativeRequest(json.RawMessage(batchRequest))
+	o := r.Observe(json.RawMessage(batchResponse))
 	zero := 0.0
-	partial := &config.NativeAcceptance{Rules: []config.NativeAcceptanceRule{{Question: "task", Field: "confidence", Predicate: config.NumericPredicate{GTE: &zero}}}}
+	partial := &config.EscalateAccept{Native: []config.NativeAcceptanceRule{{Question: "task", Field: "confidence", NumericPredicate: config.NumericPredicate{GTE: &zero}}}}
 	if acceptNative(o, partial, true) {
 		t.Fatal("uncovered answers accepted")
 	}
 	if !acceptNative(o, partial, false) {
 		t.Fatal("additional stage predicate failed")
 	}
-	partial.Rules[0].Question = "risk"
+	partial.Native[0].Question = "risk"
 	if acceptNative(o, partial, false) {
 		t.Fatal("absent Noul confidence was imputed as zero")
 	}
-	bad := strings.Replace(mixedResponse, `"0":0.9,"1":0.1`, `"10":0.9,"11":0.1`, 1)
-	partial.Rules[0].Question = "difficulty"
-	partial.Rules[0].Field = "top_probability"
+	bad := strings.Replace(batchResponse, `"0":0.9,"1":0.1`, `"10":0.9,"11":0.1`, 1)
+	partial.Native[0].Question = "difficulty"
+	partial.Native[0].Field = "top_probability"
 	if acceptNative(r.Observe(json.RawMessage(bad)), partial, false) {
 		t.Fatal("invalid score level probabilities accepted")
 	}
@@ -83,7 +103,7 @@ func TestNativeGateRequiresCoverageAndKnownStatistics(t *testing.T) {
 func TestNativeProvenanceRequestPreservesTaskAndClientOptions(t *testing.T) {
 	for _, options := range []string{"", `,"options":null`, `,"options":{}`, `,"options":{"return_meta":false}`, `,"options":{"return_meta":true}`, `,"options":{"deadline_ms":500,"max_tokens":8192}`} {
 		t.Run(options, func(t *testing.T) {
-			body := strings.TrimSuffix(mixedRequest, "}") + options + "}"
+			body := strings.TrimSuffix(batchRequest, "}") + options + "}"
 			request, err := ParseNativeRequest(json.RawMessage(body))
 			if err != nil {
 				t.Fatal(err)

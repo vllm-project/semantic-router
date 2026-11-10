@@ -20,7 +20,8 @@ type AlgorithmOptions[P any] struct {
 // decodes into a *P. The block is the one under the type's name in a
 // decision's algorithm; the type runs as a selector.
 func NewDecisionAlgorithmType[P any](catalog AlgorithmCatalogEntry, opts AlgorithmOptions[P]) DecisionAlgorithmType {
-	catalog.ConfigField, catalog.Execution = catalog.Type, AlgorithmExecutionSelector
+	catalog = selectorEntry(catalog)
+	catalog.ConfigField = catalog.Type
 	typ := catalog.Type
 	spec := DecisionAlgorithmType{
 		Catalog:      catalog,
@@ -39,10 +40,10 @@ func NewDecisionAlgorithmType[P any](catalog AlgorithmCatalogEntry, opts Algorit
 
 // retiredAlgorithmTypes are types the Router refuses with a pointer to what
 // replaced them, so no Router build may register them again.
-var retiredAlgorithmTypes = []string{
+var retiredAlgorithmTypes = slices.Concat([]string{
 	"policy",
 	"session_aware", "elo", "rl_driven", "gmtrouter", "bandit", "personalization", "thompson", "router_r1",
-}
+}, removedAlgorithmTypes)
 
 // RegisterDecisionAlgorithm adds a decision algorithm type, typically from
 // an init function. Its block lives in AlgorithmConfig.Extensions under its
@@ -54,7 +55,7 @@ func RegisterDecisionAlgorithm(spec DecisionAlgorithmType) error {
 	if slices.Contains(retiredAlgorithmTypes, spec.Catalog.Type) {
 		return fmt.Errorf("decision algorithm %q is a type the Router retired", spec.Catalog.Type)
 	}
-	if spec.Catalog.ConfigField != spec.Catalog.Type || spec.Catalog.Execution != AlgorithmExecutionSelector {
+	if spec.Catalog.ConfigField != spec.Catalog.Type || spec.Catalog.Kind != AlgorithmKindSelector {
 		return fmt.Errorf("decision algorithm %q: its block is named after its type and it runs as a selector", spec.Catalog.Type)
 	}
 	return decisionAlgorithms.Register(spec.Catalog.Type, spec)

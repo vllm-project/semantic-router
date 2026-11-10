@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import re
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 
@@ -15,6 +19,9 @@ from ci_plan import (  # noqa: E402
     make_plan,
     performance_base,
     previous_release,
+)
+from ci_plan import (  # noqa: E402
+    main as plan_main,
 )
 from classify_pr_changes import (  # noqa: E402
     CLI_RUNTIME_IMAGES,
@@ -30,11 +37,31 @@ from verification_catalog import (  # noqa: E402
 )
 
 SHA = "a" * 40
-IMAGE_CALIBRATION = "platform.image-calibration-cpu"
 MODELS = "platform.models-cpu"
 
 
 class SelectionTests(unittest.TestCase):
+    def test_shared_e2e_oracles_select_their_live_consumers(self):
+        expected_by_source = {
+            "signal_routing_helpers.go": {
+                "envoy-ai-gateway",
+                "structure-routing",
+                "conversation-routing",
+                "complexity-routing",
+                "long-context-routing",
+                "preference-routing",
+            },
+            "failover_during_traffic.go": {"production-stack"},
+            "streaming_body.go": {"streaming"},
+            "response_api_basic.go": {"response-api"},
+        }
+        for source, profiles in expected_by_source.items():
+            with self.subTest(source=source):
+                selected = set(classify([f"e2e/testcases/{source}"]).selected_jobs)
+                self.assertTrue({f"e2e.{name}" for name in profiles} <= selected)
+                self.assertNotIn("e2e.response-api-redis", selected)
+                self.assertNotIn("e2e.response-api-redis-cluster", selected)
+
     def test_no_route_contract_keeps_an_isolated_required_gateway_profile(self):
         for path in (
             "e2e/profiles/routing-errors/values.yaml",
@@ -51,60 +78,9 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(record["profile"], "routing-errors")
         self.assertEqual(set(record["images"]), {"vllm-sr", "provider-mocker"})
 
-    def test_image_calibration_inputs_select_the_platform_verification(self):
-        for path in (
-            "config/fragments/signal/embedding/image-routing.yaml",
-            "tools/calibration/image-routing/main.go",
-            "e2e/profiles/multimodal-routing/profile_test.go",
-            "e2e/testcases/testdata/image-fixtures/office.jpg",
-            "website/static/img/example.png",
-            "dashboard/frontend/public/example.png",
-            "src/model-runtime/vllm_srun/families/multimodal_embedding/family.py",
-            "src/model-runtime/vllm_srun/registry/tables/omni.py",
-            "src/semantic-router/pkg/classification/embedding.go",
-            "src/semantic-router/pkg/config/registry.go",
-            "src/semantic-router/pkg/modeldownload/revision_receipt_test.go",
-            "src/semantic-router/pkg/modelruntime/serving/runtime.go",
-            "tools/make/models.mk",
-            "tools/make/common.mk",
-            "tools/ci/image_calibration.py",
-            "tools/ci/runtime_evidence.py",
-            "tools/ci/workflow_evidence.py",
-            ".github/workflows/test-platform.yml",
-        ):
-            with self.subTest(path=path):
-                self.assertIn(IMAGE_CALIBRATION, classify([path]).selected_jobs)
-        self.assertNotIn(
-            IMAGE_CALIBRATION,
-            classify(["src/semantic-router/pkg/extproc/processor.go"]).selected_jobs,
-        )
-
-    def test_prepared_image_dependencies_select_calibration_and_routing(self):
-        expected = {IMAGE_CALIBRATION, "e2e.multimodal-routing"}
-        for path in (
-            "config/assets/image-routing/manifest.json",
-            "tools/calibration/image-routing/prepare_assets.py",
-            "tools/calibration/image-routing/testdata/prototype-protocol.json",
-            "src/model-runtime/vllm_srun/families/multimodal_embedding/family.py",
-            "src/semantic-router/pkg/embedding/embedding.go",
-            "src/semantic-router/pkg/modelruntime/embedding_owned.go",
-        ):
-            with self.subTest(path=path):
-                self.assertTrue(expected <= set(classify([path]).selected_jobs))
-
-    def test_every_authored_calibration_asset_selects_its_consumer(self):
-        path = ROOT / "tools/calibration/image-routing/testdata/calibration-set.json"
-        manifest = json.loads(path.read_text())
-        fixtures = {
-            row["image_file"] for row in manifest["positives"] + manifest["excluded"]
-        } | set(manifest["negatives"])
-        self.assertTrue(fixtures)
-        for fixture in sorted(fixtures):
-            self.assertIn(IMAGE_CALIBRATION, classify([fixture]).selected_jobs, fixture)
-
-    def test_manual_image_calibration_uses_the_same_plan_contract_and_build(self):
-        plan = make_plan([], source_sha=SHA, requested=(IMAGE_CALIBRATION,))
-        self.assertEqual(plan["expected_verification_ids"], [IMAGE_CALIBRATION])
+    def test_manual_platform_selection_uses_the_same_plan_contract_and_build(self):
+        plan = make_plan([], source_sha=SHA, requested=(MODELS,))
+        self.assertEqual(plan["expected_verification_ids"], [MODELS])
         self.assertEqual(plan["images"], [])
         self.assertFalse(plan["publish_images"])
         record = plan["verifications"][0]
@@ -112,18 +88,15 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(record["platform_id"], "model-runtime-cpu")
         self.assertEqual(record["workflow"], ".github/workflows/test-platform.yml")
         self.assertEqual(record["reasons"], ["manual-selection"])
-        self.assertIn(IMAGE_CALIBRATION, full_cpu_ids())
-        self.assertIn("e2e.multimodal-routing", full_cpu_ids())
-        for requested in (("unknown",), (IMAGE_CALIBRATION, IMAGE_CALIBRATION)):
+        self.assertIn(MODELS, full_cpu_ids())
+        for requested in (("unknown",), (MODELS, MODELS)):
             with self.assertRaises(ValueError):
                 make_plan([], source_sha=SHA, requested=requested)
         for overrides in ({"full": True}, {"draft": True}, {"profile": "release"}):
             with self.assertRaises(ValueError):
-                make_plan(
-                    [], source_sha=SHA, requested=(IMAGE_CALIBRATION,), **overrides
-                )
+                make_plan([], source_sha=SHA, requested=(MODELS,), **overrides)
         with self.assertRaises(ValueError):
-            make_plan(["README.md"], source_sha=SHA, requested=(IMAGE_CALIBRATION,))
+            make_plan(["README.md"], source_sha=SHA, requested=(MODELS,))
 
     def test_manual_selection_is_generic_and_never_publishes(self):
         for name in (MODELS, "local.cli", "cli-package"):
@@ -153,7 +126,13 @@ class SelectionTests(unittest.TestCase):
                 workflow["jobs"][job]["with"]["mode"],
                 "${{ fromJSON(needs.plan.outputs.plan).profile }}",
             )
-        self.assertIn("--results", workflow["jobs"]["gate"]["steps"][-1]["run"])
+        reconciliation = [
+            step["run"]
+            for step in workflow["jobs"]["gate"]["steps"]
+            if "check_ci_gate.py" in step.get("run", "")
+        ]
+        self.assertEqual(len(reconciliation), 1)
+        self.assertIn("--results", reconciliation[0])
 
     def test_docs_and_paper_do_not_schedule_models_or_containers(self):
         for path in ("README.md", "website/docs/overview.md", "paper/main.tex"):
@@ -169,8 +148,8 @@ class SelectionTests(unittest.TestCase):
 
     def test_platform_entrypoints_select_their_consumers(self):
         fixtures = {
-            "tools/make/models.mk": {IMAGE_CALIBRATION, "performance"},
-            "tools/make/common.mk": {IMAGE_CALIBRATION, "performance"},
+            "tools/make/models.mk": {MODELS, "performance"},
+            "tools/make/common.mk": {"performance"},
             "tools/make/build-run-test.mk": {"performance"},
             "src/semantic-router/go.mod": {"core"},
         }
@@ -197,7 +176,7 @@ class SelectionTests(unittest.TestCase):
             "src/semantic-router/pkg/cache/redis_exact_cache_integration_test.go": {
                 "storage"
             },
-            "e2e/testcases/istio_routes_test.go": {"e2e.istio"},
+            "e2e/testcases/authz_header_spoofing_test.go": {"e2e.authz-rbac"},
         }
         for path, expected in cases.items():
             self.assertTrue(classify([path]).test_only)
@@ -230,7 +209,12 @@ class SelectionTests(unittest.TestCase):
         for path in paths:
             for profile in ("pr", "main"):
                 with self.subTest(path=path, profile=profile):
-                    plan = make_plan([path], source_sha=SHA, profile=profile)
+                    plan = make_plan(
+                        [path],
+                        source_sha=SHA,
+                        profile=profile,
+                        publish=profile == "main",
+                    )
                     self.assertIn("local.cli", plan["expected_verification_ids"])
                     self.assertTrue({"vllm-sr", "dashboard"} <= set(plan["images"]))
         for path in (
@@ -260,7 +244,7 @@ class SelectionTests(unittest.TestCase):
 
     def test_owning_workflow_edits_select_executor_contracts(self):
         cases = {
-            "test-platform.yml": {IMAGE_CALIBRATION, MODELS},
+            "test-platform.yml": {MODELS},
             "test-local.yml": {"local.cli", "local.memory"},
             "performance-test.yml": {"performance"},
             "operator-ci.yml": {"operator"},
@@ -279,6 +263,7 @@ class SelectionTests(unittest.TestCase):
             "tools/test/services/provider-mocker/tests/test_fixture_latency.py": "mock-provider",
             "bench/test_agentic_routing_experiment.py": "learning-tools",
             "bench/test_openai_fault_proxy.py": "soak-tools",
+            "bench/looper_tts/test_contracts.py": "bench-tools",
         }
         for path, expected in cases.items():
             self.assertIn(expected, classify([path]).selected_jobs)
@@ -311,17 +296,6 @@ class SelectionTests(unittest.TestCase):
                 "e2e.response-api-redis", plan["expected_verification_ids"]
             )
 
-    def test_published_model_profiles_plan_their_backend_image(self):
-        for profile in ("vela-omni", "vela-halu", "vela-shield"):
-            with self.subTest(profile=profile):
-                identifier = f"e2e.{profile}"
-                plan = make_plan([], source_sha=SHA, requested=(identifier,))
-                self.assertEqual(plan["expected_verification_ids"], [identifier])
-                self.assertEqual(
-                    plan["verifications"][0]["images"], ["vllm-sr", "provider-mocker"]
-                )
-                self.assertEqual(set(plan["images"]), {"vllm-sr", "provider-mocker"})
-
     def test_full_cpu_profiles_share_explicit_inventory(self):
         plans = [
             make_plan(["README.md"], source_sha=SHA, profile=profile, full=True)
@@ -334,22 +308,115 @@ class SelectionTests(unittest.TestCase):
         self.assertTrue(
             set(full_cpu_ids()) <= set(plans[0]["expected_verification_ids"])
         )
-        for profile in ("agentgateway", "aibrix", "istio", "llm-d", "streaming"):
+        for profile in ("standalone", "envoy-ai-gateway", "streaming"):
             self.assertIn(profile, full_e2e_profiles())
         self.assertNotIn("e2e.dynamo", plans[0]["expected_verification_ids"])
         self.assertNotIn("e2e.router-replay", plans[0]["expected_verification_ids"])
 
-    def test_full_cpu_never_removes_affected_pr_verifications(self):
+    def test_retired_gateway_profiles_have_no_live_selection_entrypoint(self):
+        records = verification_records(load_domain_registry())
+        full = make_plan([], source_sha=SHA, full=True)
+        for profile in ("agentgateway", "aibrix", "dynamo", "istio", "llm-d"):
+            identity = f"e2e.{profile}"
+            with self.subTest(profile=profile):
+                self.assertNotIn(profile, profile_records())
+                self.assertNotIn(identity, records)
+                self.assertNotIn(identity, full["expected_verification_ids"])
+                self.assertNotIn(
+                    identity,
+                    classify([f"e2e/profiles/{profile}/profile.go"]).selected_jobs,
+                )
+                with self.assertRaisesRegex(ValueError, "unknown or duplicated"):
+                    make_plan([], source_sha=SHA, requested=(identity,))
+        for path in (
+            "e2e/testcases/full_duplex_routing.go",
+            "src/semantic-router/pkg/extproc/processor_req_body_full_duplex.go",
+        ):
+            with self.subTest(path=path):
+                self.assertIn("e2e.streaming", classify([path]).selected_jobs)
+
+    def test_authoring_contracts_remain_affected_and_manual_without_full_obligation(
+        self,
+    ):
+        cases = {
+            "training": "src/training/tests/test_model_artifacts.py",
+            "onnx-artifacts": "tools/models/onnx/onnx_artifacts.py",
+            "bench-tools": "bench/grounded_fusion/evaluate.py",
+            "learning-tools": "bench/test_agentic_routing_experiment.py",
+            "soak-tools": "bench/test_openai_fault_proxy.py",
+        }
+        baseline = make_plan([], source_sha=SHA, full=True)
+        self.assertTrue(set(cases).isdisjoint(baseline["expected_verification_ids"]))
+        self.assertEqual(len(baseline["verifications"]), 25)
+        self.assertEqual(len(baseline["component_batches"]), 5)
+        for identity, path in cases.items():
+            with self.subTest(identity=identity):
+                self.assertIn(identity, classify([path]).selected_jobs)
+                affected_full = make_plan([path], source_sha=SHA, full=True)
+                self.assertIn(identity, affected_full["expected_verification_ids"])
+                manual = make_plan([], source_sha=SHA, requested=(identity,))
+                self.assertEqual(manual["expected_verification_ids"], [identity])
+                self.assertEqual(len(manual["component_batches"]), 1)
+
+    def test_shared_component_execution_selects_every_component_consumer(self):
+        components = {
+            identity
+            for identity, record in verification_records(load_domain_registry()).items()
+            if record["executor"] == "tools"
+        }
+        for path in (
+            ".github/workflows/test-tools.yml",
+            ".github/workflows/ci.yml",
+            "tools/ci/run_component_batch.py",
+            "tools/ci/worker_process.py",
+            "tools/ci/execution_batches.py",
+            "tools/ci/execution_targets.yaml",
+            "tools/ci/ci_plan.py",
+            "tools/ci/ci_results.py",
+            "tools/ci/verification_catalog.yaml",
+            "tools/agent/domains.yaml",
+            "tools/agent/requirements.txt",
+            "tools/docs/requirements.txt",
+            "tools/make/agent.mk",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(components <= set(classify([path]).selected_jobs))
+        python_consumers = components - {"e2e-unit", "soak-tools"}
+        self.assertTrue(
+            python_consumers
+            <= set(classify(["tools/ci/python_test_evidence.py"]).selected_jobs)
+        )
+
+    def test_product_full_inventory_keeps_every_published_support_contract(self):
+        supported = load_catalog()["full_cpu"]["support_contracts"]
+        self.assertEqual(
+            set(supported),
+            {
+                "Helm chart",
+                "Local deployment",
+                "Kubernetes Operator",
+                "Agent Router",
+                "Streaming with Agent Router",
+            },
+        )
+        required = set(full_cpu_ids())
+        self.assertTrue(
+            {identity for ids in supported.values() for identity in ids} <= required
+        )
+        self.assertTrue({MODELS, "model-runtime", "storage"} <= required)
+
+    def test_full_cpu_preserves_affected_pr_and_publication_verifications(self):
         for path in (
             "e2e/profiles/route-action/profile.go",
             "tools/test/services/provider-mocker/provider_mocker/app.py",
         ):
             affected = make_plan([path], source_sha=SHA)
-            for profile in ("pr", "nightly", "release"):
-                with self.subTest(path=path, profile=profile):
-                    complete = make_plan(
-                        [path], source_sha=SHA, profile=profile, full=True
-                    )
+            for options in (
+                {"profile": "pr", "full": True},
+                {"profile": "main", "publish": True},
+            ):
+                with self.subTest(path=path, options=options):
+                    complete = make_plan([path], source_sha=SHA, **options)
                     self.assertTrue(
                         set(affected["expected_verification_ids"])
                         <= set(complete["expected_verification_ids"])
@@ -359,29 +426,53 @@ class SelectionTests(unittest.TestCase):
                         "e2e.response-api-redis", complete["expected_verification_ids"]
                     )
 
-    def test_local_classifier_backend_is_a_required_cpu_product_contract(self):
-        identity = "e2e.local-classifier-backend"
-        self.assertIn(identity, full_cpu_ids())
-        for profile in ("pr", "nightly", "release"):
-            with self.subTest(profile=profile):
-                plan = make_plan([], source_sha=SHA, profile=profile, full=True)
-                record = next(
-                    row for row in plan["verifications"] if row["id"] == identity
-                )
-                self.assertEqual(record["executor"], "e2e")
-                self.assertEqual(record["boundary"], ["e2e"])
-                self.assertEqual(record["runtime"], "model-runtime")
-                self.assertEqual(record["device"], "cpu")
-                self.assertEqual(record["platform"], "linux/amd64")
-                self.assertEqual(record["images"], ["vllm-sr", "provider-mocker"])
-        for path in (
-            "e2e/profiles/local-classifier-backend/profile.go",
-            "e2e/testcases/local_classifier_routing.go",
-            "src/semantic-router/pkg/classification/generic_classifier_local.go",
-            "src/semantic-router/pkg/classification/native_labels.go",
+    def test_no_base_qualification_does_not_treat_all_files_as_changes(self):
+        for profile, flags in (
+            ("nightly", []),
+            ("release", []),
+            ("main", ["--publish"]),
         ):
-            with self.subTest(path=path):
-                self.assertIn(identity, classify([path]).selected_jobs)
+            with (
+                self.subTest(profile=profile),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                output = Path(temporary) / "plan.json"
+                argv = [
+                    "ci_plan.py",
+                    "--profile",
+                    profile,
+                    "--head",
+                    SHA,
+                    "--output",
+                    str(output),
+                    *flags,
+                ]
+                with (
+                    patch.object(sys, "argv", argv),
+                    patch(
+                        "ci_plan.git_changed_files",
+                        return_value=["e2e/profiles/production-stack/profile.go"],
+                    ) as changed,
+                    patch("ci_plan.resolve_image_sources"),
+                    contextlib.redirect_stdout(io.StringIO()),
+                ):
+                    self.assertEqual(plan_main(), 0)
+                changed.assert_not_called()
+                plan = json.loads(output.read_text())
+                self.assertEqual(
+                    set(plan["expected_verification_ids"]), set(full_cpu_ids())
+                )
+                self.assertEqual(plan["paths"], [])
+
+    def test_experimental_profile_remains_available_for_changes_and_manual_runs(self):
+        identity = "e2e.production-stack"
+        self.assertNotIn(identity, full_cpu_ids())
+        affected = make_plan(
+            ["e2e/profiles/production-stack/profile.go"], source_sha=SHA
+        )
+        self.assertIn(identity, affected["expected_verification_ids"])
+        manual = make_plan([], source_sha=SHA, requested=(identity,))
+        self.assertEqual(manual["expected_verification_ids"], [identity])
 
     def test_build_union_is_unique_and_separate_from_publication(self):
         plan = make_plan(
@@ -396,35 +487,36 @@ class SelectionTests(unittest.TestCase):
         baseline = make_plan(["e2e/profiles/ai-gateway/profile.go"], source_sha=SHA)
         self.assertIn("provider-mocker", baseline["images"])
 
-    def test_main_only_publishes_affected_inputs(self):
-        docs = make_plan(["README.md"], source_sha=SHA, profile="main")
-        self.assertFalse(docs["publish_python"])
-        self.assertFalse(docs["publish_images"])
-        cli = make_plan(["src/vllm-sr/cli/core.py"], source_sha=SHA, profile="main")
-        self.assertTrue(cli["publish_python"])
-        self.assertIn("cli-package", cli["expected_verification_ids"])
-
-    def test_main_publishes_every_image_its_dev_cli_defaults_to(self):
-        # The second path is outside every image's own publication paths.
+    def test_main_push_runs_source_checks_without_republishing_artifacts(self):
         for path in (
+            "README.md",
             "src/vllm-sr/cli/core.py",
             "e2e/testing/vllm-sr-cli/test_unit_serve.py",
+            "src/semantic-router/pkg/config/loader.go",
         ):
             with self.subTest(path=path):
                 plan = make_plan([path], source_sha=SHA, profile="main")
-                self.assertTrue(plan["publish_python"])
-                self.assertLessEqual(
-                    set(CLI_RUNTIME_IMAGES), set(plan["publish_images"])
-                )
-                self.assertLessEqual(set(plan["publish_images"]), set(plan["images"]))
-                self.assertTrue(plan["multiarch"])
-        router = make_plan(
-            ["src/semantic-router/pkg/config/loader.go"], source_sha=SHA, profile="main"
-        )
-        self.assertFalse(router["publish_python"])
-        self.assertNotIn("dashboard", router["publish_images"])
-        pr = make_plan(["src/vllm-sr/cli/core.py"], source_sha=SHA)
-        self.assertEqual(pr["publish_images"], [])
+                self.assertFalse(plan["publish_python"])
+                self.assertEqual(plan["publish_images"], [])
+                self.assertEqual(plan["images"], [])
+                self.assertFalse(plan["publish_helm"])
+                self.assertEqual(plan["deferred_verifications"], [])
+                self.assertFalse(plan["approval_required"])
+
+    def test_explicit_main_publication_qualifies_all_commit_addressed_images(self):
+        plan = make_plan(["README.md"], source_sha=SHA, profile="main", publish=True)
+        self.assertTrue(plan["publish_python"])
+        self.assertTrue(plan["publish_helm"])
+        self.assertTrue(plan["full_cpu"])
+        self.assertLessEqual(set(CLI_RUNTIME_IMAGES), set(plan["publish_images"]))
+        self.assertLessEqual(set(plan["publish_images"]), set(plan["images"]))
+        self.assertTrue(plan["multiarch"])
+        self.assertIn("cli-package", plan["expected_verification_ids"])
+        self.assertIn("local.cli", plan["expected_verification_ids"])
+        self.assertIn("recipe-conformance", plan["expected_verification_ids"])
+        self.assertIn("model-runtime", plan["expected_verification_ids"])
+        with self.assertRaisesRegex(ValueError, "main"):
+            make_plan(["README.md"], source_sha=SHA, publish=True)
 
     def test_cli_runtime_images_are_the_first_party_images_the_cli_pulls(self):
         consts = (ROOT / "src/vllm-sr/cli/consts.py").read_text(encoding="utf-8")
@@ -452,10 +544,10 @@ class SelectionTests(unittest.TestCase):
             performance_base("0.4.0", ["v0.3.0"]),
             "12597be5ffae2319d856f230d61ca26248eb9b3b",
         )
-        # v0.4.0 predates the model runtime; #4707 runs the current harness.
+        # v0.4.0 predates the model runtime; #5886 runs the current harness.
         self.assertEqual(
             performance_base("0.5.0", ["v0.3.0", "v0.4.0"]),
-            "abae8ff99df2fdab372f0fb6d032b305907b9f44",
+            "4952ca055d0f99adf746b67aa61cfb7223d0739b",
         )
 
     def test_later_cycles_compare_with_a_release_that_has_the_model_runtime(self):
@@ -478,12 +570,10 @@ class SelectionTests(unittest.TestCase):
             )
 
     def test_platform_output_lists_one_worker_per_contract(self):
-        plan = make_plan(["tools/calibration/image-routing/main.go"], source_sha=SHA)
+        plan = make_plan(["tools/ci/run_model_tests.py"], source_sha=SHA)
         outputs = github_outputs(plan)
         batches = json.loads(outputs["platform"])
-        self.assertEqual(
-            [row["verifications"][0]["id"] for row in batches], [IMAGE_CALIBRATION]
-        )
+        self.assertEqual([row["verifications"][0]["id"] for row in batches], [MODELS])
 
     def test_runtime_combinations_are_qualified_rows_not_cartesian_product(self):
         records = verification_records(load_domain_registry())

@@ -38,35 +38,28 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		return c.compileSystemPromptPluginConfig(fields), true
 	},
 	"response_cache": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		cfg := &config.ResponseCachePluginConfig{}
-		return compilePluginFields(c, fields, cfg)
+		return compileStrictPluginFields(c, "response_cache", fields, &config.ResponseCachePluginConfig{})
 	},
-	"context_compression": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		cfg := &config.ContextCompressionPluginConfig{}
+	"context": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		cfg := &config.ContextPluginConfig{}
 		return compilePluginFields(c, fields, cfg)
 	},
 	"prompt_cache": compilePromptCachePluginConfig,
-	"hallucination": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileHallucinationPluginConfig(fields), true
+	// masking uses the generic structured path: its configuration is a plain
+	// map, so hand-mapping fields would only add a place to forget one (#3566).
+	"masking": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		cfg := &config.MaskingPluginConfig{}
+		return compilePluginFields(c, fields, cfg)
 	},
-	"memory": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.withObjectFields(c.compileMemoryPluginConfig(fields), fields, "reflection")
-	},
-	"rag": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileRAGPlugin(fields), true
+	"response_guard": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
+		cfg := &config.ResponseGuardPluginConfig{}
+		return compilePluginFields(c, fields, cfg)
 	},
 	"header_mutation": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileHeaderMutationPluginConfig(fields), true
 	},
-	"response_jailbreak": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		cfg := &config.ResponseJailbreakPluginConfig{}
-		return compilePluginFields(c, fields, cfg)
-	},
 	"router_replay": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileRouterReplayPluginConfig(fields)
-	},
-	"shadow_dispatch": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileShadowDispatchPluginConfig(fields), true
 	},
 	"fast_response": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileFastResponsePluginConfig(fields), true
@@ -74,12 +67,22 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 	"request_params": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileRequestParamsPluginConfig(fields), true
 	},
-	"tool_selection": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.withObjectFields(c.compileToolSelectionPluginConfig(fields), fields, "advanced_filtering")
-	},
-	"tools": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		return c.compileToolsPlugin(fields), true
-	},
+	"tools": compileToolsPluginConfig,
+}
+
+// compileToolsPluginConfig keeps the tools plugin's fields as written, its
+// policy, select and match blocks included, once they decode as one.
+func compileToolsPluginConfig(c *Compiler, fields map[string]Value) (interface{}, bool) {
+	raw := fieldsToMap(fields)
+	payload, err := config.NewStructuredPayload(raw)
+	if err == nil {
+		err = payload.DecodeIntoStrict(&config.ToolsPluginConfig{})
+	}
+	if err != nil {
+		c.addError(Position{}, "invalid tools configuration: %v; the tools plugin takes enabled, policy and select", err)
+		return nil, false
+	}
+	return raw, true
 }
 
 func compilePromptCachePluginConfig(
@@ -153,6 +156,20 @@ func stringArrayValue(value Value) []string {
 	return result
 }
 
+// compileStrictPluginFields decodes a plugin's fields as the Router loads its
+// configuration, refusing a field the payload does not declare.
+func compileStrictPluginFields(c *Compiler, pluginType string, fields map[string]Value, target interface{}) (interface{}, bool) {
+	payload, err := config.NewStructuredPayload(fieldsToMap(fields))
+	if err == nil {
+		err = payload.DecodeIntoStrict(target)
+	}
+	if err != nil {
+		c.addError(Position{}, "invalid %s configuration: %v", pluginType, err)
+		return nil, false
+	}
+	return target, true
+}
+
 func compilePluginFields(
 	c *Compiler,
 	fields map[string]Value,
@@ -170,36 +187,13 @@ func compilePluginFields(
 	return target, true
 }
 
-// withObjectFields keeps nested objects as written, so the payload does not depend on their structs' JSON tags.
-func (c *Compiler) withObjectFields(cfg interface{}, fields map[string]Value, keys ...string) (interface{}, bool) {
-	payload, err := config.NewStructuredPayload(cfg)
-	if err != nil {
-		c.addError(Position{}, "failed to encode plugin fields: %v", err)
-		return nil, false
-	}
-	compiled, err := payload.AsStringMap()
-	if err != nil {
-		c.addError(Position{}, "failed to encode plugin fields: %v", err)
-		return nil, false
-	}
-	for _, key := range keys {
-		value, exists := fields[key]
-		if !exists {
-			continue
-		}
-		object, ok := value.(ObjectValue)
-		if !ok {
-			c.addError(Position{}, "plugin field %q must be an object", key)
-			return nil, false
-		}
-		compiled[key] = fieldsToMap(object.Fields)
-	}
-	return compiled, true
-}
-
 func (c *Compiler) buildPluginConfigValue(pluginType string, fields map[string]Value) (interface{}, bool) {
 	if fn, ok := pluginConfigCompilers[pluginType]; ok {
 		return fn(c, fields)
+	}
+	if replacement, retired := config.RemovedPluginTypes[pluginType]; retired {
+		c.addError(Position{}, "plugin %q was removed; write %s", pluginType, replacement)
+		return nil, false
 	}
 	c.addError(Position{}, "unknown plugin type %q", pluginType)
 	return nil, false
@@ -216,88 +210,6 @@ func (c *Compiler) compileSystemPromptPluginConfig(fields map[string]Value) conf
 	if v, ok := getStringField(fields, "mode"); ok {
 		cfg.Mode = v
 	}
-	return cfg
-}
-
-func (c *Compiler) compileHallucinationPluginConfig(fields map[string]Value) config.HallucinationPluginConfig {
-	cfg := config.HallucinationPluginConfig{}
-	if v, ok := getBoolField(fields, "enabled"); ok {
-		cfg.Enabled = v
-	}
-	if _, ok := fields["use_nli"]; ok {
-		c.addError(Position{}, "hallucination plugin: use_nli is retired with the NLI explainer; remove it")
-	}
-	if v, ok := getStringField(fields, "hallucination_action"); ok {
-		cfg.HallucinationAction = v
-	}
-	if v, ok := getStringField(fields, "unverified_factual_action"); ok {
-		cfg.UnverifiedFactualAction = v
-	}
-	if v, ok := getBoolField(fields, "include_hallucination_details"); ok {
-		cfg.IncludeHallucinationDetails = v
-	}
-	return cfg
-}
-
-func (c *Compiler) compileMemoryPluginConfig(fields map[string]Value) config.MemoryPluginConfig {
-	cfg := config.MemoryPluginConfig{}
-	if v, ok := getBoolField(fields, "enabled"); ok {
-		cfg.Enabled = v
-	}
-	if v, ok := getIntField(fields, "retrieval_limit"); ok {
-		cfg.RetrievalLimit = &v
-	}
-	if v, ok := getFloat32Field(fields, "similarity_threshold"); ok {
-		cfg.SimilarityThreshold = &v
-	}
-	if v, ok := getBoolField(fields, "auto_store"); ok {
-		cfg.AutoStore = &v
-	}
-	if v, ok := getBoolField(fields, "hybrid_search"); ok {
-		cfg.HybridSearch = v
-	}
-	if v, ok := getStringField(fields, "hybrid_mode"); ok {
-		cfg.HybridMode = v
-	}
-	return cfg
-}
-
-func (c *Compiler) compileShadowDispatchPluginConfig(fields map[string]Value) config.ShadowDispatchPluginConfig {
-	cfg := config.ShadowDispatchPluginConfig{}
-	if v, ok := getBoolField(fields, "enabled"); ok {
-		cfg.Enabled = v
-	}
-	if v, ok := getStringField(fields, "model"); ok {
-		cfg.Model = v
-	}
-	if v, ok := getFloat64Field(fields, "sample_rate"); ok {
-		cfg.SampleRate = &v
-	}
-	if v, ok := getIntField(fields, "max_concurrency"); ok {
-		cfg.MaxConcurrency = v
-	}
-	if v, ok := getIntField(fields, "max_queue_depth"); ok {
-		cfg.MaxQueueDepth = v
-	}
-	if v, ok := getIntField(fields, "timeout_seconds"); ok {
-		cfg.TimeoutSeconds = v
-	}
-	if v, ok := getIntField(fields, "max_response_bytes"); ok {
-		cfg.MaxResponseBytes = v
-	}
-	if v, ok := getIntField(fields, "max_retries"); ok {
-		cfg.MaxRetries = v
-	}
-	if v, ok := getBoolField(fields, "capture_response_body"); ok {
-		cfg.CaptureResponseBody = v
-	}
-	if v, ok := getIntField(fields, "max_capture_bytes"); ok {
-		cfg.MaxCaptureBytes = v
-	}
-	if v, ok := getBoolField(fields, "tls_skip_verify"); ok {
-		cfg.TLSSkipVerify = v
-	}
-	cfg.ForwardHeaders = stringArrayValue(fields["forward_headers"])
 	return cfg
 }
 
@@ -346,38 +258,6 @@ func (c *Compiler) compileRequestParamsPluginConfig(fields map[string]Value) con
 	}
 	if v, ok := getBoolField(fields, "strip_unknown"); ok {
 		cfg.StripUnknown = v
-	}
-	return cfg
-}
-
-func (c *Compiler) compileToolSelectionPluginConfig(fields map[string]Value) config.ToolSelectionPluginConfig {
-	cfg := config.ToolSelectionPluginConfig{}
-	if v, ok := getBoolField(fields, "enabled"); ok {
-		cfg.Enabled = v
-	}
-	if v, ok := getStringField(fields, "mode"); ok {
-		cfg.Mode = v
-	}
-	if v, ok := getIntField(fields, "top_k"); ok {
-		cfg.TopK = v
-	}
-	if v, ok := getFloat32Field(fields, "similarity_threshold"); ok {
-		cfg.SimilarityThreshold = &v
-	}
-	if v, ok := getStringField(fields, "tools_db_path"); ok {
-		cfg.ToolsDBPath = v
-	}
-	if v, ok := getFloat32Field(fields, "relevance_threshold"); ok {
-		cfg.RelevanceThreshold = &v
-	}
-	if v, ok := getIntField(fields, "preserve_count"); ok {
-		cfg.PreserveCount = v
-	}
-	if v, ok := getStringField(fields, "strategy"); ok {
-		cfg.Strategy = v
-	}
-	if v, ok := getBoolField(fields, "fallback_to_empty"); ok {
-		cfg.FallbackToEmpty = &v
 	}
 	return cfg
 }

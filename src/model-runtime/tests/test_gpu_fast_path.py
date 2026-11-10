@@ -176,6 +176,30 @@ def test_fast_path_equals_eager(case):
     assert stats["failed"] == 0 and stats["replays"] > 0
 
 
+def test_noncausal_graphs_equal_eager():
+    """Decision 3.0 backbones: noncausal full attention, left-padded rows, graphs of ``NoncausalMasks``."""
+    accelerator, device = _device()
+    config = {**qwen3_5(8, 1024, 16, 8), "attention_mode": "noncausal_full_attention"}
+    reference = build(config, 7, False, accelerator, device)
+    assert reference.noncausal
+    fused = copy.deepcopy(reference)
+    fused.kernels = reference.kernels
+    assert fast.install_fused(fused) == len(fused.layers)
+    graphs = fast.Graphs(fused, fast.NoncausalMasks())
+    generator = torch.Generator().manual_seed(13)
+    torch_device = accelerator.torch_device(device)
+    for lengths in LENGTHS:
+        ids, mask = batch(lengths, generator, torch_device)
+        ids, mask = ids.flip(1), mask.flip(1)
+        with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
+            want = reference(ids, mask).clone()
+            for _ in range(3):
+                got = graphs(ids, mask, lengths).clone()
+                assert torch.equal(want, got), lengths
+    stats = graphs.receipt()
+    assert stats["failed"] == 0 and stats["replays"] > 0
+
+
 def test_full_graph_cache_runs_eager():
     """Past the cache limit new shapes run eagerly; the captured graphs stay and replay."""
     accelerator, device = _device()

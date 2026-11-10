@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 2
 title: 系统概览
 description: vLLM Semantic Router 的数据面、控制面、配置模型和请求生命周期。
@@ -23,7 +24,7 @@ Agent harness 调用稳定的模型端点。Semantic Router 根据策略选择�
 - **Agent harness** 负责任务循环、工具执行与持久任务状态。每次推理调用经过 Router，响应回到 harness，由其推进下一步。
 - **前端** 接收客户端流量、执行 listener 访问控制并适配协议。使用 `--gateway extproc` 时，外部网关负责入口和转发，通过 ExtProc 调用 Router。
 - **Semantic Router** 提取信号、评估策略、应用路由特定行为，并选择或协调模型候选。
-- **模型运行时** 为已配置的使用方运行判断、分类、embedding 和重排序模型，worker 可以受管或附加。
+- **模型运行时** 运行已配置的信号和功能所需的判断、分类、embedding 和重排序模型，worker 可以受管或附加。
 - **Chat 后端** 是已配置的模型服务或提供方端点，由其运维方负责权重和生成能力。
 
 ### 控制面
@@ -82,7 +83,7 @@ agent harness
 | 层 | 职责 | 示例 |
 | --- | --- | --- |
 | **AI Gateway** | 客户端入口、提供方转换、凭据、限流和流量策略。 | [Agent Router（原 Envoy AI Gateway）](../installation/k8s/ai-gateway)、[LiteLLM](https://docs.litellm.ai/docs/simple_proxy)、[agentgateway](../installation/k8s/agentgateway) |
-| **Semantic Router** | 通过配方与决策，根据请求意图和策略选择逻辑模型或模型池，并写入 `x-selected-model`。 | vLLM Semantic Router |
+| **Semantic Router** | 通过配方与决策，根据请求意图和策略选择逻辑模型或模型池，并写入 `x-vsr-route-model`。 | vLLM Semantic Router |
 | **Inference Router** | 在所选池内选择健康副本或端点。 | [llm-d](../installation/k8s/llm-d)、[vLLM Router](https://github.com/vllm-project/router)、[AIBrix gateway](../installation/k8s/aibrix) |
 
 Agent Router 和 agentgateway 通过 ExtProc 调用 Semantic Router。[Kubernetes 网关](../installation/k8s/gateways)与[推理平台](../installation/k8s/inference-platforms)列出了项目维护的集成。

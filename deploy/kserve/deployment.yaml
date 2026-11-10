@@ -32,9 +32,11 @@ spec:
         seccompProfile:
           type: RuntimeDefault
 
-      # Init container to download models from HuggingFace
+      # The model runtime in the router container downloads and verifies the
+      # models it serves into the Hugging Face cache on the cache volume. This
+      # prepares the cache directories for the UID OpenShift assigns.
       initContainers:
-      - name: model-downloader
+      - name: prepare-cache
         image: python:3.11-slim
         securityContext:
           allowPrivilegeEscalation: false
@@ -47,98 +49,18 @@ spec:
         args:
         - |
           set -e
-          echo "Installing Hugging Face Hub..."
-          pip install --no-cache-dir --user huggingface_hub
-
-          echo "Downloading models to persistent volume..."
-          cd /app/models
-
-          # Use Python API to download models
-          python3 << 'PYEOF'
-          import os
-          from huggingface_hub import snapshot_download
-
-          models = [
-              ("vllm-sr/Vela-1.0-Encoder-307M-Domain", "Vela-1.0-Encoder-307M-Domain", "f6354f54adcf38770f635ad903be2b00577f6c11"),
-              ("vllm-sr/Vela-1.0-Encoder-307M-PII", "Vela-1.0-Encoder-307M-PII", "6d3300c4bd7975f30a664503f6c725cf1fbbad48"),
-              ("vllm-sr/Vela-1.0-Encoder-307M-Guard", "Vela-1.0-Encoder-307M-Guard", "087f9e401012df839c83717b746967ac7aebfa3e"),
-              ("{{EMBEDDING_MODEL_REPO}}", "{{EMBEDDING_MODEL}}", "{{EMBEDDING_MODEL_REVISION}}")
-          ]
-
-          cache_dir = "/app/cache/hf"
-          base_dir = "/app/models"
-
-          for repo_id, local_dir_name, revision in models:
-              local_dir = os.path.join(base_dir, local_dir_name)
-
-              # Check if model weights actually exist (not just the directory)
-              has_model = False
-              if os.path.exists(local_dir):
-                  # Look specifically for model weight files
-                  for root, dirs, files in os.walk(local_dir):
-                      for f in files:
-                          if f.endswith('.safetensors') or f.endswith('.bin') or f.startswith('pytorch_model.'):
-                              has_model = True
-                              print(f"Found model weights: {f}")
-                              break
-                      if has_model:
-                          break
-
-              # Clean up incomplete downloads
-              if os.path.exists(local_dir) and not has_model:
-                  print(f"Removing incomplete download: {local_dir_name}")
-                  import shutil
-                  shutil.rmtree(local_dir, ignore_errors=True)
-
-              # A changed immutable release must not reuse stale file-presence checks.
-              if not has_model or revision != "main":
-                  print(f"Downloading {repo_id}...")
-                  snapshot_download(
-                      repo_id=repo_id,
-                      revision=revision,
-                      ignore_patterns=["reproduction/*", "reproducibility/*", "lora/*"],
-                      local_dir=local_dir,
-                      cache_dir=cache_dir
-                  )
-                  print(f"Downloaded {repo_id}")
-              else:
-                  print(f"{local_dir_name} already exists, skipping...")
-
-          print("All models downloaded successfully!")
-          PYEOF
-
-          echo "Model download complete!"
-          ls -la /app/models/
-
-          echo "Setting proper permissions..."
-          find /app/models -type f -exec chmod 644 {} \; 2>/dev/null || true
-          find /app/models -type d -exec chmod 755 {} \; 2>/dev/null || true
-
           echo "Creating cache directories..."
-          mkdir -p /app/cache/hf /app/cache/transformers /app/cache/sentence_transformers /app/cache/xdg /app/cache/bert
+          mkdir -p /app/cache/hf /app/cache/transformers /app/cache/sentence_transformers /app/cache/xdg
           chmod -R 777 /app/cache/ 2>/dev/null || true
-
-          echo "Model download complete!"
-        env:
-        - name: HF_HUB_CACHE
-          value: /app/cache/hf
-        - name: HF_HOME
-          value: /app/cache/hf
-        - name: TRANSFORMERS_CACHE
-          value: /app/cache/transformers
-        - name: PIP_CACHE_DIR
-          value: /tmp/pip_cache
-        - name: PYTHONUSERBASE
-          value: /tmp/python_user
-        - name: PATH
-          value: /tmp/python_user/bin:/usr/local/bin:/usr/bin:/bin
+          find /app/models -type d -exec chmod 755 {} \; 2>/dev/null || true
+          echo "Cache directories ready."
         resources:
           requests:
-            memory: "1Gi"
-            cpu: "500m"
+            memory: "64Mi"
+            cpu: "50m"
           limits:
-            memory: "2Gi"
-            cpu: "1"
+            memory: "128Mi"
+            cpu: "100m"
         volumeMounts:
         - name: models-volume
           mountPath: /app/models
@@ -211,12 +133,13 @@ spec:
           periodSeconds: 30
           timeoutSeconds: 10
           failureThreshold: 3
+        # Sized as in the Helm chart: the Router and the model runtime it starts for the decision model.
         resources:
           requests:
-            memory: "4Gi"
+            memory: "3Gi"
             cpu: "1500m"
           limits:
-            memory: "8Gi"
+            memory: "12Gi"
             cpu: "3"
 
       # Envoy proxy container - routes to KServe endpoints

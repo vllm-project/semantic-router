@@ -10,7 +10,9 @@ import (
 	"net/http"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
@@ -52,7 +54,10 @@ func (s *ClassificationAPIServer) handleSystemOneForward(w http.ResponseWriter, 
 		writeSystemOneError(w, http.StatusNotFound, "systemone_not_published", "System One is not published for the selected listener")
 		return
 	}
-	request, err := http.NewRequestWithContext(r.Context(), forwarded.Method, forwarded.Path, bytes.NewReader(forwarded.Request))
+	// A forwarded request is a client's, so its calls act for that client,
+	// who reaches the Router here without the authenticator's delegated
+	// credential.
+	request, err := http.NewRequestWithContext(principal.ForRequest(r.Context(), ""), forwarded.Method, forwarded.Path, bytes.NewReader(forwarded.Request))
 	if err != nil {
 		writeSystemOneError(w, http.StatusBadRequest, "invalid_request", "Invalid native operation")
 		return
@@ -60,7 +65,7 @@ func (s *ClassificationAPIServer) handleSystemOneForward(w http.ResponseWriter, 
 	request.Header.Set("Authorization", forwarded.Authorization)
 	request.Header.Set("Api-Key", forwarded.APIKey)
 	if forwarded.BackendRequest {
-		request.Header.Set(systemone.BackendRequestHeader, "1")
+		request.Header.Set(headers.VSRSystemOneBackend, "1")
 	}
 	systemone.Handler(cfg, listener, retainedSystemOneInvoker(snapshot, router, listener.Name))(w, request)
 }

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/tutorials/algorithm/looper/ratings.md"
@@ -32,9 +33,9 @@ translation:
 ```yaml
 algorithm:
   type: ratings
+  on_error: skip
   ratings:
     max_concurrent: 3
-    on_error: skip
 ```
 
 完整示例见：

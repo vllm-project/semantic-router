@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test'
-import { dashboardSettingsResponse, mockAuthenticatedAppShell } from './support/auth'
+import {
+  dashboardCapabilitiesResponse,
+  mockAuthenticatedAppShell,
+  unavailableCapability,
+} from './support/auth'
 
 test('sign-in remains usable while its decorative animation module is stalled', async ({
   page,
@@ -22,24 +26,22 @@ test('sign-in remains usable while its decorative animation module is stalled', 
   await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeVisible()
 })
 
-test('stalled settings and ML fallback release the access retry gate and a retry recovers', async ({
+test('a stalled capabilities read releases the access retry gate and a retry recovers', async ({
   page,
 }) => {
   await mockAuthenticatedAppShell(page)
   await page.clock.install()
   let requests = 0
   let recover = false
-  await page.route('**/api/settings', async (route) => {
+  await page.route('**/api/v1/capabilities', async (route) => {
     requests += 1
     if (!recover) return new Promise(() => {})
     await route.fulfill({
-      json: dashboardSettingsResponse({
-        srBenchAvailable: false,
-        srBenchUnavailableReason: 'Evaluation is intentionally offline for this test.',
+      json: dashboardCapabilitiesResponse({
+        evaluation: unavailableCapability('Evaluation is intentionally offline for this test.'),
       }),
     })
   })
-  await page.route('**/api/ml-pipeline/availability', () => new Promise(() => {}))
   await page.goto('/evaluation')
   await expect.poll(() => requests).toBeGreaterThan(0)
   await page.clock.fastForward(15_001)

@@ -3,7 +3,6 @@ from typing import get_args
 import pytest
 from cli.algorithms import AlgorithmConfig
 from cli.config_contract import (
-    LEGACY_SIGNAL_KEY_TO_CANONICAL,
     QUORUM_FAILURE_POLICY_VALUES,
     UNKNOWN_POLICY_VALUES,
     QuorumFailurePolicy,
@@ -15,13 +14,17 @@ from cli.config_contract import (
 from cli.models import Decision, PIIRule, Projections, Signals
 
 
-def test_pii_source_survives_cli_round_trip_and_rejects_unknown_values():
-    rule = PIIRule(name="tool-data", threshold=0.8, source="tool_result")
+def test_pii_input_survives_cli_round_trip_and_rejects_unknown_fields():
+    rule = PIIRule(
+        name="tool-data", predicate={"gte": 0.8}, input={"tool_results": True}
+    )
 
-    assert rule.model_dump(exclude_none=True)["source"] == "tool_result"
-    assert PIIRule(name="legacy", threshold=0.8, source="").source is None
+    assert rule.model_dump(exclude_none=True)["input"] == {
+        "history": False,
+        "tool_results": True,
+    }
     with pytest.raises(ValueError):
-        PIIRule(name="invalid", threshold=0.8, source="prompt")
+        PIIRule(name="invalid", input={"source": "tool_result"})
 
 
 def test_unknown_policy_literal_matches_allowed_values():
@@ -34,22 +37,9 @@ def test_quorum_failure_policy_literal_matches_allowed_values():
     assert QUORUM_FAILURE_POLICY_VALUES == ("fail", "fallback")
 
 
-def test_legacy_signal_inventory_covers_flat_authz_and_context_blocks():
-    assert LEGACY_SIGNAL_KEY_TO_CANONICAL["role_bindings"] == "role_bindings"
-    assert LEGACY_SIGNAL_KEY_TO_CANONICAL["context_rules"] == "context"
-    assert LEGACY_SIGNAL_KEY_TO_CANONICAL["events"] == "events"
-    assert "session_metrics" not in LEGACY_SIGNAL_KEY_TO_CANONICAL
-
-
-def test_build_signal_reference_index_expands_complexity_levels_and_authz_names():
+def test_build_signal_reference_index_names_complexity_rules_and_authz_roles():
     signals = Signals(
-        complexity=[
-            {
-                "name": "difficulty",
-                "easy": {"candidates": ["simple"]},
-                "hard": {"candidates": ["complex"]},
-            }
-        ],
+        complexity=[{"name": "difficulty", "labels": ["hard"]}],
         role_bindings=[
             {
                 "name": "admin-access",
@@ -57,32 +47,20 @@ def test_build_signal_reference_index_expands_complexity_levels_and_authz_names(
                 "subjects": [{"kind": "User", "name": "alice"}],
             }
         ],
-        events=[
+        keywords=[
             {
                 "name": "critical_event",
-                "event_types": ["payment_failed"],
-                "severities": ["critical"],
+                "operator": "OR",
+                "keywords": ["payment_failed", "critical"],
             }
         ],
     )
 
     signal_names = build_signal_reference_index(signals)
 
-    assert signal_names["complexity"] == {
-        "difficulty:easy",
-        "difficulty:medium",
-        "difficulty:hard",
-    }
-    assert signal_names["authz"] == {"admin-access"}
-    assert signal_names["event"] == {"critical_event"}
-
-
-def test_action_signals_accept_only_the_fixed_vocabulary():
-    signals = Signals(actions=[{"name": "fix"}, {"name": "explain"}])
-
-    assert build_signal_reference_index(signals)["action"] == {"fix", "explain"}
-    with pytest.raises(ValueError, match="actions"):
-        Signals(actions=[{"name": "review"}])
+    assert signal_names["complexity"] == {"difficulty"}
+    assert signal_names["authz"] == {"admin"}
+    assert signal_names["keyword"] == {"critical_event"}
 
 
 def test_signal_reference_exists_is_scoped_by_family_and_exact_runtime_name():

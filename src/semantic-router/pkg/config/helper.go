@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"slices"
 	"sort"
 	"strings"
 
@@ -231,111 +230,6 @@ func (c *RouterConfig) GetModelIndexResult(modelName, index string) (modelcatalo
 	return cloneCatalogIndexResult(result), ok
 }
 
-// GetDecisionPIIPolicy returns the PII policy for a given decision by looking at
-// the PIIRule signals referenced in the decision's rules tree.
-// If the decision doesn't reference any PII signals, returns a default policy that allows all PII.
-func (d *Decision) GetDecisionPIIPolicy(piiRules []PIIRule) PIIPolicy {
-	// Collect PII signal names referenced in the decision's rules
-	piiSignalNames := collectSignalNames(&d.Rules, "pii")
-	if len(piiSignalNames) == 0 {
-		// No PII signals → allow all PII
-		return PIIPolicy{
-			AllowByDefault: true,
-			PIITypes:       []string{},
-		}
-	}
-
-	// Build a lookup for PIIRules by name
-	rulesByName := make(map[string]*PIIRule, len(piiRules))
-	for i := range piiRules {
-		rulesByName[piiRules[i].Name] = &piiRules[i]
-	}
-
-	// Aggregate PIITypesAllowed from all referenced PIIRules
-	var allAllowed []string
-	for _, name := range piiSignalNames {
-		if rule, ok := rulesByName[name]; ok {
-			allAllowed = append(allAllowed, rule.PIITypesAllowed...)
-		}
-	}
-
-	return PIIPolicy{
-		AllowByDefault: false,
-		PIITypes:       allAllowed,
-	}
-}
-
-// IsDecisionAllowedForPIIType checks if a decision is allowed to process a specific PII type
-func (d *Decision) IsDecisionAllowedForPIIType(piiType string, piiRules []PIIRule) bool {
-	policy := d.GetDecisionPIIPolicy(piiRules)
-
-	// If allow_by_default is true, all PII types are allowed unless explicitly denied
-	if policy.AllowByDefault {
-		return true
-	}
-
-	// If allow_by_default is false, only explicitly allowed PII types are permitted
-	return slices.Contains(policy.PIITypes, piiType)
-}
-
-// IsDecisionAllowedForPIITypes checks if a decision is allowed to process any of the given PII types
-func (d *Decision) IsDecisionAllowedForPIITypes(piiTypes []string, piiRules []PIIRule) bool {
-	for _, piiType := range piiTypes {
-		if !d.IsDecisionAllowedForPIIType(piiType, piiRules) {
-			return false
-		}
-	}
-	return true
-}
-
-// IsPIIClassifierEnabled checks if PII classification is enabled. A local
-// model serves its own labels; a remote backend needs a mapping file.
-func (c *RouterConfig) IsPIIClassifierEnabled() bool {
-	if c.PIIModel.Backend != nil {
-		return c.PIIModel.Active() && c.PIIMappingPath != ""
-	}
-	return c.PIIModel.Active() && c.PIIModel.ModelID != ""
-}
-
-// IsCategoryClassifierEnabled checks if category classification is enabled. A
-// local model serves its own labels; a remote backend needs a mapping file.
-func (c *RouterConfig) IsCategoryClassifierEnabled() bool {
-	return c.CategoryModel.Active() && c.CategoryModel.ModelID != "" && (c.CategoryModel.Backend == nil || c.CategoryMappingPath != "")
-}
-
-// IsMCPCategoryClassifierEnabled checks if MCP-based category classification is enabled
-func (c *RouterConfig) IsMCPCategoryClassifierEnabled() bool {
-	return c.Enabled && c.ToolName != ""
-}
-
-// GetPromptGuardConfig returns the prompt guard configuration
-func (c *RouterConfig) GetPromptGuardConfig() PromptGuardConfig {
-	return c.PromptGuard
-}
-
-// IsPromptGuardEnabled checks if prompt guard jailbreak detection is enabled.
-// A local model serves its own labels; a remote backend needs a mapping file.
-func (c *RouterConfig) IsPromptGuardEnabled() bool {
-	if !c.PromptGuard.Enabled {
-		return false
-	}
-
-	if c.PromptGuard.Backend != nil {
-		if c.PromptGuard.JailbreakMappingPath == "" {
-			return false
-		}
-		backend := c.PromptGuard.Backend
-		contract := RemoteClassifierContractLabelDistribution
-		if backend.Protocol == RemoteClassifierProtocolHTTPChat {
-			contract = RemoteClassifierContractLabelDecision
-		}
-		_, err := ResolveRemoteClassifierBackend(c, backend, ModelRoleGuardrail, contract)
-		return err == nil
-	}
-
-	return c.PromptGuard.ModelID != ""
-}
-
 // GetEndpointsForModel returns all endpoints that can serve the specified model
 // Returns endpoints based on the model's preferred_endpoints configuration in model_config
 func (c *RouterConfig) GetEndpointsForModel(modelName string) []VLLMEndpoint {
@@ -465,34 +359,18 @@ func (c *RouterConfig) IsCacheEnabledForDecision(decisionName string) bool {
 	return c.IsCacheEnabledForDecisionObject(c.GetDecisionByName(decisionName))
 }
 
-// IsCacheEnabled resolves response_cache policy from a scoped decision.
+// IsCacheEnabledForDecisionObject resolves response_cache policy from a
+// scoped decision: the response_cache plugin it runs (RequestPlugins).
 func (c *RouterConfig) IsCacheEnabledForDecisionObject(decision *Decision) bool {
-	if decision != nil {
-		config := decision.GetResponseCacheConfig()
-		if config != nil {
-			return config.Enabled
-		}
-	}
-	// No explicit response_cache plugin configured for this decision
-	// Return false to respect per-decision plugin scoping
-	return false
+	config := c.ResponseCacheConfig(decision)
+	return config != nil && config.Enabled
 }
 
-// GetCacheSimilarityThresholdForDecision returns the effective cache similarity threshold for a decision
-func (c *RouterConfig) GetCacheSimilarityThresholdForDecision(decisionName string) float32 {
-	return c.GetCacheSimilarityThresholdForDecisionObject(c.GetDecisionByName(decisionName))
-}
-
-// GetCacheSimilarityThreshold resolves the threshold from a scoped decision.
-func (c *RouterConfig) GetCacheSimilarityThresholdForDecisionObject(decision *Decision) float32 {
-	if decision != nil {
-		config := decision.GetResponseCacheConfig()
-		if config != nil && config.EffectiveSimilarityThreshold() != nil {
-			return *config.EffectiveSimilarityThreshold()
-		}
-	}
-	// Route policy does not cascade the backend's global threshold.
-	return 0.8
+// ResponseCacheMatch is the match block a request's semantic lookup runs: the
+// semantic.match of the response_cache plugin it runs, nil for the response
+// cache's default.
+func (c *RouterConfig) ResponseCacheMatch(decision *Decision) *MatchConfig {
+	return c.ResponseCacheConfig(decision).SemanticMatch()
 }
 
 // GetCacheTTLSecondsForDecision returns the effective TTL for a decision
@@ -502,15 +380,12 @@ func (c *RouterConfig) GetCacheTTLSecondsForDecision(decisionName string) int {
 	return c.GetCacheTTLSecondsForDecisionObject(c.GetDecisionByName(decisionName))
 }
 
-// GetCacheTTLSeconds resolves TTL from a scoped decision.
+// GetCacheTTLSecondsForDecisionObject resolves TTL from a scoped decision:
+// the response_cache plugin it runs, -1 for the store's default TTL.
 func (c *RouterConfig) GetCacheTTLSecondsForDecisionObject(decision *Decision) int {
-	if decision != nil {
-		config := decision.GetResponseCacheConfig()
-		if config != nil && config.TTLSeconds != nil {
-			return *config.TTLSeconds
-		}
+	if config := c.ResponseCacheConfig(decision); config != nil && config.TTLSeconds != nil {
+		return *config.TTLSeconds
 	}
-	// Return -1 to indicate "use global default"
 	return -1
 }
 

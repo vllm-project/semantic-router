@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 智能体记忆
 description: 探索用于检索、注入、提取和存储用户范围上下文的概念验证记忆循环。
 created: 2026-02-09
@@ -84,7 +85,7 @@ flowchart LR
 
 该概念验证验证检索 → 注入 → 提取 → 存储循环。它不主张生产级隔离、可靠的会话结束检测、自主反思，或所提取记忆的事实正确性。
 
-当前[记忆插件指南](../tutorials/plugin/memory)是已实现配置和行为的事实来源。本提案不应作为部署配方使用。
+当前[记忆源指南](../tutorials/plugin/context#memory-sources)是已实现配置和行为的事实来源。本提案不应作为部署配方使用。
 
 ## 评估 {#evaluation}
 
@@ -109,5 +110,5 @@ flowchart LR
 
 ## 参考资料 {#references}
 
-- [当前记忆插件指南](../tutorials/plugin/memory)
+- [当前记忆源指南](../tutorials/plugin/context#memory-sources)
 - [路由学习中的记忆与回放](../tutorials/learning/memory-and-replay)

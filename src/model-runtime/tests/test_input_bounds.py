@@ -774,7 +774,11 @@ def test_vela2_fails_the_questions_over_a_part_past_its_scan_budget(
     assert response.status_code == 200, response.text
     check("DecisionResponse", response.json())
     answered = response.json()["answers"]
-    assert answered["jailbreak"] == {"type": "noul", "error": "scan_budget_exceeded"}
+    assert answered["jailbreak"] == {
+        "type": "noul",
+        "error": "scan_budget_exceeded",
+        "reason": "scan_budget",
+    }
     assert "error" not in answered["domain"]
     assert all(
         len(args[1]) < len(long_request) or args[2] == scan + 1 for args in reads

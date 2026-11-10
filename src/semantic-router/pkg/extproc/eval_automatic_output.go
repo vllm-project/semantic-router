@@ -14,7 +14,7 @@ import (
 func (r *OpenAIRouter) selectAutomaticEvalCandidate(input services.EvalModelSelectionInput) services.EvalModelSelection {
 	decision := input.Decision
 	method := r.getSelectionMethod(decision.Algorithm)
-	if config.IsLooperAlgorithmType(evalAlgorithmType(decision)) || !evalSupportsDryRunSelection(method) {
+	if config.IsExecutorAlgorithmType(evalAlgorithmType(decision)) || !evalSupportsDryRunSelection(method) {
 		return automaticEvalExecutionRequired(decision, "the configured algorithm requires execution")
 	}
 	effective, err := selection.EffectiveCandidateRequest(input.SemanticRequest, decision)
@@ -102,23 +102,23 @@ func automaticEvalRequestLimitation(request *llmprotocol.Request, decision *conf
 			return "automatic output preview requires text and inline tool content without external or opaque provider state"
 		}
 	}
-	if rag := decision.GetRAGConfig(); rag != nil && rag.Enabled {
-		return "retrieval enrichment requires execution"
-	}
-	if memory := decision.GetMemoryConfig(); memory != nil && memory.Enabled {
-		return "memory enrichment requires execution"
-	}
-	tools := decision.GetToolsConfig()
-	if tools != nil && tools.Enabled && tools.EffectiveMode() == config.ToolsPluginModeFiltered {
-		return "configured tool filtering requires execution"
-	}
-	if request.ToolChoice.Mode == llmprotocol.ToolChoiceAuto && (tools == nil || !tools.Enabled || tools.EffectiveMode() != config.ToolsPluginModeNone) {
-		selectionPlugin := decision.GetToolSelectionConfig()
-		if tools.SelectionEnabled() || selectionPlugin != nil && selectionPlugin.Enabled {
-			return "semantic tool selection requires execution"
+	if plugin := decision.GetContextConfig(); plugin != nil && plugin.Enabled {
+		if plugin.Source(config.ContextSourceRAG) != nil {
+			return "retrieval enrichment requires execution"
+		}
+		if plugin.Source(config.ContextSourceMemory) != nil {
+			return "memory enrichment requires execution"
 		}
 	}
-	if compression := decision.GetContextCompressionConfig(); compression != nil && compression.Enabled {
+	tools := decision.GetToolsConfig()
+	if tools.ActivePolicy().EffectiveMode() == config.ToolsPolicyModeFiltered {
+		return "configured tool filtering requires execution"
+	}
+	if tools.ActiveSelect() != nil && leavesToolChoiceToModel(request) {
+		return "tool selection requires execution"
+	}
+	if plugin := contextCompression(decision); plugin != nil {
+		compression := plugin.Compress
 		if compression.Targets != nil && compression.EffectiveTargetMode(compression.Targets.History) != config.ContextCompressionTargetPreserve && len(request.Messages) > 1 {
 			return "configured history compression is not resolved by automatic output preview"
 		}

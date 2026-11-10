@@ -9,8 +9,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestOpenAICompatibleProviderEmbedBatch(t *testing.T) {
@@ -204,19 +202,14 @@ func TestOpenAICompatibleProviderResponseLimit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider, err := NewProvider(config.EmbeddingModels{
-				EmbeddingConfig: config.HNSWConfig{
-					Backend:         config.EmbeddingBackendOpenAICompatible,
-					TargetDimension: 2,
-				},
-				Endpoint: config.EmbeddingEndpointConfig{
-					BaseURL:          server.URL,
-					Model:            "embedding-model",
-					MaxResponseBytes: tt.maxResponseBytes,
-				},
+			provider, err := NewOpenAICompatibleProvider(OpenAICompatibleConfig{
+				BaseURL:           server.URL,
+				Model:             "embedding-model",
+				MaxResponseBytes:  tt.maxResponseBytes,
+				ExpectedDimension: 2,
 			})
 			if err != nil {
-				t.Fatalf("NewProvider() error = %v", err)
+				t.Fatalf("NewOpenAICompatibleProvider() error = %v", err)
 			}
 
 			embedding, err := provider.Embed(context.Background(), "hello")
@@ -248,6 +241,17 @@ func TestNewOpenAICompatibleProviderValidatesConfig(t *testing.T) {
 		if _, err := NewOpenAICompatibleProvider(cfg); err == nil {
 			t.Fatalf("NewOpenAICompatibleProvider(%+v) returned nil error", cfg)
 		}
+	}
+}
+
+func TestOpenAICompatibleProviderHonorsFractionalTimeout(t *testing.T) {
+	provider := newTestOpenAIProvider(t, OpenAICompatibleConfig{
+		BaseURL:        "http://localhost:8000",
+		Model:          "embedding-model",
+		TimeoutSeconds: 0.8,
+	})
+	if provider.timeout != 800*time.Millisecond {
+		t.Fatalf("timeout = %v, want 800ms", provider.timeout)
 	}
 }
 

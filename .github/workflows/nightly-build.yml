@@ -1,4 +1,4 @@
-name: Nightly
+name: Nightly Qualification
 
 on:
   schedule:
@@ -8,30 +8,101 @@ on:
 permissions:
   contents: read
   actions: read
-
-concurrency:
-  group: nightly
-  cancel-in-progress: false
+  issues: read
+  pull-requests: read
 
 jobs:
-  ci:
-    name: CI
+  head:
+    name: Select the Commit to Qualify
     if: >-
       github.repository == 'vllm-project/semantic-router'
       || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      qualify: ${{ steps.published.outputs.qualify }}
+      date: ${{ steps.published.outputs.date }}
+    steps:
+      - name: Skip a scheduled run when another run already covers this commit
+        id: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # One date for every image and the chart, even when the run crosses midnight.
+          echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          qualify=true
+          if [[ "$GITHUB_EVENT_NAME" == schedule ]]; then
+            covered="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/nightly-build.yml/runs?head_sha=$GITHUB_SHA&per_page=20" \
+              --jq "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID) | select(.conclusion == \"success\" or .status != \"completed\")] | length")"
+            if [[ "$covered" != 0 ]]; then
+              qualify=false
+              echo "::notice::Another Nightly Qualification run of $GITHUB_SHA passed or is still running."
+            fi
+          fi
+          echo "qualify=$qualify" >> "$GITHUB_OUTPUT"
+
+  ci:
+    name: CI
+    needs: head
+    if: needs.head.outputs.qualify == 'true'
+    # A dispatch is explicit intent, so it cancels the qualification it
+    # supersedes. A scheduled run waits for a running qualification instead.
+    # Publication is outside this group and is never cancelled.
+    concurrency:
+      group: nightly-qualification
+      cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
       actions: read
+      issues: read
+      pull-requests: read
       security-events: write
     with:
       profile: nightly
+      date: ${{ needs.head.outputs.date }}
     secrets: inherit
+
+  reserve:
+    name: Keep Published Nightly Dates Unchanged
+    needs: [head, ci]
+    if: ${{ !cancelled() && needs.ci.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    outputs:
+      publish: ${{ steps.date.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ci-build-image-*
+          path: .agent-harness/nightly-receipts
+      - name: Install image registry client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+      - name: Publish only a free date or this run's own partial publication
+        id: date
+        env:
+          DATE: ${{ needs.head.outputs.date }}
+          IMAGES: ${{ needs.ci.outputs.publish_images }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | skopeo login --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+          python3 tools/ci/nightly_tags.py --date "$DATE" --images "$IMAGES" \
+            --receipts .agent-harness/nightly-receipts \
+            --registry "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" --github-output "$GITHUB_OUTPUT"
 
   docker:
     name: Publish Nightly Images
-    if: ${{ !cancelled() && needs.ci.result == 'success' }}
-    needs: ci
+    if: >-
+      !cancelled() && needs.ci.result == 'success'
+      && needs.reserve.outputs.publish == 'true'
+    needs: [ci, reserve]
     permissions:
       contents: read
       actions: read
@@ -45,8 +116,10 @@ jobs:
 
   helm:
     name: Publish Nightly Helm Chart
-    if: ${{ !cancelled() && needs.ci.result == 'success' }}
-    needs: ci
+    if: >-
+      !cancelled() && needs.ci.result == 'success'
+      && needs.reserve.outputs.publish == 'true'
+    needs: [head, ci, reserve]
     permissions:
       contents: read
       actions: read
@@ -54,4 +127,5 @@ jobs:
     uses: ./.github/workflows/helm-publish.yml
     with:
       mode: nightly
+      date: ${{ needs.head.outputs.date }}
     secrets: inherit

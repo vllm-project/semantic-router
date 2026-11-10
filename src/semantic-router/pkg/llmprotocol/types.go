@@ -11,6 +11,13 @@ import (
 // WireFormat is a stable wire contract identifier, not a provider product.
 type WireFormat string
 
+// Values of Request.Truncation. Only TruncationAuto needs the target to keep
+// conversation state; TruncationDisabled is the default and drops nothing.
+const (
+	TruncationDisabled = "disabled"
+	TruncationAuto     = "auto"
+)
+
 const (
 	OpenAIChatV1        WireFormat = "openai.chat.v1"
 	OpenAIResponsesV1   WireFormat = "openai.responses.v1"
@@ -81,6 +88,9 @@ type Content struct {
 	GeneratedImage *GeneratedImage
 	Signature      string
 	Reasoning      ReasoningScope
+	// ReasoningDetail is a typed continuity block, distinct from display text.
+	// Its identity and opaque payload must survive routing and tool turns.
+	ReasoningDetail *ReasoningDetail
 }
 
 // CacheDirective marks a request block or tool definition as an explicit
@@ -107,11 +117,13 @@ type Message struct {
 	Role            Role
 	Content         []Content
 	ReasoningEffort string // Anthropic per-message output_config.effort.
+	Name            string // Chat Completions participant name; formats without one drop it.
 }
 
 type InstructionBlock struct {
 	Role    Role
 	Content []Content
+	Name    string // Chat Completions participant name; formats without one drop it.
 }
 
 type ToolCall struct {

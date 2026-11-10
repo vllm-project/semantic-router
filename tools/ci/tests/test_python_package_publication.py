@@ -137,10 +137,11 @@ class PythonPublisherContractTests(unittest.TestCase):
         self.assertIn("github.repository == 'vllm-project/semantic-router'", condition)
         self.assertIn("github.event_name == 'push'", condition)
         self.assertIn(
-            "inputs.channel == 'dev' && github.ref == 'refs/heads/main'", condition
+            "inputs.channel == 'dev' && inputs.prebuilt-dist && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'",
+            condition,
         )
         self.assertIn(
-            "inputs.channel == 'stable' && startsWith(github.ref, 'refs/tags/v')",
+            "inputs.channel == 'stable' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')",
             condition,
         )
         self.assertEqual(
@@ -148,7 +149,7 @@ class PythonPublisherContractTests(unittest.TestCase):
         )
         self.assertEqual(
             self.publisher.jobs["testpypi"]["if"],
-            "github.event_name == 'workflow_dispatch' && !inputs.build-only",
+            "github.event_name == 'workflow_dispatch' && !inputs.build-only && inputs.channel != 'dev'",
         )
         callers = {
             workflow.path.name

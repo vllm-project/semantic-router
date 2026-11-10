@@ -145,7 +145,7 @@ func TestProjectionInputValueRawReadsSignalValues(t *testing.T) {
 						Method: "weighted_sum",
 						Inputs: []config.ProjectionScoreInput{
 							{
-								Type:        config.SignalTypeStructure,
+								Type:        config.SignalTypeKeyword,
 								Name:        "many_questions",
 								Weight:      0.5,
 								ValueSource: "raw",
@@ -174,7 +174,7 @@ func TestProjectionInputValueRawReadsSignalValues(t *testing.T) {
 
 	results := &SignalResults{
 		SignalValues: map[string]float64{
-			"structure:many_questions":    4.0,
+			"keyword:many_questions":      4.0,
 			"conversation:tool_loop_deep": 7.0,
 		},
 	}
@@ -190,53 +190,6 @@ func TestProjectionInputValueRawReadsSignalValues(t *testing.T) {
 	}
 	if len(got.MatchedProjectionRules) != 1 || got.MatchedProjectionRules[0] != "high_pressure" {
 		t.Fatalf("matched projection rules = %v, want [high_pressure]", got.MatchedProjectionRules)
-	}
-}
-
-func TestApplyProjectionsConsumesEventSignalInputs(t *testing.T) {
-	classifier := &Classifier{
-		Config: &config.RouterConfig{
-			IntelligentRouting: config.IntelligentRouting{
-				Projections: config.Projections{
-					Scores: []config.ProjectionScore{{
-						Name:   "event_risk_score",
-						Method: "weighted_sum",
-						Inputs: []config.ProjectionScoreInput{{
-							Type:        config.SignalTypeEvent,
-							Name:        "critical_payment_event",
-							Weight:      1.0,
-							ValueSource: "confidence",
-						}},
-					}},
-					Mappings: []config.ProjectionMapping{{
-						Name:   "event_risk_band",
-						Source: "event_risk_score",
-						Method: "threshold_bands",
-						Outputs: []config.ProjectionMappingOutput{
-							{Name: "event_risk_high", GTE: float64Ptr(0.8)},
-						},
-					}},
-				},
-			},
-		},
-	}
-
-	results := &SignalResults{
-		MatchedEventRules: []string{"critical_payment_event"},
-		SignalConfidences: map[string]float64{
-			"event:critical_payment_event": 0.9,
-		},
-	}
-
-	got := classifier.applyProjections(results)
-	if got == nil {
-		t.Fatal("applyProjections returned nil")
-	}
-	if score := got.ProjectionScores["event_risk_score"]; score < 0.89 || score > 0.91 {
-		t.Fatalf("event_risk_score = %.3f, want about 0.9", score)
-	}
-	if len(got.MatchedProjectionRules) != 1 || got.MatchedProjectionRules[0] != "event_risk_high" {
-		t.Fatalf("matched projection rules = %v, want [event_risk_high]", got.MatchedProjectionRules)
 	}
 }
 
@@ -309,7 +262,7 @@ func TestProjectionInputValueRawReturnsZeroWhenMissing(t *testing.T) {
 						Name:   "absent_score",
 						Method: "weighted_sum",
 						Inputs: []config.ProjectionScoreInput{{
-							Type:        config.SignalTypeStructure,
+							Type:        config.SignalTypeKeyword,
 							Name:        "nonexistent_signal",
 							Weight:      1.0,
 							ValueSource: "raw",
@@ -403,7 +356,7 @@ func TestApplyProjectionsScoreConsumesConfidence(t *testing.T) {
 
 func TestProjectionInputValueRawReturnsZeroWhenNilMap(t *testing.T) {
 	result := projectionInputValue(config.ProjectionScoreInput{
-		Type:        config.SignalTypeStructure,
+		Type:        config.SignalTypeKeyword,
 		Name:        "any",
 		Weight:      1.0,
 		ValueSource: "raw",
@@ -424,7 +377,7 @@ func TestProjectionMixedRawAndConfidenceInputs(t *testing.T) {
 						Method: "weighted_sum",
 						Inputs: []config.ProjectionScoreInput{
 							{
-								Type:        config.SignalTypeStructure,
+								Type:        config.SignalTypeKeyword,
 								Name:        "many_questions",
 								Weight:      0.4,
 								ValueSource: "raw",
@@ -453,7 +406,7 @@ func TestProjectionMixedRawAndConfidenceInputs(t *testing.T) {
 
 	results := &SignalResults{
 		SignalValues: map[string]float64{
-			"structure:many_questions": 3.0,
+			"keyword:many_questions": 3.0,
 		},
 		MatchedKeywordRules: []string{"reasoning_markers"},
 		SignalConfidences: map[string]float64{
@@ -477,13 +430,13 @@ func TestProjectionMixedRawAndConfidenceInputs(t *testing.T) {
 
 func TestProjectionInputValueRawNegativeValues(t *testing.T) {
 	result := projectionInputValue(config.ProjectionScoreInput{
-		Type:        config.SignalTypeStructure,
+		Type:        config.SignalTypeKeyword,
 		Name:        "neg_signal",
 		Weight:      1.0,
 		ValueSource: "raw",
 	}, &SignalResults{
 		SignalValues: map[string]float64{
-			"structure:neg_signal": -2.5,
+			"keyword:neg_signal": -2.5,
 		},
 	})
 
@@ -495,13 +448,13 @@ func TestProjectionInputValueRawNegativeValues(t *testing.T) {
 func TestProjectionInputValueRawCaseInsensitive(t *testing.T) {
 	for _, vs := range []string{"Raw", "RAW", " raw ", " Raw"} {
 		result := projectionInputValue(config.ProjectionScoreInput{
-			Type:        "Structure",
+			Type:        "Keyword",
 			Name:        "sig",
 			Weight:      1.0,
 			ValueSource: vs,
 		}, &SignalResults{
 			SignalValues: map[string]float64{
-				"structure:sig": 5.0,
+				"keyword:sig": 5.0,
 			},
 		})
 		if result != 5.0 {
@@ -512,13 +465,13 @@ func TestProjectionInputValueRawCaseInsensitive(t *testing.T) {
 
 func TestProjectionInputValueRawExplicitZero(t *testing.T) {
 	result := projectionInputValue(config.ProjectionScoreInput{
-		Type:        config.SignalTypeStructure,
+		Type:        config.SignalTypeKeyword,
 		Name:        "zero_signal",
 		Weight:      1.0,
 		ValueSource: "raw",
 	}, &SignalResults{
 		SignalValues: map[string]float64{
-			"structure:zero_signal": 0.0,
+			"keyword:zero_signal": 0.0,
 		},
 	})
 
@@ -529,13 +482,13 @@ func TestProjectionInputValueRawExplicitZero(t *testing.T) {
 
 func TestProjectionInputValueRawLargeValues(t *testing.T) {
 	result := projectionInputValue(config.ProjectionScoreInput{
-		Type:        config.SignalTypeStructure,
+		Type:        config.SignalTypeKeyword,
 		Name:        "token_count",
 		Weight:      1.0,
 		ValueSource: "raw",
 	}, &SignalResults{
 		SignalValues: map[string]float64{
-			"structure:token_count": 128000.0,
+			"keyword:token_count": 128000.0,
 		},
 	})
 

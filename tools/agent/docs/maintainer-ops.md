@@ -161,10 +161,12 @@ make perf-check PERF_BASE_REF="$(python3 tools/ci/ci_plan.py performance-base --
 ```
 
 The base is the previous release unless `PERFORMANCE_BASES` in
-`tools/ci/ci_plan.py` declares one for the cycle. 0.5.0 declares `abae8ff99`
-(#4707): v0.4.0 predates the model runtime, so the harness could only record a
-reset against it, while #4707 pinned the classify benchmarks to the Vela 1.0
-specialists and its own Production Benchmarks job passed with that harness.
+`tools/ci/ci_plan.py` declares one for the cycle. 0.5.0 declares `4952ca055`
+(#5886): v0.4.0 predates the model runtime and every earlier `main` commit
+predates the decision model's preset questions, so the harness could only
+record a reset against them, while #5886 answers the classify benchmarks'
+signals with the decision model and its own Production Benchmarks job passed
+with that harness.
 From 0.5.0 on, the previous release has the model runtime. When a
 cycle's previous release can't run the current harness, declare a reviewed
 `main` commit whose Production Benchmarks job passed with it before the
@@ -230,8 +232,12 @@ contract without making roadmap, priority, or close decisions:
 - `/accept` lets a collaborator with write, maintain, or admin permission accept
   an issue that already has exactly one recognized owner: one Workgroup for
   project work or `owner/maintainers` for repository governance; each exact
-  `/accept` event runs a paginated repository-wide reconciliation so earlier
-  valid decisions recover from queued, failed, or interrupted workflow runs;
+  `/accept` event reconciles only that issue and refreshes the open pull
+  requests that reference it. An hourly sweep in `community-labels.yml`
+  revisits open `needs-acceptance` issues updated in the last three days (a
+  manual dispatch sweeps all of them) and stops before the Actions token's
+  remaining API budget falls below a reserve, so earlier valid decisions
+  recover from queued, failed, or interrupted workflow runs;
 - `accepted`, `ready-for-dev`, contributor-ready labels, priority, assignment,
   and milestones cannot bypass their prerequisites;
 - assignment moves accepted work to `in-progress`;

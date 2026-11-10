@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "7c874be2"
   source_file: "docs/tutorials/plugin/fast-response.md"
@@ -29,7 +30,7 @@ translation:
 
 ## 配置
 
-在 `routing.decisions[].plugins` 下添加该插件：
+在 `recipes[].decisions[].plugins` 下添加该插件：
 
 ```yaml
 plugins:

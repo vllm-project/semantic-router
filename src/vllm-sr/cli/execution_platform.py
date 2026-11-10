@@ -131,6 +131,18 @@ def visible_device_ids(platform, available):
     return ids
 
 
+def _any_visible(platform, available):
+    """Whether a visibility mask leaves a GPU visible; a UUID mask names GPUs without their host IDs."""
+    masks = list(runtime_gpu_environment(platform).values())
+    if (
+        len(masks) == 1
+        and masks[0] not in ("", "-1")
+        and not all(part.isdecimal() for part in masks[0].split(","))
+    ):
+        return True
+    return bool(visible_device_ids(platform, available))
+
+
 def resolve_execution_platform(platform=None, *, target="docker", context=None):
     requested = (
         platform
@@ -147,7 +159,7 @@ def resolve_execution_platform(platform=None, *, target="docker", context=None):
     candidates = [
         name
         for name, ids in inventory.items()
-        if ids and (target == "kubernetes" or visible_device_ids(name, ids))
+        if ids and (target == "kubernetes" or _any_visible(name, ids))
     ]
     if len(candidates) > 1:
         raise ValueError(

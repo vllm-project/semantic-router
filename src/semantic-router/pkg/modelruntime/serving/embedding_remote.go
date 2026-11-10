@@ -26,6 +26,9 @@ type RemoteEmbeddingProvider struct {
 	model     string
 	dimension int
 	space     string
+	// delegated embeds with the requesting user's credential: no warmup,
+	// which would be a Router-own call, and no vector shared across requests.
+	delegated bool
 	closed    atomic.Bool
 }
 
@@ -53,22 +56,39 @@ func (r *Runtime) RemoteEmbedding(ctx context.Context, spec config.ResolvedModel
 	identity := binding.ResourceIdentity{Artifact: cfg.BaseURL, Revision: cfg.Model, Provider: "http", Device: "external", Precision: "external", Execution: connector}
 	budget, gate := resourceAdmission(spec)
 	resource, err := r.Pool.Acquire(ctx, identity, budget, gate, func(context.Context) (io.Closer, error) {
-		return embedding.NewOpenAICompatibleProvider(cfg)
+		// A nil *OpenAICompatibleProvider in an io.Closer is not a nil
+		// Closer: return the error without it.
+		provider, buildErr := embedding.NewOpenAICompatibleProvider(cfg)
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		return provider, nil
 	})
 	if err != nil {
 		return nil, err
 	}
+	delegated := cfg.Deployment != nil && cfg.Deployment.Auth.Delegated()
 	var warm []float32
-	err = resource.Use(ctx, func(value io.Closer) error {
-		vectors, callErr := value.(*embedding.OpenAICompatibleProvider).EmbedBatch(ctx, []string{"semantic router embedding warmup"})
-		if callErr != nil {
-			return callErr
+	if delegated {
+		// The deployment declares its width; configuration requires it.
+		if cfg.Deployment.Capabilities != nil {
+			warm = make([]float32, cfg.Deployment.Capabilities.Dimensions)
 		}
-		warm = vectors[0]
-		return validateEmbeddingResults(embeddingRequest{Inputs: []modelservice.EmbedInput{{Text: "warmup"}}}, []tasks.EmbeddingResult{{Embedding: warm}})
-	})
-	if err != nil {
+	} else {
+		err = resource.Use(ctx, func(value io.Closer) error {
+			vectors, callErr := value.(*embedding.OpenAICompatibleProvider).EmbedBatch(ctx, []string{"semantic router embedding warmup"})
+			if callErr != nil {
+				return callErr
+			}
+			warm = vectors[0]
+			return validateEmbeddingResults(embeddingRequest{Inputs: []modelservice.EmbedInput{{Text: "warmup"}}}, []tasks.EmbeddingResult{{Embedding: warm}})
+		})
+	}
+	if err != nil || len(warm) == 0 {
 		_ = resource.Close()
+		if err == nil {
+			err = fmt.Errorf("%w: a delegated embedding deployment declares capabilities.dimensions", binding.ErrCapability)
+		}
 		return nil, err
 	}
 	capability := binding.Capability{
@@ -98,7 +118,7 @@ func (r *Runtime) RemoteEmbedding(ctx context.Context, spec config.ResolvedModel
 		return nil, err
 	}
 	call.Ready()
-	return &RemoteEmbeddingProvider{call: call, recipe: string(spec.Recipe), model: cfg.Model, dimension: len(warm), space: connector}, nil
+	return &RemoteEmbeddingProvider{call: call, recipe: string(spec.Recipe), model: cfg.Model, dimension: len(warm), space: connector, delegated: delegated}, nil
 }
 
 // remoteConnector fingerprints the connector's immutable settings. The API
@@ -106,11 +126,21 @@ func (r *Runtime) RemoteEmbedding(ctx context.Context, spec config.ResolvedModel
 // with itself.
 func remoteConnector(cfg embedding.OpenAICompatibleConfig) (string, error) {
 	auth := sha256.Sum256([]byte(cfg.APIKey))
+	var connection []byte
+	if cfg.Deployment != nil {
+		connection, _ = json.Marshal(struct {
+			Auth    *config.DeploymentAuth
+			Headers map[string]string
+			TLS     *config.DeploymentTLS
+		}{cfg.Deployment.Auth, cfg.Deployment.Headers, cfg.Deployment.TLS})
+	}
 	encoded, err := json.Marshal(struct {
-		Endpoint, Model, Auth, Client                         string
-		TimeoutSeconds, Retries, Dimension, ExpectedDimension int
-		MaxResponseBytes                                      int64
-	}{cfg.BaseURL, cfg.Model, hex.EncodeToString(auth[:]), fmt.Sprintf("%p", cfg.HTTPClient), cfg.TimeoutSeconds, cfg.MaxRetries, cfg.Dimensions, cfg.ExpectedDimension, cfg.MaxResponseBytes})
+		Endpoint, Model, Auth, Client         string
+		TimeoutSeconds                        float64
+		Retries, Dimension, ExpectedDimension int
+		MaxResponseBytes                      int64
+		Connection                            []byte
+	}{cfg.BaseURL, cfg.Model, hex.EncodeToString(auth[:]), fmt.Sprintf("%p", cfg.HTTPClient), cfg.TimeoutSeconds, cfg.MaxRetries, cfg.Dimensions, cfg.ExpectedDimension, cfg.MaxResponseBytes, connection})
 	if err != nil {
 		return "", err
 	}
@@ -159,9 +189,13 @@ func (p *RemoteEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string
 	}
 	keys := make([]embedding.VectorKey, len(texts))
 	for i, text := range texts {
-		keys[i] = embedding.NewVectorKey(p.CacheIdentity(), embedding.Options{}, embedding.InputText, []byte(text))
+		keys[i] = embedding.NewVectorKey(p.CacheIdentity(), embedding.Options{}, []byte(text))
 	}
-	embedded, err := sharedVectors.Resolve(ctx, keys, func(ctx context.Context, missing []int) ([]embedding.Embedded, error) {
+	resolve := sharedVectors.Resolve
+	if p.delegated {
+		resolve = resolveUncached
+	}
+	embedded, err := resolve(ctx, keys, func(ctx context.Context, missing []int) ([]embedding.Embedded, error) {
 		inputs := make([]modelservice.EmbedInput, len(missing))
 		for j, i := range missing {
 			inputs[j] = modelservice.EmbedInput{Text: texts[i]}
@@ -184,4 +218,14 @@ func (p *RemoteEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string
 		vectors[i] = embedded[i].Vector
 	}
 	return vectors, nil
+}
+
+// resolveUncached embeds every input with the caller's own call, sharing no
+// vector with another request.
+func resolveUncached(ctx context.Context, keys []embedding.VectorKey, embed func(context.Context, []int) ([]embedding.Embedded, error)) ([]embedding.Embedded, error) {
+	missing := make([]int, len(keys))
+	for i := range missing {
+		missing[i] = i
+	}
+	return embed(ctx, missing)
 }

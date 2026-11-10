@@ -139,6 +139,62 @@ func TestVLLMStreamErrorEventSurvivesEverySplit(t *testing.T) {
 	}
 }
 
+// The ExtProc handler takes a Chat client's error frame as the last frame of
+// the batch that decoded the failure. Pin that for Chat to Chat: in every
+// split, that batch ends on its one error frame and nothing is encoded after.
+func TestChatStreamFailureEndsItsBatch(t *testing.T) {
+	for _, body := range []string{vllmStreamGrammarError(t), vllmStreamMidError} {
+		for at := 1; at < len(body); at++ {
+			stream, err := NewBuiltinEngine().NewStreamWithMutation(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, llmprotocol.StreamContext{
+				Source: llmprotocol.OpenAIChatV1, Target: llmprotocol.OpenAIChatV1, PublicModel: "m",
+			}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			failed := false
+			check := func(frames [][]byte, events []llmprotocol.Event) {
+				t.Helper()
+				if failed && len(frames) > 0 {
+					t.Fatalf("split at byte %d: frames after the failure: %q", at, frames)
+				}
+				for _, event := range events {
+					if event.Type != llmprotocol.EventResponseFailed {
+						continue
+					}
+					failed = true
+					errorFrames := 0
+					for _, frame := range frames {
+						if _, object := decodeVLLMErrorFrame(t, frame); object["error"] != nil {
+							errorFrames++
+						}
+					}
+					if len(frames) == 0 || errorFrames != 1 {
+						t.Fatalf("split at byte %d: want one error frame in the failure's batch, got %d of %d: %q", at, errorFrames, len(frames), frames)
+					}
+					if _, object := decodeVLLMErrorFrame(t, frames[len(frames)-1]); object["error"] == nil {
+						t.Fatalf("split at byte %d: the failure's batch does not end on its error frame: %q", at, frames)
+					}
+				}
+			}
+			// As in vllmErrorStreamFrames, a push error (data after the
+			// failure) goes to Finalize; the push's frames still count.
+			var streamErr error
+			for _, chunk := range []string{body[:at], body[at:]} {
+				frames, events, _, pushErr := stream.Push([]byte(chunk))
+				check(frames, events)
+				if pushErr != nil {
+					streamErr = pushErr
+				}
+			}
+			frames, events, _, _ := stream.Finalize(streamErr)
+			check(frames, events)
+			if !failed {
+				t.Fatalf("split at byte %d: no failure event", at)
+			}
+		}
+	}
+}
+
 // Only the integral HTTP status is newly accepted. Every other code decodes
 // as before, on the stream event and on the buffered Chat error envelope.
 func TestChatErrorCodeShapes(t *testing.T) {

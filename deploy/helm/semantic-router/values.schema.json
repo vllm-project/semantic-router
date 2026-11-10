@@ -94,6 +94,44 @@
         }
       }
     },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "persistence": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "storageClassName": {
+              "type": "string"
+            },
+            "accessMode": {
+              "type": "string",
+              "enum": [
+                "ReadWriteOnce",
+                "ReadWriteOncePod",
+                "ReadWriteMany"
+              ]
+            },
+            "size": {
+              "type": "string"
+            },
+            "annotations": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "existingClaim": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
     "safetyGuards": {
       "type": "object",
       "additionalProperties": true,

@@ -4,7 +4,7 @@ import "testing"
 
 func TestSparseCustomModelCardCarriesNoDeclaredCapabilities(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: base-model
@@ -15,9 +15,8 @@ providers:
           provider: vllm
           endpoint: 127.0.0.1:8000
           weight: 1
-routing:
-  modelCards:
-    - name: base-model
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
@@ -29,7 +28,7 @@ routing:
 
 func TestOperatorModelCardCapabilitiesAreDeclared(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: base-model
@@ -40,10 +39,9 @@ providers:
           provider: vllm
           endpoint: 127.0.0.1:8000
           weight: 1
-routing:
-  modelCards:
-    - name: base-model
       capabilities: [chat, vision]
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
@@ -56,14 +54,15 @@ routing:
 
 func TestGemini31ProCatalogCardMaterializesItsLimits(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: gemini-pro
       catalog: google/gemini-3.1-pro
       backend_refs:
         - provider: gemini
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
