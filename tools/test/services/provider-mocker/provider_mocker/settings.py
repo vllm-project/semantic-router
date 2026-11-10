@@ -15,6 +15,9 @@ class Settings:
     shadow_control: bool = False
     expected_authorization: str | None = None
     fault_schedule: Any = None
+    # Lowercase header names an upstream must never receive; a request that
+    # carries one is answered 400 so a leak fails the test instead of passing.
+    forbidden_headers: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls):
@@ -27,6 +30,13 @@ class Settings:
             shadow_control=os.getenv("PROVIDER_MOCKER_SHADOW_CONTROL") == "true",
             expected_authorization=os.getenv("PROVIDER_MOCKER_EXPECT_AUTHORIZATION"),
             fault_schedule=os.getenv("PROVIDER_MOCKER_FAULT_SCHEDULE"),
+            forbidden_headers=tuple(
+                name.strip().lower()
+                for name in os.getenv("PROVIDER_MOCKER_FORBIDDEN_HEADERS", "").split(
+                    ","
+                )
+                if name.strip()
+            ),
         )
 
 

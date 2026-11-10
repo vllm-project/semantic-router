@@ -157,7 +157,7 @@ curl --fail --include http://127.0.0.1:8899/v1/chat/completions \
 
 ### Router 使用 CPU
 
-确认 `--platform cuda` 选择了 `vllm-sr-cuda` 镜像，并且未启用 `VLLM_SR_CUDA_PRESERVE_CPU`。检查生成的运行时配置和启动日志，而不仅仅是源配方。没有本地信号模型的配方没有什么可以移到 CUDA。
+确认 `--platform cuda` 选择了 `vllm-sr-cuda` 镜像。检查生成的运行时配置和启动日志，而不仅仅是源配方。没有本地信号模型的配方没有什么可以移到 CUDA。
 
 ### vLLM 或 Router 耗尽 GPU 内存
 

@@ -161,7 +161,6 @@ class ServeSessionMixin:
         *,
         env: dict[str, str] | None = None,
         endpoint: str = "host.docker.internal:8000",
-        base_url: str | None = None,
         provider: str | None = None,
         api_key_env: str | None = None,
         api_only: bool = False,
@@ -174,7 +173,6 @@ class ServeSessionMixin:
         """Start one background serve session and clean it up automatically."""
         self.write_minimal_canonical_config(
             endpoint=endpoint,
-            base_url=base_url,
             provider=provider,
             api_key_env=api_key_env,
             api_only=api_only,

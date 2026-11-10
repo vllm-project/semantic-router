@@ -1,32 +1,15 @@
 package dsl
 
-// signalCompilerByType dispatches SIGNAL declarations to per-type compilers.
+// signalCompilerByType dispatches the SIGNAL declarations of the types that
+// are not application signals to their compilers.
 // Table-driven compileSignals keeps funlen/cyclomatic pressure off the main loop.
 var signalCompilerByType = map[string]func(*Compiler, *SignalDecl){
 	"keyword":        (*Compiler).compileKeywordSignal,
-	"embedding":      (*Compiler).compileEmbeddingSignal,
-	"domain":         (*Compiler).compileDomainSignal,
-	"fact_check":     (*Compiler).compileFactCheckSignal,
-	"user_feedback":  (*Compiler).compileUserFeedbackSignal,
-	"reask":          (*Compiler).compileReaskSignal,
-	"preference":     (*Compiler).compilePreferenceSignal,
 	"language":       (*Compiler).compileLanguageSignal,
 	"context":        (*Compiler).compileContextSignal,
-	"structure":      (*Compiler).compileStructureSignal,
-	"complexity":     (*Compiler).compileComplexitySignal,
-	"modality":       (*Compiler).compileModalitySignal,
 	"authz":          (*Compiler).compileAuthzSignal,
-	"jailbreak":      (*Compiler).compileJailbreakSignal,
-	"safety":         (*Compiler).compileSafetySignal,
-	"hallucination":  (*Compiler).compileHallucinationSignal,
-	"pii":            (*Compiler).compilePIISignal,
-	"kb":             (*Compiler).compileKBSignal,
 	"conversation":   (*Compiler).compileConversationSignal,
-	"event":          (*Compiler).compileEventSignal,
 	"metadata":       (*Compiler).compileMetadataSignal,
-	"classifier":     (*Compiler).compileClassifierSignal,
 	"input_modality": (*Compiler).compileInputModalitySignal,
-	"decision":       (*Compiler).compileDecisionModelSignal,
-
-	"topic_continuity": (*Compiler).compileTopicContinuitySignal,
+	"systemone":      (*Compiler).compileSystemOneSignal,
 }

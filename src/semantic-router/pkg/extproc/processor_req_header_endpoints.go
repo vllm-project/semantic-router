@@ -164,6 +164,8 @@ func detectSourceFormat(path string, ctx *RequestContext) {
 		ctx.SourceFormat = llmprotocol.OpenAIResponsesV1
 	case isAzureResponsesCollection(path):
 		ctx.SourceFormat = llmprotocol.OpenAIResponsesV1
+	case normalizeRequestPath(path) == imagesGenerationsPath:
+		ctx.SourceFormat = llmprotocol.OpenAIImagesV1
 	default:
 		ctx.SourceFormat = llmprotocol.OpenAIChatV1
 	}

@@ -33,22 +33,23 @@ Use a decision when:
 
 ## Configuration
 
-In v0.3, decisions live under `routing.decisions`:
+In v0.3, decisions live under `recipes[].decisions`:
 
 ```yaml
-routing:
-  decisions:
-    - name: business_route
-      description: Route business requests to the business model.
-      priority: 110
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: business_route
+        description: Route business requests to the business model.
+        priority: 110
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
 ```
 
 Each `rules` node is either a leaf (`type` and `name`) or a combination
@@ -62,13 +63,15 @@ anywhere except a root `AND`, which is the explicit match-all form. Errors name
 the decision and the node path, for example
 `decision "billing": rules.conditions[1]: NOT requires exactly one child condition, got 2`.
 
-Classifier failures evaluate as `Unknown`, not `False`. `NOT Unknown` remains
+With `rules.on_unknown` set, a signal that failed or answered late evaluates
+as `Unknown`, not `False`. `NOT Unknown` remains
 `Unknown`; `False AND Unknown` is `False`, and `True OR Unknown` is `True`.
 When the final result is still unknown, `rules.on_unknown` chooses `no_match`,
-`match`, or `fail_request`. If omitted, existing generic-classifier
-`on_error` and prompt-guard `on_error` behavior is retained, and the router
-warns at startup about classifier conditions that set neither. Applied policies
-appear in the `x-vsr-applied-unknown-policy` response header and the
+`match`, or `fail_request`. If omitted, a failed signal's condition evaluates
+as `False`; a `systemone` condition can set its own `on_error` (`match` or
+`no_match`), and the router warns at startup about a `systemone` condition
+when neither is set. Applied policies
+appear in the `on_unknown` member of `x-vsr-trace` and the
 `llm_decision_unknown_total{decision, policy}` metric. The `fail_request` 503
 carries the code [`decision_unresolved`](../../api/router.md#routing-errors),
 and the Router's log line for it names the fix.
@@ -100,10 +103,10 @@ true becomes a candidate, and ranking then picks one of them.
 `decision.tier` is the hard precedence boundary: a lower tier wins, and a
 decision that omits `tier` is tier 0, so it ranks ahead of every decision that
 sets one. Tier is compared first whenever one matched decision carries a tier
-above 0. `routing.strategy` then decides how the decisions inside that tier are
+above 0. `recipes[].strategy` then decides how the decisions inside that tier are
 ordered, and it means the same thing where no decision sets a tier at all.
 
-| `routing.strategy` | Keys, in order |
+| `recipes[].strategy` | Keys, in order |
 | --- | --- |
 | `priority` (the default) | tier ascending, catch-all last, priority descending, confidence descending, name ascending |
 | `confidence` | tier ascending, catch-all last, confidence descending, priority descending, name ascending |

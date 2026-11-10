@@ -56,7 +56,7 @@ func TestDoDefaultRouteRewritesPathAndAddsRouteHeaders(t *testing.T) {
 		got <- seen{
 			uri: r.RequestURI, host: r.Host, tenant: r.Header.Get("X-Tenant"),
 			userAgent: r.Header.Get("User-Agent"), encoding: r.Header.Get("Accept-Encoding"),
-			looper: r.Header.Get("X-Vsr-Looper-Request"),
+			looper: r.Header.Get("X-Vsr-Internal-Auth"),
 		}
 	})
 	ep := endpointOf(t, "e", server)
@@ -68,7 +68,7 @@ func TestDoDefaultRouteRewritesPathAndAddsRouteHeaders(t *testing.T) {
 
 	for _, key := range []string{"", "unknown-model"} {
 		req := post(key)
-		req.Header.Set("X-Vsr-Looper-Request", "true")
+		req.Header.Set("X-Vsr-Internal-Auth", "forged")
 		resp, err := set.Do(t.Context(), req)
 		if err != nil {
 			t.Fatal(err)

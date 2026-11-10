@@ -56,7 +56,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine --platform cpu
 
 配方插件在各自的请求、执行或响应钩子上运行，并不是全部排在选模后的最后一步。依赖模型的任务通过自己的 binding 解析部署，与它们帮助选择的 Chat 后端分离。策略编写见[路由流水线](signal-driven-decisions)。
 
-Chat Completions、Responses 和 Messages 使用协议 codec；System One 有独立的类型化请求 handler。具体原生模型 ID 直接调用模型，不执行配方；显式发布的原生入口则进入其 System One 配方。具体 Chat 后端 ID 也会绕过配方信号、决策和插件。原生配方支持的信号和算法范围比 Chat 配方更窄，见[级联指南（英文）](https://vllm-sr.ai/docs/tutorials/algorithm/native/cascade)。
+Chat Completions、Responses 和 Messages 使用协议 codec；System One 有独立的类型化请求 handler。具体原生模型 ID 直接调用模型，不执行配方；显式发布的原生入口则进入其 System One 配方。具体 Chat 后端 ID 也会绕过配方信号、决策和插件。原生配方支持的信号和算法范围比 Chat 配方更窄，见[escalate 指南](../tutorials/algorithm/looper/escalate.md#on-system-one)。
 
 ### 区分公共 API 与 worker API {#keep-public-and-worker-apis-distinct}
 
@@ -94,7 +94,7 @@ flowchart LR
     Request["System One 请求"] --> Frontend["Frontend codec + listener 授权"]
     Frontend -->|"具体模型"| Backends
     Frontend -->|"原生入口"| Recipe["配方：signals → decision"]
-    Recipe --> Algorithm["有界级联"]
+    Recipe --> Algorithm["有界 escalate 阶段"]
     Algorithm --> Backends
     subgraph Backends["显式声明的模型后端"]
         Local["本地模型运行时"]
@@ -108,15 +108,15 @@ flowchart LR
     Evidence -->|"接受"| Result["原生响应"]
 ```
 
-显式声明的 `api: systemone` 入口选择独立的原生配方。配方的信号和决策选择实验性的
-`cascade` 算法。每个级联保持 Choice / Score / Noul 问题包完整，在自己的 deadline
-和调用次数预算内访问已声明的判断模型后端。信号先于算法执行，使用自己的超时和
-请求取消机制，不消耗随后选中算法的预算。后端可以是本地 deployment、独立的
+显式声明的 `api: systemone` 入口选择独立的原生配方。配方的信号和决策选择
+`escalate` 算法，其 `escalate.stages` 保持 Choice / Score / Noul 问题包完整，并调用
+已声明的判断模型后端。信号和选中的 escalate 共享同一个请求 deadline 和物理调用账本；
+选中决策的预算会收紧这两个上限，信号各自的超时仍是上限。后端可以是本地 deployment、独立的
 vLLM-SR Engine 服务，或兼容的外部 System One API。
 
-配方负责选模型；每个 deployment 再选择自己的副本。级联先运行快速阶段，只有
+配方负责选模型；每个 deployment 再选择自己的副本。escalate 先运行快速阶段，只有
 接受条件不满足时才继续。可选的 LLM judge 可以选择完整的已有候选或弃权，不能
-制造原生概率。完整配置见 [System One 级联（英文）](https://vllm-sr.ai/docs/tutorials/algorithm/native/cascade)。
+制造原生概率。完整配置见 [System One 上的 escalate](../tutorials/algorithm/looper/escalate.md#on-system-one)。
 
 原生模型发现区分具体模型（`routing: false`）和已发布的原生配方
 （`routing: true`），两者都需要 listener 显式授权。默认 Chat 入口

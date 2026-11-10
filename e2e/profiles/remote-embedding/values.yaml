@@ -1,5 +1,5 @@
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -12,51 +12,76 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    modelCards:
-      - name: base-model
-    signals:
-      embeddings:
-        - name: billing_support
-          threshold: 0.9
-          aggregation_method: max
-          candidates:
-            - billing invoice payment subscription refund pricing credit card account balance
-    decisions:
-      - name: billing-route
-        description: Route billing requests using the remote embedding signal
-        priority: 200
-        rules:
-          operator: AND
-          conditions:
-            - type: embedding
-              name: billing_support
-        modelRefs:
-          - model: base-model
-            use_reasoning: false
-      - name: default-route
-        description: Fallback when the remote embedding signal does not match
-        priority: 10
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: base-model
-            use_reasoning: false
+  recipes:
+    - name: default
+      signals:
+        systemone:
+          - name: billing_support
+            deployment: fake-systemone
+            question:
+              type: noul
+              instructions: 'Is the request about any of these: billing invoice payment subscription refund pricing credit card account balance?'
+      decisions:
+        - name: billing-route
+          description: Route billing requests the billing_support rule matches
+          priority: 200
+          rules:
+            operator: AND
+            conditions:
+              - type: systemone
+                name: billing_support
+          modelRefs:
+            - model: base-model
+              use_reasoning: false
+          plugins:
+            # Reuses a billing answer for a paraphrase: recall embeds the request
+            # with the remote embedding deployment, and the same_request judge on
+            # the System One fixture confirms the candidate.
+            - type: response_cache
+              configuration:
+                enabled: true
+                # The e2e requests carry no user identity to partition by.
+                scope: global
+                semantic:
+                  match:
+                    recall: {top_k: 1, min_similarity: 0.9}
+                    judge: {preset: same_request, deployment: fake-systemone, min_score: 0.5, on_error: fail}
+        - name: default-route
+          description: Fallback when billing_support does not match
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: base-model
+              use_reasoning: false
   global:
     router:
       strategy: priority
     services:
       response_api:
         enabled: false
-      router_replay:
-        enabled: false
     stores:
+      # The semantic response cache is the recall consumer that prepares the
+      # remote embedding deployment.
       response_cache:
-        enabled: false
+        backend_type: memory
+        embedding: {deployment: remote-embedding}
+        max_entries: 100
+        ttl_seconds: 3600
+        eviction_policy: fifo
     model_catalog:
-      kbs: []
       deployments:
+        # provider-mocker's System One fixture answers billing_support, so the
+        # routing cases are pinned by their markers
+        # (tools/test/services/provider-mocker/README.md).
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
+          timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
         remote-embedding:
           provider: openai_embeddings
           endpoint: http://mock-embedding.default.svc.cluster.local:8000/v1
@@ -68,31 +93,7 @@ config:
           capabilities:
             dimensions: 4
       embeddings:
-        default: remote-embedding
-        semantic:
-          qwen3_model_path: ""
-          mmbert_model_path: ""
-          multimodal_model_path: ""
-          use_cpu: true
-          embedding_config:
-            preload_embeddings: false
-            target_dimension: 4
-            top_k: 1
-            min_score_threshold: 0.9
-      modules:
-        prompt_guard:
-          enabled: false
-          jailbreak_mapping_path: ""
-        classifier:
-          domain:
-            enabled: false
-            category_mapping_path: ""
-          pii:
-            enabled: false
-            pii_mapping_path: ""
-        feedback_detector:
-          enabled: false
-
+        default: {deployment: remote-embedding}
 extraEnv:
   - name: REMOTE_EMBEDDING_E2E_KEY
     value: e2e-embedding-key

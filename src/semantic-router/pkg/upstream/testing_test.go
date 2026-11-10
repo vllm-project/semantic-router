@@ -2,12 +2,17 @@ package upstream
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strconv"
+	"syscall"
 	"testing"
 )
 
@@ -75,16 +80,41 @@ func readAll(t *testing.T, resp *Response) (string, error) {
 	return string(data), err
 }
 
-// closedPort returns a loopback port with nothing listening on it.
+// closedPort returns a loopback port with nothing listening on it. The port
+// comes from outside the kernel's ephemeral range: a released ephemeral port
+// can be given to any other socket on the host, such as a test server's
+// listener in this or another test package, which then answers on it. The
+// check dials the port rather than listening on it, so it never accepts a
+// connection another test makes to its own closed port.
 func closedPort(t *testing.T) int {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	low, high := nonEphemeralPorts()
+	for range 100 {
+		port := low + rand.IntN(high-low+1)
+		conn, err := net.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+		if err == nil {
+			_ = conn.Close()
+			continue
+		}
+		if errors.Is(err, syscall.ECONNREFUSED) {
+			return port
+		}
 	}
-	port := listener.Addr().(*net.TCPAddr).Port
-	_ = listener.Close()
-	return port
+	t.Fatalf("no closed port between %d and %d", low, high)
+	return 0
+}
+
+// nonEphemeralPorts is a port range the kernel does not assign to sockets
+// on its own: above Linux's ip_local_port_range, or below the IANA dynamic
+// range that other systems assign from.
+func nonEphemeralPorts() (low, high int) {
+	if data, err := os.ReadFile("/proc/sys/net/ipv4/ip_local_port_range"); err == nil {
+		var first, last int
+		if _, err := fmt.Sscan(string(data), &first, &last); err == nil && last < 64536 {
+			return last + 1, 65535
+		}
+	}
+	return 32768, 49151
 }
 
 // awaitDisconnect blocks until the client goes away. The server only notices

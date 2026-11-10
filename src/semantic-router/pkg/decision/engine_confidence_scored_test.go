@@ -55,7 +55,7 @@ func confidenceScenarioSignals() *SignalMatches {
 // legal_specific is itself not comparable here, because its confidence would
 // be a mean over two evidence leaves, which moves as leaves are added.
 func TestTieredSelectionUnscoredPoolFallsBackToPriority(t *testing.T) {
-	engine := NewDecisionEngine(nil, nil, nil, confidenceScenarioDecisions(1), "priority")
+	engine := NewDecisionEngine(confidenceScenarioDecisions(1), "priority")
 
 	result, err := engine.EvaluateDecisionsWithSignals(confidenceScenarioSignals())
 	if err != nil {
@@ -78,7 +78,7 @@ func TestTieredSelectionUnscoredPoolFallsBackToPriority(t *testing.T) {
 // confidence inside the tier: the reported 0.95 beats the reported 0.86 even
 // though the higher priority sits on the other decision.
 func TestTieredSelectionSameKindPoolRanksByConfidence(t *testing.T) {
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{
+	engine := NewDecisionEngine([]config.Decision{
 		{Name: "legal_route", Tier: 1, Priority: 180, Rules: config.RuleNode{Type: "domain", Name: "law"}},
 		{Name: "health_route", Tier: 1, Priority: 60, Rules: config.RuleNode{Type: "domain", Name: "health"}},
 	}, "confidence")
@@ -98,34 +98,10 @@ func TestTieredSelectionSameKindPoolRanksByConfidence(t *testing.T) {
 	}
 }
 
-// A probability and a similarity are different quantities, so a pool holding
-// both ranks by priority even though every member reported a score.
-func TestPoolWithDifferentScoreKindsFallsBackToPriority(t *testing.T) {
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{
-		{Name: "domain_route", Tier: 1, Priority: 180, Rules: config.RuleNode{Type: "domain", Name: "law"}},
-		{Name: "embedding_route", Tier: 1, Priority: 60, Rules: config.RuleNode{Type: "embedding", Name: "legal_analysis"}},
-	}, "priority")
-
-	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
-		DomainRules:       []string{"law"},
-		EmbeddingRules:    []string{"legal_analysis"},
-		SignalConfidences: map[string]float64{"domain:law": 0.70, "embedding:legal_analysis": 0.99},
-	})
-	if err != nil {
-		t.Fatalf("EvaluateDecisionsWithSignals() error = %v", err)
-	}
-	if result == nil || result.Decision == nil {
-		t.Fatal("no decision matched")
-	}
-	if result.Decision.Name != "domain_route" {
-		t.Fatalf("winner = %s, want domain_route (priority decides across score kinds)", result.Decision.Name)
-	}
-}
-
 // Same decisions and signals without tiers under the default priority
 // strategy: priority is compared first, so legal_specific wins regardless.
 func TestPriorityStrategyWithoutTiersConsultsPriorityFirst(t *testing.T) {
-	engine := NewDecisionEngine(nil, nil, nil, confidenceScenarioDecisions(0), "priority")
+	engine := NewDecisionEngine(confidenceScenarioDecisions(0), "priority")
 
 	result, err := engine.EvaluateDecisionsWithSignals(confidenceScenarioSignals())
 	if err != nil {
@@ -144,7 +120,7 @@ func TestPriorityStrategyWithoutTiersConsultsPriorityFirst(t *testing.T) {
 // tier even when the pool is not confidence-comparable — the priority
 // fallback must not let a high-priority catch-all outrank real matches.
 func TestCatchAllStaysLastInUnscoredTierPool(t *testing.T) {
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{
+	engine := NewDecisionEngine([]config.Decision{
 		{
 			Name:     "keyword_route",
 			Tier:     1,
@@ -176,7 +152,7 @@ func TestCatchAllStaysLastInUnscoredTierPool(t *testing.T) {
 // An OR that matched only through an unscored branch makes the decision
 // unscored even when a scored branch exists but did not match.
 func TestORUnscoredWinnerPropagates(t *testing.T) {
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{
+	engine := NewDecisionEngine([]config.Decision{
 		{
 			Name:     "mixed_or",
 			Tier:     1,

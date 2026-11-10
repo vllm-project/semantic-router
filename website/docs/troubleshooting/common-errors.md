@@ -186,7 +186,6 @@ Milvus example:
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: milvus
       milvus:
         connection:
@@ -202,7 +201,6 @@ Qdrant example:
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: qdrant
       qdrant:
         host: qdrant
@@ -228,7 +226,6 @@ Redis and Valkey use `development.auto_create_index`; Milvus uses
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: redis
       redis:
         # Add the connection, index, and search settings from the runtime example.
@@ -243,29 +240,36 @@ separately and leave automatic creation disabled.
 
 ### Cache hits are unexpectedly rare
 
-First confirm that the decision enables the `response_cache` plugin and inspect
-`x-vsr-cache-hit` or replay diagnostics. If embeddings are healthy but near
-duplicates miss, test a lower similarity threshold on representative traffic:
+First confirm that a `response_cache` plugin is enabled for the request, in
+`global.plugins` or the decision's plugins, and inspect
+`x-vsr-response-path` (`cache` on a hit) or replay diagnostics. If embeddings are healthy but near
+duplicates miss, test a lower `min_similarity` on representative traffic:
 
 ```yaml
 global:
-  stores:
-    response_cache:
-      similarity_threshold: 0.75
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        semantic:
+          match:
+            recall: {top_k: 1, min_similarity: 0.75}
 ```
 
-A per-decision override belongs in the plugin configuration:
+A decision's own plugin overrides it for that decision:
 
 ```yaml
-routing:
-  decisions:
-    - name: cached-route
-      plugins:
-        - type: response_cache
-          configuration:
-            enabled: true
-            semantic:
-              similarity_threshold: 0.70
+recipes:
+  - name: default
+    decisions:
+      - name: cached-route
+        plugins:
+          - type: response_cache
+            configuration:
+              enabled: true
+              semantic:
+                match:
+                  recall: {top_k: 3, min_similarity: 0.70}
 ```
 
 Lower thresholds increase false-match risk. Evaluate answer equivalence before
@@ -299,26 +303,23 @@ and conversation chains on restart is acceptable.
 
 ## A PII route matches unexpectedly
 
-With debug logging enabled, a matched PII rule includes the denied entity
-types:
+Preview the request (`POST /api/v1/routing/preview?trace=true`), or send it
+with `x-vsr-debug: true` from a caller `global.router.headers.debug` allows:
+the `signals` member of `x-vsr-trace` names the `pii` rule that matched.
 
-```text
-[Signal Computation] PII rule "<name>" matched: denied_entities=[<types>]
-```
-
-If the type is allowed by policy, add it to that signal's allowlist. If the
-detector is producing low-confidence false positives, evaluate a higher
-threshold:
+If the label is allowed by policy, add it to the rule's `ignore_labels`. If the
+model produces low-confidence false positives, evaluate a higher `predicate`:
 
 ```yaml
-routing:
-  signals:
-    pii:
-      - name: pii-policy
-        threshold: 0.90
-        pii_types_allowed:
-          - GPE
-          - ORGANIZATION
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: pii-policy
+          predicate: {gte: 0.90}
+          ignore_labels:
+            - DATE_TIME
+            - LOCATION
 ```
 
 Changing a privacy threshold changes false-negative risk. Validate it against a
@@ -326,79 +327,23 @@ labeled dataset rather than a few hand-written prompts.
 
 ## A jailbreak route matches unexpectedly
 
-Contrastive classifier matches use a debug message beginning with:
+Use replay, a routing preview, or an `x-vsr-debug: true` request from a caller
+`global.router.headers.debug` allows to inspect the matched signals (the
+`signals` member of `x-vsr-trace`) and the selected decision.
 
-```text
-[Signal Computation] Contrastive jailbreak rule "<name>" matched
-```
-
-Other jailbreak classifiers do not emit that exact phrase. Use replay or an
-`x-vsr-debug: true` request to inspect matched signals and the selected
-decision.
-
-To reduce false positives, evaluate a higher threshold on the affected signal:
+To reduce false positives, evaluate a higher `predicate` on the affected rule:
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: jailbreak-standard
-        threshold: 0.85
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: jailbreak-standard
+          predicate: {gte: 0.95}
 ```
 
 If a route should not depend on jailbreak detection, remove that condition
-from the route. Disabling the classifier globally changes every decision that
-uses it.
-
-## MCP category classifier cannot start
-
-These errors identify an incomplete transport:
-
-```text
-command is required for stdio transport
-URL is required for HTTP transport
-```
-
-Use one transport and disable the local domain classifier when MCP should own
-category classification.
-
-Stdio example:
-
-```yaml
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          enabled: false
-        mcp:
-          enabled: true
-          transport_type: stdio
-          command: /app/bin/category-server
-          tool_name: classify_text
-```
-
-The executable and all arguments must exist inside the Router runtime.
-
-Streamable HTTP example:
-
-```yaml
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          enabled: false
-        mcp:
-          enabled: true
-          transport_type: streamable-http
-          url: http://mcp-server:8080/mcp
-          tool_name: classify_text
-```
-
-Test that URL from the Router network. If the server exposes another tool
-name, set `tool_name` exactly or omit it to allow discovery of a recognized
-classification tool.
+from the route. Changing the rule changes every decision that reads it.
 
 ## Provider backend has no address
 
@@ -435,7 +380,7 @@ same upstream path.
 
 See [Container connectivity](./container-connectivity) for end-to-end checks.
 
-## A classifier or embedding model cannot load
+## A decision or embedding model cannot load
 
 Every model runs in the [model runtime](../model-runtime/overview.md). When a
 model cannot load, its feature reports unknown results and the runtime records
@@ -469,22 +414,24 @@ publishes the required architecture or build and publish the image through
 your approved pipeline. Do not switch to an unpinned `latest` tag as a
 long-term immutability workaround.
 
-## Classification confidence is too low
+## Domain confidence is too low
 
-If requests frequently fall back after domain classification, confirm the
-loaded model and category mapping before changing the threshold. Then evaluate
-a lower value on labeled traffic:
+If requests frequently fall back after domain classification, confirm which
+model answers the `domains` rules before changing their `predicate`: a rule
+without one uses the answering model's calibrated threshold (0.41 on
+vela3-fast), or 0.5 with an `uncalibrated_preset` warning. Then evaluate a
+lower value on labeled traffic:
 
 ```yaml
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain:
-          threshold: 0.50
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: math
+          predicate: {gte: 0.30}
 ```
 
-Lowering the threshold may increase wrong-domain routes. Report per-category
+Lowering the predicate may increase wrong-domain routes. Report per-domain
 precision and recall at the chosen operating point.
 
 ## Diagnostic commands

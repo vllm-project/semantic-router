@@ -432,7 +432,7 @@ class Engine:
                     headers["Authorization"] = "Bearer " + key
                 url = target["preview_url"]
                 if target.get("config_hash"):
-                    headers["X-SR-Bench-Expected-Config-Hash"] = target["config_hash"]
+                    headers["X-VSR-Bench-Expected-Config-Hash"] = target["config_hash"]
                 payload = build_preview_request(
                     {
                         "messages": case["messages"],

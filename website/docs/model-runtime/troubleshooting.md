@@ -44,7 +44,7 @@ deployment in `model_deployments` with its state:
 curl -s localhost:8080/startup-status
 ```
 
-An offline attached runtime does not block custom `decision` questions from
+An offline attached runtime does not block custom `systemone` questions from
 being prepared. Those questions remain unavailable until current capability
 metadata is ready and compatible. Signals it answers as the decision model, or
 through a binding that selects a head, may still need metadata at startup. See
@@ -66,8 +66,9 @@ The model is probably not ready yet, or its answers arrive too late.
    means the answer came after the signal's `timeout_ms`; raise it, or use a
    smaller model or a GPU. `unavailable` means the runtime was not ready or
    not reachable. `overloaded` means its queue was full.
-3. Send the same text with debugging on and read the
-   `x-vsr-matched-*` headers:
+3. Send the same text with debugging on and read the `signals` member of
+   `x-vsr-trace`, which the Router sends only to a caller
+   `global.router.headers.debug` allows:
 
    ```bash
    curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
@@ -237,12 +238,12 @@ global:
           overflow: window
 ```
 
-For prompt guard and safety signals, if a native model rejects the length of
-one input, the router retries overlapping windows that cover the entire text,
-with bounded concurrency. It keeps the highest window risk and requires
-complete input coverage from each window. An unfinished scan stays unresolved;
-the scan budget and deadline still apply. Direct `/v1/decisions` calls retain
-the model's input limits.
+A safety question (jailbreak, safety, PII and hallucination, and a `systemone`
+rule with `coverage: full`) reads the whole input, up to the model's scan
+budget or the deployment's `input.max_tokens` with `overflow: window`. Content
+past it, or a scan that misses the signals' deadline, was not read, and a
+`jailbreak` or `pii` rule counts it as a match. Direct `/v1/decisions` calls
+retain the model's input limits.
 
 A Decision deployment with `max_model_len` fails a longer question with
 `max_length_exceeded`. Raise it up to the package's limit, or leave it out
@@ -251,18 +252,19 @@ A Decision deployment with `max_model_len` fails a longer question with
 A jailbreak or PII rule matches content its model did not read in full: an
 input over the model's `max_tokens` under `reject`, over its cap, truncated, or
 not scanned within the signals' deadline. The match reports the type
-`unscanned` and the reason (`input_limit`, `scan_budget` or `deadline`)
-whatever `on_error` says, so padding a prompt cannot carry an attack or
-personal data past the check. Set `on_unscanned: allow` on the module to let
-such content follow `on_error` instead. The other signals report the reason
-and follow their own `on_error`
-([Reference](model-runtime/reference.md#long-inputs)).
+`unscanned` and the reason (`input_limit`, `scan_budget` or `deadline`), so
+padding a prompt cannot carry an attack or personal data past the check. A
+`systemone` rule with `coverage: full` says what such content means with
+`on_unscanned`; the other signals report the reason and resolve as a failed
+signal ([Reference](model-runtime/reference.md#long-inputs)).
 
 ## A request waits on a slow model
 
 A model-runtime signal that has not answered by the signals' deadline resolves
 through its policy, so one slow model does not fail the whole request: a
-routing signal through `on_error`, a safety signal as unscanned. The deadline
+routing signal as a failed signal (`Unknown` under `rules.on_unknown`;
+otherwise no match, or a `systemone` condition's `on_error`), a safety signal
+as unscanned. The deadline
 is the request's less a tenth of the time left, or 45 s for a served request;
 set `global.model_catalog.signal_timeout_ms` to shorten it. On a CPU, Vela 2.0
 0.3B reads about 1,000 tokens a second on four cores, so a long request may

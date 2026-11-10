@@ -23,7 +23,7 @@ const (
 	ToolResultOptInPort      = "8899"
 )
 
-const toolResultLossWarning = "approximated;target format cannot represent tool-result failure status;tool_result.is_error"
+const toolResultLossWarning = `protocol;action=approximated;reason="target format cannot represent tool-result failure status";field="tool_result.is_error"`
 
 func init() {
 	pkgtestcases.Register("protocol-codec-tool-result-error-opt-in", pkgtestcases.TestCase{
@@ -88,8 +88,8 @@ func runToolResultErrorOptIn(ctx context.Context, session, provider *fixtures.Se
 			return fmt.Errorf("opted-in failed tool result was not dispatched (backend=%s stream=%t): status=%d body=%s",
 				backendFormat, stream, result.StatusCode, truncateString(string(result.Body), 500))
 		}
-		if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !strings.Contains(warnings, toolResultLossWarning) {
-			return fmt.Errorf("x-vsr-protocol-warnings = %q, want %q (backend=%s stream=%t)", warnings, toolResultLossWarning, backendFormat, stream)
+		if warnings := result.Headers.Get(warningsHeader); !strings.Contains(warnings, toolResultLossWarning) {
+			return fmt.Errorf("x-vsr-warnings = %q, want %q (backend=%s stream=%t)", warnings, toolResultLossWarning, backendFormat, stream)
 		}
 		raw, captureErr := lastProviderSimulatorRequest(ctx, provider, sessionID)
 		if captureErr != nil {

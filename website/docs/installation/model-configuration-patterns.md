@@ -17,8 +17,8 @@ are entries under `providers.models`.
 | Use a private model without Router-generated reasoning controls | Omit | Omit | Set when different from `name` | Set the Provider and endpoint. |
 | Use a private model with a known built-in family | Omit | `family: <built-in-id>` | Optional | Set a compatible Provider and endpoint. |
 | Use a private model with unique reasoning controls | Omit | Complete inline definition | Optional | Set a compatible Provider and endpoint. |
-| Add routing metadata to a private model | Omit | Optional | Optional | Add `routing.modelCards` under the alias. |
-| Add local metadata to a catalog model | Canonical Model Card ID | Omit; inherited | Provider-dependent | Add `routing.modelCards` under the catalog ID. |
+| Add routing metadata to a private model | Omit | Optional | Optional | Add `providers.models` under the alias. |
+| Add local metadata to a catalog model | Canonical Model Card ID | Omit; inherited | Provider-dependent | Add `providers.models` under the catalog ID. |
 | Load balance identical replicas | Either | Determined by model identity | One effective ID | Put homogeneous targets in one `backend_refs` list. |
 | Route across different Providers or protocols | Configure one Model per contract | Determined per Model | Determined per Provider | Use separate aliases in the same decision. |
 

@@ -3,7 +3,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from . import chat, classify, images, looper, messages, provider_boundary, responses
+from . import chat, images, looper, messages, provider_boundary, responses, systemone
 from .cache import SessionCacheTracker
 from .fault_schedule import FaultScheduleTracker
 from .provider_boundary import RequestStore
@@ -23,7 +23,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     instance.state.dispatch_counts = {}
     for router in (
         provider_boundary.router,
-        classify.router,
+        systemone.router,
         chat.router,
         responses.router,
         messages.router,
@@ -63,6 +63,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if request.method == "POST" and (
             request.url.path.startswith("/v1/") or settings.scenario == "cli"
         ):
+            leaked = [
+                name
+                for name in settings.forbidden_headers
+                if request.headers.get(name) is not None
+            ]
+            if leaked:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": {
+                            "type": "invalid_request_error",
+                            "message": "forbidden header received: "
+                            + ", ".join(leaked),
+                        }
+                    },
+                )
             expected = settings.expected_authorization
             if expected is not None:
                 if request.headers.get("Authorization", "") != f"Bearer {expected}":

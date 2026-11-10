@@ -191,7 +191,6 @@ func TestReMoMMultiRoundSynthesisPromptUsesObservedRatio(t *testing.T) {
 			CompactionTokens:             compactionTokens,
 			SynthesisTemplate:            "{{range .ReferenceResponses}}<ref>{{.Content}}</ref>{{end}}",
 			IncludeIntermediateResponses: true,
-			OnError:                      config.ReMoMOnErrorSkip,
 		}, false, []config.ModelRef{{Model: "model-a"}, {Model: "model-final"}}),
 	)
 	require.NoError(t, err)

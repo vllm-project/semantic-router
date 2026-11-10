@@ -22,7 +22,7 @@ import (
 // no module names a model of its own, so every signal asks hosted-d3. Math
 // that needs a tool goes to deep, anything else to fast.
 const moduleSystemOneConfig = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -36,26 +36,27 @@ providers:
       backend_refs: [{name: fast, endpoint: "BACKEND", protocol: http, weight: 1}]
     - name: deep
       backend_refs: [{name: deep, endpoint: "BACKEND", protocol: http, weight: 1}]
-routing:
-  signals:
-    domains: [{name: math, description: Math requests., mmlu_categories: [math]}]
-    jailbreak: [{name: attack, threshold: 0.75}]
-    decision:
-      - name: needs_tools
-        question: {type: noul, instructions: "Does the request need a tool?"}
-  decisions:
-    - name: attack
-      priority: 300
-      rules: {operator: AND, conditions: [{type: jailbreak, name: attack}]}
-      modelRefs: [{model: fast}]
-    - name: math
-      priority: 200
-      rules: {operator: AND, conditions: [{type: domain, name: math}, {type: decision, name: needs_tools}]}
-      modelRefs: [{model: deep}]
-    - name: everything-else
-      priority: 10
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: fast}]
+recipes:
+  - name: default
+    signals:
+      domains: [{name: math, description: Math requests., labels: [math]}]
+      jailbreak: [{name: attack, predicate: {gte: 0.75}}]
+      systemone:
+        - name: needs_tools
+          question: {type: noul, instructions: "Does the request need a tool?"}
+    decisions:
+      - name: attack
+        priority: 300
+        rules: {operator: AND, conditions: [{type: jailbreak, name: attack}]}
+        modelRefs: [{model: fast}]
+      - name: math
+        priority: 200
+        rules: {operator: AND, conditions: [{type: domain, name: math}, {type: systemone, name: needs_tools}]}
+        modelRefs: [{model: deep}]
+      - name: everything-else
+        priority: 10
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: fast}]
 global:
   model_catalog:
     deployments:
@@ -71,8 +72,9 @@ global:
 
 // moduleSystemOneAPI is hosted-d3's System One API. It lists the types
 // choice, noul, score and set (no span, no preset), chooses math, benign or
-// the first option of a choice question, answers a noul question 0.9, and
-// keeps the question IDs of each call.
+// the first option of a choice question, answers a noul question 0.9, of a
+// standard request or of each entry of a batch, refuses a body that mixes
+// the two, and keeps the question IDs of each call.
 type moduleSystemOneAPI struct {
 	mu    sync.Mutex
 	calls [][]string
@@ -93,6 +95,7 @@ func (a *moduleSystemOneAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		Model     string              `json:"model"`
+		State     json.RawMessage     `json:"state"`
 		Questions map[string]question `json:"questions"`
 		States    map[string]struct {
 			Questions map[string]question `json:"questions"`
@@ -100,6 +103,10 @@ func (a *moduleSystemOneAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if batch := body.States != nil; batch && (body.State != nil || body.Questions != nil) || !batch && body.State == nil {
+		http.Error(w, `{"error":{"code":"invalid_request"}}`, http.StatusBadRequest)
 		return
 	}
 	var ids []string
@@ -131,13 +138,15 @@ func (a *moduleSystemOneAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return map[string]any{"model": body.Model, "answers": answers, "usage": map[string]int{"input_tokens": 12}}
 	}
-	response := answer(body.Questions)
-	if len(body.States) > 0 {
+	var response map[string]any
+	if body.States == nil {
+		response = answer(body.Questions)
+	} else {
 		states := map[string]any{}
 		for name, state := range body.States {
 			states[name] = answer(state.Questions)
 		}
-		response["states"] = states
+		response = map[string]any{"model": body.Model, "states": states, "usage": map[string]int{"input_tokens": 12 * len(states)}}
 	}
 	slices.Sort(ids)
 	a.mu.Lock()
@@ -195,33 +204,12 @@ func TestBuiltInSignalsAskASystemOneDecisionModelInOneCallPerStage(t *testing.T)
 		t.Fatalf("math that needs a tool routes to deep, got %+v", plan.Call)
 	}
 	calls := api.answered()[prepared:]
-	want := []string{"domain_classifier:domain", "needs_tools", "prompt_guard:attack"}
+	want := []string{"preset:domain", "preset:jailbreak", "systemone:needs_tools"}
 	if len(calls) != 1 || !slices.Equal(calls[0], want) {
 		t.Fatalf("the request stage asked hosted-d3 %v, want one call with %v", calls, want)
 	}
 	if got := counterValue(t, "vsr_model_runtime_stage_decision_calls_total", map[string]string{"deployment": "hosted-d3", "round": "later"}) - later; got != 0 {
 		t.Fatalf("a stage made %v further calls to hosted-d3", got)
-	}
-}
-
-func TestPIIAnswersAsAVerdictWhenTheSystemOneDecisionModelHasNoSpans(t *testing.T) {
-	withPII := strings.Replace(moduleSystemOneConfig, "    jailbreak: [{name: attack, threshold: 0.75}]\n",
-		"    jailbreak: [{name: attack, threshold: 0.75}]\n    pii: [{name: personal, threshold: 0.5}]\n", 1)
-	withPII = strings.Replace(withPII, "conditions: [{type: jailbreak, name: attack}]", "conditions: [{type: jailbreak, name: attack}, {type: pii, name: personal}]", 1)
-	withPII = strings.Replace(withPII, "rules: {operator: AND, conditions: [{type: jailbreak", "rules: {operator: OR, conditions: [{type: jailbreak", 1)
-	cfg, _ := moduleSystemOneRouterConfig(t, withPII)
-	fallback := map[string]string{"signal": "pii_classifier", "deployment": "hosted-d3"}
-	fallbacks := counterValue(t, "vsr_signal_span_verdict_fallbacks_total", fallback)
-	newLooperRouter(t, cfg)
-	if got := counterValue(t, "vsr_signal_span_verdict_fallbacks_total", fallback) - fallbacks; got != 1 {
-		t.Fatalf("span verdict fallbacks %v, want the PII fallback reported once", got)
-	}
-
-	masked := strings.Replace(withPII, "      modelRefs: [{model: deep}]\n",
-		"      modelRefs: [{model: deep}]\n      plugins:\n        - type: masking\n          configuration: {enabled: true, threshold: 0.5}\n", 1)
-	cfg, _ = moduleSystemOneRouterConfig(t, masked)
-	if _, err := buildOpenAIRouterFromConfig(cfg); err == nil || !strings.Contains(err.Error(), "masking replaces PII at the positions") {
-		t.Fatalf("masking with a PII verdict: %v, want the configuration refused at load", err)
 	}
 }
 

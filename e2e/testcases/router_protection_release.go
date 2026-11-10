@@ -123,8 +123,8 @@ func runProtectionExplicitRelease(ctx context.Context, public, management, token
 	if refused.SelectedModel != b {
 		return fmt.Errorf("refused release changed the held model: %+v", refused)
 	}
-	if warnings := headers.Get("x-vsr-protocol-warnings"); !strings.Contains(warnings, "release_interval") {
-		return fmt.Errorf("x-vsr-protocol-warnings %q lacks release_interval", warnings)
+	if warnings := headers.Get(warningsHeader); !strings.Contains(warnings, "release_interval") {
+		return fmt.Errorf("x-vsr-warnings %q lacks release_interval", warnings)
 	}
 	if rel := refused.Learning.Protection.Release; rel == nil || rel.Honored || rel.Reason != "release_interval" {
 		return fmt.Errorf("refused release replay = %+v", rel)
