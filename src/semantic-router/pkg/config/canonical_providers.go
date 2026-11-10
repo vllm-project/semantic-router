@@ -1,6 +1,9 @@
 package config
 
-import "reflect"
+import (
+	"reflect"
+	"strings"
+)
 
 // CanonicalProviders holds deployment bindings and provider defaults.
 type CanonicalProviders struct {
@@ -15,8 +18,10 @@ type CanonicalProviderDefaults struct {
 	DefaultReasoningEffort string `yaml:"reasoning_effort,omitempty"`
 }
 
-// CanonicalProviderModel binds a logical routing model to concrete access
-// details without mixing those access details into provider-wide defaults.
+// CanonicalProviderModel describes one model alias in one place: how requests
+// reach it (backend_refs, api_format, pricing, reliability, ...) and what it
+// is (its facts). The facts overlay the built-in catalog card named by
+// catalog, or describe a custom model.
 type CanonicalProviderModel struct {
 	Name             string                `yaml:"name"`
 	Catalog          string                `yaml:"catalog,omitempty"`
@@ -28,6 +33,18 @@ type CanonicalProviderModel struct {
 	Reliability      ProviderReliability   `yaml:"reliability,omitempty"`
 	APIFormat        string                `yaml:"api_format,omitempty"`
 	ExternalModelIDs map[string]string     `yaml:"external_model_ids,omitempty"`
+	ModelFacts       `yaml:",inline"`
+}
+
+// ModelFactFields are the keys of the facts a providers.models[] entry states.
+func ModelFactFields() []string {
+	facts := reflect.TypeOf(ModelFacts{})
+	fields := make([]string, 0, facts.NumField())
+	for i := range facts.NumField() {
+		name, _, _ := strings.Cut(facts.Field(i).Tag.Get("yaml"), ",")
+		fields = append(fields, name)
+	}
+	return fields
 }
 
 // CanonicalReasoning either references one built-in family or defines the
@@ -101,26 +118,15 @@ type CanonicalBackendRef struct {
 	Endpoint   string `yaml:"endpoint,omitempty"`
 	Protocol   string `yaml:"protocol,omitempty"`
 	Weight     int    `yaml:"weight,omitempty"`
-	BaseURL    string `yaml:"base_url,omitempty"`
 	Provider   string `yaml:"provider,omitempty"`
-	AuthHeader string `yaml:"auth_header,omitempty"`
-	// AuthPrefix is presence-aware so an explicit empty string can disable a
-	// catalog provider's default prefix (for example, a raw x-api-key value).
-	AuthPrefix   *string           `yaml:"auth_prefix,omitempty"`
-	ExtraHeaders map[string]string `yaml:"extra_headers,omitempty"`
-	APIVersion   string            `yaml:"api_version,omitempty"`
-	ChatPath     string            `yaml:"chat_path,omitempty"`
-	APIKey       string            `yaml:"api_key,omitempty"`
-	APIKeyEnv    string            `yaml:"api_key_env,omitempty"`
-	// TrustedGateway marks an upstream gateway that receives the request's
-	// deployment-injected gateway credential (global.services.authz
-	// .gateway_credential) under this backend's auth header, instead of a
-	// static api_key. A request without a trusted credential is rejected
-	// before dispatch.
-	TrustedGateway bool `yaml:"trusted_gateway,omitempty"`
+	APIVersion string `yaml:"api_version,omitempty"`
+	ChatPath   string `yaml:"chat_path,omitempty"`
+	APIKey     string `yaml:"api_key,omitempty"`
 	// Auth is the backend's credential, as in a deployment's connection
-	// block: the header (the provider's own when unset), the prefix ("" sends
-	// the bare key) and the key's environment variable.
+	// block: the credential mode (delegated sends the requesting user's
+	// credential instead of a key), the header (the provider's own when
+	// unset), the prefix ("" sends the bare key, presence-aware) and the
+	// key's environment variable.
 	Auth *DeploymentAuth `yaml:"auth,omitempty"`
 	// Headers are non-secret headers sent with every request.
 	Headers map[string]string `yaml:"headers,omitempty"`
@@ -128,8 +134,4 @@ type CanonicalBackendRef struct {
 
 func canonicalProviderDefaults(providers CanonicalProviders) CanonicalProviderDefaults {
 	return providers.Defaults
-}
-
-func canonicalBackendRefs(model CanonicalProviderModel) []CanonicalBackendRef {
-	return model.BackendRefs
 }

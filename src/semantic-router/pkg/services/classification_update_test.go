@@ -2,20 +2,11 @@ package services
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"net"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
 func TestClassificationServiceRefreshRuntimeConfigRefreshesClassifierConfig(t *testing.T) {
@@ -135,102 +126,6 @@ func TestClassificationServiceConcurrentClassifyAndRefresh(t *testing.T) {
 	wg.Wait()
 }
 
-func TestUpdateConfigDoesNotWaitForRemoteClassification(t *testing.T) {
-	previousGlobal := config.Get()
-	t.Cleanup(func() {
-		if previousGlobal != nil {
-			config.Replace(previousGlobal)
-			return
-		}
-		config.Replace(&config.RouterConfig{})
-	})
-	started := make(chan struct{})
-	release := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(
-		func(w http.ResponseWriter, _ *http.Request) {
-			close(started)
-			<-release
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprint(w, `{
-				"id":"classification",
-				"choices":[{
-					"message":{
-						"content":"{\"scores\":{\"SAFE\":0.1,\"RISKY\":0.9},\"rationale\":\"test\"}"
-					}
-				}]
-			}`)
-		},
-	))
-	defer server.Close()
-	host, portString, err := net.SplitHostPort(
-		strings.TrimPrefix(server.URL, "http://"),
-	)
-	if err != nil {
-		t.Fatalf("split server address: %v", err)
-	}
-	var port int
-	if _, scanErr := fmt.Sscanf(portString, "%d", &port); scanErr != nil {
-		t.Fatalf("parse server port: %v", scanErr)
-	}
-	threshold := 0.5
-	cfg := &config.RouterConfig{
-		ExternalModels: []config.ExternalModelConfig{{
-			Name:      "judge",
-			ModelRole: config.ModelRoleClassification,
-			ModelName: "judge",
-			ModelEndpoint: config.ClassifierVLLMEndpoint{
-				Address: host, Port: port, Protocol: "http",
-			},
-			TimeoutSeconds: 5,
-		}},
-		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{ClassifierRules: []config.ClassifierSignalRule{{
-				Name: "risk", Type: "llm", Model: "judge",
-				Labels: []string{"SAFE", "RISKY"}, Instructions: "Classify.",
-			}}},
-			Decisions: []config.Decision{{
-				Name: "risk-route",
-				Rules: config.RuleNode{
-					Type: "classifier", Name: "risk", Label: "RISKY",
-					Predicate: &config.NumericPredicate{GTE: &threshold},
-				},
-			}},
-		},
-	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
-	if err != nil {
-		t.Fatalf("new classifier: %v", err)
-	}
-	service := NewClassificationService(classifier, cfg)
-	classifyDone := make(chan struct{})
-	go func() {
-		defer close(classifyDone)
-		_, _ = service.ClassifyIntent(context.Background(), IntentRequest{Text: "classify me"})
-	}()
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("remote classifier did not start")
-	}
-
-	updateDone := make(chan struct{})
-	go func() {
-		service.UpdateConfig(&config.RouterConfig{})
-		close(updateDone)
-	}()
-	select {
-	case <-updateDone:
-	case <-time.After(250 * time.Millisecond):
-		t.Fatal("config update waited for remote classification")
-	}
-	close(release)
-	select {
-	case <-classifyDone:
-	case <-time.After(time.Second):
-		t.Fatal("classification did not complete")
-	}
-}
-
 func replaceGlobalConfigForServiceTest(newCfg *config.RouterConfig) func() {
 	previous := config.Get()
 	config.Replace(newCfg)
@@ -240,96 +135,5 @@ func replaceGlobalConfigForServiceTest(newCfg *config.RouterConfig) func() {
 			return
 		}
 		config.Replace(&config.RouterConfig{})
-	}
-}
-
-type serviceTestOwner struct {
-	closed atomic.Int32
-	close  func() error
-}
-
-func (o *serviceTestOwner) Close() error {
-	o.closed.Add(1)
-	return o.close()
-}
-
-func TestStandaloneRefreshDrainsRealCallAndReleasesOnlyOwnedRuntime(t *testing.T) {
-	started, release := make(chan struct{}), make(chan struct{})
-	var releaseOnce sync.Once
-	unblock := func() { releaseOnce.Do(func() { close(release) }) }
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		close(started)
-		<-release
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprint(w, `{"choices":[{"message":{"content":"{\"scores\":{\"SAFE\":0.1,\"RISKY\":0.9},\"rationale\":\"test\"}"}}]}`)
-	}))
-	defer func() { unblock(); server.Close() }()
-	host, portString, err := net.SplitHostPort(strings.TrimPrefix(server.URL, "http://"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var port int
-	if _, scanErr := fmt.Sscanf(portString, "%d", &port); scanErr != nil {
-		t.Fatal(scanErr)
-	}
-	threshold := 0.5
-	cfg := &config.RouterConfig{
-		ExternalModels: []config.ExternalModelConfig{{Name: "judge", ModelRole: config.ModelRoleClassification, ModelName: "judge", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: host, Port: port, Protocol: "http"}, TimeoutSeconds: 5}},
-		IntelligentRouting: config.IntelligentRouting{
-			Signals:   config.Signals{ClassifierRules: []config.ClassifierSignalRule{{Name: "risk", Type: "llm", Model: "judge", Labels: []string{"SAFE", "RISKY"}, Instructions: "Classify."}}},
-			Decisions: []config.Decision{{Name: "old-risk-route", Rules: config.RuleNode{Type: "classifier", Name: "risk", Label: "RISKY", Predicate: &config.NumericPredicate{GTE: &threshold}}}},
-		},
-	}
-	classifier, err := classification.NewLegacyClassifierFromConfig(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	service := NewClassificationService(classifier, cfg)
-	owner := &serviceTestOwner{close: classifier.Close}
-	service.runtimeOwner = owner
-	service.unifiedClassifier = &classification.UnifiedClassifier{}
-	t.Cleanup(func() { _ = service.Close() })
-	callDone := make(chan error, 1)
-	go func() {
-		_, err := service.ClassifyIntent(context.Background(), IntentRequest{Text: "classify me"})
-		callDone <- err
-	}()
-	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("remote inference did not start")
-	}
-	refreshDone := make(chan error, 1)
-	go func() { refreshDone <- service.TryRefreshRuntimeConfig(&config.RouterConfig{}) }()
-	select {
-	case err := <-refreshDone:
-		t.Fatalf("refresh retired an active request: %v", err)
-	case <-time.After(25 * time.Millisecond):
-	}
-	if owner.closed.Load() != 0 {
-		t.Fatal("old classifier closed under its HTTP call")
-	}
-	unblock()
-	if err := <-callDone; err != nil {
-		t.Fatal(err)
-	}
-	if err := <-refreshDone; err != nil {
-		t.Fatal(err)
-	}
-	if owner.closed.Load() != 1 || service.unifiedClassifier != nil {
-		t.Fatal("refresh did not release old ownership and replace its unified view")
-	}
-	current := service.GetClassifier()
-	if err := service.TryRefreshRuntimeConfig(nil); err == nil || service.GetClassifier() != current {
-		t.Fatal("failed preparation replaced the usable snapshot")
-	}
-	if err := service.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := service.TryRefreshRuntimeConfig(cfg); !errors.Is(err, binding.ErrClosed) {
-		t.Fatalf("closed service accepted a new candidate: %v", err)
-	}
-	if owner.closed.Load() != 1 {
-		t.Fatal("retired classifier was closed twice")
 	}
 }

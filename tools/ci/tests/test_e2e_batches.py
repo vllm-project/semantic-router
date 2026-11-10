@@ -25,7 +25,7 @@ from execution_batches import e2e_batches, validate_execution_batch  # noqa: E40
 from execution_targets import observation_errors  # noqa: E402
 
 SHA = "a" * 40
-PROFILES = ("category-remote-backend", "complexity-remote-backend")
+PROFILES = ("masking", "pii-remote-backend")
 
 # Actual child processes exercise environment, report isolation and cleanup,
 # without requiring a Kubernetes daemon for the deterministic harness tests.
@@ -183,8 +183,8 @@ class E2EBatchTests(unittest.TestCase):
         self.assertEqual(result["after_retry_clusters"], [])
         self.assertEqual(result["after_retry_states"], [])
 
-    def test_model_profile_keeps_its_declared_runtime_and_full_baseline(self):
-        result = self.execute(profiles=("vela-omni",), full=True)
+    def test_full_plan_profile_keeps_its_runtime_and_full_baseline(self):
+        result = self.execute(profiles=("envoy-ai-gateway",), full=True)
         self.assertTrue(result["passed"])
         self.assertEqual(result["receipts"][0]["runtime"], "model-runtime")
         calls = [row for row in result["calls"] if row["kind"] == "profile"]

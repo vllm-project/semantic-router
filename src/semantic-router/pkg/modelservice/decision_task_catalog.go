@@ -1,6 +1,7 @@
 package modelservice
 
 import (
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -93,14 +94,9 @@ func ProjectTaskCatalog(cfg *config.RouterConfig, statuses []DeploymentStatus) T
 	for name, binding := range cfg.GlobalModelBindings {
 		response.GlobalBindings[name] = binding
 	}
-	for _, consumer := range taskConsumers(cfg) {
-		if consumer.name == "reask" {
-			// There is no default native binding: unbound reask uses cosine
-			// similarity, whose thresholds are not Noul probabilities.
-			continue
-		}
-		binding, _ := resolvedTaskBinding(cfg, consumer, response.DefaultDeployment)
-		response.DefaultBindings[consumer.name] = config.ModelBinding{Deployment: binding.Deployment, Contract: binding.Contract}
+	for _, signalType := range config.SharedAnswerSignalTypes {
+		name, _ := cfg.ApplicationTypeDeployment(signalType)
+		response.DefaultBindings[signalType] = config.ModelBinding{Deployment: name}
 	}
 	for name, resource := range cfg.ModelDeployments {
 		if _, exists := observed[name]; exists {
@@ -120,110 +116,68 @@ func ProjectTaskCatalog(cfg *config.RouterConfig, statuses []DeploymentStatus) T
 	if len(profiles) == 0 {
 		profiles = []config.RoutingRecipe{{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{Signals: cfg.Signals, ModelBindings: cfg.ModelBindings}}}
 	}
-	namedIndex := 0
 	for index := range profiles {
 		recipe := &profiles[index]
 		scoped := cfg
 		if len(cfg.Recipes) > 0 {
 			scoped = cfg.ConfigForRecipe(recipe)
 		}
-		path := []string{"routing", "model_bindings"}
-		if recipe.Name != config.DefaultRecipeName {
-			path = []string{"recipes", strconv.Itoa(namedIndex), "routing", "model_bindings"}
-			namedIndex++
-		}
-		for _, consumer := range taskConsumers(scoped) {
-			if !config.TaskConsumerInUse(scoped, recipe.Name, consumer.name) {
-				continue
-			}
-			binding, source := resolvedTaskBinding(scoped, consumer, response.DefaultDeployment)
-			status := observed[binding.Deployment]
-			model := taskCatalogModelName(status, cfg.ModelDeployments[binding.Deployment].Artifact)
+		path := []string{"recipes", strconv.Itoa(index), "model_bindings"}
+		// An application signal type the recipe asks is bound once, for
+		// the rules that name no deployment of their own.
+		for _, signalType := range applicationTypesInUse(scoped) {
+			authored, source := scoped.ApplicationTypeBinding(signalType)
+			name := authored.Deployment
+			status := observed[name]
 			response.Bindings = append(response.Bindings, TaskCatalogBinding{
-				TaskID: consumer.task, Consumer: consumer.name, Key: config.BindingKey(consumer.name), Recipe: string(recipe.Name),
-				Deployment: binding.Deployment, Model: model, Source: source, Ready: status.Ready, Editable: true,
-				Path: append(append([]string(nil), path...), consumer.name), Binding: binding,
+				TaskID: PresetTask(applicationTypePreset(scoped, signalType)), Consumer: signalType, Key: signalType, Recipe: string(recipe.Name),
+				Deployment: name, Model: taskCatalogModelName(status, cfg.ModelDeployments[name].Artifact), Source: source, Ready: status.Ready, Editable: true,
+				Path: append(append([]string(nil), path...), signalType), Binding: authored,
 			})
 		}
 		// A decision selector names its deployment in its algorithm block,
 		// which the decision's own editor writes.
 		for _, decision := range scoped.Decisions {
-			if decision.Algorithm == nil || decision.Algorithm.Decision == nil || !strings.EqualFold(strings.TrimSpace(decision.Algorithm.Type), config.DecisionAlgorithmDecision) {
+			if decision.Algorithm == nil || decision.Algorithm.SystemOne == nil || !strings.EqualFold(strings.TrimSpace(decision.Algorithm.Type), config.DecisionAlgorithmSystemOne) {
 				continue
 			}
-			name, source := scoped.DecisionSelectorDeployment(*decision.Algorithm.Decision), "rule"
-			if strings.TrimSpace(decision.Algorithm.Decision.Deployment) == "" {
+			name, source := scoped.SystemOneSelectorDeployment(*decision.Algorithm.SystemOne), "rule"
+			if strings.TrimSpace(decision.Algorithm.SystemOne.Deployment) == "" {
 				source = "default"
 			}
 			status := observed[name]
 			response.Bindings = append(response.Bindings, TaskCatalogBinding{
 				TaskID: "selector", Consumer: "selector." + decision.Name, Key: "selector." + decision.Name, Recipe: string(recipe.Name),
 				Deployment: name, Model: taskCatalogModelName(status, cfg.ModelDeployments[name].Artifact), Source: source, Ready: status.Ready,
-				Binding: config.ModelBinding{Deployment: name, Contract: config.DecisionTaskContract},
+				Binding: config.ModelBinding{Deployment: name},
 			})
 		}
 	}
 	return response
 }
 
-// resolvedTaskBinding is the deployment that answers a task consumer in a
-// scope, with its contract, and where the configuration chose it: the rule,
-// the recipe or global binding, the decision model (default) or a
-// pre-declared deployment (predeclared).
-func resolvedTaskBinding(scoped *config.RouterConfig, consumer taskConsumer, defaultDeployment string) (config.ModelBinding, string) {
-	name := consumer.name
-	// The complexity task stands for every complexity rule, which names its
-	// deployment itself; the rules a scope declares answer as its first.
-	if name == "complexity" && len(scoped.ComplexityRules) > 0 {
-		name = "complexity." + scoped.ComplexityRules[0].Name
-	}
-	resolved, ok, err := scoped.ResolveTask(name)
-	if err != nil {
-		// A binding the Router refuses is still the one the configuration
-		// writes, which the editor corrects.
-		for _, scope := range []struct {
-			bindings map[string]config.ModelBinding
-			source   string
-		}{{scoped.ModelBindings, "recipe"}, {scoped.GlobalModelBindings, "global"}} {
-			if binding, bound := scope.bindings[consumer.name]; bound {
-				return binding, scope.source
-			}
+// applicationTypesInUse are the application signal types a recipe asks.
+func applicationTypesInUse(scoped *config.RouterConfig) []string {
+	var types []string
+	for _, rule := range scoped.ApplicationRules() {
+		if slices.Contains(types, rule.Type) {
+			continue
+		}
+		if scoped.AsksApplicationRule(rule) {
+			types = append(types, rule.Type)
 		}
 	}
-	if err != nil || !ok {
-		binding := config.ModelBinding{Deployment: defaultDeployment, Contract: consumer.contract}
-		if judgmentTask(consumer.task) {
-			binding.Contract = config.DecisionTaskContract
-		}
-		return binding, "default"
-	}
-	binding := config.ImpliedBinding(name, resolved.Binding, resolved.Deployment)
-	binding.Deployment = resolved.Name
-	switch resolved.Source {
-	case config.ResolvedByRule:
-		return binding, "rule"
-	case config.ResolvedByRecipeBinding:
-		return binding, "recipe"
-	case config.ResolvedByGlobalBinding:
-		return binding, "global"
-	case config.ResolvedByDefault:
-		return binding, "predeclared"
-	}
-	binding.Contract = consumer.contract
-	if judgmentTask(consumer.task) {
-		binding.Contract = config.DecisionTaskContract
-	}
-	return binding, "default"
+	return types
 }
 
-// judgmentTask reports whether the decision model answers a task as a
-// native judgment rather than with its consumer's own contract.
-func judgmentTask(task string) bool {
-	switch task {
-	case "pii_presence", "hallucination", "preference", "reask", "complexity":
-		return true
+// applicationTypePreset is the preset a recipe's first rule of a type asks.
+func applicationTypePreset(scoped *config.RouterConfig, signalType string) string {
+	for _, rule := range scoped.ApplicationRules() {
+		if rule.Type == signalType {
+			return rule.Preset
+		}
 	}
-	return false
+	return ""
 }
 
 // Runtime card IDs address logical deployments or served aliases. Display the
@@ -255,31 +209,4 @@ func projectTaskModel(card ModelCard, definitions []TaskDefinition) TaskCatalogM
 		model.Tasks = append(model.Tasks, CapabilityForTask(definition, card))
 	}
 	return model
-}
-
-type taskConsumer struct{ task, name, contract string }
-
-func taskConsumers(cfg *config.RouterConfig) []taskConsumer {
-	consumers := []taskConsumer{
-		{"domain", "domain_classifier", config.RemoteClassifierContractLabelDistribution},
-		{"fact_check", "fact_check_classifier", config.RemoteClassifierContractLabelDistribution},
-		{"user_feedback", "feedback_detector", config.RemoteClassifierContractLabelDistribution},
-		{"modality", "modality_detector", config.RemoteClassifierContractLabelDistribution},
-		{"jailbreak", "prompt_guard", config.RemoteClassifierContractLabelDistribution},
-		{"pii_presence", "pii_classifier", config.RemoteClassifierContractTokenSpans},
-		{"hallucination", "hallucination_detector", config.RemoteClassifierContractTokenSpans},
-		{"preference", "preference", config.DecisionTaskContract},
-		{"reask", "reask", config.DecisionTaskContract},
-		{"complexity", "complexity", config.DecisionTaskContract},
-	}
-	for _, rule := range cfg.SafetyRules {
-		consumers = append(consumers, taskConsumer{"safety", "safety." + rule.Name, config.RemoteClassifierContractLabelDistribution})
-		if rule.Hazard != nil {
-			consumers = append(consumers, taskConsumer{"safety_categories", "safety." + rule.Name + ".hazard", config.RemoteClassifierContractLabelScores})
-		}
-	}
-	for _, rule := range cfg.ClassifierRules {
-		consumers = append(consumers, taskConsumer{"classifier", "classifier." + rule.Name, config.RemoteClassifierContractLabelDistribution})
-	}
-	return consumers
 }

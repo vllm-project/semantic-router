@@ -43,7 +43,6 @@ type FastExtractResult struct {
 	ToolDefinitionCount     int
 	AssistantToolCallCount  int
 	ToolResultCount         int
-	AssistantToolNames      []string
 	LastMessageRole         string
 	LastMessageToolResult   bool
 	LastUserAfterToolResult bool
@@ -214,9 +213,6 @@ func countAssistantToolCalls(msg gjson.Result, result *FastExtractResult) {
 	}
 	toolCalls.ForEach(func(_, toolCall gjson.Result) bool {
 		result.AssistantToolCallCount++
-		if name := toolCall.Get("function.name").String(); name != "" {
-			result.AssistantToolNames = append(result.AssistantToolNames, name)
-		}
 		return true
 	})
 }

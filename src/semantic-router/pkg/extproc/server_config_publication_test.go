@@ -28,7 +28,7 @@ func writeReloadTestDocument(t *testing.T, path, document string, cfg *config.Ro
 	cfg.DocumentHash = hex.EncodeToString(digest[:])
 }
 
-func TestFileReloadDoesNotPublishSupersededWarmup(t *testing.T) {
+func TestFileReloadDoesNotPublishSupersededCandidate(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
 		removeSource bool
@@ -54,7 +54,13 @@ func TestFileReloadDoesNotPublishSupersededWarmup(t *testing.T) {
 			ensureReloadConfigModels = func(*config.RouterConfig) error { return nil }
 			var candidateCloses atomic.Int32
 			closeFailure := errors.New("test resource close failed")
+			started, finish := make(chan struct{}), make(chan struct{})
+			var once sync.Once
+			releaseBuild := func() { once.Do(func() { close(finish) }) }
+			t.Cleanup(releaseBuild)
 			buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
+				close(started)
+				<-finish
 				resources := newResourceScope()
 				resources.add(func() error {
 					candidateCloses.Add(1)
@@ -65,21 +71,12 @@ func TestFileReloadDoesNotPublishSupersededWarmup(t *testing.T) {
 				})
 				return &OpenAIRouter{Config: cfg, resources: resources}, nil
 			}
-			started, finish := make(chan struct{}), make(chan struct{})
-			var once sync.Once
-			releaseWarmup := func() { once.Do(func() { close(finish) }) }
-			t.Cleanup(releaseWarmup)
-			warmupReloadRouter = func(*OpenAIRouter) error {
-				close(started)
-				<-finish
-				return nil
-			}
 			result := make(chan error, 1)
 			go func() { result <- server.reloadRouterFromFile(path) }()
 			select {
 			case <-started:
 			case <-time.After(5 * time.Second):
-				t.Fatal("candidate warmup did not start")
+				t.Fatal("candidate build did not start")
 			}
 			// This is the same per-Router transaction used by API persistence.
 			// It must remain available while an older generation is warming.
@@ -92,7 +89,7 @@ func TestFileReloadDoesNotPublishSupersededWarmup(t *testing.T) {
 				writeReloadTestDocument(t, path, "A", active)
 			}
 			release()
-			releaseWarmup()
+			releaseBuild()
 			select {
 			case err := <-result:
 				if err == nil || (!tc.removeSource && !tc.closeFails && !errors.Is(err, errConfigReloadSuperseded)) {
@@ -105,7 +102,7 @@ func TestFileReloadDoesNotPublishSupersededWarmup(t *testing.T) {
 				t.Fatal("superseded reload did not finish")
 			}
 			if registry.CurrentConfig() != active || server.service.GetRouter() != previous {
-				t.Fatal("old warmup replaced the active A generation")
+				t.Fatal("old candidate replaced the active A generation")
 			}
 			if got := candidateCloses.Load(); got != 1 {
 				t.Fatalf("superseded candidate close count = %d, want 1", got)

@@ -324,12 +324,6 @@ func rawToProjectionScore(r *rawProjectionDecl) *ProjectionScoreDecl {
 			if signalName, ok := getStringField(ov.Fields, "name"); ok {
 				input.SignalName = signalName
 			}
-			if kb, ok := getStringField(ov.Fields, "kb"); ok {
-				input.KB = kb
-			}
-			if metric, ok := getStringField(ov.Fields, "metric"); ok {
-				input.Metric = metric
-			}
 			if weight, ok := getFloat64Field(ov.Fields, "weight"); ok {
 				input.Weight = weight
 			}
@@ -462,8 +456,10 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 			}
 		case item.CandidateFor != nil:
 			route.CandidateIterations = append(route.CandidateIterations, rawToCandidateIteration(item.CandidateFor))
-		case item.Emit != nil:
-			route.Emits = append(route.Emits, rawToEmitDecl(item.Emit))
+		case item.Retention != nil:
+			route.Retention = rawToRetentionDecl(item.Retention)
+		case item.Output != nil:
+			route.Output = rawToOutputDecl(item.Output)
 		}
 	}
 
@@ -502,16 +498,12 @@ func rawToPluginRef(r *rawPluginRef) *PluginRef {
 // underscore form. Only known inline types are normalized; template names pass
 // through unchanged so "PLUGIN my-template system_prompt {}" keeps its name.
 var knownInlinePluginAliases = map[string]string{
-	"semantic-cache":      "response_cache",
-	"response-cache":      "response_cache",
-	"context-compression": "context_compression",
-	"system-prompt":       "system_prompt",
-	"header-mutation":     "header_mutation",
-	"router-replay":       "router_replay",
-	"shadow-dispatch":     "shadow_dispatch",
-	"fast-response":       "fast_response",
-	"request-params":      "request_params",
-	"response-jailbreak":  "response_jailbreak",
+	"response-cache":  "response_cache",
+	"system-prompt":   "system_prompt",
+	"header-mutation": "header_mutation",
+	"router-replay":   "router_replay",
+	"fast-response":   "fast_response",
+	"request-params":  "request_params",
 }
 
 // normalizePluginName converts known hyphenated plugin type aliases to their

@@ -80,10 +80,6 @@ func applyEffectiveModelRegistry(
 
 func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityIndex, reasoningEffort string) ModelParams {
 	card := model.Card.Card
-	modality := model.Card.RuntimeModality
-	if modality == "" {
-		modality = runtimeModalityFromCard(card)
-	}
 	indexResults := model.Indices
 	if effortResults, ok := model.IndicesByEffort[reasoningEffort]; ok {
 		indexResults = effortResults
@@ -98,7 +94,7 @@ func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityInd
 		LoRAs:                loraAdaptersFromEffectiveCard(model.Card),
 		Tags:                 append([]string(nil), card.Tags...),
 		ReasoningFamily:      card.ReasoningFamily,
-		Modality:             modality,
+		Modalities:           cloneModalities(card.Modalities),
 		IndexResults:         cloneCatalogIndexResults(indexResults),
 		IndexResultsByEffort: cloneCatalogIndexResultsByEffort(model.IndicesByEffort),
 		QualityIndex:         qualityIndex,
@@ -123,16 +119,11 @@ func declaredCardCapabilities(card modelcatalog.EffectiveModelCard) []string {
 	return append([]string(nil), card.Card.Capabilities...)
 }
 
-func runtimeModalityFromCard(card modelcatalog.ModelCard) string {
-	if stringSliceContains(card.Capabilities, "image_generation") {
-		return "diffusion"
+func cloneModalities(modalities modelcatalog.Modalities) modelcatalog.Modalities {
+	return modelcatalog.Modalities{
+		Input:  append([]string(nil), modalities.Input...),
+		Output: append([]string(nil), modalities.Output...),
 	}
-	for _, input := range card.Modalities.Input {
-		if input != "text" {
-			return "omni"
-		}
-	}
-	return "ar"
 }
 
 func appendEffectiveProviderBinding(
@@ -241,7 +232,7 @@ func appendMaterializedEndpoint(
 		modelAlias, provider.Instance.Name, endpointURL.name, bindingIndex, endpointIndex,
 	)
 	profile := materializedProviderProfile(effective, endpointURL.url)
-	if err := validateTrustedGatewayProfile(&profile); err != nil {
+	if err := validateDelegatedProfile(&profile); err != nil {
 		return fmt.Errorf("providers.models[%s].backend_refs[%d]: %w", modelAlias, bindingIndex, err)
 	}
 	cfg.ProviderProfiles[endpointName] = profile
@@ -258,10 +249,10 @@ func appendMaterializedEndpoint(
 	return nil
 }
 
-// validateTrustedGatewayProfile requires a trusted gateway to have a wire
+// validateDelegatedProfile requires a delegated backend to have a wire
 // header that can carry the request's credential.
-func validateTrustedGatewayProfile(profile *ProviderProfile) error {
-	if !profile.TrustedGateway {
+func validateDelegatedProfile(profile *ProviderProfile) error {
+	if !profile.Delegated() {
 		return nil
 	}
 	auth, err := profile.ResolveAuth()
@@ -270,7 +261,7 @@ func validateTrustedGatewayProfile(profile *ProviderProfile) error {
 	}
 	if auth.Strategy == "none" || strings.TrimSpace(auth.Header) == "" {
 		return fmt.Errorf(
-			"trusted_gateway needs an auth header to carry the gateway credential; provider %q sends none, set auth.header",
+			"auth.credential: delegated needs a header to carry the credential; provider %q sends none, set auth.header",
 			profile.Type,
 		)
 	}
@@ -303,7 +294,7 @@ func materializedProviderProfile(
 		APIVersion:         provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
 		AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,
 		ChatPath:       provider.Instance.ChatPath,
-		TrustedGateway: provider.Instance.TrustedGateway,
+		AuthCredential: provider.Instance.AuthCredential,
 	}
 }
 
@@ -419,6 +410,8 @@ func apiFormatForProtocol(protocol string) (string, error) {
 		return APIFormatResponses, nil
 	case "anthropic/messages@1":
 		return APIFormatAnthropic, nil
+	case "openai/images@1":
+		return APIFormatImages, nil
 	default:
 		return "", fmt.Errorf("protocol %q has no runtime codec", protocol)
 	}
@@ -512,7 +505,7 @@ func validateEffectiveLoRAReferences(cfg *RouterConfig) error {
 				}
 			}
 			if !found {
-				return fmt.Errorf("routing.decisions[%s].modelRefs[%s].lora_name %q is not declared by model card %q", decision.Name, ref.Model, ref.LoRAName, params.Catalog)
+				return fmt.Errorf("%s.lora_name %q is not declared by model card %q", cfg.ScopePath(fmt.Sprintf("decisions[%s].modelRefs[%s]", decision.Name, ref.Model)), ref.LoRAName, params.Catalog)
 			}
 		}
 	}

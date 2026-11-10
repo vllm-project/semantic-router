@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -21,6 +22,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
@@ -256,7 +258,12 @@ func (r *OpenAIRouter) applyDispatchDecision(
 	ctx *RequestContext,
 ) (bool, error) {
 	if dispatch.decisionName == "" {
-		return false, nil
+		// A Looper hop already carries its decision's prompt; a request that
+		// matched no decision, or names a concrete model, runs its defaults'.
+		if ctx.VSRSelectedDecision != nil || ctx.LooperRequest {
+			return false, nil
+		}
+		return r.addSemanticSystemPromptIfConfigured(request, "", dispatch.logicalModel, ctx)
 	}
 	changed := false
 	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
@@ -275,12 +282,14 @@ func (r *OpenAIRouter) applyDispatchRequestParams(
 	request *llmprotocol.Request,
 	ctx *RequestContext,
 ) (bool, error) {
-	if ctx.VSRSelectedDecision != nil && ctx.VSRSelectedDecision.GetRequestParamsConfig() != nil {
-		return r.applySemanticRequestParams(
-			ctx.VSRSelectedDecision, request, ctx.Routing.RecipeName(),
-		)
+	decisionName := ""
+	if ctx.VSRSelectedDecision != nil {
+		decisionName = ctx.VSRSelectedDecision.Name
 	}
-	return false, nil
+	return r.applySemanticRequestParams(
+		config.RequestParamsPluginOf(requestPlugins(r.Config, ctx)), request,
+		config.RoutingDecisionKey(ctx.Routing.RecipeName(), decisionName),
+	)
 }
 
 func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {
@@ -524,16 +533,20 @@ func (r *OpenAIRouter) appendProviderCredential(
 		})
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
-	// No upstream receives the authenticator's gateway credential header; a
-	// trusted gateway receives its value under the provider auth header.
-	state.removeHeaders = append(state.removeHeaders, r.gatewayCredentialHeadersForRemoval()...)
-	if state.profile != nil && state.profile.TrustedGateway {
-		return r.appendTrustedGatewayCredential(state, providerAuth, model, backendName, ctx)
+	// No upstream receives the authenticator's delegated credential header; a
+	// delegated backend receives its value under the provider auth header.
+	state.removeHeaders = append(state.removeHeaders, r.delegatedCredentialHeadersForRemoval()...)
+	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {
+		return refused
+	}
+	if state.profile.Delegated() {
+		return r.appendDelegatedCredential(state, providerAuth, model, backendName, ctx)
 	}
 	if providerAuth.Strategy == "none" {
 		if r.CredentialResolver != nil {
 			state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 		}
+		removeClientCredentials(state, providerAuth.Header, false)
 		return nil
 	}
 	if r.CredentialResolver == nil {
@@ -548,8 +561,10 @@ func (r *OpenAIRouter) appendProviderCredential(
 		return r.createErrorResponse(401, "Authentication failed. Check your API key configuration.")
 	}
 	if accessKey == "" {
+		removeClientCredentials(state, providerAuth.Header, false)
 		return nil
 	}
+	removeClientCredentials(state, providerAuth.Header, true)
 	value := accessKey
 	if providerAuth.Prefix != "" {
 		value = providerAuth.Prefix + " " + accessKey
@@ -558,11 +573,28 @@ func (r *OpenAIRouter) appendProviderCredential(
 	return nil
 }
 
-// appendTrustedGatewayCredential presents the request's trusted gateway
-// credential to a trusted gateway, replacing whatever the client sent under
-// the auth header. Static and per-user provider keys are not consulted: a
-// request without the credential fails before dispatch.
-func (r *OpenAIRouter) appendTrustedGatewayCredential(
+// removeClientCredentials keeps a client's own credentials from a provider the
+// Router configures: the request carries only what the upstream's auth sets,
+// under authHeader when sets is true.
+func removeClientCredentials(state *routeHeaderState, authHeader string, sets bool) {
+	names := headers.ProviderCredentials()
+	if header := strings.ToLower(strings.TrimSpace(authHeader)); header != "" && !slices.Contains(names, header) {
+		names = append(names, header)
+	}
+	for _, name := range names {
+		if (sets && strings.EqualFold(name, authHeader)) || slices.Contains(state.removeHeaders, name) {
+			continue
+		}
+		state.removeHeaders = append(state.removeHeaders, name)
+	}
+}
+
+// appendDelegatedCredential presents the request's delegated credential to a
+// delegated backend, replacing whatever the client sent under the auth
+// header. Static and per-user provider keys are not consulted: a request
+// without the credential fails before dispatch. The credential is the call's
+// principal's, so a Looper hop's refusal is its client request's too.
+func (r *OpenAIRouter) appendDelegatedCredential(
 	state *routeHeaderState,
 	providerAuth modelcatalog.ProviderAuth,
 	model string,
@@ -573,31 +605,27 @@ func (r *OpenAIRouter) appendTrustedGatewayCredential(
 		state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 	}
 	if providerAuth.Strategy == "none" || providerAuth.Header == "" {
-		logging.ComponentErrorEvent("extproc", "trusted_gateway_auth_header_missing", map[string]interface{}{
+		logging.ComponentErrorEvent("extproc", "delegated_auth_header_missing", map[string]interface{}{
 			"request_id": ctx.RequestID, "model": model, "backend": backendName,
 		})
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
-	credential, ok := trustedGatewayCredential(ctx)
-	if !ok {
-		logging.ComponentWarnEvent("extproc", "trusted_gateway_credential_missing", map[string]interface{}{
+	credential, err := principal.Delegated(ctx.TraceContext)
+	if err != nil {
+		logging.ComponentWarnEvent("extproc", "delegated_credential_missing", map[string]interface{}{
 			"request_id": ctx.RequestID, "model": model, "backend": backendName,
 		})
-		// The protocol contract replaces a bare 401 with a generic message;
-		// the typed error keeps the client-visible reason.
-		ctx.ImmediateProtocolError = llmprotocol.NewError(
-			llmprotocol.ErrorAuthentication, trustedGatewayCredentialCode, trustedGatewayCredentialMessage, nil,
-		)
-		return r.createErrorResponse(401, trustedGatewayCredentialMessage)
+		return r.delegatedCredentialMissing(ctx)
 	}
-	// The gateway receives the dedicated credential and no other: a client's
+	// The backend receives the delegated credential and no other: a client's
 	// own Authorization or key header does not travel beside it when the
-	// gateway authenticates on a different header.
+	// backend authenticates on a different header.
 	for _, name := range config.CredentialCarrierHeaders() {
 		if !strings.EqualFold(name, providerAuth.Header) {
 			state.removeHeaders = append(state.removeHeaders, name)
 		}
 	}
+	removeClientCredentials(state, providerAuth.Header, true)
 	value := credential
 	if providerAuth.Prefix != "" {
 		value = providerAuth.Prefix + " " + credential
@@ -643,7 +671,7 @@ func appendRoutingHeaders(headersOut *[]*core.HeaderValueOption, model string) {
 		return
 	}
 	*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
-		Key: headers.SelectedModel, RawValue: []byte(model),
+		Key: headers.VSRRouteModel, RawValue: []byte(model),
 	}})
 }
 
@@ -654,13 +682,15 @@ func appendContentLengthHeader(headersOut *[]*core.HeaderValueOption, bodyLength
 }
 
 func (r *OpenAIRouter) applyDecisionHeaderMutations(state *routeHeaderState, ctx *RequestContext) {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+	if ctx == nil {
 		return
 	}
-	setHeaders, removeHeaders := r.buildHeaderMutations(ctx.VSRSelectedDecision)
+	setHeaders, removeHeaders := r.buildHeaderMutations(ctx)
 	state.setHeaders = append(state.setHeaders, setHeaders...)
 	state.removeHeaders = append(state.removeHeaders, removeHeaders...)
-	r.runRequestExtensions(state, ctx)
+	if ctx.VSRSelectedDecision != nil {
+		r.runRequestExtensions(state, ctx)
+	}
 }
 
 func buildRequestBodyContinueResponse(

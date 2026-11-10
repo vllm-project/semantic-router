@@ -66,16 +66,6 @@ func registerDecisionPlugin(registry *extension.Registry[DecisionPluginType], sp
 // DecodeDecisionPluginAt decodes plugin's configuration into its type's
 // payload, applies the type's defaults and validates the result.
 func DecodeDecisionPluginAt(at PluginAt, plugin DecisionPlugin) (interface{}, error) {
-	// image_gen was removed when #3076 unified inference protocol translation:
-	// the router no longer executes image-generation backends. Route image
-	// generation through a vllm-omni modality route speaking the Responses-API
-	// hosted image_generation tool instead. See issue #3129.
-	if plugin.Type == "image_gen" {
-		return nil, fmt.Errorf(
-			"decision %q plugins[%d]: plugin %q is unsupported: the image_gen route plugin was removed; use the Responses-API hosted image_generation tool with a vllm-omni modality route",
-			at.Decision, at.Index, plugin.Type,
-		)
-	}
 	spec, ok := DecisionPlugins.Lookup(plugin.Type)
 	if !ok {
 		return nil, fmt.Errorf("decision %q plugins[%d]: unsupported plugin type %q", at.Decision, at.Index, plugin.Type)
@@ -134,24 +124,34 @@ func NewDecisionPluginType[P any](catalog DecisionPluginCatalogEntry, opts Plugi
 func builtinDecisionPlugins() []DecisionPluginType {
 	return []DecisionPluginType{
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginResponseCache, DisplayName: "Response Cache", Description: "Reuse exact or semantically compatible responses."}, PluginOptions[ResponseCachePluginConfig]{
-			Strict: true, Aliases: []string{DecisionPluginSemanticCache, "semantic_cache", "response-cache"},
+			Strict: true,
 			Validate: func(at PluginAt, p *ResponseCachePluginConfig) error {
 				return validateResponseCachePlugin(at.Decision, at.Index, at.Type, p)
 			},
 		}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginMemory, DisplayName: "Memory", Description: "Retrieve and store persistent conversation memory."}, PluginOptions[MemoryPluginConfig]{}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginSystemPrompt, DisplayName: "System Prompt", Description: "Insert or replace the system prompt."}, PluginOptions[SystemPromptPluginConfig]{}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginHeaderMutation, DisplayName: "Header Mutation", Description: "Add, update, or remove provider-bound headers."}, PluginOptions[HeaderMutationPluginConfig]{}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginHallucination, DisplayName: "Hallucination", Description: "Apply response hallucination handling."}, PluginOptions[HallucinationPluginConfig]{}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginRouterReplay, DisplayName: "Router Replay", Description: "Capture bounded request and response replay evidence."}, PluginOptions[RouterReplayPluginConfig]{}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginRAG, DisplayName: "RAG", Description: "Retrieve external context and inject it into the request."}, PluginOptions[RAGPluginConfig]{}),
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginContext, DisplayName: "Context", Description: "Retrieve documents and memories, compress the request within a budget and inject the context."}, PluginOptions[ContextPluginConfig]{Strict: true}),
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginSystemPrompt, DisplayName: "System Prompt", Description: "Insert or replace the system prompt."}, PluginOptions[SystemPromptPluginConfig]{
+			Validate: validateSystemPromptPlugin,
+		}),
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginHeaderMutation, DisplayName: "Header Mutation", Description: "Add, update, or remove provider-bound headers the Router does not own."}, PluginOptions[HeaderMutationPluginConfig]{}),
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginResponseGuard, DisplayName: "Response Guard", Description: "Block or annotate answers on the signals they are checked with."}, PluginOptions[ResponseGuardPluginConfig]{
+			Strict: true, Validate: validateResponseGuardPlugin,
+		}),
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginRouterReplay, DisplayName: "Router Replay", Description: "Capture bounded request and response replay evidence, and shadow a sampled copy to a secondary model."}, PluginOptions[RouterReplayPluginConfig]{
+			Strict: true,
+			Validate: func(at PluginAt, p *RouterReplayPluginConfig) error {
+				if err := p.Shadow.Validate(); err != nil {
+					return at.Errorf("shadow: %w", err)
+				}
+				return nil
+			},
+		}),
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginFastResponse, DisplayName: "Fast Response", Description: "Return a fixed response without calling an upstream model."}, PluginOptions[FastResponsePluginConfig]{
 			Validate: func(at PluginAt, p *FastResponsePluginConfig) error {
 				return validateFastResponsePlugin(at.Decision, at.Index, at.Type, p)
 			},
 		}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginTools, DisplayName: "Tools", Description: "Apply route-local tool filtering and selection."}, PluginOptions[ToolsPluginConfig]{}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginToolSelection, DisplayName: "Tool Selection", Description: "Add or filter tools using semantic retrieval."}, PluginOptions[ToolSelectionPluginConfig]{}),
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginTools, DisplayName: "Tools", Description: "Allow, block or remove the request's tools, then let the decision model filter or add the tools it needs."}, PluginOptions[ToolsPluginConfig]{Strict: true}),
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginRequestParams, DisplayName: "Request Parameters", Description: "Constrain or remove provider request parameters."}, PluginOptions[RequestParamsPluginConfig]{
 			Strict: true,
 			Validate: func(at PluginAt, p *RequestParamsPluginConfig) error {
@@ -161,35 +161,14 @@ func builtinDecisionPlugins() []DecisionPluginType {
 				return nil
 			},
 		}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginResponseJailbreak, DisplayName: "Response Jailbreak", Description: "Screen generated responses for jailbreak-like output."}, PluginOptions[ResponseJailbreakPluginConfig]{
-			Strict: true,
-			Validate: func(at PluginAt, p *ResponseJailbreakPluginConfig) error {
-				return validateResponseJailbreakPlugin(at.Decision, at.Index, at.Type, p)
-			},
-		}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginContextCompression, DisplayName: "Context Compression", Description: "Compress selected context before provider dispatch."}, PluginOptions[ContextCompressionPluginConfig]{
-			Strict: true,
-			Validate: func(at PluginAt, p *ContextCompressionPluginConfig) error {
-				return validateContextCompressionPlugin(at.Decision, at.Index, at.Type, p)
-			},
-		}),
 		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginPromptCache, DisplayName: "Prompt Cache", Description: "Add bounded Anthropic prompt-cache markers after route selection."}, PluginOptions[PromptCachePluginConfig]{
 			Strict: true,
 			Validate: func(at PluginAt, p *PromptCachePluginConfig) error {
 				return validatePromptCachePlugin(at.Decision, at.Index, at.Type, p)
 			},
 		}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginShadowDispatch, DisplayName: "Shadow Dispatch", Description: "Send a bounded asynchronous copy to a secondary model."}, PluginOptions[ShadowDispatchPluginConfig]{
-			Strict: true,
-			Validate: func(at PluginAt, p *ShadowDispatchPluginConfig) error {
-				return validateShadowDispatchPlugin(at.Decision, at.Index, at.Type, p)
-			},
-		}),
-		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginMasking, DisplayName: "Masking", Description: "Replace detected PII in the provider-bound request with placeholders."}, PluginOptions[MaskingPluginConfig]{
-			Strict: true,
-			Validate: func(at PluginAt, p *MaskingPluginConfig) error {
-				return validateMaskingPlugin(at.Decision, at.Index, at.Type, p)
-			},
+		NewDecisionPluginType(DecisionPluginCatalogEntry{Type: DecisionPluginMasking, DisplayName: "Masking", Description: "Replace the personal data a pii rule finds in the provider-bound request with placeholders."}, PluginOptions[MaskingPluginConfig]{
+			Strict: true, Validate: validateMaskingPlugin,
 		}),
 	}
 }

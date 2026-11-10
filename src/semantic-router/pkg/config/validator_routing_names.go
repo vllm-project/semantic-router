@@ -16,10 +16,10 @@ func validateRoutingLocalNames(cfg *RouterConfig) error {
 	if cfg.RoutingScope == "" {
 		return nil
 	}
-	if err := validateNamedRoutingCollections("routing.signals", canonicalSignalsFromSignals(cfg.Signals)); err != nil {
+	if err := validateNamedRoutingCollections("signals", canonicalSignalsFromSignals(cfg.Signals)); err != nil {
 		return err
 	}
-	if err := validateNamedRoutingCollections("routing.projections", cfg.Projections); err != nil {
+	if err := validateNamedRoutingCollections("projections", cfg.Projections); err != nil {
 		return err
 	}
 
@@ -27,7 +27,7 @@ func validateRoutingLocalNames(cfg *RouterConfig) error {
 	for i := range cfg.Decisions {
 		decisionNames = append(decisionNames, cfg.Decisions[i].Name)
 	}
-	return validateUniqueRoutingNames("routing.decisions", decisionNames)
+	return validateUniqueRoutingNames("decisions", decisionNames)
 }
 
 // validateNamedRoutingCollections walks a schema struct whose fields are

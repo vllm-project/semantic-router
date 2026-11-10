@@ -1,0 +1,31 @@
+# A v0.3 document is refused by its version alone; migrate rewrites its
+# layout first, then the removed forms it is written in (here the decision
+# signal of the top-level routing block), then the global feature switches.
+version: v0.3
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+global:
+  stores:
+    memory:
+      enabled: true
+  services:
+    router_replay:
+      enabled: true
+      store_backend: memory
+routing:
+  modelCards:
+    - name: general
+      description: Answers general questions.
+      capabilities: [chat]
+  signals:
+    decision:
+      - name: needs_tools
+        question: {type: noul, instructions: "Does the request need a tool?"}
+  decisions:
+    - name: tools
+      priority: 100
+      rules: {type: decision, name: needs_tools}
+      modelRefs: [{model: general}]

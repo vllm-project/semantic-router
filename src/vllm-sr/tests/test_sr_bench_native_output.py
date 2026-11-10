@@ -169,21 +169,17 @@ def recipe_provenance(frozen):
                 "recipes": [
                     {
                         "name": "chosen",
-                        "routing": {
-                            "decisions": [
-                                {
-                                    "modelRefs": [{"model": "physical"}],
-                                    "plugins": [
-                                        {
-                                            "type": "request_params",
-                                            "configuration": {
-                                                "default_max_tokens": "auto"
-                                            },
-                                        }
-                                    ],
-                                }
-                            ]
-                        },
+                        "decisions": [
+                            {
+                                "modelRefs": [{"model": "physical"}],
+                                "plugins": [
+                                    {
+                                        "type": "request_params",
+                                        "configuration": {"default_max_tokens": "auto"},
+                                    }
+                                ],
+                            }
+                        ],
                     }
                 ],
             }
@@ -294,13 +290,16 @@ def test_native_render_cancellation_interrupts_stalled_first_body_byte(native_se
     assert len(native_server.requests) == 1
 
 
-def set_native_headers(server):
+def set_native_headers(
+    server, config_hash="a" * 64, input_tokens="12", max_output="20"
+):
+    trace = [f'config_hash="{config_hash}"', "inference_calls=1"]
+    if input_tokens is not None:
+        trace.append(f"effective_input_tokens={input_tokens}")
+    trace.append(f"effective_max_output_tokens={max_output}")
     server.response_headers = {
-        "X-SR-Bench-Config-Hash": "a" * 64,
         "X-VSR-Selected-Model": "physical",
-        "X-VSR-Inference-Call-Count": "1",
-        "X-VSR-Effective-Input-Tokens": "12",
-        "X-VSR-Effective-Max-Output-Tokens": "20",
+        "X-VSR-Trace": ", ".join(trace),
     }
 
 
@@ -327,11 +326,11 @@ def test_native_mom_omits_cap_and_uses_actual_dispatch_ack(native_server):
 def test_native_mom_unproved_capacity_fails_once(native_server, change):
     set_native_headers(native_server)
     if change == "missing":
-        del native_server.response_headers["X-VSR-Effective-Input-Tokens"]
+        set_native_headers(native_server, input_tokens=None)
     elif change == "smaller":
-        native_server.response_headers["X-VSR-Effective-Max-Output-Tokens"] = "4"
+        set_native_headers(native_server, max_output="4")
     elif change == "wrong_config":
-        native_server.response_headers["X-SR-Bench-Config-Hash"] = "b" * 64
+        set_native_headers(native_server, config_hash="b" * 64)
     elif change == "logical_alias":
         native_server.response_model = "upstream-alias"
     elif change == "input_usage":
@@ -372,9 +371,9 @@ def test_native_recipe_gate_rejects_clip_and_unregistered_candidates(native_serv
     validate_recipes(frozen, original)
     for change in ("fixed", "clip", "unregistered"):
         provenance = copy.deepcopy(original)
-        decision = provenance["recipe_snapshots"]["subject"]["recipes"][0]["routing"][
-            "decisions"
-        ][0]
+        decision = provenance["recipe_snapshots"]["subject"]["recipes"][0]["decisions"][
+            0
+        ]
         if change == "fixed":
             decision["plugins"][0]["configuration"]["default_max_tokens"] = 4
         elif change == "clip":

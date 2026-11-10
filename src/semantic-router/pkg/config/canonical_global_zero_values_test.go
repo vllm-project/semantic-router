@@ -74,7 +74,7 @@ func TestReconcilePreservesMemoryRetrievalLimitZero(t *testing.T) {
 
 func TestReconcilePreservesFlowStateTTLZero(t *testing.T) {
 	const doc = `
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: m
@@ -84,16 +84,17 @@ providers:
           endpoint: 127.0.0.1:8000
           protocol: http
           weight: 100
-routing:
-  strategy: priority
-  decisions:
-    - name: r
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: m
+recipes:
+  - name: default
+    strategy: priority
+    decisions:
+      - name: r
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: m
 global:
   integrations:
     looper:

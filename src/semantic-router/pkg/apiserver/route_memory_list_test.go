@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
 
@@ -317,5 +318,32 @@ func TestHandleListMemories_RejectsNegativeOffset(t *testing.T) {
 	server.handleListMemories(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("Expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// The memory API reads the user from the header
+// global.services.authz.identity.user_id_header names, as the Router does;
+// the default x-authz-user-id then carries no identity.
+func TestHandleListMemories_ReadsTheConfiguredUserIDHeader(t *testing.T) {
+	server, store := newTestServer()
+	server.config = &config.RouterConfig{Authz: config.AuthzConfig{Identity: config.IdentityConfig{UserIDHeader: "x-jwt-sub"}}}
+	seedTestMemories(store)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories", nil)
+	req.Header.Set("x-jwt-sub", "user-bob")
+	req.Header.Set("x-authz-user-id", "user-alice")
+	w := httptest.NewRecorder()
+
+	server.handleListMemories(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp MemoryListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if resp.Total != 1 || resp.Memories[0].UserID != "user-bob" {
+		t.Fatalf("listed %d memories, want user-bob's one from x-jwt-sub", resp.Total)
 	}
 }
