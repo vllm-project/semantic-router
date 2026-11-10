@@ -97,11 +97,23 @@ recipes:
 	if err != nil {
 		t.Fatal(err)
 	}
+	if original.GlobalModelBindings[config.SignalTypeJailbreak].Deployment != "guard" {
+		t.Fatalf("the base config's global binding did not load: %v", original.GlobalModelBindings)
+	}
+	if !reflect.DeepEqual(merged.GlobalModelBindings, original.GlobalModelBindings) {
+		t.Errorf("global bindings %v after the round trip, want %v", merged.GlobalModelBindings, original.GlobalModelBindings)
+	}
 	var recipes []config.RecipeName
 	for _, recipe := range merged.Recipes {
 		recipes = append(recipes, recipe.Name)
+		if len(recipe.Profile.ModelBindings) > 0 {
+			t.Errorf("recipe %s gained model_bindings %v", recipe.Name, recipe.Profile.ModelBindings)
+		}
 	}
 	if !reflect.DeepEqual(recipes, []config.RecipeName{"main"}) || len(merged.Entrypoints) != len(original.Entrypoints) {
-		t.Fatalf("recipes %v and entrypoints %+v after the round trip:\n%s", recipes, merged.Entrypoints, text)
+		t.Errorf("recipes %v and entrypoints %+v after the round trip", recipes, merged.Entrypoints)
+	}
+	if t.Failed() {
+		t.Logf("decompiled:\n%s", text)
 	}
 }
