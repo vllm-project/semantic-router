@@ -122,6 +122,8 @@ Router 调用的每个上游都使用同一种形状的 `auth` 块：提供方�
 | 委托 | `credential: delegated` | 发起请求的用户的凭据 |
 | 无 | 两者都不设 | 不带凭据 |
 
+无论哪种模式，调用都不带其他凭据：客户端自己的 `Authorization`、`api-key`、`x-api-key`、`x-goog-api-key`、`api-subscription-key` 或 `Ocp-Apim-Subscription-Key` 标头不会到达上游。位于外部网关之后、未声明后端的模型（`listeners: []`）会为该网关保留这些标头。
+
 委托约定默认关闭。启用后，适用以下规则。
 
 #### 凭据从哪里来 {#where-the-credential-comes-from}

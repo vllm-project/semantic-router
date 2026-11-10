@@ -194,7 +194,7 @@ These name an authenticated caller. A listener that doesn't trust identity heade
 
 ### Credentials
 
-Credentials, by name only. None reaches a client, and a per-user key reaches a provider only as its credential.
+Credentials, by name only. None reaches a client, and a provider receives only the credential its `auth` sets: a per-user key only as that credential, and never a client's own credential header.
 
 | Header | Hops |
 | --- | --- |
