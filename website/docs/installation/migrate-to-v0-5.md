@@ -72,7 +72,8 @@ becomes:
 Two forms still load, with a warning, because they are renames:
 `signals.decision` and `type: decision` conditions load as `systemone`
 (`renamed_signal_type`), and `algorithm.type: decision` loads as the
-`systemone` selector (`renamed_algorithm_type`). Migrate rewrites both.
+`systemone` selector (`renamed_algorithm_type`). Migrate rewrites both, and
+the Dashboard reads both the same way and saves them as `systemone`.
 
 ## 3. Review what changed
 

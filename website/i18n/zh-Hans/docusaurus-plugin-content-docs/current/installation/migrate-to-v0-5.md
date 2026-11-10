@@ -48,7 +48,7 @@ VLLM_SR_GATEWAY=extproc vllm-sr config migrate --config config.yaml
 | `removed_section` | Router 不再读取的整个段落 |
 | `invalid_value` | 含义已经改变的值，例如 `version: v0.3` |
 
-有两种形式因为只是改名，仍能加载并给出警告：`signals.decision` 和 `type: decision` 条件按 `systemone` 加载（`renamed_signal_type`），`algorithm.type: decision` 按 `systemone` 选择器加载（`renamed_algorithm_type`）。migrate 会改写两者。
+有两种形式因为只是改名，仍能加载并给出警告：`signals.decision` 和 `type: decision` 条件按 `systemone` 加载（`renamed_signal_type`），`algorithm.type: decision` 按 `systemone` 选择器加载（`renamed_algorithm_type`）。migrate 会改写两者；Dashboard 也按同样方式读取两者，保存时写为 `systemone`。
 
 ## 3. 检查变化 {#3-review-what-changed}
 
