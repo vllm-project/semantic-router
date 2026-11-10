@@ -76,10 +76,10 @@ func TestAPromptInSeveralTextPartsReachesTheImagesModelWhole(t *testing.T) {
 	request := &decoded
 	ctx := routingTestContext(llmprotocol.OpenAIResponsesV1, request)
 	ctx.VSRSelectedDecision = decision
-	if err := router.applyDecisionOutput(ctx); err != nil {
+	if err = router.applyDecisionOutput(ctx); err != nil {
 		t.Fatalf("applyDecisionOutput: %v", err)
 	}
-	if _, err := selectCapabilityTestDispatch(router, request, decision, ctx); err != nil {
+	if _, err = selectCapabilityTestDispatch(router, request, decision, ctx); err != nil {
 		t.Fatalf("selection: %v", err)
 	}
 	body, err := router.encodeDispatchRequest(ctx)
