@@ -9,6 +9,7 @@ from vllm_srun.accel.cpu import CPUAccelerator
 from vllm_srun.errors import VerificationError
 from vllm_srun.families.vela3_d3.family import GOLDEN_QUESTIONS, Vela3D3Family
 from vllm_srun.plugins.decisions import well_formed
+from vllm_srun.registry import builtin
 from vllm_srun.supervision.readiness import CPU_TOLERANCE
 from vllm_srun.testing import vela3_d3 as fixture
 
@@ -37,6 +38,17 @@ def unrecorded(written):
     values = [served.golden_surface(g["surface"], g["body"]) for g in goldens]
     yield runtime, goldens, values
     runtime.stop()
+
+
+def test_every_size_has_rocm_references_for_the_golden_request() -> None:
+    models = builtin.all_models("vela3_d3")
+    assert len(models) == 4
+    for model in models:
+        for device_class in ("rocm", "rocm:gfx942"):
+            answers = model.golden_answers.get(device_class)
+            assert answers, (model.repo_id, device_class)
+            assert set(answers) == set(GOLDEN_QUESTIONS), model.repo_id
+            assert all(well_formed(a) for a in answers.values()), model.repo_id
 
 
 def test_without_a_recorded_reference_the_check_is_unverified_not_failed(
