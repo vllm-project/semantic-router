@@ -26,7 +26,7 @@
 
 :root {
   --search-chip-docs-fg: #0b6ab8;
-  --search-chip-docs-bg: rgba(48, 162, 255, 0.13);
+  --search-chip-docs-bg: rgba(77, 111, 163, 0.13);
   --search-chip-blog-fg: #96590a;
   --search-chip-blog-bg: rgba(217, 145, 6, 0.15);
   --search-chip-pages-fg: var(--site-muted-bright);
@@ -36,7 +36,7 @@
 html[data-theme='dark'],
 [data-theme='dark'] {
   --search-chip-docs-fg: #7cc6ff;
-  --search-chip-docs-bg: rgba(48, 162, 255, 0.18);
+  --search-chip-docs-bg: rgba(127, 162, 216, 0.18);
   --search-chip-blog-fg: #fbbf24;
   --search-chip-blog-bg: rgba(217, 145, 6, 0.2);
 }

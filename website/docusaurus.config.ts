@@ -1,13 +1,26 @@
 import type { Config } from '@docusaurus/types'
 import type * as Preset from '@docusaurus/preset-classic'
-import { themes } from 'prism-react-renderer'
+import type { PrismTheme } from 'prism-react-renderer'
 import { SITE_SOCIAL_PREVIEW_IMAGE } from './src/data/socialPreview'
 import blogSearchIndexPlugin from './src/plugins/blogSearchIndex'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 
-const lightCodeTheme = themes.github
-const darkCodeTheme = themes.vsDark
+// Code blocks are ink in both colour modes, in System Duo's syntax colours (each at least 5:1 on ink), the colours the
+// homepage's terminals use.
+const codeTheme: PrismTheme = {
+  plain: { color: '#d9dbe0', backgroundColor: '#16181d' },
+  styles: [
+    { types: ['comment', 'prolog', 'doctype', 'cdata'], style: { color: '#8b8f99' } },
+    { types: ['string', 'char', 'attr-value', 'regex', 'inserted', 'url'], style: { color: '#f3d3a8' } },
+    { types: ['property', 'attr-name', 'tag', 'selector', 'key', 'atrule'], style: { color: '#9ec1ef' } },
+    { types: ['number', 'boolean', 'constant', 'symbol'], style: { color: '#f6a37f' } },
+    { types: ['keyword', 'important', 'builtin', 'deleted'], style: { color: '#ff8c69' } },
+    { types: ['function', 'class-name'], style: { color: '#ffffff', fontWeight: '600' } },
+    { types: ['operator', 'punctuation', 'entity'], style: { color: '#b8c6dc' } },
+    { types: ['variable', 'parameter', 'environment'], style: { color: '#ffcf7a' } },
+  ],
+}
 const siteUrl = 'https://vllm-sr.ai'
 const siteDefaultDescription
   = 'An open, programmable decision layer for models and compute.'
@@ -681,8 +694,8 @@ const config: Config = {
       copyright: `Copyright © ${new Date().getFullYear()} vLLM Semantic Router Team.`,
     },
     prism: {
-      theme: lightCodeTheme,
-      darkTheme: darkCodeTheme,
+      theme: codeTheme,
+      darkTheme: codeTheme,
       additionalLanguages: ['bash', 'json', 'yaml', 'go', 'rust', 'python'],
     },
     colorMode: {
