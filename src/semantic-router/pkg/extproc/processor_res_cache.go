@@ -24,6 +24,12 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	if !r.semanticCacheEnabledForRequest(ctx) {
 		return
 	}
+	// A streamed request's hit streams the entry back, so an answer the stream
+	// encoder cannot write, such as a generated image, would fail every hit.
+	if ctx.ExpectStreamingResponse && ctx.SemanticResponse != nil && !r.streamsFromCache(ctx) {
+		metrics.RecordCacheWriteSkipped("stream_content_unsupported")
+		return
+	}
 	if ctx.CacheWriteBypass {
 		metrics.RecordCacheWriteSkipped("request_no_store")
 		return
@@ -134,4 +140,14 @@ func (r *OpenAIRouter) addSemanticCacheEntry(
 		ResponseBody: responseBody,
 		TTL:          cache.TTLPolicyFromLegacySeconds(ttlSeconds),
 	})
+}
+
+// streamsFromCache reports whether a cache hit can stream the request's
+// answer back.
+func (r *OpenAIRouter) streamsFromCache(ctx *RequestContext) bool {
+	engine, err := r.protocolEngine()
+	if err == nil {
+		_, _, err = encodeCachedSemanticStream(engine, ctx, *ctx.SemanticResponse, nil)
+	}
+	return err == nil
 }

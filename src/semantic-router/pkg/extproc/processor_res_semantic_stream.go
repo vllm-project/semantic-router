@@ -40,6 +40,7 @@ type semanticStreamItem struct {
 	reasoning        string
 	reasoningSig     string
 	toolCall         *llmprotocol.ToolCall
+	image            *llmprotocol.GeneratedImage
 	completed        bool
 	reasoningDetails map[int]llmprotocol.ReasoningDetail
 }
@@ -336,6 +337,10 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				call := *event.ToolCall
 				item.toolCall = &call
 			}
+			if event.Content != nil && event.Content.GeneratedImage != nil {
+				image := *event.Content.GeneratedImage
+				item.image = &image
+			}
 		case llmprotocol.EventResponseCompleted:
 			state.terminal = true
 			state.stopSeq = event.MatchedStopSequence
@@ -395,6 +400,10 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 		if item.toolCall != nil {
 			call := *item.toolCall
 			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentToolCall, ToolCall: &call})
+		}
+		if item.image != nil {
+			image := *item.image
+			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentGeneratedImage, GeneratedImage: &image})
 		}
 		if len(contents) == 0 {
 			return nil, fmt.Errorf("semantic stream output item is empty")
