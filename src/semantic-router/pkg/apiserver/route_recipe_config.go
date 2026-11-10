@@ -12,27 +12,25 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-type managedRecipeSource string
-
-const (
-	managedRecipeSourceDefault managedRecipeSource = "routing"
-	managedRecipeSourceNamed   managedRecipeSource = "recipes"
-)
-
+// recipeMutationRequest writes one recipe. Profile holds the recipe's routing
+// fields: signals, projections, decisions, strategy, fallback,
+// candidate_requirements, model_bindings and plugins.
 type recipeMutationRequest struct {
 	Name        string         `json:"name,omitempty"`
 	Description *string        `json:"description,omitempty"`
-	Routing     map[string]any `json:"routing"`
+	Profile     map[string]any `json:"profile"`
 	Entrypoints *[]string      `json:"entrypoints,omitempty"`
 }
 
+// managedRecipeRecord is one recipe of the document. Default marks the
+// default recipe: the only recipe, or the one the default entrypoint maps.
 type managedRecipeRecord struct {
 	EntrypointSource routerconfig.EntrypointSource `json:"entrypoint_source"`
 	Name             string                        `json:"name"`
 	Description      string                        `json:"description,omitempty"`
-	Routing          map[string]any                `json:"routing"`
+	Profile          map[string]any                `json:"profile"`
 	Entrypoints      []string                      `json:"entrypoints"`
-	Source           managedRecipeSource           `json:"source"`
+	Default          bool                          `json:"default"`
 	Deletable        bool                          `json:"deletable"`
 }
 
@@ -180,10 +178,6 @@ func (s *ClassificationAPIServer) handleDeleteRecipe(w http.ResponseWriter, r *h
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_RECIPE_NAME", "recipe name is required")
 		return
 	}
-	if routerconfig.RecipeName(name) == routerconfig.DefaultRecipeName {
-		s.writeErrorResponse(w, http.StatusConflict, "DEFAULT_RECIPE_REQUIRED", "The default recipe is the top-level routing profile and cannot be deleted")
-		return
-	}
 	guard, ok := s.acquireConfigMutationGuard(w)
 	if !ok {
 		return
@@ -192,6 +186,10 @@ func (s *ClassificationAPIServer) handleDeleteRecipe(w http.ResponseWriter, r *h
 
 	doc, existingData, ok := s.readManagedConfigDocument(w)
 	if !ok || !checkConfigPrecondition(w, r, existingData) {
+		return
+	}
+	if name == documentDefaultRecipe(doc) {
+		s.writeErrorResponse(w, http.StatusConflict, "DEFAULT_RECIPE_REQUIRED", fmt.Sprintf("Recipe %q is the default recipe and cannot be deleted; make another recipe the default first", name))
 		return
 	}
 	entrypoints := recipeEntrypointNames(doc, name)
@@ -246,15 +244,8 @@ func (s *ClassificationAPIServer) readManagedConfigDocument(w http.ResponseWrite
 }
 
 func collectManagedRecipes(doc map[string]any) []managedRecipeRecord {
-	recipes := []managedRecipeRecord{{
-		Name:             string(routerconfig.DefaultRecipeName),
-		Description:      "Default routing profile",
-		Routing:          mappingValue(doc["routing"]),
-		Entrypoints:      effectiveRecipeEntrypointNames(doc, string(routerconfig.DefaultRecipeName)),
-		EntrypointSource: recipeEntrypointSource(doc, string(routerconfig.DefaultRecipeName)),
-		Source:           managedRecipeSourceDefault,
-		Deletable:        false,
-	}}
+	defaultRecipe := documentDefaultRecipe(doc)
+	recipes := []managedRecipeRecord{}
 	for _, item := range sequenceValue(doc["recipes"]) {
 		recipe := mappingValue(item)
 		name := strings.TrimSpace(stringValue(recipe["name"]))
@@ -264,14 +255,41 @@ func collectManagedRecipes(doc map[string]any) []managedRecipeRecord {
 		recipes = append(recipes, managedRecipeRecord{
 			Name:             name,
 			Description:      stringValue(recipe["description"]),
-			Routing:          mappingValue(recipe["routing"]),
-			Entrypoints:      effectiveRecipeEntrypointNames(doc, name),
-			EntrypointSource: recipeEntrypointSource(doc, name),
-			Source:           managedRecipeSourceNamed,
-			Deletable:        true,
+			Profile:          recipeProfile(recipe),
+			Entrypoints:      effectiveRecipeEntrypointNames(doc, name, name == defaultRecipe),
+			EntrypointSource: recipeEntrypointSource(doc, name, name == defaultRecipe),
+			Default:          name == defaultRecipe,
+			Deletable:        name != defaultRecipe,
 		})
 	}
 	return recipes
+}
+
+// documentDefaultRecipe names a document's default recipe: the only recipe,
+// or the recipe of the entrypoint marked default.
+func documentDefaultRecipe(doc map[string]any) string {
+	recipes := sequenceValue(doc["recipes"])
+	if len(recipes) == 1 {
+		return strings.TrimSpace(stringValue(mappingValue(recipes[0])["name"]))
+	}
+	for _, item := range sequenceValue(doc["entrypoints"]) {
+		if entrypoint := mappingValue(item); entrypoint["default"] == true {
+			return strings.TrimSpace(stringValue(entrypoint["recipe"]))
+		}
+	}
+	return ""
+}
+
+// recipeProfile is a recipe's routing fields: all of it but its name and
+// description.
+func recipeProfile(recipe map[string]any) map[string]any {
+	profile := make(map[string]any, len(recipe))
+	for key, value := range recipe {
+		if key != "name" && key != "description" {
+			profile[key] = value
+		}
+	}
+	return profile
 }
 
 func findManagedRecipe(doc map[string]any, name string) (managedRecipeRecord, bool) {
@@ -284,25 +302,19 @@ func findManagedRecipe(doc map[string]any, name string) (managedRecipeRecord, bo
 }
 
 func applyRecipeMutation(doc map[string]any, name string, req recipeMutationRequest) (bool, error) {
-	if len(req.Routing) == 0 {
-		return false, fmt.Errorf("routing is required and must not be empty")
+	if len(req.Profile) == 0 {
+		return false, fmt.Errorf("profile is required and must not be empty")
 	}
-	if routerconfig.RecipeName(name) == routerconfig.DefaultRecipeName {
-		if req.Description != nil && strings.TrimSpace(*req.Description) != "" {
-			return false, fmt.Errorf("the default recipe has no description field; update its top-level routing block only")
-		}
-		if req.Entrypoints != nil {
-			replaceRecipeEntrypoints(doc, name, *req.Entrypoints)
-		}
-		doc["routing"] = cloneYAMLValue(req.Routing)
-		return false, nil
+	replacement, _ := cloneYAMLValue(req.Profile).(map[string]any)
+	if _, named := replacement["name"]; named {
+		return false, fmt.Errorf("profile holds the recipe's routing fields; its name is the path's")
 	}
+	if _, described := replacement["description"]; described {
+		return false, fmt.Errorf("profile holds the recipe's routing fields; write description beside it")
+	}
+	replacement["name"] = name
 
 	recipes := sequenceValue(doc["recipes"])
-	replacement := map[string]any{
-		"name":    name,
-		"routing": cloneYAMLValue(req.Routing),
-	}
 	if req.Description != nil && strings.TrimSpace(*req.Description) != "" {
 		replacement["description"] = strings.TrimSpace(*req.Description)
 	}
@@ -318,6 +330,9 @@ func applyRecipeMutation(doc map[string]any, name string, req recipeMutationRequ
 		break
 	}
 	if created {
+		if len(recipes) == 1 {
+			keepDefaultEntrypoint(doc, documentDefaultRecipe(doc))
+		}
 		recipes = append(recipes, replacement)
 	}
 	doc["recipes"] = recipes
@@ -337,6 +352,17 @@ func replaceRecipeEntrypoints(doc map[string]any, recipeName string, modelNames 
 	}
 
 	entrypoints := sequenceValue(doc["entrypoints"])
+	isDefault := documentDefaultRecipe(doc) == recipeName && len(sequenceValue(doc["recipes"])) > 1
+	mapping := func() map[string]any {
+		entrypoint := map[string]any{
+			"model_names": append([]string(nil), normalized...),
+			"recipe":      recipeName,
+		}
+		if isDefault {
+			entrypoint["default"] = true
+		}
+		return entrypoint
+	}
 	filtered := make([]any, 0, len(entrypoints)+1)
 	inserted := false
 	for _, item := range entrypoints {
@@ -346,20 +372,40 @@ func replaceRecipeEntrypoints(doc map[string]any, recipeName string, modelNames 
 			continue
 		}
 		if !inserted && len(normalized) > 0 {
-			filtered = append(filtered, map[string]any{
-				"model_names": append([]string(nil), normalized...),
-				"recipe":      recipeName,
-			})
+			filtered = append(filtered, mapping())
 			inserted = true
 		}
 	}
 	if !inserted && len(normalized) > 0 {
-		filtered = append(filtered, map[string]any{
-			"model_names": append([]string(nil), normalized...),
-			"recipe":      recipeName,
-		})
+		filtered = append(filtered, mapping())
 	}
 	doc["entrypoints"] = filtered
+}
+
+// keepDefaultEntrypoint marks the default entrypoint of a document's only
+// recipe before a second recipe joins it, so the requests the recipe served
+// stay with it.
+func keepDefaultEntrypoint(doc map[string]any, recipeName string) {
+	entrypoints := sequenceValue(doc["entrypoints"])
+	for _, item := range entrypoints {
+		if mappingValue(item)["default"] == true {
+			return
+		}
+	}
+	for _, item := range entrypoints {
+		entrypoint, ok := item.(map[string]any)
+		api := stringValue(entrypoint["api"])
+		if ok && strings.TrimSpace(stringValue(entrypoint["recipe"])) == recipeName && (api == "" || api == string(routerconfig.ChatAPI)) {
+			entrypoint["default"] = true
+			return
+		}
+	}
+	builtin := map[string]any{
+		"model_names": []string{routerconfig.DefaultEntrypointModel},
+		"recipe":      recipeName,
+		"default":     true,
+	}
+	doc["entrypoints"] = append([]any{builtin}, entrypoints...)
 }
 
 func recipeEntrypointNames(doc map[string]any, recipeName string) []string {
@@ -436,23 +482,23 @@ func (s *ClassificationAPIServer) maybeRedactManagedRecipes(
 	redacted := make([]managedRecipeRecord, len(recipes))
 	copy(redacted, recipes)
 	for index := range redacted {
-		if routing, ok := redactSensitiveConfigValue(redacted[index].Routing).(map[string]any); ok {
-			redacted[index].Routing = routing
+		if profile, ok := redactSensitiveConfigValue(redacted[index].Profile).(map[string]any); ok {
+			redacted[index].Profile = profile
 		}
 	}
 	return redacted
 }
 
-func recipeEntrypointSource(doc map[string]any, recipeName string) routerconfig.EntrypointSource {
-	if recipeName == string(routerconfig.DefaultRecipeName) && len(recipeEntrypointNames(doc, recipeName)) == 0 {
+func recipeEntrypointSource(doc map[string]any, recipeName string, isDefault bool) routerconfig.EntrypointSource {
+	if isDefault && len(recipeEntrypointNames(doc, recipeName)) == 0 {
 		return routerconfig.EntrypointBuiltin
 	}
 	return routerconfig.EntrypointExplicit
 }
 
-func effectiveRecipeEntrypointNames(doc map[string]any, recipeName string) []string {
+func effectiveRecipeEntrypointNames(doc map[string]any, recipeName string, isDefault bool) []string {
 	names := recipeEntrypointNames(doc, recipeName)
-	if recipeName == string(routerconfig.DefaultRecipeName) && len(names) == 0 {
+	if isDefault && len(names) == 0 {
 		return []string{routerconfig.DefaultEntrypointModel}
 	}
 	return names

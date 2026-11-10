@@ -37,7 +37,8 @@ auditable decision policy.
 
 Use `multi_factor` when a decision has at least two candidate models and must
 optimize a quality/latency/cost/load trade-off. Use `static` when order alone is
-the policy, or `latency_aware` when latency is the only selection signal.
+the policy. When latency is the only selection signal, weight `multi_factor` on
+latency alone, as [Latency-Aware Selection](./latency-aware) shows.
 
 ## Configuration
 
@@ -188,6 +189,17 @@ If every candidate is excluded, `on_no_candidates` chooses `cheapest`, `first`,
 or `fail`. `fail` is a strict policy: the Router returns HTTP 503 and never
 substitutes the first configured candidate. Eval dry-runs report the selection
 as unavailable for the same request.
+
+## Cache affinity
+
+A provider's prompt cache belongs to one model, so switching models in the
+middle of a conversation recomputes its whole context. On a continuing
+conversation (a later turn, carried history, a `previous_response_id` or a
+`prompt_cache_key`), the weighted objective adds a bounded bonus to the
+candidate that served the session's earlier turns. The bonus is a
+tie-breaker: it grows with the share of the request the cache would reuse, and
+it never outweighs a clear quality, cost or SLO difference. Lexicographic
+priorities keep their order; the bonus applies only within the final band.
 
 ## Parameters
 

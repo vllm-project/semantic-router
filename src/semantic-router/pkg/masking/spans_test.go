@@ -197,22 +197,6 @@ func TestMaskText_InvertedSpanErrors(t *testing.T) {
 	}
 }
 
-// Case: Below threshold.
-func TestMaskText_BelowThresholdNotMasked(t *testing.T) {
-	text := "call John Smith now"
-	start, end := byteRange(t, text, "John Smith")
-	spans := []Span{{EntityType: "PERSON", Start: start, End: end, Confidence: 0.5}}
-	cfg := &config.MaskingPluginConfig{Threshold: 0.85}
-
-	got, _, err := MaskText(text, spans, nil, NewAllocator(cfg))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != text {
-		t.Fatalf("expected unmasked text %q, got %q", text, got)
-	}
-}
-
 // Case: Type not included.
 func TestMaskText_TypeNotIncludedNotMasked(t *testing.T) {
 	text := "call John Smith now"

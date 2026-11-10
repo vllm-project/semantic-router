@@ -26,7 +26,6 @@ const models = Array.from({ length: 7 }, (_, index) => ({
 }))
 const props: ConfigPageModelsSectionProps = {
   config: { providers: { models: models.map(({ name }) => ({ name })) } },
-  isPythonCLI: true,
   isReadonly: true,
   canVerifyModels: false,
   models,

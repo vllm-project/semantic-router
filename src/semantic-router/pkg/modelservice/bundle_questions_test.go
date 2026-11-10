@@ -183,8 +183,15 @@ func TestAFanOutAsksEveryStateInItsCallersPlace(t *testing.T) {
 		t.Fatal(err)
 	}
 	asked := runtime.Decisions()
-	if len(asked) != 1 || asked[0].State != texts[0] || len(asked[0].Questions) != 3 || asked[0].States == nil || len(*asked[0].States) != 2 {
-		t.Fatalf("one call: the request with its three questions and the two other texts as states: %+v", asked)
+	if len(asked) != 1 || asked[0].State != nil || asked[0].Questions != nil || asked[0].States == nil {
+		t.Fatalf("one call, a batch about the three texts: %+v", asked)
+	}
+	entries := map[interface{}]int{}
+	for _, entry := range *asked[0].States {
+		entries[entry.State] = len(entry.Questions)
+	}
+	if want := map[interface{}]int{texts[0]: 3, texts[1]: 2, texts[2]: 2}; !reflect.DeepEqual(entries, want) {
+		t.Fatalf("an entry per text, with every question about it: %v, want %v", entries, want)
 	}
 	for i, text := range texts {
 		spans := answers[i].Answers["pii_classifier:pii"].Spans

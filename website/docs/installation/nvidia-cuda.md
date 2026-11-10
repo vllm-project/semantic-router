@@ -230,9 +230,8 @@ for CUDA cannot load.
 
 ### The Router uses the CPU
 
-Confirm that `--platform cuda` selected the `vllm-sr-cuda` image and that
-`VLLM_SR_CUDA_PRESERVE_CPU` is not enabled. Check the generated runtime
-configuration and startup logs, not only the source recipe. A recipe without a
+Confirm that `--platform cuda` selected the `vllm-sr-cuda` image. Check the
+generated runtime configuration and startup logs, not only the source recipe. A recipe without a
 local signal model has nothing to move to CUDA. `GET /v1/models` on a runtime,
 or the Dashboard's model inventory, shows the device each model runs on.
 

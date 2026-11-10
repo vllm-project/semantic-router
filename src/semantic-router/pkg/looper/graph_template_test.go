@@ -5,11 +5,32 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/graph"
 )
+
+// An executor's budget lowers the run's call limit to its max_calls and
+// bounds the run by its deadline; the hard per-request limit still caps a
+// larger max_calls.
+func TestTemplateAppliesTheAlgorithmBudget(t *testing.T) {
+	program, err := Template(&config.LooperConfig{}, config.DecisionAlgorithmEscalate, &config.AlgorithmBudget{Deadline: "2s", MaxCalls: 3}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if program.Limits.MaxHops != 3 || program.Limits.Timeout != 2*time.Second {
+		t.Fatalf("limits = %+v, want 3 calls within 2s", program.Limits)
+	}
+	program, err = Template(&config.LooperConfig{}, config.DecisionAlgorithmFusion, &config.AlgorithmBudget{Deadline: "2s", MaxCalls: 100}, nil)
+	if err != nil || program.Limits.MaxHops != config.MaxUpstreamCallsPerRequest {
+		t.Fatalf("limits = %+v, %v, want the per-request limit", program.Limits, err)
+	}
+	if _, err := Template(&config.LooperConfig{}, config.DecisionAlgorithmRatings, &config.AlgorithmBudget{Deadline: "0s", MaxCalls: 1}, nil); err == nil {
+		t.Fatal("a budget without a positive deadline must not build a program")
+	}
+}
 
 func TestTemplateBoundsTheRunWithTheCallBudget(t *testing.T) {
 	for _, algorithm := range []string{
@@ -18,7 +39,7 @@ func TestTemplateBoundsTheRunWithTheCallBudget(t *testing.T) {
 		config.DecisionAlgorithmWorkflows,
 	} {
 		t.Run(algorithm, func(t *testing.T) {
-			program, err := Template(&config.LooperConfig{}, algorithm, nil)
+			program, err := Template(&config.LooperConfig{}, algorithm, nil, nil)
 			if err != nil {
 				t.Fatalf("Template: %v", err)
 			}
@@ -38,7 +59,7 @@ func TestTemplateWorkflowHopBudgetStaysFatalThroughFinalFallback(t *testing.T) {
 	for i := range roles {
 		roles[i] = config.WorkflowRoleConfig{Name: fmt.Sprintf("role-%d", i), Models: []string{"worker"}}
 	}
-	program, err := Template(&config.LooperConfig{}, config.DecisionAlgorithmWorkflows, nil)
+	program, err := Template(&config.LooperConfig{}, config.DecisionAlgorithmWorkflows, nil, nil)
 	if err != nil {
 		t.Fatalf("Template: %v", err)
 	}
@@ -46,14 +67,14 @@ func TestTemplateWorkflowHopBudgetStaysFatalThroughFinalFallback(t *testing.T) {
 		OriginalRequest: workflowTestRequest(),
 		ModelRefs:       []config.ModelRef{{Model: "worker"}},
 		Algorithm: &config.AlgorithmConfig{
-			Type: config.DecisionAlgorithmWorkflows,
+			Type:    config.DecisionAlgorithmWorkflows,
+			OnError: config.WorkflowOnErrorSkip,
 			Workflows: &config.WorkflowsAlgorithmConfig{
 				Mode:        config.WorkflowModeStatic,
 				Roles:       roles,
 				Final:       config.WorkflowFinalConfig{Model: "worker"},
 				MaxSteps:    config.MaxUpstreamCallsPerRequest,
 				MaxParallel: 1,
-				OnError:     config.WorkflowOnErrorSkip,
 			},
 		},
 	}

@@ -39,7 +39,7 @@ func TestParseYAMLBytesExpandsEnvironmentVariablesInRouterReplayPostgres(t *test
 	t.Setenv("POSTGRES_PASSWORD", "super_sensitive_string")
 
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -53,28 +53,26 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  signals:
-    domains:
-      - name: general
-        description: General requests
-        mmlu_categories: [other]
-  modelCards:
-    - name: qwen3
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: qwen3
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: general
+          description: General requests
+          labels: [other]
+    decisions:
+      - name: default_route
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: general
+        modelRefs:
+          - model: qwen3
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: postgres
       postgres:
         host: 10.0.0.1
@@ -83,6 +81,10 @@ global:
         password: "${POSTGRES_PASSWORD}"
         ssl_mode: disable
         table_name: router_replay
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
@@ -99,7 +101,7 @@ func TestParseYAMLBytesExpandsEnvironmentVariablesInProviderAccessKey(t *testing
 	t.Setenv("OPENAI_API_KEY", "sk-router-secret")
 
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -111,24 +113,23 @@ providers:
         - endpoint: https://api.openai.com/v1
           provider: vllm
           api_key: "${OPENAI_API_KEY}"
-routing:
-  signals:
-    domains:
-      - name: general
-        description: General requests
-        mmlu_categories: [other]
-  modelCards:
-    - name: gpt-4o
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: gpt-4o
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: general
+          description: General requests
+          labels: [other]
+    decisions:
+      - name: default_route
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: general
+        modelRefs:
+          - model: gpt-4o
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
@@ -182,7 +183,7 @@ func TestExpandStringKeepsUnsetReferences(t *testing.T) {
 }
 
 func deferredEnvDocument(maxTokens, apiKey, ejectionTime string) []byte {
-	return []byte(`version: v0.3
+	return []byte(`version: v0.5
 providers:
   defaults:
     model: model-a
@@ -193,28 +194,29 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: model-a
-  signals:
-    context:
-      - name: probe
-        min_tokens: 8K
-        max_tokens: ` + maxTokens + `
-  decisions:
-    - name: default
-      rules:
-        operator: AND
-      modelRefs:
-        - model: model-a
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: openai
-            backend_config:
-              vector_store_id: vs_probe
-              api_key: ` + apiKey + `
+recipes:
+  - name: default
+    signals:
+      context:
+        - name: probe
+          min_tokens: 8K
+          max_tokens: ` + maxTokens + `
+    decisions:
+      - name: default
+        rules:
+          operator: AND
+        modelRefs:
+          - model: model-a
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: openai
+                  backend_config:
+                    vector_store_id: vs_probe
+                    api_key: ` + apiKey + `
 `)
 }
 

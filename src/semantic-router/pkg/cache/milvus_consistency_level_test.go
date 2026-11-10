@@ -139,7 +139,7 @@ func TestMilvusCacheSearchHonorsConsistencyLevel(t *testing.T) {
 		collectionName: "test_cache",
 	}
 
-	_, err := cache.milvusSearchSimilarVectors(context.Background(), "model", []float32{0.1, 0.2})
+	_, err := cache.milvusSearchSimilarVectors(context.Background(), "model", []float32{0.1, 0.2}, 1)
 	require.NoError(t, err)
 	level, set := appliedConsistencyLevel(t, fake.searchOpts)
 	assert.True(t, set, "configured level must reach the SDK search call")
@@ -155,7 +155,7 @@ func TestMilvusCacheSearchUnsetKeepsSDKDefault(t *testing.T) {
 		collectionName: "test_cache",
 	}
 
-	_, err := cache.milvusSearchSimilarVectors(context.Background(), "model", []float32{0.1, 0.2})
+	_, err := cache.milvusSearchSimilarVectors(context.Background(), "model", []float32{0.1, 0.2}, 1)
 	require.NoError(t, err)
 	assert.Empty(t, fake.searchOpts, "unset level must not pass a consistency option")
 }

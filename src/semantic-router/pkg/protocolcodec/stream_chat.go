@@ -181,12 +181,18 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	if err != nil || !parsed.HasData {
 		return nil, nil, err
 	}
-	if decoder.terminal {
-		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted data after its terminal sentinel")
-	}
 	if bytes.Equal(bytes.TrimSpace(parsed.Data), []byte("[DONE]")) {
+		// A repeated sentinel is not data after the terminal: gateways that
+		// re-split frames can send it twice. The stream is already complete,
+		// so treat it as a no-op like the Anthropic decoder does.
+		if decoder.terminal {
+			return nil, nil, nil
+		}
 		events, doneErr := decoder.nextAfterHeld(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted, StopReason: decoder.stop, MatchedStopSequence: decoder.stopSequence, Usage: &decoder.usage})
 		return events, nil, doneErr
+	}
+	if decoder.terminal {
+		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted data after its terminal sentinel")
 	}
 	var chunk chatChunkWire
 	_, unknownFields, err := decodeChatProviderWire(parsed.Data, &chunk, decoder.policy)

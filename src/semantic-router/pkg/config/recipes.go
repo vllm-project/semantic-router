@@ -11,8 +11,9 @@ import (
 // RecipeName identifies an isolated routing namespace.
 type RecipeName string
 
-// DefaultRecipeName names the routing profile normalized from the top-level
-// `routing:` block. Additional named profiles come from `recipes:`.
+// DefaultRecipeName names the default recipe of a configuration that
+// declares none, and the recipe migrate writes the old top-level routing
+// block as. A declared default recipe keeps its own name.
 const DefaultRecipeName RecipeName = "default"
 
 // RoutingStrategy controls how matching decisions are ordered within one
@@ -31,21 +32,26 @@ func (s RoutingStrategy) Validate() error {
 	case "", RoutingStrategyPriority, RoutingStrategyConfidence:
 		return nil
 	default:
-		return fmt.Errorf("routing.strategy must be %q or %q, got %q", RoutingStrategyPriority, RoutingStrategyConfidence, s)
+		return fmt.Errorf("strategy must be %q or %q, got %q", RoutingStrategyPriority, RoutingStrategyConfidence, s)
 	}
 }
 
 // RoutingProfile contains all state whose names and execution are isolated by
 // a recipe. Shared provider bindings, model assets, and runtime services stay
-// on RouterConfig.
+// on RouterConfig. Plugins are the recipe's declared plugins; its decisions
+// carry their effective plugins.
 type RoutingProfile struct {
 	CandidateRequirements *CandidateRequirements
 	ModelBindings         map[string]ModelBinding
-	Signals               Signals
-	Projections           Projections
-	Decisions             []Decision
-	Strategy              RoutingStrategy
-	Fallback              *fallback.FallbackPolicy
+	Plugins               []DecisionPlugin
+	// DefaultPlugins are global.plugins layered with Plugins: what a request
+	// that matches no decision runs, and the layer below each decision's own.
+	DefaultPlugins []DecisionPlugin
+	Signals        Signals
+	Projections    Projections
+	Decisions      []Decision
+	Strategy       RoutingStrategy
+	Fallback       *fallback.FallbackPolicy
 }
 
 // RoutingRecipe gives an isolated routing profile a stable name and optional
@@ -64,6 +70,8 @@ type EntrypointMapping struct {
 	Recipe     RecipeName
 	API        InferenceAPI
 	Source     EntrypointSource
+	// Default marks the entrypoint of the default recipe.
+	Default bool
 }
 
 // RoutingDecisionRef identifies a decision inside its owning recipe. The
@@ -89,7 +97,8 @@ func RoutingNamespaceKey(recipeName RecipeName, localName string) string {
 }
 
 // RoutingNamespaceScope returns the escaped storage component for a named
-// recipe. The default recipe intentionally keeps existing unscoped keys.
+// recipe. A recipe named DefaultRecipeName keeps the unscoped keys of the
+// configurations migrate writes it from.
 func RoutingNamespaceScope(recipeName RecipeName) string {
 	normalizedRecipe := RecipeName(strings.TrimSpace(string(recipeName)))
 	if normalizedRecipe == "" {
@@ -115,7 +124,7 @@ func (c *RouterConfig) RoutingDecisionRefs() []RoutingDecisionRef {
 	if len(c.Recipes) == 0 {
 		refs := make([]RoutingDecisionRef, 0, len(c.Decisions))
 		for i := range c.Decisions {
-			refs = append(refs, RoutingDecisionRef{Recipe: DefaultRecipeName, Decision: &c.Decisions[i]})
+			refs = append(refs, RoutingDecisionRef{Recipe: c.defaultRecipeName(), Decision: &c.Decisions[i]})
 		}
 		return refs
 	}
@@ -142,23 +151,25 @@ func (c *RouterConfig) RecipeByName(name RecipeName) (*RoutingRecipe, bool) {
 	return nil, false
 }
 
-// DefaultRecipe returns the recipe backing the flat routing fields. Canonical
-// configs contain an explicit normalized default recipe; programmatically
-// assembled single-profile configs get an equivalent immutable view so callers
-// do not need a second routing path.
+// DefaultRecipe returns the recipe backing the flat routing fields: the only
+// recipe, or the one the default entrypoint maps. Programmatically assembled
+// single-profile configs get an equivalent immutable view so callers do not
+// need a second routing path.
 func (c *RouterConfig) DefaultRecipe() *RoutingRecipe {
 	if c == nil {
 		return nil
 	}
-	recipe, ok := c.RecipeByName(DefaultRecipeName)
+	recipe, ok := c.RecipeByName(c.defaultRecipeName())
 	if ok {
 		return recipe
 	}
 	return &RoutingRecipe{
-		Name: DefaultRecipeName,
+		Name: c.defaultRecipeName(),
 		Profile: RoutingProfile{
 			ModelBindings:         cloneModelMap(c.ModelBindings),
 			CandidateRequirements: c.CandidateRequirements.Clone(),
+			Plugins:               copyDecisionPlugins(c.Plugins),
+			DefaultPlugins:        copyDecisionPlugins(c.DefaultPlugins),
 			Signals:               c.Signals,
 			Projections:           c.Projections,
 			Decisions:             c.Decisions,
@@ -180,12 +191,32 @@ func (c *RouterConfig) RecipeForRequestModel(modelName string) (*RoutingRecipe, 
 		return nil, false
 	}
 	if entrypoint, ok := c.ResolveEntrypoint(ChatAPI, trimmed); ok {
-		if entrypoint.Recipe == DefaultRecipeName {
+		if c.IsDefaultRecipe(entrypoint.Recipe) {
 			return c.DefaultRecipe(), true
 		}
 		return c.RecipeByName(entrypoint.Recipe)
 	}
 	return nil, false
+}
+
+// UseDefaultRecipe makes the recipe name the default of a programmatically
+// assembled config, as the loader does for the recipe of the default
+// entrypoint, and mirrors its profile in the flat routing fields.
+func (c *RouterConfig) UseDefaultRecipe(name RecipeName) {
+	c.defaultRecipe = name
+	c.mirrorDefaultRecipe()
+}
+
+// IsDefaultRecipe reports whether name is the default recipe.
+func (c *RouterConfig) IsDefaultRecipe(name RecipeName) bool {
+	return name == c.defaultRecipeName()
+}
+
+func (c *RouterConfig) defaultRecipeName() RecipeName {
+	if c == nil || c.defaultRecipe == "" {
+		return DefaultRecipeName
+	}
+	return c.defaultRecipe
 }
 
 // RecipeForRoutingModel resolves every request-facing routing model. Effective entrypoints
@@ -227,7 +258,7 @@ func (c *RouterConfig) ReachableRoutingRecipes() []*RoutingRecipe {
 	}
 
 	if len(c.Recipes) == 0 {
-		if _, ok := reachable[DefaultRecipeName]; !ok {
+		if _, ok := reachable[c.defaultRecipeName()]; !ok {
 			return nil
 		}
 		return []*RoutingRecipe{c.DefaultRecipe()}
@@ -266,8 +297,10 @@ func (c *RouterConfig) ConfigForRecipe(recipe *RoutingRecipe) *RouterConfig {
 	scoped := *c
 	scoped.RoutingScope = recipe.Name
 	scoped.IntelligentRouting = IntelligentRouting{
-		ModelBindings:         c.EffectiveModelBindings(recipe.Profile.Signals, recipe.Profile.ModelBindings),
+		ModelBindings:         c.EffectiveModelBindings(recipe.Profile.ModelBindings),
 		CandidateRequirements: recipe.Profile.CandidateRequirements.Clone(),
+		Plugins:               copyDecisionPlugins(recipe.Profile.Plugins),
+		DefaultPlugins:        copyDecisionPlugins(recipe.Profile.DefaultPlugins),
 		Signals:               recipe.Profile.Signals,
 		Projections:           recipe.Profile.Projections,
 		Decisions:             recipe.Profile.Decisions,
@@ -276,7 +309,6 @@ func (c *RouterConfig) ConfigForRecipe(recipe *RoutingRecipe) *RouterConfig {
 		ModelSelection:        c.ModelSelection,
 		ReasoningConfig:       c.ReasoningConfig,
 	}
-	scoped.KnowledgeBases = knowledgeBasesForRoutingProfile(c.KnowledgeBases, recipe.Profile)
 	scoped.scopedBindings = cloneModelMap(recipe.Profile.ModelBindings)
 	if scoped.scopedBindings == nil {
 		scoped.scopedBindings = map[string]ModelBinding{}
@@ -285,35 +317,7 @@ func (c *RouterConfig) ConfigForRecipe(recipe *RoutingRecipe) *RouterConfig {
 	// recipe list here would make helpers such as AllRoutingDecisions escape the
 	// selected recipe again.
 	scoped.Recipes = nil
-	scoped.applyModuleThresholds()
 	return &scoped
-}
-
-func knowledgeBasesForRoutingProfile(catalog []KnowledgeBaseConfig, profile RoutingProfile) []KnowledgeBaseConfig {
-	referenced := make(map[string]struct{}, len(profile.Signals.KBRules))
-	for _, rule := range profile.Signals.KBRules {
-		if rule.KB != "" {
-			referenced[rule.KB] = struct{}{}
-		}
-	}
-	for _, score := range profile.Projections.Scores {
-		for _, input := range score.Inputs {
-			if strings.EqualFold(input.Type, ProjectionInputKBMetric) && input.KB != "" {
-				referenced[input.KB] = struct{}{}
-			}
-		}
-	}
-	if len(referenced) == 0 {
-		return nil
-	}
-
-	filtered := make([]KnowledgeBaseConfig, 0, len(referenced))
-	for _, kb := range catalog {
-		if _, ok := referenced[kb.Name]; ok {
-			filtered = append(filtered, kb)
-		}
-	}
-	return filtered
 }
 
 // IsEntrypointModelName reports whether the name is a request-facing virtual

@@ -12,6 +12,9 @@ import (
 )
 
 func TestDecisionWillPersonalize(t *testing.T) {
+	globalMemory := withGlobalPlugins(t, &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{{Name: "d"}}},
+	}, memoryTestPlugin())
 	tests := []struct {
 		name string
 		ctx  *RequestContext
@@ -29,7 +32,7 @@ func TestDecisionWillPersonalize(t *testing.T) {
 			ctx: &RequestContext{
 				VSRSelectedDecision: &config.Decision{
 					Plugins: []config.DecisionPlugin{
-						{Type: "rag", Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true})},
+						{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "sources": []interface{}{map[string]interface{}{"type": "rag", "backend": "vectorstore"}}})},
 					},
 				},
 			},
@@ -41,7 +44,7 @@ func TestDecisionWillPersonalize(t *testing.T) {
 			ctx: &RequestContext{
 				VSRSelectedDecision: &config.Decision{
 					Plugins: []config.DecisionPlugin{
-						{Type: "rag", Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": false})},
+						{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": false, "sources": []interface{}{map[string]interface{}{"type": "rag", "backend": "vectorstore"}}})},
 					},
 				},
 			},
@@ -53,7 +56,7 @@ func TestDecisionWillPersonalize(t *testing.T) {
 			ctx: &RequestContext{
 				VSRSelectedDecision: &config.Decision{
 					Plugins: []config.DecisionPlugin{
-						{Type: "memory", Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true})},
+						{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "sources": []interface{}{map[string]interface{}{"type": "memory"}}})},
 					},
 				},
 			},
@@ -62,12 +65,8 @@ func TestDecisionWillPersonalize(t *testing.T) {
 		},
 		{
 			name: "global memory enabled",
-			ctx: &RequestContext{
-				VSRSelectedDecision: &config.Decision{},
-			},
-			cfg: &config.RouterConfig{
-				Memory: config.MemoryConfig{Enabled: true},
-			},
+			ctx:  &RequestContext{VSRSelectedDecision: &globalMemory.Decisions[0]},
+			cfg:  globalMemory,
 			want: true,
 		},
 		{
@@ -82,7 +81,7 @@ func TestDecisionWillPersonalize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, decisionWillPersonalize(tt.ctx, tt.cfg))
+			assert.Equal(t, tt.want, decisionWillPersonalize(tt.ctx))
 		})
 	}
 }
@@ -91,9 +90,9 @@ func TestUpdateResponseCacheSkipsPersonalizedContext(t *testing.T) {
 	mockCache := &mockStreamingCache{}
 	router := &OpenAIRouter{
 		Cache: mockCache,
-		Config: &config.RouterConfig{
-			SemanticCache: config.SemanticCache{Enabled: true},
-		},
+		Config: withGlobalPlugins(t, &config.RouterConfig{
+			SemanticCache: config.SemanticCache{InUse: true},
+		}, testPlugin(config.DecisionPluginResponseCache, map[string]interface{}{"enabled": true, "scope": "global"})),
 	}
 
 	tests := []struct {
@@ -129,6 +128,7 @@ func TestUpdateResponseCacheSkipsPersonalizedContext(t *testing.T) {
 			tt.ctx.RequestModel = "test"
 			tt.ctx.RequestQuery = "hello"
 			tt.ctx.SemanticRequest = testNeutralRequest("test", "hello")
+			tt.ctx.Routing.SelectRecipe(router.Config.DefaultRecipe())
 			router.updateResponseCache(tt.ctx, []byte(`{"choices":[]}`))
 			assert.Equal(t, tt.wantUpdate, mockCache.addEntryCalled,
 				"updateResponseCache should %s for %s", map[bool]string{true: "write", false: "skip"}[tt.wantUpdate], tt.name)

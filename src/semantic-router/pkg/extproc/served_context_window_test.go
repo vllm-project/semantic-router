@@ -47,11 +47,11 @@ func servedWindowConfig(t *testing.T, backendURL string, cardOverride int) *conf
 	t.Helper()
 	backend, err := url.Parse(backendURL)
 	require.NoError(t, err)
-	override := "routing: {}\n"
+	override := ""
 	if cardOverride > 0 {
-		override = fmt.Sprintf("routing:\n  modelCards:\n    - name: qwen/qwen3.6-27b\n      context_window_size: %d\n", cardOverride)
+		override = fmt.Sprintf("      context_window_size: %d\n", cardOverride)
 	}
-	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.5
 listeners: []
 providers:
   defaults:
@@ -65,7 +65,9 @@ providers:
           endpoint: %s
           protocol: http
           api_key: backend-secret
-%sglobal: {}
+%srecipes:
+  - name: default
+global: {}
 `, backend.Host, override)))
 	require.NoError(t, err)
 	return cfg
@@ -141,7 +143,7 @@ func TestServedContextWindowWarnsOnlyWhenTheBackendServesLess(t *testing.T) {
 			assert.EqualValues(t, tt.wantWindow, fields["context_window_size"])
 			assert.Equal(t, tt.wantSource, fields["context_window_source"])
 			assert.EqualValues(t, 32_768, fields["served_max_model_len"])
-			assert.Contains(t, fields["message"], `context_window_size: 32768 on the routing.modelCards entry named "qwen/qwen3.6-27b"`)
+			assert.Contains(t, fields["message"], `context_window_size: 32768 on the providers.models[] entry named "qwen-long"`)
 		})
 	}
 }

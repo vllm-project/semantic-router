@@ -13,8 +13,7 @@ transport, pricing, and any restrictions known for that Provider.
 ## Configure the smallest binding
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   defaults:
     model: production
@@ -25,8 +24,8 @@ providers:
         - name: openai-primary
           provider: openai
           auth: {api_key_env: OPENAI_API_KEY}
-
-routing: {}
+recipes:
+  - name: default
 ```
 
 `production` is the local alias. The Router resolves the canonical card and the
@@ -50,7 +49,7 @@ The card records the checkpoint's 1,048,576-token context window from its
 The MiniMax API mapping separately records its 1,000,000-token service limit.
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: flash
@@ -59,17 +58,18 @@ providers:
         - name: primary
           provider: minimax
           auth: {api_key_env: MINIMAX_API_KEY}
-routing:
-  decisions:
-    - name: flash_default
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: flash
-          use_reasoning: true
-          reasoning_effort: high
+recipes:
+  - name: default
+    decisions:
+      - name: flash_default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: flash
+            use_reasoning: true
+            reasoning_effort: high
 ```
 
 The model uses adaptive thinking and supports `low`, `medium`, `high`, `xhigh`,
@@ -135,8 +135,10 @@ forking the built-in card. The override must use the canonical `catalog` ID,
 not the local alias:
 
 ```yaml
-routing:
-  modelCards:
+recipes:
+  - name: default
+providers:
+  models:
     - name: openai/gpt-5.6-sol
       tags: [production, approved]
       description: Approved for production reasoning traffic.
@@ -156,8 +158,10 @@ with a matching `--max-model-len`, or set the served window on the canonical
 card:
 
 ```yaml
-routing:
-  modelCards:
+recipes:
+  - name: default
+providers:
+  models:
     - name: qwen/qwen3.6-27b
       context_window_size: 32768
 ```
@@ -168,7 +172,7 @@ and rejects `max_model_len=262144`, although the model card and tokenizer
 advertise 256K. For that deployment, override the canonical card window:
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: local-hunyuan
@@ -178,10 +182,9 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: http://127.0.0.1:8000/v1
-routing:
-  modelCards:
-    - name: tencent/hunyuan-7b-instruct
       context_window_size: 32768
+recipes:
+  - name: default
 ```
 
 The override uses the canonical card ID, not `local-hunyuan`. Keep the published

@@ -2,14 +2,16 @@
 
 The CLI's offline checks cover the document's structure and the rules the CLI
 owns. The rules the Router applies when it loads a document -- its model
-deployments and bindings, and cross-field contracts such as a modality
-decision's models or a module's required settings -- live in the Router
+deployments and bindings, and cross-field contracts such as the models of a
+decision's output contract or a module's required settings -- live in the Router
 alone, so `config validate` and `config migrate` ask the Router: a local
-Router binary (`--router-binary` or VLLM_SR_ROUTER_BINARY), or the stack's
-Router image, run once with `-validate-config` and no network, or a running
-Router through its management API (`--endpoint`). Either way one set of rules
-decides what `vllm-sr serve` and `vllm-sr config apply` accept, and the
-answer carries the warnings the Router logs when it loads the document.
+Router binary (`--router-binary` or VLLM_SR_ROUTER_BINARY), or the Router
+image of this CLI's version, run once with `-validate-config` and no network,
+or a running Router through its management API (`--endpoint`). Either way one
+set of rules decides what `vllm-sr serve` and `vllm-sr config apply` accept,
+and the answer carries the warnings the Router logs when it loads the document.
+A running stack's Router is asked only when named: during an upgrade it is the
+older one.
 """
 
 from __future__ import annotations
@@ -17,9 +19,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from cli.consts import (
@@ -27,7 +30,9 @@ from cli.consts import (
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
     VLLM_SR_CONTAINER_IMAGE_ROCM,
 )
+from cli.container_images import get_router_image, resolve_router_image
 from cli.container_runtime import container_image_exists, get_container_runtime
+from cli.execution_platform import resolve_execution_platform
 from cli.router_management_client import RouterManagementClient, RouterManagementError
 from cli.runtime_stack import resolve_runtime_stack
 
@@ -53,12 +58,19 @@ class RouterVerdict:
     valid: bool
     error: str = ""
     warnings: tuple[RouterWarning, ...] = field(default_factory=tuple)
-    # With migrate: the document with its deprecated model fields in the forms
-    # that replace them, the deprecated fields that have none, and why the
-    # Router could not write it.
+    # With migrate: the document with its removed and renamed forms in the
+    # forms that replace them, the notes of what migrate rewrote and what an
+    # operator must do, and why the Router could not write it.
     migrated: str = ""
-    kept: tuple[RouterWarning, ...] = field(default_factory=tuple)
+    notes: tuple[RouterWarning, ...] = field(default_factory=tuple)
     migration_error: str = ""
+    # This stack's running Router image, when it is not the one that answered.
+    running_router: str = ""
+    # When the answering image is a moving tag: the date its local copy was
+    # built, and the commands that rebuild it from this checkout or pull it.
+    built: str = ""
+    rebuild: str = ""
+    pull: str = ""
 
 
 class RouterValidationUnavailableError(Exception):
@@ -77,8 +89,8 @@ def local_router_verdict(
     """The verdict of a Router on this host: a local binary, or an image.
 
     An explicit binary wins, then an explicit image, then the binary
-    VLLM_SR_ROUTER_BINARY names, then the images `vllm-sr serve` would run.
-    With migrate, the verdict also carries the migrated document.
+    VLLM_SR_ROUTER_BINARY names, then the image `vllm-sr serve` runs by
+    default. With migrate, the verdict also carries the migrated document.
     """
 
     executable = router_binary(binary) if binary or not image else None
@@ -90,13 +102,15 @@ def local_router_verdict(
             models_dir=models_dir,
             migrate=migrate,
         )
-    return validate_with_image(
+    selected = validation_image(image)
+    verdict = validate_with_image(
         config_path,
-        validation_image(image),
+        selected,
         gateway=gateway,
         models_dir=models_dir,
         migrate=migrate,
     )
+    return replace(verdict, running_router=_other_running_router(selected))
 
 
 def router_binary(explicit: str | None = None) -> str | None:
@@ -119,11 +133,13 @@ def router_binary(explicit: str | None = None) -> str | None:
 
 
 def validation_image(explicit: str | None = None) -> str:
-    """The Router image to validate with: the stack's own, or one present here.
+    """The Router image to validate with, which must be present here.
 
-    An explicit image wins. Otherwise the image of this stack's Router
-    container, then the images `vllm-sr serve` would choose, the first one
-    present locally. Validation never pulls an image.
+    An explicit image wins. Otherwise the image `vllm-sr serve` runs by
+    default: the one VLLM_SR_ROUTER_IMAGE or VLLM_SR_IMAGE names, else this
+    CLI's own release of it, whichever platform variant is present. A running
+    stack's Router is never chosen for being there: during an upgrade it is
+    the older one. Validation never pulls an image.
     """
 
     if not _container_runtime_installed():
@@ -153,25 +169,153 @@ def _container_runtime_installed() -> bool:
 
 def _present_image(explicit: str | None) -> str:
     if explicit:
-        if not container_image_exists(explicit):
-            raise RouterValidationUnavailableError(
-                f"the Router image {explicit} is not present locally; pull it first"
-            )
-        return explicit
-    candidates = [
-        _container_image(resolve_runtime_stack().router_container_name),
-        os.getenv("VLLM_SR_ROUTER_IMAGE", "").strip(),
-        os.getenv("VLLM_SR_IMAGE", "").strip(),
-        VLLM_SR_CONTAINER_IMAGE_DEFAULT,
-        VLLM_SR_CONTAINER_IMAGE_ROCM,
-        VLLM_SR_CONTAINER_IMAGE_CUDA,
-    ]
-    for image in dict.fromkeys(candidate for candidate in candidates if candidate):
+        return _named_image(explicit, explicit)
+    for variable in ("VLLM_SR_ROUTER_IMAGE", "VLLM_SR_IMAGE"):
+        named = os.getenv(variable, "").strip()
+        if named:
+            return _named_image(named, f"{named}, which {variable} names,")
+    for image in dict.fromkeys(
+        (
+            VLLM_SR_CONTAINER_IMAGE_DEFAULT,
+            VLLM_SR_CONTAINER_IMAGE_ROCM,
+            VLLM_SR_CONTAINER_IMAGE_CUDA,
+        )
+    ):
         if container_image_exists(image):
             return image
+    served = _served_release_image()
+    build = _checkout_build_command(served)
+    if build:
+        missing = (
+            "no Router image built from this checkout is present locally; build "
+            f"the one `vllm-sr serve` runs on this host with `{build}` (a "
+            "registry `latest` is not this checkout)"
+        )
+    else:
+        missing = (
+            "no Router image of this CLI's version is present locally; "
+            f"`{_runtime_name()} pull {served}` fetches the one `vllm-sr serve` "
+            "runs on this host, which `vllm-sr serve` also pulls"
+        )
+    running = _running_router()
+    if running:
+        missing += f"; this stack's running Router image {running[0]} is not used"
+    raise RouterValidationUnavailableError(missing)
+
+
+def _named_image(image: str, description: str) -> str:
+    if container_image_exists(image):
+        return image
+    build = _checkout_build_command(image)
+    fetch = (
+        f"build it from this checkout with `{build}` (a registry `latest` is "
+        "not this checkout)"
+        if build
+        else f"`{_runtime_name()} pull {image}` fetches it"
+    )
     raise RouterValidationUnavailableError(
-        "no Router image is present locally (`vllm-sr serve` pulls "
-        f"{VLLM_SR_CONTAINER_IMAGE_DEFAULT})"
+        f"the Router image {description} is not present locally; {fetch}"
+    )
+
+
+def _served_release_image() -> str:
+    """This CLI's own Router image for this host's platform, as serve picks it."""
+    try:
+        platform = resolve_execution_platform()
+    except ValueError:
+        platform = None
+    return resolve_router_image(platform=platform)
+
+
+def _moving_tag(image: str) -> bool:
+    """Whether *image* names the moving `latest` tag, written or implied."""
+    if "@" in image:
+        return False
+    return image.rsplit("/", 1)[-1].partition(":")[2] in ("", "latest")
+
+
+def _checkout_build_command(image: str) -> str:
+    """The command that builds *image* from the source checkout this CLI runs
+    from, when *image* is that checkout's own moving-tag Router image."""
+    root = _source_checkout()
+    if root is None or not _moving_tag(image):
+        return ""
+    if not image.rsplit("/", 1)[-1].partition(":")[2]:
+        image = f"{image}:latest"
+    variants = {
+        VLLM_SR_CONTAINER_IMAGE_DEFAULT: "",
+        VLLM_SR_CONTAINER_IMAGE_ROCM: " VLLM_SR_PLATFORM=rocm",
+        VLLM_SR_CONTAINER_IMAGE_CUDA: " VLLM_SR_PLATFORM=cuda",
+    }
+    if image not in variants:
+        return ""
+    return f"make -C {root} vllm-sr-build{variants[image]}"
+
+
+def _source_checkout() -> Path | None:
+    """The repository this CLI runs from, when it runs from a source checkout."""
+    try:
+        root = Path(__file__).resolve().parents[3]
+    except IndexError:
+        return None
+    return root if (root / "tools" / "make" / "docker.mk").is_file() else None
+
+
+def _runtime_name() -> str:
+    return Path(get_container_runtime()).name
+
+
+def with_moving_tag_hint(
+    message: str,
+    verdict: RouterVerdict | None,
+    name_router: str,
+    *,
+    pulled: bool = False,
+) -> str:
+    """*message* about a Router's refusal, and, when that Router is a moving
+    tag's local copy, why it may answer as an older Router and what to do.
+
+    *pulled*: serve fetched that copy in this run, so pulling again changes
+    nothing, and a rebuild must not be pulled over.
+    """
+    if verdict is None or not verdict.pull:
+        return message
+    built = f"was built on {verdict.built} and " if verdict.built else ""
+    if verdict.rebuild:
+        keep = " and serve it with `--image-pull-policy ifnotpresent`" if pulled else ""
+        update = f"rebuild it from this checkout (`{verdict.rebuild}`){keep} or "
+    else:
+        update = "" if pulled else f"pull it again (`{verdict.pull}`) or "
+    return (
+        f"{message.rstrip('.')}. `latest` is a moving tag: this local copy "
+        f"{built}may be older than this CLI; {update}name the Router with "
+        f"{name_router}."
+    )
+
+
+def served_router_image(
+    *,
+    image: str | None,
+    router_image: str | None,
+    platform: str | None,
+    pull_policy: str | None,
+) -> str:
+    """The Router image this `vllm-sr serve` runs, pulled as its policy says.
+
+    A new config is checked before the restart by the Router that will load
+    it, never by another image on this host. A pull that fails ends serve
+    here, before the running stack is touched.
+    """
+
+    if not _container_runtime_installed():
+        raise RouterValidationUnavailableError(
+            "no container runtime (Docker or Podman) is installed"
+        )
+    return get_router_image(
+        image=image,
+        router_image=router_image,
+        pull_policy=pull_policy,
+        platform=platform,
     )
 
 
@@ -187,6 +331,8 @@ def validate_with_image(
 
     The file goes in on stdin. The models directory `serve` would mount is
     mounted read-only, so local model packages resolve as they do at runtime.
+    A moving tag's verdict says when its local copy was built and how to
+    update it.
     """
 
     command = [
@@ -202,11 +348,20 @@ def validate_with_image(
     if models_dir is not None and models_dir.is_dir():
         command += ["-v", f"{models_dir.resolve()}:/app/models:ro,z"]
     command += [image, *_validate_arguments(gateway, migrate)]
-    return _run_validation(
+    verdict = _run_validation(
         command,
         config_path,
         subject=f"the Router image {image}",
         source=f"the Router in {image}",
+    )
+    if not _moving_tag(image):
+        return verdict
+    built = re.search(r"\d{4}-\d{2}-\d{2}", _inspect("image", "{{.Created}}", image))
+    return replace(
+        verdict,
+        built=built.group(0) if built else "",
+        rebuild=_checkout_build_command(image),
+        pull=f"{_runtime_name()} pull {image}",
     )
 
 
@@ -280,7 +435,7 @@ def _run_validation(
         error=str(report.get("error") or ""),
         warnings=_warnings(report.get("warnings")),
         migrated=str(report.get("migrated") or ""),
-        kept=_warnings(report.get("kept")),
+        notes=_warnings(report.get("notes")),
         migration_error=str(report.get("migration_error") or ""),
     )
 
@@ -332,17 +487,39 @@ def _warnings(raw: object) -> tuple[RouterWarning, ...]:
     )
 
 
-def _container_image(container_name: str) -> str:
+def _other_running_router(image: str) -> str:
+    """This stack's running Router image when it is not *image*, else ""."""
+
+    running = _running_router()
+    if running is None:
+        return ""
+    reference, running_id = running
+    return "" if _image_id(image) == running_id else reference
+
+
+def _running_router() -> tuple[str, str] | None:
+    """The image reference and ID of this stack's running Router, if one runs."""
+
+    output = _inspect(
+        "container",
+        "{{.State.Running}} {{.Image}} {{.Config.Image}}",
+        resolve_runtime_stack().router_container_name,
+    )
+    running, _, rest = output.partition(" ")
+    image_id, _, reference = rest.partition(" ")
+    if running != "true" or not reference:
+        return None
+    return reference, image_id.removeprefix("sha256:")
+
+
+def _image_id(image: str) -> str:
+    return _inspect("image", "{{.Id}}", image).removeprefix("sha256:")
+
+
+def _inspect(kind: str, template: str, name: str) -> str:
     try:
         result = subprocess.run(
-            [
-                get_container_runtime(),
-                "container",
-                "inspect",
-                "--format",
-                "{{.Config.Image}}",
-                container_name,
-            ],
+            [get_container_runtime(), kind, "inspect", "--format", template, name],
             capture_output=True,
             text=True,
             timeout=15,

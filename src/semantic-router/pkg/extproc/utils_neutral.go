@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routinginput"
@@ -141,16 +142,21 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 		result.LastUserHasText = strings.TrimSpace(text) != ""
 		result.LastUserAfterToolResult = previousWasTool
 		recordUserInputModalities(result, message.Content, text)
+		result.UserImages, result.UserVideos = userInlineMedia(message.Content)
 		if text != "" {
 			if result.UserContent != "" {
 				result.PriorUserMessages = append(result.PriorUserMessages, result.UserContent)
 			}
 			result.UserContent = text
+			result.Turns = append(result.Turns, classification.ConversationTurn{Role: role, Text: text})
 		}
 	case llmprotocol.RoleAssistant:
 		result.AssistantMessageCount++
 		result.HasAssistantReply = result.HasAssistantReply || text != ""
 		recordNonUserSignalMessage(result, role, text)
+		if text != "" {
+			result.Turns = append(result.Turns, classification.ConversationTurn{Role: role, Text: text})
+		}
 	case llmprotocol.RoleSystem:
 		result.SystemMessageCount++
 		recordNonUserSignalMessage(result, role, text)
@@ -164,7 +170,6 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 	for _, content := range message.Content {
 		switch content.Kind {
 		case llmprotocol.ContentImage:
-			result.ImageContentCount++
 			if result.FirstImageURL == "" {
 				result.FirstImageURL = neutralInlineImageDataURL(content)
 			}
@@ -176,11 +181,6 @@ func consumeSemanticMessage(result *requestSignalSnapshot, message llmprotocol.M
 			result.AssistantToolCallCount++
 			if message.Role == llmprotocol.RoleAssistant {
 				result.LastAssistantToolCall = true
-			}
-			if content.ToolCall != nil {
-				if content.ToolCall.Name != "" {
-					result.AssistantToolNames = append(result.AssistantToolNames, content.ToolCall.Name)
-				}
 			}
 		case llmprotocol.ContentToolResult:
 			result.ToolResultCount++
@@ -239,6 +239,35 @@ func saturatingNeutralAdd(left, right int) int {
 		return math.MaxInt
 	}
 	return left + right
+}
+
+// userInlineMedia are a user message's inline images and videos as base64
+// data URLs, in order. Remote URLs and local paths never cross this boundary.
+func userInlineMedia(contents []llmprotocol.Content) (images, videos []string) {
+	for _, content := range contents {
+		switch content.Kind {
+		case llmprotocol.ContentImage:
+			if image := neutralInlineImageDataURL(content); image != "" {
+				images = append(images, image)
+			}
+		case llmprotocol.ContentVideo:
+			if video := neutralInlineVideoDataURL(content); video != "" {
+				videos = append(videos, video)
+			}
+		}
+	}
+	return images, videos
+}
+
+// neutralInlineVideoDataURL returns an inline video as a base64 data URL.
+func neutralInlineVideoDataURL(content llmprotocol.Content) string {
+	if content.Data != "" && strings.HasPrefix(strings.ToLower(content.MediaType), "video/") {
+		return "data:" + strings.ToLower(content.MediaType) + ";base64," + content.Data
+	}
+	if strings.HasPrefix(strings.ToLower(content.URL), "data:video/") && strings.Contains(content.URL, ";base64,") {
+		return content.URL
+	}
+	return ""
 }
 
 // Inline audio remains protocol-neutral and is decoded only if an audio rule

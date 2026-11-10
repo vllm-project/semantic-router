@@ -13,11 +13,9 @@ func stickyEnabledDecision(t *testing.T, name string) config.Decision {
 	return config.Decision{
 		Name: name,
 		Plugins: []config.DecisionPlugin{
-			mustToolSelectionDecisionPlugin(t, &config.ToolSelectionPluginConfig{
-				Enabled: true,
-				Mode:    config.ToolSelectionModeAdd,
-				Sticky:  &config.StickyToolSelectionConfig{Enabled: true},
-			}),
+			mustToolsDecisionPlugin(t, &config.ToolsPluginConfig{Enabled: true, Select: &config.ToolsSelectConfig{
+				Mode: config.ToolsSelectModeAdd, ToolsDBPath: "tools.json", Sticky: &config.StickyToolSelectionConfig{Enabled: true},
+			}}),
 		},
 	}
 }
@@ -27,10 +25,7 @@ func stickyDisabledDecision(t *testing.T, name string) config.Decision {
 	return config.Decision{
 		Name: name,
 		Plugins: []config.DecisionPlugin{
-			mustToolSelectionDecisionPlugin(t, &config.ToolSelectionPluginConfig{
-				Enabled: true,
-				Mode:    config.ToolSelectionModeAdd,
-			}),
+			mustToolsDecisionPlugin(t, &config.ToolsPluginConfig{Enabled: true, Select: &config.ToolsSelectConfig{Mode: config.ToolsSelectModeAdd, ToolsDBPath: "tools.json"}}),
 		},
 	}
 }

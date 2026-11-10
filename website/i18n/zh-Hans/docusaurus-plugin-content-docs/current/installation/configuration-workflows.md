@@ -22,7 +22,7 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-`config init` 写入打包的最小 canonical 模板，并且除非显式指定 `--force`，否则拒绝替换现有文件。当 Router 已经在运行时，从 `vllm-sr config get` 开始，以便保留不相关的活动设置。在 `providers.models` 中声明物理模型，并在适用决策的 `modelRefs` 中引用其名称。命名配方的决策位于 `recipes[].routing.decisions`；可复用的内置配方在发布入口点时接收模型分配。可选模型元数据统一保留在顶层 `routing.modelCards`，并根据所选算法或能力补充上下文限制、LoRA 适配器等必需信息。
+`config init` 写入打包的最小 canonical 模板，并且除非显式指定 `--force`，否则拒绝替换现有文件。当 Router 已经在运行时，从 `vllm-sr config get` 开始，以便保留不相关的活动设置。在 `providers.models` 中声明物理模型，并在适用决策的 `modelRefs` 中引用其名称。命名配方的决策位于 `recipes[].decisions`；可复用的内置配方在发布入口点时接收模型分配。可选模型元数据统一保留在顶层 `providers.models`，并根据所选算法或能力补充上下文限制、LoRA 适配器等必需信息。
 
 本地运行时在运行时拥有的状态中派生栈专用服务地址，而不会重写源文件。同一运行时和栈的并发 `serve` 和 `stop` 操作会串行化；在活动生命周期操作完成后重试。
 
@@ -70,7 +70,6 @@ configOverride:
     strategy: priority
     modelCards:
       - name: local/general
-        modality: text
         capabilities: [chat]
     decisions:
       - name: default-route
@@ -116,8 +115,8 @@ kubectl --namespace vllm-semantic-router-system port-forward \
 
 Operator 从两个 Kubernetes 原生输入渲染 canonical 配置：
 
-- `spec.vllmEndpoints` 发现模型服务，并创建 provider 绑定和 model card；以及
-- `spec.config.routing` 接受 canonical 路由对象。
+- `spec.vllmEndpoints` 发现模型服务，并创建 provider 绑定；以及
+- `spec.config.recipes`、`spec.config.entrypoints`、`spec.config.plugins` 和 `spec.config.models` 接受 canonical 配方、入口点、默认插件和模型事实。
 
 其他 `spec.config` 字段是用于响应缓存、分类器、工具、可观测性、推理家族和相关共享设置的类型化 Operator 适配器。Operator 将它们翻译为 canonical provider 和 `global` 节。`spec.config.model_deployments`、`model_bindings` 和 `decision_model` 承载模型目录；见[模型部署与决策模型](../api/semantic-router-crd#model-deployments-and-the-decision-model)。
 

@@ -47,7 +47,6 @@ func stubPassingReload(t *testing.T) {
 	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		return &OpenAIRouter{Config: cfg, resources: newResourceScope()}, nil
 	}
-	warmupReloadRouter = func(*OpenAIRouter) error { return nil }
 }
 
 func TestFileReloadActivatesTheNextSnapshotVersion(t *testing.T) {

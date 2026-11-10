@@ -1,0 +1,1 @@
+global.model_catalog.deployments.fast.profile: removed_field: profile is removed; run `vllm-sr config migrate` (the engine arguments it stood for: max_num_seqs, max_num_batched_tokens, batch_window_ms, enable_shared_context, dtype)

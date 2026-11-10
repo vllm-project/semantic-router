@@ -5,16 +5,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-const defaultCacheControlHeader = "x-vsr-cache-control"
-
 func applyRequestCacheControls(ctx *RequestContext) {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
-		return
-	}
-	pluginConfig := ctx.VSRSelectedDecision.GetResponseCacheConfig()
+	pluginConfig := requestResponseCache(ctx)
 	if pluginConfig == nil {
 		return
 	}
@@ -24,7 +20,7 @@ func applyRequestCacheControls(ctx *RequestContext) {
 	}
 	headerName := strings.TrimSpace(controls.Header)
 	if headerName == "" {
-		headerName = defaultCacheControlHeader
+		headerName = headers.VSRCacheControl
 	}
 	allowed := responseCacheAllowedControls(controls.Allowed)
 	for _, rawDirective := range strings.Split(strings.ToLower(headerValueCI(ctx, headerName)), ",") {

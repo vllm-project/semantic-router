@@ -35,7 +35,7 @@ func TestResponsesRetentionPolicyAcrossCompletionPaths(t *testing.T) {
 					router, ctx, responseStore, memoryStore, runner := responseRetentionTestContext(t, tc.store)
 					ctx.TargetFormat = backend
 					if tc.drop != nil {
-						ctx.EmittedRetention = &config.RetentionDirective{Drop: tc.drop}
+						ctx.Retention = &config.DecisionRetention{Drop: tc.drop}
 					}
 					completeRetentionTestResponse(t, router, ctx, path)
 					if err := runner.RetireAndWait(time.Second); err != nil {
@@ -87,7 +87,7 @@ func responseRetentionTestContext(t *testing.T, store *bool) (*OpenAIRouter, *Re
 	runner := memory.NewPersistenceRunner(time.Second, 1, 1)
 	t.Cleanup(func() { _ = runner.RetireAndWait(time.Second) })
 	router := &OpenAIRouter{
-		Config:            &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
+		Config:            &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, AutoStore: true}},
 		ResponseAPIFilter: NewResponseAPIFilter(responseStore), MemoryExtractor: memory.NewMemoryChunkStore(memoryStore),
 		memoryPersistence: runner,
 	}
