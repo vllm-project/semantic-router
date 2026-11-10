@@ -12,7 +12,7 @@ i18n/
     │   ├── navbar.json                    # Navigation bar labels
     │   └── footer.json                    # Footer labels
     └── docusaurus-plugin-content-docs/
-        └── current/                       # Translations for /docs (next version)
+        └── current/                       # Translations for /docs (the latest docs, from main)
 ```
 
 ## Translation Frontmatter
