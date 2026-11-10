@@ -5,6 +5,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -28,15 +29,15 @@ const defaultSystemOneSelectorInstructions = "Which candidate model best fits th
 var algorithmForms = []ConfigForm{
 	removedAlgorithm("confidence", "type: escalate, with its method and threshold under escalate.accept", migrateConfidenceAlgorithm),
 	removedAlgorithm("cascade", "type: escalate, with its stages and quality under escalate", migrateCascadeAlgorithm),
-	removedAlgorithm("prompt", "type: systemone, which asks the decision model with the same instructions", migratePromptAlgorithm),
-	removedAlgorithm("router_dc", "type: systemone, which asks the decision model to choose by the candidates' descriptions, or static for a decision with one candidate", migrateSystemOneSelector("router_dc's embedding similarity")),
+	removedAlgorithm("prompt", "type: systemone, which asks the decision model with the same instructions, over the first modelRef of each model; static when every candidate is one model", migratePromptAlgorithm),
+	removedAlgorithm("router_dc", "type: systemone, which asks the decision model to choose by the candidates' descriptions, over the first modelRef of each model; static when every candidate is one model", migrateSystemOneSelector("router_dc's embedding similarity")),
 	removedAlgorithm("automix", "type: multi_factor, weighted {quality: 1-t, cost: t} by cost_quality_tradeoff t", migrateAutoMixAlgorithm),
 	removedAlgorithm("hybrid", "type: multi_factor, weighted by hybrid's automix and cost weights", migrateHybridAlgorithm),
 	removedAlgorithm("latency_aware", "type: multi_factor, weighted on latency", migrateLatencyAwareAlgorithm),
-	removedAlgorithm("knn", "type: systemone, or static for a decision with one candidate; the trained model is not used", migrateSystemOneSelector("the trained knn model")),
-	removedAlgorithm("kmeans", "type: systemone, or static for a decision with one candidate; the trained model is not used", migrateSystemOneSelector("the trained kmeans model")),
-	removedAlgorithm("svm", "type: systemone, or static for a decision with one candidate; the trained model is not used", migrateSystemOneSelector("the trained svm model")),
-	removedAlgorithm("mlp", "type: systemone, or static for a decision with one candidate; the trained model is not used", migrateSystemOneSelector("the trained mlp model")),
+	removedAlgorithm("knn", "type: systemone over the first modelRef of each model, or static when every candidate is one model; the trained model is not used", migrateSystemOneSelector("the trained knn model")),
+	removedAlgorithm("kmeans", "type: systemone over the first modelRef of each model, or static when every candidate is one model; the trained model is not used", migrateSystemOneSelector("the trained kmeans model")),
+	removedAlgorithm("svm", "type: systemone over the first modelRef of each model, or static when every candidate is one model; the trained model is not used", migrateSystemOneSelector("the trained svm model")),
+	removedAlgorithm("mlp", "type: systemone over the first modelRef of each model, or static when every candidate is one model; the trained model is not used", migrateSystemOneSelector("the trained mlp model")),
 	{
 		Code:  CodeRemovedField,
 		Paths: RoutingScopes("decisions[].algorithm"),
@@ -314,24 +315,36 @@ func migratePromptAlgorithm(m *Migration, at FormMatch) error {
 
 // migratedToStatic makes a selector static when the systemone selector, which
 // chooses among two or more distinct models, has nothing to choose: a decision
-// with one candidate, or one whose modelRefs repeat a model, as the LoRA
-// adapters of one base model do. It reports whether it did.
+// with one candidate, or one whose modelRefs all name one model, as the LoRA
+// adapters of one base model do. It reports whether it did. Otherwise the
+// selector keeps the first modelRef of each model, and the note names the
+// ones it drops.
 func migratedToStatic(m *Migration, at FormMatch) bool {
-	refs := sequenceItems(mappingValue(at.Parent, "modelRefs"))
+	refs := mappingValue(at.Parent, "modelRefs")
 	seen := map[string]bool{}
-	repeated := ""
-	for _, ref := range refs {
+	var kept []*yaml.Node
+	var dropped []string
+	for _, ref := range sequenceItems(refs) {
 		model := scalarAt(ref, "model")
-		if seen[model] && repeated == "" {
-			repeated = model
+		if !seen[model] {
+			seen[model] = true
+			kept = append(kept, ref)
+		} else if lora := scalarAt(ref, "lora_name"); lora != "" {
+			dropped = append(dropped, model+" with lora_name "+lora)
+		} else {
+			dropped = append(dropped, model)
 		}
-		seen[model] = true
 	}
-	if len(refs) >= 2 && repeated == "" {
+	if len(kept) >= 2 {
+		if len(dropped) > 0 {
+			refs.Content = kept
+			m.Note(at.Path, "the systemone selector chooses among distinct models, so the decision keeps the first modelRef of each model and drops "+
+				strings.Join(dropped, ", ")+"; to route to a dropped one, give it a decision of its own")
+		}
 		return false
 	}
-	if repeated != "" {
-		m.Note(at.Path, "the decision's modelRefs repeat model "+repeated+", which the systemone selector cannot choose between, so the decision is static "+
+	if len(dropped) > 0 {
+		m.Note(at.Path, "the decision's modelRefs repeat model "+scalarAt(kept[0], "model")+", which the systemone selector cannot choose between, so the decision is static "+
 			"and its first candidate serves every request; list each model once for the decision model to choose")
 	}
 	m.Delete(at.Node, algorithmTypeOf(at.Node))

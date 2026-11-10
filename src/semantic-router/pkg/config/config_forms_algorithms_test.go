@@ -58,3 +58,26 @@ func TestSelectorsOverOneModelsAdaptersMigrateToStatic(t *testing.T) {
 		})
 	}
 }
+
+// A selector over two models, one of them with two LoRA adapters, keeps
+// choosing between the models with the first adapter of the repeated one,
+// where it used to become static and never choose the other model.
+func TestSelectorOverARepeatedModelKeepsChoosing(t *testing.T) {
+	migrated, notes, err := MigrateConfig([]byte(strings.Replace(migrateModels, "description: Fast general model", "description: Fast general model\n      loras: [{name: math}, {name: code}]", 1) + `recipes:
+  - name: default
+    decisions:
+      - name: pick
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small, lora_name: math}, {model: small, lora_name: code}, {model: large}]
+        algorithm: {type: router_dc}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(migrated), "modelRefs: [{model: small, lora_name: math}, {model: large}]") || !strings.Contains(string(migrated), "type: systemone") {
+		t.Fatalf("migrate wrote\n%s\nwant a systemone selector over small with lora_name math and large", migrated)
+	}
+	wantNotes(t, notes, map[string][]string{
+		"recipes[default].decisions[pick].algorithm": {"keeps the first modelRef of each model and drops small with lora_name code"},
+	})
+}

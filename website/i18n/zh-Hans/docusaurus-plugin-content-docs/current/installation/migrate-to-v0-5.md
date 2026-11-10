@@ -150,7 +150,8 @@ recipes:
 | `signals.decision`、`algorithm.type: decision` | `systemone`（加载时给出警告） |
 | `domains[].mmlu_categories` | `domains[].labels` |
 | 自行声明领域的 domain 条件 | 为条件指定的每个领域各写一条 `domains` 规则 |
-| 没有 `labels` 或 `mmlu_categories`、名称又不是领域的 `domains` 规则 | 删除：分类器只报告领域，这条规则从未匹配过；需要它的决策、它在 `OR` 中的那一项和读取它的分数输入也一并删除（migrate 会逐一说明） |
+| 没有 `labels` 或 `mmlu_categories`、名称是其他大小写形式领域的 `domains` 规则（如 `Math`） | 改为小写的领域名，规则以及引用它的每个条件、分数输入和分区一并修改 |
+| 没有 `labels` 或 `mmlu_categories`、名称又不是领域的 `domains` 规则 | 删除：分类器只报告领域，这条规则从未匹配过；需要它的决策、它在 `OR` 中的那一项和读取它的分数输入也一并删除（migrate 会逐一说明）。投影分区引用的规则保留并写成 `labels: [other]`，因为分区的默认成员曾匹配它。加载时会提示近似领域的名称（如 `maths`）只要仍有条件读取它，就保留该错误 |
 | `jailbreak` 的 `threshold`、`direction`、`include_history` | `predicate`、`stage`、`input.history`；`method: contrastive` 的阈值界定的是相似度之差而不是概率，migrate 会提示重新拟合 |
 | `jailbreak` 的 `method`、`jailbreak_patterns`、`benign_patterns` | 已移除：决策模型直接读取请求。需要确定性的硬拦截时，把这些模式写成一条 [`keywords`](../tutorials/signal/heuristic/keyword) 规则，并由一个拦截决策读取它 |
 | `on_error: block` 下的 `jailbreak` 和 `pii` 规则 | 规则上的 `on_unknown: match` |
@@ -225,7 +226,7 @@ recipes:
 | 之前 | 之后 |
 | --- | --- |
 | `prompt`、`router_dc` | `systemone`，用同样的说明或候选描述询问决策模型；无可选候选时与 `knn` 一样为 `static` |
-| `knn`、`kmeans`、`svm`、`mlp` | `systemone`；只有一个候选，或 `modelRefs` 重复同一个模型（例如同一模型的多个 LoRA 适配器，migrate 会说明）的决策为 `static`；不再使用训练出的模型 |
+| `knn`、`kmeans`、`svm`、`mlp` | `systemone`，每个模型只保留第一个 `modelRefs` 项（migrate 会说明丢弃的 LoRA 适配器）；所有候选都是同一个模型（例如只有一个候选，或同一模型的多个 LoRA 适配器）时为 `static`；不再使用训练出的模型 |
 | `automix`、`hybrid`、`latency_aware` | `multi_factor`，由 migrate 写出权重 |
 | `confidence`（Looper） | 带 `escalate.accept.confidence` 的 `escalate` |
 | `cascade`（System One） | 带 `escalate.stages` 的 `escalate` |

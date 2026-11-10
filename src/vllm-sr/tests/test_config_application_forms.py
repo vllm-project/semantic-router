@@ -20,6 +20,9 @@ from cli.parser import ConfigParseError, parse_user_config  # noqa: E402
 
 GOLDEN = REPO_ROOT / "src/semantic-router/pkg/config/testdata/migrate"
 CASES = (
+    "invalid-value-domain-rule-cased",
+    "invalid-value-domain-rule-no-domain",
+    "invalid-value-domain-rule-partition",
     "removed-application-fields",
     "removed-domain-autogen",
     "removed-embedding-audio-query",
@@ -156,4 +159,43 @@ def test_a_rule_without_labels_whose_conditions_name_its_option_is_v05():
         "recipes[default].signals.user_feedbacks[satisfied]: invalid_value: a "
         "user_feedbacks rule's name no longer chooses its feedback; run `vllm-sr "
         "config migrate` (labels: [SAT])"
+    ]
+
+
+def test_a_domain_rule_named_near_a_domain_that_a_decision_reads_is_no_removed_form():
+    # The Router refuses a rule named maths with its suggestion "math", a
+    # likely v0.5 typo, so the CLI names no migration for it; one nothing reads
+    # is dropped as a rule named for no domain.
+    config = {
+        "recipes": [
+            {
+                "name": "default",
+                "signals": {"domains": [{"name": "maths"}]},
+                "decisions": [
+                    {"name": "d", "rules": {"type": "domain", "name": "maths"}}
+                ],
+            }
+        ]
+    }
+    assert removed_application_forms(config) == []
+    config["recipes"][0]["decisions"] = []
+    assert removed_application_forms(config) == [
+        "recipes[default].signals.domains[maths]: invalid_value: a domain rule "
+        "without labels or mmlu_categories whose name is no domain never matched, "
+        "since the domain classifier reports domains; run `vllm-sr config migrate` "
+        "(drop it; to route on it, set labels to the domains it means)"
+    ]
+
+
+def test_the_cli_lists_the_places_of_a_form_in_the_routers_order():
+    # The Router lists a form's places in document order, and this golden
+    # writes its score input before its decisions.
+    before = yaml.safe_load(
+        _golden("invalid-value-domain-rule-no-domain", "before.yaml")
+    )
+    assert [line.split(": ")[0] for line in removed_application_forms(before)] == [
+        "recipes[default].projections.scores[technical].inputs[general]",
+        "recipes[default].decisions[general].rules",
+        "recipes[default].decisions[math_or_general].rules.conditions[general]",
+        "recipes[default].signals.domains[general]",
     ]

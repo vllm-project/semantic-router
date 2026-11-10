@@ -178,7 +178,8 @@ recipes:
 | `signals.decision`, `algorithm.type: decision` | `systemone` (loads with a warning) |
 | `domains[].mmlu_categories` | `domains[].labels` |
 | Domain conditions that declared their own domains | One `domains` rule per domain the conditions name |
-| A `domains` rule without `labels` or `mmlu_categories` whose name is no domain | Dropped: the classifier reported domains, so it never matched; so are a decision that needs it, its term of an `OR` and a score input on it (migrate notes each) |
+| A `domains` rule without `labels` or `mmlu_categories` named for a domain in another case, such as `Math` | The domain in lower case, in the rule and each condition, score input and partition that names it |
+| A `domains` rule without `labels` or `mmlu_categories` whose name is no domain | Dropped: the classifier reported domains, so it never matched; so are a decision that needs it, its term of an `OR` and a score input on it (migrate notes each). A rule a projection partition names stays, with `labels: [other]`, since the partition's default matched it. A name the load suggests a domain for, such as `maths`, keeps that error while a condition reads it |
 | `jailbreak` `threshold`, `direction`, `include_history` | `predicate`, `stage`, `input.history`; a `method: contrastive` threshold bounded a similarity gap, not a probability, and migrate notes to re-fit it |
 | `jailbreak` `method`, `jailbreak_patterns`, `benign_patterns` | Removed: the decision model reads the request. For a deterministic hard block, write the patterns as a [`keywords`](../tutorials/signal/heuristic/keyword) rule that a blocking decision reads |
 | `jailbreak` and `pii` rules under `on_error: block` | `on_unknown: match` on the rules |
@@ -253,7 +254,7 @@ recipes:
 | Before | After |
 | --- | --- |
 | `prompt`, `router_dc` | `systemone`, which asks the decision model with the same instructions or the candidates' descriptions, or `static` as for `knn` |
-| `knn`, `kmeans`, `svm`, `mlp` | `systemone`, or `static` for a decision with one candidate or whose `modelRefs` repeat a model, as one model's LoRA adapters do (migrate notes it); the trained model is not used |
+| `knn`, `kmeans`, `svm`, `mlp` | `systemone` over the first `modelRefs` entry of each model (migrate notes the LoRA adapters it drops), or `static` when every candidate is one model, as one candidate or one model's LoRA adapters are; the trained model is not used |
 | `automix`, `hybrid`, `latency_aware` | `multi_factor`, with weights migrate writes out |
 | `confidence` (Looper) | `escalate` with `escalate.accept.confidence` |
 | `cascade` (System One) | `escalate` with `escalate.stages` |

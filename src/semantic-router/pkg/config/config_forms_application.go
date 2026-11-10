@@ -302,21 +302,105 @@ var domainNeverMatches = neverMatches{
 	restore: "to route on it, declare it with labels naming the domains it means",
 }
 
-// unmatchedDomain reports whether a domain rule never matched before v0.5:
-// the domain classifier reported supported domains only, which a rule matched
-// by its mmlu_categories or by its name in any case, so a rule with neither
-// whose name is no domain matched nothing.
-func unmatchedDomain(rule *yaml.Node) bool {
-	return mappingValue(rule, "labels") == nil && mappingValue(rule, "mmlu_categories") == nil &&
-		!IsSupportedRoutingDomainName(strings.ToLower(scalarAt(rule, "name")))
+// Before v0.5 the domain classifier reported domains, and a domain rule
+// without labels or mmlu_categories matched the one its name was in any case.
+// Migrate writes a rule named for a domain in another case in lower case
+// (casedDomain) and drops a rule named for no domain, which never matched
+// (droppedDomain), unless a projection partition names it: then the
+// partition's default matched it, and it is kept (partitionDomain). A name
+// the load suggests a domain for (formatDomainSuggestion) that the recipe
+// reads keeps that load error, as the likely typo of a v0.5 rule.
+
+func unlabeledDomain(rule *yaml.Node) bool {
+	return mappingValue(rule, "labels") == nil && mappingValue(rule, "mmlu_categories") == nil
 }
 
-// unmatchedDomainRule reports whether a recipe's signals declare the domain
-// rule name, and it never matched.
-func unmatchedDomainRule(signals *yaml.Node, name string) bool {
-	return slices.ContainsFunc(sequenceAt(signals, "domains"), func(rule *yaml.Node) bool {
-		return scalarAt(rule, "name") == name && unmatchedDomain(rule)
+func casedDomain(rule *yaml.Node) bool {
+	name := scalarAt(rule, "name")
+	return unlabeledDomain(rule) && !IsSupportedRoutingDomainName(name) && IsSupportedRoutingDomainName(strings.ToLower(name))
+}
+
+// noDomain reports whether a domain rule of a recipe is named for no domain,
+// and migrate rewrites it.
+func noDomain(recipe, rule *yaml.Node) bool {
+	name := scalarAt(rule, "name")
+	return unlabeledDomain(rule) && !IsSupportedRoutingDomainName(strings.ToLower(name)) &&
+		(formatDomainSuggestion(name) == "" || !domainNamed(recipe, name))
+}
+
+func droppedDomain(recipe, rule *yaml.Node) bool {
+	return noDomain(recipe, rule) && domainPartition(recipe, scalarAt(rule, "name")) == nil
+}
+
+func partitionDomain(recipe, rule *yaml.Node) bool {
+	return noDomain(recipe, rule) && domainPartition(recipe, scalarAt(rule, "name")) != nil
+}
+
+// droppedDomainRule reports whether a recipe declares the domain rule name,
+// and migrate drops it.
+func droppedDomainRule(recipe *yaml.Node, name string) bool {
+	return slices.ContainsFunc(sequenceAt(recipe, "signals", "domains"), func(rule *yaml.Node) bool {
+		return scalarAt(rule, "name") == name && droppedDomain(recipe, rule)
 	})
+}
+
+// domainPartition is the projection partition of a recipe whose default is
+// the domain rule name, else the first whose members name it, or nil.
+func domainPartition(recipe *yaml.Node, name string) *yaml.Node {
+	var member *yaml.Node
+	for _, partition := range sequenceAt(recipe, "projections", "partitions") {
+		if scalarAt(partition, "default") == name {
+			return partition
+		}
+		if member == nil && slices.Contains(stringItems(mappingValue(partition, "members")), name) {
+			member = partition
+		}
+	}
+	return member
+}
+
+// domainNamed reports whether a recipe's conditions, score inputs or
+// projection partitions name the domain rule name.
+func domainNamed(recipe *yaml.Node, name string) bool {
+	return domainPartition(recipe, name) != nil || slices.ContainsFunc(recipeConditions(recipe), func(node *yaml.Node) bool {
+		return hasType(SignalTypeDomain)(node, "") && scalarAt(node, "name") == name
+	})
+}
+
+// renameDomain renames the domain rule from to in a recipe: the rule and each
+// condition, score input and partition that names it.
+func renameDomain(recipe *yaml.Node, from, to string) {
+	rename := func(node *yaml.Node) {
+		if node != nil && node.Kind == yaml.ScalarNode && node.Value == from {
+			node.Value = to
+		}
+	}
+	for _, rule := range sequenceAt(recipe, "signals", "domains") {
+		rename(mappingValue(rule, "name"))
+	}
+	for _, node := range recipeConditions(recipe) {
+		if hasType(SignalTypeDomain)(node, "") {
+			rename(mappingValue(node, "name"))
+		}
+	}
+	for _, partition := range sequenceAt(recipe, "projections", "partitions") {
+		rename(mappingValue(partition, "default"))
+		for _, member := range sequenceItems(mappingValue(partition, "members")) {
+			rename(member)
+		}
+	}
+}
+
+// recipeConditions are the places a recipe names a signal: its decisions'
+// conditions at any depth and its score inputs.
+func recipeConditions(recipe *yaml.Node) []*yaml.Node {
+	var nodes []*yaml.Node
+	for _, pattern := range []string{"decisions[].rules.**", "projections.scores[].inputs[]"} {
+		for _, use := range matchPattern(recipe, strings.Split(pattern, ".")) {
+			nodes = append(nodes, use.Node)
+		}
+	}
+	return nodes
 }
 
 // namedWithLabel reports whether a condition or score input of a rule's
@@ -324,16 +408,11 @@ func unmatchedDomainRule(signals *yaml.Node, name string) bool {
 // input "<rule>:<label>". So a v0.5 rule without labels is read, whatever its
 // name; before v0.5, a user_feedbacks or modality rule's name chose its option.
 func namedWithLabel(at FormMatch, signalType string) bool {
-	name, recipe := scalarAt(at.Node, "name"), scopeRouting(at.Root, at.Path)
-	for _, pattern := range []string{"decisions[].rules.**", "projections.scores[].inputs[]"} {
-		for _, use := range matchPattern(recipe, strings.Split(pattern, ".")) {
-			named := scalarAt(use.Node, "name")
-			if hasType(signalType)(use.Node, "") && ((named == name && scalarAt(use.Node, "label") != "") || strings.HasPrefix(named, name+":")) {
-				return true
-			}
-		}
-	}
-	return false
+	name := scalarAt(at.Node, "name")
+	return slices.ContainsFunc(recipeConditions(scopeRouting(at.Root, at.Path)), func(use *yaml.Node) bool {
+		named := scalarAt(use, "name")
+		return hasType(signalType)(use, "") && ((named == name && scalarAt(use, "label") != "") || strings.HasPrefix(named, name+":"))
+	})
 }
 
 // kbNeverMatches is why a kb condition never matches.
@@ -426,10 +505,22 @@ var applicationFieldForms = []ConfigForm{
 		},
 	},
 	{
+		Code:    CodeInvalidValue,
+		Paths:   RoutingScopes("signals.domains[]"),
+		Match:   func(node *yaml.Node, _ string) bool { return casedDomain(node) },
+		What:    "a domain rule named for a domain in another case matched that domain, since rule names were matched in any case",
+		Becomes: "the domain in lower case, in the rule and each condition, score input and partition that names it",
+		Migrate: func(m *Migration, at FormMatch) error {
+			name := scalarAt(at.Node, "name")
+			renameDomain(scopeRouting(m.Root(), at.Path), name, strings.ToLower(name))
+			return nil
+		},
+	},
+	{
 		Code:  CodeInvalidValue,
 		Paths: conditionPaths,
 		MatchAt: func(at FormMatch) bool {
-			return hasType(SignalTypeDomain)(at.Node, at.Path) && unmatchedDomainRule(scopeSignals(at.Root, at.Path), scalarAt(at.Node, "name"))
+			return hasType(SignalTypeDomain)(at.Node, at.Path) && droppedDomainRule(scopeRouting(at.Root, at.Path), scalarAt(at.Node, "name"))
 		},
 		What:    "a domain condition reads a domain rule named for no domain, which never matched",
 		Becomes: "nothing: the condition never matches, so migrate drops a decision that needs it, its term of an OR and a score input on it",
@@ -438,9 +529,9 @@ var applicationFieldForms = []ConfigForm{
 				dropScoreInput(m, at, "domain "+scalarAt(at.Node, "name"), domainNeverMatches)
 				return nil
 			}
-			signals := scopeSignals(m.Root(), at.Path)
+			recipe := scopeRouting(m.Root(), at.Path)
 			settleRemovedCondition(m, at, "domain rule", func(node *yaml.Node) bool {
-				return hasType(SignalTypeDomain)(node, "") && unmatchedDomainRule(signals, scalarAt(node, "name"))
+				return hasType(SignalTypeDomain)(node, "") && droppedDomainRule(recipe, scalarAt(node, "name"))
 			}, domainNeverMatches)
 			return nil
 		},
@@ -448,7 +539,7 @@ var applicationFieldForms = []ConfigForm{
 	{
 		Code:    CodeInvalidValue,
 		Paths:   RoutingScopes("signals.domains[]"),
-		Match:   func(node *yaml.Node, _ string) bool { return unmatchedDomain(node) },
+		MatchAt: func(at FormMatch) bool { return droppedDomain(scopeRouting(at.Root, at.Path), at.Node) },
 		What:    "a domain rule without labels or mmlu_categories whose name is no domain never matched, since the domain classifier reports domains",
 		Becomes: "drop it; to route on it, set labels to the domains it means",
 		Migrate: func(m *Migration, at FormMatch) error {
@@ -458,6 +549,26 @@ var applicationFieldForms = []ConfigForm{
 			if len(at.Parent.Content) == 0 {
 				m.Delete(at.Above(2), "domains")
 				deleteEmpty(at.Above(3), "signals")
+			}
+			return nil
+		},
+	},
+	{
+		Code:    CodeInvalidValue,
+		Paths:   RoutingScopes("signals.domains[]"),
+		MatchAt: func(at FormMatch) bool { return partitionDomain(scopeRouting(at.Root, at.Path), at.Node) },
+		What:    "a domain rule without labels or mmlu_categories whose name is no domain matched only as the default of a projection partition that names it",
+		Becomes: "labels: [other], so the partition keeps it",
+		Migrate: func(m *Migration, at FormMatch) error {
+			name := scalarAt(at.Node, "name")
+			partition := domainPartition(scopeRouting(m.Root(), at.Path), name)
+			setNode(at.Node, "labels", stringSequence("other"))
+			if scalarAt(partition, "default") == name {
+				m.Note(at.Path, fmt.Sprintf("domain rule %s matched only as the default of projection partition %s, when no other member matched; with labels [other] it also matches "+
+					"when the decision model chooses other, when no other member matches either, so it matches as before unless another member's labels hold other", name, scalarAt(partition, "name")))
+			} else {
+				m.Note(at.Path, fmt.Sprintf("domain rule %s never matched, and projection partition %s names it as a member, so it is kept with labels [other]: "+
+					"it now matches when the decision model chooses other; drop it from the partition's members to keep it from matching", name, scalarAt(partition, "name")))
 			}
 			return nil
 		},

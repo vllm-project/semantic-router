@@ -37,22 +37,22 @@ func TestClassifierReferenceMigrationNotes(t *testing.T) {
 	}
 }
 
-// An empty global.model_catalog.external is a removed section like a full
-// one: the load names it with the migrate hint, and migrate deletes it.
+// An empty global.model_catalog.external written as a mapping is a removed
+// section like the empty list the golden removed-section-external-models-empty
+// covers: the load names it with the migrate hint, and migrate deletes it.
 func TestEmptyExternalModelsMigrate(t *testing.T) {
-	for _, empty := range []string{"[]", "{}"} {
-		document := []byte(migrateModels + `recipes:
+	document := []byte(migrateModels + `recipes:
   - name: default
 global:
   model_catalog:
-    external: ` + empty + "\n")
-		_, err := ParseYAMLBytesWithoutEnvExpansion(document)
-		if err == nil || !strings.Contains(err.Error(), "global.model_catalog.external: removed_section: external models are removed; run `vllm-sr config migrate`") {
-			t.Errorf("external: %s loads with %v", empty, err)
-		}
-		migrated, _, err := MigrateConfig(document)
-		if err != nil || bytes.Contains(migrated, []byte("model_catalog")) {
-			t.Errorf("external: %s migrates with %v to\n%s", empty, err, migrated)
-		}
+    external: {}
+`)
+	_, err := ParseYAMLBytesWithoutEnvExpansion(document)
+	if err == nil || !strings.Contains(err.Error(), "global.model_catalog.external: removed_section: external models are removed; run `vllm-sr config migrate`") {
+		t.Errorf("external: {} loads with %v", err)
+	}
+	migrated, _, err := MigrateConfig(document)
+	if err != nil || bytes.Contains(migrated, []byte("model_catalog")) {
+		t.Errorf("external: {} migrates with %v to\n%s", err, migrated)
 	}
 }

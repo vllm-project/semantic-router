@@ -223,3 +223,59 @@ func TestContrastiveJailbreakThresholdNotesARefit(t *testing.T) {
 		t.Errorf("a classifier threshold kept its meaning, but migrate notes %q", got)
 	}
 }
+
+// A v0.5 domain rule whose name the load suggests a domain for is a likely
+// typo: the load keeps the suggestion, and migrate drops neither the rule nor
+// the decision that reads it, so it refuses with the same suggestion.
+func TestDomainNearMissKeepsTheSuggestion(t *testing.T) {
+	for _, near := range [][2]string{{"maths", "math"}, {"computer_science", "computer science"}} {
+		document := []byte(migrateModels + `recipes:
+  - name: default
+    signals:
+      domains: [{name: ` + near[0] + `}]
+    decisions:
+      - name: near
+        priority: 100
+        rules: {type: domain, name: ` + near[0] + `}
+        modelRefs: [{model: small}]
+`)
+		suggestion := `the rule's name "` + near[0] + `" is not a domain`
+		_, err := ParseYAMLBytesWithoutEnvExpansion(document)
+		if err == nil || !strings.Contains(err.Error(), suggestion) || !strings.Contains(err.Error(), `did you mean "`+near[1]+`"?`) || strings.Contains(err.Error(), "vllm-sr config migrate") {
+			t.Errorf("%s loads with %v, want the suggestion %q alone", near[0], err, near[1])
+		}
+		if _, _, err = MigrateConfig(document); err == nil || !strings.Contains(err.Error(), suggestion) {
+			t.Errorf("%s migrates with %v, want the suggestion", near[0], err)
+		}
+	}
+}
+
+// Before v0.5 a projection partition synthesized its default member when no
+// member matched, so a domain rule named for no domain matched as the
+// default. Migrate keeps it, and the decision on it, with labels [other], and
+// says what a member that is no partition's default now matches.
+func TestPartitionDomainRuleIsKept(t *testing.T) {
+	migrated, notes, err := MigrateConfig([]byte(migrateModels + `recipes:
+  - name: default
+    signals:
+      domains: [{name: math}, {name: general}, {name: chitchat}]
+    projections:
+      partitions: [{name: subjects, semantics: exclusive, members: [math, general, chitchat], default: general}]
+    decisions:
+      - name: general
+        priority: 100
+        rules: {type: domain, name: general}
+        modelRefs: [{model: small}]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "domains: [{name: math}, {name: general, labels: [other]}, {name: chitchat, labels: [other]}]"; !strings.Contains(string(migrated), want) ||
+		!strings.Contains(string(migrated), "rules: {type: domain, name: general}") {
+		t.Fatalf("migrate wrote\n%s\nwant %s and the decision on general", migrated, want)
+	}
+	wantNotes(t, notes, map[string][]string{
+		"recipes[default].signals.domains[general]":  {"matched only as the default of projection partition subjects", "so it matches as before"},
+		"recipes[default].signals.domains[chitchat]": {"it now matches when the decision model chooses other"},
+	})
+}
