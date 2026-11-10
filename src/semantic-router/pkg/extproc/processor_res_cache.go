@@ -17,7 +17,7 @@ import (
 // representation, so cache state never contains provider-specific stream
 // accumulator state.
 func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []byte) {
-	if ctx.RequestID == "" || responseBody == nil {
+	if ctx.RequestID == "" || responseBody == nil || !r.cacheBackendEnabled() {
 		return
 	}
 	if !r.semanticCacheEnabledForRequest(ctx) {
@@ -25,6 +25,12 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	}
 	if ctx.CacheWriteBypass {
 		metrics.RecordCacheWriteSkipped("request_no_store")
+		return
+	}
+	// A cache hit runs no guard, so an answer is kept only as the guard let it
+	// through.
+	if reason := ctx.ResponseGuard.cacheSkipReason(); reason != "" {
+		metrics.RecordCacheWriteSkipped(reason)
 		return
 	}
 
@@ -59,8 +65,8 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	}
 
 	ttlSeconds := -1
-	if r != nil && r.Config != nil {
-		ttlSeconds = r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
+	if plugin := requestResponseCache(ctx); plugin != nil && plugin.TTLSeconds != nil {
+		ttlSeconds = *plugin.TTLSeconds
 	}
 	ttlSeconds = applyResponseCacheRequestTTL(ctx, ttlSeconds)
 	ttlSeconds = applyRetentionTTLOverride(ttlSeconds, ctx)

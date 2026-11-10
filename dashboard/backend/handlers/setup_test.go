@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -20,7 +20,7 @@ func createBootstrapSetupConfig(t *testing.T, dir string) string {
 
 	configPath := filepath.Join(dir, "config.yaml")
 	config := map[string]interface{}{
-		"version": "v0.3",
+		"version": "v0.5",
 		"listeners": []map[string]interface{}{
 			{
 				"name":    "http-8899",
@@ -45,25 +45,14 @@ func createBootstrapSetupConfig(t *testing.T, dir string) string {
 	return configPath
 }
 
-// Config transport tests own temporary files, never the host's running stack.
-// Lifecycle behavior is exercised separately with explicitly seeded containers.
+// Config transport tests own temporary files, never the host's running stack,
+// and the Dashboard never runs a container CLI.
 func isolateConfigMutationRuntime(t *testing.T) {
 	t.Helper()
-	fakeDocker := writeFakeLifecycleDockerCLI(t)
-	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("TEST_DOCKER_LOG_FILE", fakeDocker.logPath)
-	for _, key := range []string{"TEST_ROUTER_CONTAINER", "TEST_ENVOY_CONTAINER", "TEST_DASHBOARD_CONTAINER"} {
-		t.Setenv(key, "")
-	}
+	containerCLICalls := trapContainerCLIs(t)
 	t.Cleanup(func() {
-		calls, err := os.ReadFile(fakeDocker.logPath)
-		if err != nil && !os.IsNotExist(err) {
-			t.Errorf("read isolated runtime calls: %v", err)
-		}
-		for _, call := range strings.Split(strings.TrimSpace(string(calls)), "\n") {
-			if call != "" && !strings.HasPrefix(call, "inspect ") {
-				t.Errorf("config transport attempted to mutate an unconfigured runtime: %s", call)
-			}
+		if calls := containerCLICalls(); len(calls) != 0 {
+			t.Errorf("config transport ran a container CLI: %q", calls)
 		}
 	})
 }
@@ -71,53 +60,55 @@ func isolateConfigMutationRuntime(t *testing.T) {
 func TestSummarizeSetupConfigIncludesRecipeOwnedSignalsAndDecisions(t *testing.T) {
 	var config setupConfigFile
 	err := yaml.Unmarshal([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: shared-model
-routing:
-  modelCards:
-    - name: shared-model
-  decisions: []
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          provider: vllm
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/balanced]
     recipe: balanced
 recipes:
+  - name: default
+    decisions: []
   - name: balanced
-    routing:
-      signals:
-        keywords:
-          - name: balanced-keyword
-            operator: OR
-            keywords: [balanced]
-      decisions:
-        - name: balanced-route
-          priority: 100
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: balanced-keyword
-          modelRefs:
-            - model: shared-model
-              use_reasoning: false
+    signals:
+      keywords:
+        - name: balanced-keyword
+          operator: OR
+          keywords: [balanced]
+    decisions:
+      - name: balanced-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: balanced-keyword
+        modelRefs:
+          - model: shared-model
+            use_reasoning: false
   - name: private
-    routing:
-      signals:
-        pii:
-          - name: private-pii
-            threshold: 0.8
-      decisions:
-        - name: private-route
-          priority: 100
-          rules:
-            operator: AND
-            conditions:
-              - type: pii
-                name: private-pii
-          modelRefs:
-            - model: shared-model
-              use_reasoning: false
+    signals:
+      pii:
+        - name: private-pii
+          threshold: 0.8
+    decisions:
+      - name: private-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: pii
+              name: private-pii
+        modelRefs:
+          - model: shared-model
+            use_reasoning: false
 `), &config)
 	if err != nil {
 		t.Fatalf("unmarshal config: %v", err)
@@ -130,7 +121,7 @@ recipes:
 	}
 
 	merged := mergeSetupCanonicalConfig(setupConfigFile{}.CanonicalConfig, config.CanonicalConfig)
-	if len(merged.Entrypoints) != 1 || len(merged.Recipes) != 2 {
+	if len(merged.Entrypoints) != 2 || len(merged.Recipes) != 3 {
 		t.Fatalf(
 			"setup merge dropped scoped routing: entrypoints=%d recipes=%d",
 			len(merged.Entrypoints),
@@ -160,13 +151,8 @@ func createValidSetupPatch() map[string]interface{} {
 				},
 			},
 		},
-		"routing": map[string]interface{}{
-			"modelCards": []map[string]interface{}{
-				{
-					"name":     "test-model",
-					"modality": "text",
-				},
-			},
+		"recipes": []map[string]interface{}{{
+			"name": "default",
 			"signals": map[string]interface{}{
 				"domains": []map[string]interface{}{
 					{
@@ -209,7 +195,7 @@ func createValidSetupPatch() map[string]interface{} {
 					},
 				},
 			},
-		},
+		}},
 	}
 }
 
@@ -295,56 +281,6 @@ func TestSetupValidateHandler(t *testing.T) {
 	}
 }
 
-func TestSetupValidateHandlerUsesConfigDirectoryForRelativeKBAssets(t *testing.T) {
-	tempDir := t.TempDir()
-	configPath := createBootstrapSetupConfig(t, tempDir)
-
-	kbDir := filepath.Join(tempDir, "custom-kb")
-	if err := os.MkdirAll(kbDir, 0o755); err != nil {
-		t.Fatalf("failed to create custom kb directory: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(kbDir, "labels.json"), []byte(`{
-  "labels": {
-    "safe": {
-      "description": "Safe content",
-      "exemplars": ["hello world"]
-    }
-  }
-}`), 0o644); err != nil {
-		t.Fatalf("failed to write custom kb labels manifest: %v", err)
-	}
-
-	patch := createValidSetupPatch()
-	patch["global"] = map[string]interface{}{
-		"model_catalog": map[string]interface{}{
-			"kbs": []map[string]interface{}{
-				{
-					"name": "custom_kb",
-					"source": map[string]interface{}{
-						"path":     "custom-kb/",
-						"manifest": "labels.json",
-					},
-					"threshold": 0.55,
-				},
-			},
-		},
-	}
-
-	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, patch)})
-	if err != nil {
-		t.Fatalf("failed to marshal request: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/setup/validate", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-
-	SetupValidateHandler(configPath, setupmode.New(configPath, false))(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
 func TestSetupImportRemoteHandler(t *testing.T) {
 	// The fixture server is on loopback; declare it the way an operator would
 	// declare a real internal target (#1388).
@@ -356,7 +292,7 @@ func TestSetupImportRemoteHandler(t *testing.T) {
 	remoteConfigServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-yaml")
 		_, _ = w.Write([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: remote-model
@@ -368,26 +304,26 @@ providers:
           endpoint: remote.example.com
           protocol: https
           weight: 100
-routing:
-  modelCards:
-    - name: remote-model
-      modality: text
-  signals:
-    domains:
-      - name: remote-domain
-        description: Remote domain signal
-  decisions:
-    - name: remote-route
-      description: Remote route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: remote-domain
-      modelRefs:
-        - model: remote-model
-          use_reasoning: false
+      capabilities: [chat]
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: remote-domain
+          description: Remote domain signal
+          labels: [other]
+    decisions:
+      - name: remote-route
+        description: Remote route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: remote-domain
+        modelRefs:
+          - model: remote-model
+            use_reasoning: false
 `))
 	}))
 	defer remoteConfigServer.Close()
@@ -429,87 +365,13 @@ routing:
 	} else if defaults, ok := providers["defaults"].(map[string]interface{}); !ok || defaults["model"] != "remote-model" {
 		t.Fatalf("expected imported config providers.defaults.model=remote-model, got %#v", importedConfig["providers"])
 	}
-	if routing, ok := importedConfig["routing"].(map[string]interface{}); !ok || routing["modelCards"] == nil {
-		t.Fatalf("expected imported config routing.modelCards to be preserved, got %#v", importedConfig["routing"])
+	models, _ := importedConfig["providers"].(map[string]interface{})["models"].([]interface{})
+	var capabilities []interface{}
+	if len(models) > 0 {
+		capabilities, _ = models[0].(map[string]interface{})["capabilities"].([]interface{})
 	}
-}
-
-func TestSetupImportRemoteHandlerUsesConfigDirectoryForRelativeKBAssets(t *testing.T) {
-	// The fixture server is on loopback; declare it the way an operator would
-	// declare a real internal target (#1388).
-	allowLoopbackForTest(t)
-
-	tempDir := t.TempDir()
-	configPath := createBootstrapSetupConfig(t, tempDir)
-
-	kbDir := filepath.Join(tempDir, "remote-kb")
-	if err := os.MkdirAll(kbDir, 0o755); err != nil {
-		t.Fatalf("failed to create remote kb directory: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(kbDir, "labels.json"), []byte(`{
-  "labels": {
-    "safe": {
-      "description": "Safe content",
-      "exemplars": ["hello world"]
-    }
-  }
-}`), 0o644); err != nil {
-		t.Fatalf("failed to write remote kb labels manifest: %v", err)
-	}
-
-	remoteConfigServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/x-yaml")
-		_, _ = w.Write([]byte(`
-version: v0.3
-providers:
-  defaults:
-    model: remote-model
-  models:
-    - name: remote-model
-      backend_refs:
-        - name: primary
-          provider: openai-compatible
-          endpoint: remote.example.com
-          protocol: https
-          weight: 100
-routing:
-  modelCards:
-    - name: remote-model
-      modality: text
-  decisions:
-    - name: remote-route
-      description: Remote route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: remote-model
-          use_reasoning: false
-global:
-  model_catalog:
-    kbs:
-      - name: remote_kb
-        source:
-          path: remote-kb/
-          manifest: labels.json
-        threshold: 0.55
-`))
-	}))
-	defer remoteConfigServer.Close()
-
-	body, err := json.Marshal(SetupImportRemoteRequest{URL: remoteConfigServer.URL})
-	if err != nil {
-		t.Fatalf("failed to marshal request: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/setup/import-remote", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-
-	SetupImportRemoteHandler(configPath, setupmode.New(configPath, false))(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	if len(capabilities) != 1 || capabilities[0] != "chat" {
+		t.Fatalf("expected imported config model facts to be preserved, got %#v", importedConfig["providers"])
 	}
 }
 
@@ -558,13 +420,11 @@ func TestSetupActivateHandler(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected global.model_catalog.embeddings in activated config, got %#v", modelCatalog["embeddings"])
 	}
-	semantic, ok := embeddings["semantic"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected global.model_catalog.embeddings.semantic in activated config, got %#v", embeddings["semantic"])
+	if binding, _ := embeddings["default"].(map[string]interface{}); binding["deployment"] != "vela-embedding" {
+		t.Fatalf("expected embeddings.default {deployment: vela-embedding}, got %#v", embeddings["default"])
 	}
-	// Mirrors pkg/config/canonical_defaults global.model_catalog.embeddings.semantic.mmbert_model_path
-	if semantic["mmbert_model_path"] != "models/Vela-1.0-Encoder-307M-Embedding" {
-		t.Fatalf("expected explicit mmbert default path, got %#v", semantic["mmbert_model_path"])
+	if _, ok := embeddings["semantic"]; ok {
+		t.Fatalf("activated config kept removed embeddings.semantic: %#v", embeddings["semantic"])
 	}
 
 	if info, err := os.Stat(filepath.Join(tempDir, ".vllm-sr")); err != nil || !info.IsDir() {
@@ -573,122 +433,114 @@ func TestSetupActivateHandler(t *testing.T) {
 	assertSnapshotPermissions(t, tempDir)
 }
 
-func TestSetupActivateHandlerStartsCreatedSplitRuntimeContainers(t *testing.T) {
+func activateSetupWithTrappedContainerCLIs(t *testing.T) (string, func() []string) {
+	t.Helper()
 	tempDir := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, tempDir)
-	fakeDocker := writeFakeLifecycleDockerCLI(t)
+	containerCLICalls := trapContainerCLIs(t)
 	configureSetupRuntimeCLI(t)
-
-	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+":"+os.Getenv("PATH"))
 	t.Setenv(routerContainerNameEnv, "lane-a-vllm-sr-router-container")
 	t.Setenv(envoyContainerNameEnv, "lane-a-vllm-sr-envoy-container")
 	t.Setenv(dashboardContainerNameEnv, "lane-a-vllm-sr-dashboard-container")
-	t.Setenv("TEST_DOCKER_LOG_FILE", fakeDocker.logPath)
-	t.Setenv("TEST_ROUTER_CONTAINER", "lane-a-vllm-sr-router-container")
-	t.Setenv("TEST_ROUTER_STATUS_FILE", fakeDocker.routerStatusPath)
-	t.Setenv("TEST_ENVOY_CONTAINER", "lane-a-vllm-sr-envoy-container")
-	t.Setenv("TEST_ENVOY_STATUS_FILE", fakeDocker.envoyStatusPath)
+	return configPath, containerCLICalls
+}
 
-	if writeErr := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); writeErr != nil {
-		t.Fatalf("failed to seed router status: %v", writeErr)
-	}
-	if writeErr := os.WriteFile(fakeDocker.envoyStatusPath, []byte("created\n"), 0o644); writeErr != nil {
-		t.Fatalf("failed to seed envoy status: %v", writeErr)
-	}
-
+func postSetupActivation(t *testing.T, configPath string) *httptest.ResponseRecorder {
+	t.Helper()
 	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
 	if err != nil {
 		t.Fatalf("failed to marshal request: %v", err)
 	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body))
 	w := httptest.NewRecorder()
+	SetupActivateHandler(configPath, false, filepath.Dir(configPath), setupmode.New(configPath, false))(
+		w, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body)))
+	return w
+}
 
-	SetupActivateHandler(configPath, false, tempDir, setupmode.New(configPath, false))(w, req)
+func TestSetupActivationLeavesTheRouterToTheCLI(t *testing.T) {
+	configPath, containerCLICalls := activateSetupWithTrappedContainerCLIs(t)
+	t.Setenv("VLLM_SR_GATEWAY", "standalone")
 
+	w := postSetupActivation(t, configPath)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	logData, err := os.ReadFile(fakeDocker.logPath)
+	// The Dashboard holds no container runtime: setup runs no container CLI.
+	if calls := containerCLICalls(); len(calls) != 0 {
+		t.Fatalf("setup ran a container CLI: %q", calls)
+	}
+	data, err := os.ReadFile(pendingActivationPath(configPath, pendingActivationSuffix))
 	if err != nil {
-		t.Fatalf("failed to read docker log: %v", err)
+		t.Fatalf("activation was not recorded for the CLI: %v", err)
 	}
-	logText := string(logData)
-	if !strings.Contains(logText, "start lane-a-vllm-sr-router-container") {
-		t.Fatalf("expected router start, got %q", logText)
+	var record pendingActivationRecord
+	if err := json.Unmarshal(data, &record); err != nil || record.Reason != activationReasonSetup || len(record.ConfigSHA256) != 64 || record.RecordedAt == "" {
+		t.Fatalf("unexpected activation record: %s, %v", data, err)
 	}
-	if !strings.Contains(logText, "start lane-a-vllm-sr-envoy-container") {
-		t.Fatalf("expected envoy start, got %q", logText)
+	var response SetupActivateResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
 	}
-	if strings.Contains(logText, "supervisorctl") {
-		t.Fatalf("split runtime should not use supervisorctl, got %q", logText)
+	if response.Message != "Setup saved. Run `vllm-sr serve` to start the Router." {
+		t.Fatalf("no waiting CLI, unexpected message %q", response.Message)
 	}
 }
 
-func TestSetupActivateHandlerRefreshesSplitEnvoyConfigBeforeStartingCreatedContainers(t *testing.T) {
-	tempDir := t.TempDir()
-	configPath := createBootstrapSetupConfig(t, tempDir)
-	fakeDocker := writeFakeLifecycleDockerCLI(t)
+func TestSetupActivationSaysTheRouterIsStartingWhileTheCLIWaits(t *testing.T) {
+	for _, tc := range []struct {
+		gateway   string
+		heartbeat string
+		message   string
+	}{
+		{"standalone", `{"pid": 1, "state": "waiting"}`, "Setup saved. The Router is starting."},
+		{"extproc", `{"pid": 1, "state": "waiting"}`, "Setup saved. The Router and Envoy are starting."},
+		// A CLI from before the heartbeat had a state beat only while it waited.
+		{"standalone", `{"pid": 1}`, "Setup saved. The Router is starting."},
+	} {
+		t.Run(tc.gateway, func(t *testing.T) {
+			configPath, _ := activateSetupWithTrappedContainerCLIs(t)
+			t.Setenv("VLLM_SR_GATEWAY", tc.gateway)
+			if err := os.WriteFile(pendingActivationPath(configPath, serveHeartbeatSuffix), []byte(tc.heartbeat), 0o644); err != nil {
+				t.Fatal(err)
+			}
 
-	t.Setenv("PATH", filepath.Dir(fakeDocker.path)+":"+os.Getenv("PATH"))
-	t.Setenv(routerContainerNameEnv, "lane-a-vllm-sr-router-container")
-	t.Setenv(envoyContainerNameEnv, "lane-a-vllm-sr-envoy-container")
-	t.Setenv(dashboardContainerNameEnv, "lane-a-vllm-sr-dashboard-container")
-	t.Setenv("TEST_DOCKER_LOG_FILE", fakeDocker.logPath)
-	t.Setenv("TEST_ROUTER_CONTAINER", "lane-a-vllm-sr-router-container")
-	t.Setenv("TEST_ROUTER_STATUS_FILE", fakeDocker.routerStatusPath)
-	t.Setenv("TEST_ENVOY_CONTAINER", "lane-a-vllm-sr-envoy-container")
-	t.Setenv("TEST_ENVOY_STATUS_FILE", fakeDocker.envoyStatusPath)
-
-	runtimeDir := filepath.Join(tempDir, ".vllm-sr")
-	if err := os.MkdirAll(runtimeDir, 0o755); err != nil {
-		t.Fatalf("failed to create runtime dir: %v", err)
+			w := postSetupActivation(t, configPath)
+			var response SetupActivateResponse
+			if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil || w.Code != http.StatusOK {
+				t.Fatalf("activation failed: %d %s", w.Code, w.Body.String())
+			}
+			if response.Message != tc.message {
+				t.Fatalf("got %q, want %q", response.Message, tc.message)
+			}
+		})
 	}
+}
 
-	runtimeConfigPath := filepath.Join(runtimeDir, "runtime-config.yaml")
-	envoyConfigPath := filepath.Join(runtimeDir, "envoy.yaml")
-	if err := os.WriteFile(envoyConfigPath, []byte("# stale bootstrap config\nbootstrap_only: true\n"), 0o644); err != nil {
-		t.Fatalf("failed to seed stale envoy config: %v", err)
+func TestAStaleHeartbeatMeansNoCLIWaits(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
+	watch := pendingActivationPath(configPath, serveHeartbeatSuffix)
+	if err := os.WriteFile(watch, []byte(`{"pid": 1}`), 0o644); err != nil {
+		t.Fatal(err)
 	}
-
-	t.Setenv("VLLM_SR_RUNTIME_CONFIG_PATH", runtimeConfigPath)
-	t.Setenv("VLLM_SR_ENVOY_CONFIG_PATH", envoyConfigPath)
-	configureSetupRuntimeCLI(t)
-
-	if writeErr := os.WriteFile(fakeDocker.routerStatusPath, []byte("created\n"), 0o644); writeErr != nil {
-		t.Fatalf("failed to seed router status: %v", writeErr)
+	if !serveAttached(configPath) {
+		t.Fatal("a fresh heartbeat must count")
 	}
-	if writeErr := os.WriteFile(fakeDocker.envoyStatusPath, []byte("created\n"), 0o644); writeErr != nil {
-		t.Fatalf("failed to seed envoy status: %v", writeErr)
+	old := time.Now().Add(-2 * serveHeartbeatFreshness)
+	if err := os.Chtimes(watch, old, old); err != nil {
+		t.Fatal(err)
 	}
-
-	body, err := json.Marshal(SetupConfigRequest{Config: mustJSONRaw(t, createValidSetupPatch())})
-	if err != nil {
-		t.Fatalf("failed to marshal request: %v", err)
+	if serveAttached(configPath) || serveRunning(configPath) {
+		t.Fatal("a stale heartbeat must not count")
 	}
-
-	req := httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(body))
-	w := httptest.NewRecorder()
-
-	SetupActivateHandler(configPath, false, tempDir, setupmode.New(configPath, false))(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	// A CLI that starts the stack applies nothing recorded meanwhile.
+	if err := os.WriteFile(watch, []byte(`{"pid": 1, "state": "starting"}`), 0o644); err != nil {
+		t.Fatal(err)
 	}
-
-	envoyConfigData, err := os.ReadFile(envoyConfigPath)
-	if err != nil {
-		t.Fatalf("failed to read envoy config: %v", err)
+	if serveAttached(configPath) || !serveRunning(configPath) {
+		t.Fatal("a starting CLI must count as running, not as waiting to apply a change")
 	}
-	envoyConfigText := string(envoyConfigData)
-	if strings.Contains(envoyConfigText, "bootstrap_only") {
-		t.Fatalf("expected setup activation to replace stale envoy config, got:\n%s", envoyConfigText)
-	}
-	if !strings.Contains(envoyConfigText, "host.docker.internal") {
-		t.Fatalf("expected refreshed envoy config to include activated backend endpoint, got:\n%s", envoyConfigText)
-	}
-	if !strings.Contains(envoyConfigText, "model_test_2dmodel_cluster") {
-		t.Fatalf("expected refreshed envoy config to include activated model cluster, got:\n%s", envoyConfigText)
+	if got := pendingActivationPath("/app/.vllm-sr/runtime-config.lane.yaml", pendingActivationSuffix); got != "/app/.vllm-sr/runtime-config.lane.pending-activation.json" {
+		t.Fatalf("hand-off path %q", got)
 	}
 }

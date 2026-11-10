@@ -92,7 +92,7 @@ func assertJSONPromptCompressionRoute(
 ) error {
 	sessionID := fmt.Sprintf("json-compression-%d", time.Now().UnixNano())
 	response, err := sendProtocolMatrixRaw(ctx, router, "/v1/chat/completions", map[string]any{
-		"model":      "auto",
+		"model":      "vllm-sr/auto",
 		"max_tokens": 32,
 		"messages":   []map[string]string{{"role": "user", "content": prompt}},
 	}, false, map[string]string{
@@ -107,9 +107,9 @@ func assertJSONPromptCompressionRoute(
 	}
 	if decision := response.Headers.Get("x-vsr-selected-decision"); decision != wantDecision {
 		return fmt.Errorf("selected decision %q, want %q (matched keywords: %q)",
-			decision, wantDecision, response.Headers.Get("x-vsr-matched-keywords"))
+			decision, wantDecision, matchedSignals(response.Headers, "keyword"))
 	}
-	matched := response.Headers.Get("x-vsr-matched-keywords")
+	matched := matchedSignals(response.Headers, "keyword")
 	if hasMarker := strings.Contains(matched, "json_prompt_marker"); hasMarker != (wantDecision == jsonPromptMarkerDecision) {
 		return fmt.Errorf("matched keyword header %q disagrees with decision %q", matched, wantDecision)
 	}

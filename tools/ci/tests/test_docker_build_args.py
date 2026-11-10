@@ -17,7 +17,6 @@ def run_resolver(**overrides: str) -> str:
         env = os.environ | {
             "GITHUB_OUTPUT": str(output),
             "MATRIX_IMAGE": "dashboard",
-            "CARGO_BUILD_JOBS": "8",
         }
         env.update(overrides)
         subprocess.run(["bash", str(SCRIPT)], cwd=REPO_ROOT, env=env, check=True)
@@ -25,13 +24,15 @@ def run_resolver(**overrides: str) -> str:
 
 
 class DockerBuildArgumentTests(unittest.TestCase):
-    def test_e2e_image_contains_both_omni_variants(self) -> None:
-        output = run_resolver(MATRIX_IMAGE="extproc")
-        self.assertIn("VELA_OMNI_VARIANTS=nano mini\n", output)
+    def test_no_image_builds_model_bundles(self) -> None:
+        for image in ("envoy", "vllm-sr", "vllm-sr-rocm"):
+            self.assertNotIn("VELA_OMNI", run_resolver(MATRIX_IMAGE=image))
 
-    def test_other_images_keep_their_model_bundle_defaults(self) -> None:
-        output = run_resolver(MATRIX_IMAGE="envoy")
-        self.assertNotIn("VELA_OMNI_VARIANTS", output)
+    def test_router_images_pass_their_runtime_accelerator(self) -> None:
+        output = run_resolver(MATRIX_IMAGE="vllm-sr-rocm", ACCELERATOR="rocm")
+        self.assertIn("ACCELERATOR=rocm\n", output)
+        self.assertNotIn("ACCELERATOR", run_resolver(MATRIX_IMAGE="operator"))
+        self.assertNotIn("CARGO", output)
 
     def test_release_dashboard_uses_stable_tag(self) -> None:
         output = run_resolver(

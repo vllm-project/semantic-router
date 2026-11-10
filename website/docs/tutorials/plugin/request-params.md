@@ -23,7 +23,7 @@ Model routing can restrict which backend serves a request, but clients can still
 
 ## Configuration
 
-Add the plugin under `routing.decisions[].plugins`:
+Add the plugin under `recipes[].decisions[].plugins`:
 
 ```yaml
 plugins:

@@ -75,6 +75,10 @@ __all__ = [
     "load_model_catalog",
 ]
 
+# The packaged catalog is over a megabyte; PyYAML's pure-Python parser takes
+# seconds to read it, libyaml a fraction of that.
+_CATALOG_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
 
 @dataclass(frozen=True)
 class _CatalogHeader:
@@ -152,7 +156,9 @@ def _load_catalog_document(version: str) -> tuple[str, dict[str, Any]]:
     if not catalog_resource.is_file():
         raise ModelCatalogError(f"built-in catalog version is not installed: {version}")
     try:
-        document = yaml.safe_load(catalog_resource.read_text(encoding="utf-8"))
+        document = yaml.load(
+            catalog_resource.read_text(encoding="utf-8"), Loader=_CATALOG_LOADER
+        )
     except yaml.YAMLError as error:
         raise ModelCatalogError("built-in model catalog YAML is invalid") from error
     if (
@@ -313,7 +319,15 @@ def _parse_catalog_protocols(value: Any) -> tuple[str, ...]:
         if not isinstance(item, dict):
             raise ModelCatalogError("catalog protocol entry is invalid")
         protocol_ids.append(_required_string(item, "id"))
-    return _unique_enum_strings(protocol_ids, "protocols", SUPPORTED_PROTOCOLS)
+    _unique_enum_strings(protocol_ids, "protocols", SUPPORTED_PROTOCOLS)
+    # CLI virtual bundles currently materialize Chat recipes. Recognizing a
+    # native protocol in the shared catalog must not advertise it on MoM.
+    chat_protocols = tuple(
+        item["id"] for item in value if "chat" in item.get("capabilities", [])
+    )
+    if not chat_protocols:
+        raise ModelCatalogError("built-in virtual recipes have no Chat protocols")
+    return chat_protocols
 
 
 def _parse_model_verification(

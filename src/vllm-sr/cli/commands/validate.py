@@ -1,11 +1,9 @@
 """Validate command implementation."""
 
 import sys
+from collections.abc import Callable
 
-from cli.catalog_provider_projection import (
-    CatalogProviderProjectionError,
-    validate_provider_model_configuration,
-)
+from cli.catalog_provider_projection import provider_projection_errors
 from cli.config_contract import (
     PROJECTION_FAMILY_SPECS,
     SIGNAL_FAMILY_SPECS,
@@ -13,9 +11,20 @@ from cli.config_contract import (
 )
 from cli.models import UserConfig
 from cli.parser import ConfigParseError, parse_user_config
+from cli.router_validation import (
+    ROUTER_BINARY_ENV,
+    RouterValidationUnavailableError,
+    RouterVerdict,
+    with_moving_tag_hint,
+)
 from cli.terminal import echo, error, fields, heading, success
 from cli.validation_error import ValidationError
-from cli.validator import print_validation_errors, validate_user_config
+from cli.validator import (
+    collect_validation_warnings,
+    print_validation_errors,
+    print_validation_warnings,
+    validate_user_config,
+)
 
 
 def _count_items(value) -> int:
@@ -23,7 +32,7 @@ def _count_items(value) -> int:
 
 
 def _signal_summary_lines(signals) -> list[str]:
-    """Return non-empty signal summary lines for the canonical v0.3 surface."""
+    """Return non-empty signal summary lines for the canonical v0.5 surface."""
     if not signals:
         return []
 
@@ -98,32 +107,98 @@ def _plugin_summary_lines(decisions) -> list[str]:
     ]
 
 
-def _provider_projection_errors(config: UserConfig) -> list[ValidationError]:
-    """Validate the same provider projection used by Envoy generation.
+def collect_config_errors(user_config: UserConfig) -> list[ValidationError]:
+    """Return the semantic and provider projection errors for a parsed config."""
 
-    Projection works on deep copies and resolves only structural catalog
-    defaults. It neither reads provider credentials nor mutates the authored
-    configuration, so it is safe for the validation-only command path.
+    errors = validate_user_config(user_config, log_summary=False)
+    if not errors:
+        errors.extend(provider_projection_errors(user_config))
+    return errors
+
+
+def ask_router(
+    router_verdict: Callable[[], RouterVerdict] | None,
+) -> tuple[RouterVerdict | None, str]:
+    """The Router's verdict, or why it could not give one."""
+
+    if router_verdict is None:
+        return None, ""
+    try:
+        return router_verdict(), ""
+    except RouterValidationUnavailableError as unavailable:
+        return None, str(unavailable)
+    except SystemExit:
+        return None, "the container runtime is not reachable"
+
+
+def router_refusal(
+    verdict: RouterVerdict | None,
+    name_router: str = "`--image` or `VLLM_SR_IMAGE`",
+    *,
+    pulled: bool = False,
+) -> list[ValidationError]:
+    """The Router's refusal; *name_router* says how this command names another
+    Router, and *pulled* that serve fetched the image in this run."""
+    if verdict is None or verdict.valid:
+        return []
+    message = with_moving_tag_hint(
+        f"{verdict.source} refuses it: {verdict.error}",
+        verdict,
+        name_router,
+        pulled=pulled,
+    )
+    return [ValidationError(message)]
+
+
+def router_warnings(verdict: RouterVerdict | None) -> list[ValidationError]:
+    if verdict is None:
+        return []
+    return [
+        ValidationError(item.message, field=item.field or None)
+        for item in verdict.warnings
+    ]
+
+
+def router_check_line(verdict: RouterVerdict | None, unavailable: str, ask: str) -> str:
+    """Who checked the file: the Router as well, or only the CLI's structure.
+
+    ask says how to get the Router's verdict when no Router could run.
     """
 
-    try:
-        validate_provider_model_configuration(
-            config,
-            allow_backendless_physical=(
-                "listeners" in config.model_fields_set and not config.listeners
-            ),
+    if verdict is not None:
+        built = f" (built {verdict.built})" if verdict.pull and verdict.built else ""
+        line = f"  Checked by {verdict.source}{built} as well as the CLI."
+        if verdict.running_router:
+            line += (
+                "\n  This stack's running Router is a different image: "
+                f"{verdict.running_router}."
+            )
+        return line
+    if not unavailable:
+        return (
+            "  Only the CLI's structural checks ran (--offline); the Router "
+            "did not check the model deployments, bindings or its other "
+            "load-time rules."
         )
-    except CatalogProviderProjectionError as projection_error:
-        return [ValidationError(str(projection_error))]
-    return []
+    return (
+        f"  Only the CLI's structural checks ran: {unavailable}. The Router "
+        "checks the model deployments, bindings and its other load-time "
+        f"rules; {ask}."
+    )
 
 
-def validate_command(config_path: str):
+def validate_command(
+    config_path: str,
+    *,
+    router_verdict: Callable[[], RouterVerdict] | None = None,
+):
     """
     Validate user configuration.
 
     Args:
         config_path: Path to user config.yaml
+        router_verdict: Runs the Router's own validation of the file, whatever
+            the CLI's own checks find. None runs only the CLI's checks.
     """
     # Parse config
     try:
@@ -132,16 +207,26 @@ def validate_command(config_path: str):
         error(f"Configuration parsing failed: {e}")
         sys.exit(1)
 
-    # Validate config
-    errors = validate_user_config(user_config, log_summary=False)
-    if not errors:
-        errors.extend(_provider_projection_errors(user_config))
-
+    errors = collect_config_errors(user_config)
+    verdict, unavailable = ask_router(router_verdict)
+    errors.extend(router_refusal(verdict))
     if errors:
         print_validation_errors(errors)
+        print_validation_warnings(router_warnings(verdict))
         sys.exit(1)
 
     success("Configuration is valid")
+    echo(
+        router_check_line(
+            verdict,
+            unavailable,
+            f"pass --router-binary (or set {ROUTER_BINARY_ENV}), --image or "
+            "--endpoint to ask it",
+        )
+    )
+    print_validation_warnings(
+        router_warnings(verdict) + collect_validation_warnings(user_config)
+    )
     heading("Configuration summary")
     fields(
         (
@@ -157,9 +242,7 @@ def validate_command(config_path: str):
         for line in signal_lines:
             echo(line)
     else:
-        echo(
-            "  Signals: None (catch-all routing is supported; domain categories will auto-generate when needed)"
-        )
+        echo("  Signals: None (catch-all routing is supported)")
 
     for line in _aggregate_projection_summary_lines(routing_profiles):
         echo(line)

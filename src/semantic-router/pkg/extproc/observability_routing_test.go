@@ -254,7 +254,7 @@ func TestRoutingTraceRAGErrorOmitsPrivateCause(t *testing.T) {
 	_, span := tracing.StartSpan(t.Context(), tracing.SpanRAGRetrieval)
 	secret := "private-provider?token=fixture-secret&prompt=private-input"
 	ctx := &RequestContext{}
-	if err := handleRAGRetrievalError(ctx, span, &config.RAGPluginConfig{Backend: "external_api", OnFailure: "skip"}, "route", errors.New(secret), .1); err != nil {
+	if err := handleRAGRetrievalError(ctx, span, &config.ContextSource{Type: config.ContextSourceRAG, Backend: "external_api", OnFailure: config.RAGOnFailureSkip}, errors.New(secret), .1); err != nil {
 		t.Fatal(err)
 	}
 	span.End()
@@ -293,8 +293,8 @@ func TestRoutingTraceLocalResponseErrorKeepsProviderStatus(t *testing.T) {
 	}{{"guard block before EOS", 403, false}, {"guard block at EOS", 403, true}, {"decode error", 502, true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			recorder := routingTraceRecorder(t)
-			server := newJailbreakScoreServer(t, 0.95, 0.05)
-			router, ctx := newResponseStageRouter(t, server, "", "block")
+			server := newJailbreakDecider(0.95)
+			router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
 			ctx.SourceFormat, ctx.TargetFormat = llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1
 			ctx.StartTime = time.Now()
 			ctx.VSRSelectedModel = "provider-model"
@@ -304,7 +304,7 @@ func TestRoutingTraceLocalResponseErrorKeepsProviderStatus(t *testing.T) {
 			headers := &ext_proc.ProcessingRequest_ResponseHeaders{ResponseHeaders: &ext_proc.HttpHeaders{
 				Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "200"}}},
 			}}
-			if err := router.processResponseHeaders(stream, headers, ctx); err != nil {
+			if err := router.processResponseHeaders(stream, &ext_proc.ProcessingRequest{}, headers, ctx); err != nil {
 				t.Fatal(err)
 			}
 			body := []byte(`{"id":"fixture","object":"chat.completion","model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"fixture response"},"finish_reason":"stop"}]}`)
@@ -351,7 +351,7 @@ func TestRoutingTraceSkipProcessingPreservesHTTPStatus(t *testing.T) {
 	ctx := &RequestContext{SkipProcessing: true}
 	ctx.TraceContext, ctx.RequestSpan = tracing.StartSpan(t.Context(), tracing.SpanRequest)
 	router := &OpenAIRouter{}
-	if err := router.processResponseHeaders(NewMockStream(nil), &ext_proc.ProcessingRequest_ResponseHeaders{
+	if err := router.processResponseHeaders(NewMockStream(nil), &ext_proc.ProcessingRequest{}, &ext_proc.ProcessingRequest_ResponseHeaders{
 		ResponseHeaders: &ext_proc.HttpHeaders{EndOfStream: true, Headers: &core.HeaderMap{
 			Headers: []*core.HeaderValue{{Key: ":status", Value: "503"}},
 		}},

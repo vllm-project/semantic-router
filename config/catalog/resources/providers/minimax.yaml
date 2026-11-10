@@ -23,6 +23,30 @@ conformance:
   status: fixture_verified
   verified_at: 2026-09-04
 models:
+- catalog: minimax/minimax-m3.1-flash
+  relationship: first_party
+  id: MiniMax-M3.1-Flash
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: top_level_effort
+  reasoning_modes:
+  - adaptive
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.15
+    completion_per_1m: 0.60
+    cached_input_per_1m: 0.015
+  restrictions:
+    context_window_size: 1000000
+    max_output_tokens: 524288
+    unsupported_request_fields:
+      openai/chat-completions@1:
+      - service_tier
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-10-23
+    source: https://platform.minimax.io/docs/api-reference/text-openai-api
 - catalog: minimax/minimax-m2.5
   relationship: first_party
   id: MiniMax-M2.5

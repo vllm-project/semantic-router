@@ -40,7 +40,7 @@ func testProtocolCodecPromptCacheKeyAnthropic(ctx context.Context, client *kuber
 		for _, stream := range []bool{false, true} {
 			marker := protocolCodecAnthropicProbe + " prompt_cache_key " + api.name
 			sessionID := "prompt-cache-key-" + uuid.NewString()
-			body := api.request("MoM", marker, stream)
+			body := api.request("vllm-sr/auto", marker, stream)
 			body["prompt_cache_key"] = sessionID
 			result, requestErr := sendProtocolMatrixRaw(ctx, session, api.path, body, stream,
 				map[string]string{"x-vsr-test-session-id": sessionID})
@@ -58,7 +58,7 @@ func testProtocolCodecPromptCacheKeyAnthropic(ctx context.Context, client *kuber
 			if err != nil {
 				return fmt.Errorf("%s stream=%t response: %w", api.name, stream, err)
 			}
-			if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !hasProtocolFieldDiagnostic(warnings, "dropped", "prompt_cache_key") {
+			if warnings := result.Headers.Get(warningsHeader); !hasProtocolFieldDiagnostic(warnings, "dropped", "prompt_cache_key") {
 				return fmt.Errorf("%s stream=%t omitted prompt_cache_key without a dropped warning: %q", api.name, stream, warnings)
 			}
 			if err := verifyProviderSimulatorRequest(ctx, provider, sessionID, "anthropic.messages.v1", marker); err != nil {

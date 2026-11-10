@@ -35,7 +35,13 @@ type shadowDatasetExample struct {
 type shadowDatasetManifest struct {
 	Version string `json:"version"`
 	Digest  string `json:"digest"`
-	Counts  struct {
+	Policy  struct {
+		Balance *struct {
+			By  string `json:"by"`
+			Max int    `json:"max"`
+		} `json:"balance"`
+	} `json:"policy"`
+	Counts struct {
 		Records  int            `json:"records"`
 		Examples int            `json:"examples"`
 		Excluded map[string]int `json:"excluded"`
@@ -106,6 +112,38 @@ func testShadowDatasetExportManifest(
 	}
 	if repeat.Digest != manifest.Digest {
 		return fmt.Errorf("second export digest %s, first export %s", repeat.Digest, manifest.Digest)
+	}
+	return requireBalancedExport(ctx, run, target, manifest)
+}
+
+// A balance cap is part of the policy the digest covers, so a capped export of
+// the same records is a different dataset. Half of a balance is refused rather
+// than read as a default.
+func requireBalancedExport(
+	ctx context.Context,
+	run *shadowDispatchRun,
+	target string,
+	unbalanced *shadowDatasetManifest,
+) error {
+	balanced, _, err := fetchShadowDatasetManifest(ctx, run.api,
+		target+"&balance_by=decision&balance_max=1", routerReplayDetailToken)
+	if err != nil {
+		return err
+	}
+	if balanced.Policy.Balance == nil || balanced.Policy.Balance.By != "decision" || balanced.Policy.Balance.Max != 1 {
+		return fmt.Errorf("balanced export policy %+v, want decision capped at 1", balanced.Policy.Balance)
+	}
+	if balanced.Counts.Examples != 1 || balanced.Digest == unbalanced.Digest {
+		return fmt.Errorf("balanced export kept %d examples under digest %s, want one under a new digest",
+			balanced.Counts.Examples, balanced.Digest)
+	}
+
+	raw, err := doRouterReplayManagementGETAs(ctx, run.api, target+"&balance_by=decision", routerReplayDetailToken)
+	if err != nil {
+		return fmt.Errorf("GET half-balanced dataset: %w", err)
+	}
+	if raw.StatusCode != http.StatusBadRequest {
+		return fmt.Errorf("balance without a cap returned %d, want 400: %s", raw.StatusCode, string(raw.Body))
 	}
 	return nil
 }

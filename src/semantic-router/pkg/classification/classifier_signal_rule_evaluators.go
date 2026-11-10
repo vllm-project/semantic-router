@@ -1,19 +1,28 @@
 package classification
 
 import (
-	"context"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
+// evaluateKeywordSignal evaluates keyword rules against the current text only.
 func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mutex, text string) {
+	c.evaluateKeywordSignalWithHistory(results, mu, text, nil)
+}
+
+// evaluateKeywordSignalWithHistory evaluates keyword rules; rules that opted
+// into include_history also see the prior user messages. A counting rule
+// publishes its count or density as its value, matched or not.
+func (c *Classifier) evaluateKeywordSignalWithHistory(results *SignalResults, mu *sync.Mutex, text string, priorUserMessages []string) {
 	start := time.Now()
-	matches, err := c.keywordClassifier.MatchAll(text)
+	historyText := ""
+	if len(priorUserMessages) > 0 && c.keywordClassifier.HasHistoryRules() {
+		historyText = keywordHistoryText(text, priorUserMessages)
+	}
+	matches, values, err := c.keywordClassifier.MatchAllWithHistory(text, historyText)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 
@@ -41,6 +50,9 @@ func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mute
 
 	mu.Lock()
 	defer mu.Unlock()
+	for name, value := range values {
+		results.SignalValues[signalConfidenceKey(config.SignalTypeKeyword, name)] = value
+	}
 	seenKeywords := make(map[string]struct{}, len(results.MatchedKeywords))
 	for _, keyword := range results.MatchedKeywords {
 		seenKeywords[keyword] = struct{}{}
@@ -55,268 +67,6 @@ func (c *Classifier) evaluateKeywordSignal(results *SignalResults, mu *sync.Mute
 			results.MatchedKeywords = append(results.MatchedKeywords, keyword)
 		}
 	}
-}
-
-type categoryProbabilityFallbackPolicy interface {
-	fallbackToTop1OnProbabilityError() bool
-}
-
-func categoryProbabilityFallbackAllowed(inference CategoryInference) bool {
-	policy, ok := inference.(categoryProbabilityFallbackPolicy)
-	return !ok || policy.fallbackToTop1OnProbabilityError()
-}
-
-const (
-	embeddingEvaluationFailedCode    = "embedding_evaluation_failed"
-	reaskEvaluationFailedCode        = "reask_evaluation_failed"
-	domainEvaluationFailedCode       = "domain_evaluation_failed"
-	factCheckEvaluationFailedCode    = "fact_check_evaluation_failed"
-	userFeedbackEvaluationFailedCode = "user_feedback_evaluation_failed"
-	userFeedbackUncertainCode        = "user_feedback_uncertain"
-	piiEvaluationFailedCode          = "pii_evaluation_failed"
-)
-
-func recordSignalRuleErrors(results *SignalResults, mu *sync.Mutex, signalType string, names []string, code string) {
-	mu.Lock()
-	defer mu.Unlock()
-	if results.SignalErrors == nil {
-		results.SignalErrors = make(map[string]string)
-	}
-	for _, name := range names {
-		results.SignalErrors[signalConfidenceKey(signalType, name)] = code
-	}
-}
-
-func (c *Classifier) evaluateDomainSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string) {
-	start := time.Now()
-	domainResult, err := c.categoryInference.ClassifyWithProbabilities(ctx, text)
-	if err != nil && !isAdmissionError(err) && categoryProbabilityFallbackAllowed(c.categoryInference) {
-		// Fall back to Classify() (top-1 only) when ClassifyWithProbabilities is unavailable.
-		logging.Debugf("[Signal Computation] ClassifyWithProbabilities unavailable, falling back to Classify: %v", err)
-		basicResult, basicErr := c.categoryInference.Classify(ctx, text)
-		if basicErr != nil {
-			err = basicErr
-		} else {
-			domainResult = tasks.ClassResultWithProbs{
-				Class:      basicResult.Class,
-				Confidence: basicResult.Confidence,
-			}
-			err = nil
-		}
-	}
-	elapsed := time.Since(start)
-	latencySeconds := elapsed.Seconds()
-
-	categoryName := ""
-	if err == nil {
-		if name, ok := c.CategoryMapping.GetCategoryFromIndex(domainResult.Class); ok {
-			categoryName = c.translateMMLUToGeneric(name)
-		}
-	}
-	results.DomainClassification = &DomainClassificationResult{
-		Category:            categoryName,
-		Confidence:          float64(domainResult.Confidence),
-		ConfidenceAvailable: err == nil && categoryName != "",
-	}
-
-	c.recordSignalExtraction(config.SignalTypeDomain, categoryName, latencySeconds)
-
-	// Record metrics
-	results.Metrics.Domain.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	results.Metrics.Domain.ConfidenceAvailable = &results.DomainClassification.ConfidenceAvailable
-	if categoryName != "" && err == nil {
-		results.Metrics.Domain.Confidence = float64(domainResult.Confidence)
-	}
-	logging.Debugf("[Signal Computation] Domain signal evaluation completed in %v", elapsed)
-
-	if err != nil {
-		logging.Errorf("domain rule evaluation failed: %v", err)
-		names := make([]string, 0, len(c.Config.Categories))
-		for _, category := range c.Config.Categories {
-			names = append(names, category.Name)
-		}
-		recordSignalRuleErrors(results, mu, config.SignalTypeDomain, names, domainEvaluationFailedCode)
-	} else {
-		matched := c.matchDomainCategories(domainResult, categoryName)
-		mu.Lock()
-		for _, cat := range matched {
-			c.recordSignalMatch(config.SignalTypeDomain, cat.Category)
-			results.MatchedDomainRules = append(results.MatchedDomainRules, cat.Category)
-			results.SignalConfidences["domain:"+cat.Category] = float64(cat.Probability)
-		}
-		mu.Unlock()
-	}
-}
-
-func (c *Classifier) evaluateFactCheckSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string) {
-	start := time.Now()
-	factCheckResult, err := c.ClassifyFactCheck(ctx, text)
-	elapsed := time.Since(start)
-	latencySeconds := elapsed.Seconds()
-
-	// Determine which signal to output based on classification result
-	signalName := "no_fact_check_needed"
-	if err == nil && factCheckResult != nil && factCheckResult.NeedsFactCheck {
-		signalName = "needs_fact_check"
-	}
-
-	// Record signal extraction metrics
-	c.recordSignalExtraction(config.SignalTypeFactCheck, signalName, latencySeconds)
-
-	// Record metrics (use microseconds for better precision)
-	results.Metrics.FactCheck.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	factScoreAvailable := err == nil && factCheckResult != nil && factCheckResult.ConfidenceAvailable
-	results.Metrics.FactCheck.ConfidenceAvailable = &factScoreAvailable
-	if factScoreAvailable {
-		results.Metrics.FactCheck.Confidence = float64(factCheckResult.Confidence)
-	}
-	if factCheckResult != nil {
-		results.Metrics.FactCheck.PolicyDefault = factCheckResult.PolicyDefault
-	}
-
-	logging.Debugf("[Signal Computation] Fact-check signal evaluation completed in %v", elapsed)
-	if err != nil {
-		logging.Errorf("fact-check rule evaluation failed: %v", err)
-		names := make([]string, 0, len(c.Config.FactCheckRules))
-		for _, rule := range c.Config.FactCheckRules {
-			names = append(names, rule.Name)
-		}
-		recordSignalRuleErrors(results, mu, config.SignalTypeFactCheck, names, factCheckEvaluationFailedCode)
-	} else if factCheckResult != nil {
-		// Check if this signal is defined in fact_check_rules
-		for _, rule := range c.Config.FactCheckRules {
-			if rule.Name == signalName {
-				// Record signal match
-				c.recordSignalMatch(config.SignalTypeFactCheck, rule.Name)
-
-				mu.Lock()
-				results.MatchedFactCheckRules = append(results.MatchedFactCheckRules, rule.Name)
-				mu.Unlock()
-				break
-			}
-		}
-	}
-}
-
-func (c *Classifier) evaluateUserFeedbackSignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string, hasPriorAssistantReply bool) {
-	if !shouldEvaluateUserFeedbackSignal(hasPriorAssistantReply) {
-		logging.Debugf("[Signal Computation] User feedback signal skipped: no prior assistant reply")
-		return
-	}
-
-	start := time.Now()
-	feedbackResult, err := c.ClassifyFeedback(ctx, text)
-	elapsed := time.Since(start)
-	latencySeconds := elapsed.Seconds()
-
-	// Use the feedback type directly as the signal name
-	signalName := ""
-	if err == nil && feedbackResult != nil {
-		signalName = feedbackResult.FeedbackType
-	}
-
-	// Record signal extraction metrics
-	c.recordSignalExtraction(config.SignalTypeUserFeedback, signalName, latencySeconds)
-
-	// Record metrics (use microseconds for better precision)
-	results.Metrics.UserFeedback.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-	feedbackScoreAvailable := err == nil && feedbackResult != nil && feedbackResult.ConfidenceAvailable
-	results.Metrics.UserFeedback.ConfidenceAvailable = &feedbackScoreAvailable
-	if feedbackScoreAvailable {
-		results.Metrics.UserFeedback.Confidence = float64(feedbackResult.Confidence)
-	}
-	if feedbackResult != nil {
-		results.Metrics.UserFeedback.PolicyDefault = feedbackResult.PolicyDefault
-	}
-
-	logging.Debugf("[Signal Computation] User feedback signal evaluation completed in %v", elapsed)
-	c.applyUserFeedbackSignalResult(results, mu, feedbackResult, err)
-}
-
-func (c *Classifier) applyUserFeedbackSignalResult(results *SignalResults, mu *sync.Mutex, feedbackResult *FeedbackResult, err error) {
-	if err != nil {
-		logging.Errorf("user feedback rule evaluation failed: %v", err)
-		names := make([]string, 0, len(c.Config.UserFeedbackRules))
-		for _, rule := range c.Config.UserFeedbackRules {
-			names = append(names, rule.Name)
-		}
-		recordSignalRuleErrors(results, mu, config.SignalTypeUserFeedback, names, userFeedbackEvaluationFailedCode)
-	} else if feedbackResult != nil && feedbackResult.Abstained {
-		names := make([]string, 0, len(c.Config.UserFeedbackRules))
-		for _, rule := range c.Config.UserFeedbackRules {
-			names = append(names, rule.Name)
-		}
-		recordSignalRuleErrors(results, mu, config.SignalTypeUserFeedback, names, userFeedbackUncertainCode)
-	} else if feedbackResult != nil && feedbackResult.FeedbackType != FeedbackLabelNoFeedback {
-		// Check if this signal is defined in user_feedback_rules
-		for _, rule := range c.Config.UserFeedbackRules {
-			if rule.Name == feedbackResult.FeedbackType {
-				// Record signal match
-				c.recordSignalMatch(config.SignalTypeUserFeedback, rule.Name)
-
-				mu.Lock()
-				results.MatchedUserFeedbackRules = append(results.MatchedUserFeedbackRules, rule.Name)
-				mu.Unlock()
-				break
-			}
-		}
-	}
-}
-
-func (c *Classifier) evaluateReaskSignal(results *SignalResults, mu *sync.Mutex, currentUserText string, priorUserMessages []string) {
-	names := c.applicableReaskRuleNames(currentUserText, priorUserMessages)
-	if len(names) == 0 {
-		return
-	}
-	start := time.Now()
-	matchedRules, err := c.reaskClassifier.Classify(currentUserText, priorUserMessages)
-	elapsed := time.Since(start)
-
-	results.Metrics.Reask.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0
-
-	logging.Debugf("[Signal Computation] Reask signal evaluation completed in %v", elapsed)
-	if err != nil {
-		logging.Errorf("reask rule evaluation failed: %v", err)
-		recordSignalRuleErrors(results, mu, config.SignalTypeReask, names, reaskEvaluationFailedCode)
-		return
-	}
-	if len(matchedRules) == 0 {
-		return
-	}
-
-	bestConfidence := 0.0
-	mu.Lock()
-	for _, match := range matchedRules {
-		if match.MinSimilarity > bestConfidence {
-			bestConfidence = match.MinSimilarity
-		}
-		c.recordSignalExtraction(config.SignalTypeReask, match.RuleName, elapsed.Seconds())
-		c.recordSignalMatch(config.SignalTypeReask, match.RuleName)
-		results.MatchedReaskRules = append(results.MatchedReaskRules, match.RuleName)
-		results.SignalConfidences["reask:"+match.RuleName] = match.MinSimilarity
-		results.SignalValues["reask:"+match.RuleName] = float64(match.MatchedTurns)
-	}
-	results.Metrics.Reask.Confidence = bestConfidence
-	mu.Unlock()
-}
-
-func (c *Classifier) applicableReaskRuleNames(currentUserText string, priorUserMessages []string) []string {
-	if strings.TrimSpace(currentUserText) == "" {
-		return nil
-	}
-	priorTurns := 0
-	for _, text := range priorUserMessages {
-		if strings.TrimSpace(text) != "" {
-			priorTurns++
-		}
-	}
-	var names []string
-	for _, rule := range c.reaskClassifier.rules {
-		if priorTurns >= rule.WithDefaults().LookbackTurns {
-			names = append(names, rule.Name)
-		}
-	}
-	return names
 }
 
 func (c *Classifier) evaluateContextSignal(

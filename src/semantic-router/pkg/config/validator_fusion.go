@@ -5,13 +5,6 @@ import (
 	"strings"
 )
 
-func validateFusionContracts(cfg *RouterConfig) error {
-	if err := ValidateFusionRuntimeConfig(cfg.Looper.Fusion); err != nil {
-		return fmt.Errorf("global.integrations.looper.fusion: %w", err)
-	}
-	return nil
-}
-
 // validateDecisionFusionFallbackTarget validates the recipe-owned
 // quorum_fallback_target. The checks are split by what data they need so a
 // routing-only fragment, which carries no provider state, still round-trips
@@ -65,11 +58,7 @@ func validateFusionFallbackTargetIdentity(
 // isCompositeFusionFallbackTarget reports whether the target re-enters a
 // composite or virtual routing path instead of naming a concrete model.
 func isCompositeFusionFallbackTarget(cfg *RouterConfig, target string) bool {
-	return cfg.IsAutoModelName(target) ||
-		cfg.IsEntrypointModelName(target) ||
-		cfg.IsFusionModelName(target) ||
-		cfg.IsFlowModelName(target) ||
-		cfg.IsReMoMModelName(target)
+	return cfg.IsEntrypointModelName(target)
 }
 
 // validateFusionFallbackTargetModel covers the rules that need a declared model
@@ -90,26 +79,35 @@ func validateFusionFallbackTargetModel(
 	modelConfig, ok := cfg.ModelConfig[target]
 	if !ok {
 		return fusionFallbackTargetError(decision.Name, target,
-			"is not declared in routing.modelCards")
+			"is not a providers.models[] entry")
 	}
 	if strings.EqualFold(modelConfig.APIFormat, ClientProtocolAnthropic) {
 		return fusionFallbackTargetError(decision.Name, target,
 			"must use an OpenAI-compatible API format")
 	}
-	if !promptHelperModalitySupported(modelConfig.Modality) {
+	if !modelOutputsText(modelConfig) {
 		return fusionFallbackTargetError(decision.Name, target,
-			"must be chat-capable text modality")
+			"must answer in text")
 	}
 	// Validate against the widest panel the recipe can execute; request-time
 	// context eligibility can only narrow it.
 	if reason := fusionFallbackPanelRejection(cfg, decision, fusion, target); reason != "" {
 		return fusionFallbackTargetError(decision.Name, target, reason)
 	}
-	if !promptHelperHasBackend(cfg, target) {
+	if !modelHasBackend(cfg, target) {
 		return fusionFallbackTargetError(decision.Name, target,
 			"requires a provider backend")
 	}
 	return nil
+}
+
+func modelHasBackend(cfg *RouterConfig, model string) bool {
+	for _, endpoint := range cfg.VLLMEndpoints {
+		if endpoint.Model == model || endpoint.Name == model {
+			return true
+		}
+	}
+	return false
 }
 
 // fusionFallbackPanelRejection reports why the target cannot serve the effective

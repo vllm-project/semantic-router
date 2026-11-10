@@ -9,7 +9,8 @@ import (
 // selected recipe's declarations. Running this validator on ConfigForRecipe is
 // what turns cross-recipe references into deterministic startup errors instead
 // of silent non-matches at request time.
-func validateDecisionSignalReferences(cfg *RouterConfig) error {
+func validateDecisionSignalReferences(cfg *RouterConfig) (err error) {
+	defer func() { err = cfg.inRecipe(err) }()
 	if cfg == nil {
 		return nil
 	}
@@ -58,19 +59,36 @@ func validateLeafSignalReference(
 		return nil
 	}
 	if !IsSupportedSignalType(signalType) {
-		return fmt.Errorf("routing.decisions[%q]: unsupported signal type %q", decisionName, node.Type)
+		return fmt.Errorf("decisions[%q]: unsupported signal type %q", decisionName, node.Type)
+	}
+	if entry, _ := LookupSignalCatalog(signalType); !entry.DecisionReferenceable && signalType != SignalTypeHallucination {
+		// Response-stage hallucination references get their own, more specific
+		// error from the signal-stage validator.
+		return fmt.Errorf(
+			"decisions[%q]: signal type %q is not decision-referenceable; "+
+				"it is evidence for context policy, read from the request context",
+			decisionName, signalType)
 	}
 	if !strictReferences {
 		return nil
 	}
+	if node.Name != name {
+		return fmt.Errorf(
+			"decisions[%q]: signal %s reference %q has surrounding whitespace; expected %q without padding",
+			decisionName,
+			signalType,
+			node.Name,
+			name,
+		)
+	}
 	if name == "" {
-		return fmt.Errorf("routing.decisions[%q]: signal condition of type %q requires a name", decisionName, signalType)
+		return fmt.Errorf("decisions[%q]: signal condition of type %q requires a name", decisionName, signalType)
 	}
 	if projectionInputDeclared(declared, signalType, name) {
 		return nil
 	}
 	return fmt.Errorf(
-		"routing.decisions[%q]: signal %s(%q) is not declared in this recipe",
+		"decisions[%q]: signal %s(%q) is not declared in this recipe",
 		decisionName,
 		signalType,
 		name,

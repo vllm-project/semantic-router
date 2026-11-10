@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="881.28pt" height="538.56pt" viewBox="0 0 881.28 538.56" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>vLLM Semantic Router</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 538.56 
+L 881.28 538.56 
+L 881.28 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 70.5024 243.776077 
+L 471.084218 243.776077 
+L 471.084218 160.143923 
+L 70.5024 160.143923 
+z
+" clip-path="url(#p198900990b)" style="fill: #d55e00"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 471.084218 243.776077 
+L 810.7776 243.776077 
+L 810.7776 160.143923 
+L 471.084218 160.143923 
+z
+" clip-path="url(#p198900990b)" style="fill: #0072b2"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 30px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="270.793309" y="201.829923" transform="rotate(-0 270.793309 201.829923)">125</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 14px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="270.793309" y="223.204035" transform="rotate(-0 270.793309 223.204035)">Return Kai · 54.11%</text>
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 30px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="640.930909" y="201.829923" transform="rotate(-0 640.930909 201.829923)">106</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 14px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="640.930909" y="223.204035" transform="rotate(-0 640.930909 223.204035)">Upgrade to Vega · 45.89%</text>
+   </g>
+  </g>
+  <g id="patch_4">
+   <path d="M 70.5024 462.08448 
+L 423.0144 462.08448 
+Q 430.06464 462.08448 430.06464 457.776 
+L 430.06464 328.5216 
+Q 430.06464 324.21312 423.0144 324.21312 
+L 70.5024 324.21312 
+Q 63.45216 324.21312 63.45216 328.5216 
+L 63.45216 457.776 
+Q 63.45216 462.08448 70.5024 462.08448 
+z
+" style="fill: #f6f8fa; stroke: #e7ebef; stroke-linejoin: miter"/>
+  </g>
+  <g id="patch_5">
+   <path d="M 458.2656 462.08448 
+L 810.7776 462.08448 
+Q 817.82784 462.08448 817.82784 457.776 
+L 817.82784 328.5216 
+Q 817.82784 324.21312 810.7776 324.21312 
+L 458.2656 324.21312 
+Q 451.21536 324.21312 451.21536 328.5216 
+L 451.21536 457.776 
+Q 451.21536 462.08448 458.2656 462.08448 
+z
+" style="fill: #f6f8fa; stroke: #e7ebef; stroke-linejoin: miter"/>
+  </g>
+  <g id="text_5">
+   <text style="font-weight: 700; font-size: 29px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #172430" x="52.8768" y="40.392" transform="rotate(-0 52.8768 40.392)">Most answers stop with Kai.</text>
+  </g>
+  <g id="text_6">
+   <text style="font-size: 16px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #5f6b76" x="52.8768" y="75.3984" transform="rotate(-0 52.8768 75.3984)">Request outcomes and model calls are different counts.</text>
+  </g>
+  <g id="text_7">
+   <text style="font-weight: 700; font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #5f6b76" x="70.5024" y="134.64" transform="rotate(-0 70.5024 134.64)">231 APPLICATION REQUESTS</text>
+  </g>
+  <g id="text_8">
+   <text style="font-weight: 700; font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #5f6b76" x="70.5024" y="301.5936" transform="rotate(-0 70.5024 301.5936)">ACTUAL NATIVE API CALLS</text>
+  </g>
+  <g id="text_9">
+   <text style="font-weight: 700; font-size: 17px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #63798b" x="92.5344" y="363.528" transform="rotate(-0 92.5344 363.528)">Kai</text>
+  </g>
+  <g id="text_10">
+   <text style="font-weight: 700; font-size: 40px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #63798b" x="392.1696" y="395.8416" transform="rotate(-0 392.1696 395.8416)">231</text>
+  </g>
+  <g id="text_11">
+   <text style="font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #5f6b76" x="92.5344" y="430.848" transform="rotate(-0 92.5344 430.848)">Every request starts here</text>
+  </g>
+  <g id="text_12">
+   <text style="font-weight: 700; font-size: 17px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #0072b2" x="480.2976" y="363.528" transform="rotate(-0 480.2976 363.528)">Vega</text>
+  </g>
+  <g id="text_13">
+   <text style="font-weight: 700; font-size: 40px; font-family: 'DejaVu Sans'; text-anchor: end; fill: #0072b2" x="779.9328" y="395.8416" transform="rotate(-0 779.9328 395.8416)">106</text>
+  </g>
+  <g id="text_14">
+   <text style="font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #5f6b76" x="480.2976" y="430.848" transform="rotate(-0 480.2976 430.848)">Only escalated requests</text>
+  </g>
+  <g id="text_15">
+   <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #5f6b76" x="52.8768" y="519.7104" transform="rotate(-0 52.8768 519.7104)">337 native calls in total · at most 2 per request · no claim of fewer provisioned GPUs or lower dollar cost</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p198900990b">
+   <rect x="70.5024" y="156.1824" width="740.2752" height="91.5552"/>
+  </clipPath>
+ </defs>
+</svg>

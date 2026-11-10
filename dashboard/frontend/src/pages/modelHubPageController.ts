@@ -128,7 +128,7 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
   const [selectedID, setSelectedID] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const compact = useCompactModelHubLayout()
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(6)
   const [filtersCollapsed, setFiltersCollapsed] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const detailCloseRef = useRef<HTMLButtonElement>(null)
@@ -174,7 +174,7 @@ export function useModelHubPageController(catalog: BuiltInModelCatalog) {
     setPage(1)
   }
   const updatePageSize = (next: number): void => {
-    setPageSize(next)
+    setPageSize(Math.min(6, Math.max(1, next)))
     setPage(1)
   }
   const selectModel = (id: string): void => {

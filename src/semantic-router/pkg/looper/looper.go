@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package looper provides multi-model execution strategies for LLM routing.
-// It enables executing requests against multiple models with various algorithms
-// (confidence, ratings, cost-aware) and aggregating the results.
+// Package looper runs the executors of Chat decisions: escalate, fusion,
+// remom, ratings and workflows call several models and aggregate their
+// answers into one response.
 package looper
 
 import (
@@ -46,12 +46,20 @@ type Request struct {
 	ModelRefs []config.ModelRef
 
 	// ModelParams maps model names to their ModelParams configuration
-	// Used to lookup access_key and param_size for confidence routing
+	// Used to lookup access_key, and param_size and pricing for escalate's order
 	ModelParams map[string]config.ModelParams
 
 	// CandidateRequirements is the owning recipe's admission policy. Every
 	// generated stage rechecks this policy against its complete outbound request.
 	CandidateRequirements *config.CandidateRequirements
+
+	// ToolStageGate judges each model attempt's tools at that attempt's own
+	// stage. Nil leaves attempts' tools untouched.
+	ToolStageGate ToolStageGate
+
+	// AnswerChecks asks a System One model about an escalation's answers when
+	// they are accepted by answer_check or refusal; nil otherwise.
+	AnswerChecks AnswerChecker
 
 	// PermittedModels contains the filtered assigned workers and explicitly
 	// configured helpers, including only their declared deployment aliases.
@@ -280,8 +288,8 @@ func (e *UnsupportedAlgorithmError) Error() string {
 type algorithmConstructor func(*config.LooperConfig, clientBinding) ManagedLooper
 
 var algorithmConstructors = map[string]algorithmConstructor{
-	config.DecisionAlgorithmConfidence: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
-		return newConfidenceLooper(cfg, binding)
+	config.DecisionAlgorithmEscalate: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
+		return newEscalateLooper(cfg, binding)
 	},
 	config.DecisionAlgorithmFusion: func(cfg *config.LooperConfig, binding clientBinding) ManagedLooper {
 		return newFusionLooper(cfg, binding)
@@ -324,7 +332,7 @@ func FactoryWithClient(cfg *config.LooperConfig, algorithmType string, client *C
 
 func constructorFor(algorithmType string) (algorithmConstructor, error) {
 	constructor, ok := algorithmConstructors[algorithmType]
-	if !config.IsLooperAlgorithmType(algorithmType) || !ok {
+	if !config.IsExecutorAlgorithmType(algorithmType) || !ok {
 		return nil, &UnsupportedAlgorithmError{AlgorithmType: algorithmType}
 	}
 	return constructor, nil

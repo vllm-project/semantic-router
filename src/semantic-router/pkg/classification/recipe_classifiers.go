@@ -6,7 +6,8 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -20,54 +21,51 @@ type RecipeClassifiers struct {
 	order        []config.RecipeName
 	runtimeOrder []config.RecipeName
 	routingOrder []config.RecipeName
+	// defaultRecipe names the recipe whose classifier serves the default APIs.
+	defaultRecipe config.RecipeName
 }
 
-// RecipeRuntimeOptions borrows the generation's default snapshot and pool.
-// Named recipes prepare independent snapshots against the same resource pool.
+// RecipeRuntimeOptions borrows the generation's model runtime and default
+// embedding snapshot. Named recipes prepare independent bindings against the
+// same deployments and resource pool.
 type RecipeRuntimeOptions struct {
-	Runtime    *native.Runtime
+	Runtime    *serving.Runtime
 	Embeddings *embedding.Set
+	// SystemOne asks the systemone deployments' remote APIs.
+	SystemOne modelservice.Remote
 }
 
 // BuildRecipeClassifiers prepares the classifier graph and owned dependencies
 // for each active recipe. InitializeRuntime completes family initialization
 // before publication. Unreachable named recipes retain validated config only.
-func BuildRecipeClassifiers(
-	cfg *config.RouterConfig,
-	categoryMapping *CategoryMapping,
-	piiMapping *PIIMapping,
-	jailbreakMapping *JailbreakMapping,
-	runtimeOptions ...RecipeRuntimeOptions,
-) (*RecipeClassifiers, error) {
+func BuildRecipeClassifiers(cfg *config.RouterConfig, runtimeOptions ...RecipeRuntimeOptions) (*RecipeClassifiers, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
 
-	runtime := native.New(nil)
-	options := RecipeRuntimeOptions{Runtime: runtime}
+	options := RecipeRuntimeOptions{}
 	if len(runtimeOptions) > 0 {
 		options = runtimeOptions[0]
-		if options.Runtime != nil {
-			runtime = options.Runtime
-		}
 	}
-	options.Runtime = runtime
-	sharedAdmission := buildAdmissionRegistry(cfg)
+	if options.Runtime == nil {
+		options.Runtime = serving.New(nil, nil)
+	}
 	set := &RecipeClassifiers{
-		byRecipe:     make(map[config.RecipeName]*Classifier),
-		runtimeOrder: make([]config.RecipeName, 0, len(cfg.Recipes)),
-		routingOrder: make([]config.RecipeName, 0, len(cfg.Recipes)),
+		byRecipe:      make(map[config.RecipeName]*Classifier),
+		runtimeOrder:  make([]config.RecipeName, 0, len(cfg.Recipes)),
+		routingOrder:  make([]config.RecipeName, 0, len(cfg.Recipes)),
+		defaultRecipe: cfg.DefaultRecipe().Name,
 	}
 	if len(cfg.Recipes) == 0 {
-		classifier, err := buildClassifierWithAdmission(cfg, categoryMapping, piiMapping, jailbreakMapping, sharedAdmission, options)
+		classifier, err := buildClassifier(cfg, options)
 		if err != nil {
-			return nil, fmt.Errorf("build routing recipe %q: %w", config.DefaultRecipeName, err)
+			return nil, fmt.Errorf("build routing recipe %q: %w", set.defaultRecipe, err)
 		}
-		set.byRecipe[config.DefaultRecipeName] = classifier
-		set.order = append(set.order, config.DefaultRecipeName)
-		set.runtimeOrder = append(set.runtimeOrder, config.DefaultRecipeName)
-		if cfg.IsRecipeReachableForRouting(config.DefaultRecipeName) {
-			set.routingOrder = append(set.routingOrder, config.DefaultRecipeName)
+		set.byRecipe[set.defaultRecipe] = classifier
+		set.order = append(set.order, set.defaultRecipe)
+		set.runtimeOrder = append(set.runtimeOrder, set.defaultRecipe)
+		if cfg.IsRecipeReachableForRouting(set.defaultRecipe) {
+			set.routingOrder = append(set.routingOrder, set.defaultRecipe)
 		}
 		return set, nil
 	}
@@ -78,19 +76,19 @@ func BuildRecipeClassifiers(
 		reachable := cfg.IsRecipeReachableForRouting(recipe.Name)
 		var classifier *Classifier
 		var err error
-		if recipe.Name != config.DefaultRecipeName && !reachable {
+		if recipe.Name != set.defaultRecipe && !reachable {
 			// Canonical contract validation remains eager. Provisioning belongs
 			// only to reachable routing scopes and the default API owner.
 			err = config.ValidateKubernetesConfigContracts(scopedConfig)
 			if err == nil {
 				var models *classifierModelRuntime
-				models, err = newClassifierModelRuntime(scopedConfig, runtime)
+				models, err = newClassifierModelRuntime(scopedConfig, options)
 				if err == nil {
 					classifier = &Classifier{Config: models.cfg, models: models}
 				}
 			}
 		} else {
-			classifier, err = buildClassifierWithAdmission(scopedConfig, categoryMapping, piiMapping, jailbreakMapping, sharedAdmission, options)
+			classifier, err = buildClassifier(scopedConfig, options)
 		}
 		if err != nil {
 			_ = set.Close()
@@ -98,7 +96,7 @@ func BuildRecipeClassifiers(
 		}
 		set.byRecipe[recipe.Name] = classifier
 		set.order = append(set.order, recipe.Name)
-		if recipe.Name == config.DefaultRecipeName || reachable {
+		if recipe.Name == set.defaultRecipe || reachable {
 			set.runtimeOrder = append(set.runtimeOrder, recipe.Name)
 		}
 		if reachable {
@@ -117,14 +115,12 @@ func (s *RecipeClassifiers) InitializeRuntime() error {
 		return fmt.Errorf("recipe classifiers are nil")
 	}
 	for _, recipeName := range s.lifecycleOrder() {
-		classifier := s.byRecipe[recipeName]
-		var err error
-		if recipeName == config.DefaultRecipeName && !s.routingRecipe(recipeName) {
-			err = classifier.InitializeDefaultAPIRuntime()
-		} else {
-			err = classifier.InitializeRuntime()
+		// The default APIs of a default recipe that routes nothing own no
+		// runtime: the decision model answers them.
+		if recipeName == s.defaultRecipe && !s.routingRecipe(recipeName) {
+			continue
 		}
-		if err != nil {
+		if err := s.byRecipe[recipeName].InitializeRuntime(); err != nil {
 			if closeErr := s.Close(); closeErr != nil {
 				logging.ComponentWarnEvent("classifier", "recipe_runtime_initialization_rollback_failed", map[string]interface{}{
 					"recipe": string(recipeName),
@@ -192,66 +188,8 @@ func (s *RecipeClassifiers) ForRecipe(recipeName config.RecipeName) (*Classifier
 
 // Default returns the classifier for the default recipe.
 func (s *RecipeClassifiers) Default() *Classifier {
-	classifier, _ := s.ForRecipe(config.DefaultRecipeName)
+	classifier, _ := s.ForRecipe(s.defaultRecipe)
 	return classifier
-}
-
-// HasFactCheckClassifier reports default/API fact-check readiness.
-func (s *RecipeClassifiers) HasFactCheckClassifier() bool {
-	return factCheckClassifierReady(s.Default())
-}
-
-// HasHallucinationDetector reports default/API detector readiness.
-func (s *RecipeClassifiers) HasHallucinationDetector() bool {
-	classifier := s.Default()
-	return classifier != nil && classifier.IsHallucinationDetectorReady()
-}
-
-// HasHallucinationExplainer reports default/API NLI readiness.
-func (s *RecipeClassifiers) HasHallucinationExplainer() bool {
-	classifier := s.Default()
-	return classifier != nil && classifier.IsHallucinationExplainerReady()
-}
-
-// HasFeedbackDetector reports default/API feedback readiness.
-func (s *RecipeClassifiers) HasFeedbackDetector() bool {
-	return feedbackDetectorReady(s.Default())
-}
-
-// HasAnyFactCheckClassifier reports aggregate reachable-recipe inventory
-// readiness without changing default API readiness semantics.
-func (s *RecipeClassifiers) HasAnyFactCheckClassifier() bool {
-	return s.anyClassifierReady(factCheckClassifierReady)
-}
-
-// HasAnyHallucinationDetector reports aggregate reachable-recipe detector
-// inventory readiness.
-func (s *RecipeClassifiers) HasAnyHallucinationDetector() bool {
-	return s.anyClassifierReady((*Classifier).IsHallucinationDetectorReady)
-}
-
-// HasAnyHallucinationExplainer reports aggregate reachable-recipe NLI
-// inventory readiness.
-func (s *RecipeClassifiers) HasAnyHallucinationExplainer() bool {
-	return s.anyClassifierReady((*Classifier).IsHallucinationExplainerReady)
-}
-
-// HasAnyFeedbackDetector reports aggregate reachable-recipe feedback inventory
-// readiness.
-func (s *RecipeClassifiers) HasAnyFeedbackDetector() bool {
-	return s.anyClassifierReady(feedbackDetectorReady)
-}
-
-func factCheckClassifierReady(classifier *Classifier) bool {
-	return classifier != nil &&
-		classifier.factCheckClassifier != nil &&
-		classifier.factCheckClassifier.IsInitialized()
-}
-
-func feedbackDetectorReady(classifier *Classifier) bool {
-	return classifier != nil &&
-		classifier.feedbackDetector != nil &&
-		classifier.feedbackDetector.IsInitialized()
 }
 
 func (s *RecipeClassifiers) anyClassifierReady(ready func(*Classifier) bool) bool {
@@ -270,29 +208,4 @@ func (s *RecipeClassifiers) anyClassifierReady(ready func(*Classifier) bool) boo
 // HasAnyPreparedEmbeddings reports actual providers across active recipe owners.
 func (s *RecipeClassifiers) HasAnyPreparedEmbeddings() bool {
 	return s.anyClassifierReady(func(c *Classifier) bool { return c.PreparedEmbeddings().Ready() })
-}
-
-// HasPreparedKnowledgeBases reports KB warmup readiness only from the routing
-// recipes that own KB consumers, independently of default or global embeddings.
-func (s *RecipeClassifiers) HasPreparedKnowledgeBases() bool {
-	for _, name := range s.routingLifecycleOrder() {
-		if s.byRecipe[name].HasPreparedKnowledgeBases() {
-			return true
-		}
-	}
-	return false
-}
-
-// PreloadKnowledgeBases prepares recipe-local KB classifiers without sharing
-// policy or symbol state across recipe boundaries.
-func (s *RecipeClassifiers) PreloadKnowledgeBases() error {
-	if s == nil {
-		return nil
-	}
-	for _, recipeName := range s.routingLifecycleOrder() {
-		if err := s.byRecipe[recipeName].PreloadKnowledgeBases(); err != nil {
-			return fmt.Errorf("preload routing recipe %q: %w", recipeName, err)
-		}
-	}
-	return nil
 }

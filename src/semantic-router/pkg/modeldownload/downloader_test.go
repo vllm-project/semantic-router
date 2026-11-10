@@ -11,7 +11,7 @@ import (
 func TestBuildDownloadArgsFetchesFullSnapshotByDefault(t *testing.T) {
 	spec := ModelSpec{
 		LocalPath: "models/category_classifier_modernbert-base_model",
-		RepoID:    "llm-semantic-router/category_classifier_modernbert-base_model",
+		RepoID:    "vllm-sr/category_classifier_modernbert-base_model",
 	}
 
 	want := []string{
@@ -27,14 +27,19 @@ func TestBuildDownloadArgsFetchesFullSnapshotByDefault(t *testing.T) {
 	}
 }
 
+const (
+	testModelPath   = "models/test-model"
+	testModelRepoID = "test/test-model"
+)
+
 // TestBuildDownloadArgsRepeatsExcludeFlagPerPattern guards the CLI contract: the
 // typer-based `hf download` takes `--exclude` as a repeatable single-value option, so
 // one flag followed by several patterns silently drops all but the first and passes
 // the rest as positional filenames. Each pattern must carry its own flag.
 func TestBuildDownloadArgsRepeatsExcludeFlagPerPattern(t *testing.T) {
 	spec := ModelSpec{
-		LocalPath:       testEmbeddingModelPath,
-		RepoID:          testEmbeddingRepoID,
+		LocalPath:       testModelPath,
+		RepoID:          testModelRepoID,
 		Revision:        "abc123",
 		ExcludePatterns: []string{"*.onnx", "*.onnx.data", "*.onnx_data"},
 	}
@@ -42,8 +47,8 @@ func TestBuildDownloadArgsRepeatsExcludeFlagPerPattern(t *testing.T) {
 	got := buildDownloadArgs(spec)
 	want := []string{
 		"download",
-		testEmbeddingRepoID,
-		"--local-dir", testEmbeddingModelPath,
+		testModelRepoID,
+		"--local-dir", testModelPath,
 		"--revision", "abc123",
 		"--exclude", "*.onnx",
 		"--exclude", "*.onnx.data",
@@ -74,8 +79,8 @@ func TestBuildDownloadArgsRepeatsExcludeFlagPerPattern(t *testing.T) {
 // producing a bare `--exclude` that would swallow nothing or error out.
 func TestBuildDownloadArgsSkipsEmptyExcludePatterns(t *testing.T) {
 	spec := ModelSpec{
-		LocalPath:       testEmbeddingModelPath,
-		RepoID:          testEmbeddingRepoID,
+		LocalPath:       testModelPath,
+		RepoID:          testModelRepoID,
 		Revision:        "main",
 		ExcludePatterns: []string{"", "*.onnx", ""},
 	}
@@ -83,8 +88,8 @@ func TestBuildDownloadArgsSkipsEmptyExcludePatterns(t *testing.T) {
 	got := buildDownloadArgs(spec)
 	want := []string{
 		"download",
-		testEmbeddingRepoID,
-		"--local-dir", testEmbeddingModelPath,
+		testModelRepoID,
+		"--local-dir", testModelPath,
 		"--exclude", "*.onnx",
 	}
 	if !reflect.DeepEqual(got, want) {

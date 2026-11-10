@@ -24,7 +24,7 @@ def write_local_looper_config(tmp_path: Path):
         config_path.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "listeners": [
                         {
                             "name": "http-generic",
@@ -49,13 +49,9 @@ def test_resolve_effective_config_path_injects_local_service_runtime_defaults(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
-                    {
-                        "name": "http-8899",
-                        "address": "0.0.0.0",
-                        "port": 8899,
-                    }
+                    {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
             },
             sort_keys=False,
@@ -66,7 +62,6 @@ def test_resolve_effective_config_path_injects_local_service_runtime_defaults(
         config_path=config_path,
         algorithm=None,
         setup_mode=False,
-        platform=None,
     )
 
     assert effective_path == tmp_path / ".vllm-sr" / "runtime-config.yaml"
@@ -78,10 +73,7 @@ def test_resolve_effective_config_path_injects_local_service_runtime_defaults(
     assert response_api["redis"]["db"] == 0
 
     router_replay = effective["global"]["services"]["router_replay"]
-    assert router_replay == {
-        "enabled": False,
-        "store_backend": "memory",
-    }
+    assert router_replay == {"store_backend": "memory"}
     assert effective["global"]["services"]["management_api"] == {
         "bind_address": "0.0.0.0",
         "port": 8080,
@@ -95,14 +87,11 @@ def test_resolve_effective_config_path_preserves_explicit_management_listener(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [{"name": "public", "address": "0.0.0.0", "port": 8899}],
                 "global": {
                     "services": {
-                        "management_api": {
-                            "bind_address": "0.0.0.0",
-                            "port": 9090,
-                        }
+                        "management_api": {"bind_address": "0.0.0.0", "port": 9090}
                     }
                 },
             },
@@ -114,7 +103,6 @@ def test_resolve_effective_config_path_preserves_explicit_management_listener(
         config_path=config_path,
         algorithm=None,
         setup_mode=False,
-        platform=None,
     )
 
     effective = yaml.safe_load(effective_path.read_text())
@@ -126,18 +114,14 @@ def test_resolve_effective_config_path_preserves_explicit_management_listener(
 
 @pytest.mark.parametrize(
     "endpoint",
-    [
-        None,
-        "http://localhost:8899/v1/chat/completions",
-        "http://127.0.0.2:8899/v1/chat/completions",
-        "http://[::1]:8899/v1/chat/completions",
-    ],
+    [None, "http://localhost:8899/v1/chat/completions"],
 )
-def test_resolve_effective_config_path_rewrites_local_looper_endpoint(
+def test_resolve_effective_config_path_leaves_the_looper_endpoint_alone(
     endpoint: str | None,
     write_local_looper_config,
     monkeypatch,
 ):
+    """The Router makes Looper calls in process; serve points nothing at Envoy."""
     monkeypatch.setenv("VLLM_SR_STACK_NAME", "test-stack")
     config_path = write_local_looper_config(endpoint)
 
@@ -145,56 +129,10 @@ def test_resolve_effective_config_path_rewrites_local_looper_endpoint(
         config_path=config_path,
         algorithm=None,
         setup_mode=False,
-        platform=None,
     )
 
     effective = yaml.safe_load(effective_path.read_text())
-    assert effective["global"]["integrations"]["looper"]["endpoint"] == (
-        "http://test-stack-vllm-sr-envoy-container:9011/v1/chat/completions"
-    )
-
-
-def test_resolve_effective_config_path_rewrites_default_envoy_service_for_named_stack(
-    write_local_looper_config,
-    monkeypatch,
-):
-    monkeypatch.setenv("VLLM_SR_STACK_NAME", "test-stack")
-    config_path = write_local_looper_config(
-        "http://vllm-sr-envoy-container:8899/v1/chat/completions"
-    )
-
-    effective_path = resolve_effective_config_path(
-        config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
-        platform=None,
-    )
-
-    effective = yaml.safe_load(effective_path.read_text())
-    assert effective["global"]["integrations"]["looper"]["endpoint"] == (
-        "http://test-stack-vllm-sr-envoy-container:9011/v1/chat/completions"
-    )
-
-
-def test_resolve_effective_config_path_preserves_external_looper_endpoint(
-    write_local_looper_config,
-    monkeypatch,
-):
-    monkeypatch.setenv("VLLM_SR_STACK_NAME", "test-stack")
-    external_endpoint = "https://gateway.example.test/v1/chat/completions"
-    config_path = write_local_looper_config(external_endpoint)
-
-    effective_path = resolve_effective_config_path(
-        config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
-        platform=None,
-    )
-
-    effective = yaml.safe_load(effective_path.read_text())
-    assert (
-        effective["global"]["integrations"]["looper"]["endpoint"] == external_endpoint
-    )
+    assert effective["global"]["integrations"]["looper"].get("endpoint") == endpoint
 
 
 def test_resolve_effective_config_path_preserves_setup_mode_bootstrap_config(
@@ -207,40 +145,24 @@ def test_resolve_effective_config_path_preserves_setup_mode_bootstrap_config(
         config_path=config_path,
         algorithm=None,
         setup_mode=True,
-        platform=None,
     )
 
     assert effective_path == config_path
 
 
-def test_target_neutral_config_skips_all_local_runtime_materialization(
-    tmp_path: Path, monkeypatch
-):
+def test_target_neutral_config_skips_all_local_runtime_materialization(tmp_path: Path):
     source = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http", "port": 8899}],
-        "global": {
-            "services": {},
-            "stores": {},
-            "integrations": {"looper": {}},
-        },
+        "global": {"services": {}, "stores": {}, "integrations": {"looper": {}}},
     }
     config_path = tmp_path / "config.yaml"
     config_path.write_text(yaml.safe_dump(source), encoding="utf-8")
-
-    def _unexpected_kb_materialization(*_args, **_kwargs):
-        raise AssertionError("Kubernetes config must not materialize local KB state")
-
-    monkeypatch.setattr(
-        "cli.commands.runtime_support._sync_runtime_kb_store",
-        _unexpected_kb_materialization,
-    )
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
         algorithm=None,
         setup_mode=False,
-        platform=None,
         materialize_local_runtime=False,
     )
 
@@ -256,15 +178,13 @@ def test_generated_runtime_config_references_credentials_instead_of_carrying_the
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
                 "global": {
-                    "services": {
-                        "router_replay": {
-                            "enabled": True,
-                            "store_backend": "postgres",
-                        }
-                    }
+                    "services": {"router_replay": {"store_backend": "postgres"}},
+                    "plugins": [
+                        {"type": "router_replay", "configuration": {"enabled": True}}
+                    ],
                 },
             },
             sort_keys=False,
@@ -275,7 +195,6 @@ def test_generated_runtime_config_references_credentials_instead_of_carrying_the
         config_path=config_path,
         algorithm=None,
         setup_mode=False,
-        platform=None,
     )
 
     services = yaml.safe_load(effective_path.read_text())["global"]["services"]
@@ -292,7 +211,7 @@ def test_local_backend_defaults_skip_an_externally_hosted_endpoint():
     external_redis = "redis.external.example:6379"
     external_postgres = "postgres.external.example"
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {
             "services": {
                 "response_api": {
@@ -322,7 +241,7 @@ def test_local_backend_defaults_skip_an_externally_hosted_endpoint():
 def test_vector_store_metadata_defaults_skip_an_externally_hosted_postgres():
     metadata = {"host": "postgres.external.example", "password": "operator-owned"}
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {
             "stores": {
                 "response_cache": {"enabled": False},
@@ -350,15 +269,14 @@ def test_managed_metadata_postgres_credential_is_replaced_with_the_placeholder()
     """
 
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {
             "stores": {
-                "response_cache": {"enabled": False},
                 "vector_store": {
                     "enabled": True,
                     "metadata_store": "postgres",
                     "metadata_postgres": {"host": "vllm-sr-postgres"},
-                },
+                }
             }
         },
     }
@@ -372,7 +290,7 @@ def test_managed_metadata_postgres_credential_is_replaced_with_the_placeholder()
 def test_managed_credential_field_is_overwritten_and_reported(caplog):
     stale_password = "router-secret"
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {
             "services": {
                 "response_api": {
@@ -401,7 +319,7 @@ def test_managed_credential_field_is_overwritten_and_reported(caplog):
 
 def test_managed_credential_placeholder_is_reapplied_without_a_warning(caplog):
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {
             "services": {
                 "response_api": {

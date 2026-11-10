@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">vllm-sr validate remediation hints</title>
+  <desc id="desc">Terminal output showing validation errors with actionable hints for unknown recipes, duplicate recipe names, and reserved aliases.</desc>
+  <rect width="1200" height="620" fill="#111827" rx="12"/>
+  <circle cx="28" cy="28" r="7" fill="#ef4444"/>
+  <circle cx="52" cy="28" r="7" fill="#f59e0b"/>
+  <circle cx="76" cy="28" r="7" fill="#22c55e"/>
+  <g font-family="Menlo, Monaco, Consolas, monospace" font-size="19" fill="#e5e7eb">
+    <text x="28" y="78" fill="#93c5fd">$ vllm-sr validate --config broken.yaml</text>
+    <text x="28" y="122" fill="#f87171">Error: Configuration validation failed</text>
+    <text x="28" y="164">  1. [entrypoints.0.recipe] Entrypoint references unknown recipe 'missing-recipe'</text>
+    <text x="52" y="194" fill="#67e8f9">Hint: Change this to the name of a recipe defined under recipes.</text>
+    <text x="28" y="246">  2. [recipes.production] Duplicate recipe name 'production'</text>
+    <text x="52" y="276" fill="#67e8f9">Hint: Rename one recipe so every recipe has a unique name.</text>
+    <text x="28" y="328">  3. [entrypoints.1.model_names] Entrypoint model 'vllm-sr/auto'</text>
+    <text x="52" y="358">     conflicts with a configured model or reserved alias</text>
+    <text x="52" y="388" fill="#67e8f9">Hint: Use a distinct entrypoint model name; do not reuse a configured</text>
+    <text x="52" y="418" fill="#67e8f9">      model or reserved alias such as vllm-sr/auto.</text>
+    <text x="28" y="500" fill="#9ca3af">Edit the indicated field, then rerun the same validate command.</text>
+  </g>
+</svg>

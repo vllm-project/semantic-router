@@ -7,9 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -57,74 +55,61 @@ func (s *ClassificationService) TryRefreshRuntimeConfig(
 	if s.modelPool == nil {
 		s.modelPool = binding.NewPool()
 	}
-	options := classification.RecipeRuntimeOptions{Runtime: native.New(s.modelPool)}
+	options, lease, err := serviceModelRuntimes(newConfig, s.modelPool)
+	if err != nil {
+		return err
+	}
 	s.configMutex.RLock()
 	currentRecipes := s.recipeClassifiers
-	currentClassifier := s.classifier
 	s.configMutex.RUnlock()
 	if currentRecipes != nil {
-		return s.refreshRecipeClassifiers(
-			newConfig,
-			currentClassifier,
-			options,
-		)
+		return s.refreshRecipeClassifiers(newConfig, options, lease)
 	}
 
-	rebuiltClassifier, err := classification.NewLegacyClassifierFromConfig(newConfig, options)
+	rebuiltClassifier, err := classification.NewClassifier(newConfig, options)
 	if err != nil {
+		_ = lease.Close()
 		return fmt.Errorf("rebuild classifier: %w", err)
 	}
-	return s.prepareAndPublishClassifiers(newConfig, rebuiltClassifier, nil, rebuiltClassifier, options.Runtime)
+	s.publishClassifiers(newConfig, rebuiltClassifier, nil, classifierAPIResources{classifiers: rebuiltClassifier, lease: lease})
+	return nil
 }
 
 func (s *ClassificationService) refreshRecipeClassifiers(
 	newConfig *config.RouterConfig,
-	current *classification.Classifier,
 	options classification.RecipeRuntimeOptions,
+	lease io.Closer,
 ) error {
-	var (
-		categoryMapping  *classification.CategoryMapping
-		piiMapping       *classification.PIIMapping
-		jailbreakMapping *classification.JailbreakMapping
-	)
-	if current != nil {
-		categoryMapping = current.CategoryMapping
-		piiMapping = current.PIIMapping
-		jailbreakMapping = current.JailbreakMapping
-	}
-	rebuilt, err := classification.BuildRecipeClassifiers(
-		newConfig,
-		categoryMapping,
-		piiMapping,
-		jailbreakMapping,
-		options,
-	)
+	rebuilt, err := classification.BuildRecipeClassifiers(newConfig, options)
 	if err != nil {
+		_ = lease.Close()
 		return fmt.Errorf("rebuild recipe classifiers: %w", err)
 	}
 	if err := rebuilt.InitializeRuntime(); err != nil {
+		_ = lease.Close()
 		return fmt.Errorf("initialize recipe classifiers: %w", err)
 	}
 	defaultClassifier := rebuilt.Default()
 	if defaultClassifier == nil {
 		_ = rebuilt.Close()
+		_ = lease.Close()
 		return fmt.Errorf("default routing recipe classifier is unavailable")
 	}
 
-	return s.prepareAndPublishClassifiers(newConfig, defaultClassifier, rebuilt, rebuilt, options.Runtime)
+	s.publishClassifiers(newConfig, defaultClassifier, rebuilt, classifierAPIResources{classifiers: rebuilt, lease: lease})
+	return nil
 }
 
 // Preparation leaves old requests running. Only publication/retirement waits
 // for standalone service calls; normal router replacement uses its generation
 // lease and never mutates this service's classifier graph.
-func (s *ClassificationService) publishClassifiers(cfg *config.RouterConfig, classifier *classification.Classifier, recipes *classification.RecipeClassifiers, owner io.Closer, embeddings *embedding.Set) {
+func (s *ClassificationService) publishClassifiers(cfg *config.RouterConfig, classifier *classification.Classifier, recipes *classification.RecipeClassifiers, owner io.Closer) {
 	s.runtimeMutex.Lock()
 	defer s.runtimeMutex.Unlock()
 	s.configMutex.Lock()
 	previousOwner, previousUnified := s.runtimeOwner, s.unifiedClassifier
 	s.classifier, s.recipeClassifiers, s.config = classifier, recipes, cfg
 	s.runtimeOwner = owner
-	s.globalEmbeddings = embeddings
 	s.unifiedClassifier = classification.NewUnifiedClassifierFromRecipe(classifier)
 	s.configMutex.Unlock()
 	if err := previousUnified.Close(); err != nil {

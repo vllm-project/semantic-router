@@ -2,68 +2,57 @@
 
 ## Overview
 
-Run all ten Vela task models on an AMD GPU and connect the Router to an existing
-OpenAI-compatible vLLM backend. The public model name is `vela-auto`; the backend
+Run the Vela decision model and the Vela 1.0 Embedding on an AMD
+GPU and connect the Router to an existing OpenAI-compatible vLLM backend. The public model name is `vela-auto`; the backend
 serves `vela-default`. This recipe exposes real routing signals and enables
-retrieval with neural reranking for document questions.
+retrieval for document questions, with the decision model judging which
+documents are relevant.
 
 ## Model details
 
-The [config](config.yaml) pins every task artifact to an immutable Hugging Face
-revision. The shared Encoder is a training parent and is not loaded separately.
+The [config](config.yaml) pins every model to an immutable Hugging Face
+revision.
 
 | Models | Execution | Input policy |
 | --- | --- | --- |
-| Embedding, Reranker | ORT ROCm with CK FlashAttention, native graph precision | 32,768 tokens, including special tokens; reject overflow |
-| Guard | ORT ROCm, native precision, `onnx/model_rocm_8k.onnx` | 8,192 tokens, including special tokens; reject overflow |
-| Domain, Safety, PII, FactCheck, Feedback, Modality | ORT MIGraphX, native precision | 8,192 tokens, including special tokens; reject overflow |
-| Hazard | ORT MIGraphX, native precision | Artifact-bound 2,048-token overlapping windows within a 32,768-token logical budget |
+| vela3-fast (the decision model) | Built-in model runtime on `rocm:0`, default engine arguments | 8,192-token windows, including special tokens |
+| Embedding | Built-in model runtime on `rocm:0`, FP32, default engine arguments | 32,768 tokens, including special tokens; reject overflow |
 
-Embedding uses layer 22 and dimension 768, with `full_context: true`.
-Both representation bindings select `head: onnx/model_fa.onnx` and deployments
-select `custom_ops_profile: ck_flash_attention`, `device: rocm:0` and
-`precision: native`. The Reranker's `pair_scorer` is exactly layer 22, dimension
-768. The GPU provider must execute the model without CPU fallback.
-
-The published CK graphs also contain Embedding exits at layers 3, 6 and 11 and
-Reranker exits at layers 3, 6, 11 and 22 with dimensions 64, 128, 256, 512 and
-768. For a reduced Reranker, choose `onnx/model_fa_layer_N_dim_D.onnx` and set
-both `pair_scorer` coordinates to those same values. The full 22/768 selection
-uses `onnx/model_fa.onnx`. Embedding resolves matching flat
-`onnx/model_fa_layer_N.onnx` companions for enabled consumers. Keep the CK graph
-family consistent; portable and FP16 graph variants are different selections.
+Every deployment is a `model_runtime` deployment: the Router starts the runtime
+and the runtime loads each pinned package on the GPU and chooses its kernels.
+`global.model_catalog.embeddings.default` names the Embedding deployment, which
+embeds the vector store's documents and queries at dimension 768.
 
 ## Intended use
 
 Use this recipe to inspect Vela signals on AMD, add semantic routing to a local
-backend, or rerank retrieved documents before generation. It is a starting
+backend, or keep the relevant retrieved documents before generation. It is a starting
 configuration for one backend, not a claim that routing improves that backend's
-answer quality. Keep the all-signals request within the 8K classifier budget.
-Standalone Embedding and Reranker execution is qualified through 32K; this does
-not establish 32K AMD support for the complete classifier pipeline.
+answer quality. The decision model answers every routing signal in one call and
+scans longer inputs in 8K windows. Standalone Embedding execution is
+qualified through 32K.
 
 ## Routing behavior
 
-- `knowledge` matches the phrase `Search my documents`. It retrieves up to three
-  chunks, reranks them and injects the best two before calling `vela-default`.
-  Candidate retrieval uses `similarity_threshold: 0.0` and selects up to
-  `top_k` candidates before neural reranking.
-- `observe` combines the configured learned signals and calls the same backend.
+- `knowledge` matches the phrase `Search my documents`. It recalls up to three
+  chunks, asks the decision model which are relevant and injects the best two
+  before calling `vela-default`. Recall uses `min_similarity: 0` and keeps up
+  to `top_k` candidates for the judge.
+- `observe` combines the configured application signals and calls the same backend.
   Requests without a matching decision also use the configured default backend.
 
-Guard detects prompt attacks; Safety detects unsafe content. Their meanings are
-independent. Guard retains threshold 0.5 and checks the current user input;
-PII includes history. FactCheck uses 0.95 and Feedback uses 0.7. Hazard uses the
-pinned operating point's twelve independent thresholds and window policy.
+The jailbreak rule detects prompt attacks; the safety rule detects unsafe
+content. Their meanings are independent. The jailbreak rule matches at 0.5 and
+reads the current user input; the PII rule includes history. Rules that write
+no predicate use the thresholds calibrated for vela3-fast.
 
 ## Requirements
 
-Use an AMD Router image containing ORT ROCm, MIGraphX and the CK custom operator
-library, a supported AMD GPU, device access through `/dev/kfd` and `/dev/dri`,
-and enough memory for ten loaded task models and the chosen concurrency.
-The CLI downloads the pinned artifacts. Cold MIGraphX compilation can take
-longer than startup on a cached deployment; size the startup budget from actual
-hardware measurements.
+Use the ROCm Router image (it ships the model runtime with ROCm PyTorch), a
+supported AMD GPU, device access through `/dev/kfd` and `/dev/dri`,
+and enough memory for the three loaded models and the chosen concurrency.
+The runtime downloads the pinned packages on first start; size the startup
+budget from actual hardware measurements.
 
 Start your generation backend separately with `--served-model-name vela-default`.
 It must be reachable from the Router as `http://vllm:8000`. For a Docker backend,
@@ -73,14 +62,14 @@ request first. The recipe does not provision a generation model.
 
 ## Data handling and safety
 
-The ten task models run inside the Router. Chat text and retrieved context are
+The models run in the Router's model runtime on the same host. Chat text and retrieved context are
 sent to the configured backend. Uploaded documents and vectors use local stores;
 the example's in-memory vector index does not survive a restart. The CLI mounts
-its workspace state at `/app/.vllm-sr`, including the compilation cache and files.
+its workspace state at `/app/.vllm-sr`, including the files.
 
 This recipe observes risk signals; it does not block requests merely because a
 risk label matches. Configure your application's enforcement policy before
-using those labels as a guardrail. Guard and PII retain `on_error: block`; decisions use
+using those labels as a guardrail. Decisions use
 `on_unknown: fail_request` for unresolved conditions. A resolved branch of the
 observation route's `OR` can still select that route, so inspect `signal_errors`
 alongside scores. Retrieval failures block the knowledge route. Preview returns the supplied text and diagnostic values, so handle its
@@ -88,17 +77,17 @@ responses as application data.
 
 ## Quick start
 
-Install the CLI using the [installation guide](https://vllm-sr.ai/docs/installation/installation),
+Install the CLI using the [installation guide](https://vllm-sr.ai/docs/installation/),
 connect the backend described above, and download the recipe:
 
 ```bash
 curl --fail --location --output vela-amd.yaml \
   https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/vela-amd/config.yaml
 vllm-sr config validate --config vela-amd.yaml
-vllm-sr serve --platform amd --config vela-amd.yaml
+vllm-sr serve --platform rocm --config vela-amd.yaml
 ```
 
-`--platform amd` selects the AMD image and device access; the recipe's explicit
+`--platform rocm` selects the AMD image and device access; the recipe's explicit
 deployments select which models use the GPU. It does not override an authored
 CPU deployment. On a shared machine, select the Router's visible GPU with
 `VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES`; deployment index `0` refers to that visible
@@ -124,21 +113,23 @@ curl --fail http://localhost:8899/v1/chat/completions \
 
 For RAG, create a vector store, upload and index documents, then replace
 `vs_your_documents` in the plugin with the returned store ID and activate the
-updated config. Follow [neural reranking](https://vllm-sr.ai/docs/tutorials/plugin/rag#neural-reranking)
+updated config. Follow [RAG sources](../../../website/docs/tutorials/plugin/context.md#rag-sources)
 and [vector stores](https://vllm-sr.ai/docs/tutorials/global/stores-and-tools).
 Send a real chat request beginning with `Search my documents` after indexing.
-Preview shows the selected RAG plugin but does not run retrieval or reranking.
+Preview shows the selected context plugin but does not run retrieval or the
+relevance judge.
 
 ## Evaluation
 
 [Maintained probes](probes.yaml) check both routes, the public entrypoint, text
 and message requests, semantic matching and plugin selection on a running AMD
 Router. Runtime qualification covers full-signal 8K execution and standalone
-Embedding/Reranker execution through 32K, including padded batches. These are
+Embedding execution through 32K, including padded batches. These are
 execution and numerical checks, not retrieval or classification quality scores.
 
 Inspect actual per-signal timing in Preview's `metrics`. For retrieval, inspect
-the real chat trace's candidate counts, reranker identity, scores and latency.
+the real chat trace's retrieval latency and the relevance judge's
+`vsr_match_judge_total{feature="rag"}` counter.
 Measure cold startup, warm latency and memory on the intended hardware.
 
 The [98x routing paper](https://arxiv.org/abs/2603.12646) reports latency and
@@ -148,10 +139,8 @@ compares its settings with this recipe.
 
 ## Limitations
 
-All-signals Preview is bounded by the 8K classifier deployments even though the
-representation models and Hazard's logical budget are larger. PII scanning and
-Hazard window aggregation are different from a whole-document classifier.
-Reranker capacity includes the query, document and pair special tokens.
+The decision model reads a long input in 8K windows, so a signal that spans
+two windows is judged per window.
 
 Preview defaults to a 120-second request budget and 16 admitted workers. Choose
 `global.services.api.routing_preview` limits from measured workload and hardware
@@ -165,8 +154,7 @@ and the single generation backend determines answer capabilities.
 
 ## References
 
-- [Vela models](https://vllm-sr.ai/docs/tutorials/global/vela-models)
-- [AMD installation](https://vllm-sr.ai/docs/installation/amd-rocm)
-- [Embedding runtime](https://vllm-sr.ai/docs/installation/runtime/embeddings)
-- [In-process model bindings](https://vllm-sr.ai/docs/installation/runtime/in-process)
+- [System One: choose a deployment](https://vllm-sr.ai/docs/next/system-one/deployments)
+- [AMD installation](https://vllm-sr.ai/docs/next/installation/amd-rocm)
+- [Embeddings](https://vllm-sr.ai/docs/next/model-runtime/guides/embeddings)
 - [Recipe authoring and conformance](../CONFORMANCE.md)

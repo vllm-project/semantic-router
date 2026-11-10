@@ -61,6 +61,9 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 
 func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
+	if err := appendToolResultErrorLoss(&diagnostics, request, policy, llmprotocol.OpenAIChatV1); err != nil {
+		return diagnostics, err
+	}
 	for _, message := range request.Messages {
 		if message.ReasoningEffort != "" {
 			appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat,
@@ -76,7 +79,7 @@ func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Poli
 			return diagnostics, err
 		}
 	}
-	if request.PreviousResponseID == "" && request.ConversationID == "" && request.Truncation == "" {
+	if request.PreviousResponseID == "" && request.ConversationID == "" && request.Truncation != llmprotocol.TruncationAuto {
 		return diagnostics, nil
 	}
 	err := appendLossy(
@@ -113,13 +116,13 @@ func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 
 func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request) error {
 	for _, instruction := range request.Instructions {
-		encoded, err := encodeChatMessage(llmprotocol.Message{Role: instruction.Role, Content: instruction.Content})
+		encoded, err := encodeChatMessage(llmprotocol.Message{Role: instruction.Role, Content: instruction.Content, Name: instruction.Name})
 		if err != nil {
 			return err
 		}
 		wire.Messages = append(wire.Messages, encoded)
 	}
-	for _, message := range request.Messages {
+	for _, message := range responsesAssistantTurns(request) {
 		if len(message.Content) == 0 && message.ReasoningEffort != "" {
 			continue
 		}
@@ -165,6 +168,9 @@ func encodeChatMessage(message llmprotocol.Message) (chatMessageWire, error) {
 		return chatMessageWire{}, err
 	}
 	wire := chatMessageWire{ID: message.ID, Role: role}
+	if message.Name != "" {
+		wire.Name, _ = json.Marshal(message.Name)
+	}
 	state := chatMessageEncodingState{wire: &wire, parts: make([]chatContentWire, 0, len(message.Content))}
 	for _, content := range message.Content {
 		if err := state.appendContent(content); err != nil {
@@ -178,6 +184,9 @@ func encodeChatMessage(message llmprotocol.Message) (chatMessageWire, error) {
 		wire.Content, _ = json.Marshal(state.parts[0].Text)
 	} else if len(state.parts) > 0 {
 		wire.Content, _ = json.Marshal(state.parts)
+	} else if message.Role == llmprotocol.RoleTool {
+		// Chat tool messages require content even when the result has no parts.
+		wire.Content = json.RawMessage(`""`)
 	}
 	return wire, nil
 }
@@ -195,6 +204,10 @@ func (state *chatMessageEncodingState) appendContent(content llmprotocol.Content
 	case llmprotocol.ContentRefusal:
 		return appendChatTextField(&state.wire.Refusal, content)
 	case llmprotocol.ContentReasoning:
+		if content.ReasoningDetail != nil {
+			state.wire.ReasoningDetails = append(state.wire.ReasoningDetails, encodeChatReasoningDetail(*content.ReasoningDetail))
+			return nil
+		}
 		return appendChatTextField(&state.wire.Reasoning, content)
 	case llmprotocol.ContentImage:
 		return state.appendImage(content)

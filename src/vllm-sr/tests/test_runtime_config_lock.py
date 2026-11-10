@@ -115,11 +115,11 @@ def test_serve_fails_fast_when_runtime_config_is_already_mutating(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default"}]},
+                "recipes": [{"name": "default", "decisions": [{"name": "default"}]}],
             },
             sort_keys=False,
         ),
@@ -169,12 +169,16 @@ def test_serve_fails_fast_when_runtime_config_is_already_mutating(
 def test_serve_lock_matches_deployment_for_parent_paths(
     monkeypatch, tmp_path: Path, state_root_override: bool
 ):
+    monkeypatch.setattr("cli.runtime_lifecycle.get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        "cli.runtime_lifecycle.container_status_strict", lambda _name: "not found"
+    )
     config_dir = tmp_path / "samples" / "config"
     config_dir.mkdir(parents=True)
     (config_dir / "config.yaml").write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],

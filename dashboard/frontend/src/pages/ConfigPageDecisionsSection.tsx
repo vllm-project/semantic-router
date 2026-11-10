@@ -16,7 +16,12 @@ import type {
   DecisionFormState,
   NormalizedModel,
 } from './configPageSupport'
-import { getReasoningFamiliesMap, mergeDecisionForSave } from './configPageSupport'
+import {
+  decisionOutputForEditor,
+  decisionOutputFromEditor,
+  getReasoningFamiliesMap,
+  mergeDecisionForSave,
+} from './configPageSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import ConfigPageDecisionPluginsEditor from './ConfigPageDecisionPluginsEditor'
@@ -31,6 +36,8 @@ import {
   DECISION_ADAPTATIONS_SCHEMA,
   DECISION_DECLARATIVE_SCHEMA,
   DECISION_OUTPUT_CONTRACT_SCHEMA,
+  DECISION_FALLBACK_SCHEMA,
+  DECISION_RELIABILITY_SCHEMA,
 } from './configPageDecisionAdvancedSchemas'
 import {
   decisionModelRefsForSave,
@@ -46,7 +53,6 @@ import {
 
 interface ConfigPageDecisionsSectionProps {
   config: ConfigData | null
-  isPythonCLI: boolean
   isReadonly: boolean
   decisionsSearch: string
   onDecisionsSearchChange: (value: string) => void
@@ -65,7 +71,6 @@ function configuredObject(value: Record<string, unknown>): Record<string, unknow
 
 export default function ConfigPageDecisionsSection({
   config,
-  isPythonCLI,
   isReadonly,
   decisionsSearch,
   onDecisionsSearchChange,
@@ -80,7 +85,7 @@ export default function ConfigPageDecisionsSection({
   const [decisionDeleteError, setDecisionDeleteError] = useState<string | null>(null)
   const { applyScopedConfig, routingScopes, scopedConfig, selectedScopeId, setSelectedScopeId } =
     useRoutingScopeManager(config)
-  const reasoningFamilies = getReasoningFamiliesMap(config, isPythonCLI)
+  const reasoningFamilies = getReasoningFamiliesMap()
   useEffect(() => {
     setDecisionPendingDelete(null)
     setDecisionDeleteError(null)
@@ -203,6 +208,36 @@ export default function ConfigPageDecisionsSection({
           ),
           fullWidth: true,
         },
+        ...(decision.reliability && Object.keys(decision.reliability).length > 0
+          ? [
+              {
+                label: 'Timeouts & Retries',
+                value: (
+                  <ConfigPageSchemaFieldsEditor
+                    schema={DECISION_RELIABILITY_SCHEMA}
+                    value={decision.reliability}
+                    readOnly
+                  />
+                ),
+                fullWidth: true,
+              },
+            ]
+          : []),
+        ...(decision.fallback && Object.keys(decision.fallback).length > 0
+          ? [
+              {
+                label: 'Fallback',
+                value: (
+                  <ConfigPageSchemaFieldsEditor
+                    schema={DECISION_FALLBACK_SCHEMA}
+                    value={decision.fallback}
+                    readOnly
+                  />
+                ),
+                fullWidth: true,
+              },
+            ]
+          : []),
         ...(decision.plugins?.length
           ? [
               {
@@ -246,13 +281,14 @@ export default function ConfigPageDecisionsSection({
           fullWidth: true,
         },
         {
-          label: 'Iterations, Emits & Annotations',
+          label: 'Iterations, Retention, Output & Annotations',
           value: (
             <ConfigPageSchemaFieldsEditor
               schema={DECISION_DECLARATIVE_SCHEMA}
               value={{
                 candidateIterations: decision.candidateIterations || [],
-                emits: decision.emits || [],
+                retention: decision.retention || {},
+                output: decisionOutputForEditor(decision.output),
                 annotations: decision.annotations || {},
               }}
               readOnly
@@ -277,6 +313,8 @@ export default function ConfigPageDecisionsSection({
       action: {},
       algorithm: undefined,
       adaptations: {},
+      reliability: {},
+      fallback: {},
       declarative: {},
       rules: {},
       modelRefs: [
@@ -304,9 +342,12 @@ export default function ConfigPageDecisionsSection({
             action: decision.action || {},
             algorithm: decision.algorithm,
             adaptations: decision.adaptations || {},
+            reliability: decision.reliability || {},
+            fallback: decision.fallback || {},
             declarative: {
               candidateIterations: decision.candidateIterations || [],
-              emits: decision.emits || [],
+              retention: decision.retention || {},
+              output: decisionOutputForEditor(decision.output),
               annotations: decision.annotations || {},
             },
             rules: JSON.parse(JSON.stringify(decision.rules || {})),
@@ -434,6 +475,36 @@ export default function ConfigPageDecisionsSection({
         ),
       },
       {
+        name: 'reliability',
+        label: 'Timeouts & Retries',
+        section: 'Selection & runtime',
+        type: 'custom',
+        description:
+          "Overrides the provider model's timeouts and retries for this decision. Retry conditions and status codes add to the provider model's.",
+        customRender: (value, onChange) => (
+          <ConfigPageSchemaFieldsEditor
+            schema={DECISION_RELIABILITY_SCHEMA}
+            value={(value as Record<string, unknown>) || {}}
+            onChange={onChange}
+          />
+        ),
+      },
+      {
+        name: 'fallback',
+        label: 'Fallback',
+        section: 'Selection & runtime',
+        type: 'custom',
+        description:
+          "Overrides the recipe's cross-model fallback for this decision, field by field. The candidates stay this decision's ranked models.",
+        customRender: (value, onChange) => (
+          <ConfigPageSchemaFieldsEditor
+            schema={DECISION_FALLBACK_SCHEMA}
+            value={(value as Record<string, unknown>) || {}}
+            onChange={onChange}
+          />
+        ),
+      },
+      {
         name: 'plugins',
         label: 'Plugins',
         section: 'Selection & runtime',
@@ -472,7 +543,8 @@ export default function ConfigPageDecisionsSection({
         label: 'Declarative Extensions',
         section: 'Output behavior',
         type: 'custom',
-        description: 'Candidate iteration, emitted directives, and bounded annotations.',
+        description:
+          'Candidate iteration, retention, the media the decision answers with, and bounded annotations.',
         customRender: (value, onChange) => (
           <ConfigPageSchemaFieldsEditor
             schema={DECISION_DECLARATIVE_SCHEMA}
@@ -488,10 +560,6 @@ export default function ConfigPageDecisionsSection({
         throw new Error('Configuration not loaded yet.')
       }
 
-      if (!isPythonCLI) {
-        throw new Error('Decisions are only supported for Python CLI configs.')
-      }
-
       const name = (formData.name || '').trim()
       if (!name) {
         throw new Error('Name is required.')
@@ -504,6 +572,8 @@ export default function ConfigPageDecisionsSection({
       const plugins = decisionPluginsForSave(formData.plugins)
       const action = configuredObject(formData.action)
       const adaptations = configuredObject(formData.adaptations)
+      const reliability = configuredObject(formData.reliability)
+      const fallback = configuredObject(formData.fallback)
       const outputContractSpec = configuredObject(formData.output_contract_spec)
       const declarative = formData.declarative || {}
       if (action) {
@@ -533,12 +603,18 @@ export default function ConfigPageDecisionsSection({
         action: action as DecisionConfig['action'],
         algorithm: formData.algorithm,
         adaptations,
+        reliability,
+        fallback,
         candidateIterations: Array.isArray(declarative.candidateIterations)
           ? (declarative.candidateIterations as Array<Record<string, unknown>>)
           : undefined,
-        emits: Array.isArray(declarative.emits)
-          ? (declarative.emits as Array<Record<string, unknown>>)
-          : undefined,
+        retention:
+          declarative.retention &&
+          typeof declarative.retention === 'object' &&
+          Object.keys(declarative.retention).length > 0
+            ? (declarative.retention as Record<string, unknown>)
+            : undefined,
+        output: decisionOutputFromEditor(declarative.output),
         annotations:
           declarative.annotations && typeof declarative.annotations === 'object'
             ? (declarative.annotations as Record<string, unknown>)
@@ -579,8 +655,8 @@ export default function ConfigPageDecisionsSection({
 
   const confirmDeleteDecision = async () => {
     if (!decisionPendingDelete) return
-    if (!config || !isPythonCLI) {
-      setDecisionDeleteError('Deleting decisions is only supported for Python CLI configs.')
+    if (!config) {
+      setDecisionDeleteError('Configuration not loaded yet.')
       return
     }
 

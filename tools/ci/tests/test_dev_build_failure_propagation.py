@@ -105,7 +105,7 @@ esac
                     target,
                     f"CONTAINER_RUNTIME={runtime}",
                     f"VLLM_SR_TOPOLOGY={topology}",
-                    "VLLM_SR_PLATFORM=amd",
+                    "VLLM_SR_PLATFORM=rocm",
                     "ENV=amd",
                     "VLLM_SR_SOURCE_REVISION=test-source-revision",
                     "VLLM_SR_DASHBOARD_VERSION=test-dashboard-version",

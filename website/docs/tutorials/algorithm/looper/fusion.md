@@ -7,13 +7,15 @@ one final answer. The recipe-owned `analysis_mode` chooses whether the judge
 uses a separate structured analysis call, combines analysis and synthesis in
 one call, or synthesizes directly. The compatibility default is `separate`.
 
-The same runtime also supports a direct Fusion model slug through `global.integrations.looper.fusion.model_names`. The built-in default is `vllm-sr/fusion`; add `openrouter/fusion` there only when you intentionally want an OpenRouter-compatible alias. Direct Fusion is still signal-driven: vLLM-SR evaluates the request against Fusion-capable decisions and then executes the matched decision's judge and panel policy.
+Expose `fusion` through an ordinary `entrypoints` mapping to a recipe. The public name has no built-in dispatch behavior: the selected recipe evaluates its signals and decisions, and `algorithm.type=fusion` activates the algorithm. Use a dedicated recipe when this entrypoint should run only fusion policies.
 
 ## Key Advantages
 
 - Runs analysis models concurrently instead of choosing only one model.
 - Supports explicit `separate`, `one_call`, and `none` judge execution modes.
-- Keeps Fusion policy inside vLLM-SR decisions: `vllm-sr/auto` can choose any route, while `vllm-sr/fusion` intelligently chooses among Fusion routes only.
+- Keeps Fusion policy inside its recipe. A dedicated `vllm-sr/fusion` entrypoint
+  can expose a recipe containing only Fusion decisions; its name alone does not
+  filter algorithms.
 - Keeps judge, panel, budget, prompt, trace, fallback, and grounding policy
   under recipe ownership.
 - Continues after partial panel failures only when the remaining usable
@@ -50,15 +52,11 @@ content, reasoning, prompt data, raw response bodies, or error text.
 
 ```mermaid
 flowchart TD
-    A[Request arrives] --> B{Request model}
-    B -- vllm-sr/auto --> C[Evaluate all decisions]
-    B -- vllm-sr/fusion --> D[Evaluate Fusion decisions only]
+    A[Request arrives] --> B[Resolve entrypoint to its recipe]
+    B --> C[Evaluate that recipe's signals and decisions]
     C --> E{Matched decision uses algorithm.type=fusion?}
-    D --> F{Matched Fusion decision?}
-    E -- No --> G[Use normal selected route]
+    E -- No --> G[Use the matched route or recipe fallback]
     E -- Yes --> H[Resolve recipe-owned Fusion config]
-    F -- Yes --> H
-    F -- No --> J[Return no eligible Fusion decision error]
     H --> M[Run analysis panel concurrently]
     M --> N{Usable responses meet quorum?}
     N -- No --> O{quorum_failure_policy}
@@ -81,7 +79,7 @@ flowchart TD
 
 ## What Problem Does It Solve?
 
-Some prompts benefit from multiple independent attempts and a judge pass rather than a single route decision. `fusion` keeps that orchestration in Router policy, so clients can use it through the same chat completions endpoint. Unlike a fixed provider-side Fusion endpoint, `vllm-sr/fusion` first uses vLLM-SR signals and decision priority to pick the right Fusion route for the request.
+Some prompts benefit from multiple independent attempts and a judge pass rather than a single route decision. `fusion` keeps that orchestration in Router policy, so clients can use it through the same chat completions endpoint. An entrypoint such as `vllm-sr/fusion` selects its configured recipe; that recipe's signals and decisions determine whether Fusion runs.
 
 ## When to Use
 
@@ -101,30 +99,31 @@ Some prompts benefit from multiple independent attempts and a judge pass rather 
 Decision-level Fusion:
 
 ```yaml
-routing:
-  decisions:
-    - name: deliberation
-      description: Compare candidate answers and synthesize one response.
-      priority: 100
-      output_contract: Preserve any explicit output format exactly.
-      modelRefs:
-        - model: qwen3-32b
-        - model: deepseek-worker
-      algorithm:
-        type: fusion
-        fusion:
-          model: qwen3-32b
-          analysis_models:
-            - qwen3-32b
-            - deepseek-worker
-          analysis_mode: separate
-          analysis_overrides:
-            - model: qwen3-32b
-              temperature: 0.15
-              max_completion_tokens: 512
-            - model: deepseek-worker
-              temperature: 0.2
-              max_completion_tokens: 384
+recipes:
+  - name: default
+    decisions:
+      - name: deliberation
+        description: Compare candidate answers and synthesize one response.
+        priority: 100
+        output_contract: Preserve any explicit output format exactly.
+        modelRefs:
+          - model: qwen3-32b
+          - model: deepseek-worker
+        algorithm:
+          type: fusion
+          fusion:
+            model: qwen3-32b
+            analysis_models:
+              - qwen3-32b
+              - deepseek-worker
+            analysis_mode: separate
+            analysis_overrides:
+              - model: qwen3-32b
+                temperature: 0.15
+                max_completion_tokens: 512
+              - model: deepseek-worker
+                temperature: 0.2
+                max_completion_tokens: 384
 ```
 
 `output_contract` is decision-scoped prompt text. Use it for benchmark or
@@ -141,6 +140,7 @@ Minimal algorithm configuration:
 ```yaml
 algorithm:
   type: fusion
+  on_error: skip
   fusion:
     model: qwen3-32b
     analysis_models:
@@ -161,65 +161,55 @@ algorithm:
     temperature: 0.2
     include_analysis: true
     include_intermediate_responses: true
-    on_error: skip
     quorum_failure_policy: fail
     judge_prompt_version: fusion-v1
 ```
 
-Automatic routing aliases:
+Default routing uses `vllm-sr/auto` when no entrypoint explicitly targets
+`default`. To replace that public name, declare all desired aliases:
 
 ```yaml
-global:
-  router:
-    auto_model_names:
-      - vllm-sr/auto
-      - auto
-      - MoM
+entrypoints:
+  - model_names: [router/default, MoM]
+    recipe: default
 ```
 
-`vllm-sr/auto` evaluates all decisions. If the matched decision uses `algorithm.type=fusion`, the request enters Fusion; otherwise it follows the matched non-Fusion route.
+Only these explicit aliases resolve to `default`; `MoM` has no special meaning.
+The matched decision selects Fusion when its algorithm is `fusion`.
 
-Direct Fusion slug registration:
+For a dedicated Fusion surface, map its public names to an isolated recipe:
 
 ```yaml
-global:
-  integrations:
-    looper:
-      endpoint: http://localhost:8899/v1/chat/completions
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
-      fusion:
-        model_names:
-          - vllm-sr/fusion
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
+  - model_names: [vllm-sr/fusion, openrouter/fusion]
+    recipe: fusion
+recipes:
+  - name: default
+  - name: fusion
+    decisions:
+      - name: panel
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
+        algorithm:
+          type: fusion
+          fusion:
+            model: qwen3-32b
+            analysis_models: [qwen3-8b, qwen3-32b]
 ```
 
-`global.integrations.looper.fusion` only registers direct request model names. It does not own route policy, a default route, judge selection, panel selection, concurrency, templates, or error handling.
-
-The judge model, analysis panel, analysis mode, sampling settings, concurrency,
-token and time budgets, quorum, templates, prompt version, trace visibility,
-error policy, and grounding policy belong under
-`routing.decisions[].algorithm.fusion`. Direct slug calls evaluate only
-Fusion-capable decisions, so `vllm-sr/fusion` cannot silently fall back to a
-normal single-model route. The public HTTP path executes the selected recipe
-policy and does not expose Fusion execution overrides through
-`plugins[].id = fusion`.
-
-To expose an OpenRouter-compatible alias, opt in explicitly:
-
-```yaml
-global:
-  integrations:
-    looper:
-      fusion:
-        model_names:
-          - vllm-sr/fusion
-          - openrouter/fusion
-```
+Public entrypoint names must not collide with backend models. Recipe signals,
+judge, panel, concurrency, budgets, templates and error policy remain inside
+that recipe. Shared orchestration limits such as `max_response_bytes_mb`
+belong under `global.integrations.looper`; it does not declare public names.
 
 ### Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/fusion"]` | Direct request model slugs that trigger Fusion decision matching |
 | `model` | string | first analysis model | Recipe-owned judge/calling model used for analysis and final synthesis |
 | `analysis_models` | list[string] | `modelRefs` | Recipe-owned panel models for parallel analysis |
 | `analysis_mode` | string | `separate` | Recipe-owned judge execution: `separate`, `one_call`, or `none` |
@@ -232,7 +222,7 @@ global:
 | `temperature` | float | request default | Recipe-owned temperature applied to Fusion subrequests |
 | `include_analysis` | bool | `true` | Recipe-owned visibility for an available structured judge analysis; this does not control execution |
 | `include_intermediate_responses` | bool | `true` | Recipe-owned visibility for raw panel responses |
-| `on_error` | string | `skip` | Recipe-owned handling: `skip` individual failed or unusable panel responses while enforcing quorum, or `fail` on the first such response |
+| `algorithm.on_error` | string | `skip` | Set beside `type`, not in this block. Recipe-owned handling: `skip` individual failed or unusable panel responses while enforcing quorum, or `fail` on the first such response |
 | `quorum_failure_policy` | string | `fail` | Panel-level behavior when usable responses fall below `min_successful_responses`: `fail` returns a typed quorum failure, `fallback` routes the request to `quorum_fallback_target`. Recipe-owned; requests cannot override it |
 | `quorum_fallback_target` | string | none | Concrete provider model to route to when `quorum_failure_policy: fallback`. Required by, and only valid with, that policy |
 | `analysis_template` | string | built-in | Recipe-owned separate-analysis prompt with `{{original}}` and `{{responses}}`; rejected outside `separate` |
@@ -295,7 +285,7 @@ answer instead of synthesizing from an under-strength panel. The judge and
 grounding stages are skipped: there is no panel to deliberate over.
 
 The target is validated when the configuration loads. It must be declared in
-`routing.modelCards`, use an OpenAI-compatible API format, be chat-capable text
+`providers.models`, use an OpenAI-compatible API format, be chat-capable text
 modality, have a provider backend, and not be one of the decision's own
 `analysis_models`. It must also be a concrete provider model: `vllm-sr/auto`,
 an entrypoint name, or a Fusion, Flow, or ReMoM slug is rejected, because
@@ -335,7 +325,7 @@ carry the outcome, one per layer:
 | Disposition | Meaning |
 | --- | --- |
 | `quorum_failed` | Policy was `fail`; a typed quorum error was returned |
-| `fallback_served` | Fallback answered and protocol encoding succeeded, so the response was returned to Envoy. The Router sees no delivery acknowledgement, so this does not assert what the client received |
+| `fallback_served` | Fallback answered and protocol encoding succeeded, so the response was handed to the serving frontend. This records successful encoding, not a client delivery acknowledgement, so this does not assert what the client received |
 | `fallback_failed` | Fallback was attempted and failed |
 | `fallback_response_failed` | Fallback answered but its response could not be built |
 | `response_encode_failed` | The response was built but protocol translation rejected it, so an error was returned instead |
@@ -414,12 +404,12 @@ Public mode-trace transport remains deferred to
 
 ## Grounding-Aware Synthesis
 
-By default the judge reads raw panel text with no grounding oracle. Grounding-aware synthesis scores each panel response for **faithfulness** *before* the judge runs, then uses those scores to guide synthesis toward the better-grounded responses. It makes **no extra LLM calls** — it uses local encoder models (the hallucination/groundedness detector and an NLI entailment model).
+By default the judge reads raw panel text with no grounding oracle. Grounding-aware synthesis scores each panel response for **faithfulness** *before* the judge runs, then uses those scores to guide synthesis toward the better-grounded responses. It makes **no extra LLM calls** — it asks the decision model's [hallucination](../../signal/application/hallucination) question, which needs a span-capable deployment.
 
 Reference selection (what each answer is scored against):
 
 - `context` — score answers against provided RAG/tool context via the detector (strongest, but only when the request carries context such as system/tool messages).
-- `panel` — score answers against each other via cross-model NLI; the panel acts as its own mutual reference (no external dependency, works on any query).
+- `panel` — score answers against each other: the detector reads each answer with a peer's answer as its context, so the panel acts as its own mutual reference (no external dependency, works on any query).
 - `hybrid` (default) — use `context` when the request carries it, otherwise `panel`.
 
 Policy (how the scores are used):
@@ -434,7 +424,7 @@ quorum check on the reduced judge input.
 
 > Grounding measures faithfulness/consistency, not truth. With no authoritative source it can down-weight the least-supported responses, not certify correctness. **Hard-dropping** the least mutually-consistent response (the `filter` policy) measurably *hurts* on contested factual questions — three models can be confidently wrong together while the lone dissenter is right — so the default is `weight`. See `bench/grounded_fusion/FINDINGS.md` for the evaluation behind this default.
 
-Requires the hallucination detector (and, for the `panel`/cross-model path, the NLI model) to be configured under `global` hallucination mitigation. If the backends are unavailable, `on_error: skip` falls back to plain Fusion.
+Grounding asks the decision model's [hallucination](../../signal/application/hallucination) question, which needs a span-capable deployment. If it is unavailable, `on_error: skip` falls back to plain Fusion.
 
 ```yaml
 algorithm:
@@ -448,7 +438,7 @@ algorithm:
       policy: weight             # weight | annotate | filter
       min_score: 0.0             # filter policy only: drop below this (0-1)
       min_keep: 1                # filter policy only: keep at least this many
-      nli_contradiction_penalty: 1.0
+      contradiction_penalty: 1.0
       on_error: skip             # skip (fall back to plain fusion) | fail
 ```
 
@@ -463,7 +453,7 @@ When enabled, the Fusion response `trace.grounding` records the reference mode, 
 | `policy` | string | `weight` | `weight` (soft-weight, keep all), `annotate` (notes, keep all), or `filter` (hard-drop) |
 | `min_score` | float | `0.0` | `filter` policy only: drop responses scoring below this (0–1) |
 | `min_keep` | int | `1` | `filter` policy only: keep at least this many top-scoring responses |
-| `nli_contradiction_penalty` | float | `1.0` | Weight of a peer contradiction in the `panel` reference |
+| `contradiction_penalty` | float | `1.0` | Weight of a peer contradiction (the detector's unsupported-span probability) in the `panel` reference; `vllm-sr config migrate` renames the earlier `nli_contradiction_penalty` |
 | `on_error` | string | `skip` | `skip` (fall back to plain Fusion) or `fail` |
 
 Panel responses and the original request are sent to the judge model. Treat all
@@ -481,7 +471,7 @@ serving the valid answer. It does not truncate trace JSON or answer text.
 
 OpenAI Responses and Anthropic Messages responses omit this Chat-specific
 extension. Both an unsupported target protocol and a size-based omission emit a
-`x-vsr-protocol-warnings` response header with action `dropped`, field `fusion`,
+`x-vsr-warnings` response header with action `dropped`, field `fusion`,
 and reason `router_extension_unsupported_protocol` or
 `router_extension_size_limit`. The warning also accompanies immediate Looper
 responses. Required answer content remains subject to the normal protocol

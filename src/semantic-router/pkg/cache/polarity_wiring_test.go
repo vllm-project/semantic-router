@@ -1,9 +1,8 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
 import (
-	"context"
 	"testing"
 	"time"
 )
@@ -39,9 +38,12 @@ func TestFinishFindSimilarSearchPolarityWiring(t *testing.T) {
 
 	// Exercise the candidate-selection seam used by both search paths.
 	buildResult := func(c *InMemoryCache, query string, entry CacheEntry) cacheSearchResult {
-		result := cacheSearchResult{bestIndex: -1}
+		result := cacheSearchResult{}
 		c.considerSearchCandidate(&result, tokenizeForPolarity(query, nil), threshold, 0, entry, embedding)
 		return result
+	}
+	finish := func(c *InMemoryCache, query string, result cacheSearchResult) (LookupResult, error) {
+		return bestSimilar(c.finishFindSimilarSearch(time.Now(), "model-x", query, atThreshold(threshold), result), nil)
 	}
 
 	t.Run("polarity mismatch flips above-threshold candidate to miss", func(t *testing.T) {
@@ -51,9 +53,7 @@ func TestFinishFindSimilarSearchPolarityWiring(t *testing.T) {
 		if !result.polarityRejected {
 			t.Fatalf("expected candidate diverted to polarityRejected, got %+v", result)
 		}
-		lookup, err := c.finishFindSimilarSearch(
-			context.Background(), time.Now(), "model-x", query, threshold, result,
-		)
+		lookup, err := finish(c, query, result)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -69,12 +69,10 @@ func TestFinishFindSimilarSearchPolarityWiring(t *testing.T) {
 		c, entry := newCacheWithEntry()
 		const query = "How do I enable two-factor authentication?"
 		result := buildResult(c, query, entry)
-		if result.polarityRejected || result.bestIndex != 0 {
-			t.Fatalf("expected genuine match promoted to bestIndex 0, got %+v", result)
+		if result.polarityRejected || len(result.hits) != 1 || result.hits[0].index != 0 {
+			t.Fatalf("expected genuine match kept as a hit, got %+v", result)
 		}
-		lookup, err := c.finishFindSimilarSearch(
-			context.Background(), time.Now(), "model-x", query, threshold, result,
-		)
+		lookup, err := finish(c, query, result)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

@@ -4,12 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
@@ -17,56 +14,33 @@ import (
 )
 
 // createModelSelectorRegistries leaves publication to publishRouterState.
-func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader, classifiers ...*classification.RecipeClassifiers) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
+func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
 	lt, cancel := buildLookupTable(cfg, replayReader)
-	var defaultSet *embedding.Set
-	if len(classifiers) > 0 && classifiers[0] != nil {
-		defaultSet = classifiers[0].Default().PreparedEmbeddings()
-	}
-	embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFunc(cfg, defaultSet)
 	registries := make(map[config.RecipeName]*selection.Registry)
 
 	if len(cfg.Recipes) == 0 {
-		registry := createModelSelectorRegistry(cfg, lt, embed, defaultEmbeddingConfig)
-		registries[config.DefaultRecipeName] = registry
+		registry := createModelSelectorRegistry(cfg)
+		registries[cfg.DefaultRecipe().Name] = registry
 		return registries, registry, lt, cancel
 	}
 
 	for i := range cfg.Recipes {
 		recipe := &cfg.Recipes[i]
-		scopedConfig := cfg.ConfigForRecipe(recipe)
-		var scoped *embedding.Set
-		if len(classifiers) > 0 && classifiers[0] != nil {
-			if classifier, ok := classifiers[0].ForRecipe(recipe.Name); ok {
-				scoped = classifier.PreparedEmbeddings()
-			}
-		}
-		embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFunc(scopedConfig, scoped)
-		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt, embed, defaultEmbeddingConfig)
+		registries[recipe.Name] = createModelSelectorRegistry(cfg.ConfigForRecipe(recipe))
 	}
-	defaultRegistry := registries[config.DefaultRecipeName]
+	defaultRegistry := registries[cfg.DefaultRecipe().Name]
 	return registries, defaultRegistry, lt, cancel
 }
 
-func createModelSelectorRegistry(
-	cfg *config.RouterConfig,
-	lt lookuptable.LookupTableStorage,
-	embed func(string, selection.EmbeddingConfig) ([]float32, error),
-	defaultEmbeddingConfig selection.EmbeddingConfig,
-) *selection.Registry {
-	modelSelectionCfg := buildModelSelectionConfig(cfg)
+func createModelSelectorRegistry(cfg *config.RouterConfig) *selection.Registry {
 	backendModels := cfg.BackendModels
-	selectionFactory := selection.NewFactory(modelSelectionCfg)
+	selectionFactory := selection.NewFactory()
 
 	if backendModels.ModelConfig != nil {
 		selectionFactory = selectionFactory.WithModelConfig(backendModels.ModelConfig)
 	}
 	if len(cfg.Categories) > 0 {
 		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
-	}
-	selectionFactory = selectionFactory.WithEmbeddingFunc(embed, defaultEmbeddingConfig)
-	if lt != nil {
-		selectionFactory = selectionFactory.WithLookupTable(lt)
 	}
 
 	registry := selectionFactory.CreateAll()
@@ -84,54 +58,6 @@ func createModelSelectorRegistry(
 	return registry
 }
 
-func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig, sets ...*embedding.Set) (func(string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
-	models := cfg.EmbeddingModels
-	backend := embedding.BackendOverrideFromEnv()
-	if backend == "" {
-		backend = models.EmbeddingBackend()
-	}
-	modelType := selectionEmbeddingModelType(models, backend)
-	defaultConfig := selection.EmbeddingConfig{
-		ModelType:       modelType,
-		TargetDimension: selectionEmbeddingDimension(models, modelType),
-	}
-
-	var prepared *embedding.Set
-	if len(sets) > 0 {
-		prepared = sets[0]
-	}
-	return func(text string, embeddingConfig selection.EmbeddingConfig) ([]float32, error) {
-		provider, err := prepared.Get(embeddingConfig.ModelType, embeddingConfig.TargetDimension, 0)
-		if err != nil {
-			return nil, err
-		}
-		return provider.Embed(context.Background(), text)
-	}, defaultConfig
-}
-
-func selectionEmbeddingModelType(models config.EmbeddingModels, backend string) string {
-	// Config validation accepts model names case-insensitively; the prepared
-	// provider set uses normalized keys for every execution backend.
-	modelType := strings.ToLower(strings.TrimSpace(models.EmbeddingConfig.ModelType))
-	if modelType != "" {
-		return modelType
-	}
-	if backend == config.EmbeddingBackendOpenAICompatible {
-		return config.EmbeddingModelTypeRemote
-	}
-	return config.EmbeddingModelTypeQwen3
-}
-
-func selectionEmbeddingDimension(models config.EmbeddingModels, modelType string) int {
-	if models.EmbeddingConfig.TargetDimension > 0 {
-		return models.EmbeddingConfig.TargetDimension
-	}
-	if modelType == config.EmbeddingModelTypeQwen3 {
-		return 1024
-	}
-	return 0
-}
-
 func collectConfiguredAlgorithmMethods(cfg *config.RouterConfig) []selection.SelectionMethod {
 	seen := make(map[string]bool)
 	var methods []selection.SelectionMethod
@@ -147,229 +73,6 @@ func collectConfiguredAlgorithmMethods(cfg *config.RouterConfig) []selection.Sel
 	}
 
 	return methods
-}
-
-func buildModelSelectionConfig(cfg *config.RouterConfig) *selection.ModelSelectionConfig {
-	modelSelectionCfg := &selection.ModelSelectionConfig{
-		Method: "static",
-	}
-
-	decisionCfgs := findDecisionScopedSelectionConfigs(cfg)
-	modelSelectionCfg.Elo = buildEloSelectionConfig(cfg, decisionCfgs.elo)
-	modelSelectionCfg.RouterDC = buildRouterDCSelectionConfig(cfg, decisionCfgs.routerDC)
-	modelSelectionCfg.AutoMix = buildAutoMixSelectionConfig(cfg)
-	modelSelectionCfg.Hybrid = buildHybridSelectionConfig(cfg, nil)
-	modelSelectionCfg.ML = buildMLSelectionConfig(cfg)
-	modelSelectionCfg.MultiFactor = buildMultiFactorSelectionConfig(nil)
-	modelSelectionCfg.RLDriven = buildRLDrivenSelectionConfig(decisionCfgs.rlDriven)
-	modelSelectionCfg.GMTRouter = buildGMTRouterSelectionConfig(decisionCfgs.gmtRouter)
-	return modelSelectionCfg
-}
-
-type decisionScopedSelectionConfigs struct {
-	elo       *config.EloSelectionConfig
-	routerDC  *config.RouterDCSelectionConfig
-	rlDriven  *config.RLDrivenSelectionConfig
-	gmtRouter *config.GMTRouterSelectionConfig
-}
-
-func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScopedSelectionConfigs {
-	var result decisionScopedSelectionConfigs
-
-	for _, decision := range cfg.AllRoutingDecisions() {
-		if decision.Algorithm == nil {
-			continue
-		}
-		if decision.Algorithm.Type == "elo" &&
-			decision.Algorithm.Elo != nil &&
-			result.elo == nil {
-			result.elo = decision.Algorithm.Elo
-		}
-		if decision.Algorithm.Type == "router_dc" &&
-			decision.Algorithm.RouterDC != nil &&
-			result.routerDC == nil {
-			result.routerDC = decision.Algorithm.RouterDC
-		}
-		if decision.Algorithm.Type == "rl_driven" &&
-			decision.Algorithm.RLDriven != nil &&
-			result.rlDriven == nil {
-			result.rlDriven = decision.Algorithm.RLDriven
-		}
-		if decision.Algorithm.Type == "gmtrouter" &&
-			decision.Algorithm.GMTRouter != nil &&
-			result.gmtRouter == nil {
-			result.gmtRouter = decision.Algorithm.GMTRouter
-		}
-	}
-
-	return result
-}
-
-func buildEloSelectionConfig(
-	cfg *config.RouterConfig,
-	decisionCfg *config.EloSelectionConfig,
-) *selection.EloConfig {
-	intelligentRouting := cfg.IntelligentRouting
-	eloCfg := intelligentRouting.ModelSelection.Elo
-	result := &selection.EloConfig{
-		InitialRating:     eloCfg.InitialRating,
-		KFactor:           eloCfg.KFactor,
-		CategoryWeighted:  eloCfg.CategoryWeighted,
-		DecayFactor:       eloCfg.DecayFactor,
-		MinComparisons:    eloCfg.MinComparisons,
-		CostScalingFactor: eloCfg.CostScalingFactor,
-		StoragePath:       eloCfg.StoragePath,
-		AutoSaveInterval:  eloCfg.AutoSaveInterval,
-	}
-
-	if decisionCfg == nil {
-		return result
-	}
-
-	if decisionCfg.StoragePath != "" {
-		result.StoragePath = decisionCfg.StoragePath
-	}
-	if decisionCfg.AutoSaveInterval != "" {
-		result.AutoSaveInterval = decisionCfg.AutoSaveInterval
-	}
-	if decisionCfg.KFactor != 0 {
-		result.KFactor = decisionCfg.KFactor
-	}
-	if decisionCfg.InitialRating != 0 {
-		result.InitialRating = decisionCfg.InitialRating
-	}
-	result.CategoryWeighted = decisionCfg.CategoryWeighted
-	return result
-}
-
-func buildRouterDCSelectionConfig(
-	cfg *config.RouterConfig,
-	decisionCfg *config.RouterDCSelectionConfig,
-) *selection.RouterDCConfig {
-	intelligentRouting := cfg.IntelligentRouting
-	routerDCCfg := intelligentRouting.ModelSelection.RouterDC
-	result := &selection.RouterDCConfig{
-		Temperature:         routerDCCfg.Temperature,
-		DimensionSize:       routerDCCfg.DimensionSize,
-		MinSimilarity:       routerDCCfg.MinSimilarity,
-		UseQueryContrastive: routerDCCfg.UseQueryContrastive,
-		UseModelContrastive: routerDCCfg.UseModelContrastive,
-		RequireDescriptions: routerDCCfg.RequireDescriptions,
-		UseCapabilities:     routerDCCfg.UseCapabilities,
-	}
-
-	if decisionCfg == nil {
-		return result
-	}
-
-	if decisionCfg.Temperature != 0 {
-		result.Temperature = decisionCfg.Temperature
-	}
-	result.RequireDescriptions = decisionCfg.RequireDescriptions
-	result.UseCapabilities = decisionCfg.UseCapabilities
-	return result
-}
-
-func buildAutoMixSelectionConfig(cfg *config.RouterConfig) *selection.AutoMixConfig {
-	intelligentRouting := cfg.IntelligentRouting
-	autoMixCfg := intelligentRouting.ModelSelection.AutoMix
-	return &selection.AutoMixConfig{
-		VerificationThreshold:  autoMixCfg.VerificationThreshold,
-		MaxEscalations:         autoMixCfg.MaxEscalations,
-		CostAwareRouting:       autoMixCfg.CostAwareRouting,
-		CostQualityTradeoff:    autoMixCfg.CostQualityTradeoff,
-		DiscountFactor:         autoMixCfg.DiscountFactor,
-		UseLogprobVerification: autoMixCfg.UseLogprobVerification,
-	}
-}
-
-func buildHybridSelectionConfig(
-	cfg *config.RouterConfig,
-	decisionCfg *config.HybridSelectionConfig,
-) *selection.HybridConfig {
-	intelligentRouting := cfg.IntelligentRouting
-	hybridCfg := intelligentRouting.ModelSelection.Hybrid
-	result := &selection.HybridConfig{
-		ExperienceWeight:    hybridCfg.ExperienceWeight,
-		RouterDCWeight:      hybridCfg.RouterDCWeight,
-		AutoMixWeight:       hybridCfg.AutoMixWeight,
-		CostWeight:          hybridCfg.CostWeight,
-		QualityGapThreshold: hybridCfg.QualityGapThreshold,
-		NormalizeScores:     hybridCfg.NormalizeScores,
-	}
-
-	if decisionCfg == nil {
-		return result
-	}
-	if decisionCfg.ExperienceWeight != 0 {
-		result.ExperienceWeight = decisionCfg.ExperienceWeight
-	}
-	if decisionCfg.RouterDCWeight != 0 {
-		result.RouterDCWeight = decisionCfg.RouterDCWeight
-	}
-	if decisionCfg.AutoMixWeight != 0 {
-		result.AutoMixWeight = decisionCfg.AutoMixWeight
-	}
-	if decisionCfg.CostWeight != 0 {
-		result.CostWeight = decisionCfg.CostWeight
-	}
-	if decisionCfg.QualityGapThreshold != 0 {
-		result.QualityGapThreshold = decisionCfg.QualityGapThreshold
-	}
-	if decisionCfg.NormalizeScores {
-		result.NormalizeScores = true
-	}
-	return result
-}
-
-func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfig {
-	intelligentRouting := cfg.IntelligentRouting
-	mlCfg := intelligentRouting.ModelSelection.ML
-	// Same normalization as selectionEmbeddingModelType, and for the same
-	// reason: nothing validates or rewrites ml.model_type, so an unnormalized
-	// "Qwen3" would reach factory.go's mlEmbeddingConfig unnormalized and hit
-	// the identical SupportsBatchedEmbedding/FFI casing mismatch.
-	mlCfg.ModelType = strings.ToLower(strings.TrimSpace(mlCfg.ModelType))
-	if mlCfg.ModelsPath == "" &&
-		mlCfg.KNN.PretrainedPath == "" &&
-		mlCfg.KMeans.PretrainedPath == "" &&
-		mlCfg.SVM.PretrainedPath == "" &&
-		mlCfg.MLP.PretrainedPath == "" {
-		return nil
-	}
-
-	logging.ComponentEvent("extproc", "ml_model_selection_enabled", map[string]interface{}{
-		"models_path":       mlCfg.ModelsPath,
-		"model_type":        mlCfg.ModelType,
-		"embedding_dim":     mlCfg.EmbeddingDim,
-		"knn_pretrained":    mlCfg.KNN.PretrainedPath != "",
-		"kmeans_pretrained": mlCfg.KMeans.PretrainedPath != "",
-		"svm_pretrained":    mlCfg.SVM.PretrainedPath != "",
-		"mlp_pretrained":    mlCfg.MLP.PretrainedPath != "",
-	})
-	return &selection.MLSelectorConfig{
-		ModelsPath:   mlCfg.ModelsPath,
-		ModelType:    mlCfg.ModelType,
-		EmbeddingDim: mlCfg.EmbeddingDim,
-		KNN: &selection.KNNConfig{
-			K:              mlCfg.KNN.K,
-			PretrainedPath: mlCfg.KNN.PretrainedPath,
-		},
-		KMeans: &selection.KMeansConfig{
-			NumClusters:      mlCfg.KMeans.NumClusters,
-			EfficiencyWeight: mlCfg.KMeans.EfficiencyWeight,
-			PretrainedPath:   mlCfg.KMeans.PretrainedPath,
-		},
-		SVM: &selection.SVMConfig{
-			Kernel:         mlCfg.SVM.Kernel,
-			Gamma:          mlCfg.SVM.Gamma,
-			PretrainedPath: mlCfg.SVM.PretrainedPath,
-		},
-		MLP: &selection.MLPConfig{
-			Device:         mlCfg.MLP.Device,
-			PretrainedPath: mlCfg.MLP.PretrainedPath,
-		},
-	}
 }
 
 func buildMultiFactorSelectionConfig(decisionCfg *config.MultiFactorSelectionConfig) *selection.MultiFactorConfig {
@@ -426,114 +129,6 @@ func buildMultiFactorSelectionConfig(decisionCfg *config.MultiFactorSelectionCon
 	}
 	if decisionCfg.OnNoCandidates != "" {
 		result.OnNoCandidates = decisionCfg.OnNoCandidates
-	}
-	return result
-}
-
-func buildRLDrivenSelectionConfig(decisionCfg *config.RLDrivenSelectionConfig) *selection.RLDrivenConfig {
-	result := selection.DefaultRLDrivenConfig()
-	if decisionCfg == nil {
-		return result
-	}
-
-	if decisionCfg.ExplorationRate != 0 {
-		result.ExplorationRate = decisionCfg.ExplorationRate
-	}
-	if decisionCfg.ExplorationDecay != 0 {
-		result.ExplorationDecay = decisionCfg.ExplorationDecay
-	}
-	if decisionCfg.MinExploration != 0 {
-		result.MinExploration = decisionCfg.MinExploration
-	}
-	if decisionCfg.UseThompsonSampling {
-		result.UseThompsonSampling = true
-	}
-	if decisionCfg.EnablePersonalization {
-		result.EnablePersonalization = true
-	}
-	if decisionCfg.PersonalizationBlend != 0 {
-		result.PersonalizationBlend = decisionCfg.PersonalizationBlend
-	}
-	if decisionCfg.SessionContextWeight != 0 {
-		result.SessionContextWeight = decisionCfg.SessionContextWeight
-	}
-	if decisionCfg.ImplicitFeedbackWeight != 0 {
-		result.ImplicitFeedbackWeight = decisionCfg.ImplicitFeedbackWeight
-	}
-	if decisionCfg.CostAwareness {
-		result.CostAwareness = true
-	}
-	if decisionCfg.CostWeight != 0 {
-		result.CostWeight = decisionCfg.CostWeight
-	}
-	if decisionCfg.StoragePath != "" {
-		result.StoragePath = decisionCfg.StoragePath
-	}
-	if decisionCfg.AutoSaveInterval != "" {
-		result.AutoSaveInterval = decisionCfg.AutoSaveInterval
-	}
-	if decisionCfg.UseRouterR1Rewards {
-		result.UseRouterR1Rewards = true
-	}
-	if decisionCfg.CostRewardAlpha != 0 {
-		result.CostRewardAlpha = decisionCfg.CostRewardAlpha
-	}
-	if decisionCfg.FormatRewardPenalty != 0 {
-		result.FormatRewardPenalty = decisionCfg.FormatRewardPenalty
-	}
-	if decisionCfg.EnableLLMRouting {
-		result.EnableLLMRouting = true
-	}
-	if decisionCfg.RouterR1ServerURL != "" {
-		result.RouterR1ServerURL = decisionCfg.RouterR1ServerURL
-	}
-	if decisionCfg.LLMRoutingFallback != "" {
-		result.LLMRoutingFallback = decisionCfg.LLMRoutingFallback
-	}
-	if decisionCfg.EnableMultiRoundAggregation {
-		result.EnableMultiRoundAggregation = true
-	}
-	if decisionCfg.MaxAggregationRounds != 0 {
-		result.MaxAggregationRounds = decisionCfg.MaxAggregationRounds
-	}
-	return result
-}
-
-func buildGMTRouterSelectionConfig(decisionCfg *config.GMTRouterSelectionConfig) *selection.GMTRouterConfig {
-	result := selection.DefaultGMTRouterConfig()
-	if decisionCfg == nil {
-		return result
-	}
-
-	if decisionCfg.EnablePersonalization {
-		result.EnablePersonalization = true
-	}
-	if decisionCfg.HistorySampleSize != 0 {
-		result.HistorySampleSize = decisionCfg.HistorySampleSize
-	}
-	if decisionCfg.EmbeddingDimension != 0 {
-		result.EmbeddingDimension = decisionCfg.EmbeddingDimension
-	}
-	if decisionCfg.NumGNNLayers != 0 {
-		result.NumGNNLayers = decisionCfg.NumGNNLayers
-	}
-	if decisionCfg.AttentionHeads != 0 {
-		result.AttentionHeads = decisionCfg.AttentionHeads
-	}
-	if decisionCfg.MinInteractionsForPersonalization != 0 {
-		result.MinInteractionsForPersonalization = decisionCfg.MinInteractionsForPersonalization
-	}
-	if decisionCfg.MaxInteractionsPerUser != 0 {
-		result.MaxInteractionsPerUser = decisionCfg.MaxInteractionsPerUser
-	}
-	if len(decisionCfg.FeedbackTypes) > 0 {
-		result.FeedbackTypes = append([]string(nil), decisionCfg.FeedbackTypes...)
-	}
-	if decisionCfg.ModelPath != "" {
-		result.ModelPath = decisionCfg.ModelPath
-	}
-	if decisionCfg.StoragePath != "" {
-		result.StoragePath = decisionCfg.StoragePath
 	}
 	return result
 }

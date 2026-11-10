@@ -11,7 +11,7 @@ import (
 )
 
 // ExtractModelPaths extracts canonical local model paths from the configuration.
-// It recursively searches for fields named "ModelID", "Qwen3ModelPath", "GemmaModelPath",
+// It recursively searches for fields named "ModelID", "Qwen3ModelPath",
 // or any field ending with "ModelPath" (but excludes non-model paths like mapping_path, tools_db_path)
 func ExtractModelPaths(cfg *config.RouterConfig) []string {
 	var paths []string
@@ -84,10 +84,7 @@ func recordModelPath(fieldName string, field reflect.Value, paths *[]string, see
 }
 
 func isModelPathField(fieldName string) bool {
-	return fieldName == "ModelID" ||
-		fieldName == "Qwen3ModelPath" ||
-		fieldName == "GemmaModelPath" ||
-		strings.HasSuffix(fieldName, "ModelPath")
+	return fieldName == "ModelID" || strings.HasSuffix(fieldName, "ModelPath")
 }
 
 // isModelDirectory checks if a path looks like a model directory (not a file)
@@ -100,82 +97,6 @@ func isModelDirectory(path string) bool {
 		".json", ".yaml", ".yml", ".txt", ".bin", ".pt", ".pth",
 		".safetensors", ".onnx", ".data", ".xml", ".model", ".gguf",
 	}, ext)
-}
-
-// embeddingModelWeightFiles are the files the candle embedding runtime loads to bring a
-// semantic embedding model up. They are deliberately stricter than the nested-weight
-// heuristic in IsModelComplete: a directory holding only config.json + onnx/ (the layout
-// shipped in the image) otherwise satisfies that heuristic via the nested *.onnx files and
-// the safetensors/tokenizer download is never triggered, leaving embedding_ready=false (#2172).
-var embeddingModelWeightFiles = []string{"model.safetensors", "tokenizer.json"}
-
-// gemmaDenseWeightFiles are the dense-bottleneck weights the gemma embedding model
-// additionally hard-loads at startup (candle-binding dense_layers: 2_Dense + 3_Dense).
-var gemmaDenseWeightFiles = []string{
-	"2_Dense/model.safetensors",
-	"3_Dense/model.safetensors",
-}
-
-// candleEmbeddingModelRequiredFiles returns, per canonical candle embedding model path,
-// the files the runtime hard-loads at startup. The qwen3, gemma, and multimodal paths
-// share the non-healing completeness defect fixed for mmbert in #2195 (#2531).
-func candleEmbeddingModelRequiredFiles(cfg *config.RouterConfig) map[string][]string {
-	required := make(map[string][]string)
-	add := func(path string, files []string) {
-		path = config.ResolveModelPath(path)
-		for _, fileName := range files {
-			if !slices.Contains(required[path], fileName) {
-				required[path] = append(required[path], fileName)
-			}
-		}
-	}
-
-	add(cfg.MmBertModelPath, embeddingModelWeightFiles)
-	add(cfg.Qwen3ModelPath, embeddingModelWeightFiles)
-	add(cfg.GemmaModelPath, embeddingModelWeightFiles)
-	add(cfg.GemmaModelPath, gemmaDenseWeightFiles)
-	add(cfg.MultiModalModelPath, embeddingModelWeightFiles)
-	return required
-}
-
-// onnxWeightExcludePatterns match the ONNX inference exports published beside the
-// safetensors weights in the embedding model repositories. The candle runtime never
-// opens them, yet they dominate the snapshot size (about 4.3 GB of the 4.9 GB
-// mmbert-embed-32k-2d-matryoshka repository), so a candle deployment skips them at
-// download time. Small manifests such as onnx/model_config.json, which
-// config.MmBertAvailableLayers reads, are not matched and stay in the snapshot.
-var onnxWeightExcludePatterns = []string{
-	"*.onnx",
-	"*.onnx.data",
-	"*.onnx_data",
-	"onnx/weights.data",
-}
-
-// candleEmbeddingModelExcludePatterns returns, per configured embedding model path,
-// the download exclude globs for artifacts the selected embedding backend never
-// loads. Only the candle backend is narrowed: OpenVINO consumes the ONNX exports
-// and the remote backend provisions no local embedding models.
-//
-// Keys are canonical registry paths (config.ResolveModelPath), matching how the
-// embedding runtime resolves the same fields before loading. Callers look the map
-// up by the resolved path too, so the narrowing holds whether the configured value
-// is the canonical directory or a registry alias, and whether or not the collected
-// provisioning paths have already been canonicalized upstream.
-func candleEmbeddingModelExcludePatterns(cfg *config.RouterConfig) map[string][]string {
-	excluded := make(map[string][]string)
-	provider, _ := config.DefaultModelExecution(cfg.EmbeddingModels.UseCPU)
-	if provider != "candle" || cfg.EmbeddingModels.EmbeddingBackend() != config.EmbeddingBackendCandle {
-		return excluded
-	}
-
-	for path := range candleEmbeddingModelRequiredFiles(cfg) {
-		resolved := config.ResolveModelPath(path)
-		if resolved == "" || !strings.HasPrefix(resolved, "models/") {
-			continue
-		}
-		excluded[resolved] = append([]string(nil), onnxWeightExcludePatterns...)
-	}
-	return excluded
 }
 
 // ExtractRequiredFilesByModel derives per-model completeness requirements from

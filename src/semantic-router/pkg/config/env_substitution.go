@@ -5,33 +5,48 @@ import (
 	"strings"
 )
 
-// expandEnvSubstitutionsInMap walks a parsed YAML tree and expands environment
-// variable references in string scalars. Supported forms mirror common compose
-// interpolation:
+// envExpander expands environment variable references in the string scalars
+// of a parsed YAML tree. Supported forms mirror common compose interpolation:
 //   - ${VAR} and $VAR
 //   - ${VAR:-default} when VAR is unset or empty
 //   - ${VAR-default} when VAR is unset
 //   - $$ for a literal $
-func expandEnvSubstitutionsInMap(raw map[string]interface{}) {
+type envExpander struct {
+	lookup func(string) (string, bool)
+	// keepUnset writes a reference without a default as is, instead of empty,
+	// when lookup does not find its variable.
+	keepUnset bool
+	// unset names variables written empty even when keepUnset is set.
+	unset map[string]bool
+	// kept maps each reference written as is to its variable.
+	kept map[string]string
+}
+
+// processEnv resolves references from this process, as the Router does when it loads a config.
+var processEnv = envExpander{lookup: os.LookupEnv}
+
+func noEnv(string) (string, bool) { return "", false }
+
+func (e envExpander) expandMap(raw map[string]interface{}) {
 	for key, value := range raw {
-		raw[key] = expandEnvSubstitutionsInValue(value)
+		raw[key] = e.expandValue(value)
 	}
 }
 
-func expandEnvSubstitutionsInValue(value interface{}) interface{} {
+func (e envExpander) expandValue(value interface{}) interface{} {
 	switch typed := value.(type) {
 	case string:
-		return expandEnvString(typed)
+		return e.expandString(typed)
 	case map[string]interface{}:
-		expandEnvSubstitutionsInMap(typed)
+		e.expandMap(typed)
 		return typed
 	case map[interface{}]interface{}:
 		converted := nestedStringMap(typed)
-		expandEnvSubstitutionsInMap(converted)
+		e.expandMap(converted)
 		return converted
 	case []interface{}:
 		for i, item := range typed {
-			typed[i] = expandEnvSubstitutionsInValue(item)
+			typed[i] = e.expandValue(item)
 		}
 		return typed
 	default:
@@ -39,7 +54,7 @@ func expandEnvSubstitutionsInValue(value interface{}) interface{} {
 	}
 }
 
-func expandEnvString(value string) string {
+func (e envExpander) expandString(value string) string {
 	if value == "" || !strings.Contains(value, "$") {
 		return value
 	}
@@ -56,7 +71,7 @@ func expandEnvString(value string) string {
 			i++
 			continue
 		}
-		expanded, next := expandEnvDollarToken(escaped, i)
+		expanded, next := e.expandDollarToken(escaped, i)
 		builder.WriteString(expanded)
 		i = next
 	}
@@ -64,31 +79,31 @@ func expandEnvString(value string) string {
 	return strings.ReplaceAll(builder.String(), dollarPlaceholder, "$")
 }
 
-func expandEnvDollarToken(escaped string, start int) (string, int) {
+func (e envExpander) expandDollarToken(escaped string, start int) (string, int) {
 	if start+1 >= len(escaped) {
 		return "$", start + 1
 	}
 
 	switch escaped[start+1] {
 	case '{':
-		return expandBracedEnvToken(escaped, start)
+		return e.expandBracedToken(escaped, start)
 	case '$':
 		return "$", start + 2
 	default:
-		return expandUnbracedEnvToken(escaped, start)
+		return e.expandUnbracedToken(escaped, start)
 	}
 }
 
-func expandBracedEnvToken(escaped string, start int) (string, int) {
+func (e envExpander) expandBracedToken(escaped string, start int) (string, int) {
 	closeIdx := strings.IndexByte(escaped[start+2:], '}')
 	if closeIdx < 0 {
 		return "$", start + 1
 	}
 	closeIdx += start + 2
-	return resolveBracedEnvReference(escaped[start+2 : closeIdx]), closeIdx + 1
+	return e.resolveBraced(escaped[start+2 : closeIdx]), closeIdx + 1
 }
 
-func expandUnbracedEnvToken(escaped string, start int) (string, int) {
+func (e envExpander) expandUnbracedToken(escaped string, start int) (string, int) {
 	end := start + 1
 	for end < len(escaped) && isEnvNameByte(escaped[end]) {
 		end++
@@ -96,17 +111,17 @@ func expandUnbracedEnvToken(escaped string, start int) (string, int) {
 	if end == start+1 {
 		return "$", start + 1
 	}
-	return os.Getenv(escaped[start+1 : end]), end
+	return e.resolve(escaped[start+1:end], escaped[start:end]), end
 }
 
-func resolveBracedEnvReference(inner string) string {
+func (e envExpander) resolveBraced(inner string) string {
 	if inner == "" {
 		return ""
 	}
 	if idx := strings.Index(inner, ":-"); idx > 0 {
 		name := inner[:idx]
 		defaultValue := inner[idx+2:]
-		if value, ok := os.LookupEnv(name); ok && value != "" {
+		if value, ok := e.lookup(name); ok && value != "" {
 			return value
 		}
 		return defaultValue
@@ -114,12 +129,54 @@ func resolveBracedEnvReference(inner string) string {
 	if idx := strings.Index(inner, "-"); idx > 0 {
 		name := inner[:idx]
 		defaultValue := inner[idx+1:]
-		if value, ok := os.LookupEnv(name); ok {
+		if value, ok := e.lookup(name); ok {
 			return value
 		}
 		return defaultValue
 	}
-	return os.Getenv(inner)
+	return e.resolve(inner, "${"+inner+"}")
+}
+
+// resolve returns the value of a reference without a default.
+func (e envExpander) resolve(name, reference string) string {
+	if value, ok := e.lookup(name); ok {
+		return value
+	}
+	if !e.keepUnset || e.unset[name] {
+		return ""
+	}
+	if e.kept != nil {
+		e.kept[reference] = name
+	}
+	return reference
+}
+
+// unsetQuoted makes each variable whose kept reference appears in message read
+// as empty from now on, and reports whether there was one.
+func (e envExpander) unsetQuoted(message string) bool {
+	found := false
+	for reference, name := range e.kept {
+		if !e.unset[name] && quotesReference(message, reference) {
+			e.unset[name] = true
+			found = true
+		}
+	}
+	return found
+}
+
+// quotesReference reports whether message contains reference other than as
+// the start of a longer $NAME.
+func quotesReference(message, reference string) bool {
+	for {
+		index := strings.Index(message, reference)
+		if index < 0 {
+			return false
+		}
+		message = message[index+len(reference):]
+		if strings.HasSuffix(reference, "}") || message == "" || !isEnvNameByte(message[0]) {
+			return true
+		}
+	}
 }
 
 func isEnvNameByte(ch byte) bool {

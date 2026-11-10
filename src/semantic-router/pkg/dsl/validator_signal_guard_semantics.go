@@ -66,7 +66,7 @@ func collectRouteSignalClauses(expr BoolExpr, negated bool) []routeSignalClause 
 		if negated {
 			target = clause.negatedRefs
 		}
-		target[e.SignalType] = append(target[e.SignalType], e.SignalName)
+		target[e.SignalType] = append(target[e.SignalType], guardSignalName(e))
 		return []routeSignalClause{clause}
 	case *BoolNot:
 		return collectRouteSignalClauses(e.Expr, !negated)

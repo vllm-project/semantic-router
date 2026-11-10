@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -15,45 +15,19 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
-// windowedSearchEmbedder answers one vector per window and records what it was
-// asked to embed, so a test can tell whether the tail of a long query was read.
-type windowedSearchEmbedder struct {
-	windowSize int
-	seen       []string
-}
+// recordingSearchEmbedder answers the refund chunk's vector for every text and
+// records the texts it was asked to embed.
+type recordingSearchEmbedder struct{ seen []string }
 
-func (e *windowedSearchEmbedder) Embed(_ context.Context, text string) ([]float32, error) {
+func (e *recordingSearchEmbedder) Embed(_ context.Context, text string) ([]float32, error) {
 	e.seen = append(e.seen, text)
-	// The marker is one short token so it cannot straddle a window boundary and
-	// leave every window looking alike.
-	if strings.Contains(text, searchRefundMarker) {
-		return []float32{1, 0, 0}, nil
-	}
-	// The preamble matches neither stored chunk, so a window that carries no
-	// question cannot decide the ranking on its own.
-	return []float32{0, 0, 1}, nil
+	return []float32{1, 0, 0}, nil
 }
 
-// searchRefundMarker is the question's distinctive token. searchLongQuery puts
-// it at the end, past the first window, which is what a single embedding misses.
-const searchRefundMarker = "REFUND"
+func (e *recordingSearchEmbedder) Dimension() int { return 3 }
 
 func searchLongQuery() string {
-	return strings.Repeat("operations handbook preamble text. ", 4) + "how long does a " + searchRefundMarker + " take"
-}
-
-func (e *windowedSearchEmbedder) Dimension() int { return 3 }
-
-func (e *windowedSearchEmbedder) Windows(_ context.Context, text string, _ int) ([]embedding.Window, error) {
-	var windows []embedding.Window
-	for start := 0; start < len(text); start += e.windowSize {
-		end := start + e.windowSize
-		if end > len(text) {
-			end = len(text)
-		}
-		windows = append(windows, embedding.Window{Start: start, End: end})
-	}
-	return windows, nil
+	return strings.Repeat("operations handbook preamble text. ", 64) + "how long does a refund take"
 }
 
 func vectorStoreSearchFixture(t *testing.T, embedder vectorstore.Embedder) (*ClassificationAPIServer, string) {
@@ -62,7 +36,7 @@ func vectorStoreSearchFixture(t *testing.T, embedder vectorstore.Embedder) (*Cla
 	backend := vectorstore.NewMemoryBackend(vectorstore.MemoryBackendConfig{})
 	stores := vectorstore.NewMemoryMetadataRegistry()
 	manager := vectorstore.NewManager(backend, stores, 3, vectorstore.BackendTypeMemory)
-	store, err := manager.CreateStore(ctx, vectorstore.CreateStoreRequest{Name: "windows"})
+	store, err := manager.CreateStore(ctx, vectorstore.CreateStoreRequest{Name: "search"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,53 +71,33 @@ func searchFilenames(t *testing.T, body []byte) []string {
 	return names
 }
 
-func TestVectorStoreSearchReadsAQuestionPastTheFirstWindow(t *testing.T) {
-	embedder := &windowedSearchEmbedder{windowSize: 60}
-	server, storeID := vectorStoreSearchFixture(t, embedder)
-	query := searchLongQuery()
-	body, err := json.Marshal(SearchRequest{Query: query, MaxNumResults: 2})
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestVectorStoreSearchEmbedsTheWholeQueryOnce(t *testing.T) {
+	for _, query := range []string{"how long does a refund take", searchLongQuery()} {
+		embedder := &recordingSearchEmbedder{}
+		server, storeID := vectorStoreSearchFixture(t, embedder)
+		body, err := json.Marshal(SearchRequest{Query: query, MaxNumResults: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	request := httptest.NewRequest(http.MethodPost, apiStorageVectorStoresPath+"/"+storeID+"/search", strings.NewReader(string(body)))
-	response := httptest.NewRecorder()
-	server.handleSearchVectorStore(response, request)
+		request := httptest.NewRequest(http.MethodPost, apiStorageVectorStoresPath+"/"+storeID+"/search", strings.NewReader(string(body)))
+		response := httptest.NewRecorder()
+		server.handleSearchVectorStore(response, request)
 
-	if response.Code != http.StatusOK {
-		t.Fatalf("search failed: %d %s", response.Code, response.Body.String())
-	}
-	if len(embedder.seen) < 2 {
-		t.Fatalf("embedded the query %d times, want one per window", len(embedder.seen))
-	}
-	names := searchFilenames(t, response.Body.Bytes())
-	if len(names) == 0 || names[0] != "refund.txt" {
-		t.Fatalf("the question past the first window was not read, hits: %v", names)
-	}
-}
-
-func TestVectorStoreSearchEmbedsAShortQueryOnce(t *testing.T) {
-	embedder := &windowedSearchEmbedder{windowSize: 4096}
-	server, storeID := vectorStoreSearchFixture(t, embedder)
-	body, err := json.Marshal(SearchRequest{Query: "how long does a refund take", MaxNumResults: 2})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	request := httptest.NewRequest(http.MethodPost, apiStorageVectorStoresPath+"/"+storeID+"/search", strings.NewReader(string(body)))
-	response := httptest.NewRecorder()
-	server.handleSearchVectorStore(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("search failed: %d %s", response.Code, response.Body.String())
-	}
-	if len(embedder.seen) != 1 {
-		t.Fatalf("a query inside one window was embedded %d times", len(embedder.seen))
+		if response.Code != http.StatusOK {
+			t.Fatalf("search failed: %d %s", response.Code, response.Body.String())
+		}
+		if len(embedder.seen) != 1 || embedder.seen[0] != query {
+			t.Fatalf("embedded %q, want the whole query once", embedder.seen)
+		}
+		if names := searchFilenames(t, response.Body.Bytes()); len(names) == 0 || names[0] != "refund.txt" {
+			t.Fatalf("search ranked %v, want refund.txt first", names)
+		}
 	}
 }
 
 func TestVectorStoreHybridSearchKeepsOneEmbedding(t *testing.T) {
-	embedder := &windowedSearchEmbedder{windowSize: 60}
+	embedder := &recordingSearchEmbedder{}
 	server, storeID := vectorStoreSearchFixture(t, embedder)
 	query := searchLongQuery()
 	body, err := json.Marshal(SearchRequest{Query: query, MaxNumResults: 2, Hybrid: &vectorstore.HybridSearchConfig{}})
@@ -166,8 +120,7 @@ func TestVectorStoreHybridSearchKeepsOneEmbedding(t *testing.T) {
 	}
 }
 
-// preparedRemoteSearchEmbedder has no token windows of its own, the way a remote
-// embedding service does not. It implements the whole Provider surface so a test
+// preparedRemoteSearchEmbedder implements the whole Provider surface so a test
 // can hand it to NewSet and receive the wrapper the runtime would build.
 type preparedRemoteSearchEmbedder struct{ calls int }
 
@@ -192,9 +145,7 @@ func (e *preparedRemoteSearchEmbedder) Dimension() int { return 3 }
 
 func (e *preparedRemoteSearchEmbedder) Backend() string { return "remote" }
 
-// Set.Get wraps every prepared provider, and the wrapper satisfies WindowProvider
-// whether or not the model behind it can tokenize, so a remote embedder only
-// reveals the missing capability when Windows is called.
+// Set.Get wraps every prepared provider, and search embeds through that wrapper.
 func TestVectorStoreSearchAnswersWithAPreparedRemoteEmbedder(t *testing.T) {
 	plain := &preparedRemoteSearchEmbedder{}
 	set := embedding.NewSet(map[string]embedding.Provider{"remote": plain}, "remote")

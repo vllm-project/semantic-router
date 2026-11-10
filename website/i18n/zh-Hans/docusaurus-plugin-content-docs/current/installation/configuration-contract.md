@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 配置契约
 description: 发现、校验并扩展 canonical vLLM Semantic Router 配置，而无需重复 schema。
 translation:
@@ -78,7 +79,7 @@ JSON Schema 校验尽早捕获结构错误。在应用配置之前，将编写�
 
 ```json
 {
-  "yaml": "version: v0.3\nrouting: {}\nglobal: {}\n"
+  "yaml": "version: v0.5\nrecipes:\n  - name: default\nglobal: {}\n"
 }
 ```
 
@@ -103,12 +104,12 @@ JSON Schema 校验尽早捕获结构错误。在应用配置之前，将编写�
 3. 使用 `schema_id`、`contract_version` 和 `ETag` 作为契约身份；
 4. 从 schema 字段和路由表面引用构建最小的 canonical 文档；
 5. 省略仅用于引导的 `setup` 块，并调用语义校验端点；
-6. 规划变更；使用返回的 `current_etag` 在 `If-Match` 中应用可热重载的变更，或在 listener 或 provider 拓扑返回 `RESTART_REQUIRED` 时使用部署工作流（对于本地 Docker，在批准后使用显式的 `vllm-sr serve --config <candidate> --replace-active-config` 操作）；
-7. 轮询 `activation_status`，并在保留变更之前探测 Envoy 数据平面。
+6. 规划变更；使用返回的 `current_etag` 在 `If-Match` 中应用可热重载的变更。运行中的 Router 无法接收的变更返回 `RESTART_REQUIRED`：standalone 模式下是 listener 变更，`--gateway extproc` 时是 listener 或 provider 拓扑变更。在本地 Docker 上，`vllm-sr config apply` 会保存这类变更，由下一次 `vllm-sr serve` 应用（或在批准后运行显式的 `vllm-sr serve --config <candidate> --replace-active-config`）；其他环境使用部署工作流；
+7. 轮询 `activation_status`，并在保留变更之前探测数据平面。
 
 当目标 Router 的 schema 可用时，Agent 绝不应该从示例推断字段，或发送未知键。
 
-## 添加或更改字段
+## 添加或更改字段 {#add-or-change-a-field}
 
 对于稳态字段，更新其 Go 类型、YAML 标签和源注释。仅当存在在结构上强制时才添加 `jsonschema:"required"`；默认值和跨字段要求仍属于语义校验。对于带判别器的路由表面，同时更新匹配的 Go 注册表。注册表覆盖会对照反射的 Go 字段检查，因此如果只在一侧添加信号、投影或 algorithm 载荷，生成会失败。
 
@@ -120,6 +121,6 @@ make config-schema-check
 make check
 ```
 
-仓库恰好跟踪一份完整 schema，位于 `src/semantic-router/pkg/configschema/router-config-v0.3.schema.json`。生成器还会发出一个小型 TypeScript 导入/类型适配器，但没有第二份 JSON 副本。打包会将 canonical 产物暂存到 wheel 和容器镜像中，而不会把生成文件写回工作树。当 canonical 产物或适配器过期时，CI 会失败。
+仓库恰好跟踪一份完整 schema，位于 `src/semantic-router/pkg/configschema/router-config-v0.5.schema.json`。生成器还会发出一个小型 TypeScript 导入/类型适配器，但没有第二份 JSON 副本。打包会将 canonical 产物暂存到 wheel 和容器镜像中，而不会把生成文件写回工作树。当 canonical 产物或适配器过期时，CI 会失败。
 
 `setup.mode` 是仅用于引导的控制面板控制平面元数据，因此 Router schema 不会发布它。控制面板在激活时移除它；活动 Router 文档和对 `/api/v1/config/validate` 的调用不得包含它。

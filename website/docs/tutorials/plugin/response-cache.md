@@ -24,7 +24,7 @@ every time. `response_cache` keeps the reuse policy local to the route.
 
 ## Configuration
 
-Add the plugin under `routing.decisions[].plugins`:
+Add the plugin under `recipes[].decisions[].plugins`:
 
 ```yaml
 plugins:
@@ -58,6 +58,33 @@ lexical guard recognizes English negation cues; a German `nicht` or Chinese
 `不` can otherwise receive a cached answer to the opposite question. The
 `high-recall.yaml` fragment remains an explicit semantic-cache example.
 
+### Semantic reuse
+
+The semantic tier finds the cached requests a request may reuse with the
+[match block](./overview#match-block) in `semantic.match`. Without one it runs
+the response cache's default, which recalls and confirms:
+
+```yaml
+semantic:
+  match:
+    recall: {method: embedding, top_k: 3, min_similarity: 0.8}
+    judge:  {preset: same_request, min_score: 0.8}
+```
+
+- `recall` asks the cache store for the cached requests most similar to the
+  request, at most `top_k`, each at least `min_similarity` similar (a cosine).
+- `judge` asks the decision model the `same_request` question about the
+  request and each recalled request, one batch entry each in one call, and
+  serves the best one that scores at least `min_score`. It turns away a cached
+  request that is close in embedding space but asks something else, such as
+  the opposite question: a recalled request the judge rejects is a miss. When
+  the judge fails, `on_error: skip` (the default) serves the recall result and
+  `on_error: fail` reuses nothing.
+- A block that writes `recall` alone serves the most similar cached request
+  and asks no model.
+- A request that matched no decision runs the block of the `response_cache`
+  plugin in `global.plugins`.
+
 The exact tier is available with the in-memory, Redis, Valkey, Milvus, Qdrant,
 and hybrid cache backends. Anthropic client requests are replayed in the
 Anthropic response or SSE wire format.
@@ -76,30 +103,66 @@ When request controls are enabled, the configured header accepts the authorized
 directives. `max-age` bounds read freshness and `ttl` bounds write lifetime;
 caller TTL values are clamped to `max_ttl_seconds`.
 
+Exact-cache promotion from L2 to L1 retains the original entry age and backend
+expiry. An entry whose age is unknown can serve an unrestricted lookup, but it
+cannot satisfy a `max-age` freshness bound in either tier.
+
+### With a response guard
+
+On a decision that also has a [`response_guard`](./response-guard.md), the
+cache keeps only the answers the guard released. It never stores a blocked
+answer, or one the guard flagged only in `x-vsr-warnings`, because a cache hit
+carries no guard headers; an answer with the guard's note is stored with its
+note. A hit is answered without calling the model, so the guard does not run on
+it:
+
+- An exact hit is the same request, so the guard's verdict on it still holds.
+- A semantic hit serves the answer the guard released for a similar earlier
+  request. The guard's conditions on the request itself, such as a `keyword`
+  or `fact_check` condition, are not evaluated for the new request, so a rule
+  they would have triggered does not apply to it: an answer released for a
+  request that needed no fact check is served, unchecked, to a similar request
+  that does. Where that matters, use `mode: exact` for that decision's cache.
+
+Changing the decision's guard starts its cache fresh, because the guard's
+configuration is part of the cache key. Changing a signal the guard reads, such
+as a jailbreak rule's `predicate`, does not change the key: a store that keeps
+its entries across a configuration reload, such as Redis, goes on serving the
+answers released under the old value until they expire. After such a
+change, set a new `revision.policy_revision` in the `response_cache`
+configuration of each decision whose guard reads that signal. Every `revision`
+value is part of the cache key:
+
+```yaml
+plugins:
+  - type: response_cache
+    configuration:
+      enabled: true
+      mode: exact
+      revision:
+        policy_revision: guard-2
+```
+
 ## Migration
 
-`semantic-cache`, `semantic_cache`, and `response-cache` are accepted as
-deprecated aliases and normalize to `response_cache`. Likewise,
-`global.stores.semantic_cache` is read as a deprecated alias for
-`global.stores.response_cache`. Do not configure both spellings in the same
-document. Export, Dashboard saves, and DSL decompilation always emit the
-canonical names.
+The plugin type is `response_cache` and the store is
+`global.stores.response_cache`. A configuration that still writes the
+`semantic-cache`, `semantic_cache` or `response-cache` plugin types,
+`global.stores.semantic_cache`, the flat `similarity_threshold` or
+`semantic.similarity_threshold`, or `allow_request_controls` and
+`control_header` fails to load with a line that names the field;
+`vllm-sr config migrate` writes the threshold as
+`semantic.match.recall.min_similarity` and the request-control fields under
+`request_controls`.
 
-For local `mmbert` embeddings, including Vela Embedding, changing the model,
+For embeddings from the model runtime, including Vela Embedding, changing the model,
 tokenizer, representation size, or inference settings starts a separate cache
 space. The router retains your tenant namespace and explicit cache revision;
 historical entries remain stored until their normal expiry or explicit cleanup.
 The first requests after a model upgrade are cache misses. Restarting with the
 same representation reuses its compatible cache. The router rejects a
-[remote embedding endpoint](../../installation/runtime/embeddings.md#remote-embeddings)
+[remote embedding endpoint](../../model-runtime/guides/embeddings.md#use-an-external-embedding-service)
 for the semantic cache, because the cache needs local tokenizer windows.
-
-Candle `bert` embeddings are keyed by an encoder version instead, which changes
-whenever Candle BERT vectors change, as they did when padding tokens stopped
-counting toward the average. Upgrading across such a change starts a new BERT
-cache space. Entries written before the upgrade are not reused and remain until
-they expire, and the cache fills again from new traffic. BERT served by another
-runtime keeps its existing cache.
 
 ## Operations
 
@@ -129,19 +192,15 @@ cannot judge, so the hit relied on vector similarity alone. Reworded English
 questions and most non-English hits report `not_applicable`; for example, the
 cue list does not recognize German `nicht` or Chinese `不`.
 
-The in-memory backend additionally supports the optional NLI verifier
-(`global.stores.response_cache.polarity_guard`; see
-[Stores and Tools](../global/stores-and-tools.md#negation-guard)). With this
-optional tier enabled, an NLI-rejected candidate is logged as
-`cache_negation_reject` with `tier: nli`, is reported as a miss, and its
-similarity still appears on `x-vsr-cache-similarity` so near-threshold
-rejections stay diagnosable.
+The NLI tier that earlier releases offered on the in-memory backend is retired;
+`vllm-sr config migrate` keeps the lexical check. See
+[Stores and Tools](../global/stores-and-tools.md#negation-guard).
 
 Cached responses can contain user or tenant data. Choose an appropriate scope,
 TTL, backend authentication, encryption, and invalidation process. Semantic
 thresholds must be calibrated for the configured embedding model. A query longer
-than the embedding model's context window (512 tokens for the default `bert`
-model) is not cached, because a truncated embedding would match every query
+than the embedding deployment's input limit is not cached, because a truncated
+embedding would match every query
 sharing that prefix. Routes
 with personalized RAG or memory should not reuse pre-enrichment responses
 without an explicit policy. See complete examples:

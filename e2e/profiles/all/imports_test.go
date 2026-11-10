@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"slices"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -42,6 +43,24 @@ func TestEnvoyAIGatewayProfileKeepsKubernetesAlias(t *testing.T) {
 	}
 	if profile.Name() != "envoy-ai-gateway" {
 		t.Fatalf("legacy alias resolved to %q, want envoy-ai-gateway", profile.Name())
+	}
+}
+
+func TestRoutingErrorsRetainBothTransportsAndBaselineFallback(t *testing.T) {
+	for name, required := range map[string][]string{
+		"routing-errors":   {"routing-error-codes", "chat-completions-request"},
+		"standalone":       {"routing-error-codes", "standalone-chat-completions"},
+		"envoy-ai-gateway": {"unknown-model-error-codes", "decision-fallback-behavior"},
+	} {
+		profile, err := framework.NewProfileByName(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, testcase := range required {
+			if !slices.Contains(profile.GetTestCases(), testcase) {
+				t.Fatalf("%s lost its %s contract", name, testcase)
+			}
+		}
 	}
 }
 

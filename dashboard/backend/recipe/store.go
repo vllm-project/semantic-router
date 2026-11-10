@@ -31,6 +31,15 @@ const (
 	maxPackageQuery               = 256
 )
 
+// The Dashboard's entrypoint gives the store the group of the user who runs
+// `vllm-sr serve`, which validates the active package before it starts the
+// stack and recovers interrupted activations: every file is readable by that
+// group and every directory writable.
+const (
+	storeFileMode      os.FileMode = 0o640
+	storeDirectoryMode os.FileMode = 0o770
+)
+
 type packageRecord struct {
 	SchemaVersion   string           `json:"schema_version"`
 	ID              string           `json:"id"`
@@ -398,7 +407,6 @@ func (s *Store) ensureLayout() error {
 		filepath.Join(s.root, "records", "sha256"),
 		filepath.Join(s.root, ".staging"),
 		filepath.Join(s.root, "transactions"),
-		filepath.Join(s.root, "credentials"),
 		filepath.Join(s.root, "source-baselines"),
 	} {
 		if err := ensureRealDirectory(path); err != nil {
@@ -409,7 +417,8 @@ func (s *Store) ensureLayout() error {
 }
 
 func ensureRealDirectory(path string) error {
-	if err := os.MkdirAll(path, 0o700); err != nil {
+	_, statErr := os.Lstat(path)
+	if err := os.MkdirAll(path, storeDirectoryMode); err != nil {
 		return err
 	}
 	info, err := os.Lstat(path)
@@ -418,6 +427,31 @@ func ensureRealDirectory(path string) error {
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
 		return errors.New("recipe store path must be a real directory")
+	}
+	if errors.Is(statErr, os.ErrNotExist) {
+		return shareStoreDirectory(path)
+	}
+	return nil
+}
+
+// shareStoreDirectory gives a directory the Dashboard created its store mode,
+// which the process umask narrows at creation. It keeps the setgid bit the
+// directory inherits, so its entries keep the store's group.
+func shareStoreDirectory(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	return os.Chmod(path, storeDirectoryMode|info.Mode()&os.ModeSetgid)
+}
+
+func makeStoreDirectory(path string) error {
+	if err := os.Mkdir(path, storeDirectoryMode); err != nil {
+		return err
+	}
+	if err := shareStoreDirectory(path); err != nil {
+		_ = os.Remove(path)
+		return err
 	}
 	return nil
 }
@@ -455,16 +489,16 @@ func readStrictJSONFile(path string, maxBytes int64, target any) error {
 	return nil
 }
 
-func writeJSONAtomically(path string, value any, mode os.FileMode) error {
+func writeJSONAtomically(path string, value any) error {
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
 	data = append(data, '\n')
-	return writeFileAtomically(path, data, mode)
+	return writeFileAtomically(path, data)
 }
 
-func writeFileAtomically(path string, data []byte, mode os.FileMode) error {
+func writeFileAtomically(path string, data []byte) error {
 	parent := filepath.Dir(path)
 	if err := ensureRealDirectory(parent); err != nil {
 		return err
@@ -474,14 +508,12 @@ func writeFileAtomically(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	temp := filepath.Join(parent, "."+filepath.Base(path)+"."+hex.EncodeToString(random)+".tmp")
-	file, err := os.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	file, err := os.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, storeFileMode)
 	if err != nil {
 		return err
 	}
 	cleanup := func() { _ = os.Remove(temp) }
-	if _, err = file.Write(data); err == nil {
-		err = file.Sync()
-	}
+	err = writeStoreFile(file, data)
 	if closeErr := file.Close(); err == nil {
 		err = closeErr
 	}
@@ -494,6 +526,18 @@ func writeFileAtomically(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	return syncDirectory(parent)
+}
+
+// writeStoreFile writes and syncs a new store file with the store's mode,
+// which the process umask may have narrowed at creation.
+func writeStoreFile(file *os.File, data []byte) error {
+	if err := file.Chmod(storeFileMode); err != nil {
+		return err
+	}
+	if _, err := file.Write(data); err != nil {
+		return err
+	}
+	return file.Sync()
 }
 
 func syncDirectory(path string) error {

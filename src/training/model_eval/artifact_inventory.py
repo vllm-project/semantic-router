@@ -5,15 +5,20 @@ configurations". The evaluation registry in ``constants.py`` is hand maintained
 and has drifted from ``config/config.yaml``, so this module reads the config
 instead and reports what the router would actually serve.
 
-Nothing here loads weights. It walks the config for every declared artifact
-path, groups the load sites by task, and checks that each site agrees with the
-``system:`` reference table. That is enough to tell an evaluation run which
-artifact it must measure, and to show when two sites disagree.
+Nothing here loads weights. Every rule of a model-answered signal that a
+recipe declares (``recipes[].signals.<collection>``) asks one deployment: the
+one it names, else the one its recipe's ``model_bindings.<type>`` names, else
+the one ``global.model_catalog.bindings.<type>`` names, else the decision
+model's (``global.model_catalog.system.decision_model``, the pre-declared
+``primary`` unless it names another). This module reports the artifact that
+deployment serves, grouped by evaluation task; a remote deployment serves
+none. A rule runs at the bound of its predicate, or, when it sets none, at the
+threshold calibrated for its model, which the Router reads and this module
+does not.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -22,29 +27,39 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG = REPO_ROOT / "config" / "config.yaml"
-HF_ORG = "llm-semantic-router"
+HF_ORG = "vllm-sr"
 MODEL_PREFIX = "models/"
-MODEL_PATH_KEYS = ("model_id", "model_path")
 
-# ``system:`` reference name -> evaluation task name.
-REF_TASKS = {
-    "prompt_guard": "jailbreak",
-    "domain_classifier": "domain",
-    "pii_classifier": "pii",
-    "fact_check_classifier": "fact-check",
-    "feedback_detector": "feedback",
+# The model_runtime deployments the Router always declares, mirroring
+# DefaultModelDeployments; a deployment the configuration declares under the
+# same name replaces one.
+PREDECLARED_ARTIFACTS = {
+    "primary": "vllm-sr/vela3-fast",
+    "vela-embedding": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
+}
+DEFAULT_DECISION_DEPLOYMENT = "primary"
+
+# A recipe's signal collections whose rules ask a model: the signal type its
+# bindings name (a systemone rule takes none), and the evaluation task that
+# measures it, if any.
+MODEL_SIGNALS = {
+    "domains": ("domain", "domain"),
+    "fact_check": ("fact_check", "fact-check"),
+    "user_feedbacks": ("user_feedback", "feedback"),
+    "jailbreak": ("jailbreak", "jailbreak"),
+    "safety": ("safety", None),
+    "hallucination": ("hallucination", None),
+    "refusal": ("refusal", None),
+    "turn_relation": ("turn_relation", None),
+    "pii": ("pii", "pii"),
+    "complexity": ("complexity", None),
+    "modality": ("modality", "modality"),
+    "systemone": ("systemone", None),
 }
 
-# Load sites that declare no model_ref are classified by their config location.
-LOCATION_TASKS = (("modality_detector", "modality"),)
-
-MAPPING_KEYS = (
-    "jailbreak_mapping_path",
-    "category_mapping_path",
-    "pii_mapping_path",
-    "feedback_mapping_path",
-    "label_mapping_path",
-)
+# A task whose rules are binary gates rather than argmax classifiers, and the
+# option a gate matches: the guard's positive one.
+GATE_LABELS = {"jailbreak": ("jailbreak",)}
 
 # Evaluation-registry keys that name the same task under a different word.
 REGISTRY_ALIASES = {"domain": "intent"}
@@ -52,13 +67,11 @@ REGISTRY_ALIASES = {"domain": "intent"}
 
 @dataclass(frozen=True)
 class LoadSite:
-    """One place in the config that names an artifact."""
+    """One rule in the config that asks an artifact."""
 
     location: str
     model_path: str
-    model_ref: str | None
     threshold: float | None
-    mapping_path: str | None
     positive_labels: tuple[str, ...]
 
 
@@ -100,12 +113,6 @@ class ServedArtifact:
             )
         )
 
-    @property
-    def mapping_paths(self) -> tuple[str, ...]:
-        return tuple(
-            sorted({site.mapping_path for site in self.sites if site.mapping_path})
-        )
-
 
 def load_config(path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
     config = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
@@ -114,53 +121,49 @@ def load_config(path: Path = DEFAULT_CONFIG) -> dict[str, Any]:
     return config
 
 
-def system_refs(config: dict[str, Any]) -> dict[str, str]:
-    """Read the ``system:`` table that names one artifact per model reference."""
-    for _, block in _walk_mappings(config):
-        system = block.get("system")
-        if not isinstance(system, dict):
-            continue
-        refs = {
-            key: value
-            for key, value in system.items()
-            if isinstance(value, str) and value.startswith(MODEL_PREFIX)
-        }
-        if refs:
-            return refs
-    return {}
-
-
-def load_sites(config: dict[str, Any]) -> list[LoadSite]:
-    """Every config mapping that names a ``models/`` artifact path."""
-    sites: list[LoadSite] = []
-    for location, block in _walk_mappings(config):
-        if block.get("enabled") is False:
-            continue
-        for key in MODEL_PATH_KEYS:
-            value = block.get(key)
-            if not isinstance(value, str) or not value.startswith(MODEL_PREFIX):
-                continue
-            sites.append(
-                LoadSite(
-                    location=f"{location}.{key}" if location else key,
-                    model_path=value,
-                    model_ref=_optional_str(block.get("model_ref")),
-                    threshold=_as_float(block.get("threshold")),
-                    mapping_path=_mapping_path(block),
-                    positive_labels=_positive_labels(block),
+def load_sites(config: dict[str, Any]) -> list[tuple[str | None, LoadSite]]:
+    """Every rule that asks an artifact, with the evaluation task that measures it."""
+    catalog = _mapping(_mapping(config.get("global")).get("model_catalog"))
+    decision = _deployment_name(_mapping(catalog.get("system")).get("decision_model"))
+    sites: list[tuple[str | None, LoadSite]] = []
+    for index, raw_recipe in enumerate(_sequence(config.get("recipes"))):
+        recipe = _mapping(raw_recipe)
+        name = _optional_str(recipe.get("name")) or str(index)
+        signals = _mapping(recipe.get("signals"))
+        bindings = (
+            _mapping(recipe.get("model_bindings")),
+            _mapping(catalog.get("bindings")),
+        )
+        for collection, (signal_type, task) in MODEL_SIGNALS.items():
+            for raw_rule in _sequence(signals.get(collection)):
+                rule = _mapping(raw_rule)
+                deployment = _optional_str(rule.get("deployment"))
+                if deployment is None and signal_type != "systemone":
+                    for scope in bindings:
+                        if deployment := _deployment_name(scope.get(signal_type)):
+                            break
+                model_path = _deployment_artifact(
+                    catalog, deployment or decision or DEFAULT_DECISION_DEPLOYMENT
                 )
-            )
+                if model_path is None:
+                    continue
+                site = LoadSite(
+                    location=f"recipes[{name}].signals.{collection}"
+                    f"[{_optional_str(rule.get('name')) or ''}]",
+                    model_path=model_path,
+                    threshold=_predicate_bound(rule.get("predicate")),
+                    positive_labels=GATE_LABELS.get(task or "", ()),
+                )
+                sites.append((task, site))
     return sites
 
 
 def served_artifacts(config: dict[str, Any]) -> dict[str, ServedArtifact]:
     """Group load sites into one artifact per evaluation task."""
     grouped: dict[str, list[LoadSite]] = {}
-    for site in load_sites(config):
-        task = _site_task(site)
-        if task is None:
-            continue
-        grouped.setdefault(task, []).append(site)
+    for task, site in load_sites(config):
+        if task is not None:
+            grouped.setdefault(task, []).append(site)
 
     inventory: dict[str, ServedArtifact] = {}
     for task, sites in grouped.items():
@@ -174,27 +177,6 @@ def served_artifacts(config: dict[str, Any]) -> dict[str, ServedArtifact]:
             task=task, model_path=paths[0], sites=tuple(sites)
         )
     return inventory
-
-
-def ref_mismatches(config: dict[str, Any]) -> list[str]:
-    """Load sites whose ``model_id`` disagrees with the ``system:`` table."""
-    refs = system_refs(config)
-    findings: list[str] = []
-    for site in load_sites(config):
-        if site.model_ref is None:
-            continue
-        declared = refs.get(site.model_ref)
-        if declared is None:
-            findings.append(
-                f"{site.location} references {site.model_ref!r}, which the system "
-                "table does not define"
-            )
-        elif declared != site.model_path:
-            findings.append(
-                f"{site.location} loads {site.model_path} but the system table maps "
-                f"{site.model_ref!r} to {declared}"
-            )
-    return findings
 
 
 def registry_drift(
@@ -235,10 +217,9 @@ def registry_drift(
 def uncovered_artifacts(config: dict[str, Any]) -> list[str]:
     """Artifacts a maintained configuration loads that no task in this module covers."""
     uncovered: dict[str, set[str]] = {}
-    for site in load_sites(config):
-        if _site_task(site) is not None:
-            continue
-        uncovered.setdefault(site.model_path, set()).add(site.location)
+    for task, site in load_sites(config):
+        if task is None:
+            uncovered.setdefault(site.model_path, set()).add(site.location)
     return [
         f"{path} is loaded at {', '.join(sorted(locations))} but no evaluation task "
         "covers it"
@@ -246,40 +227,45 @@ def uncovered_artifacts(config: dict[str, Any]) -> list[str]:
     ]
 
 
-def _site_task(site: LoadSite) -> str | None:
-    if site.model_ref is not None:
-        return REF_TASKS.get(site.model_ref)
-    for marker, task in LOCATION_TASKS:
-        if marker in site.location:
-            return task
+def _deployment_artifact(catalog: dict[str, Any], name: str) -> str | None:
+    """The model a deployment serves, or None for one the Router runs nowhere."""
+    deployment = _mapping(catalog.get("deployments")).get(name)
+    if deployment is None:
+        artifact = PREDECLARED_ARTIFACTS.get(name)
+    elif deployment.get("provider") != "model_runtime" or deployment.get("endpoint"):
+        return None
+    else:
+        artifact = deployment.get("artifact")
+    if not isinstance(artifact, str) or not artifact.strip():
+        return None
+    artifact = artifact.strip()
+    if artifact.startswith(f"{HF_ORG}/"):
+        return MODEL_PREFIX + artifact.removeprefix(f"{HF_ORG}/")
+    return artifact
+
+
+def _deployment_name(value: Any) -> str | None:
+    """A binding written as a deployment name or as ``{deployment: name}``."""
+    if isinstance(value, dict):
+        value = value.get("deployment")
+    return _optional_str(value)
+
+
+def _predicate_bound(predicate: Any) -> float | None:
+    """The lower bound a rule's predicate holds its probability to."""
+    predicate = _mapping(predicate)
+    for key in ("gte", "gt"):
+        if (bound := _as_float(predicate.get(key))) is not None:
+            return bound
     return None
 
 
-def _walk_mappings(
-    node: Any, location: str = ""
-) -> Iterator[tuple[str, dict[str, Any]]]:
-    if isinstance(node, dict):
-        yield location, node
-        for key, value in node.items():
-            yield from _walk_mappings(value, f"{location}.{key}".lstrip("."))
-    elif isinstance(node, list):
-        for index, value in enumerate(node):
-            yield from _walk_mappings(value, f"{location}[{index}]")
+def _mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
-def _mapping_path(block: dict[str, Any]) -> str | None:
-    for key in MAPPING_KEYS:
-        value = block.get(key)
-        if isinstance(value, str) and value:
-            return value
-    return None
-
-
-def _positive_labels(block: dict[str, Any]) -> tuple[str, ...]:
-    declared = block.get("positive_labels")
-    if not isinstance(declared, list):
-        return ()
-    return tuple(str(label) for label in declared if isinstance(label, str) and label)
+def _sequence(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
 
 
 def _optional_str(value: Any) -> str | None:

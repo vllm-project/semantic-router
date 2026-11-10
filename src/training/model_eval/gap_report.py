@@ -29,7 +29,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from artifact_inventory import (
     DEFAULT_CONFIG,
     load_config,
-    ref_mismatches,
     registry_drift,
     served_artifacts,
     uncovered_artifacts,
@@ -180,9 +179,7 @@ def _dedupe(findings: list[tuple[str, str]]) -> list[tuple[str, str]]:
 def _collect(
     baselines: list[dict[str, Any]], config: dict[str, Any], inventory: dict[str, Any]
 ) -> list[tuple[str, str]]:
-    findings: list[tuple[str, str]] = []
-    findings += [("identity", text) for text in ref_mismatches(config)]
-    findings += [
+    findings: list[tuple[str, str]] = [
         ("identity", text) for text in registry_drift(inventory, MODEL_REGISTRY)
     ]
     findings += [("coverage", text) for text in uncovered_artifacts(config)]
@@ -191,10 +188,16 @@ def _collect(
         (baseline["task"], baseline["artifact"]["repo"]): baseline
         for baseline in baselines
     }
-    for task in sorted(inventory):
-        if not any(key[0] == task for key in measured):
+    # A baseline of another artifact, such as the legacy checkpoint a split is
+    # restricted to, does not measure the one the router serves.
+    for task, artifact in sorted(inventory.items()):
+        if (task, artifact.hf_repo) not in measured:
             findings.append(
-                ("coverage", f"{task}: no baseline has been measured for this task")
+                (
+                    "coverage",
+                    f"{task}: no baseline has been measured for the served "
+                    f"`{artifact.artifact_name}`",
+                )
             )
 
     for baseline in baselines:
@@ -422,8 +425,21 @@ def _baseline_findings(baseline: dict[str, Any]) -> list[tuple[str, str]]:
 
     findings += _threshold_findings(baseline, task, name)
 
+    per_label = baseline["metrics"]["per_label"]
+    unmeasured = sorted(
+        label for label, entry in per_label.items() if not entry["support"]
+    )
+    if unmeasured:
+        findings.append(
+            (
+                "coverage",
+                f"{task}: `{name}` was scored on a split with no rows for "
+                f"{', '.join(f'`{label}`' for label in unmeasured)}; those labels are "
+                "unmeasured and left out of macro F1",
+            )
+        )
     worst = min(
-        baseline["metrics"]["per_label"].items(),
+        ((label, entry) for label, entry in per_label.items() if entry["support"]),
         key=lambda item: item[1]["recall"],
         default=None,
     )

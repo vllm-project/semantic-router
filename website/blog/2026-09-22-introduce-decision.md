@@ -26,7 +26,7 @@ Those decisions are everywhere: route an intent, gate an action by confidence, c
 
 That vision is deeply aligned with **vLLM Semantic Router**: understand each request, apply policy, and choose what should happen next. It is why we invested in **Decision 1.0: six open-weight Decision Foundation Models**—and why we will keep improving them in the open.
 
-[**Read the paper →**](/decision-paper) · [**Explore the six models →**](https://huggingface.co/collections/llm-semantic-router/decision-10) · [**Try Decision Studio →**](https://huggingface.co/spaces/llm-semantic-router/decision-studio)
+[**Read the paper →**](/decision-paper) · [**Explore the six models →**](https://huggingface.co/collections/vllm-sr/decision-10) · [**Try Decision Studio →**](https://huggingface.co/spaces/vllm-sr/decision-studio)
 
 <!-- truncate -->
 
@@ -90,7 +90,7 @@ The result is a model designed around the decision itself: compare the alternati
   Lux's shared candidate readout. Candidate descriptions come from the request, rather than a fixed vocabulary of task labels.
 </ArticleFigure>
 
-[Kai architecture](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/blob/3ec2d25838bf50b60d56cacb03fde220ab9d638a/ARCHITECTURE.md)
+[Kai architecture](https://huggingface.co/vllm-sr/Decision-1.0-Kai-0.6B/blob/3ec2d25838bf50b60d56cacb03fde220ab9d638a/ARCHITECTURE.md)
 
 </details>
 
@@ -100,12 +100,12 @@ Start with the model that fits your workload. Keep the questions, options, and r
 
 | Model | Built for | Input budget |
 | --- | --- | ---: |
-| [**Decision-1.0-Kai-0.6B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B) | A compact, general-purpose starting point for routing, conditions, and action selection. | 1,024 tokens |
-| [**Decision-1.0-Lex-0.6B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B) | Operational decisions: customer service, invoices, security incidents, and agent traces. | 1,024 tokens |
-| [**Decision-1.0-Eos-0.8B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B) | The smallest hybrid decoder, bringing longer evidence into a compact model tier. | 16,384 tokens |
-| [**Decision-1.0-Sol-2B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B) | The next step in capacity for decisions over extended context. | 16,384 tokens |
-| [**Decision-1.0-Nox-4B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B) | More capacity for combining conditions, applying rules, and choosing actions. | 16,384 tokens |
-| [**Decision-1.0-Lux-9B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B) | Our largest model and strongest overall result on the released decision suite. | 16,384 tokens |
+| [**Decision-1.0-Kai-0.6B**](https://huggingface.co/vllm-sr/Decision-1.0-Kai-0.6B) | A compact, general-purpose starting point for routing, conditions, and action selection. | 1,024 tokens |
+| [**Decision-1.0-Lex-0.6B**](https://huggingface.co/vllm-sr/Decision-1.0-Lex-0.6B) | Operational decisions: customer service, invoices, security incidents, and agent traces. | 1,024 tokens |
+| [**Decision-1.0-Eos-0.8B**](https://huggingface.co/vllm-sr/Decision-1.0-Eos-0.8B) | The smallest hybrid decoder, bringing longer evidence into a compact model tier. | 16,384 tokens |
+| [**Decision-1.0-Sol-2B**](https://huggingface.co/vllm-sr/Decision-1.0-Sol-2B) | The next step in capacity for decisions over extended context. | 16,384 tokens |
+| [**Decision-1.0-Nox-4B**](https://huggingface.co/vllm-sr/Decision-1.0-Nox-4B) | More capacity for combining conditions, applying rules, and choosing actions. | 16,384 tokens |
+| [**Decision-1.0-Lux-9B**](https://huggingface.co/vllm-sr/Decision-1.0-Lux-9B) | Our largest model and strongest overall result on the released decision suite. | 16,384 tokens |
 
 Input budgets cover the complete state, question, and candidate descriptions. The model cards document each release's architecture and runtime requirements.
 
@@ -136,7 +136,7 @@ The options are yours. A Choice can select a tool, a backend, or an available ga
 
 A single support record can need a destination, a refund check, an escalation decision, and a priority score. Apply those four questions to 128 records and you have **512 decisions in one local SDK batch submission**.
 
-Kai and Lex's native Python API accepts up to 128 independent requests and 512 total decisions, preserving request and question order. The runtime groups work into physical batches; 512 describes submission capacity, not simultaneous forwards or measured throughput. [Batch API](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/blob/52c81702356711b43b1a68e4aca8c98c84230155/SYSTEM_ONE.md).
+Kai and Lex's native Python API accepts up to 128 independent requests and 512 total decisions, preserving request and question order. The runtime groups work into physical batches; 512 describes submission capacity, not simultaneous forwards or measured throughput. [Batch API](https://huggingface.co/vllm-sr/Decision-1.0-Kai-0.6B/blob/52c81702356711b43b1a68e4aca8c98c84230155/SYSTEM_ONE.md).
 
 This is where a decision model becomes useful across an entire operation: apply a policy to a stack of invoices, triage a stream of incidents, or assess thousands of agent traces in successive batches. Define the questions once, bring new contexts, and collect structured answers ready for the next stage of the workflow.
 
@@ -172,7 +172,7 @@ Configure that deployment to serve `Decision-1.0-Lux-9B`, then replace the place
 pip install typesafe-sdk
 ```
 
-Published request example from the [Lux model card](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/blob/ec7001aa04b2fe2a682e02aed9572e047bd68993/USAGE.md):
+Published request example from the [Lux model card](https://huggingface.co/vllm-sr/Decision-1.0-Lux-9B/blob/ec7001aa04b2fe2a682e02aed9572e047bd68993/USAGE.md):
 
 ```python
 from typesafe_sdk import Choice, Noul, TypeSafeClient
@@ -227,7 +227,7 @@ curl -X POST 'https://your-decision-endpoint.example/v1/systemone' \
   }'
 ```
 
-To try Kai, configure its `Decision-1.0-Kai-0.6B` deployment alias and keep the same request structure. Its [SDK and curl guide](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/blob/52c81702356711b43b1a68e4aca8c98c84230155/USAGE.md) walks through delivery routing and urgency. Add questions to inspect another dimension of the state, or reuse the questions with new contexts.
+To try Kai, configure its `Decision-1.0-Kai-0.6B` deployment alias and keep the same request structure. Its [SDK and curl guide](https://huggingface.co/vllm-sr/Decision-1.0-Kai-0.6B/blob/52c81702356711b43b1a68e4aca8c98c84230155/USAGE.md) walks through delivery routing and urgency. Add questions to inspect another dimension of the state, or reuse the questions with new contexts.
 
 ## Next: an open decision runtime
 
@@ -239,8 +239,8 @@ This is the roadmap ahead. Today's release provides the models and local inferen
 
 ## Build your next move
 
-Start in Decision Studio, download a model, or bring the System One format into your application. Kai and Lex also include [fine-tuning tools](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/blob/52c81702356711b43b1a68e4aca8c98c84230155/FINETUNING.md) for adapting decisions to your own data. Decision's contributions use Apache 2.0, with retained upstream terms documented in each repository.
+Start in Decision Studio, download a model, or bring the System One format into your application. Kai and Lex also include [fine-tuning tools](https://huggingface.co/vllm-sr/Decision-1.0-Kai-0.6B/blob/52c81702356711b43b1a68e4aca8c98c84230155/FINETUNING.md) for adapting decisions to your own data. Decision's contributions use Apache 2.0, with retained upstream terms documented in each repository.
 
 **Open models. Your questions. Your next move.**
 
-[**Get Decision 1.0 →**](https://huggingface.co/collections/llm-semantic-router/decision-10) · [**Explore the playground →**](https://huggingface.co/spaces/llm-semantic-router/decision-studio) · [**Build with vLLM-SR →**](https://github.com/vllm-project/semantic-router)
+[**Get Decision 1.0 →**](https://huggingface.co/collections/vllm-sr/decision-10) · [**Explore the playground →**](https://huggingface.co/spaces/vllm-sr/decision-studio) · [**Build with vLLM-SR →**](https://github.com/vllm-project/semantic-router)

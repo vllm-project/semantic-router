@@ -36,6 +36,11 @@ The router may consume bounded, request-safe performance signals when an algorit
 explicitly supports them. It does not collect a batch and solve a joint assignment on
 the ExtProc hot path.
 
+The built-in model runtime is also a serving layer: its replica pool selects a
+ready worker using bounded queue and health information. This does not rematch
+semantic decisions or choose a different logical model. Scaling decision-model
+replicas and selecting Chat backends remain separate controls.
+
 ## Rationale
 
 - **Latency:** Waiting to form a batch adds queueing delay before routing begins.
@@ -58,8 +63,8 @@ The serving layer may queue, reject, or use an explicitly compatible fallback.
 Cross-model fallback still needs its own safety contract because changing a logical
 model is not equivalent to selecting another replica.
 
-Fleet sizing and capacity planning remain offline concerns. The Fleet Simulator can
-evaluate candidate fleet shapes without putting an optimizer in the request path.
+Fleet sizing and capacity planning remain offline concerns, outside the request
+path.
 
 ## Scope and non-goals
 
@@ -82,6 +87,5 @@ Reconsider the boundary if:
 
 ## References
 
-- [Fleet Simulator overview](../fleet-sim/overview)
 - [Latency-aware selection](../tutorials/algorithm/selection/latency-aware)
 - [Model execution fallback](./model-execution-fallback)

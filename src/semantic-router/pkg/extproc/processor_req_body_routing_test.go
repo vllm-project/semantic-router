@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -19,7 +23,7 @@ import (
 
 func TestProviderCredentialIsInjectedOnceWithOverwriteSemantics(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: private
@@ -28,10 +32,10 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: https://private.example/v1
-          auth_header: x-api-key
-          auth_prefix: ""
+          auth: {header: x-api-key, prefix: ""}
           api_key: static-secret
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +71,7 @@ routing: {}
 
 func TestProviderWithNoAuthDoesNotRequireCredentialInFailClosedMode(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: local
@@ -76,7 +80,8 @@ providers:
       backend_refs:
         - provider: ollama
           endpoint: http://127.0.0.1:11434/v1
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -125,8 +130,8 @@ func TestAzureProviderDispatchAcceptsDecoratedResponse(t *testing.T) {
 	if _, err := router.prepareProviderDispatch(request, logicalModel, "", false, ctx); err != nil {
 		t.Fatal(err)
 	}
-	if ctx.ResponseVendor != llmprotocol.ResponseVendorAzure {
-		t.Fatalf("response vendor = %q, want Azure", ctx.ResponseVendor)
+	if ctx.ResponseVendor != "" {
+		t.Fatalf("response vendor = %q, want none: Azure decorations need no vendor", ctx.ResponseVendor)
 	}
 
 	body := []byte(`{"id":"response_1","model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop","content_filter_results":{}}]}`)
@@ -196,12 +201,9 @@ func TestProviderDispatchAppliesReasoningBeforeExternalModelIDRewrite(t *testing
 }
 
 func TestToolSelectionMutatesNeutralRequestBeforeEveryProviderEncoding(t *testing.T) {
-	semanticSelection := false
 	payload, err := config.NewStructuredPayload(config.ToolsPluginConfig{
-		Enabled:           true,
-		Mode:              config.ToolsPluginModeFiltered,
-		AllowTools:        []string{"lookup_weather"},
-		SemanticSelection: &semanticSelection,
+		Enabled: true,
+		Policy:  &config.ToolsPolicyConfig{Mode: config.ToolsPolicyModeFiltered, AllowTools: []string{"lookup_weather"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -509,21 +511,18 @@ func routingTestRouterForFormat(format llmprotocol.WireFormat) (*OpenAIRouter, s
 
 func TestHandleAutoModelRoutingEmitsSelectedModelAndEncodedBody(t *testing.T) {
 	router := routingTestRouter("qwen14b-dev")
-	request := testNeutralRequest("MoM", "hello from routed model")
+	request := testNeutralRequest("vllm-sr/auto", "hello from routed model")
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
-	ctx.ModalityClassification = &ModalityClassificationResult{
-		Modality: ModalityBoth, Confidence: 0.97, Method: "signal",
-	}
 
 	response, err := router.handleEntrypointModelRouting(
-		request, "MoM", "", entropy.ReasoningDecision{}, "qwen14b-dev", ctx,
+		request, "vllm-sr/auto", "", entropy.ReasoningDecision{}, "qwen14b-dev", ctx,
 	)
 	if err != nil {
 		t.Fatalf("handleEntrypointModelRouting returned error: %v", err)
 	}
 	common := response.GetRequestBody().GetResponse()
 	headersByName := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
-	if got := headersByName[headers.SelectedModel]; got != "qwen14b-dev" {
+	if got := headersByName[headers.VSRRouteModel]; got != "qwen14b-dev" {
 		t.Fatalf("selected model header = %q", got)
 	}
 	var body map[string]any
@@ -535,9 +534,6 @@ func TestHandleAutoModelRoutingEmitsSelectedModelAndEncodedBody(t *testing.T) {
 	}
 	if request.Model != "qwen14b-dev" || ctx.SemanticRequest != request {
 		t.Fatalf("neutral request was not updated in place: %+v", request)
-	}
-	if ctx.ModalityClassification.Modality != ModalityBoth {
-		t.Fatalf("backend dispatch lost modality evidence: %+v", ctx.ModalityClassification)
 	}
 }
 
@@ -679,7 +675,7 @@ func TestProviderDispatchHonorsRouteCachePolicyAcrossRequestPaths(t *testing.T) 
 					t.Fatalf("expected provider dispatch, got %v", response)
 				}
 				values := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
-				if values[headers.SelectedModel] != "worker" || values[":path"] != "/v1/chat/completions" {
+				if values[headers.VSRRouteModel] != "worker" || values[":path"] != "/v1/chat/completions" {
 					t.Fatalf("provider routing headers = %v", values)
 				}
 				if common.GetClearRouteCache() != clear {
@@ -687,5 +683,58 @@ func TestProviderDispatchHonorsRouteCachePolicyAcrossRequestPaths(t *testing.T) 
 				}
 			})
 		}
+	}
+}
+
+func TestProviderAuthResolutionFailureEmitsEventAndKeepsGenericResponse(t *testing.T) {
+	core, logs := observer.New(zapcore.DebugLevel)
+	restoreLogger := zap.ReplaceGlobals(zap.New(core))
+	defer restoreLogger()
+
+	cfg, err := config.ParseYAMLBytes([]byte(`
+version: v0.5
+providers:
+  models:
+    - name: broken
+      provider_model_id: broken
+      api_format: openai
+      backend_refs:
+        - provider: vllm
+          endpoint: https://broken.example/v1
+recipes:
+  - name: default
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := &OpenAIRouter{Config: cfg}
+	profile, err := cfg.GetProviderProfileForEndpoint("broken_primary")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Parse-time validation rejects unknown providers, so the failure follows a valid profile.
+	profile.Type = "not-a-real-provider"
+	state := &routeHeaderState{profile: profile}
+	response := router.appendProviderCredential(
+		state, "broken", "broken_primary", &RequestContext{RequestID: "req-auth-resolution", Headers: map[string]string{}},
+	)
+	if response == nil {
+		t.Fatalf("appendProviderCredential() returned nil, want the generic 500 response")
+	}
+	body := string(response.GetImmediateResponse().GetBody())
+	if !strings.Contains(body, "Internal routing error. Contact your administrator.") {
+		t.Fatalf("client body = %q, want the generic internal routing error", body)
+	}
+	entries := logs.FilterMessage("provider_auth_resolution_failed").All()
+	if len(entries) != 1 {
+		t.Fatalf("expected one provider_auth_resolution_failed event, got %d", len(entries))
+	}
+	fields := entries[0].ContextMap()
+	assertLogField(t, fields, "request_id", "req-auth-resolution")
+	assertLogField(t, fields, "model", "broken")
+	assertLogField(t, fields, "backend", "broken_primary")
+	errField, ok := fields["error"].(string)
+	if !ok || !strings.Contains(errField, "not-a-real-provider") {
+		t.Fatalf("event error field = %#v, want the underlying provider resolution error", fields["error"])
 	}
 }

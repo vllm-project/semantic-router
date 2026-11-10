@@ -3,6 +3,8 @@ package extproc
 import (
 	"bytes"
 	"encoding/json"
+	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
@@ -55,19 +58,19 @@ func assertChunkEaten(t *testing.T, response *ext_proc.ProcessingResponse) {
 }
 
 func makeTestRouterWithLimits(maxBytes int64, timeoutSec int) *OpenAIRouter {
-	router := makeTestRouter("auto")
+	router := makeTestRouter("vllm-sr/auto")
 	router.Config.MaxStreamedBodyBytes = maxBytes
 	router.Config.StreamedBodyTimeoutSec = timeoutSec
 	return router
 }
 
 func TestStreamedBodyAccumulatesProtocolNeutralBytesUntilEOS(t *testing.T) {
-	router := makeTestRouter("auto")
+	router := makeTestRouter("vllm-sr/auto")
 	ctx := &RequestContext{Headers: make(map[string]string)}
 	handler := newStreamedBodyHandler(router, ctx)
 	defer handler.Release()
 
-	body := []byte(`{"messages":[{"role":"user","content":"hello"}],"model":"auto","stream":true}`)
+	body := []byte(`{"messages":[{"role":"user","content":"hello"}],"model":"vllm-sr/auto","stream":true}`)
 	for _, chunk := range splitTestChunks(body, 7) {
 		response, err := handler.HandleChunk(&ext_proc.HttpBody{Body: chunk}, ctx)
 		require.NoError(t, err)
@@ -102,7 +105,7 @@ func TestStreamedBodyEOSDelegatesCompleteBodyToCodec(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := &RequestContext{Headers: make(map[string]string), SourceFormat: test.format}
-			handler := newStreamedBodyHandler(makeTestRouter("auto"), ctx)
+			handler := newStreamedBodyHandler(makeTestRouter("vllm-sr/auto"), ctx)
 			defer handler.Release()
 			chunks := splitTestChunks(test.body, 11)
 			for _, chunk := range chunks[:len(chunks)-1] {
@@ -129,10 +132,10 @@ func TestStreamedBodyEOSDelegatesCompleteBodyToCodec(t *testing.T) {
 
 func TestStreamedBodyDefersCodecValidationUntilEOS(t *testing.T) {
 	ctx := &RequestContext{Headers: make(map[string]string), SourceFormat: llmprotocol.OpenAIChatV1}
-	handler := newStreamedBodyHandler(makeTestRouter("auto"), ctx)
+	handler := newStreamedBodyHandler(makeTestRouter("vllm-sr/auto"), ctx)
 	defer handler.Release()
 
-	response, err := handler.HandleChunk(&ext_proc.HttpBody{Body: []byte(`{"model":"auto",`)}, ctx)
+	response, err := handler.HandleChunk(&ext_proc.HttpBody{Body: []byte(`{"model":"vllm-sr/auto",`)}, ctx)
 	require.NoError(t, err)
 	assertChunkEaten(t, response)
 	assert.Nil(t, ctx.SemanticRequest)
@@ -147,13 +150,72 @@ func TestStreamedBodyDefersCodecValidationUntilEOS(t *testing.T) {
 
 func TestStreamedBodyNonEOSChunkUsesSharedResponse(t *testing.T) {
 	ctx := &RequestContext{}
-	handler := newStreamedBodyHandler(makeTestRouter("auto"), ctx)
+	handler := newStreamedBodyHandler(makeTestRouter("vllm-sr/auto"), ctx)
 	defer handler.Release()
 
 	response, err := handler.HandleChunk(&ext_proc.HttpBody{Body: []byte("opaque bytes")}, ctx)
 	require.NoError(t, err)
 	assert.Same(t, sharedContinueEmptyBody, response)
 	assertChunkEaten(t, response)
+}
+
+func TestProcessRequestBodyBenchmarkBindingKeepsSharedResponseImmutable(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		header     string
+		fullDuplex bool
+	}{
+		{name: "benchmark", header: headers.VSRBenchExpectedConfigHash},
+		{name: "mixed case", header: strings.ToUpper(headers.VSRBenchExpectedConfigHash)},
+		{name: "unbound"},
+		{name: "full duplex", header: headers.VSRBenchExpectedConfigHash, fullDuplex: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			router := makeTestRouter("auto")
+			ctx := &RequestContext{
+				Headers:               make(map[string]string),
+				FullDuplexRequestBody: test.fullDuplex,
+			}
+			if test.header != "" {
+				ctx.Headers[test.header] = strings.Repeat("a", 64)
+			}
+			stream := NewMockStream(nil)
+			defer func() {
+				if ctx.StreamedBody != nil {
+					ctx.StreamedBody.Release()
+				}
+			}()
+
+			for range 3 {
+				require.NoError(t, router.processRequestBody(stream, &ext_proc.ProcessingRequest_RequestBody{
+					RequestBody: &ext_proc.HttpBody{Body: []byte("opaque bytes")},
+				}, ctx))
+			}
+			assert.Nil(t, sharedContinueEmptyBody.GetRequestBody().GetResponse().GetHeaderMutation())
+			if test.fullDuplex {
+				assert.Empty(t, stream.Responses)
+				return
+			}
+			require.Len(t, stream.Responses, 3)
+			for i, response := range stream.Responses {
+				assertChunkEaten(t, response)
+				mutation := response.GetRequestBody().GetResponse().GetHeaderMutation()
+				if test.header == "" {
+					assert.Same(t, sharedContinueEmptyBody, response)
+					assert.Nil(t, mutation)
+					continue
+				}
+				assert.NotSame(t, sharedContinueEmptyBody, response)
+				if i > 0 {
+					assert.NotSame(t, stream.Responses[i-1], response)
+				}
+				require.NotNil(t, mutation)
+				assert.Empty(t, mutation.GetRemoveHeaders())
+				assert.Len(t, mutation.GetSetHeaders(), 2)
+			}
+		})
+	}
 }
 
 func TestProcessRequestBodyRejectsStreamedGuardViolations(t *testing.T) {
@@ -199,6 +261,9 @@ func TestProcessRequestBodyRejectsStreamedGuardViolations(t *testing.T) {
 			require.NoError(t, json.Unmarshal(immediate.GetBody(), &body))
 			assert.Equal(t, "invalid_request_error", body.Error.Type)
 			assert.Equal(t, test.wantCode, body.Error.Code)
+			assert.Nil(t, ctx.StreamedBody)
+			require.NoError(t, send([]byte("c")))
+			assert.Len(t, stream.Responses, 2, "rejection is terminal for both size and deadline guards")
 		})
 	}
 }
@@ -222,24 +287,107 @@ func TestProcessRequestBodyRejectsSingleEOSAboveStreamedLimit(t *testing.T) {
 	assert.Nil(t, ctx.StreamedBody)
 }
 
-func TestSingleEOSWithinStreamedLimitReachesCodec(t *testing.T) {
-	router := makeTestRouterWithLimits(512, 0)
-	ctx := &RequestContext{Headers: make(map[string]string), SourceFormat: llmprotocol.OpenAIChatV1}
-	body := []byte(`{"model":"fallback-model","messages":[{"role":"user","content":"hello"}]}`)
+func TestStreamedBodyRejectsOversizedChunkBeforeBuffering(t *testing.T) {
+	const maxBytes = 1024
+	first := bytes.Repeat([]byte("a"), maxBytes-1)
+	chunk := bytes.Repeat([]byte("b"), 2*1024*1024)
+	for _, test := range []struct {
+		name       string
+		capacity   int
+		eos        bool
+		fullDuplex bool
+	}{
+		{name: "requires growth", capacity: maxBytes},
+		{name: "retained capacity", capacity: 4 * 1024 * 1024},
+		{name: "EOS", capacity: maxBytes, eos: true},
+		{name: "full duplex", capacity: maxBytes, fullDuplex: true},
+		{name: "full duplex EOS", capacity: maxBytes, eos: true, fullDuplex: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := &RequestContext{FullDuplexRequestBody: test.fullDuplex}
+			// Avoid the pool so retained capacity cannot hide an unexpected growth.
+			handler := &StreamedBodyHandler{
+				router: makeTestRouterWithLimits(maxBytes, 0), ctx: ctx, maxBytes: maxBytes,
+			}
+			handler.buf.Grow(test.capacity)
+			response, err := handler.HandleChunk(&ext_proc.HttpBody{Body: first}, ctx)
+			require.NoError(t, err)
+			require.Nil(t, response.GetImmediateResponse())
+			beforeLen, beforeCap := handler.buf.Len(), handler.buf.Cap()
 
-	response, err := router.handleRequestBodyDispatch(&ext_proc.ProcessingRequest_RequestBody{
-		RequestBody: &ext_proc.HttpBody{Body: body, EndOfStream: true},
-	}, ctx)
-	require.NoError(t, err)
-	require.NotNil(t, response)
-	require.NotNil(t, ctx.SemanticRequest)
-	assert.Equal(t, "fallback-model", ctx.SemanticRequest.Model)
-	assert.Nil(t, ctx.StreamedBody)
+			response, err = handler.HandleChunk(&ext_proc.HttpBody{Body: chunk, EndOfStream: test.eos}, ctx)
+			require.NoError(t, err)
+			immediate := response.GetImmediateResponse()
+			require.NotNil(t, immediate)
+			assert.Equal(t, typev3.StatusCode_PayloadTooLarge, immediate.GetStatus().GetCode())
+			require.NotNil(t, ctx.ImmediateProtocolError)
+			assert.Equal(t, "request_too_large", ctx.ImmediateProtocolError.Code)
+			assert.Equal(t, "request body exceeds the 1024-byte limit", ctx.ImmediateProtocolError.Message)
+			assert.Equal(t, beforeLen, handler.buf.Len(), "rejected chunk must not be appended")
+			assert.Equal(t, beforeCap, handler.buf.Cap(), "rejected chunk must not grow the buffer")
+			assert.True(t, bytes.Equal(first, handler.buf.Bytes()), "buffer contents must remain unchanged")
+		})
+	}
+}
+
+func TestProcessRequestBodyAtStreamedLimitReachesCodec(t *testing.T) {
+	body := []byte(`{"model":"fallback-model","messages":[{"role":"user","content":"hello"}]}`)
+	for _, test := range []struct {
+		name      string
+		chunkSize int
+	}{
+		{name: "single EOS", chunkSize: len(body)},
+		{name: "multiple chunks", chunkSize: 7},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := &RequestContext{Headers: make(map[string]string), SourceFormat: llmprotocol.OpenAIChatV1}
+			router := makeTestRouterWithLimits(int64(len(body)), 0)
+			chunks := splitTestChunks(body, test.chunkSize)
+			for i, chunk := range chunks {
+				response, err := router.handleRequestBodyDispatch(&ext_proc.ProcessingRequest_RequestBody{
+					RequestBody: &ext_proc.HttpBody{Body: chunk, EndOfStream: i == len(chunks)-1},
+				}, ctx)
+				require.NoError(t, err)
+				require.NotNil(t, response)
+				assert.Nil(t, response.GetImmediateResponse())
+			}
+			require.NotNil(t, ctx.SemanticRequest)
+			assert.Equal(t, "fallback-model", ctx.SemanticRequest.Model)
+			assert.Nil(t, ctx.StreamedBody)
+		})
+	}
+}
+
+func TestStreamedBodyGuardDoesNotOverflowAccumulatedSize(t *testing.T) {
+	ctx := &RequestContext{}
+	handler := &StreamedBodyHandler{router: makeTestRouterWithLimits(math.MaxInt64, 0), ctx: ctx, maxBytes: math.MaxInt64}
+	handler.buf.WriteByte('a')
+	// Exercise the size guard without allocating a chunk this large.
+	response := handler.checkBodySize(math.MaxInt)
+	if math.MaxInt == math.MaxInt64 {
+		require.NotNil(t, response)
+		assert.Equal(t, typev3.StatusCode_PayloadTooLarge, response.GetImmediateResponse().GetStatus().GetCode())
+	} else {
+		assert.Nil(t, response)
+	}
+}
+
+func TestStreamedBodyZeroLimitAllowsAccumulation(t *testing.T) {
+	ctx := &RequestContext{}
+	handler := &StreamedBodyHandler{router: makeTestRouterWithLimits(0, 0), ctx: ctx}
+	chunk := bytes.Repeat([]byte("a"), 1024)
+	for range 2 {
+		response, err := handler.HandleChunk(&ext_proc.HttpBody{Body: chunk}, ctx)
+		require.NoError(t, err)
+		assertChunkEaten(t, response)
+	}
+	assert.Equal(t, 2*len(chunk), handler.buf.Len())
 }
 
 func TestStreamedBodyPoolReuseClearsRequestStateAndGuards(t *testing.T) {
 	first := newStreamedBodyHandler(makeTestRouterWithLimits(500, 60), &RequestContext{})
 	first.buf.WriteString("leftover")
+	first.reject(413, "request_too_large", "rejected request")
 	first.Release()
 
 	second := newStreamedBodyHandler(makeTestRouterWithLimits(0, 0), &RequestContext{})
@@ -247,4 +395,8 @@ func TestStreamedBodyPoolReuseClearsRequestStateAndGuards(t *testing.T) {
 	assert.Empty(t, second.buf.Bytes())
 	assert.Zero(t, second.maxBytes)
 	assert.True(t, second.deadline.IsZero())
+	response, err := second.HandleChunk(&ext_proc.HttpBody{Body: []byte("new request")}, second.ctx)
+	require.NoError(t, err)
+	assertChunkEaten(t, response)
+	assert.Equal(t, "new request", second.buf.String())
 }

@@ -19,33 +19,6 @@ export function getPolicySignalFieldSchema(signalType: string): FieldSchema[] | 
           ],
         },
       ]
-    case 'classifier':
-      return [
-        { key: 'description', label: 'Description', type: 'string' },
-        {
-          key: 'type',
-          label: 'Backend Type',
-          type: 'select',
-          options: ['local', 'llm', 'sequence_classifier'],
-          required: true,
-        },
-        { key: 'model', label: 'External Model', type: 'string' },
-        { key: 'model_path', label: 'Local Model Path', type: 'string' },
-        {
-          key: 'labels',
-          label: 'Labels',
-          type: 'string[]',
-          required: true,
-        },
-        { key: 'instructions', label: 'Instructions', type: 'string' },
-        {
-          key: 'disable_rationale',
-          label: 'Disable Rationale',
-          type: 'boolean',
-          description: 'Only LLM classifiers support this option.',
-        },
-        { key: 'use_cpu', label: 'Use CPU', type: 'boolean' },
-      ]
     case 'input_modality':
       return [
         { key: 'description', label: 'Description', type: 'string' },

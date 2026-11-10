@@ -1,11 +1,14 @@
 package extproc
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -18,6 +21,8 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
@@ -36,36 +41,11 @@ const (
 )
 
 var (
-	parseReloadConfig        = config.Parse
-	ensureReloadConfigModels = modeldownload.EnsureModelsForConfig
-	buildReloadRouter        = buildOpenAIRouterFromConfig
-	replaceReloadConfig      = config.Replace
-
-	warmupReloadRouter = func(router *OpenAIRouter) error {
-		if router == nil {
-			return nil
-		}
-		state := router.embeddingRuntimeState()
-		_, err := modelruntime.WarmupRouter(context.Background(), []modelruntime.RouterWarmupTask{
-			{
-				Name:       "tools_database",
-				Ready:      state.ToolsReady,
-				SkipReason: "embedding_runtime_not_ready_for_tools",
-				Load:       router.LoadToolsDatabase,
-			},
-			{
-				Name:       "knowledge_bases",
-				Ready:      state.KnowledgeBasesReady,
-				SkipReason: "embedding_runtime_not_ready_for_knowledge_bases",
-				Load:       router.PreloadKnowledgeBases,
-			},
-		}, modelruntime.WarmupRouterOptions{
-			Component:      "extproc",
-			MaxParallelism: 2,
-			OnEvent:        logReloadRuntimeLifecycleEvent,
-		})
-		return err
-	}
+	parseReloadConfig               = config.Parse
+	ensureReloadConfigModels        = modeldownload.EnsureModelsForConfig
+	buildReloadRouter               = buildOpenAIRouterFromConfig
+	buildReloadRouterSharingSignals = buildOpenAIRouterSharingSignals
+	replaceReloadConfig             = config.Replace
 )
 
 // Server represents a gRPC server for the Envoy ExtProc
@@ -83,6 +63,11 @@ type Server struct {
 	servingReady chan struct{}
 	healthServer *health.Server
 	lifecycle    serverLifecycle
+	configs      *configsnapshot.Manager
+	configsOnce  sync.Once
+	// gateway is the mode client traffic reaches the server in; a reload
+	// that needs a capability the mode lacks is rejected.
+	gateway config.GatewayMode
 }
 
 // NewServer creates a new ExtProc gRPC server
@@ -92,66 +77,59 @@ func NewServer(
 	secure bool,
 	certPath string,
 	runtimeRegistry *routerruntime.Registry,
+	opts ...ServerOption,
 ) (*Server, error) {
+	options := serverOptions{historyLimit: configsnapshot.DefaultHistoryLimit, gateway: config.GatewayExtProc}
+	for _, opt := range opts {
+		opt(&options)
+	}
 	modelPool := binding.NewPool()
 	if runtimeRegistry != nil {
 		modelPool = runtimeRegistry.ModelPool()
 	}
-	router, err := newOpenAIRouterForServer(configPath, runtimeRegistry, modelPool)
+	cfg, publishGlobal, err := resolveInitialRouterConfig(configPath, runtimeRegistry)
 	if err != nil {
 		return nil, err
 	}
+	var router *OpenAIRouter
+	if cfg.RoutingEnabled() {
+		router, err = buildOpenAIRouterFromConfig(cfg, modelPool)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if publishGlobal {
+		config.Replace(cfg)
+	}
+	logLoadedRouterConfig(configPath, cfg)
 	attachRuntimeRegistry(router, runtimeRegistry)
-	service := NewRouterService(router)
-	publishRouterState(router.Config, router, runtimeRegistry, service.current.Load().acquire)
-	return &Server{
+	server := &Server{
 		modelPool:  modelPool,
 		configPath: configPath,
-		service:    service,
 		port:       port,
 		secure:     secure,
 		certPath:   certPath,
 		runtime:    runtimeRegistry,
-	}, nil
+		gateway:    options.gateway,
+	}
+	server.configs = server.newConfigManager(openConfigHistory(configPath, options.historyLimit), options.parts...)
+	snapshot, err := server.configManager().Install(context.Background(), configsnapshot.Update{
+		Origin:   configsnapshot.Origin{Source: configsnapshot.SourceStartup},
+		Config:   cfg,
+		Document: parsedDocument(configPath, cfg),
+	})
+	if err != nil {
+		return nil, errors.Join(err, router.Close())
+	}
+	router.nameSignals(snapshot.ComponentKey(configsnapshot.ComponentSignals))
+	server.service = newRouterServiceWithSnapshot(router, snapshot)
+	publishSnapshotState(cfg, snapshot, router, runtimeRegistry, server.service.current.Load().acquire)
+	return server, nil
 }
 
 // GetRouter returns the current router instance
 func (s *Server) GetRouter() *OpenAIRouter {
 	return s.service.GetRouter()
-}
-
-// WarmupRouter loads generation-owned runtime data before serving requests.
-func (s *Server) WarmupRouter(
-	ctx context.Context,
-	options modelruntime.WarmupRouterOptions,
-) error {
-	if s == nil || s.service == nil {
-		return nil
-	}
-	generation := s.service.current.Load()
-	if generation == nil || generation.router == nil {
-		return nil
-	}
-	state := generation.router.embeddingRuntimeState()
-	_, err := modelruntime.WarmupRouter(ctx, []modelruntime.RouterWarmupTask{
-		{
-			Name:       "tools_database",
-			Ready:      state.ToolsReady,
-			SkipReason: "embedding_runtime_not_ready_for_tools",
-			Load: func() error {
-				return generation.withLease(generation.router.LoadToolsDatabase)
-			},
-		},
-		{
-			Name:       "knowledge_bases",
-			Ready:      state.KnowledgeBasesReady,
-			SkipReason: "embedding_runtime_not_ready_for_knowledge_bases",
-			Load: func() error {
-				return generation.withLease(generation.router.PreloadKnowledgeBases)
-			},
-		},
-	}, options)
-	return err
 }
 
 // Start serves requests until Stop is called or the gRPC server fails.
@@ -251,6 +229,9 @@ func (s *Server) StartContextWithReady(ctx context.Context, onServing func()) er
 		}
 	}}
 
+	// Serve's first Accept reports serving, so the config watch exists before it.
+	watch := s.prepareConfigWatch()
+
 	// Run the server in a separate goroutine
 	serverErrCh := make(chan error, 1)
 	go func() {
@@ -266,7 +247,7 @@ func (s *Server) StartContextWithReady(ctx context.Context, onServing func()) er
 	defer s.lifecycle.beginShutdown()
 	go func() {
 		defer watcherDone()
-		s.watchConfigAndReload(watchCtx)
+		watch(watchCtx)
 	}()
 
 	// Process signal ownership belongs to the command entrypoint. This server
@@ -390,8 +371,12 @@ type RouterService struct {
 	errors  []error
 }
 
+// routerGeneration is the serving instance of one configuration snapshot. A
+// request that leases it reads the router and the snapshot of one version.
 type routerGeneration struct {
 	router *OpenAIRouter
+	// snapshot is nil for routers installed without the lifecycle.
+	snapshot *configsnapshot.Snapshot
 
 	mu      sync.Mutex
 	refs    sync.WaitGroup
@@ -405,17 +390,31 @@ type routerGeneration struct {
 type AcquireFunc func() (release func(), ok bool)
 
 func NewRouterService(r *OpenAIRouter) *RouterService {
+	return newRouterServiceWithSnapshot(r, nil)
+}
+
+// NewRouterServiceForSnapshot returns a service whose router serves
+// snapshot, as the lifecycle installs a Router's startup configuration.
+func NewRouterServiceForSnapshot(r *OpenAIRouter, snapshot *configsnapshot.Snapshot) *RouterService {
+	return newRouterServiceWithSnapshot(r, snapshot)
+}
+
+func newRouterServiceWithSnapshot(r *OpenAIRouter, snapshot *configsnapshot.Snapshot) *RouterService {
 	rs := &RouterService{}
-	rs.current.Store(newRouterGeneration(r))
+	rs.current.Store(newRouterGeneration(r, snapshot))
 	return rs
 }
 
-func newRouterGeneration(router *OpenAIRouter) *routerGeneration {
+func newRouterGeneration(router *OpenAIRouter, snapshot *configsnapshot.Snapshot) *routerGeneration {
 	generation := &routerGeneration{
-		router:  router,
-		drained: make(chan struct{}),
+		router:   router,
+		snapshot: snapshot,
+		drained:  make(chan struct{}),
 	}
 	if router != nil {
+		if snapshot != nil {
+			router.configVersion.Store(snapshot.Version())
+		}
 		router.routerLearningMu.Lock()
 		router.generation = generation
 		if router.routerLearningRuntime != nil {
@@ -444,15 +443,6 @@ func (g *routerGeneration) acquire() (func(), bool) {
 	}, true
 }
 
-func (g *routerGeneration) withLease(work func() error) error {
-	release, acquired := g.acquire()
-	if !acquired {
-		return errors.New("router generation is shutting down")
-	}
-	defer release()
-	return work()
-}
-
 func (g *routerGeneration) retire() {
 	if g == nil {
 		return
@@ -477,6 +467,11 @@ func (g *routerGeneration) retire() {
 // cannot observe the new generation until the management snapshot is also
 // published and this critical section ends.
 func (rs *RouterService) Swap(r *OpenAIRouter, publish func(acquire AcquireFunc)) error {
+	return rs.swapSnapshot(r, nil, publish)
+}
+
+// swapSnapshot is Swap for the router built from snapshot.
+func (rs *RouterService) swapSnapshot(r *OpenAIRouter, snapshot *configsnapshot.Snapshot, publish func(acquire AcquireFunc)) error {
 	rs.mu.Lock()
 	if rs.closed {
 		rs.mu.Unlock()
@@ -485,7 +480,7 @@ func (rs *RouterService) Swap(r *OpenAIRouter, publish func(acquire AcquireFunc)
 		}
 		return errors.New("router service is shutting down")
 	}
-	generation := newRouterGeneration(r)
+	generation := newRouterGeneration(r, snapshot)
 	old := rs.current.Swap(generation)
 	if publish != nil {
 		publish(generation.acquire)
@@ -510,21 +505,73 @@ func (rs *RouterService) GetRouter() *OpenAIRouter {
 	return generation.router
 }
 
+// Snapshot returns the configuration snapshot the current router serves, or
+// nil when it was installed without the lifecycle.
+func (rs *RouterService) Snapshot() *configsnapshot.Snapshot {
+	generation := rs.current.Load()
+	if generation == nil {
+		return nil
+	}
+	return generation.snapshot
+}
+
 // Process delegates to the current router.
 func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
+	lease, err := rs.Pin()
+	if err != nil {
+		return err
+	}
+	defer lease.Release()
+	if lease.Router == nil {
+		// Send an HTTP decision, not a transport failure an Envoy configured
+		// with failure_mode_allow could bypass.
+		if _, err := stream.Recv(); err != nil {
+			return err
+		}
+		return stream.Send(createImmediateJSONResponse(http.StatusNotFound, []byte(`{"error":{"code":"routing_disabled","message":"Chat routing is disabled for this instance."}}`)))
+	}
+	return lease.Router.Process(stream)
+}
+
+// lease pins the current router generation until release is called.
+func (rs *RouterService) lease() (*OpenAIRouter, func(), error) {
+	pin, err := rs.Pin()
+	if err != nil {
+		return nil, nil, err
+	}
+	if pin.Router == nil {
+		pin.Release()
+		return nil, nil, errors.New("routing is disabled for this instance")
+	}
+	return pin.Router, pin.Release, nil
+}
+
+// Lease is one request's pin on a router generation: the router and the
+// configuration snapshot it serves stay the same until Release, and the
+// generation drains only after every lease is released.
+type Lease struct {
+	Router   *OpenAIRouter
+	Snapshot *configsnapshot.Snapshot
+	release  func()
+}
+
+// Release ends the lease. Only the first call counts.
+func (l *Lease) Release() { l.release() }
+
+// Pin leases the serving generation for one request.
+func (rs *RouterService) Pin() (*Lease, error) {
 	rs.mu.Lock()
 	generation := rs.current.Load()
 	if generation == nil {
 		rs.mu.Unlock()
-		return errors.New("router is shutting down")
+		return nil, errors.New("router is shutting down")
 	}
 	release, acquired := generation.acquire()
 	rs.mu.Unlock()
 	if !acquired {
-		return errors.New("router is shutting down")
+		return nil, errors.New("router is shutting down")
 	}
-	defer release()
-	return generation.router.Process(stream)
+	return &Lease{Router: generation.router, Snapshot: generation.snapshot, release: release}, nil
 }
 
 func (rs *RouterService) Close() error {
@@ -547,6 +594,7 @@ func (rs *RouterService) Shutdown(ctx context.Context) error {
 		if generation != nil {
 			generation.retire()
 			rs.retired.Add(1)
+			// #nosec G118 -- Cleanup must outlive the caller's wait deadline so retained requests can drain safely.
 			go rs.closeRetiredGeneration(generation)
 		}
 	}
@@ -575,10 +623,18 @@ func (rs *RouterService) retiredGenerationErrors() error {
 func (rs *RouterService) closeRetiredGeneration(generation *routerGeneration) {
 	defer rs.retired.Done()
 	<-generation.drained
-	if generation.router == nil {
-		return
+	var err error
+	if generation.router != nil {
+		err = generation.router.Close()
 	}
-	if err := generation.router.Close(); err != nil {
+	// The snapshot's parts serve only through this generation's leases, which
+	// have all ended; parts a newer snapshot shares stay open.
+	releaseCtx, cancel := context.WithTimeout(context.Background(), defaultGenerationDrainTimeout)
+	defer cancel()
+	if releaseErr := generation.snapshot.Release(releaseCtx); releaseErr != nil {
+		err = errors.Join(err, releaseErr)
+	}
+	if err != nil {
 		rs.errMu.Lock()
 		rs.errors = append(rs.errors, err)
 		rs.errMu.Unlock()
@@ -591,14 +647,14 @@ func (rs *RouterService) closeRetiredGeneration(generation *routerGeneration) {
 func (s *Server) reloadRouterFromFile(configPath string) error {
 	s.reloadMu.Lock()
 	defer s.reloadMu.Unlock()
-	before, _ := reloadDocumentHash(configPath)
+	before, _ := os.ReadFile(configPath)
 	candidateCfg, err := parseReloadConfig(configPath)
 	if err != nil {
 		// Do not attribute an older parse failure to a concurrent replacement.
-		if after, hashErr := reloadDocumentHash(configPath); hashErr == nil && after == before {
-			attempt := s.runtime.BeginConfigActivation(before, "file")
-			s.runtime.SetConfigActivationStage(attempt, "parse")
-			s.runtime.FinishConfigActivation(attempt, "failed", err)
+		if after, readErr := os.ReadFile(configPath); readErr == nil && bytes.Equal(after, before) {
+			return s.configManager().Reject(configsnapshot.Update{
+				Origin: configsnapshot.Origin{Source: configsnapshot.SourceFile}, Document: before,
+			}, configsnapshot.Reject(configsnapshot.StageParse, configsnapshot.CodeInvalidDocument, err))
 		}
 		return err
 	}
@@ -624,87 +680,15 @@ func (s *Server) reloadRouterFromConfigLocked(
 	return s.reloadRouterFromConfigLockedContext(context.Background(), source, configPath, candidateCfg)
 }
 
-func (s *Server) reloadRouterFromConfigLockedContext(ctx context.Context, source, configPath string, candidateCfg *config.RouterConfig) (reloadErr error) {
+// reloadRouterFromConfigLockedContext hands a source's candidate to the
+// configuration lifecycle, which validates, warms and activates it as the
+// next snapshot, or rejects it while the active one keeps serving.
+func (s *Server) reloadRouterFromConfigLockedContext(ctx context.Context, source, configPath string, candidateCfg *config.RouterConfig) error {
 	if candidateCfg == nil {
 		return errors.New("config reload candidate is nil")
 	}
-	attempt := s.runtime.BeginConfigActivation(candidateCfg.DocumentHash, source)
-	defer func() {
-		status := "active"
-		if errors.Is(reloadErr, errConfigReloadSuperseded) {
-			status = "superseded"
-		} else if reloadErr != nil {
-			status = "failed"
-		}
-		s.runtime.FinishConfigActivation(attempt, status, reloadErr)
-	}()
-	if s.lifecycle.isStopping() {
-		return errors.New("router server is shutting down")
-	}
-	if err := config.ValidateRoutingPreviewReload(resolveServerConfig(s), candidateCfg); err != nil {
-		return err
-	}
-	s.runtime.SetConfigActivationStage(attempt, "artifacts")
-	if err := modeldownload.ValidateReloadArtifacts(resolveServerConfig(s), candidateCfg); err != nil {
-		return fmt.Errorf("model artifact reload preflight failed: %w", err)
-	}
-	if source == "file" {
-		if err := checkFileReloadCandidate(configPath, candidateCfg); err != nil {
-			return err
-		}
-		s.runtime.SetConfigActivationStage(attempt, "model_download")
-		if err := ensureReloadConfigModels(candidateCfg); err != nil {
-			return fmt.Errorf("model download preflight failed: %w", err)
-		}
-	}
-
-	s.runtime.SetConfigActivationStage(attempt, "model_prepare")
-	newRouter, err := buildReloadRouter(candidateCfg, s.modelPool)
-	if err != nil {
-		return err
-	}
-	attachRuntimeRegistry(newRouter, s.runtime)
-	s.runtime.SetConfigActivationStage(attempt, "warmup")
-	if err := warmupReloadRouter(newRouter); err != nil {
-		_ = newRouter.Close()
-		return fmt.Errorf("runtime warmup failed: %w", err)
-	}
-	if err := ctx.Err(); err != nil {
-		_ = newRouter.Close()
-		return err
-	}
-	if s.lifecycle.isStopping() {
-		_ = newRouter.Close()
-		return errors.New("router server is shutting down")
-	}
-	s.runtime.SetConfigActivationStage(attempt, "publication")
-	if source == "file" {
-		release := s.runtime.LockConfigPublication()
-		if err := checkFileReloadCandidate(configPath, candidateCfg); err != nil {
-			release()
-			if closeErr := newRouter.Close(); closeErr != nil {
-				return fmt.Errorf("close discarded config generation: %w", closeErr)
-			}
-			return err
-		}
-		defer release()
-	}
-	inheritRouterLearningState(s.service.GetRouter(), newRouter)
-
-	// Registry-backed generations publish only after a successful swap.
-	if source != "kubernetes" && s.runtime == nil {
-		replaceReloadConfig(candidateCfg)
-	}
-	logLoadedRouterConfig(configPath, candidateCfg)
-	if err := s.service.Swap(newRouter, func(acquire AcquireFunc) {
-		if newRouter != nil {
-			newRouter.WorkflowStateService.CommitStorePolicy()
-		}
-		publishRouterState(candidateCfg, newRouter, s.runtime, acquire)
-	}); err != nil {
-		return err
-	}
-	return nil
+	_, err := s.configManager().Apply(ctx, sourceUpdate(source, configPath, candidateCfg))
+	return err
 }
 
 // CurrentConfig returns the published generation's configuration, including
@@ -721,6 +705,9 @@ func (s *Server) configuredGRPCMaxMessageSize() int {
 
 func resolveServerConfig(s *Server) *config.RouterConfig {
 	if s != nil && s.service != nil {
+		if snapshot := s.service.Snapshot(); snapshot != nil {
+			return snapshot.Config()
+		}
 		if router := s.service.GetRouter(); router != nil && router.Config != nil {
 			return router.Config
 		}
@@ -736,29 +723,6 @@ func (s *Server) usesKubernetesConfigSource() bool {
 	return cfg != nil && cfg.ConfigSource == config.ConfigSourceKubernetes
 }
 
-func logReloadRuntimeLifecycleEvent(event modelruntime.Event) {
-	if event.Status != modelruntime.TaskFailed && event.Status != modelruntime.TaskSkipped {
-		return
-	}
-
-	payload := map[string]interface{}{
-		"task":        event.Task,
-		"best_effort": event.BestEffort,
-	}
-	if event.Error != nil {
-		payload["error"] = event.Error.Error()
-	}
-	if event.Status == modelruntime.TaskSkipped {
-		logging.ComponentWarnEvent("extproc", "runtime_lifecycle_task_skipped", payload)
-		return
-	}
-	if event.BestEffort {
-		logging.ComponentWarnEvent("extproc", "runtime_lifecycle_task_failed", payload)
-		return
-	}
-	logging.ComponentErrorEvent("extproc", "runtime_lifecycle_task_failed", payload)
-}
-
 func attachRuntimeRegistry(router *OpenAIRouter, runtimeRegistry *routerruntime.Registry) {
 	if router == nil {
 		return
@@ -772,16 +736,41 @@ func publishRouterState(
 	runtimeRegistry *routerruntime.Registry,
 	acquire AcquireFunc,
 ) {
+	publishSnapshotState(cfg, nil, router, runtimeRegistry, acquire)
+}
+
+// publishSnapshotState publishes a router generation, and the snapshot it
+// serves, as the management runtime.
+func publishSnapshotState(
+	cfg *config.RouterConfig,
+	snapshot *configsnapshot.Snapshot,
+	router *OpenAIRouter,
+	runtimeRegistry *routerruntime.Registry,
+	acquire AcquireFunc,
+) {
 	if router == nil {
+		if runtimeRegistry != nil {
+			runtimeRegistry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
+				Config: cfg, ConfigSnapshot: snapshot, AcquireClassification: routerruntime.AcquireClassification(acquire),
+				MemoryStatus: routerruntime.MemoryStatus{Reason: routerruntime.MemoryReasonStarting},
+			})
+		} else {
+			services.SetGlobalClassificationService(nil)
+			memory.SetGlobalMemoryStore(nil)
+			selection.SetGlobalRegistry(nil)
+		}
 		return
 	}
 	publishRouterLearningStateStore(router)
+	router.startServedContextWindowCheck()
 	if runtimeRegistry != nil {
 		runtimeRegistry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
 			Config:                cfg,
+			ConfigSnapshot:        snapshot,
 			ClassificationService: router.ClassificationService,
 			AcquireClassification: routerruntime.AcquireClassification(acquire),
 			MemoryStore:           router.MemoryStore,
+			MemoryStatus:          router.MemoryStatus,
 			ModelSelector:         router.ModelSelector,
 			LearningRuntime:       router.routerLearningRuntimeState(),
 			ReplayRuntime:         router,
@@ -789,6 +778,7 @@ func publishRouterState(
 			ContextCompression:    router.contextCompressionService(),
 			CompressionRecovery:   router.CompressionRecovery,
 			Plugins:               pluginruntime.Capabilities{Guards: router, Retrieval: router, Inspector: router},
+			NativeRouter:          router,
 		})
 		return
 	}
@@ -810,12 +800,13 @@ func (s *Server) EmbeddingRuntimeState() modelruntime.EmbeddingRuntimeState {
 
 func (r *OpenAIRouter) embeddingRuntimeState() modelruntime.EmbeddingRuntimeState {
 	state := modelruntime.EmbeddingState(r.Config, r.Embeddings)
-	state.AnyReady = state.AnyReady || r.serviceEmbeddings.Ready() || r.cacheEmbeddings.Ready() || r.RecipeClassifiers.HasAnyPreparedEmbeddings()
-	state.ToolsReady = r.ToolsDatabase != nil && r.ToolsDatabase.IsEnabled() && r.serviceEmbeddings.Has("")
-	if r.RecipeClassifiers != nil {
-		state.KnowledgeBasesReady = r.RecipeClassifiers.HasPreparedKnowledgeBases()
-	} else {
-		state.KnowledgeBasesReady = r.Classifier.HasPreparedKnowledgeBases()
+	// The default deployment is prepared by the consumers that recall with
+	// it: RAG queries above, else the response cache, else memory.
+	for _, set := range []*embedding.Set{r.cacheEmbeddings, r.serviceEmbeddings} {
+		if state.EmbeddingProvider == nil {
+			state.EmbeddingProvider = modelruntime.EmbeddingState(r.Config, set).EmbeddingProvider
+		}
 	}
+	state.AnyReady = state.AnyReady || r.serviceEmbeddings.Ready() || r.cacheEmbeddings.Ready() || r.RecipeClassifiers.HasAnyPreparedEmbeddings()
 	return state
 }

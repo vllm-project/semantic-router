@@ -1,10 +1,9 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
 import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
@@ -53,16 +52,6 @@ func (s *ClassificationAPIServer) currentFileStore() *vectorstore.FileStore {
 		return nil
 	}
 	return globalRuntimeDeps.getFileStore()
-}
-
-func (s *ClassificationAPIServer) currentSelectionRegistry() *selection.Registry {
-	if s != nil && s.runtimeRegistry != nil {
-		if registry := s.runtimeRegistry.ModelSelector(); registry != nil {
-			return registry
-		}
-		return nil
-	}
-	return selection.GetGlobalRegistry()
 }
 
 func (s *ClassificationAPIServer) acquireLearningRuntime() (routerruntime.LearningRuntime, func()) {

@@ -9,7 +9,7 @@ spec:
 
   # Image configuration
   image:
-    repository: ghcr.io/vllm-project/semantic-router/extproc
+    repository: ghcr.io/vllm-project/semantic-router/vllm-sr
     tag: latest
     pullPolicy: IfNotPresent
 
@@ -30,7 +30,7 @@ spec:
   # Resource requirements
   resources:
     limits:
-      memory: "7Gi"
+      memory: "12Gi"
       cpu: "2"
     requests:
       memory: "3Gi"
@@ -89,8 +89,6 @@ spec:
 
   # Environment variables
   env:
-    - name: LD_LIBRARY_PATH
-      value: "/app/lib"
     - name: HF_TOKEN
       valueFrom:
         secretKeyRef:
@@ -129,11 +127,6 @@ spec:
 
   # Semantic Router configuration
   config:
-    embedding_models:
-      mmbert_model_path: "models/Vela-1.0-Encoder-307M-Embedding"
-      use_cpu: true
-
-    # Semantic cache for response caching
     response_cache:
       enabled: true
       backend_type: "memory"
@@ -141,26 +134,7 @@ spec:
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: "fifo"
-      embedding_model: "mmbert"
 
-    # Tools auto-selection
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: "0.2"
-      tools_db_path: "config/tools_db.json"
-      fallback_to_empty: true
-
-    # Prompt guard / jailbreak detection
-    prompt_guard:
-      enabled: true
-      variant: mmbert32k
-      model_id: "models/Vela-1.0-Encoder-307M-Guard"
-      threshold: "0.5"
-      use_cpu: true
-      jailbreak_mapping_path: "models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json"
-
-    # Domain and PII classifiers use the Vela defaults.
 
     # Reasoning mode configuration per model family
     # Default reasoning effort level
@@ -170,8 +144,6 @@ spec:
     api:
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
         metrics:
           enabled: true
           detailed_goroutine_tracking: true

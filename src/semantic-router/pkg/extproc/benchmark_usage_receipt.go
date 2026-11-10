@@ -17,7 +17,8 @@ var errBenchmarkCallLimit = errors.New("the selected route cannot enforce the re
 // Only these transformations are known not to dispatch auxiliary generative
 // calls. Unknown plugins and future algorithms fail closed for cost proof.
 func (r *OpenAIRouter) benchmarkUsageScopeKnown(ctx *RequestContext, allowLooper bool) bool {
-	if r == nil || r.Config == nil || ctx == nil || ctx.SkipProcessing || r.Config.Memory.Enabled || ctx.ShadowDispatchPluginConfig != nil {
+	if r == nil || r.Config == nil || ctx == nil || ctx.SkipProcessing || r.Config.Memory.InUse ||
+		(ctx.RouterReplayPluginConfig != nil && ctx.RouterReplayPluginConfig.Shadow != nil) {
 		return false
 	}
 	decision := ctx.VSRSelectedDecision
@@ -31,26 +32,31 @@ func (r *OpenAIRouter) benchmarkUsageScopeKnown(ctx *RequestContext, allowLooper
 	if method == "" {
 		method = "static"
 	}
-	if config.IsLooperAlgorithmType(method) {
+	if config.IsExecutorAlgorithmType(method) {
 		if !allowLooper {
 			return false
 		}
 	} else {
 		switch method {
-		case "static", "automix", "hybrid", "router_dc", "knn", "kmeans", "svm", "mlp", "latency_aware", "multi_factor":
+		case config.DecisionAlgorithmStatic, config.DecisionAlgorithmMultiFactor, config.DecisionAlgorithmRandom:
 		default:
 			return false
 		}
 	}
-	if r.Config.ModelSelection.Enabled && strings.EqualFold(r.Config.ModelSelection.Method, "prompt") {
-		return false
-	}
 	for _, plugin := range decision.Plugins {
 		switch config.NormalizeDecisionPluginType(plugin.Type) {
-		case config.DecisionPluginSystemPrompt, config.DecisionPluginHeaderMutation, config.DecisionPluginRequestParams, config.DecisionPluginRouterReplay, config.DecisionPluginResponseCache:
-		case config.DecisionPluginContextCompression:
-			compression := decision.GetContextCompressionConfig()
-			if compression == nil || compression.Enabled && compression.EffectiveScoring().Method != config.ContextCompressionScoringBM25 {
+		case config.DecisionPluginSystemPrompt, config.DecisionPluginHeaderMutation, config.DecisionPluginRequestParams, config.DecisionPluginRouterReplay:
+		case config.DecisionPluginResponseCache:
+			// A same_request judge asks the decision model about cached requests.
+			plugin := decision.GetResponseCacheConfig()
+			if plugin != nil && plugin.Enabled && plugin.Mode != config.ResponseCacheModeExact &&
+				config.MatchResponseCache.Effective(plugin.SemanticMatch()).Judge != nil {
+				return false
+			}
+		case config.DecisionPluginContext:
+			// Only compression that asks no model keeps the receipt's accounting.
+			plugin := decision.GetContextConfig()
+			if plugin == nil || plugin.Enabled && (len(plugin.Sources) > 0 || plugin.Compress == nil || plugin.Compress.CompressesRequest() && config.MatchCompress.Effective(plugin.Compress.Match).Judge != nil) {
 				return false
 			}
 		default:
@@ -61,7 +67,7 @@ func (r *OpenAIRouter) benchmarkUsageScopeKnown(ctx *RequestContext, allowLooper
 }
 
 func (r *OpenAIRouter) benchmarkCallLimitCheck(ctx *RequestContext) error {
-	if headerValueCI(ctx, headers.SRBenchMaxInferenceCalls) != "" && !r.benchmarkUsageScopeKnown(ctx, false) {
+	if headerValueCI(ctx, headers.VSRBenchMaxInferenceCalls) != "" && !r.benchmarkUsageScopeKnown(ctx, false) {
 		return errBenchmarkCallLimit
 	}
 	return nil

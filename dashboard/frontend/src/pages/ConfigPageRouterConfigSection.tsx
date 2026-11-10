@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
+import ConfigSaveWarnings from '../components/ConfigSaveWarnings'
 import ProductIcon from '../components/ProductIcon'
+import { responseConfigWarnings, type RouterConfigWarning } from '../utils/configSaveWarnings'
 import styles from './ConfigPageRouterConfigSection.module.css'
-import ConfigPageLegacyCategoriesSection from './ConfigPageLegacyCategoriesSection'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import {
   buildEffectiveRouterConfig,
@@ -10,20 +12,15 @@ import {
   type RouterSectionBadge,
 } from './configPageRouterDefaultsSupport'
 import type { OpenEditModal } from './configPageRouterSectionSupport'
-import type { CanonicalGlobalConfig, ConfigData, Tool } from './configPageSupport'
+import type { CanonicalGlobalConfig, ConfigData } from './configPageSupport'
 
 type GlobalEditorMode = 'visual' | 'raw'
 
 interface ConfigPageRouterConfigSectionProps {
   config: ConfigData | null
-  toolsData: Tool[]
-  toolsLoading: boolean
-  toolsError: string | null
   isReadonly: boolean
   openEditModal: OpenEditModal
-  saveConfig: (config: ConfigData) => Promise<void>
   refreshConfig: () => Promise<void>
-  showLegacyCategories?: boolean
 }
 
 function badgeClassName(badge: RouterSectionBadge): string {
@@ -39,15 +36,11 @@ function badgeClassName(badge: RouterSectionBadge): string {
 
 export default function ConfigPageRouterConfigSection({
   config,
-  toolsData,
-  toolsLoading,
-  toolsError,
   isReadonly,
   openEditModal,
-  saveConfig,
   refreshConfig,
-  showLegacyCategories = false,
 }: ConfigPageRouterConfigSectionProps) {
+  const { hash } = useLocation()
   const [routerDefaults, setRouterDefaults] = useState<CanonicalGlobalConfig | null>(null)
   const [editorMode, setEditorMode] = useState<GlobalEditorMode>('visual')
   const [rawYaml, setRawYaml] = useState('{}\n')
@@ -55,6 +48,13 @@ export default function ConfigPageRouterConfigSection({
   const [rawSaving, setRawSaving] = useState(false)
   const [rawError, setRawError] = useState<string | null>(null)
   const [rawDirty, setRawDirty] = useState(false)
+  const [saveWarnings, setSaveWarnings] = useState<RouterConfigWarning[]>([])
+
+  useEffect(() => {
+    if (editorMode === 'visual' && hash.startsWith('#global-section-')) {
+      document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' })
+    }
+  }, [editorMode, hash])
 
   const loadRawGlobalConfig = useCallback(async () => {
     setRawLoading(true)
@@ -119,9 +119,6 @@ export default function ConfigPageRouterConfigSection({
     config,
     routerConfig: effectiveRouterConfig,
     routerDefaults,
-    toolsData,
-    toolsLoading,
-    toolsError,
   })
 
   const configuredCount = sectionCards.filter((card) => card.data !== undefined).length
@@ -140,18 +137,7 @@ export default function ConfigPageRouterConfigSection({
   }, [sectionCards])
 
   const saveRouterSettings = async (updates: Partial<ConfigData>) => {
-    if (showLegacyCategories) {
-      if (!config) {
-        throw new Error('Configuration not loaded yet.')
-      }
-
-      await saveConfig({
-        ...config,
-        ...updates,
-      })
-      return
-    }
-
+    setSaveWarnings([])
     const response = await fetch('/api/router/config/global/update', {
       method: 'POST',
       headers: {
@@ -164,6 +150,7 @@ export default function ConfigPageRouterConfigSection({
       const errorText = await response.text()
       throw new Error(errorText || `HTTP ${response.status}: ${response.statusText}`)
     }
+    setSaveWarnings(await responseConfigWarnings(response))
 
     await refreshConfig()
     await loadRouterDefaults()
@@ -187,6 +174,7 @@ export default function ConfigPageRouterConfigSection({
   const handleSaveRawYaml = async () => {
     setRawSaving(true)
     setRawError(null)
+    setSaveWarnings([])
     try {
       const response = await fetch('/api/router/config/global/raw/update', {
         method: 'POST',
@@ -200,6 +188,7 @@ export default function ConfigPageRouterConfigSection({
         const message = await response.text()
         throw new Error(message || `HTTP ${response.status}: ${response.statusText}`)
       }
+      setSaveWarnings(await responseConfigWarnings(response))
 
       await refreshConfig()
       await loadRouterDefaults()
@@ -256,6 +245,7 @@ export default function ConfigPageRouterConfigSection({
             </div>
           </div>
         </header>
+        <ConfigSaveWarnings warnings={saveWarnings} />
 
         {editorMode === 'visual' ? (
           <div className={styles.visualWorkspace}>
@@ -296,7 +286,11 @@ export default function ConfigPageRouterConfigSection({
                   </header>
                   <div className={styles.sectionList}>
                     {group.cards.map((card) => (
-                      <article key={card.key} className={styles.systemRow}>
+                      <article
+                        key={card.key}
+                        id={`global-section-${card.key}`}
+                        className={styles.systemRow}
+                      >
                         <div className={styles.rowMain}>
                           <div className={styles.cardCopy}>
                             <div className={styles.cardTitleRow}>
@@ -313,7 +307,7 @@ export default function ConfigPageRouterConfigSection({
                             >
                               {card.sourceLabel}
                             </span>
-                            {!isReadonly ? (
+                            {!isReadonly && !card.deprecation ? (
                               <button
                                 type="button"
                                 className={styles.editButton}
@@ -325,6 +319,9 @@ export default function ConfigPageRouterConfigSection({
                             ) : null}
                           </div>
                         </div>
+                        {card.deprecation ? (
+                          <p className={styles.cardDescription}>{card.deprecation}</p>
+                        ) : null}
 
                         <div className={styles.summaryGrid}>
                           {card.summary.map((item) => (
@@ -417,15 +414,6 @@ export default function ConfigPageRouterConfigSection({
             </div>
           </section>
         )}
-
-        {showLegacyCategories ? (
-          <ConfigPageLegacyCategoriesSection
-            config={config}
-            isReadonly={isReadonly}
-            openEditModal={openEditModal}
-            saveConfig={saveConfig}
-          />
-        ) : null}
       </div>
     </ConfigPageManagerLayout>
   )

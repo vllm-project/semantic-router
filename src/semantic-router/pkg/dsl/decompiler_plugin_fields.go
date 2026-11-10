@@ -9,21 +9,17 @@ import (
 type pluginFieldsDecoder func(*config.DecisionPlugin) map[string]Value
 
 var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
-	"system_prompt":       pluginFieldsSystemPrompt,
-	"response_cache":      pluginFieldsResponseCache,
-	"context_compression": pluginFieldsStructuredConfiguration,
-	"prompt_cache":        pluginFieldsStructuredConfiguration,
-	"router_replay":       pluginFieldsRouterReplay,
-	"shadow_dispatch":     pluginFieldsStructuredConfiguration,
-	"memory":              pluginFieldsMemory,
-	"hallucination":       pluginFieldsHallucination,
-	"fast_response":       pluginFieldsFastResponse,
-	"request_params":      pluginFieldsRequestParams,
-	"tool_selection":      pluginFieldsToolSelection,
-	"tools":               pluginFieldsTools,
-	"rag":                 pluginFieldsRAG,
-	"header_mutation":     pluginFieldsHeaderMutation,
-	"response_jailbreak":  pluginFieldsResponseJailbreak,
+	"system_prompt":   pluginFieldsSystemPrompt,
+	"response_cache":  pluginFieldsResponseCache,
+	"context":         pluginFieldsStructuredConfiguration,
+	"prompt_cache":    pluginFieldsStructuredConfiguration,
+	"router_replay":   pluginFieldsStructuredConfiguration,
+	"response_guard":  pluginFieldsStructuredConfiguration,
+	"fast_response":   pluginFieldsFastResponse,
+	"request_params":  pluginFieldsRequestParams,
+	"tools":           pluginFieldsStructuredConfiguration,
+	"header_mutation": pluginFieldsHeaderMutation,
+	"masking":         pluginFieldsStructuredConfiguration,
 }
 
 func pluginConfigToFields(p *config.DecisionPlugin) map[string]Value {
@@ -61,81 +57,6 @@ func pluginFieldsStructuredConfiguration(p *config.DecisionPlugin) map[string]Va
 		return map[string]Value{}
 	}
 	return object.Fields
-}
-
-func pluginFieldsRouterReplay(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.RouterReplayPluginConfig](p)
-	if !ok {
-		return fields
-	}
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.MaxRecords != 0 {
-		fields["max_records"] = IntValue{V: cfg.MaxRecords}
-	}
-	if cfg.CaptureRequestBody {
-		fields["capture_request_body"] = BoolValue{V: true}
-	}
-	if cfg.CaptureResponseBody {
-		fields["capture_response_body"] = BoolValue{V: true}
-	}
-	if cfg.MaxBodyBytes != 0 {
-		fields["max_body_bytes"] = IntValue{V: cfg.MaxBodyBytes}
-	}
-	if cfg.MaxToolTraceBytes != 0 {
-		fields["max_tool_trace_bytes"] = IntValue{V: cfg.MaxToolTraceBytes}
-	}
-	if cfg.MaxToolTraceSteps != 0 {
-		fields["max_tool_trace_steps"] = IntValue{V: cfg.MaxToolTraceSteps}
-	}
-	return fields
-}
-
-func pluginFieldsMemory(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.MemoryPluginConfig](p)
-	if !ok {
-		return fields
-	}
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.RetrievalLimit != nil {
-		fields["retrieval_limit"] = IntValue{V: *cfg.RetrievalLimit}
-	}
-	if cfg.SimilarityThreshold != nil {
-		fields["similarity_threshold"] = FloatValue{V: float64(*cfg.SimilarityThreshold)}
-	}
-	if cfg.AutoStore != nil {
-		fields["auto_store"] = BoolValue{V: *cfg.AutoStore}
-	}
-	return fields
-}
-
-func pluginFieldsHallucination(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.HallucinationPluginConfig](p)
-	if !ok {
-		return fields
-	}
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.UseNLI {
-		fields["use_nli"] = BoolValue{V: true}
-	}
-	if cfg.HallucinationAction != "" {
-		fields["hallucination_action"] = StringValue{V: cfg.HallucinationAction}
-	}
-	if cfg.UnverifiedFactualAction != "" {
-		fields["unverified_factual_action"] = StringValue{V: cfg.UnverifiedFactualAction}
-	}
-	if cfg.IncludeHallucinationDetails {
-		fields["include_hallucination_details"] = BoolValue{V: true}
-	}
-	return fields
 }
 
 func pluginFieldsFastResponse(p *config.DecisionPlugin) map[string]Value {
@@ -182,133 +103,6 @@ func pluginFieldsRequestParams(p *config.DecisionPlugin) map[string]Value {
 	return fields
 }
 
-func pluginFieldsToolSelection(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.ToolSelectionPluginConfig](p)
-	if !ok {
-		return fields
-	}
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.Mode != "" {
-		fields["mode"] = StringValue{V: cfg.Mode}
-	}
-	if cfg.ToolsDBPath != "" {
-		fields["tools_db_path"] = StringValue{V: cfg.ToolsDBPath}
-	}
-	if cfg.TopK != 0 {
-		fields["top_k"] = IntValue{V: cfg.TopK}
-	}
-	if cfg.SimilarityThreshold != nil {
-		fields["similarity_threshold"] = FloatValue{V: float64(*cfg.SimilarityThreshold)}
-	}
-	if cfg.Strategy != "" {
-		fields["strategy"] = StringValue{V: cfg.Strategy}
-	}
-	if cfg.RelevanceThreshold != nil {
-		fields["relevance_threshold"] = FloatValue{V: float64(*cfg.RelevanceThreshold)}
-	}
-	if cfg.PreserveCount != 0 {
-		fields["preserve_count"] = IntValue{V: cfg.PreserveCount}
-	}
-	return fields
-}
-
-func pluginFieldsTools(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.ToolsPluginConfig](p)
-	if !ok {
-		return fields
-	}
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.Mode != "" {
-		fields["mode"] = StringValue{V: cfg.Mode}
-	}
-	if cfg.SemanticSelection != nil {
-		fields["semantic_selection"] = BoolValue{V: *cfg.SemanticSelection}
-	}
-	if cfg.Strategy != "" {
-		fields["strategy"] = StringValue{V: cfg.Strategy}
-	}
-	if len(cfg.AllowTools) > 0 {
-		fields["allow_tools"] = stringsToArray(cfg.AllowTools)
-	}
-	if len(cfg.BlockTools) > 0 {
-		fields["block_tools"] = stringsToArray(cfg.BlockTools)
-	}
-	if cfg.StripToolHistory {
-		fields["strip_tool_history"] = BoolValue{V: true}
-	}
-	if cfg.DynamicRetrieval != nil {
-		fields["dynamic_retrieval"] = dynamicRetrievalObjectValue(cfg.DynamicRetrieval)
-	}
-	return fields
-}
-
-func pluginFieldsRAG(p *config.DecisionPlugin) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.RAGPluginConfig](p)
-	if !ok {
-		return fields
-	}
-	addRAGCoreFields(fields, cfg)
-	addRAGBackendAndFailureFields(fields, cfg)
-	addRAGCacheFields(fields, cfg)
-	return fields
-}
-
-func addRAGCoreFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
-	if cfg.Enabled {
-		fields["enabled"] = BoolValue{V: true}
-	}
-	if cfg.Backend != "" {
-		fields["backend"] = StringValue{V: cfg.Backend}
-	}
-	if cfg.SimilarityThreshold != nil {
-		fields["similarity_threshold"] = FloatValue{V: float64(*cfg.SimilarityThreshold)}
-	}
-	if cfg.TopK != nil {
-		fields["top_k"] = IntValue{V: *cfg.TopK}
-	}
-	if cfg.MaxContextLength != nil {
-		fields["max_context_length"] = IntValue{V: *cfg.MaxContextLength}
-	}
-	if cfg.InjectionMode != "" {
-		fields["injection_mode"] = StringValue{V: cfg.InjectionMode}
-	}
-}
-
-func addRAGBackendAndFailureFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
-	if cfg.Rerank != nil {
-		rerank := make(map[string]Value)
-		if cfg.Rerank.TopK != nil {
-			rerank["top_k"] = IntValue{V: *cfg.Rerank.TopK}
-		}
-		fields["rerank"] = ObjectValue{Fields: rerank}
-	}
-	if backendConfig, ok := structuredPayloadObjectValue(cfg.BackendConfig); ok {
-		fields["backend_config"] = backendConfig
-	}
-	if cfg.OnFailure != "" {
-		fields["on_failure"] = StringValue{V: cfg.OnFailure}
-	}
-}
-
-func addRAGCacheFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
-	if cfg.CacheResults {
-		fields["cache_results"] = BoolValue{V: true}
-	}
-	if cfg.CacheTTLSeconds != nil {
-		fields["cache_ttl_seconds"] = IntValue{V: *cfg.CacheTTLSeconds}
-	}
-	if cfg.MinConfidenceThreshold != nil {
-		fields["min_confidence_threshold"] = FloatValue{V: float64(*cfg.MinConfidenceThreshold)}
-	}
-}
-
 func pluginFieldsHeaderMutation(p *config.DecisionPlugin) map[string]Value {
 	fields := make(map[string]Value)
 	cfg, ok := decodePluginConfig[config.HeaderMutationPluginConfig](p)
@@ -337,24 +131,6 @@ func pluginFieldsHeaderMutation(p *config.DecisionPlugin) map[string]Value {
 	}
 	if len(cfg.Delete) > 0 {
 		fields["delete"] = stringsToArray(cfg.Delete)
-	}
-	return fields
-}
-
-func pluginFieldsResponseJailbreak(
-	p *config.DecisionPlugin,
-) map[string]Value {
-	fields := make(map[string]Value)
-	cfg, ok := decodePluginConfig[config.ResponseJailbreakPluginConfig](p)
-	if !ok {
-		return fields
-	}
-	fields["enabled"] = BoolValue{V: cfg.Enabled}
-	if cfg.Threshold != 0 {
-		fields["threshold"] = FloatValue{V: float64(cfg.Threshold)}
-	}
-	if cfg.Action != "" {
-		fields["action"] = StringValue{V: cfg.Action}
 	}
 	return fields
 }

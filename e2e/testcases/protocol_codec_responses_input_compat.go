@@ -16,7 +16,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("protocol-codec-responses-input-compat", pkgtestcases.TestCase{
-		Description: "Chat and Copilot tool turns reach Responses without invented IDs, echoed status, or zero-penalty rejection",
+		Description: "Chat and Copilot tool turns reach Responses without invented IDs, echoed status, input_text assistant history, or zero-penalty rejection",
 		Tags:        []string{"protocol-codec", "response-api", "agents", "tools"},
 		Fn:          testProtocolCodecResponsesInputCompat,
 	})
@@ -37,10 +37,12 @@ func testProtocolCodecResponsesInputCompat(ctx context.Context, client *kubernet
 	for _, check := range []struct {
 		name, path string
 		body       map[string]any
+		wantItems  int
 		wantCall   bool
+		wantText   []string
 	}{
 		{
-			name: "chat-zero-penalties", path: "/v1/chat/completions",
+			name: "chat-zero-penalties", path: "/v1/chat/completions", wantItems: 2,
 			body: map[string]any{
 				"model": nativeResponsesBackendModel, "frequency_penalty": 0, "presence_penalty": 0,
 				"messages": []map[string]string{
@@ -50,13 +52,25 @@ func testProtocolCodecResponsesInputCompat(ctx context.Context, client *kubernet
 			},
 		},
 		{
-			name: "copilot-completed-tool-turn", path: "/v1/responses", wantCall: true,
+			name: "copilot-completed-tool-turn", path: "/v1/responses", wantItems: 3, wantCall: true,
 			body: map[string]any{
 				"model": nativeResponsesBackendModel, "store": false,
 				"input": []map[string]any{
 					{"type": "function_call", "id": "fc_1", "name": "bash", "arguments": `{}`, "call_id": "call_1", "status": "completed"},
 					{"type": "function_call_output", "call_id": "call_1", "output": "ok", "status": "completed"},
 					{"type": "message", "role": "user", "content": []map[string]string{{"type": "input_text", "text": "Copilot completed tool turn probe"}}, "status": "completed"},
+				},
+			},
+		},
+		{
+			name: "chat-assistant-history", path: "/v1/chat/completions", wantItems: 3,
+			wantText: []string{"input_text", "output_text", "input_text"},
+			body: map[string]any{
+				"model": nativeResponsesBackendModel,
+				"messages": []map[string]string{
+					{"role": "user", "content": "Assistant history probe"},
+					{"role": "assistant", "content": "First answer"},
+					{"role": "user", "content": "Continue"},
 				},
 			},
 		},
@@ -82,13 +96,9 @@ func testProtocolCodecResponsesInputCompat(ctx context.Context, client *kubernet
 		if decodeErr := json.Unmarshal(raw, &observation); decodeErr != nil {
 			return fmt.Errorf("%s provider observation decode: %w", check.name, decodeErr)
 		}
-		wantItems := 2
-		if check.wantCall {
-			wantItems = 3
-		}
-		if len(observation.Body.Input) != wantItems {
+		if len(observation.Body.Input) != check.wantItems {
 			return fmt.Errorf("%s provider received %d items, want %d: %s", check.name,
-				len(observation.Body.Input), wantItems, truncateString(string(raw), 500))
+				len(observation.Body.Input), check.wantItems, truncateString(string(raw), 500))
 		}
 		for index, item := range observation.Body.Input {
 			if _, found := item["status"]; found {
@@ -96,6 +106,16 @@ func testProtocolCodecResponsesInputCompat(ctx context.Context, client *kubernet
 			}
 			if _, found := item["id"]; found && (!check.wantCall || index != 0) {
 				return fmt.Errorf("%s input[%d] invented an item ID: %s", check.name, index, truncateString(string(raw), 500))
+			}
+			if check.wantText != nil {
+				var content []struct {
+					Type string `json:"type"`
+				}
+				if decodeErr := json.Unmarshal(item["content"], &content); decodeErr != nil || len(content) != 1 ||
+					content[0].Type != check.wantText[index] {
+					return fmt.Errorf("%s input[%d] content is not %s: %s", check.name, index, check.wantText[index],
+						truncateString(string(raw), 500))
+				}
 			}
 		}
 		if check.wantCall && (string(observation.Body.Input[0]["id"]) != `"fc_1"` ||

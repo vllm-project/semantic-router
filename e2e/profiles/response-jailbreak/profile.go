@@ -1,9 +1,10 @@
 // Package responsejailbreak provides the e2e test profile for the
-// response-direction jailbreak signal and the response_jailbreak plugin. It
-// deploys the router with prompt_guard pointed at a window-limited
-// http_classify stand-in, then verifies that jailbreak content the model emits
-// past that window is still caught in the buffered response and reported
-// through the selected decision's configured action.
+// response-direction jailbreak signal and the response_guard that acts on it. It
+// deploys the router with its jailbreak rule answered by provider-mocker's
+// System One fixture, then verifies that jailbreak content the model emits at
+// the end of a long answer is still caught, in a buffered response and in a
+// streamed one, and reported through the selected decision's configured
+// action.
 package responsejailbreak
 
 import (
@@ -12,14 +13,10 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
-const (
-	valuesFile           = "e2e/profiles/response-jailbreak/values.yaml"
-	mappingConfigMapYAML = "deploy/kubernetes/response-jailbreak/jailbreak-mapping-configmap.yaml"
-)
+const valuesFile = "e2e/profiles/response-jailbreak/values.yaml"
 
 var resourceManifests = []string{
 	"deploy/kubernetes/hallucination/provider-mocker.yaml",
@@ -27,13 +24,13 @@ var resourceManifests = []string{
 }
 
 // waitDeployments are the mock backends the profile must wait on. provider-mocker
-// is both the chat backend and, on /classify, the http_classify guardrail
-// this profile thresholds against.
+// is both the chat backend and, on /v1/systemone, the deployment that answers
+// the jailbreak rule.
 var waitDeployments = []helpers.DeploymentRef{
 	{Namespace: "default", Name: "provider-mocker"},
 }
 
-// Profile implements the response_jailbreak test profile.
+// Profile implements the response-jailbreak test profile.
 type Profile struct {
 	stack *gatewaystack.Stack
 }
@@ -44,7 +41,6 @@ func NewProfile() *Profile {
 		stack: gatewaystack.New(gatewaystack.Config{
 			Name:                     "response-jailbreak",
 			SemanticRouterValuesFile: valuesFile,
-			PrerequisiteManifests:    []string{mappingConfigMapYAML},
 			ResourceManifests:        resourceManifests,
 			WaitDeployments:          waitDeployments,
 		}),
@@ -58,7 +54,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests the response-direction jailbreak signal on LLM output past the classifier's sequence window and the response_jailbreak plugin that enforces on it"
+	return "Tests the response-direction jailbreak signal on the end of a long LLM output and the response_guard that acts on it"
 }
 
 // Setup deploys the shared gateway stack and this profile's resources.
@@ -77,6 +73,8 @@ func (p *Profile) GetTestCases() []string {
 		"response-jailbreak-window-block",
 		"response-jailbreak-window-warning",
 		"response-jailbreak-streaming-passthrough",
+		"response-jailbreak-streaming-block",
+		"response-jailbreak-streaming-pass",
 	}
 }
 

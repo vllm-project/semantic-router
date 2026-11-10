@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -24,7 +23,6 @@ const recipeEnvironmentAllowlist = "VLLM_SR_RECIPE_ENV_ALLOWLIST"
 var (
 	pureEnvironmentReference = regexp.MustCompile(`^\$\{[A-Z_][A-Z0-9_]*\}$`)
 	recipeEnvironmentName    = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
-	knowledgeBasePathPart    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 )
 
 var forbiddenRecipeEnvironmentNames = map[string]struct{}{
@@ -50,6 +48,9 @@ var forbiddenRecipeEnvironmentNames = map[string]struct{}{
 	"VLLM_SR_SOURCE_CONFIG_PATH":       {},
 	"VLLM_SR_STACK_NAME":               {},
 	"VLLM_SR_STATE_ROOT_DIR":           {},
+	// The Dashboard always holds the management credential, and a Recipe
+	// could send a value it binds anywhere.
+	ManagementCredentialEnv: {},
 }
 
 type environmentBinding struct {
@@ -115,15 +116,8 @@ func validateRuntimeConfig(data []byte) error {
 	if setupModeEnabled(data) {
 		return errors.New("config.yaml must not enable setup mode")
 	}
-	config, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion(data)
-	if err != nil {
+	if _, err := routerconfig.ParseYAMLBytesWithoutEnvExpansion(data); err != nil {
 		return fmt.Errorf("config.yaml: %w", err)
-	}
-	if err := validatePackageKnowledgeBasePaths(config); err != nil {
-		return err
-	}
-	if err := validatePackageMCPTransport(config); err != nil {
-		return err
 	}
 	if _, err := extractEnvironmentBindings(data); err != nil {
 		return err
@@ -160,46 +154,6 @@ func rejectYAMLIndirection(filename string, data []byte) error {
 		return nil
 	}
 	return walk(&document)
-}
-
-func validatePackageMCPTransport(config *routerconfig.RouterConfig) error {
-	mcp := config.MCPCategoryModel
-	if !mcp.Enabled {
-		return nil
-	}
-	transport := strings.ToLower(strings.TrimSpace(mcp.TransportType))
-	if transport == "" {
-		if strings.TrimSpace(mcp.URL) != "" && strings.TrimSpace(mcp.Command) == "" {
-			transport = "streamable-http"
-		} else {
-			transport = "stdio"
-		}
-	}
-	if transport == "stdio" || strings.TrimSpace(mcp.Command) != "" || len(mcp.Args) != 0 || len(mcp.Env) != 0 {
-		return errors.New("config.yaml must not enable a local-process MCP transport")
-	}
-	return nil
-}
-
-func validatePackageKnowledgeBasePaths(config *routerconfig.RouterConfig) error {
-	for _, knowledgeBase := range config.KnowledgeBases {
-		raw := strings.TrimSpace(knowledgeBase.Source.Path)
-		if raw == "" || strings.Contains(raw, "\\") || strings.HasPrefix(raw, "/") {
-			return fmt.Errorf("global.model_catalog.kbs[%q]: source.path must use the canonical knowledge_bases/<name>/ form", knowledgeBase.Name)
-		}
-		trimmed := strings.TrimSuffix(raw, "/")
-		cleaned := path.Clean(trimmed)
-		parts := strings.Split(cleaned, "/")
-		if cleaned != trimmed || len(parts) < 2 || parts[0] != "knowledge_bases" {
-			return fmt.Errorf("global.model_catalog.kbs[%q]: source.path must use the canonical knowledge_bases/<name>/ form", knowledgeBase.Name)
-		}
-		for _, part := range parts[1:] {
-			if !knowledgeBasePathPart.MatchString(part) {
-				return fmt.Errorf("global.model_catalog.kbs[%q]: source.path contains an unsafe path component", knowledgeBase.Name)
-			}
-		}
-	}
-	return nil
 }
 
 func setupModeEnabled(data []byte) bool {

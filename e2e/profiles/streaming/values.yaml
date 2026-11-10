@@ -1,5 +1,5 @@
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -14,143 +14,161 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    decisions:
-      # ── Security layer: block before routing (priority 1000+) ──
-      # These decisions verify that fast_response blocking works correctly
-      # even when the request body arrives in Envoy streamed chunks.
-      - name: block_jailbreak
-        description: Block jailbreak attempts in streamed body mode
-        priority: 1000
-        rules:
-          operator: OR
-          conditions:
-            - type: jailbreak
-              name: jailbreak_standard
-        plugins:
-          - type: fast_response
-            configuration:
-              message: "I'm sorry, but I cannot process this request as it appears to violate our usage policies."
-      - name: block_pii
-        description: Block requests containing PII in streamed body mode
-        priority: 999
-        rules:
-          operator: OR
-          conditions:
-            - type: pii
-              name: pii_deny_all
-        plugins:
-          - type: fast_response
-            configuration:
-              message: "Your request contains personal information that cannot be processed."
-      - name: code_keywords_decision
-        description: Code and programming queries (BM25 classified)
-        priority: 150
-        rules:
-          operator: AND
-          conditions:
-            - type: keyword
-              name: code_keywords
-        modelRefs:
-          - model: base-model
-            use_reasoning: true
-        plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are an expert software engineer.
-      - name: urgent_request_decision
-        description: Urgent and time-sensitive requests (N-gram classified)
-        priority: 150
-        rules:
-          operator: AND
-          conditions:
-            - type: keyword
-              name: urgent_request
-        modelRefs:
-          - model: base-model
-            use_reasoning: false
-      - name: general_decision
-        description: Catch-all with semantic cache for all unmatched requests
-        priority: 50
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: base-model
-            use_reasoning: false
-        plugins:
-          - type: response_cache
-            configuration:
-              enabled: true
-              scope: global
-              similarity_threshold: 0.6
-    signals:
-      keywords:
-        - name: code_keywords
-          operator: OR
-          method: bm25
-          keywords:
-            - code
-            - function
-            - implement
-            - debug
-            - algorithm
-            - compile
-            - syntax
-            - variable
-            - loop
-            - refactor
-          bm25_threshold: 0.1
-          case_sensitive: false
-        - name: urgent_request
-          operator: OR
-          method: ngram
-          keywords:
-            - urgent
-            - immediate
-            - asap
-            - emergency
-          ngram_threshold: 0.4
-          ngram_arity: 3
-          case_sensitive: false
-        - name: sensitive_data
-          operator: AND
-          keywords:
-            - SSN
-            - credit card
-          case_sensitive: false
-      domains:
-        - name: code_keywords
-          description: Programming and software development queries
-          mmlu_categories:
-            - "computer science"
-        - name: urgent_request
-          description: Urgent and time-sensitive requests
-        - name: sensitive_data
-          description: Requests involving sensitive personal data
-        - name: business
-          description: Business and management related queries
-          mmlu_categories:
-            - business
-        - name: other
-          description: General knowledge and miscellaneous topics
-          mmlu_categories:
-            - other
-      jailbreak:
-        - name: jailbreak_standard
-          threshold: 0.6
-          include_history: false
-          description: Standard jailbreak detection for streaming tests
-      pii:
-        - name: pii_deny_all
-          threshold: 0.4
-          include_history: false
-          description: Block all PII
-    modelCards:
-      - name: base-model
+      # envoy-full-duplex-routing: the full-duplex gateway routes on this model
+      # name, and its backend checks this provider path and credential.
+      - name: full-duplex-provider
+        backend_refs:
+          - name: full-duplex-selected
+            provider: vllm
+            endpoint: full-duplex-selected.default.svc.cluster.local:8000
+            chat_path: /provider/v1/chat/completions
+            auth:
+              api_key_env: FULL_DUPLEX_PROVIDER_KEY
+  recipes:
+    - name: default
+      decisions:
+        # ── Security layer: block before routing (priority 1000+) ──
+        # These decisions verify that fast_response blocking works correctly
+        # even when the request body arrives in Envoy streamed chunks.
+        - name: block_jailbreak
+          description: Block jailbreak attempts in streamed body mode
+          priority: 1000
+          rules:
+            operator: OR
+            conditions:
+              - type: jailbreak
+                name: jailbreak_standard
+          plugins:
+            - type: fast_response
+              configuration:
+                message: "I'm sorry, but I cannot process this request as it appears to violate our usage policies."
+        - name: block_pii
+          description: Block requests containing PII in streamed body mode
+          priority: 999
+          rules:
+            operator: OR
+            conditions:
+              - type: pii
+                name: pii_deny_all
+          plugins:
+            - type: fast_response
+              configuration:
+                message: "Your request contains personal information that cannot be processed."
+        - name: code_keywords_decision
+          description: Code and programming queries (BM25 classified)
+          priority: 150
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: code_keywords
+          modelRefs:
+            - model: base-model
+              use_reasoning: true
+          plugins:
+            - type: system_prompt
+              configuration:
+                system_prompt: You are an expert software engineer.
+        - name: urgent_request_decision
+          description: Urgent and time-sensitive requests (N-gram classified)
+          priority: 150
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: urgent_request
+          modelRefs:
+            - model: base-model
+              use_reasoning: false
+        - name: general_decision
+          description: Catch-all with semantic cache for all unmatched requests
+          priority: 50
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: base-model
+              use_reasoning: false
+          plugins:
+            - type: response_cache
+              configuration:
+                enabled: true
+                scope: global
+                semantic: {match: {recall: {top_k: 3, min_similarity: 0.6}}}
+      signals:
+        keywords:
+          - name: code_keywords
+            operator: OR
+            method: bm25
+            keywords:
+              - code
+              - function
+              - implement
+              - debug
+              - algorithm
+              - compile
+              - syntax
+              - variable
+              - loop
+              - refactor
+            bm25_threshold: 0.1
+            case_sensitive: false
+          - name: urgent_request
+            operator: OR
+            method: ngram
+            keywords:
+              - urgent
+              - immediate
+              - asap
+              - emergency
+            ngram_threshold: 0.4
+            ngram_arity: 3
+            case_sensitive: false
+          - name: sensitive_data
+            operator: AND
+            keywords:
+              - SSN
+              - credit card
+            case_sensitive: false
+        domains:
+          - name: code_keywords
+            description: Programming and software development queries
+            labels:
+              - "computer science"
+          - name: business
+            description: Business and management related queries
+            labels:
+              - business
+          - name: other
+            description: General knowledge and miscellaneous topics
+            labels:
+              - other
+        jailbreak:
+          - name: jailbreak_standard
+            description: Standard jailbreak detection for streaming tests
+            predicate:
+              gte: 0.88
+        pii:
+          - name: pii_deny_all
+            description: Block all PII
+            predicate:
+              gte: 0.18
   global:
     model_catalog:
-      kbs: []
+      deployments:
+        # provider-mocker's System One fixture answers the jailbreak and PII
+        # rules, so the shared detection cases are pinned by their markers
+        # (tools/test/services/provider-mocker/README.md).
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
+          timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
+      bindings:
+        jailbreak: fake-systemone
+        pii: fake-systemone
     router:
       streamed_body:
         enabled: true
@@ -160,13 +178,14 @@ config:
         # A deliberately paused chunked upload exercises HTTP 408 while
         # staying below Envoy's 60-second request and ExtProc timeouts.
         timeout_sec: 3
+      # Already the default; the FULL_DUPLEX_STREAMED gateway depends on it to
+      # re-select its route on the Router's routing headers.
+      clear_route_cache: true
       strategy: priority
     services:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
       observability:
         tracing:
           enabled: true
@@ -184,21 +203,13 @@ config:
             deployment_environment: development
     stores:
       response_cache:
-        enabled: true
         backend_type: memory
-        similarity_threshold: 0.6
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
-      vector_store:
-        embedding_model: mmbert
-    integrations:
-      tools:
-        enabled: true
-        top_k: 3
-        similarity_threshold: 0.2
-        tools_db_path: config/tools_db.json
-        fallback_to_empty: true
+
+# The full-duplex backend checks this test credential; the Router reads it from
+# the environment, never from its configuration.
+extraEnv:
+  - name: FULL_DUPLEX_PROVIDER_KEY
+    value: e2e-provider-credential

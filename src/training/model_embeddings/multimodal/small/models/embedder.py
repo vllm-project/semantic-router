@@ -32,7 +32,7 @@ class MultimodalEmbedder(nn.Module):
 
     def __init__(
         self,
-        text_encoder_name: str = "llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
+        text_encoder_name: str = "vllm-sr/mmbert-embed-32k-2d-matryoshka",
         text_encoder_revision: str | None = None,
         image_encoder_name: str = "google/siglip2-so400m-patch14-384",
         image_encoder_revision: str | None = None,

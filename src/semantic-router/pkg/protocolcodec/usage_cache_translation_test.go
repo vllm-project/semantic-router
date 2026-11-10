@@ -25,7 +25,11 @@ func TestAnthropicPartialCacheTranslationDoesNotDoubleCount(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			assertDiagnosticFields(t, diagnostics, "usage.cache")
+			expected := []string{"usage.cache"}
+			if !streaming && strings.Contains(details, "created_cache_tokens") {
+				expected = append(expected, "usage.cache_creation")
+			}
+			assertDiagnosticFields(t, diagnostics, expected...)
 			decoded := decodeCacheUsageResponse(t, engine, llmprotocol.AnthropicMessagesV1, body, streaming)
 			if tokenValue(decoded.Usage.InputTotal) != 10 || tokenValue(decoded.Usage.Total) != 12 {
 				t.Fatalf("partial cache evidence counted twice: %+v", decoded.Usage)

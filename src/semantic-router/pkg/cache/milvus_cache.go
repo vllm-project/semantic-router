@@ -34,7 +34,7 @@ type MilvusCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
-	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	embeddingDeployment string
 }
 
 // MilvusCacheOptions contains configuration parameters for Milvus cache initialization
@@ -45,7 +45,7 @@ type MilvusCacheOptions struct {
 	Enabled             bool
 	Config              *config.MilvusConfig
 	ConfigPath          string
-	EmbeddingModel      string
+	EmbeddingDeployment string
 }
 
 // NewMilvusCache initializes a new Milvus-backed semantic cache instance
@@ -106,8 +106,6 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
 	}
 
-	embeddingModel := normalizeEmbeddingModel(options.EmbeddingModel)
-
 	cache := &MilvusCache{
 		client:              milvusClient,
 		config:              milvusConfig,
@@ -115,8 +113,8 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		similarityThreshold: options.SimilarityThreshold,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
-		embeddingModel:      embeddingModel,
-		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingProvider), 0)),
+		embeddingDeployment: options.EmbeddingDeployment,
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, embedding.Options{Dimension: semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingProvider)}),
 	}
 
 	// Test connection using the new CheckConnection method
@@ -268,6 +266,8 @@ func (c *MilvusCache) initializeCollection() error {
 func (c *MilvusCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
 	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
+
+func (c *MilvusCache) semanticEmbeddingProvider() embedding.Provider { return c.embeddingProvider }
 
 func (c *MilvusCache) embeddingDimension() int {
 	if c == nil || c.config == nil {

@@ -84,8 +84,7 @@ const Overview: React.FC<{ row: ModelHubRow; catalog: BuiltInModelCatalog }> = (
             <span>{family.id}</span>
           </div>
           <p>
-            Default:{' '}
-            <strong>{family.default ? readable(family.default) : 'model selected'}</strong>
+            Default: <strong>{family.default ? readable(family.default) : 'model selected'}</strong>
             {family.default_mode ? ` · mode: ${readable(family.default_mode)}` : ''}
             {family.disabled ? ` · disabled: ${readable(family.disabled)}` : ''}
             {family.activation_parameter
@@ -320,10 +319,11 @@ export const VirtualPool: React.FC<{ row: ModelHubRow; catalog: BuiltInModelCata
 export const ModelDetail: React.FC<{
   row: ModelHubRow | null
   catalog: BuiltInModelCatalog
+  evidenceReady?: boolean
   modal?: boolean
   closeButtonRef?: React.RefObject<HTMLButtonElement>
   onClose?: () => void
-}> = ({ row, catalog, modal = false, closeButtonRef, onClose }) => {
+}> = ({ row, catalog, evidenceReady = true, modal = false, closeButtonRef, onClose }) => {
   const [tab, setTab] = useState<ModelHubDetailTab>('overview')
   if (!row)
     return (
@@ -333,7 +333,7 @@ export const ModelDetail: React.FC<{
     )
   const tabs: Array<ModelHubDetailTabItem & { hidden?: boolean }> = [
     { id: 'overview', label: 'Overview' },
-    { id: 'evaluations', label: `Evaluations ${row.evaluationCount}` },
+    { id: 'evaluations', label: `Evaluations ${evidenceReady ? row.evaluationCount : '…'}` },
     { id: 'access', label: `Access ${row.providers.length}` },
     { id: 'pool', label: 'Backend pool', hidden: row.model.kind !== 'virtual' },
   ]
@@ -383,7 +383,13 @@ export const ModelDetail: React.FC<{
         tabIndex={0}
       >
         {tab === 'overview' ? <Overview row={row} catalog={catalog} /> : null}
-        {tab === 'evaluations' ? <Evaluations row={row} catalog={catalog} /> : null}
+        {tab === 'evaluations' ? (
+          evidenceReady ? (
+            <Evaluations row={row} catalog={catalog} />
+          ) : (
+            <p role="status">Model evaluations have not loaded yet.</p>
+          )
+        ) : null}
         {tab === 'access' ? <ModelAccess row={row} catalog={catalog} /> : null}
         {tab === 'pool' ? <VirtualPool row={row} catalog={catalog} /> : null}
       </div>

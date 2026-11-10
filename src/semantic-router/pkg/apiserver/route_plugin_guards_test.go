@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -22,14 +22,10 @@ type blockingPluginGuard struct {
 	finish  chan struct{}
 }
 
-func (g *blockingPluginGuard) PreviewResponseJailbreak(context.Context, pluginruntime.ResponseJailbreakPreviewRequest) (pluginruntime.GuardPreviewResponse, error) {
+func (g *blockingPluginGuard) PreviewResponseGuard(context.Context, pluginruntime.ResponseGuardPreviewRequest) (pluginruntime.ResponseGuardPreviewResponse, error) {
 	close(g.started)
 	<-g.finish
-	return pluginruntime.GuardPreviewResponse{}, nil
-}
-
-func (g *blockingPluginGuard) PreviewHallucination(context.Context, pluginruntime.HallucinationPreviewRequest) (pluginruntime.GuardPreviewResponse, error) {
-	return pluginruntime.GuardPreviewResponse{}, nil
+	return pluginruntime.ResponseGuardPreviewResponse{}, nil
 }
 
 func TestPluginPreviewCancellationRetainsRuntimeLease(t *testing.T) {
@@ -41,9 +37,9 @@ func TestPluginPreviewCancellationRetainsRuntimeLease(t *testing.T) {
 	server := &ClassificationAPIServer{runtimeRegistry: registry}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	req := httptest.NewRequest(http.MethodPost, apiPluginsPath+"/response_jailbreak/preview", strings.NewReader(`{"binding":{"recipe":"default","decision":"guard"},"response":"text","mode":"probe"}`)).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodPost, apiPluginsPath+"/response_guard/preview", strings.NewReader(`{"binding":{"recipe":"default","decision":"guard"},"response":"text","mode":"probe"}`)).WithContext(ctx)
 	done := make(chan struct{})
-	go func() { server.handleResponseJailbreakPreview(httptest.NewRecorder(), req); close(done) }()
+	go func() { server.handleResponseGuardPreview(httptest.NewRecorder(), req); close(done) }()
 	select {
 	case <-guard.started:
 	case <-time.After(time.Second):
@@ -89,7 +85,7 @@ func TestPluginPreviewDeadlineReturnsResponseAndRetainsAdmission(t *testing.T) {
 	client := &http.Client{Timeout: 3 * time.Second}
 	request := func() (int, string) {
 		t.Helper()
-		response, err := client.Post(server.URL+apiPluginsPath+"/response_jailbreak/preview", "application/json", strings.NewReader(`{"binding":{"recipe":"default","decision":"guard"},"response":"text","mode":"probe"}`))
+		response, err := client.Post(server.URL+apiPluginsPath+"/response_guard/preview", "application/json", strings.NewReader(`{"binding":{"recipe":"default","decision":"guard"},"response":"text","mode":"probe"}`))
 		if err != nil {
 			t.Fatal(err)
 		}

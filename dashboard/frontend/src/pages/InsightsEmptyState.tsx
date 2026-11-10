@@ -97,12 +97,13 @@ export default function InsightsEmptyState({
         </summary>
         <div className={styles.privacyBody}>
           <p>
-            Replay capture depends on global settings, decision settings, and the recipe’s privacy
-            policy.
+            Global Replay settings provide capture defaults. A decision’s Replay plugin can
+            override those defaults for its route.
           </p>
           <p>
-            <code>routing.data_policy.replay: false</code> prevents a recipe from producing replay
-            records, even when global or decision capture is enabled.
+            Disable Replay to stop recording requests. When personal data capture is off,
+            content is omitted if personal data is detected or detection is unavailable or
+            incomplete. Routing metadata remains available.
           </p>
         </div>
       </details>

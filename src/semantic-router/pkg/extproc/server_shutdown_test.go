@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net"
-	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -17,31 +16,10 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
 type shutdownTestService interface{}
-
-type blockingWarmupEmbeddingProvider struct {
-	started chan struct{}
-	release chan struct{}
-}
-
-func (p *blockingWarmupEmbeddingProvider) Embed(context.Context, string) ([]float32, error) {
-	close(p.started)
-	<-p.release
-	return []float32{1}, nil
-}
-
-func (p *blockingWarmupEmbeddingProvider) EmbedBatch(context.Context, []string) ([][]float32, error) {
-	return nil, errors.New("unexpected batch embedding")
-}
-
-func (*blockingWarmupEmbeddingProvider) Dimension() int  { return 1 }
-func (*blockingWarmupEmbeddingProvider) Backend() string { return "test" }
 
 type scheduledReloadShutdownFixture struct {
 	server                   *Server
@@ -95,9 +73,6 @@ func startScheduledReloadShutdownFixture(t *testing.T) *scheduledReloadShutdownF
 			return nil
 		})
 		return (&routerComponents{cfg: cfg, resources: resources}).buildRouter(), nil
-	}
-	warmupReloadRouter = func(*OpenAIRouter) error {
-		return nil
 	}
 	configPath := filepath.Join(t.TempDir(), "router.yaml")
 	writeReloadTestDocument(t, configPath, "candidate", candidateCfg)
@@ -163,83 +138,6 @@ func TestServerStartContextRejectsStartupAfterShutdown(t *testing.T) {
 	defer server.servingMu.Unlock()
 	if server.server != nil {
 		t.Fatal("StartContext() installed a gRPC server after shutdown")
-	}
-}
-
-func TestServerShutdownDoesNotCloseResourcesUnderCanceledStartupWarmup(t *testing.T) {
-	toolsPath := filepath.Join(t.TempDir(), "tools.json")
-	if err := os.WriteFile(toolsPath, []byte(`[{"tool":{"type":"function","function":{"name":"lookup"}},"description":"lookup"}]`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	provider := &blockingWarmupEmbeddingProvider{
-		started: make(chan struct{}),
-		release: make(chan struct{}),
-	}
-	released := false
-	t.Cleanup(func() {
-		if !released {
-			close(provider.release)
-		}
-	})
-	toolsDatabase := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
-		Enabled:         true,
-		Provider:        provider,
-		TargetDimension: 1,
-	})
-	resourcesClosed := make(chan struct{})
-	resources := newResourceScope()
-	resources.add(func() error {
-		close(resourcesClosed)
-		return nil
-	})
-	router := (&routerComponents{
-		cfg: &config.RouterConfig{ToolSelection: config.ToolSelection{
-			Tools: config.ToolsConfig{
-				Enabled:     true,
-				ToolsDBPath: toolsPath,
-			},
-		}},
-		resources:         resources,
-		toolsDatabase:     toolsDatabase,
-		serviceEmbeddings: embedding.NewSet(map[string]embedding.Provider{"test": provider}, "test"),
-	}).buildRouter()
-	server := &Server{service: NewRouterService(router)}
-
-	warmupCtx, cancelWarmup := context.WithCancel(context.Background())
-	warmupDone := make(chan error, 1)
-	go func() {
-		warmupDone <- server.WarmupRouter(
-			warmupCtx,
-			modelruntime.WarmupRouterOptions{MaxParallelism: 1},
-		)
-	}()
-	select {
-	case <-provider.started:
-	case <-time.After(time.Second):
-		t.Fatal("startup warmup did not begin")
-	}
-	cancelWarmup()
-	if err := <-warmupDone; !errors.Is(err, context.Canceled) {
-		t.Fatalf("WarmupRouter() error = %v, want context canceled", err)
-	}
-
-	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 25*time.Millisecond)
-	defer cancelShutdown()
-	if err := server.ShutdownResources(shutdownCtx); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("ShutdownResources() error = %v, want deadline exceeded", err)
-	}
-	select {
-	case <-resourcesClosed:
-		t.Fatal("generation resources closed while startup warmup was still running")
-	default:
-	}
-
-	close(provider.release)
-	released = true
-	select {
-	case <-resourcesClosed:
-	case <-time.After(time.Second):
-		t.Fatal("generation resources remained open after startup warmup exited")
 	}
 }
 

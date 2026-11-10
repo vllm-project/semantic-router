@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -12,42 +12,52 @@ providers:
           provider: vllm
           endpoint: 127.0.0.1:8002
           weight: 1
-routing:
-  decisions:
-    - name: general_decision
-      description: General questions
-      priority: 100
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-          - type: fact_check
-            name: needs_fact_check
-      modelRefs:
-        - model: qwen3
-          use_reasoning: false
-      plugins:
-        - type: hallucination
-          configuration:
-            enabled: true
-            use_nli: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: true
-  signals:
-    domains:
-      - name: general
+recipes:
+  - name: default
+    decisions:
+      - name: general_decision
         description: General questions
-        mmlu_categories:
-          - other
-    fact_check:
-      - name: needs_fact_check
-        description: Query contains factual claims that should be verified against context
-      - name: no_fact_check_needed
-        description: Query is creative, code-related, or opinion-based - no fact verification needed
-  modelCards:
-    - name: qwen3
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: general
+            - type: fact_check
+              name: needs_fact_check
+        modelRefs:
+          - model: qwen3
+            use_reasoning: false
+        plugins:
+          - type: response_guard
+            configuration:
+              rules:
+                - when:
+                    operator: AND
+                    conditions:
+                      - type: fact_check
+                        name: needs_fact_check
+                      - type: hallucination
+                        name: ungrounded_claims
+                  action: annotate
+              on_unknown: annotate
+    signals:
+      domains:
+        - name: general
+          description: General questions
+          labels:
+            - other
+      fact_check:
+        - name: needs_fact_check
+          description: Query contains factual claims that should be verified against context
+        - name: no_fact_check_needed
+          description: Query is creative, code-related, or opinion-based - no fact verification needed
+          labels: [NO_FACT_CHECK_NEEDED]
+          predicate:
+            gt: 0.3
+      hallucination:
+        - name: ungrounded_claims
+          description: Answers with claims their grounding context does not support.
 global:
   router:
     strategy: priority
@@ -59,12 +69,4 @@ global:
           detailed_goroutine_tracking: true
           high_resolution_timing: false
           sample_rate: 1.0
-  stores:
-    response_cache:
-      enabled: false
-      embedding_model: mmbert
-    memory:
-      embedding_model: mmbert
-    vector_store:
-      embedding_model: mmbert
   integrations: {}

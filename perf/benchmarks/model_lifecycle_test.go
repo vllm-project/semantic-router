@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package benchmarks
 
@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/perf/pkg/modelassets"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
@@ -26,7 +27,7 @@ func TestOwnedBenchmarkCleanup(t *testing.T) {
 	if code, err := closeBenchmarkOwners(0, owner); code != 0 || err != nil || closer.calls != 1 {
 		t.Fatalf("owner closed more than once: %d %v %+v", code, err, closer)
 	}
-	failure := errors.New("native close failed")
+	failure := errors.New("close failed")
 	if code, err := closeBenchmarkOwners(0, &countingCloser{err: failure}); code != 1 || !errors.Is(err, failure) {
 		t.Fatalf("close failure did not fail run: %d %v", code, err)
 	}
@@ -37,20 +38,26 @@ func TestOwnedBenchmarkCleanup(t *testing.T) {
 
 func TestCacheBenchmarkUsesIndexedGPU(t *testing.T) {
 	t.Setenv("USE_GPU", "1")
+	t.Setenv("VLLM_SR_EMBEDDING_MODEL", "")
 	if cacheEmbeddingDevice() != "cuda:0" {
 		t.Fatal("GPU device must have an explicit index")
 	}
-	cfg := cacheEmbeddingConfig(config.ResolvedModelBinding{Deployment: config.ModelDeployment{Artifact: "/test/vela", Provider: "candle", Device: cacheEmbeddingDevice(), Precision: "fp32"}})
-	plan, err := config.CompileModelBindings(cfg)
+	artifact, err := modelassets.Resolve("embedding", t.TempDir())
 	if err != nil {
-		t.Fatalf("invalid owned cache binding: %v", err)
+		t.Fatal(err)
 	}
-	global, ok := plan.LookupGlobal("embedding")
-	if !ok || global.Deployment.Artifact != "/test/vela" || global.Deployment.Device != "cuda:0" {
-		t.Fatalf("cache embedding must be owned by the global service: %+v", global)
+	cfg, err := cacheEmbeddingConfig(config.ResolvedModelBinding{Deployment: artifact.Deployment(cacheEmbeddingDevice(), benchmarkInput)})
+	if err != nil {
+		t.Fatalf("invalid cache configuration: %v", err)
 	}
-	requirements := config.EmbeddingRequirements(cfg, cacheEmbeddingModelType, true)
-	if len(requirements) != 1 || requirements[0].Consumer != "response cache" || requirements[0].Dimension != 256 || requirements[0].Layer != 6 {
-		t.Fatalf("cache workload no longer matches its recorded layer/dimension: %+v", requirements)
+	if !cfg.NeedsSemanticResponseCache() {
+		t.Fatal("the benchmark's response cache must embed")
+	}
+	name, dimension, layer := cfg.ResponseCacheEmbedding()
+	if name != cacheEmbeddingDeployment || cfg.ModelDeployments[name].Device != "cuda:0" {
+		t.Fatalf("the response cache must embed with the benchmark's deployment: %s %+v", name, cfg.ModelDeployments[name])
+	}
+	if dimension != 256 || layer != 6 {
+		t.Fatalf("cache workload no longer matches its recorded layer/dimension: %d/%d", layer, dimension)
 	}
 }

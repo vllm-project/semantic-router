@@ -50,11 +50,16 @@ supported subset into canonical backend references.
 
 <!-- END BACKEND TARGET COMPATIBILITY MATRIX -->
 
-The Docker / CLI path generates one route for a logical model. When a model has
-several weighted refs, request headers, Host rewriting, and TLS SNI come from
-the first ref. A path prefix is applied only when every ref uses the same path;
-otherwise the local generator omits path rewriting. Keep those route-level
-properties compatible across a model's refs. Endpoint or replica selection
+The URL row is the full-URL target form: write it as a full URL in
+`endpoint` ([Migrate model resources](model-resource-migration.md#request-backends)
+shows the earlier spelling).
+
+With `--gateway extproc`, the Docker / CLI path generates one Envoy route for
+a logical model. Route-level headers, Host rewriting, paths, and TLS behavior
+must remain compatible across its weighted refs. The default standalone
+frontend builds upstream pools directly from the canonical references. In
+both modes, use separate model aliases for different upstream contracts; see
+[Custom models](custom-models#use-replicas-only-for-the-same-upstream-contract). Endpoint or replica selection
 using live inference telemetry is a separate data-plane contract tracked in
 [#2332](https://github.com/vllm-project/semantic-router/issues/2332).
 
@@ -76,8 +81,8 @@ providers:
           weight: 100
 ```
 
-Use `base_url` when the upstream identity includes a scheme or path. Keep
-credentials in environment references rather than committed YAML:
+Write a full URL in `endpoint` when the upstream identity includes a scheme or
+path. Keep credentials in environment references rather than committed YAML:
 
 ```yaml
 providers:
@@ -87,19 +92,19 @@ providers:
       api_format: openai
       backend_refs:
         - name: hosted-primary
-          base_url: https://provider.example/v1
+          endpoint: https://provider.example.com/v1
           provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: PROVIDER_API_KEY
-          extra_headers:
+          auth: {header: Authorization, prefix: Bearer, api_key_env: PROVIDER_API_KEY}
+          headers:
             X-Tenant: production
           weight: 100
 ```
 
-For portable configuration, do not put a URL scheme or path in `endpoint`.
-Some local generation paths accept those forms, but not every maintained
-producer agrees on their meaning. `base_url` is the canonical URL form.
+An `endpoint` of `host[:port]` takes its scheme from `protocol`; a full URL
+carries its scheme and path, and its path is the complete API root. `auth` and
+`headers` have the same shape as a deployment's
+[connection block](model-catalog.md#connection-block); a backend reads its key
+from `auth.api_key_env`.
 
 `api_format` belongs to the model, not to an individual backend ref. It selects
 the backend request and response codec; `protocol` on a backend ref selects the
@@ -110,10 +115,10 @@ choosing `api_format`.
 
 | Producer | Behavior and boundary |
 | --- | --- |
-| Docker / local CLI | Translates refs into Envoy clusters and routes. It preserves host, port, HTTP or HTTPS, weight, a shared path prefix, environment-resolved authorization, and shared extra headers. Referenced model servers must already be reachable. |
+| Docker / local CLI | Standalone builds upstream pools from canonical refs; `--gateway extproc` renders Envoy clusters and routes. Host, port, protocol, weight, compatible paths, authorization, and shared headers describe existing model services, not workloads to provision. |
 | Helm | `configOverride` renders one complete canonical mapping without merging sample provider defaults. Reachability and model compatibility remain runtime checks. |
 | Operator | `spec.vllmEndpoints[]` is a Kubernetes discovery adapter, not a copy of the full provider schema. It emits the supported canonical subset described below. |
-| Dashboard | Reads and writes the supported canonical backend inventory, including provider identity, URL, auth metadata, API version, chat path, extra headers, and environment-key references. |
+| Dashboard | Reads and writes the supported canonical backend inventory, including provider identity, URL, auth metadata, API version, chat path, headers, and environment-key references. |
 
 The Operator currently discovers:
 

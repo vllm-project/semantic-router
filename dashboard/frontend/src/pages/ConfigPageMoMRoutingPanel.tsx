@@ -6,8 +6,13 @@ import type { FieldConfig } from '../components/EditModal'
 import ConfigPageMixtureDialog from './ConfigPageMixtureDialog'
 import ConfigPageModelUsageDialog from './ConfigPageModelUsageDialog'
 import ConfigPageMoMTopologyDialog from './ConfigPageMoMTopologyDialog'
-import { ConfigPageMoMEntrypointsList, ConfigPageMoMRecipesList } from './ConfigPageMoMRoutingLists'
+import {
+  ConfigPageMoMBuiltInRecipesList,
+  ConfigPageMoMEntrypointsList,
+  ConfigPageMoMRecipesList,
+} from './ConfigPageMoMRoutingLists'
 import pageStyles from './ConfigPageEntrypointsRecipesSection.module.css'
+import { useBuiltInRecipes } from './configPageBuiltInRecipes'
 import { cloneConfigData } from './configPageCanonicalization'
 import {
   collectRecipeTargetModels,
@@ -17,6 +22,7 @@ import {
   type RecipeFormState,
   validateRecipeForm,
 } from './configPageEntrypointsRecipesSupport'
+import type { MixtureRecipeChoice } from './configPageMixtureSupport'
 import type {
   ConfigData,
   EntrypointConfig,
@@ -27,6 +33,7 @@ import { DEFAULT_ROUTING_STRATEGY, ROUTING_STRATEGIES } from './configPageSuppor
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import type { MixtureWorkspaceView } from './ConfigPageEntrypointsRecipesSection'
 import {
+  effectiveChatEntrypoints,
   countProjectionsInProfile,
   countSignalsInProfile,
   type RoutingProfileLike,
@@ -69,10 +76,12 @@ export default function ConfigPageMoMRoutingPanel({
   const [mixtureEditor, setMixtureEditor] = useState<{
     entrypoint?: EntrypointConfig
     index?: number
+    recipe?: MixtureRecipeChoice
   } | null>(null)
   const [usageTarget, setUsageTarget] = useState<EntrypointConfig | null>(null)
+  const builtInRecipes = useBuiltInRecipes()
 
-  const entrypoints = config.entrypoints ?? []
+  const entrypoints = effectiveChatEntrypoints(config)
 
   const openRecipeEditor = (mode: 'add' | 'edit', recipe?: RecipeConfig) => {
     const originalName = recipe?.name ?? null
@@ -230,7 +239,9 @@ export default function ConfigPageMoMRoutingPanel({
               if (!model) return
               navigate(`/evaluation?model=${encodeURIComponent(model)}`)
             }}
-            onEdit={(entrypoint, index) => setMixtureEditor({ entrypoint, index })}
+            onEdit={(entrypoint, index) =>
+              setMixtureEditor({ entrypoint, index: index < 0 ? undefined : index })
+            }
             onDelete={(entrypoint, index) => {
               setDeleteError(null)
               setEntrypointPendingDelete({ entrypoint, index })
@@ -238,17 +249,26 @@ export default function ConfigPageMoMRoutingPanel({
             onTopology={(entrypoint, recipe) => setTopologyTarget({ entrypoint, recipe })}
           />
         ) : (
-          <ConfigPageMoMRecipesList
-            config={config}
-            isReadonly={isReadonly}
-            onAdd={() => openRecipeEditor('add')}
-            onView={viewRecipe}
-            onEdit={(recipe) => openRecipeEditor('edit', recipe)}
-            onDelete={(recipe) => {
-              setDeleteError(getRecipeDeleteBlocker(config, recipe.name))
-              setRecipePendingDelete(recipe)
-            }}
-          />
+          <>
+            <ConfigPageMoMRecipesList
+              config={config}
+              isReadonly={isReadonly}
+              onAdd={() => openRecipeEditor('add')}
+              onView={viewRecipe}
+              onEdit={(recipe) => openRecipeEditor('edit', recipe)}
+              onDelete={(recipe) => {
+                setDeleteError(getRecipeDeleteBlocker(config, recipe.name))
+                setRecipePendingDelete(recipe)
+              }}
+            />
+            <ConfigPageMoMBuiltInRecipesList
+              catalog={builtInRecipes.data}
+              failed={Boolean(builtInRecipes.error) && !builtInRecipes.refreshing}
+              isReadonly={isReadonly}
+              onRetry={() => void builtInRecipes.refresh()}
+              onCreate={(recipe) => setMixtureEditor({ recipe })}
+            />
+          </>
         )}
       </div>
 
@@ -256,6 +276,8 @@ export default function ConfigPageMoMRoutingPanel({
         <ConfigPageMixtureDialog
           config={config}
           models={models}
+          builtInRecipes={builtInRecipes.data}
+          initialRecipe={mixtureEditor.recipe}
           entrypoint={mixtureEditor.entrypoint}
           entrypointIndex={mixtureEditor.index}
           onClose={() => setMixtureEditor(null)}

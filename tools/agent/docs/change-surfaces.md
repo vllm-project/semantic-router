@@ -6,7 +6,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 - Router-side config schema and shared config files consumed directly by the runtime.
 - The canonical Go types and routing registries generate the JSON schema,
-  `src/semantic-router/pkg/configschema/router-config-v0.3.schema.json`, and
+  `src/semantic-router/pkg/configschema/router-config-v0.5.schema.json`, and
   `dashboard/frontend/src/generated/routerConfigContract.ts`.
   CLI and container builds stage that artifact without tracked mirrors; the
   Dashboard frontend imports it directly. Do not maintain a parallel field or
@@ -60,11 +60,11 @@ This document defines the project-level surfaces used by skills, reports, and va
   `sessiontelemetry/**`, `responseapi/**`, `publicmodels/**`
 - Task rules: `router-core`
 
-## `native_binding`
+## `model_runtime`
 
-- Rust/cgo/onnx/native model bindings used by runtime signals, classifiers, or training artifacts.
-- Typical paths: `candle-binding/**`, `ml-binding/**`, `nlp-binding/**`, `onnx-binding/**`
-- Task rules: `rust-bindings`, `router-core`
+- The model runtime that serves every classifier, embedding, reranker, and decision model, and the router's client and serving facade for it.
+- Typical paths: `src/model-runtime/**`, `src/semantic-router/pkg/modelservice/**`, `src/semantic-router/pkg/modelruntime/serving/**`
+- Task rules: `router-core`
 
 ## `response_headers`
 
@@ -138,16 +138,10 @@ This document defines the project-level surfaces used by skills, reports, and va
 - Typical paths: `deploy/helm/**`, `deploy/operator/**`, `deploy/kubernetes/**`, `src/semantic-router/pkg/apis/**`, `src/semantic-router/pkg/dsl/**`, `src/semantic-router/pkg/k8s/**`
 - Task rules: `helm-chart`, `operator-stack`, `e2e-framework`
 
-## `fleet_sim_runtime`
-
-- Fleet simulator package, API service, release workflow, and simulator-owned docs or assets that must stay runnable as one subsystem.
-- Typical paths: `src/fleet-sim/**`, `website/docs/fleet-sim/**`, `.github/workflows/pypi-publish-vllm-sr-sim.yml`
-- Task rules: `fleet-sim`, `repo-docs`
-
 ## `training_stack`
 
 - Training-stack workflows, selector or embedding artifacts, evaluation scripts, and runtime-facing training outputs under `src/training`.
-- Typical paths: `src/training/**`, `tools/make/models.mk`, `src/training/model_classifier/train-mmbert32k-gpu.sh`, `website/docs/training/**`
+- Typical paths: `src/training/**`, `src/training/kv_mapper/**`, `tools/make/models.mk`, `src/training/model_classifier/train-mmbert32k-gpu.sh`, `website/docs/training/**`
 - Task rules: `training-stack`, `repo-docs`
 
 ## `docs_examples`
@@ -165,8 +159,9 @@ This document defines the project-level surfaces used by skills, reports, and va
   `.github/workflows/**`.
 - Contributor prose lives in `AGENTS.md`, `CONTRIBUTING.md`, this directory,
   and the nearest local `AGENTS.md`. It does not duplicate executable routing.
-- `make generated-contract-check` recomputes config JSON/TypeScript, OpenAPI
-  JSON and its endpoint index, model catalogs, CLI/CRD references, the configuration
+- `make generated-contract-check` recomputes config JSON/TypeScript, the
+  header reference and Dashboard header constants, OpenAPI JSON and its
+  endpoint index, model catalogs, CLI/CRD references, the configuration
   catalog, and the public operations skill with all Markdown references.
   It fails on drift without rewriting authored or published files.
   `make generated-contract-generate` refreshes those artifacts in dependency

@@ -45,6 +45,7 @@ test.describe('Users page', () => {
         body: JSON.stringify({
           invitation: {
             id: 'invite-1',
+            kind: invitePayload.kind,
             email: invitePayload.email,
             name: invitePayload.name,
             role: invitePayload.role,
@@ -79,13 +80,14 @@ test.describe('Users page', () => {
 
     await submitButton.click()
     await expect.poll(() => invitePayload).toEqual({
+      kind: 'personal',
       email: 'grace@example.com',
       name: 'Grace Hopper',
       role: 'write',
     })
     const readyDialog = page.getByRole('dialog', { name: 'Welcome Grace Hopper' })
     await expect(readyDialog).toBeVisible()
-    await expect(readyDialog.getByText('One-time invitation URL')).toBeVisible()
+    await expect(readyDialog.getByText('One-time invitation link')).toBeVisible()
     await readyDialog.getByRole('button', { name: 'Done' }).click()
     await expect(dialog).toBeHidden()
     await expect(inviteUserButton).toBeFocused()

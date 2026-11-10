@@ -3,7 +3,7 @@
   "workflow_name": "mmbert32k-safety-legacy9-v1",
   "taxonomy_version": "legacy-9-v1",
   "base_model": {
-    "id": "llm-semantic-router/mmbert-32k-yarn",
+    "id": "vllm-sr/mmbert-32k-yarn",
     "revision": "72a23a6640489471eb4ff7ad3ec5bc80af8a27de"
   },
   "datasets": {
@@ -26,7 +26,7 @@
       }
     },
     "synthetic": {
-      "id": "llm-semantic-router/mlcommons-ai-safety-synth",
+      "id": "vllm-sr/mlcommons-ai-safety-synth",
       "revision": "803cb35d8fc1c6d89b4082231ef0205cce931fb4",
       "files": {
         "train": {
@@ -95,8 +95,8 @@
       },
       "selection_metric": "f1_macro",
       "release_repositories": {
-        "adapter": "llm-semantic-router/mmbert32k-safety-classifier-level1-binary-lora",
-        "merged": "llm-semantic-router/mmbert32k-safety-classifier-level1-binary-merged"
+        "adapter": "vllm-sr/mmbert32k-safety-classifier-level1-binary-lora",
+        "merged": "vllm-sr/mmbert32k-safety-classifier-level1-binary-merged"
       }
     },
     "level2": {
@@ -115,8 +115,8 @@
       },
       "selection_metric": "f1_macro",
       "release_repositories": {
-        "adapter": "llm-semantic-router/mmbert32k-safety-classifier-level2-hazard-lora",
-        "merged": "llm-semantic-router/mmbert32k-safety-classifier-level2-hazard-merged"
+        "adapter": "vllm-sr/mmbert32k-safety-classifier-level2-hazard-lora",
+        "merged": "vllm-sr/mmbert32k-safety-classifier-level2-hazard-merged"
       }
     }
   },

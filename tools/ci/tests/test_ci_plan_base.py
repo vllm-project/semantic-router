@@ -132,6 +132,75 @@ class PlanBaseTests(unittest.TestCase):
         )
         self.assertIn('--base "$BASE_SHA"', self.steps["plan"]["run"])
 
+    def publisher_ready(self, event: str = "pull_request", source: str = "") -> bool:
+        output = self.history.root / "publisher-output"
+        output.write_text("", encoding="utf-8")
+        subprocess.run(
+            ["bash", "-e", "-o", "pipefail", "-c", self.steps["publisher"]["run"]],
+            cwd=self.history.root,
+            env={
+                **os.environ,
+                "GITHUB_EVENT_NAME": event,
+                "GITHUB_SHA": source or self.history.merge,
+                "GITHUB_OUTPUT": str(output),
+            },
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return output.read_text(encoding="utf-8").strip() == "ready=true"
+
+    def write_publisher(self, *, script: bool = True) -> None:
+        self.history.write(".github/workflows/ci-status.yml", "name: trusted\n")
+        if script:
+            self.history.write("tools/ci/pr_ci_status.py", "# trusted publisher\n")
+
+    def merge_publisher_pr(self, *, publisher_on_base: bool) -> str:
+        if publisher_on_base:
+            self.write_publisher()
+            self.history.commit("trusted publisher on main")
+        self.history.git("checkout", "-q", "-b", "status-pr")
+        self.history.write(PR_FILE, "updated pull request\n")
+        if not publisher_on_base:
+            self.write_publisher()
+        self.history.commit("pull request status changes")
+        self.history.git("checkout", "-q", "main")
+        self.history.git("merge", "-q", "--no-ff", "-m", "merge ref", "status-pr")
+        return self.history.git("rev-parse", "HEAD")
+
+    def test_pr_cannot_enable_deferred_success_by_adding_its_own_publisher(
+        self,
+    ) -> None:
+        source = self.merge_publisher_pr(publisher_on_base=False)
+        self.assertFalse(self.publisher_ready(source=source))
+
+    def test_publisher_in_actual_merge_base_enables_waiting(self) -> None:
+        source = self.merge_publisher_pr(publisher_on_base=True)
+        self.assertTrue(self.publisher_ready(source=source))
+
+    def test_old_merge_base_stays_strict_after_main_gains_publisher(self) -> None:
+        self.write_publisher()
+        self.history.commit("publisher added after this PR merge ref")
+        self.assertFalse(self.publisher_ready())
+
+    def test_workflow_without_its_script_does_not_enable_waiting(self) -> None:
+        self.write_publisher(script=False)
+        self.history.commit("incomplete publisher")
+        self.history.git("checkout", "-q", "-b", "incomplete-pr")
+        self.history.write(PR_FILE, "another change\n")
+        self.history.commit("pull request")
+        self.history.git("checkout", "-q", "main")
+        self.history.git("merge", "-q", "--no-ff", "-m", "merge ref", "incomplete-pr")
+        self.assertFalse(
+            self.publisher_ready(source=self.history.git("rev-parse", "HEAD"))
+        )
+
+    def test_non_pr_events_never_enable_deferred_success(self) -> None:
+        source = self.merge_publisher_pr(publisher_on_base=True)
+        for event in ("push", "schedule", "workflow_dispatch", "merge_group"):
+            with self.subTest(event=event):
+                self.assertFalse(self.publisher_ready(event=event, source=source))
+
 
 class PerformanceBaseTests(unittest.TestCase):
     def test_plan_output_carries_the_compared_base(self) -> None:

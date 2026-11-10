@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,7 +29,7 @@ func testLooperFusionSynthesisTrace(ctx context.Context, client *kubernetes.Clie
 		return err
 	}
 	defer stopPortForward()
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", looperFusionSynthesisProbeKeyword, 60*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", looperFusionSynthesisProbeKeyword, 60*time.Second)
 	if err != nil {
 		return fmt.Errorf("request traced synthesis: %w", err)
 	}
@@ -38,7 +39,7 @@ func testLooperFusionSynthesisTrace(ctx context.Context, client *kubernetes.Clie
 	if traceErr := validateLooperSynthesisTrace(response.Body); traceErr != nil {
 		return traceErr
 	}
-	stream, err := requestResponseAPIStreamingSSE(ctx, client, opts, "MoM", "looper-fusion-synthesis-trace", looperFusionSynthesisProbeKeyword, nil)
+	stream, err := requestResponseAPIStreamingSSE(ctx, client, opts, "vllm-sr/auto", "looper-fusion-synthesis-trace", looperFusionSynthesisProbeKeyword, nil)
 	if err != nil {
 		return fmt.Errorf("request traced Responses synthesis stream: %w", err)
 	}
@@ -52,7 +53,11 @@ func validateLooperResponsesSynthesisStream(result responseAPIStreamingSSEResult
 	if !strings.Contains(string(result.body), "fusion-none-answer") || strings.Contains(string(result.body), `"fusion"`) {
 		return fmt.Errorf("responses synthesis stream lost its final answer or leaked the optional trace")
 	}
-	if !strings.Contains(result.protocolWarnings, "dropped;router_extension_unsupported_protocol;fusion") || len(result.protocolWarnings) > 4096 {
+	traceOmitted := slices.ContainsFunc(parseWarnings(result.protocolWarnings), func(warning warningMember) bool {
+		return warning.Code == "protocol" && warning.Params["action"] == "dropped" &&
+			warning.Params["reason"] == "router_extension_unsupported_protocol" && warning.Params["field"] == "fusion"
+	})
+	if !traceOmitted || len(result.protocolWarnings) > 4096 {
 		return fmt.Errorf("responses synthesis stream did not publish a bounded trace-omission diagnostic")
 	}
 	return nil

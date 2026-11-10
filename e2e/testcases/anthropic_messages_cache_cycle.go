@@ -88,7 +88,7 @@ func testAnthropicMessagesCacheCycle(ctx context.Context, client *kubernetes.Cli
 	sessionID := fmt.Sprintf("cache-cycle-%d", time.Now().UnixNano())
 
 	body := anthropicCacheRequestBody{
-		Model:     "MoM",
+		Model:     "vllm-sr/auto",
 		MaxTokens: 32,
 		System: []anthropicCacheBlock{
 			{

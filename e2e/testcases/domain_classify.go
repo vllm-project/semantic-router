@@ -11,8 +11,9 @@ import (
 	"strings"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -48,10 +49,10 @@ func domainFixtureForProfile(profile string) (domainClassificationFixture, error
 	switch profile {
 	case "envoy-ai-gateway":
 		return domainClassificationFixture{model: "e2e-domain", requiredRecipe: "e2e-domain"}, nil
-	case "ml-model-selection", "production-stack":
-		// These profiles own top-level routing and retain their original MoM
-		// request contract. They do not declare the AI Gateway feature recipe.
-		return domainClassificationFixture{model: "MoM"}, nil
+	case "production-stack":
+		// This profile owns top-level routing and uses its default recipe
+		// request contract. It does not declare the AI Gateway feature recipe.
+		return domainClassificationFixture{model: "vllm-sr/auto"}, nil
 	default:
 		return domainClassificationFixture{}, fmt.Errorf("domain-classify has no fixture contract for profile %q", profile)
 	}
@@ -164,8 +165,8 @@ func testSingleClassification(ctx context.Context, question, expectedCategory, l
 		return result
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// v0.4 demotes the intermediate decision/signal headers behind x-vsr-debug
-	// (#2205); opt in so the routing assertions below can read them.
+	// The classification details ride in x-vsr-trace, behind x-vsr-debug; opt
+	// in so the routing assertions below can read them.
 	req.Header.Set("x-vsr-debug", "true")
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
@@ -201,7 +202,7 @@ func testSingleClassification(ctx context.Context, question, expectedCategory, l
 	}
 
 	// The AI Gateway classifier fixture requires its isolated upstream path.
-	// Other profiles retain their own MoM routing and category assertions.
+	// Other profiles retain their own default routing and category assertions.
 	if fixture.requiredRecipe != "" && (resp.Header.Get("x-vsr-selected-recipe") != fixture.requiredRecipe ||
 		resp.Header.Get("x-vsr-response-path") != "upstream") {
 		result.Error = "classification response did not use the isolated Domain upstream path"
@@ -209,8 +210,8 @@ func testSingleClassification(ctx context.Context, question, expectedCategory, l
 	}
 
 	// Extract VSR headers
-	result.ActualCategory = resp.Header.Get("x-vsr-selected-category")
-	result.ActualReasoning = resp.Header.Get("x-vsr-selected-reasoning")
+	result.ActualCategory = traceValue(resp.Header, "category")
+	result.ActualReasoning = traceValue(resp.Header, "reasoning")
 
 	// Check if classification is correct (only compare category, not reasoning)
 	result.Correct = (result.ActualCategory == expectedCategory)

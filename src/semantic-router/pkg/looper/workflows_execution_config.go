@@ -9,8 +9,13 @@ import (
 
 func resolveWorkflowsExecutionConfig(req *Request) workflowsExecutionConfig {
 	cfg := defaultWorkflowsExecutionConfig()
-	if req != nil && req.Algorithm != nil && req.Algorithm.Workflows != nil {
-		applyWorkflowsAlgorithmConfig(&cfg, req.Algorithm.Workflows)
+	if req != nil && req.Algorithm != nil {
+		if req.Algorithm.Workflows != nil {
+			applyWorkflowsAlgorithmConfig(&cfg, req.Algorithm.Workflows)
+		}
+		if onError := strings.TrimSpace(req.Algorithm.OnError); onError != "" {
+			cfg.OnError = onError
+		}
 	}
 	return normalizeWorkflowsExecutionConfig(cfg)
 }
@@ -74,9 +79,6 @@ func applyWorkflowOutputConfig(cfg *workflowsExecutionConfig, src *config.Workfl
 	if src.IncludeIntermediateResponses != nil {
 		cfg.IncludeIntermediateResponses = *src.IncludeIntermediateResponses
 	}
-	if src.OnError != "" {
-		cfg.OnError = strings.TrimSpace(src.OnError)
-	}
 }
 
 func applyWorkflowPlannerConfig(cfg *workflowsExecutionConfig, planner config.WorkflowPlannerConfig) {
@@ -108,9 +110,9 @@ func (l *WorkflowsLooper) validateWorkflowControlModels(cfg workflowsExecutionCo
 	if cfg.PlannerModel == "" {
 		return nil
 	}
-	for _, flowName := range l.cfg.Flow.EffectiveModelNames() {
+	for _, flowName := range l.cfg.EntrypointModels {
 		if cfg.PlannerModel == flowName {
-			return fmt.Errorf("workflows planner.model cannot be direct Flow model %q", cfg.PlannerModel)
+			return fmt.Errorf("workflows planner.model cannot be virtual entrypoint %q", cfg.PlannerModel)
 		}
 	}
 	return nil

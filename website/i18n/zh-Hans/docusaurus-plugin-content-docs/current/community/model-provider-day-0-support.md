@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 title: 模型与提供商 Day-0 支持
 description: 一次加入内置模型或提供商，再从共享目录生成所有运行时和产品视图。
 translation:
-  source_commit: "2b7519a84aec96963b02a3534e82908beba33f76"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/community/model-provider-day-0-support.md"
   outdated: false
 ---
@@ -38,11 +39,11 @@ translation:
 
 模型 ID 带命名空间，例如 `organization/model`。基准和指数 ID 使用完整语义版本。数据集、评分器、提示词协议或聚合规则变更时，需要新的基准版本。
 
-默认智能指数对 MMLU-Pro、GPQA Diamond、Humanity's Last Exam、SWE-bench Verified 和 Terminal-Bench 2.1 等权。覆盖率达到 60% 才给出头条分数。新模型可以带着更少证据发布；模型库会显示已有分量和 `Not yet measured`，而不是编造数值。同一模型和带版本指标出现两个可用值会被拒绝。厂商发布结果保留精确模型变体、推理模式、工具模式和 harness 元数据，并标为 claimed；只有带产物的冻结 vLLM-SR 运行才能标为 reproduced。
+Intelligence 1.0 使用 MMLU-Pro、GPQA Diamond、冻结的纯文本 HLE 子集、LiveCodeBench v6、SciCode 和 Terminal-Bench 2.1。每个节点都要求完整证据；General、Reasoning、Coding、Agentic 的权重分别为 20%、40%、20%、20%。详见[指数契约](../proposals/open-intelligence-index-and-model-arena.md)。新模型可以带着更少证据发布；模型库会显示已有分量和 `Not yet measured`，而不是编造数值。同一模型和带版本指标出现两个可用值会被拒绝。厂商发布结果保留精确模型变体、推理模式、工具模式和 harness 元数据，并标为 claimed；只有带产物的冻结 vLLM-SR 运行才能标为 reproduced。
 
 `reasoning_effort` 是运行时控制，不是证据来源。若分数未披露运行时 effort，使用 `unspecified`；把结果是厂商发布还是独立测量放在 `evidence.provenance` 和 `evidence.verification`。
 
-生成会为每个模型和每个可选推理 effort 恰好发出这五个基准槽。没有可信证据的槽是显式 `missing`，绝不是零。来源报告多个 effort 时，为每个 effort 单独写评测记录；不要把 `high`、`xhigh` 或 `max` 的结果抄到其他行。额外基准仍可作为证据可见，但不会静默进入该版本的默认指数。
+生成会为每个模型和每个可选推理 effort 恰好发出这六个基准槽。没有可信证据的槽是显式 `missing`，绝不是零。来源报告多个 effort 时，为每个 effort 单独写评测记录；不要把 `high`、`xhigh` 或 `max` 的结果抄到其他行。额外基准仍可作为证据可见，但不会静默进入该版本的默认指数。
 
 ## 添加提供商
 
@@ -106,7 +107,7 @@ OpenAI 绑定记录：工具需要 Responses；超过 272,000 输入 token 的�
 Astra 的工具调用请用 Responses。最小路由配置不需要手写 Model Card 或推理家族：
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: astra
@@ -115,19 +116,19 @@ providers:
       backend_refs:
         - name: primary
           provider: openai
-          api_key_env: OPENAI_API_KEY
-
-routing:
-  decisions:
-    - name: astra_default
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: astra
-          use_reasoning: true
-          reasoning_effort: high
+          auth: {api_key_env: OPENAI_API_KEY}
+recipes:
+  - name: default
+    decisions:
+      - name: astra_default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: astra
+            use_reasoning: true
+            reasoning_effort: high
 ```
 
 对没有工具的普通 Chat Completions 工作负载，省略 `api_format: responses`；同一目录绑定会发出顶层 `reasoning_effort`，并在启动时拒绝仅限 Responses 的 effort。Responses 发出 `reasoning.effort`。黑盒 E2E 还证明 Responses 工具定义能在 Router 到提供商的一跳中存活。生成的 Router、CLI、控制面板和网站视图都来自这些编写的资源。
@@ -147,7 +148,7 @@ make e2e-test-specific \
 内置卡片用一个可选的 `catalog` 引用选择。模型 `name` 仍是面向请求的别名，而 `backend_refs[].provider` 是目录 Provider ID：
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: production
@@ -158,14 +159,16 @@ providers:
       backend_refs:
         - name: primary
           provider: provider-id
-          api_key_env: PROVIDER_API_KEY
+          auth: {api_key_env: PROVIDER_API_KEY}
 ```
 
-内置卡片不需要 `routing.modelCards`。有意覆盖时，用规范目录身份作为卡片名：
+内置卡片不需要 `providers.models`。有意覆盖时，用规范目录身份作为卡片名：
 
 ```yaml
-routing:
-  modelCards:
+recipes:
+  - name: default
+providers:
+  models:
     - name: organization/model
       tags: [production, approved]
 ```
@@ -174,7 +177,7 @@ routing:
 
 当提供商绑定声明运维定义的 `deployment_name` 时，其目录 ID 只记录可用性；用户必须显式设置 `providers.models[].provider_model_id`（或该提供商的 `external_model_ids` 条目）。
 
-把同一别名上的多个 `backend_refs` 当作一个 Envoy 池里的同质子副本。HTTP 端点地址、端口和权重可以不同；HTTPS 子副本可以按端口和权重变化，但保持一个 DNS 主机名。Provider ID、协议/模型映射、凭据来源、认证和默认请求头、有效请求路径，以及 DNS/TLS 行为在其他方面必须一致。把异构提供商或凭据拆成不同别名，这样 Router 请求整形不会和 Envoy 选中的端点分叉。配置加载器和 CLI 生成器会拒绝不安全的混合池，并点名不同的语义字段，错误中从不包含凭据值。
+把同一别名上的多个 `backend_refs` 当作一个传输池里的同质子副本。HTTP 端点地址、端口和权重可以不同；HTTPS 子副本可以按端口和权重变化，但保持一个 DNS 主机名。Provider ID、协议/模型映射、凭据来源、认证和默认请求头、有效请求路径，以及 DNS/TLS 行为在其他方面必须一致。把异构提供商或凭据拆成不同别名，这样 Router 请求整形不会和 传输层选中的端点分叉。配置加载器和 CLI 生成器会拒绝不安全的混合池，并点名不同的语义字段，错误中从不包含凭据值。
 
 内置推理来自该卡片。只有省略 `catalog` 的自定义模型才接受 `providers.models[].reasoning` 块。
 
@@ -195,7 +198,8 @@ providers:
         - name: lab
           provider: vllm
           endpoint: model-gateway.example:8000/v1
-
+      context_window_size: 131072
+      capabilities: [chat, tools, reasoning]
 evaluation:
   records:
     - model: private-reasoner
@@ -204,12 +208,8 @@ evaluation:
       reasoning_effort: high
       metrics:
         pass_rate: 0.82
-
-routing:
-  modelCards:
-    - name: private-reasoner
-      context_window_size: 131072
-      capabilities: [chat, tools, reasoning]
+recipes:
+  - name: default
 ```
 
 用户编写的记录刻意保持小表面：`model`、`benchmark` 和 `metrics`，外加可选的 `benchmark_profile`、`reasoning_effort`、`source`、`measured_at` 和标量 `metadata`。省略 `benchmark_profile` 以使用已知基准的默认配置；测量来自特定模型 effort 时设置 `reasoning_effort`。目录记录在内部保留更丰富的证据和出处。自定义基准身份仍带命名空间和版本，指标值必须有限。

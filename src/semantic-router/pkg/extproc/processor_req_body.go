@@ -1,8 +1,6 @@
 package extproc
 
 import (
-	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -31,6 +29,9 @@ func (r *OpenAIRouter) handleRequestBody(
 ) (*ext_proc.ProcessingResponse, error) {
 	ctx.ProcessingStartTime = time.Now()
 	requestBody := v.RequestBody.GetBody()
+	if isCountTokensRequest(ctx) {
+		requestBody = withCountTokensOutputLimit(requestBody)
+	}
 	request, earlyResponse := r.prepareProtocolRequest(requestBody, ctx)
 	if earlyResponse != nil {
 		return earlyResponse, nil
@@ -44,6 +45,14 @@ func (r *OpenAIRouter) handleRequestBody(
 	}
 
 	originalModel := strings.TrimSpace(snapshot.Model)
+	if rejected := r.listenerModelRejection(originalModel, ctx); rejected != nil {
+		return rejected, nil
+	}
+	if isCountTokensRequest(ctx) {
+		// Token budgets admit a count by its input, as they admit a turn.
+		applyRequestContextEstimate(snapshot, ctx)
+		return r.handleCountTokens(request, originalModel, ctx)
+	}
 	if ctx.RequestModel == "" {
 		ctx.RequestModel = originalModel
 	}
@@ -55,10 +64,14 @@ func (r *OpenAIRouter) handleRequestBody(
 		return r.handleLooperInternalRequestWithPlugins(originalModel, ctx)
 	}
 	ctx.UserContent = snapshot.UserContent
+	observeRoutingInput(snapshot.RoutingInput)
 	ctx.RequestImageURL = snapshot.FirstImageURL
 	ctx.RequestAudio = snapshot.FirstAudio
 
-	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, snapshot, ctx)
+	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, request, snapshot, ctx)
+	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {
+		return refused, nil
+	}
 	if earlyResponse != nil {
 		return earlyResponse, nil
 	}
@@ -88,7 +101,7 @@ func (r *OpenAIRouter) handleModelRoutingWithPersonalizedCache(
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	if response, hit := r.lookupPersonalizedExactCache(ctx, decisionState.decisionName, decisionState.selectedModel); hit {
-		inflight.End(decisionState.selectedModel, ctx.InflightToken)
+		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return response, nil
 	}
@@ -105,6 +118,9 @@ func (r *OpenAIRouter) handleModelRoutingWithPersonalizedCache(
 // handleModelRouting handles model selection and routing logic
 // decisionName, reasoningDecision, and selectedModel are pre-computed from ProcessRequest
 func (r *OpenAIRouter) handleModelRouting(request *llmprotocol.Request, originalModel string, decisionName string, reasoningDecision entropy.ReasoningDecision, selectedModel string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	if rejected := r.imagesEntryRejection(ctx); rejected != nil {
+		return rejected, nil
+	}
 	if changed, err := r.applyPreDispatchToolsPolicy(ctx); err != nil {
 		return nil, err
 	} else if changed {
@@ -178,9 +194,14 @@ func (r *OpenAIRouter) handleEntrypointRouting(
 
 	logging.ComponentWarnEvent("extproc", "entrypoint_routing_no_selection", map[string]interface{}{
 		"request_id": ctx.RequestID,
+		"code":       routingFailureNoRoute.code,
+		"model":      originalModel,
+		"recipe":     ctx.Routing.RecipeName(),
+		"decision":   decisionName,
+		"reason":     "the Entrypoint selected no model",
 	})
 	metrics.RecordRequestError(originalModel, "no_model_selected")
-	return r.createErrorResponse(http.StatusBadRequest, "unable to route request: the Entrypoint selected no model"), nil
+	return r.routingFailureResponse(ctx, routingFailureNoRoute), nil
 }
 
 // handleEntrypointModelRouting dispatches the Model selected by a Recipe.
@@ -203,12 +224,16 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 			return r.imageFileDispatchFailure(err, ctx)
 		}
 		response := r.buildProviderDispatchResponse(dispatch, ctx)
-		r.handleToolSelectionForRequest(request, response, ctx)
+		r.applyToolsPlugin(request, response, ctx)
 		finalized, err := r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 		if err != nil {
 			return nil, err
 		}
-		r.dispatchShadowIfConfigured(ctx, dispatch)
+		// A rejected request (an immediate response) never goes upstream, so it is
+		// not mirrored to the shadow model either.
+		if finalized.GetImmediateResponse() == nil {
+			r.dispatchShadowIfConfigured(ctx, dispatch)
+		}
 		return finalized, nil
 	}
 
@@ -250,12 +275,13 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	}()
 
 	// Handle tool selection
-	r.handleToolSelectionForRequest(request, response, ctx)
+	r.applyToolsPlugin(request, response, ctx)
 	response, err = r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 	if err != nil {
 		return nil, err
 	}
-	dispatched = true
+	// An immediate response rejects the request, so there is nothing to mirror.
+	dispatched = response.GetImmediateResponse() == nil
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)
@@ -300,7 +326,7 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 	defer r.startRouterReplay(ctx, originalModel, originalModel, decisionName)
 
 	// Handle tool selection
-	r.handleToolSelectionForRequest(request, response, ctx)
+	r.applyToolsPlugin(request, response, ctx)
 	response, err = r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 	if err != nil {
 		return nil, err
@@ -327,8 +353,9 @@ func (r *OpenAIRouter) unavailableModelResponse(
 	}
 	logging.ComponentWarnEvent("extproc", "specified_model_not_found", map[string]interface{}{
 		"request_id": requestID,
+		"code":       routingFailureModelNotFound.code,
 		"model":      model,
 	})
 	metrics.RecordRequestError(model, "model_not_found")
-	return r.createErrorResponse(http.StatusBadRequest, fmt.Sprintf("model %q is not available", model))
+	return r.routingFailureResponse(ctx, routingFailureModelNotFound)
 }

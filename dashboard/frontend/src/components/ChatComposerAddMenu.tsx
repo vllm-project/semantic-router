@@ -11,23 +11,12 @@ import {
 
 import styles from './ChatComposerAddMenu.module.css'
 
-interface ClawRoomMenuOption {
-  active: boolean
-  disabled: boolean
-  onToggle: () => void
-}
-
 interface ChatComposerAddMenuProps {
   attachFilesDisabled?: boolean
-  clawModeDisabled: boolean
-  clawModeEnabled: boolean
-  clawRoom?: ClawRoomMenuOption
   onAttachFiles?: () => void
-  onToggleClawMode: () => void
   onToggleWebSearch?: () => void
   webSearchDisabled?: boolean
   webSearchEnabled: boolean
-  webSearchLocked?: boolean
 }
 
 interface ComposerMenuItem {
@@ -59,13 +48,6 @@ const WebSearchIcon = () => (
   </svg>
 )
 
-const RoomIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-    <path d="M4 5.5h16v10H8l-4 3v-13Z" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M8 9h8M8 12h5" strokeLinecap="round" />
-  </svg>
-)
-
 const CheckIcon = () => (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
     <path d="m3 8.2 3.1 3.1L13 4.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -74,15 +56,10 @@ const CheckIcon = () => (
 
 export default function ChatComposerAddMenu({
   attachFilesDisabled = false,
-  clawModeDisabled,
-  clawModeEnabled,
-  clawRoom,
   onAttachFiles,
-  onToggleClawMode,
   onToggleWebSearch,
   webSearchDisabled = false,
   webSearchEnabled,
-  webSearchLocked = false,
 }: ChatComposerAddMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -116,9 +93,7 @@ export default function ChatComposerAddMenu({
 
     nextItems.push({
       checked: webSearchEnabled,
-      description: webSearchLocked
-        ? 'Always on in ClawRoom'
-        : 'Use current information from the web',
+      description: 'Use current information from the web',
       disabled: webSearchDisabled || !onToggleWebSearch,
       icon: <WebSearchIcon />,
       id: 'web-search',
@@ -126,44 +101,8 @@ export default function ChatComposerAddMenu({
       onSelect: onToggleWebSearch ?? (() => undefined),
     })
 
-    nextItems.push({
-      checked: clawModeEnabled,
-      description: 'Recruit and coordinate Claw specialists',
-      disabled: clawModeDisabled,
-      icon: <img src="/openclaw.svg" alt="" aria-hidden="true" />,
-      id: 'hire-claw',
-      label: 'HireClaw',
-      onSelect: onToggleClawMode,
-    })
-
-    if (clawRoom) {
-      nextItems.push({
-        checked: clawRoom.active,
-        closeOnSelect: true,
-        description: clawRoom.active
-          ? 'Return to the standard playground chat'
-          : 'Open the collaborative room',
-        disabled: clawRoom.disabled,
-        icon: <RoomIcon />,
-        id: 'claw-room',
-        label: clawRoom.active ? 'Exit ClawRoom' : 'Open ClawRoom',
-        onSelect: clawRoom.onToggle,
-      })
-    }
-
     return nextItems
-  }, [
-    attachFilesDisabled,
-    clawModeDisabled,
-    clawModeEnabled,
-    clawRoom,
-    onAttachFiles,
-    onToggleClawMode,
-    onToggleWebSearch,
-    webSearchDisabled,
-    webSearchEnabled,
-    webSearchLocked,
-  ])
+  }, [attachFilesDisabled, onAttachFiles, onToggleWebSearch, webSearchDisabled, webSearchEnabled])
 
   useEffect(() => {
     if (!isOpen) {
@@ -271,13 +210,9 @@ export default function ChatComposerAddMenu({
           {items.map((item) => {
             const isToggle = typeof item.checked === 'boolean'
             const ariaLabel =
-              item.id === 'hire-claw'
-                ? `${item.checked ? 'Disable' : 'Enable'} HireClaw`
-                : item.id === 'web-search'
-                  ? `${item.checked ? 'Disable' : 'Enable'} Web Search`
-                  : item.id === 'claw-room'
-                    ? `${clawRoom?.active ? 'Exit' : 'Open'} ClawRoom view`
-                    : item.label
+              item.id === 'web-search'
+                ? `${item.checked ? 'Disable' : 'Enable'} Web Search`
+                : item.label
             return (
               <button
                 key={item.id}

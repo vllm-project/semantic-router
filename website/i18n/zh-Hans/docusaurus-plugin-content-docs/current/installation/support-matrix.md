@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 title: 部署支持
 description: 查看 Semantic Router 项目维护哪些部署路径、集成、示例和硬件配置。
 translation:
-  source_commit: "7d671e90d6cb1d5540c795158b94ee89fe323e19"
+  source_commit: "49fd62932eb54334c4e4bbc64977733f1c7ed5fa"
   source_file: "docs/installation/support-matrix.md"
   outdated: false
 ---
@@ -24,7 +25,7 @@ translation:
 
 证据标签显示最强的周期性检查：**PR CI** 运行端到端配置，**Contract** 在没有外部平台的情况下校验静态契约，**Manual** 需要可选环境。
 
-## 使用一套经过测试的版本
+## 使用一套经过测试的版本 {#use-one-tested-version-set}
 
 对于每个链接的选项：
 
@@ -39,7 +40,7 @@ translation:
 | 选项 | 分类 | 项目覆盖 |
 | --- | --- | --- |
 | [Helm chart](configuration-workflows#helm) | Maintained reference stack | **Contract。** Router、可选控制面板、ingress、自动扩缩、持久化和可观测性资源。网关和存储仍是外部的。 |
-| [本地部署](docker) | Maintained reference stack | **PR CI。** CLI 管理 Router、Envoy、控制面板和支持服务。你提供自定义模型端点，并加固本地默认值。 |
+| [本地部署](docker) | Maintained reference stack | **PR CI。** CLI 管理 Router、控制面板和支持服务，使用 `--gateway extproc` 时还管理 Envoy。你提供自定义模型端点，并加固本地默认值。 |
 | [Kubernetes Operator](k8s/operator) | Maintained reference stack | **PR CI + Contract。** 项目拥有 CRD、协调、Router 工作负载、Service 和路由 API。Kubernetes 调度工作负载；你的网关承载流量。 |
 
 ## 受支持的集成
@@ -78,7 +79,7 @@ translation:
 
 当前没有随附选项处于 **Deprecated** 状态。迁移指导见[升级与回滚](upgrade-rollback)。
 
-## 硬件叠加层
+## 硬件叠加层 {#hardware-overlays}
 
 硬件支持适用于部署栈；它不是单独的 Router 拓扑。Router 加速和后端模型服务也是分开的选择。
 

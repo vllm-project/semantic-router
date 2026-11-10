@@ -4,179 +4,127 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
-	"strconv"
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
-// PrepareOwnedEmbeddings prepares the catalog for a candidate generation.
-// Failure releases only the candidate's independent resource references.
-func PrepareOwnedEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *native.Runtime) (*embedding.Set, error) {
+// PrepareOwnedEmbeddings prepares a candidate generation's recipe consumers;
+// the service-owned cache, memory and ingestion consumers are prepared by
+// PrepareOwnedGlobalServiceEmbeddings. Failure releases only the
+// candidate's independent binding references.
+func PrepareOwnedEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *serving.Runtime) (*embedding.Set, error) {
 	return prepareEmbeddings(ctx, cfg, runtime, false, embedding.Options{})
 }
 
-// PrepareOwnedRecipeEmbeddings excludes service-owned cache, tools, memory and
-// ingestion resources. A standalone classifier owns only its recipe consumers.
-func PrepareOwnedRecipeEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *native.Runtime) (*embedding.Set, error) {
-	return prepareEmbeddings(ctx, cfg, runtime, false, embedding.Options{})
-}
-
-func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *native.Runtime, sharedServices bool, view embedding.Options) (*embedding.Set, error) {
+// prepareEmbeddings prepares one provider per embedding deployment the
+// scope's consumers name, at view, keyed by the deployment's name; the
+// set's default is embeddings.default.
+func prepareEmbeddings(ctx context.Context, cfg *config.RouterConfig, runtime *serving.Runtime, sharedServices bool, view embedding.Options) (*embedding.Set, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("embedding configuration is required")
 	}
 	if runtime == nil {
-		runtime = native.New(nil)
-	}
-	providers := make(map[string]embedding.Provider)
-	var closers []io.Closer
-	primary := strings.ToLower(strings.TrimSpace(cfg.EmbeddingConfig.ModelType))
-	if primary == "" {
-		primary = "qwen3"
-	}
-	fail := func(err error) (*embedding.Set, error) {
-		_ = embedding.NewSet(providers, primary, closers...).Close()
-		return nil, err
-	}
-	plan, err := config.CompileModelBindings(cfg)
-	if err != nil {
-		return fail(err)
+		runtime = serving.New(nil, nil)
 	}
 	recipe := cfg.RoutingScope
 	if recipe == "" {
 		recipe = config.DefaultRecipeName
 	}
-	explicit, hasExplicit := plan.Lookup(recipe, "embedding")
-	if recipe == config.GlobalModelScope {
-		explicit, hasExplicit = plan.LookupGlobal("embedding")
-		explicit.Name = globalEmbeddingConsumerName(cfg, primary, primary)
+	requirements := config.EmbeddingRequirements(cfg, sharedServices)
+	providers := make(map[string]embedding.Provider)
+	var closers []io.Closer
+	fail := func(err error) (*embedding.Set, error) {
+		_ = embedding.NewSet(providers, cfg.EmbeddingDeployment, closers...).Close()
+		return nil, err
 	}
-
-	if hasExplicit && view == (embedding.Options{}) && cfg.GlobalModelBindings["embedding"].Deployment != "" && primary == "mmbert" {
-		configured := cfg.EmbeddingConfig.WithDefaults()
-		view = embedding.Options{Dimension: configured.TargetDimension, Layer: configured.TargetLayer}
-	}
-	needed := embeddingNeedsForScope(cfg, primary, sharedServices)
-	requirements := config.EmbeddingRequirements(cfg, primary, sharedServices)
-
-	if len(needed) == 0 {
-		return embedding.NewSet(providers, primary), nil
-	}
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() && !hasExplicit {
-		for _, requirement := range requirements {
-			if err := remoteEmbeddingRequirement(requirement); err != nil {
-				return fail(err)
-			}
-		}
-		endpoint := cfg.EmbeddingModels.Endpoint
-		spec := config.ResolvedModelBinding{Recipe: recipe, Name: "embedding", Binding: config.ModelBinding{Deployment: "embedding:remote", Contract: "embedding.v1", Adapter: "openai_compatible"}, Deployment: config.ModelDeployment{Provider: "http"}, Admission: cfg.ModelAdmission["embedding:remote"]}
-		provider, err := runtime.RemoteEmbedding(ctx, spec, embedding.OpenAICompatibleConfig{BaseURL: endpoint.BaseURL, Model: endpoint.Model, APIKeyEnv: endpoint.APIKeyEnv, TimeoutSeconds: endpoint.TimeoutSeconds, MaxRetries: endpoint.MaxRetries, MaxResponseBytes: endpoint.MaxResponseBytes, Dimensions: endpoint.Dimensions, ExpectedDimension: cfg.EmbeddingConfig.TargetDimension})
+	for _, name := range embeddingDeployments(requirements) {
+		spec, err := embeddingSpec(cfg, recipe, name, requirements)
 		if err != nil {
 			return fail(err)
 		}
-		for model := range needed {
-			providers[model] = provider
-		}
-		providers[primary] = provider
-		if err := validatePreparedEmbeddings(ctx, requirements, providers); err != nil {
-			_ = provider.Close()
-			return fail(err)
-		}
-		return embedding.NewSet(providers, primary, provider), nil
-	}
-
-	paths := resolveEmbeddingPaths(cfg)
-	models := map[string]string{"qwen3": paths.qwen3, "gemma": paths.gemma, "mmbert": paths.mmBert, "multimodal": paths.multiModal, "bert": paths.bert}
-	if semanticCacheNeedsBERT(cfg) || vectorStoreNeedsBERT(cfg) || memoryNeedsBERT(cfg) {
-		models["bert"] = resolveBertModelID(cfg.BertModelPath)
-	}
-	for _, model := range []string{"qwen3", "gemma", "mmbert", "multimodal", "bert"} {
-		path := models[model]
-		if !needed[model] {
-			continue
-		}
-		if model == "bert" && path == "" {
-			path = resolveBertModelID(cfg.BertModelPath)
-		}
-		if hasExplicit && model == primary {
-			continue
-		}
-		if path == "" {
-			return fail(fmt.Errorf("required embedding model %q has no artifact path", model))
-		}
-		spec := embeddingCatalogSpec(cfg, recipe, model, path)
-		if recipe == config.GlobalModelScope {
-			spec.Name = globalEmbeddingConsumerName(cfg, model, primary)
-		}
-		var options embedding.Options
-		if recipe == config.GlobalModelScope && cfg.SemanticCache.Enabled && model == config.SemanticCacheEmbeddingModel(cfg) {
-			options = view
-		}
-		provider, err := runtime.Embedding(ctx, spec, options.Dimension, options.Layer)
+		provider, err := prepareEmbedding(ctx, cfg, runtime, spec, view)
 		if err != nil {
-			return fail(fmt.Errorf("prepare %s embedding: %w", model, err))
+			return fail(fmt.Errorf("prepare embedding deployment %s: %w", name, err))
 		}
-		providers[model] = provider
-		closers = append(closers, provider)
-	}
-	if hasExplicit && needed[primary] {
-		explicit.Deployment.Artifact = config.ResolveModelPath(explicit.Deployment.Artifact)
-
-		var provider *native.EmbeddingProvider
-		var err error
-		if explicit.Deployment.Provider == "http" {
-			external := cfg.FindExternalModelByName(explicit.Deployment.ExternalModel)
-			if external == nil {
-				return fail(fmt.Errorf("embedding external_model %q is unavailable", explicit.Deployment.ExternalModel))
-			}
-			address := external.ModelEndpoint.Address
-			if external.ModelEndpoint.Port > 0 {
-				address = net.JoinHostPort(address, strconv.Itoa(external.ModelEndpoint.Port))
-			}
-			if !strings.Contains(address, "://") {
-				protocol := external.ModelEndpoint.Protocol
-				if protocol == "" {
-					protocol = "http"
-				}
-				address = protocol + "://" + address
-			}
-			provider, err = runtime.RemoteEmbedding(ctx, explicit, embedding.OpenAICompatibleConfig{BaseURL: address, Model: external.ModelName, APIKey: external.AccessKey, TimeoutSeconds: external.TimeoutSeconds, MaxResponseBytes: external.MaxResponseBytes, ExpectedDimension: cfg.EmbeddingConfig.TargetDimension})
-		} else {
-			provider, err = runtime.Embedding(ctx, explicit, view.Dimension, view.Layer)
-		}
-
-		if err != nil {
-			return fail(err)
-		}
-		providers[primary] = provider
+		providers[name] = provider
 		closers = append(closers, provider)
 	}
 	if err := validatePreparedEmbeddings(ctx, requirements, providers); err != nil {
 		return fail(err)
 	}
-	return embedding.NewSet(providers, primary, closers...), nil
+	return embedding.NewSet(providers, cfg.EmbeddingDeployment, closers...), nil
 }
 
-func embeddingCatalogSpec(cfg *config.RouterConfig, recipe config.RecipeName, model, path string) config.ResolvedModelBinding {
-	provider, device := config.DefaultModelExecution(cfg.EmbeddingModels.UseCPU)
-	primary := strings.ToLower(strings.TrimSpace(cfg.EmbeddingConfig.ModelType))
-	if primary == "" {
-		primary = "qwen3"
+// embeddingDeployments are the deployments requirements name, in order.
+func embeddingDeployments(requirements []config.EmbeddingRequirement) []string {
+	var names []string
+	for _, requirement := range requirements {
+		if !slices.Contains(names, requirement.Deployment) {
+			names = append(names, requirement.Deployment)
+		}
 	}
-	if model == primary {
-		provider, device = config.DefaultEmbeddingExecution(cfg.EmbeddingModels)
+	sort.Strings(names)
+	return names
+}
+
+// embeddingSpec is the binding that prepares a deployment for the consumers
+// that name it, admitted by the deployment's own admission. Its name lists
+// the shared services that use it, or is "embedding" for a recipe's.
+func embeddingSpec(cfg *config.RouterConfig, recipe config.RecipeName, name string, requirements []config.EmbeddingRequirement) (config.ResolvedModelBinding, error) {
+	if name == "" {
+		return config.ResolvedModelBinding{}, fmt.Errorf("global.model_catalog.embeddings.default names no embedding deployment")
 	}
-	adapter, overflow := model, "truncate"
-	if catalog := config.GetModelByPath(path); catalog != nil && catalog.DefaultAdapter != "" {
-		adapter = catalog.DefaultAdapter
-		provider, device = catalog.DefaultProvider, catalog.DefaultDevice
-		overflow = "reject"
+	deployment, ok := cfg.ModelDeployments[name]
+	if !ok {
+		return config.ResolvedModelBinding{}, fmt.Errorf("embedding deployment %q is not declared", name)
 	}
-	return config.ResolvedModelBinding{Recipe: recipe, Name: "embedding", Binding: config.ModelBinding{Deployment: "embedding:" + model, Contract: "embedding.v1", Adapter: adapter}, Deployment: config.ModelDeployment{Artifact: path, Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{Overflow: overflow}}, Admission: cfg.ModelAdmission["embedding:"+model]}
+	consumer := "embedding"
+	if recipe == config.GlobalModelScope {
+		var consumers []string
+		for _, requirement := range requirements {
+			if requirement.Deployment == name && !slices.Contains(consumers, requirement.Consumer) {
+				consumers = append(consumers, requirement.Consumer)
+			}
+		}
+		consumer = strings.Join(consumers, "+") + ".embedding"
+	}
+	return config.ResolvedModelBinding{
+		Recipe: recipe, Name: consumer, Contract: "embedding.v1",
+		Binding:    config.ModelBinding{Deployment: name},
+		Deployment: deployment.WithDefaults(), Admission: cfg.ModelAdmission[name],
+	}, nil
+}
+
+// embeddingProvider is a prepared provider the set owns.
+type embeddingProvider interface {
+	embedding.Provider
+	io.Closer
+}
+
+// prepareEmbedding serves an embedding deployment: a model_runtime one at
+// view, or an openai_embeddings one.
+func prepareEmbedding(ctx context.Context, cfg *config.RouterConfig, runtime *serving.Runtime, spec config.ResolvedModelBinding, view embedding.Options) (embeddingProvider, error) {
+	if spec.Deployment.Provider != config.OpenAIEmbeddingsProvider {
+		return runtime.Embedding(ctx, spec, view.Dimension, view.Layer)
+	}
+	return prepareRemoteEmbedding(ctx, runtime, spec)
+}
+
+// prepareRemoteEmbedding serves an openai_embeddings deployment through its
+// connection block.
+func prepareRemoteEmbedding(ctx context.Context, runtime *serving.Runtime, spec config.ResolvedModelBinding) (*serving.RemoteEmbeddingProvider, error) {
+	deployment := spec.Deployment
+	return runtime.RemoteEmbedding(ctx, spec, embedding.OpenAICompatibleConfig{
+		BaseURL: deployment.Endpoint, Model: deployment.Model,
+		TimeoutSeconds: float64(deployment.TimeoutMs) / 1000, MaxRetries: deployment.RetryCount(0),
+		MaxResponseBytes: deployment.ResponseLimitOr(0), Dimensions: deployment.DeclaredDimensions(),
+		ExpectedDimension: deployment.DeclaredDimensions(), Deployment: &deployment,
+	})
 }
 
 // EmbeddingState describes one prepared set without inferring consumer readiness.

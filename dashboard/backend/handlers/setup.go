@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
@@ -80,7 +79,7 @@ type setupConfigSummary struct {
 
 func SetupStateHandler(configPath string, setupResolver *setupmode.Resolver) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -143,7 +142,7 @@ func SetupValidateHandler(configPath string, setupResolver *setupmode.Resolver) 
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		candidate, err = realizeSetupCandidateConfig(configPath, candidate, true)
+		candidate, err = realizeSetupCandidateConfig(configPath, candidate)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Setup runtime realization failed: %v", err), http.StatusBadRequest)
 			return
@@ -203,7 +202,7 @@ func SetupActivateHandler(
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		candidate, err = realizeSetupCandidateConfig(configPath, candidate, false)
+		candidate, err = realizeSetupCandidateConfig(configPath, candidate)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Setup runtime realization failed: %v", err), http.StatusBadRequest)
 			return
@@ -280,14 +279,15 @@ func SetupActivateHandler(
 			return
 		}
 
-		effectiveConfigPath, err := syncRuntimeConfigForCurrentRuntime(configPath)
-		if err != nil {
+		if _, err := syncRuntimeConfigForCurrentRuntime(configPath); err != nil {
 			failSetupActivation(w, configPath, previousData, setupResolver, "runtime_config_sync")
 			return
 		}
 
-		if err := restartSetupRuntimeServices(configPath, effectiveConfigPath); err != nil {
-			failSetupActivation(w, configPath, previousData, setupResolver, "runtime_start")
+		// The CLI that owns the stack starts the Router from here on.
+		if err := recordPendingActivation(configPath, yamlData, activationReasonSetup, ""); err != nil {
+			log.Printf("Setup activation could not be recorded: %v", err)
+			failSetupActivation(w, configPath, previousData, setupResolver, "activation_record")
 			return
 		}
 
@@ -295,7 +295,7 @@ func SetupActivateHandler(
 		if err := json.NewEncoder(w).Encode(SetupActivateResponse{
 			Status:    "success",
 			SetupMode: false,
-			Message:   "Setup activated successfully. Router and Envoy are starting.",
+			Message:   setupActivatedMessage(configPath),
 		}); err != nil {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		}
@@ -488,9 +488,6 @@ func parseSetupCanonicalConfig(raw []byte) (*setupConfigFile, error) {
 		len(parsed.Listeners) == 0 &&
 		len(parsed.Providers.Models) == 0 &&
 		parsed.Global == nil &&
-		len(parsed.Routing.ModelCards) == 0 &&
-		len(parsed.Routing.Decisions) == 0 &&
-		countCanonicalSignals(parsed.Routing.Signals) == 0 &&
 		len(parsed.Entrypoints) == 0 &&
 		len(parsed.Recipes) == 0 {
 		return nil, fmt.Errorf("remote config is empty")
@@ -563,14 +560,6 @@ func mergeSetupCanonicalConfig(base, patch routerconfig.CanonicalConfig) routerc
 		patch.Providers.Defaults.DefaultReasoningEffort != "" {
 		merged.Providers = patch.Providers
 	}
-	if len(patch.Routing.ModelCards) > 0 ||
-		len(patch.Routing.Decisions) > 0 ||
-		countCanonicalSignals(patch.Routing.Signals) > 0 ||
-		len(patch.Routing.Projections.Partitions) > 0 ||
-		len(patch.Routing.Projections.Scores) > 0 ||
-		len(patch.Routing.Projections.Mappings) > 0 {
-		merged.Routing = patch.Routing
-	}
 	if len(patch.Entrypoints) > 0 {
 		merged.Entrypoints = patch.Entrypoints
 	}
@@ -593,31 +582,4 @@ func backupCurrentConfig(configPath string, configDir string) error {
 	}
 	cleanupBackups(configBackupDir(configDir))
 	return nil
-}
-
-func restartSetupManagedServices(effectiveConfigPath string) error {
-	if err := refreshManagedSplitEnvoyConfig(effectiveConfigPath); err != nil {
-		return err
-	}
-
-	for _, service := range []string{"router", "envoy"} {
-		if err := restartManagedService(service, 20*time.Second); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func restartSetupRuntimeServices(configPath string, effectiveConfigPath string) error {
-	if isRunningInContainer() && isManagedContainerConfigPath(configPath) {
-		return restartSetupManagedServices(effectiveConfigPath)
-	}
-
-	if getDockerContainerStatus(managedContainerNameForService("router")) == "not found" &&
-		getDockerContainerStatus(managedContainerNameForService("envoy")) == "not found" {
-		return nil
-	}
-
-	return restartSetupManagedServices(effectiveConfigPath)
 }

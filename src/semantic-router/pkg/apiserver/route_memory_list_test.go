@@ -290,3 +290,32 @@ func TestHandleListMemories_AuthHeaderOnly(t *testing.T) {
 		t.Errorf("Expected 3 memories for user-alice, got %d", resp.Total)
 	}
 }
+
+func TestHandleListMemories_OffsetSecondPage(t *testing.T) {
+	server, store := newTestServer()
+	seedTestMemories(store)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories?user_id=user-alice&limit=2&offset=2", nil)
+	w := httptest.NewRecorder()
+	server.handleListMemories(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp MemoryListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if resp.Total != 3 || len(resp.Memories) != 1 || resp.Offset != 2 {
+		t.Fatalf("page = total %d len %d offset %d", resp.Total, len(resp.Memories), resp.Offset)
+	}
+}
+
+func TestHandleListMemories_RejectsNegativeOffset(t *testing.T) {
+	server, _ := newTestServer()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/storage/memories?user_id=user-alice&offset=-1", nil)
+	w := httptest.NewRecorder()
+	server.handleListMemories(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}

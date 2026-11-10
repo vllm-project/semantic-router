@@ -13,7 +13,7 @@ const FOOTER_GROUPS = [
     title: 'Build',
     links: [
       { label: 'GitHub', href: 'https://github.com/vllm-project/semantic-router' },
-      { label: 'Hugging Face', href: 'https://huggingface.co/LLM-Semantic-Router' },
+      { label: 'Hugging Face', href: 'https://huggingface.co/vllm-sr' },
       { label: 'Installation', href: 'https://vllm-sr.ai/docs/installation/' },
     ],
   },

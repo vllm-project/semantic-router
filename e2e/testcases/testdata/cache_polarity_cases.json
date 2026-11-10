@@ -1,18 +1,18 @@
 [
   {
-    "description": "Antonym flip must not reuse the cached answer (on/off) — routes to default_decision, mmbert similarity ~0.95",
+    "description": "Antonym flip (on/off) must not reuse the cached answer",
     "original_question": "How do I turn on the lights?",
     "contradiction": "How do I turn off the lights?",
     "paraphrase": "How can I turn on the lights?"
   },
   {
-    "description": "Antonym flip must not reuse the cached answer (lock/unlock) — routes to default_decision, mmbert similarity ~0.97",
-    "original_question": "How do I lock the door?",
-    "contradiction": "How do I unlock the door?",
-    "paraphrase": "How can I lock the door?"
+    "description": "Antonym flip (enable/disable) must not reuse the cached answer",
+    "original_question": "How do I enable two-factor authentication?",
+    "contradiction": "How do I disable two-factor authentication?",
+    "paraphrase": "How can I enable two-factor authentication?"
   },
   {
-    "description": "Antonym flip must not reuse the cached answer (dark mode) — routes to default_decision, mmbert similarity ~0.93",
+    "description": "Antonym flip (on/off, dark mode) must not reuse the cached answer",
     "original_question": "How to turn on dark mode?",
     "contradiction": "How to turn off dark mode?",
     "paraphrase": "How do I turn on dark mode?"

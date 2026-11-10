@@ -64,28 +64,30 @@ func TestJailbreakAcceptanceRequiresBothClasses(t *testing.T) {
 
 func TestJailbreakResponseAttributesTheConfiguredGuardDecision(t *testing.T) {
 	tests := []struct {
-		name, decision, path, fast, matched string
-		status                              int
-		blocked, wantErr                    bool
+		name, decision, path, matched string
+		status                        int
+		blocked, wantErr              bool
 	}{
-		{name: "production Guard", decision: "block_jailbreak", path: "fast_response", fast: "true", blocked: true},
-		{name: "strict Guard", decision: "block_jailbreak_prod", path: "fast_response", fast: "true", blocked: true},
-		{name: "relaxed Guard", decision: "block_jailbreak_dev", path: "fast_response", fast: "true", blocked: true},
-		{name: "PII fast response is not Guard", decision: "block_pii", path: "fast_response", fast: "true"},
-		{name: "Safety fast response is not Guard", decision: "block_safety", path: "fast_response", fast: "true"},
-		{name: "matching prefix is not the configured decision", decision: "block_jailbreak_other", path: "fast_response", fast: "true"},
+		{name: "production Guard", decision: "block_jailbreak", path: "fast_response", blocked: true},
+		{name: "strict Guard", decision: "block_jailbreak_prod", path: "fast_response", blocked: true},
+		{name: "relaxed Guard", decision: "block_jailbreak_dev", path: "fast_response", blocked: true},
+		{name: "Guard names its matched rule", decision: "block_jailbreak", path: "fast_response", matched: "jailbreak_standard", blocked: true},
+		{name: "PII fast response is not Guard", decision: "block_pii", path: "fast_response"},
+		{name: "Safety fast response is not Guard", decision: "block_safety", path: "fast_response"},
+		{name: "matching prefix is not the configured decision", decision: "block_jailbreak_other", path: "fast_response"},
 		{name: "upstream allowed", decision: "other", path: "upstream"},
+		{name: "upstream no-match is allowed", path: "upstream"},
+		{name: "upstream no-match cannot hide a Guard match", path: "upstream", matched: "jailbreak_standard", wantErr: true},
+		{name: "fast path needs a selected decision", path: "fast_response", wantErr: true},
 		{name: "validated cache allowed", decision: "other", path: "cache"},
 		{name: "missing route is not a negative", path: "cache", wantErr: true},
 		{name: "missing path is not a negative", decision: "other", wantErr: true},
 		{name: "Guard cannot reach upstream", decision: "block_jailbreak", path: "upstream", wantErr: true},
 		{name: "Guard cannot reach cache", decision: "block_jailbreak", path: "cache", wantErr: true},
 		{name: "unblocked match is an enforcement failure", decision: "other", path: "upstream", matched: "jailbreak_standard", wantErr: true},
-		{name: "other policy cannot hide a Guard match", decision: "block_pii", path: "fast_response", fast: "true", matched: "jailbreak_standard", wantErr: true},
-		{name: "fast path needs enforcement header", decision: "block_jailbreak", path: "fast_response", wantErr: true},
-		{name: "upstream cannot claim fast enforcement", decision: "other", path: "upstream", fast: "true", wantErr: true},
-		{name: "HTTP failure is not a Guard success", decision: "block_jailbreak", path: "fast_response", fast: "true", status: http.StatusInternalServerError, wantErr: true},
-		{name: "profile does not emit forbidden", decision: "block_jailbreak", path: "fast_response", fast: "true", status: http.StatusForbidden, wantErr: true},
+		{name: "other policy cannot hide a Guard match", decision: "block_pii", path: "fast_response", matched: "jailbreak_standard", wantErr: true},
+		{name: "HTTP failure is not a Guard success", decision: "block_jailbreak", path: "fast_response", status: http.StatusInternalServerError, wantErr: true},
+		{name: "profile does not emit forbidden", decision: "block_jailbreak", path: "fast_response", status: http.StatusForbidden, wantErr: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -94,12 +96,11 @@ func TestJailbreakResponseAttributesTheConfiguredGuardDecision(t *testing.T) {
 				status = http.StatusOK
 			}
 			header := http.Header{}
-			for key, value := range map[string]string{
-				"x-vsr-schema-version": "2", "x-vsr-selected-decision": test.decision,
-				"x-vsr-response-path": test.path, "x-vsr-fast-response": test.fast,
-				"x-vsr-matched-jailbreak": test.matched,
-			} {
-				header.Set(key, value)
+			header.Set("x-vsr-schema-version", routerSchemaVersion)
+			header.Set("x-vsr-selected-decision", test.decision)
+			header.Set(responsePathHeader, test.path)
+			if test.matched != "" {
+				header.Set(traceHeader, `algorithm=static, signals=("jailbreak:`+test.matched+`")`)
 			}
 			blocked, decision, err := observeJailbreakResponse(&localChatCompletionResponse{StatusCode: status, Headers: header})
 			if (err != nil) != test.wantErr || blocked != test.blocked || decision != test.decision {

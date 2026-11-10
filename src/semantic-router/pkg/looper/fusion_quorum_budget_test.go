@@ -125,14 +125,14 @@ func TestFusionRoundTimeoutStillServesFallbackForLiveCaller(t *testing.T) {
 
 	req := newFusionTestRequest()
 	req.Algorithm = &config.AlgorithmConfig{
-		Type: "fusion",
+		Type:    "fusion",
+		OnError: config.FusionOnErrorSkip,
 		Fusion: &config.FusionAlgorithmConfig{
 			Model:                  "judge",
 			AnalysisModels:         []string{"panel-slow", "panel-b"},
 			MaxConcurrent:          2,
 			MinSuccessfulResponses: 2,
 			RoundTimeoutSeconds:    1,
-			OnError:                config.FusionOnErrorSkip,
 			QuorumFailurePolicy:    config.FusionQuorumFailurePolicyFallback,
 			QuorumFallbackTarget:   "backup-model",
 		},

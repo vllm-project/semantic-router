@@ -15,30 +15,31 @@ import (
 
 func TestCLIDecompileUnboundRecipeOnlyDocument(t *testing.T) {
 	var source strings.Builder
-	source.WriteString("version: v0.3\nrecipes:\n")
+	source.WriteString("version: v0.5\nrecipes:\n")
 	for _, name := range []string{"alpha", "beta", "gamma", "delta", "epsilon"} {
 		fmt.Fprintf(&source, `  - name: %s
-    routing:
-      candidate_requirements: {capabilities: declared, context: known_limits}
-      data_policy: {replay: false}
-      decisions:
-        - name: primary
-          priority: 1
-          rules: {operator: AND}
-          algorithm:
-            type: multi_factor
-            minimum_candidates: 1
-            multi_factor:
-              objective:
-                strategy: lexicographic
-                priorities: [{factor: latency}, {factor: cost}]
-              latency_metric: ttft
-              quality: {index: "vllm-sr/general@1.0.0", on_missing: exclude, min_coverage: 0.8, min_score: 0}
-          plugins:
-            - type: request_params
-              configuration: {default_max_tokens: 4096}
+    candidate_requirements: {capabilities: declared, context: known_limits}
+    decisions:
+      - name: primary
+        priority: 1
+        rules: {operator: AND}
+        algorithm:
+          type: multi_factor
+          minimum_candidates: 1
+          multi_factor:
+            objective:
+              strategy: lexicographic
+              priorities: [{factor: latency}, {factor: cost}]
+            latency_metric: ttft
+            quality: {index: "vllm-sr/general@1.0.0", on_missing: exclude, min_coverage: 0.8, min_score: 0}
+        plugins:
+          - type: router_replay
+            configuration: {enabled: false}
+          - type: request_params
+            configuration: {default_max_tokens: 4096}
 `, name)
 	}
+	source.WriteString("entrypoints:\n  - model_names: [vllm-sr/auto]\n    recipe: alpha\n    default: true\n")
 	input := []byte(source.String())
 	want, err := config.ParseYAMLBytes(input)
 	if err != nil {

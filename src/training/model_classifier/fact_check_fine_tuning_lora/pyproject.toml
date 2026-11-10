@@ -1,0 +1,21 @@
+[project]
+name = "vllm-sr-fact-check-fine-tuning-lora"
+version = "0.0.0"
+description = "Environment for the fact-check LoRA scripts under src/training/model_classifier/fact_check_fine_tuning_lora"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "accelerate>=0.28,<2",
+    "datasets>=2.19,<5",
+    "numpy>=1.24,<3",
+    "peft>=0.10,<1",
+    "pyarrow>=14,<26",
+    "scikit-learn>=1.4,<2",
+    "torch>=2.2,<3",
+    "transformers>=4.40,<6",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10"]
+
+[tool.uv]
+package = false

@@ -13,6 +13,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
+const protectionReasonMissingIdentity = "missing_identity"
+
 type routerLearningProtectionPreflight struct {
 	enabled         bool
 	mode            string
@@ -36,23 +38,27 @@ func (r *OpenAIRouter) applyProtectionPreflight(input routerLearningInput) route
 	if !ok {
 		return preflight
 	}
+	identity, identityOK := r.protectionIdentity(input.ctx, cfg)
+	if identityOK {
+		preflight.identity = identity
+		if input.ctx != nil {
+			input.ctx.VSRLearningSessionID = identity.memoryKey
+			input.ctx.VSRLearningConversationID = identity.conversationID
+		}
+	}
 	if mode == config.DecisionAdaptationModeBypass {
 		preflight.policy = newProtectionPolicy(input.ctx, cfg, mode, routerLearningActionBypass, "decision_bypass", scope)
 		return preflight
 	}
-	identity, identityOK := r.protectionIdentity(input.ctx, cfg)
 	if !identityOK {
-		preflight.policy = newProtectionPolicy(input.ctx, cfg, mode, routerLearningActionSuppressSampling, "missing_identity", scope)
+		preflight.policy = newProtectionPolicy(input.ctx, cfg, mode, routerLearningActionSuppressSampling, protectionReasonMissingIdentity, scope)
 		return preflight
 	}
 	if input.ctx != nil {
-		input.ctx.VSRLearningSessionID = identity.memoryKey
-		input.ctx.VSRLearningConversationID = identity.conversationID
 		configureProgressEvidence(input.ctx, progressGateConfig(cfg.Tuning), time.Now())
 	}
 
 	preflight.enabled = true
-	preflight.identity = identity
 	if mode == config.DecisionAdaptationModeObserve {
 		preflight.samplingAllowed = true
 		preflight.policy = newProtectionPolicy(input.ctx, cfg, mode, routerLearningActionObserve, "observe_only", scope)
@@ -126,7 +132,13 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 	input routerLearningInput,
 	preflight routerLearningProtectionPreflight,
 	proposal routerLearningDecision,
-) (routerLearningDecision, error) {
+) (out routerLearningDecision, err error) {
+	var release protectionReleaseVerdict
+	defer func() {
+		if err == nil {
+			applyProtectionReleasePolicy(input.ctx, &out, release)
+		}
+	}()
 	baseResult := firstNonNilSelectionResult(proposal.selectionResult, input.baseResult)
 	baseCtx := firstNonNilSelectionContext(proposal.selectionContext, input.selCtx)
 	baseRef := firstNonNilModelRef(proposal.selectedModelRef, input.selectedModelRef)
@@ -135,12 +147,36 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 		selectionResult:  baseResult,
 		selectedModelRef: baseRef,
 	}
-	if !preflight.enabled || preflight.mode == config.DecisionAdaptationModeBypass {
+	if preflight.mode == config.DecisionAdaptationModeBypass {
+		// Bypass disables learning policy, not conversation ownership. Stage the
+		// selected hard-policy route under the same scoped key that a following
+		// tool-loop hard lock will read.
+		if preflight.identity.memoryKey != "" {
+			decision.selectionContext = r.protectionSelectionContext(baseCtx, input.ctx, preflight.identity)
+		}
+		decision.changesModel = learningChangesModel(input.baseResult, baseResult)
+		decision.policy = preflight.policy
+		release = unavailableProtectionRelease(input.ctx, preflight.config, protectionReleaseReasonProtectionBypassed)
+		recordProtectionReleaseWarning(input.ctx, release)
+		return decision, nil
+	}
+	if !preflight.enabled {
+		reason := protectionReleaseReasonProtectionDisabled
+		if preflight.policy.Reason == protectionReasonMissingIdentity {
+			reason = preflight.policy.Reason
+		}
+		release = unavailableProtectionRelease(input.ctx, preflight.config, reason)
+		recordProtectionReleaseWarning(input.ctx, release)
 		decision.changesModel = learningChangesModel(input.baseResult, baseResult)
 		decision.policy = preflight.policy
 		return decision, nil
 	}
 	learningCtx := r.protectionSelectionContext(baseCtx, input.ctx, preflight.identity)
+	release = evaluateProtectionRelease(input.ctx, preflight.config, learningCtx.AgenticSession, preflight.mode)
+	recordProtectionReleaseWarning(input.ctx, release)
+	if release.honored {
+		learningCtx.AgenticSession.ReleaseHonored = true
+	}
 	if progressGateConfig(preflight.config.Tuning).Enabled {
 		learningCtx = r.progressEligibleContext(input.ctx, learningCtx)
 		if learningCtx == nil || len(learningCtx.CandidateModels) == 0 {
@@ -148,13 +184,19 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 			return decision, nil
 		}
 	}
-	rescue, rescued := r.protectionRescueDecision(input, learningCtx, preflight, proposal)
-	if rescued {
-		return rescue, nil
-	}
-	if protected, ok := sessionScopeProtectedResult(preflight.config, baseResult, learningCtx, preflight.identity); ok {
-		attachRejectedRescue(protected, rescue.selectionResult)
-		return r.protectionDecisionFromResult(input, learningCtx, protected, preflight, proposal), nil
+	// A release asks for a fresh decision, so neither the held-model shortcut
+	// nor rescue evidence applies to it.
+	var rescue routerLearningDecision
+	if !release.honored {
+		var rescued bool
+		rescue, rescued = r.protectionRescueDecision(input, learningCtx, preflight, proposal)
+		if rescued {
+			return rescue, nil
+		}
+		if protected, ok := sessionScopeProtectedResult(preflight.config, baseResult, learningCtx, preflight.identity); ok {
+			attachRejectedRescue(protected, rescue.selectionResult)
+			return r.protectionDecisionFromResult(input, learningCtx, protected, preflight, proposal), nil
+		}
 	}
 
 	result, err := r.selectProtectionResultForContext(selectionRequestContext(input.ctx), preflight.config, baseResult, learningCtx, input.ctx)
@@ -472,6 +514,13 @@ func (r *OpenAIRouter) applySwitchGateToResult(
 		finishProgressTrace(trace, proposedModel, false, "proposal_accepted")
 		return
 	}
+	// A client release replaces the evidence and oscillation rules with its own
+	// user-turn interval; hard eligibility above still applies.
+	if hardReason == "" && learningCtx.AgenticSession != nil && learningCtx.AgenticSession.ReleaseHonored {
+		trace.Decision, trace.Reason = selection.GateDecisionSwitch, switchGateReasonRelease
+		finishProgressTrace(trace, proposedModel, false, "proposal_accepted")
+		return
+	}
 	if reason := r.progressCandidateReason(ctx, learningCtx, current); reason != "" {
 		finishProgressTrace(trace, proposedModel, false, "current_ineligible:"+reason)
 		if hardReason != "" && ctx != nil {
@@ -514,15 +563,29 @@ func holdCurrentModelInResult(
 	return true
 }
 
+// protectionSessionID is the session id protection keys on and the header it
+// came from: identity.headers.session when configured, else the session id
+// the request pins.
+func protectionSessionID(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) (string, string) {
+	if header := cfg.HeaderName("session"); header != "" {
+		return strings.TrimSpace(headerValueCI(ctx, header)), header
+	}
+	return pinnedSessionID(ctx)
+}
+
 func (r *OpenAIRouter) protectionIdentity(
 	ctx *RequestContext,
 	cfg config.RouterLearningProtectionConfig,
 ) (routerLearningIdentity, bool) {
 	scope := cfg.EffectiveScope()
-	sessionHeader := cfg.HeaderName("session")
+	sessionID, sessionHeader := protectionSessionID(ctx, cfg)
 	conversationHeader := cfg.HeaderName("conversation")
-	sessionID := strings.TrimSpace(headerValueCI(ctx, sessionHeader))
+	agentHeader := cfg.HeaderName("agent")
 	conversationID := strings.TrimSpace(headerValueCI(ctx, conversationHeader))
+	agentID := ""
+	if agentHeader != "" {
+		agentID = strings.TrimSpace(headerValueCI(ctx, agentHeader))
+	}
 	if sessionID == "" {
 		return routerLearningIdentity{}, false
 	}
@@ -533,6 +596,11 @@ func (r *OpenAIRouter) protectionIdentity(
 		}
 		components = append(components, conversationID)
 	}
+	if agentID != "" {
+		// The marker component gives agent keys a component count no session
+		// or conversation key has, so the two can never collide.
+		components = append(components, "agent", agentID)
+	}
 	return routerLearningIdentity{
 		sessionID:          sessionID,
 		conversationID:     conversationID,
@@ -540,6 +608,8 @@ func (r *OpenAIRouter) protectionIdentity(
 		scope:              scope,
 		sessionHeader:      sessionHeader,
 		conversationHeader: conversationHeader,
+		agentID:            agentID,
+		agentHeader:        agentHeader,
 	}, true
 }
 
@@ -684,7 +754,7 @@ func sessionScopeProtectionTrace(
 		IdleExpired:                 false,
 		HasNonPortableContext:       session.HasNonPortableContext,
 		NonPortableContextReason:    session.NonPortableContextReason,
-		DecisionDrift:               session.LastDecisionName != "" && session.LastDecisionName != selectionDecisionStateKey(learningCtx),
+		DecisionDrift:               selectionDecisionDrift(learningCtx),
 		DecisionReason:              "session_scope_protect",
 		CacheWarmth:                 session.CacheWarmth,
 		CacheWarmthOK:               session.CacheWarmthOK,
@@ -780,7 +850,7 @@ func rescueProtectionTrace(
 	trace.IdleExpired = sessionScopeIdleExpired(cfg, session)
 	trace.HasNonPortableContext = session.HasNonPortableContext
 	trace.NonPortableContextReason = session.NonPortableContextReason
-	trace.DecisionDrift = session.LastDecisionName != "" && session.LastDecisionName != selectionDecisionStateKey(learningCtx)
+	trace.DecisionDrift = selectionDecisionDrift(learningCtx)
 	trace.CacheWarmth = session.CacheWarmth
 	trace.CacheWarmthOK = session.CacheWarmthOK
 	return trace

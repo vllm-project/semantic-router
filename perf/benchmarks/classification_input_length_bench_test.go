@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package benchmarks
 
@@ -10,8 +10,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
 var (
@@ -22,7 +21,7 @@ var (
 	inputLengthBudget = config.ModelInputBudget{MaxTokens: inputLengthTokens[len(inputLengthTokens)-1], Overflow: "reject"}
 
 	inputLengthOnce                                  sync.Once
-	inputLengthDomain                                *binding.Resolved[string, tasks.LabelDistribution]
+	inputLengthDomain                                *signalClassifier
 	inputLengthErr                                   error
 	inputLengthUnitTokens, inputLengthTemplateTokens int
 )
@@ -30,12 +29,10 @@ var (
 func initInputLengthDomain(b *testing.B) {
 	b.Helper()
 	inputLengthOnce.Do(func() {
-		spec := benchmarkModel(b, "domain", "label_distribution.v1")
-		spec.Binding.Deployment += "-input-length"
-		spec.Deployment.Input = inputLengthBudget
-		if inputLengthDomain, inputLengthErr = benchmarkRuntime.Sequence(context.Background(), spec); inputLengthErr != nil {
-			return
-		}
+		inputLengthErr = fmt.Errorf("an earlier benchmark stopped while preparing it")
+		inputLengthDomain = newSignalClassifier(b, "perf-decision-input-length", inputLengthBudget, presets.Domain)
+		// The domain question reads as much of the text as the budget allows.
+		inputLengthDomain.questions[0].Truncate = false
 		one, err := inputTokens(inputLengthUnit)
 		if err != nil {
 			inputLengthErr = err
@@ -46,34 +43,36 @@ func initInputLengthDomain(b *testing.B) {
 			inputLengthErr = err
 			return
 		}
-		inputLengthUnitTokens, inputLengthTemplateTokens = two-one, 2*one-two
+		inputLengthUnitTokens, inputLengthTemplateTokens, inputLengthErr = two-one, 2*one-two, nil
 	})
 	if inputLengthErr != nil {
-		if missingBenchModels(inputLengthErr) {
-			b.Skipf("Failed to initialize domain classifier: %v", inputLengthErr)
-		}
-		b.Fatalf("prepare owned Vela Domain with a %d-token budget: %v", inputLengthBudget.MaxTokens, inputLengthErr)
+		b.Fatalf("prepare the decision model with a %d-token budget: %v", inputLengthBudget.MaxTokens, inputLengthErr)
 	}
 }
 
 func inputTokens(text string) (int, error) {
-	result, err := inputLengthDomain.Call(context.Background(), "perf", text)
+	response, err := inputLengthDomain.ask(context.Background(), text)
 	if err != nil {
 		return 0, err
 	}
-	if result.Input == nil || result.Input.Truncated {
-		return 0, fmt.Errorf("domain result did not report complete input usage: %+v", result.Input)
+	answer := response.Answers[inputLengthDomain.questions[0].ID]
+	if answer.Error != "" || answer.InputCoverage != "complete" {
+		return 0, fmt.Errorf("domain answer did not read the complete input: %+v", answer)
 	}
-	return result.Input.ProcessedTokens, nil
+	return response.InputTokens, nil
 }
 
 func recordInputLengthProtocol(b *testing.B) {
-	recordModelIdentity(b, "domain")
+	recordModelIdentity(b, "decision")
 	benchmarkModelMu.Lock()
 	defer benchmarkModelMu.Unlock()
 	identity := benchmarkIdentities[b.Name()]
-	identity.Protocol = fmt.Sprintf("owned-native-v1;max_tokens=%d;overflow=%s;embedding=full-layer/full-dimension;input=repeated-fixture",
-		inputLengthBudget.MaxTokens, inputLengthBudget.Overflow)
+	card := benchmarkCards["decision"]
+	protocol, err := modelRuntimeProtocol(card, inputLengthBudget, "full-layer/full-dimension")
+	if err != nil {
+		b.Fatalf("record input-length execution settings: %v", err)
+	}
+	identity.Protocol = protocol + ";input=repeated-fixture"
 	benchmarkIdentities[b.Name()] = identity
 }
 
@@ -88,11 +87,11 @@ func BenchmarkClassifyInputLength(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				result, err := inputLengthDomain.Call(context.Background(), "perf", text)
+				response, err := inputLengthDomain.ask(context.Background(), text)
 				if err != nil {
 					b.Fatalf("classify %d-token input: %v", tokens, err)
 				}
-				processed = result.Input.ProcessedTokens
+				processed = response.InputTokens
 			}
 			b.StopTimer()
 			if processed > tokens || processed <= tokens-inputLengthUnitTokens {

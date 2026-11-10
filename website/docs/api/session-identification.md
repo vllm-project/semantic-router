@@ -4,6 +4,9 @@ Router Learning protection requires stable, explicit client identities for
 related turns. Replay and telemetry can use derived fallback identities, but
 those fallbacks do not enable protection.
 
+For the inference connection and a tool-loop check, start with
+[Connect an agent harness](../installation/agent-harness).
+
 ## Choose the identity you need
 
 For the default `scope: conversation` protection, send both headers:
@@ -18,6 +21,15 @@ each conversation inside it. Conversation protection requires both; a policy
 with `scope: session` requires only the session header. Use your configured
 header names if customized. If a required identity is missing, the request
 still routes, but protection does not retain a model.
+
+An agent harness that delegates work to subagents can also name each agent.
+Set `identity.headers.agent` to the header that carries that name, such as
+`x-claude-code-agent-id`, which Claude Code sends on subagent requests only.
+For Codex CLI, set `session: session-id` and `agent: thread-id`. Codex sends
+both on every request; on a root thread the two values are equal.
+Protection then holds each named agent on its own model inside the session,
+and requests without the header keep the session or conversation key. The
+agent header is optional, has no default, and is never required.
 
 Replay uses the same configured session and conversation header names when that
 explicit identity is available. Recording a conversation ID does not change the
@@ -36,7 +48,7 @@ protection.
 When the request is not a Responses API request, the first available source in
 this order becomes the router session id:
 
-1. `x-session-id` supplied by the application or gateway.
+1. `x-session-id` supplied by the agent harness, another client, or a trusted gateway.
 2. `x-claude-code-session-id` on Anthropic Messages requests.
 3. Anthropic `metadata.user_id`, stored with an `ant-md-` prefix.
 4. A fingerprint of the message history and authenticated user identity.

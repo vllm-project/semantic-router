@@ -38,7 +38,7 @@ func validateDecisionReferences(cfg *RouterConfig, decision Decision) error {
 	if err := validateDecisionRuleNode(cfg, decision.Name, &decision.Rules, true); err != nil {
 		return err
 	}
-	warnUnguardedClassifierConditions(decision)
+	warnUnguardedSystemOneConditions(decision)
 	if err := validateDecisionAnnotations(decision); err != nil {
 		return err
 	}
@@ -51,13 +51,16 @@ func validateDecisionReferences(cfg *RouterConfig, decision Decision) error {
 // validateDecisionExecution checks how a decision runs: its algorithm
 // configuration and the model contracts that configuration depends on.
 func validateDecisionExecution(cfg *RouterConfig, decision Decision) error {
+	if err := validateDecisionModelRefBudget(decision.Name, decision.ModelRefs); err != nil {
+		return err
+	}
 	if err := validateDecisionAlgorithmConfig(decision.Name, decision.ModelRefs, decision.Algorithm); err != nil {
 		return err
 	}
 	if err := validateDecisionAutomaticOutput(decision); err != nil {
 		return err
 	}
-	if err := validateDecisionPromptModel(cfg, decision); err != nil {
+	if err := validateDecisionAutomaticOutputCandidates(cfg, decision); err != nil {
 		return err
 	}
 	if err := validateDecisionFusionFallbackTarget(cfg, decision); err != nil {
@@ -69,5 +72,11 @@ func validateDecisionExecution(cfg *RouterConfig, decision Decision) error {
 	if err := validateDecisionCandidateIterations(decision); err != nil {
 		return err
 	}
-	return validateDecisionOutputContractSpec(decision)
+	if err := validateDecisionReliability(decision); err != nil {
+		return err
+	}
+	if err := validateDecisionOutputContractSpec(decision); err != nil {
+		return err
+	}
+	return validateDecisionLooperBackends(cfg, decision)
 }

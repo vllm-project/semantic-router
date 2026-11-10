@@ -1,0 +1,436 @@
+package modelservice
+
+import (
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
+)
+
+// The questions a stage asks one served model travel in one call. A send
+// fuses the parked decisions calls to one model with the same options (but
+// the deadline) and cache into one task and hands each caller the answers to
+// its own questions. Calls about one state share it, and the model reads
+// their questions together, as one request with all of them. A task about
+// one state is a standard request (DecisionRequest.state and questions); a
+// task about several is a batch (DecisionRequest.states) with an entry per
+// state, each read exactly as a request of its own. Calls about one state
+// that ask the same question under one ID (consumers of a family's trained
+// question) share its answer; calls about one state whose question IDs could
+// otherwise share an answer key (an equal ID, or an ID under a Set question's
+// "<id>." labels) stay apart.
+//
+// The result cache applies to the call the runtime answers: a fused call is
+// looked up and stored under the key of all its states and questions, so an
+// answer a model gave alongside other questions never serves a call that
+// asked alone.
+
+// fusedDecision is a decisions task's states, in request order, and its
+// cache key.
+type fusedDecision struct {
+	states []*fusedState
+	cache  *resultCache
+	key    cacheKey
+}
+
+// fusedState is one state of a fused decisions task: the calls about it, its
+// request (the state and every question about it once, in ID order), its
+// entry's name in a batch ("" when the task asks about it alone), its fusion
+// key and the questions it asks by ID.
+type fusedState struct {
+	name    string
+	text    string
+	calls   []*bundleCall
+	taken   map[string]Question
+	request Request
+}
+
+// decisionGroup is the fusion key of a decisions call: its model, options
+// without the deadline and the cache it reads.
+func decisionGroup(call *bundleCall) string {
+	request := *call.task.Decisions
+	shape := struct {
+		Model   *string             `json:"model,omitempty"`
+		Options *api.RequestOptions `json:"options,omitempty"`
+	}{Model: request.Model}
+	if request.Options != nil {
+		options := *request.Options
+		options.DeadlineMs = nil
+		shape.Options = &options
+	}
+	key, err := json.Marshal(shape)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%s|%p", key, call.decision.cache)
+}
+
+// stateText is the fusion key of a call's state: its text, or its named
+// parts, and the images and videos every question of it sees.
+func stateText(request Request) string {
+	var key strings.Builder
+	field := func(value string) {
+		key.WriteString(strconv.Itoa(len(value)))
+		key.WriteByte(':')
+		key.WriteString(value)
+	}
+	if request.Parts == nil {
+		key.WriteByte('s')
+		field(request.State)
+	} else {
+		names := make([]string, 0, len(request.Parts))
+		for name := range request.Parts {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		key.WriteByte('p')
+		key.WriteString(strconv.Itoa(len(names)))
+		for _, name := range names {
+			field(name)
+			field(request.Parts[name])
+		}
+	}
+	for _, media := range [][]string{request.Images, request.Videos} {
+		key.WriteByte('m')
+		key.WriteString(strconv.Itoa(len(media)))
+		for _, item := range media {
+			field(item)
+		}
+	}
+	return key.String()
+}
+
+// questionIDs are a decisions call's question IDs.
+func questionIDs(call *bundleCall) []string {
+	ids := make([]string, len(call.decision.request.Questions))
+	for index, question := range call.decision.request.Questions {
+		ids[index] = question.ID
+	}
+	return ids
+}
+
+// compatibleAnswers reports whether a call's questions can join a state's:
+// each either is a question the state already asks under its ID, or has an
+// ID no question of the state has that names no label answer ("<id>.<label>")
+// of one.
+func compatibleAnswers(questions []Question, taken map[string]Question) bool {
+	for _, question := range questions {
+		if asked, exists := taken[question.ID]; exists {
+			if !sameWireQuestion(asked, question) {
+				return false
+			}
+			continue
+		}
+		for other := range taken {
+			if strings.HasPrefix(question.ID, other+".") || strings.HasPrefix(other, question.ID+".") {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// fuseDecisions turns the decisions calls parked for one process or remote
+// deployment into tasks of at most limit states each. The calls are placed in
+// a fixed order, so the same calls make the same tasks whatever order they
+// parked in.
+func fuseDecisions(limit int, calls []*bundleCall) []*bundleTask {
+	type placed struct {
+		call  *bundleCall
+		group string
+		text  string
+		first string
+	}
+	ordered := make([]placed, len(calls))
+	for index, call := range calls {
+		ids := questionIDs(call)
+		sort.Strings(ids)
+		first := ""
+		if len(ids) > 0 {
+			first = ids[0]
+		}
+		ordered[index] = placed{call: call, group: decisionGroup(call), text: stateText(call.decision.request), first: first}
+	}
+	sort.SliceStable(ordered, func(i, j int) bool {
+		a, b := ordered[i], ordered[j]
+		if a.group != b.group {
+			return a.group < b.group
+		}
+		if a.text != b.text {
+			return a.text < b.text
+		}
+		return a.first < b.first
+	})
+	limit = max(1, limit)
+	open := make(map[string][]*bundleTask)
+	var tasks []*bundleTask
+	for _, entry := range ordered {
+		var target *bundleTask
+		if entry.group != "" {
+			for _, task := range open[entry.group] {
+				if task.decision.fits(entry.call, entry.text, limit) {
+					target = task
+					break
+				}
+			}
+		}
+		if target == nil {
+			target = &bundleTask{decision: &fusedDecision{cache: entry.call.decision.cache}}
+			tasks = append(tasks, target)
+			if entry.group != "" {
+				open[entry.group] = append(open[entry.group], target)
+			}
+		}
+		target.decision.add(entry.call, entry.text)
+		target.calls = append(target.calls, entry.call)
+	}
+	for _, task := range tasks {
+		task.prepareDecision()
+	}
+	return tasks
+}
+
+// fits reports whether a call can join the task: about one of its states
+// with questions compatible with that state's, or about another state while
+// the task has fewer than limit of them.
+func (d *fusedDecision) fits(call *bundleCall, text string, limit int) bool {
+	for _, state := range d.states {
+		if state.text == text {
+			return compatibleAnswers(call.decision.request.Questions, state.taken)
+		}
+	}
+	return len(d.states) < limit
+}
+
+func (d *fusedDecision) add(call *bundleCall, text string) {
+	var state *fusedState
+	for _, existing := range d.states {
+		if existing.text == text {
+			state = existing
+		}
+	}
+	if state == nil {
+		state = &fusedState{text: text, taken: make(map[string]Question), request: call.decision.request}
+		state.request.Questions = nil
+		d.states = append(d.states, state)
+	}
+	state.calls = append(state.calls, call)
+	for _, question := range call.decision.request.Questions {
+		if _, asked := state.taken[question.ID]; asked {
+			continue
+		}
+		state.taken[question.ID] = question
+		state.request.Questions = append(state.request.Questions, question)
+	}
+}
+
+// prepareDecision builds a decisions task's request: a standard request
+// about its one state, or a batch whose entries "1", "2", ... are its states
+// in order. The request carries the latest deadline of its calls (none if a
+// call has none).
+func (t *bundleTask) prepareDecision() {
+	d := t.decision
+	for index, state := range d.states {
+		sort.SliceStable(state.request.Questions, func(i, j int) bool { return state.request.Questions[i].ID < state.request.Questions[j].ID })
+		if len(d.states) > 1 {
+			state.name = strconv.Itoa(index + 1)
+		}
+	}
+	first := d.states[0].calls[0]
+	body := decisionsAbout(*first.task.Decisions, d.states, (*fusedState).questions)
+	if body.Options != nil {
+		options := *body.Options
+		options.DeadlineMs = t.latestDeadline()
+		body.Options = &options
+	}
+	t.task = api.BundleTask{Id: first.task.Id, Decisions: &body}
+	if d.cache != nil {
+		d.key = d.cacheKey()
+	}
+}
+
+// decisionsAbout is the decisions request about states, with shared's model
+// and options: a standard request about one state, or a batch with an entry
+// per state under its name. questions are the questions it asks about a
+// state.
+func decisionsAbout(shared api.DecisionRequest, states []*fusedState, questions func(*fusedState) map[string]api.Question) api.DecisionRequest {
+	body := api.DecisionRequest{Model: shared.Model, Options: shared.Options}
+	if len(states) == 1 {
+		own := states[0].calls[0].task.Decisions
+		body.State, body.Images, body.Videos, body.Questions = own.State, own.Images, own.Videos, questions(states[0])
+		return body
+	}
+	entries := make(map[string]api.DecisionState, len(states))
+	for _, state := range states {
+		own := state.calls[0].task.Decisions
+		entries[state.name] = api.DecisionState{State: own.State, Images: own.Images, Videos: own.Videos, Questions: questions(state)}
+	}
+	body.States = &entries
+	return body
+}
+
+// questions is the encoded questions of every call about the state.
+func (s *fusedState) questions() map[string]api.Question {
+	questions := make(map[string]api.Question, len(s.taken))
+	for _, call := range s.calls {
+		for id, question := range call.task.Decisions.Questions {
+			questions[id] = question
+		}
+	}
+	return questions
+}
+
+// latestDeadline is the latest deadline the task's calls send, nil when one
+// sends none.
+func (t *bundleTask) latestDeadline() *float64 {
+	var latest *float64
+	for _, call := range t.calls {
+		options := call.task.Decisions.Options
+		if options == nil || options.DeadlineMs == nil {
+			return nil
+		}
+		if latest == nil || *options.DeadlineMs > *latest {
+			latest = options.DeadlineMs
+		}
+	}
+	return latest
+}
+
+// cacheKey keys a task by its one state's request, or by each batch entry's
+// name and request.
+func (d *fusedDecision) cacheKey() cacheKey {
+	if len(d.states) == 1 {
+		return decideKey(d.states[0].request)
+	}
+	requests := make([]Request, len(d.states))
+	names := make([]string, len(d.states))
+	for index, state := range d.states {
+		requests[index], names[index] = state.request, state.name
+	}
+	return decideStatesKey(names, requests)
+}
+
+// answerCached answers the decisions tasks the cache holds and returns the
+// tasks still to send.
+func answerCached(tasks []*bundleTask) []*bundleTask {
+	unsent := tasks[:0]
+	for _, task := range tasks {
+		if task.decision != nil && task.decision.cache != nil {
+			if cached, ok := task.decision.cache.get(task.decision.key); ok {
+				for _, call := range task.calls {
+					cacheTotal.WithLabelValues(call.decision.deployment, "hit").Inc()
+				}
+				task.deliver(cachedResponses(cached), nil)
+				continue
+			}
+		}
+		unsent = append(unsent, task)
+	}
+	return unsent
+}
+
+// cachedResponses reads a cached decisions result: one state's Response, or
+// one per state.
+func cachedResponses(value any) []Response {
+	if responses, ok := value.([]Response); ok {
+		return responses
+	}
+	return []Response{value.(Response)}
+}
+
+// answerDecision decodes a decisions task's result once, stores a complete
+// answer in the cache and hands every call its own answers.
+func (t *bundleTask) answerDecision(result api.BundleResult, err error) {
+	if err == nil {
+		err = statusError(result.Status, result.Error)
+	}
+	if err == nil && result.Decisions == nil {
+		err = fmt.Errorf("%w: missing decision response body", ErrFailed)
+	}
+	var responses []Response
+	if err == nil {
+		responses, err = t.decision.decode(*result.Decisions)
+	}
+	if err == nil {
+		if cache := t.decision.cache; cache != nil {
+			for _, call := range t.calls {
+				cacheTotal.WithLabelValues(call.decision.deployment, "miss").Inc()
+			}
+			if completeAll(responses) {
+				if len(responses) == 1 {
+					cache.put(t.decision.key, responses[0])
+				} else {
+					cache.put(t.decision.key, responses)
+				}
+			}
+		}
+	}
+	t.deliver(responses, err)
+}
+
+// decode reads every state's answers.
+func (d *fusedDecision) decode(body api.DecisionResponse) ([]Response, error) {
+	return decodeStates(body, d.states)
+}
+
+// decodeStates reads the answers about states from the response to the
+// request decisionsAbout makes about them: the one state's from the
+// response, or each state's from its batch entry.
+func decodeStates(body api.DecisionResponse, states []*fusedState) ([]Response, error) {
+	if len(states) == 1 {
+		return []Response{decodeResponse(body, states[0].request.Questions)}, nil
+	}
+	responses := make([]Response, len(states))
+	for index, state := range states {
+		var entry api.DecisionStateResponse
+		found := false
+		if body.States != nil {
+			entry, found = (*body.States)[state.name]
+		}
+		if !found {
+			return nil, fmt.Errorf("%w: the decisions response has no answers about entry %q", ErrFailed, state.name)
+		}
+		answered := api.DecisionResponse{
+			Model: entry.Model, Answers: entry.Answers, Sets: entry.Sets, Spans: entry.Spans,
+			Thresholds: entry.Thresholds, SpanHeads: entry.SpanHeads, Usage: entry.Usage,
+		}
+		responses[index] = decodeResponse(answered, state.request.Questions)
+	}
+	return responses, nil
+}
+
+func completeAll(responses []Response) bool {
+	for _, response := range responses {
+		if !complete(response) {
+			return false
+		}
+	}
+	return len(responses) > 0
+}
+
+// deliver hands every call of a decisions task the answers to its questions.
+func (t *bundleTask) deliver(responses []Response, err error) {
+	for index, state := range t.decision.states {
+		for _, call := range state.calls {
+			call.err = err
+			if err == nil {
+				call.decision.response = responses[index].part(call.decision.request.Questions)
+			}
+			close(call.done)
+		}
+	}
+}
+
+// part is the response restricted to the given questions.
+func (r Response) part(questions []Question) Response {
+	answers := make(map[string]Answer, len(questions))
+	for _, question := range questions {
+		if answer, ok := r.Answers[question.ID]; ok {
+			answers[question.ID] = answer
+		}
+	}
+	return Response{Model: r.Model, Answers: answers, InputTokens: r.InputTokens}
+}

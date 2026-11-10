@@ -2,45 +2,45 @@ package recipe
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 type configDocument struct {
-	Global struct {
-		Router configRouterDocument `yaml:"router"`
-	} `yaml:"global"`
-	Routing struct {
-		Decisions []struct {
-			Name string `yaml:"name"`
-		} `yaml:"decisions"`
-	} `yaml:"routing"`
 	Entrypoints []struct {
 		ModelNames []string `yaml:"model_names"`
 		Recipe     string   `yaml:"recipe"`
+		Default    bool     `yaml:"default"`
 	} `yaml:"entrypoints"`
 	Recipes []struct {
-		Name    string `yaml:"name"`
-		Routing struct {
-			Decisions []struct {
-				Name string `yaml:"name"`
-			} `yaml:"decisions"`
-		} `yaml:"routing"`
+		Name      string `yaml:"name"`
+		Decisions []struct {
+			Name string `yaml:"name"`
+		} `yaml:"decisions"`
 	} `yaml:"recipes"`
 }
 
-type configRouterDocument struct {
-	AutoModelName  string    `yaml:"auto_model_name"`
-	AutoModelNames yaml.Node `yaml:"auto_model_names"`
+// defaultRecipe is the only recipe, or the recipe of the default entrypoint.
+func (config configDocument) defaultRecipe() routerconfig.RecipeName {
+	if len(config.Recipes) == 1 {
+		return routerconfig.RecipeName(config.Recipes[0].Name)
+	}
+	for _, entrypoint := range config.Entrypoints {
+		if entrypoint.Default {
+			return routerconfig.RecipeName(entrypoint.Recipe)
+		}
+	}
+	return routerconfig.DefaultRecipeName
 }
 
 type configProjection struct {
 	counts          Counts
-	autoModels      []string
+	defaultModels   []string
 	modelsByRecipe  map[string][]string
 	unifiedModelIDs []string
 }
@@ -56,29 +56,24 @@ func projectConfig(data []byte) (configProjection, error) {
 		return configProjection{}, err
 	}
 	projection := configProjection{modelsByRecipe: map[string][]string{}}
-	autoModels, err := projectAutoModels(config.Global.Router)
-	if err != nil {
-		return configProjection{}, err
-	}
-	projection.autoModels = autoModels
-
-	models := map[string]struct{}{}
-	for _, model := range projection.autoModels {
-		models[model] = struct{}{}
-	}
+	resolved := &routerconfig.RouterConfig{}
+	resolved.UseDefaultRecipe(config.defaultRecipe())
 	for _, entrypoint := range config.Entrypoints {
-		recipeName := strings.TrimSpace(entrypoint.Recipe)
+		resolved.Entrypoints = append(resolved.Entrypoints, routerconfig.EntrypointMapping{ModelNames: entrypoint.ModelNames, Recipe: routerconfig.RecipeName(entrypoint.Recipe), Default: entrypoint.Default})
+	}
+	models := map[string]struct{}{}
+	for _, entrypoint := range resolved.EffectiveEntrypoints(routerconfig.ChatAPI) {
+		recipeName := string(entrypoint.Recipe)
 		for _, model := range entrypoint.ModelNames {
-			if model = strings.TrimSpace(model); model != "" {
-				models[model] = struct{}{}
-				projection.modelsByRecipe[recipeName] = append(projection.modelsByRecipe[recipeName], model)
-			}
+			models[model] = struct{}{}
+			projection.modelsByRecipe[recipeName] = append(projection.modelsByRecipe[recipeName], model)
 		}
 		projection.modelsByRecipe[recipeName] = stableUnique(projection.modelsByRecipe[recipeName])
 	}
-	counts := Counts{UnifiedModels: len(models), Recipes: len(config.Recipes), Decisions: len(config.Routing.Decisions)}
+	projection.defaultModels = projection.modelsByRecipe[string(config.defaultRecipe())]
+	counts := Counts{UnifiedModels: len(models), Recipes: len(config.Recipes)}
 	for _, recipe := range config.Recipes {
-		counts.Decisions += len(recipe.Routing.Decisions)
+		counts.Decisions += len(recipe.Decisions)
 	}
 	if counts.Recipes == 0 {
 		counts.Recipes = 1
@@ -92,33 +87,12 @@ func projectConfig(data []byte) (configProjection, error) {
 	return projection, nil
 }
 
-func projectAutoModels(router configRouterDocument) ([]string, error) {
-	// Presence is part of the compatibility contract: an explicit list, even an
-	// empty one, replaces both the legacy field and historical defaults.
-	if router.AutoModelNames.Kind != 0 {
-		var explicit []string
-		if err := router.AutoModelNames.Decode(&explicit); err != nil {
-			return nil, fmt.Errorf("global.router.auto_model_names: %w", err)
-		}
-		return stableUnique(cleanStrings(explicit)), nil
-	}
-
-	configured := strings.TrimSpace(router.AutoModelName)
-	if configured == "" {
-		return nil, nil
-	}
-	return []string{configured}, nil
-}
-
 func (projection configProjection) requestModelFor(expectedRecipe string) (string, error) {
 	if candidates := projection.modelsByRecipe[strings.TrimSpace(expectedRecipe)]; len(candidates) > 0 {
 		return candidates[0], nil
 	}
-	if len(projection.autoModels) > 0 {
-		return projection.autoModels[0], nil
-	}
-	if len(projection.unifiedModelIDs) == 1 {
-		return projection.unifiedModelIDs[0], nil
+	if strings.TrimSpace(expectedRecipe) == "" && len(projection.defaultModels) > 0 {
+		return projection.defaultModels[0], nil
 	}
 	return "", errors.New("config has no unambiguous request-facing model")
 }

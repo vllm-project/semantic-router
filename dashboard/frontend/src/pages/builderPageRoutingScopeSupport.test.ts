@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
+import { validateTree } from '@/components/ExpressionBuilderSupport'
 import { updateSignal } from '@/lib/dslMutations'
 import type { ASTProgram } from '@/types/dsl'
 import {
   chooseDefaultBuilderRoutingScope,
   listBuilderRoutingScopes,
+  listReferenceableSignals,
   mutateBuilderRecipeSource,
   resolveBuilderRoutingScope,
   summarizeBuilderRoutingScopes,
@@ -138,7 +140,7 @@ describe('Builder routing scope navigation', () => {
     expect(listBuilderRoutingScopes(scopedAst)).toEqual([
       {
         id: 'global',
-        label: 'Global catalog',
+        label: 'Shared model catalog',
         recipeName: null,
         modelNames: [],
       },
@@ -178,11 +180,60 @@ RECIPE speed {
     expect(mutated).toContain('keywords: ["unchanged"]')
   })
 
+  it('applies mutations inside a recipe whose description contains parentheses or braces', () => {
+    const source = `RECIPE balanced (description = "Everyday routing (beta, {draft})") {
+  SIGNAL keyword balanced-keyword {
+    keywords: ["before"]
+  }
+}`
+
+    const mutated = mutateBuilderRecipeSource(source, 'balanced', (program) =>
+      updateSignal(program, 'keyword', 'balanced-keyword', { keywords: ['after'] }),
+    )
+
+    expect(mutated).toBe(`RECIPE balanced (description = "Everyday routing (beta, {draft})") {
+  SIGNAL keyword balanced-keyword {
+    keywords: ["after"]
+  }
+}`)
+  })
+
   it('keeps bindings-only default routing visible and isolates recipe bindings', () => {
-    const binding = { deployment: 'shared', contract: 'embedding.v1', adapter: 'mmbert' }
+    const binding = { deployment: 'shared' }
     const ast: ASTProgram = { ...scopedAst, modelBindings: { embedding: binding } }
     expect(chooseDefaultBuilderRoutingScope(ast)).toBe('global')
     expect(resolveBuilderRoutingScope(ast, 'global')?.modelBindings).toEqual({ embedding: binding })
     expect(resolveBuilderRoutingScope(ast, 'recipe:balanced')?.modelBindings).toBeUndefined()
+  })
+})
+
+describe('listReferenceableSignals', () => {
+  const pos = { Line: 1, Column: 1 }
+
+  it('offers the role an authz binding grants, not the binding name', () => {
+    const available = listReferenceableSignals([
+      { signalType: 'authz', name: 'admins', fields: { role: 'admin' }, pos },
+      { signalType: 'authz', name: 'admin-tokens', fields: { role: 'admin' }, pos },
+    ])
+
+    expect(available).toEqual([{ signalType: 'authz', name: 'admin' }])
+    expect(validateTree({ signalType: 'authz', signalName: 'admin' }, available)).toEqual([])
+    expect(validateTree({ signalType: 'authz', signalName: 'admins' }, available)).toEqual([
+      'Signal authz("admins") is not defined',
+    ])
+  })
+
+  it('expands complexity levels and projection outputs', () => {
+    expect(
+      listReferenceableSignals(
+        [{ signalType: 'complexity', name: 'difficulty', fields: {}, pos }],
+        [{ name: 'band', outputs: [{ name: 'band_low' }], pos }],
+      ),
+    ).toEqual([
+      { signalType: 'complexity', name: 'difficulty:easy' },
+      { signalType: 'complexity', name: 'difficulty:medium' },
+      { signalType: 'complexity', name: 'difficulty:hard' },
+      { signalType: 'projection', name: 'band_low' },
+    ])
   })
 })

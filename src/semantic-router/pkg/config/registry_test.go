@@ -8,14 +8,14 @@ func TestToLegacyRegistry_IncludesAliases(t *testing.T) {
 	registry := ToLegacyRegistry()
 
 	assertRegistryAliases(t, registry,
-		"LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model",
+		"vllm-sr/lora_pii_detector_bert-base-uncased_model",
 		"models/mom-pii-classifier",
 		"models/lora_pii_detector_bert-base-uncased_model",
 		"models/pii-detector",
 		"pii-detector",
 	)
 	assertRegistryAliases(t, registry,
-		"llm-semantic-router/mmbert-pii-detector-merged",
+		"vllm-sr/mmbert-pii-detector-merged",
 		"models/mom-mmbert-pii-detector",
 		"models/pii_classifier_modernbert-base_presidio_token_model",
 		"models/pii_classifier_modernbert-base_model",
@@ -25,7 +25,7 @@ func TestToLegacyRegistry_IncludesAliases(t *testing.T) {
 		"mmbert-pii-detector",
 	)
 	assertRegistryAliases(t, registry,
-		"LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model",
+		"vllm-sr/lora_intent_classifier_bert-base-uncased_model",
 		"models/mom-domain-classifier",
 		"models/category_classifier_modernbert-base_model",
 		"models/lora_intent_classifier_bert-base-uncased_model",
@@ -33,7 +33,7 @@ func TestToLegacyRegistry_IncludesAliases(t *testing.T) {
 		"domain-classifier",
 	)
 	assertRegistryAliases(t, registry,
-		"LLM-Semantic-Router/jailbreak_classifier_modernbert-base_model",
+		"vllm-sr/jailbreak_classifier_modernbert-base_model",
 		"models/mom-jailbreak-classifier",
 		"models/jailbreak_classifier_modernbert-base_model",
 		"models/jailbreak_classifier_modernbert_model",
@@ -42,7 +42,7 @@ func TestToLegacyRegistry_IncludesAliases(t *testing.T) {
 		"jailbreak-detector",
 	)
 	assertRegistryAliases(t, registry,
-		"llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
+		"vllm-sr/mmbert-embed-32k-2d-matryoshka",
 		"models/mmbert-embed-32k-2d-matryoshka",
 		"models/mom-embedding-ultra",
 		"models/mmbert-embed-32k-2d-matryoshka",

@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 title: 配置工作流
 description: 选择 CLI、控制面板、Helm、Operator 和 DSL 如何编写并应用同一份 canonical Router 配置。
 translation:
-  source_commit: "8ded1a3c28a4af8358c8d638955b0318caeb8ed4"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/configuration-workflows.md"
   outdated: false
 ---
@@ -21,23 +22,25 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-`config init` 写入打包的最小 canonical 模板，并且除非显式指定 `--force`，否则拒绝替换现有文件。当 Router 已经在运行时，从 `vllm-sr config get` 开始，以便保留不相关的活动设置。在 `providers.models` 中声明物理模型，并在适用决策的 `modelRefs` 中引用其名称。命名配方的决策位于 `recipes[].routing.decisions`；可复用的内置配方在发布入口点时接收模型分配。可选模型元数据统一保留在顶层 `routing.modelCards`，并根据所选算法或能力补充上下文限制、LoRA 适配器等必需信息。
+`config init` 写入打包的最小 canonical 模板，并且除非显式指定 `--force`，否则拒绝替换现有文件。当 Router 已经在运行时，从 `vllm-sr config get` 开始，以便保留不相关的活动设置。在 `providers.models` 中声明物理模型，并在适用决策的 `modelRefs` 中引用其名称。命名配方的决策位于 `recipes[].decisions`；可复用的内置配方在发布入口点时接收模型分配。可选模型元数据统一保留在顶层 `providers.models`，并根据所选算法或能力补充上下文限制、LoRA 适配器等必需信息。
 
 本地运行时在运行时拥有的状态中派生栈专用服务地址，而不会重写源文件。同一运行时和栈的并发 `serve` 和 `stop` 操作会串行化；在活动生命周期操作完成后重试。
 
 ## 控制面板
 
-空的本地工作区会以设置模式启动控制面板。用它绑定模型端点、选择基线策略、预览结果，并激活完整配置。
+空的本地工作区会以设置模式启动控制面板。用它绑定模型端点、选择基线策略、预览结果，并激活完整配置；仍在等待的 `vllm-sr serve` 随后用这份配置启动 Router。
 
-激活后，**Mixture-of-Models** 工作区将三项任务分开：
+激活后，从 **Build → Routing → Models** 连接物理 Chat 后端。**Mixture-of-Models** 有三个 tab：
 
-- **Built-in Models** 发现已安装的虚拟模型及其 Model Card；
-- **Models & Routing** 编辑物理模型、入口点、配方和路由；
+- **Models** 发布和管理公开模型入口；
+- **Recipes** 管理入口选择的策略；
 - **Probes** 检查配方场景，并支持生成或仅路由校验。
+
+**Build → System One** 单独提供 **Decision Models**、**Decision Playground** 和 **Decision Monitoring**，用于管理判断模型部署、测试类型化问题及查看运行时观测。
 
 将 provider 生成与路由评估分开验证。即使所选后端无法生成，探针也可以选择预期路由。
 
-可视化 DSL 编辑器拥有路由语义。它在替换其路由表面时保留 listeners、providers、全局设置和设置状态。多配方生命周期变更从 Models & Routing 或管理 API 管理，以免可视化编辑悄悄丢弃另一个配方。
+可视化 DSL 编辑器拥有路由语义。它在替换其路由表面时保留 listeners、providers、全局设置和设置状态。多配方生命周期变更从 Mixture-of-Models 或管理 API 管理，以免可视化编辑悄悄丢弃另一个配方。
 
 ## Helm {#helm}
 
@@ -47,13 +50,9 @@ vllm-sr serve --config config.yaml
 configOverride:
   version: v0.3
   listeners:
-    - name: grpc-50051
+    - name: http-8899
       address: 0.0.0.0
-      port: 50051
-      timeout: 300s
-    - name: http-8080
-      address: 0.0.0.0
-      port: 8080
+      port: 8899
       timeout: 300s
   providers:
     defaults:
@@ -71,7 +70,6 @@ configOverride:
     strategy: priority
     modelCards:
       - name: local/general
-        modality: text
         capabilities: [chat]
     decisions:
       - name: default-route
@@ -98,9 +96,9 @@ helm upgrade --install semantic-router \
   -f values.yaml
 ```
 
-`vllm-sr serve --target k8s --config config.yaml` 将所选文档作为原子覆盖传递，因此 chart 示例路由不能合并到其中。该命令拒绝空文档或仅包含 setup 的文档，并且不会注入本地 Docker 服务地址或知识库路径。先运行 `vllm-sr config validate`，以便 schema 和引用错误在部署前失败。
+`vllm-sr serve --target kubernetes --config config.yaml` 将所选文档作为原子覆盖传递，因此 chart 示例路由不能合并到其中。该命令拒绝空文档或仅包含 setup 的文档，并且不会注入本地 Docker 服务地址或知识库路径。先运行 `vllm-sr config validate`，以便 schema 和引用错误在部署前失败。
 
-通过 Helm 或 Operator 选择 Kubernetes GPU 镜像、资源和设备插件。本地 `--platform amd` 和 `--platform nvidia` 快捷方式不会配置 Kubernetes 调度。
+在 Kubernetes 上，`--platform rocm` 和 `--platform cuda` 会选择 ROCm 或 CUDA 版 Router 镜像（除非显式指定了镜像），并申请一个 `amd.com/gpu` 或 `nvidia.com/gpu`，因此 Router Pod 会被调度到其设备插件提供该 GPU 的节点上。节点选择器、容忍度、其他资源以及设备插件本身仍通过 Helm values 或 Operator 配置。
 
 chart 将控制面板作为自己的 Deployment 和 Service 运行，并且该 Deployment 默认禁用。Router Service 仅承载 gRPC 和 HTTP API 端口，因此仅在启用控制面板后，端口 8700 才会出现在集群中。
 
@@ -117,10 +115,10 @@ kubectl --namespace vllm-semantic-router-system port-forward \
 
 Operator 从两个 Kubernetes 原生输入渲染 canonical 配置：
 
-- `spec.vllmEndpoints` 发现模型服务，并创建 provider 绑定和 model card；以及
-- `spec.config.routing` 接受 canonical 路由对象。
+- `spec.vllmEndpoints` 发现模型服务，并创建 provider 绑定；以及
+- `spec.config.recipes`、`spec.config.entrypoints`、`spec.config.plugins` 和 `spec.config.models` 接受 canonical 配方、入口点、默认插件和模型事实。
 
-其他 `spec.config` 字段是用于响应缓存、分类器、工具、可观测性、推理家族和相关共享设置的类型化 Operator 适配器。Operator 将它们翻译为 canonical provider 和 `global` 节。
+其他 `spec.config` 字段是用于响应缓存、分类器、工具、可观测性、推理家族和相关共享设置的类型化 Operator 适配器。Operator 将它们翻译为 canonical provider 和 `global` 节。`spec.config.model_deployments`、`model_bindings` 和 `decision_model` 承载模型目录；见[模型部署与决策模型](../api/semantic-router-crd#model-deployments-and-the-decision-model)。
 
 ```yaml
 spec:

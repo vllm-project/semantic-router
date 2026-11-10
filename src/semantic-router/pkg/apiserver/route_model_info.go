@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -52,23 +52,12 @@ func (s *ClassificationAPIServer) handleClassifierInfo(w http.ResponseWriter, r 
 	})
 }
 
-type classifierModelAvailability struct {
-	core                   bool
-	factCheck              bool
-	hallucination          bool
-	hallucinationExplainer bool
-	feedback               bool
-}
-
 // buildModelsInfoResponse builds the models info response
 func (s *ClassificationAPIServer) buildModelsInfoResponse() ModelsInfoResponse {
 	runtimeState := s.loadModelsRuntimeState()
-	cfg, service, release := s.acquireClassificationRuntime()
+	_, service, release := s.acquireClassificationRuntime()
 	defer release()
 	models, prepared := preparedModelsInfo(service)
-	if !prepared {
-		models = s.getClassifierModelsInfo(cfg, classificationAvailabilityForService(service), runtimeState)
-	}
 	systemInfo := s.getSystemInfo()
 	systemInfo.GPUAvailable = modelsUseGPU(models)
 	summary := buildModelsInfoSummary(runtimeState, models)

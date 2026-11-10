@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -141,7 +141,7 @@ func TestAPIStartupBorrowsExistingRouterAndGlobalService(t *testing.T) {
 
 func TestStandaloneAPIRejectsUnpreparedCanonicalModel(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "missing", Adapter: "mmbert", Contract: "embedding.v1"}}
+	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "missing"}}
 	service, err := ensureClassificationService(cfg, nil, nil)
 	if err == nil || service != nil {
 		t.Fatal("canonical model error became a placeholder API")

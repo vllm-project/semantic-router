@@ -172,11 +172,11 @@ func TestClientPublicStateAndStreamErrorsOmitRemoteDetails(t *testing.T) {
 			return nil
 		},
 	)
-	if err != nil {
-		t.Fatal(err)
+	if err == nil {
+		t.Fatal("transport failure was swallowed")
 	}
-	if strings.Contains(fmt.Sprint(chunk.Data), secretCanary) || chunk.Data != "Tool execution failed" {
-		t.Fatalf("public stream exposed remote error: %#v", chunk)
+	if strings.Contains(err.Error(), secretCanary) || strings.Contains(fmt.Sprint(chunk.Data), secretCanary) || chunk.Type != "error" || chunk.Data != "Tool execution failed" {
+		t.Fatalf("public stream exposed remote error: err=%v chunk=%#v", err, chunk)
 	}
 }
 

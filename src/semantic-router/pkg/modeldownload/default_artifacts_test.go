@@ -1,16 +1,40 @@
 package modeldownload
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestDefaultPIIDownloadUsesPublishedVelaMapping(t *testing.T) {
+// assertRuntimeServed checks that a built-in model reaches the model runtime
+// at its registered release and that the router downloads none of it beyond
+// companion files.
+func assertRuntimeServed(t *testing.T, cfg *config.RouterConfig, specs []ModelSpec, path string) {
+	t.Helper()
+	model := config.GetModelByPath(path)
+	if model == nil {
+		t.Fatalf("%s is not a built-in model", path)
+	}
+	if spec, ok := findSpecByPath(specs, model.LocalPath); ok && !spec.FilesOnly {
+		t.Fatalf("router downloads the runtime-served %s: %+v", path, spec)
+	}
+	for name, deployment := range config.ModelRuntimeDeploymentsInUse(cfg) {
+		if config.SameModelRepo(deployment.Artifact, model.RepoID) || config.ResolveModelPath(deployment.Artifact) == model.LocalPath {
+			// An omitted revision delegates the built-in pin to the model runtime.
+			if deployment.Revision != "" && deployment.Revision != model.Revision {
+				t.Fatalf("deployment %q serves %s at %q, want the release %q", name, path, deployment.Revision, model.Revision)
+			}
+			return
+		}
+	}
+	t.Fatalf("no model_runtime deployment in use serves %s: %+v", path, config.ModelRuntimeDeploymentsInUse(cfg))
+}
+
+// Application rules are systemone questions to the decision model, so a pii
+// rule and a hallucination rule download no classifier of their own.
+func TestApplicationRulesAreServedByTheDecisionModel(t *testing.T) {
 	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: demo
@@ -21,22 +45,28 @@ providers:
           endpoint: localhost:8000
           protocol: http
           weight: 1
-routing:
-  signals:
-    pii:
-      - name: sensitive-contact
-        threshold: 0.9
-        pii_types_allowed: []
-  decisions:
-    - name: protect-contact
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: pii
-            name: sensitive-contact
-      modelRefs:
-        - model: demo
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: sensitive-contact
+          predicate: {gte: 0.9}
+      hallucination:
+        - name: ungrounded
+    decisions:
+      - name: protect-contact
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: pii
+              name: sensitive-contact
+        modelRefs:
+          - model: demo
+        plugins:
+          - type: response_guard
+            configuration:
+              rules: [{when: {type: hallucination, name: ungrounded}, action: annotate}]
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -45,28 +75,8 @@ routing:
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The published Vela token-classification package contains pii_mapping.json,
-	// not the legacy MOM pii_type_mapping.json. Model-directory presence alone
-	// cannot establish that the download requirements are satisfiable.
-	packageDir := t.TempDir()
-	for _, name := range []string{"config.json", "pii_mapping.json"} {
-		if err := os.WriteFile(filepath.Join(packageDir, name), []byte("{}"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+	if len(specs) != 0 {
+		t.Fatalf("router downloads models for rules the decision model answers: %+v", specs)
 	}
-	for _, spec := range specs {
-		if spec.RepoID != "llm-semantic-router/Vela-1.0-Encoder-307M-PII" {
-			continue
-		}
-		for _, name := range spec.RequiredFiles {
-			if _, err := os.Stat(filepath.Join(packageDir, name)); err != nil {
-				t.Fatalf("default PII provisioning requests absent published artifact %q: %v", name, err)
-			}
-		}
-		if cfg.PIIModel.PIIMappingPath != filepath.Join(spec.LocalPath, "pii_mapping.json") {
-			t.Fatalf("PII runtime mapping differs from the published package: %q", cfg.PIIModel.PIIMappingPath)
-		}
-		return
-	}
-	t.Fatal("PII signal did not provision the default Vela token classifier")
+	assertRuntimeServed(t, cfg, specs, config.Vela3SignalModel)
 }

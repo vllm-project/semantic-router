@@ -28,7 +28,7 @@ Define agent-aware **facts** and **handoff envelopes** that let the Router selec
 logical models safely for external agent runtimes. Preserve the v0.3 contract:
 
 - the Router selects a logical **Model**;
-- Envoy and the client-facing gateway own upstream transport;
+- the selected frontend transport (standalone or Envoy) owns upstream transport;
 - recipe **decisions remain model-free** while **entrypoints own `model_names`**;
 - optional agent services live **outside** the Router.
 
@@ -43,14 +43,14 @@ precede it.
 | **Router** | Semantic decisions, recipe execution, logical-model selection, recipe-scoped plugins, validation and projection of bounded agentic facts, content-minimized diagnostics | Agent identity, task orchestration, tool execution, durable task state, recursive delegation, agent endpoint invocation |
 | **Client-facing gateway / data plane** | Deployment-specific proxy, transport, authenticated ingress of envelopes, downstream acknowledgement | Semantic model selection, recipe policy |
 | **External agent runtime** | Agent identity, orchestration, tools, durable state, delegation graph, opaque context references | Router recipe decisions, model cards, or provider inventory |
-| **Envoy / upstream transport** | Physical routing to the selected model endpoint after the Router decision | Agent discovery, mixed model/agent candidate pools |
+| **Standalone / Envoy upstream transport** | Physical routing to the selected model endpoint after the Router decision | Agent discovery, mixed model/agent candidate pools |
 
 ```mermaid
 flowchart LR
   Runtime["External agent runtime"] -->|"bounded facts + handoff envelope"| Gateway["Client-facing gateway"]
   Gateway -->|"validated request facts"| Router["Router: signals → decision → logical model"]
   Router -->|"selected model + constraints + provenance"| Gateway
-  Gateway -->|"transport"| Envoy["Envoy / upstream"]
+  Gateway -->|"transport"| Envoy["Standalone / Envoy upstream"]
   Envoy --> Model["Inference endpoint"]
   Runtime -.->|"orchestration, tools, durable state"| Runtime
 ```

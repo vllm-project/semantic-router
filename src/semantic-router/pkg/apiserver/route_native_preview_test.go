@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -75,7 +75,7 @@ func TestNativePreviewHTTPUsesRendererAndHonorsDeadline(t *testing.T) {
 			request, err := http.NewRequest(http.MethodPost, server.URL+apiRoutingPreviewPath, strings.NewReader(`{"text":"hello"}`))
 			require.NoError(t, err)
 			request.Header.Set("Content-Type", "application/json")
-			request.Header.Set(headers.SRBenchExpectedConfigHash, cfg.DocumentHash)
+			request.Header.Set(headers.VSRBenchExpectedConfigHash, cfg.DocumentHash)
 			response, err := server.Client().Do(request)
 			require.NoError(t, err)
 			defer response.Body.Close()

@@ -16,7 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
 )
 
 // Run separate test processes against the same disposable Qdrant/Redis
@@ -55,13 +55,18 @@ func TestMemoryEmbeddingIdentityPersistent(t *testing.T) {
 	t.Setenv("VLLM_SR_DETERMINISTIC_EMBEDDINGS", "")
 	cfg := &config.RouterConfig{
 		Memory: config.MemoryConfig{
-			Enabled: true, Backend: "qdrant", EmbeddingModel: "mmbert",
+			InUse: true, Backend: "qdrant",
 			Qdrant:     &config.MemoryQdrantConfig{Host: fixture.QdrantHost, Port: fixture.QdrantPort, Collection: fixture.Collection, Dimension: fixture.Dimension},
 			RedisCache: &config.MemoryRedisCacheConfig{Enabled: true, Address: fixture.RedisAddress, KeyPrefix: fixture.Collection + ":hot:", TTLSeconds: 3600},
 		},
 	}
-	cfg.EmbeddingModels = config.EmbeddingModels{MmBertModelPath: fixture.ModelPath, UseCPU: fixture.UseCPU}
-	prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, native.New(nil))
+	deployment, err := config.ImplicitModelRuntimeDeployment(fixture.ModelPath, fixture.UseCPU)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.EmbeddingDeployment = config.EmbeddingDefaultDeployment
+	cfg.ModelDeployments = map[string]config.ModelDeployment{config.EmbeddingDefaultDeployment: deployment}
+	prepared, err := modelruntime.PrepareOwnedGlobalServiceEmbeddings(context.Background(), cfg, servingtest.Managed(t))
 	if err != nil {
 		t.Fatal(err)
 	}

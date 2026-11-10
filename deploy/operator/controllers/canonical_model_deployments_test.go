@@ -14,9 +14,10 @@ import (
 
 func TestOperatorModelDeploymentsReachCanonicalConfig(t *testing.T) {
 	spec := vllmv1alpha1.ConfigSpec{
-		ModelDeployments: rawCanonicalRoutingJSON(t, `{"shared":{"artifact":"models/checkpoint","revision":"pinned","provider":"candle","device":"cpu","precision":"fp32","input":{"max_tokens":512,"overflow":"reject"}}}`),
+		ModelDeployments: rawCanonicalRoutingJSON(t, `{"shared":{"artifact":"vllm-sr/checkpoint","revision":"`+strings.Repeat("a", 40)+`","provider":"model_runtime","device":"cpu","input":{"max_tokens":512,"overflow":"reject"}}}`),
 		ModelAdmission:   rawCanonicalRoutingJSON(t, `{"shared":{"max_concurrency":2,"max_queue":3,"queue_timeout_ms":500,"on_overflow":"shed"}}`),
-		Routing:          rawCanonicalRoutingJSON(t, `{"model_bindings":{"pii_classifier":{"deployment":"shared","contract":"token_spans.v1","adapter":"mmbert","head":"pii","mapping_path":"mappings/pii.json"}}}`),
+		ModelBindings:    rawCanonicalRoutingJSON(t, `{"domain":"shared","safety":{"deployment":"shared"}}`),
+		Recipes:          rawCanonicalRoutingJSON(t, `[{"name": "default", "model_bindings":{"pii":{"deployment":"shared"}}}]`),
 	}
 	r := &SemanticRouterReconciler{}
 	canonical, err := r.buildCanonicalConfig(context.Background(), &vllmv1alpha1.SemanticRouter{Spec: vllmv1alpha1.SemanticRouterSpec{Config: spec}})
@@ -31,7 +32,7 @@ func TestOperatorModelDeploymentsReachCanonicalConfig(t *testing.T) {
 	if unmarshalErr := yaml.Unmarshal(encoded, &roundTrip); unmarshalErr != nil {
 		t.Fatal(unmarshalErr)
 	}
-	wantDeployment := routerconfig.ModelDeployment{Artifact: "models/checkpoint", Revision: "pinned", Provider: "candle", Device: "cpu", Precision: "fp32", Input: routerconfig.ModelInputBudget{MaxTokens: 512, Overflow: "reject"}}
+	wantDeployment := routerconfig.ModelDeployment{Artifact: "vllm-sr/checkpoint", Revision: strings.Repeat("a", 40), Provider: routerconfig.ModelRuntimeProvider, Device: "cpu", Input: routerconfig.ModelInputBudget{MaxTokens: 512, Overflow: "reject"}}
 	if !reflect.DeepEqual(roundTrip.Global.ModelCatalog.Deployments["shared"], wantDeployment) {
 		t.Fatalf("deployment was changed: %#v", roundTrip.Global.ModelCatalog.Deployments)
 	}
@@ -39,17 +40,19 @@ func TestOperatorModelDeploymentsReachCanonicalConfig(t *testing.T) {
 	if roundTrip.Global.ModelCatalog.Admission["shared"] != wantBudget {
 		t.Fatalf("deployment admission was lost: %#v", roundTrip.Global.ModelCatalog.Admission)
 	}
-	wantBinding := routerconfig.ModelBinding{Deployment: "shared", Contract: "token_spans.v1", Adapter: "mmbert", Head: "pii", MappingPath: "mappings/pii.json"}
-	if roundTrip.Routing.ModelBindings["pii_classifier"] != wantBinding {
-		t.Fatalf("task binding was lost: %#v", roundTrip.Routing.ModelBindings)
+	wantBinding := routerconfig.ModelBinding{Deployment: "shared"}
+	if defaultRecipe(&roundTrip).ModelBindings["pii"] != wantBinding {
+		t.Fatalf("task binding was lost: %#v", defaultRecipe(&roundTrip).ModelBindings)
+	}
+	wantGlobal := map[string]routerconfig.ModelBinding{"domain": {Deployment: "shared"}, "safety": {Deployment: "shared"}}
+	if !reflect.DeepEqual(roundTrip.Global.ModelCatalog.Bindings, wantGlobal) {
+		t.Fatalf("global bindings were changed: %#v", roundTrip.Global.ModelCatalog.Bindings)
 	}
 	// Explicit empty override clears the previously supplied binding map.
-	routing, fields, err := canonicalRoutingFromKubernetesJSON(rawCanonicalRoutingJSON(t, `{"model_bindings":{}}`))
-	if err != nil {
+	if err := applyOperatorRecipes(canonical, configRoutingSpec{recipes: rawCanonicalRoutingJSON(t, `[{"name":"default","model_bindings":{}}]`)}); err != nil {
 		t.Fatal(err)
 	}
-	applyCanonicalRoutingOverrides(canonical, routing, fields)
-	if len(canonical.Routing.ModelBindings) != 0 {
+	if len(defaultRecipe(canonical).ModelBindings) != 0 {
 		t.Fatal("empty binding override did not clear bindings")
 	}
 }
@@ -61,7 +64,13 @@ func TestOperatorModelDeploymentRejectsUnknownFields(t *testing.T) {
 			t.Errorf("invalid declaration accepted: %s, %v", raw, err)
 		}
 	}
-	if _, _, err := canonicalRoutingFromKubernetesJSON(rawCanonicalRoutingJSON(t, `{"model_bindings":{"pii_classifier":{"deploymnt":"typo"}}}`)); err == nil {
+	if err := applyOperatorRecipes(&routerconfig.CanonicalConfig{}, configRoutingSpec{recipes: rawCanonicalRoutingJSON(t, `[{"name":"default","model_bindings":{"pii":{"deploymnt":"typo"}}}]`)}); err == nil {
 		t.Fatal("unknown binding field silently discarded")
+	}
+	for _, raw := range []string{`null`, `[]`, `{"pii":{"deploymnt":"typo"}}`, `{"pii":["local"]}`} {
+		spec := vllmv1alpha1.ConfigSpec{ModelBindings: rawCanonicalRoutingJSON(t, raw)}
+		if err := applyOperatorModelDeployments(&routerconfig.CanonicalConfig{}, spec); err == nil || !strings.Contains(err.Error(), "config.model_bindings") {
+			t.Errorf("invalid global binding accepted: %s, %v", raw, err)
+		}
 	}
 }

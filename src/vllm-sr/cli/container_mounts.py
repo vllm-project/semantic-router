@@ -1,10 +1,11 @@
 """One way to ask the container runtime what an existing container mounts.
 
-Two callers need the same ``inspect --format '{{json .Mounts}}'`` round trip and
-want opposite things from a failure, so the transport lives here while the
-judgement stays with them. :func:`cli.storage_secrets.adopted_volume_name` fails
-closed, because reading an unreachable daemon as "there is no container" would
-mint an empty volume beside data that is still on disk;
+Two callers need the same ``container inspect --format '{{json .Mounts}}'``
+round trip and want opposite things from a failure, so the transport lives here
+while the judgement stays with them.
+:func:`cli.storage_secrets.adopted_volume_name` fails closed, because reading
+an unreachable daemon as "there is no container" would mint an empty volume
+beside data that is still on disk;
 :func:`cli.container_services.container_mount_destinations` answers "unknown"
 and lets its caller keep the container. Sharing the round trip is what keeps the
 two from drifting apart on the format string, the timeout, or what a reply that
@@ -25,8 +26,9 @@ log = get_logger(__name__)
 # runtime socket cannot hang a `serve` or a `stop` indefinitely.
 RUNTIME_INSPECT_TIMEOUT_SECONDS = 10
 
-# Docker and Podman both word a missing container as "no such object".
-_NO_SUCH_OBJECT = "no such object"
+# How `container inspect` words a missing container: Docker says "No such
+# container", Podman "no such container" or "no container with name or ID".
+_CONTAINER_ABSENT_MARKERS = ("no such container", "no container with name or id")
 
 
 class ContainerMountsUnavailableError(RuntimeError):
@@ -54,8 +56,19 @@ def inspect_container_mounts(container_name: str) -> list[dict]:
 
     runtime = get_container_runtime()
     try:
+        # Only containers: an untyped `inspect` that finds none goes on to
+        # volumes, and Podman also matches volumes by an unambiguous name
+        # prefix, so a removed `vllm-sr-redis` would answer as the
+        # `vllm-sr-redis-data` volume that `vllm-sr stop` keeps.
         result = subprocess.run(
-            [runtime, "inspect", "--format", "{{json .Mounts}}", container_name],
+            [
+                runtime,
+                "container",
+                "inspect",
+                "--format",
+                "{{json .Mounts}}",
+                container_name,
+            ],
             capture_output=True,
             text=True,
             check=True,
@@ -66,7 +79,9 @@ def inspect_container_mounts(container_name: str) -> list[dict]:
         stderr = exc.stderr or ""
         raise ContainerMountsUnavailableError(
             stderr.strip() or str(exc),
-            container_absent=_NO_SUCH_OBJECT in stderr.lower(),
+            container_absent=any(
+                marker in stderr.lower() for marker in _CONTAINER_ABSENT_MARKERS
+            ),
         ) from exc
     except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
         raise ContainerMountsUnavailableError(str(exc)) from exc

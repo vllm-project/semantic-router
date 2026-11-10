@@ -12,9 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 // imageFilePNGBase64 is a 1x1 transparent PNG. The router sniffs the stored
@@ -108,7 +109,7 @@ func assertImageFileSelectsVisionDecision(
 	sessionID string,
 ) error {
 	imageResp, err := postResponsesWithHeaders(ctx, session, map[string]any{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"store": false,
 		"input": []map[string]any{{
 			"role": "user",
@@ -195,7 +196,7 @@ func assertTextModelRejectsImage(
 // the image: a text-only request stays on the text decision.
 func assertTextOnlySelectsTextDecision(ctx context.Context, session *fixtures.ServiceSession) error {
 	textResp, err := postResponsesWithHeaders(ctx, session, map[string]any{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"store": false,
 		"input": "What is 2 + 2?",
 	}, nil)
@@ -219,7 +220,7 @@ func assertTextOnlySelectsTextDecision(ctx context.Context, session *fixtures.Se
 func assertUnknownImageFileRejected(ctx context.Context, session *fixtures.ServiceSession) error {
 	missingID := "file-e2e-does-not-exist"
 	missingResp, err := postResponsesWithHeaders(ctx, session, map[string]any{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"store": false,
 		"input": []map[string]any{{
 			"role": "user",

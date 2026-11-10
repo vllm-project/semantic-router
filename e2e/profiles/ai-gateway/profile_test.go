@@ -11,17 +11,14 @@ import (
 
 func TestFeatureRecipesReuseBaselinePluginContracts(t *testing.T) {
 	config := profileConfig(t)
-	baseline := profileMap(t, config, "routing")
-	routing := profileMap(t, profileNamed(t, config["recipes"], "e2e-plugins"), "routing")
+	baseline := profileNamed(t, config["recipes"], "default")
+	routing := profileNamed(t, config["recipes"], "e2e-plugins")
 	signals := profileMap(t, routing, "signals")
 	if len(signals) != 1 || signals["keywords"] == nil {
 		t.Fatalf("plugin feature recipe must use only its explicit keyword signals: %#v", signals)
 	}
 	names := []string{
 		"plugin_request_mutations", "tools_passthrough", "tools_filtered", "tools_none",
-		"tool_selection_add_weather", "tool_selection_add_calc",
-		"tool_selection_filter", "tool_selection_filter_threshold", "tool_selection_add_topk_one",
-		"tool_selection_with_system_prompt",
 	}
 	if len(routing["decisions"].([]any)) != len(names) || len(signals["keywords"].([]any)) != len(names) {
 		t.Fatal("plugin recipe must preserve every feature route without additional policies")
@@ -40,9 +37,30 @@ func TestFeatureRecipesReuseBaselinePluginContracts(t *testing.T) {
 	}
 }
 
+func TestPIIPrecedenceRecipeOrdersOnlyTheBaselinePIIBlockAndToolsRoute(t *testing.T) {
+	config := profileConfig(t)
+	baseline := profileNamed(t, config["recipes"], "default")
+	routing := profileNamed(t, config["recipes"], "e2e-pii-precedence")
+	signals := profileMap(t, routing, "signals")
+	if len(signals) != 2 || len(routing["decisions"].([]any)) != 2 {
+		t.Fatalf("PII precedence recipe must hold only the PII block and one tools route: %#v", routing)
+	}
+	for _, name := range []string{"block_pii", "tools_passthrough_decision"} {
+		if !reflect.DeepEqual(profileNamed(t, baseline["decisions"], name), profileNamed(t, routing["decisions"], name)) {
+			t.Fatalf("PII precedence recipe changed the baseline decision %s", name)
+		}
+	}
+	for signalType, name := range map[string]string{"keywords": "tools_passthrough", "pii": "pii_deny_all"} {
+		original := profileNamed(t, profileMap(t, baseline, "signals")[signalType], name)
+		if !reflect.DeepEqual(original, profileNamed(t, signals[signalType], name)) {
+			t.Fatalf("PII precedence recipe changed the baseline signal %s", name)
+		}
+	}
+}
+
 func TestProtocolAndCacheRecipesReachTheirOwnedBoundaries(t *testing.T) {
 	config := profileConfig(t)
-	baselineCache := profileNamed(t, profileMap(t, config, "routing")["decisions"], "other_decision")["plugins"]
+	baselineCache := profileNamed(t, profileNamed(t, config["recipes"], "default")["decisions"], "other_decision")["plugins"]
 	for _, test := range []struct {
 		recipe   string
 		decision string
@@ -52,7 +70,7 @@ func TestProtocolAndCacheRecipesReachTheirOwnedBoundaries(t *testing.T) {
 		{"e2e-cache", "e2e_cache_decision", baselineCache},
 	} {
 		t.Run(test.recipe, func(t *testing.T) {
-			routing := profileMap(t, profileNamed(t, config["recipes"], test.recipe), "routing")
+			routing := profileNamed(t, config["recipes"], test.recipe)
 			if routing["signals"] != nil || len(routing["decisions"].([]any)) != 1 {
 				t.Fatal("boundary fixture must not depend on learned signals or competing decisions")
 			}
@@ -73,7 +91,7 @@ func TestProtocolAndCacheRecipesReachTheirOwnedBoundaries(t *testing.T) {
 
 func TestExactCacheRecipeKeepsMultilingualNegationOnAnExactOnlyPolicy(t *testing.T) {
 	config := profileConfig(t)
-	routing := profileMap(t, profileNamed(t, config["recipes"], "e2e-cache-exact"), "routing")
+	routing := profileNamed(t, config["recipes"], "e2e-cache-exact")
 	if routing["signals"] != nil || len(routing["decisions"].([]any)) != 1 {
 		t.Fatal("exact-cache fixture must have one unconditional decision")
 	}
@@ -95,7 +113,7 @@ func TestExactCacheRecipeKeepsMultilingualNegationOnAnExactOnlyPolicy(t *testing
 
 func TestFeatureEntrypointsPreserveDefaultSecurityPrecedence(t *testing.T) {
 	config := profileConfig(t)
-	for _, recipe := range []string{"e2e-protocol", "e2e-plugins", "e2e-cache", "e2e-cache-exact", "e2e-domain", "e2e-fallback"} {
+	for _, recipe := range []string{"e2e-protocol", "e2e-plugins", "e2e-pii-precedence", "e2e-cache", "e2e-cache-exact", "e2e-domain", "e2e-fallback"} {
 		found := false
 		for _, raw := range config["entrypoints"].([]any) {
 			entrypoint := raw.(map[string]any)
@@ -107,18 +125,19 @@ func TestFeatureEntrypointsPreserveDefaultSecurityPrecedence(t *testing.T) {
 			t.Fatalf("feature model must resolve explicitly to its owned recipe: %s", recipe)
 		}
 	}
-	routing := profileMap(t, config, "routing")
+	routing := profileNamed(t, config["recipes"], "default")
 	for _, test := range []struct {
 		name, signalType, signalName string
 		priority                     int
 		threshold                    float64
 	}{
-		{"block_jailbreak", "jailbreak", "jailbreak_standard", 1000, 0.5},
-		{"block_pii", "pii", "pii_deny_all", 999, 0.7},
+		// Vela 2.0 0.3B's thresholds for Vela 1.0's 0.5 and 0.7.
+		{"block_jailbreak", "jailbreak", "jailbreak_standard", 1000, 0.88},
+		{"block_pii", "pii", "pii_deny_all", 999, 0.18},
 	} {
 		decision := profileNamed(t, routing["decisions"], test.name)
 		signal := profileNamed(t, profileMap(t, routing, "signals")[test.signalType], test.signalName)
-		if decision["priority"] != test.priority || signal["threshold"] != test.threshold {
+		if predicate, _ := signal["predicate"].(map[string]any); decision["priority"] != test.priority || predicate["gte"] != test.threshold {
 			t.Fatalf("default security policy changed: %s", test.name)
 		}
 		plugins := decision["plugins"].([]any)
@@ -130,8 +149,8 @@ func TestFeatureEntrypointsPreserveDefaultSecurityPrecedence(t *testing.T) {
 
 func TestDomainRecipePreservesEveryBaselineLabelAndSelection(t *testing.T) {
 	config := profileConfig(t)
-	baseline := profileMap(t, config, "routing")
-	routing := profileMap(t, profileNamed(t, config["recipes"], "e2e-domain"), "routing")
+	baseline := profileNamed(t, config["recipes"], "default")
+	routing := profileNamed(t, config["recipes"], "e2e-domain")
 	signals := profileMap(t, routing, "signals")
 	if len(signals) != 1 || !reflect.DeepEqual(signals["domains"], profileMap(t, baseline, "signals")["domains"]) {
 		t.Fatal("domain recipe must retain the original domain labels without competing signal families")
@@ -156,7 +175,7 @@ func TestDomainRecipePreservesEveryBaselineLabelAndSelection(t *testing.T) {
 
 func TestFallbackRecipeRetainsARealUnmatchedPath(t *testing.T) {
 	config := profileConfig(t)
-	routing := profileMap(t, profileNamed(t, config["recipes"], "e2e-fallback"), "routing")
+	routing := profileNamed(t, config["recipes"], "e2e-fallback")
 	if len(routing["decisions"].([]any)) != 1 {
 		t.Fatal("fallback fixture must not have a catch-all decision")
 	}
@@ -173,24 +192,6 @@ func TestFallbackRecipeRetainsARealUnmatchedPath(t *testing.T) {
 	defaults := profileMap(t, profileMap(t, config, "providers"), "defaults")
 	if defaults["model"] != "general-expert" {
 		t.Fatal("unmatched fallback must retain the declared default provider")
-	}
-}
-
-func TestGuardProfileMatchesCanonicalPublishedOperatingPoint(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "config", "config.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var canonical map[string]any
-	if err := yaml.Unmarshal(raw, &canonical); err != nil {
-		t.Fatal(err)
-	}
-	modules := profileMap(t, profileMap(t, profileMap(t, canonical, "global"), "model_catalog"), "modules")
-	guard := profileMap(t, modules, "prompt_guard")
-	profile := profileMap(t, profileMap(t, profileConfig(t), "routing"), "signals")
-	signal := profileNamed(t, profile["jailbreak"], "jailbreak_standard")
-	if signal["threshold"] != guard["threshold"] {
-		t.Fatalf("Guard operating point differs from canonical published configuration: profile=%v canonical=%v", signal["threshold"], guard["threshold"])
 	}
 }
 

@@ -29,10 +29,7 @@ def _validate_profile_signal_references(profile_name, routing):
     projection_names = build_projection_reference_index(routing.projections)
 
     for decision in routing.decisions:
-        field = (
-            f"recipes.{profile_name}.routing.decisions."
-            f"{decision.name}.rules.conditions"
-        )
+        field = f"recipes.{profile_name}.decisions." f"{decision.name}.rules.conditions"
         decision_context = f"Decision '{decision.name}' in recipe '{profile_name}'"
         for condition in iter_condition_leaves(decision.rules.conditions):
             message = _condition_reference_error(
@@ -55,8 +52,7 @@ def _condition_reference_error(condition, signal_names, projection_names):
             return None
         return f"references unknown projection '{condition.name}'"
     if condition_type == CONDITION_TYPE_DOMAIN:
-        # Domains support auto-generated declarations and have a dedicated
-        # validator that owns their reference contract.
+        # A dedicated validator owns the domain reference contract.
         return None
     if not is_signal_condition_type(condition.type):
         return f"uses unsupported signal type '{condition.type}'"

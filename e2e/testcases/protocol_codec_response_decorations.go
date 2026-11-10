@@ -28,7 +28,7 @@ func init() {
 }
 
 func testAnthropicResponseDiagnostics(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-	return runResponseDecorationMatrix(ctx, client, opts, "MoM", "anthropic.messages.v1",
+	return runResponseDecorationMatrix(ctx, client, opts, "vllm-sr/auto", "anthropic.messages.v1",
 		"__mock_anthropic_diagnostics__ __mock_protocol_matrix__", protocolCodecAnthropicReply,
 		assertAnthropicResponseDiagnostics)
 }
@@ -131,7 +131,7 @@ func assertAnthropicResponseDiagnostics(client protocolCodecE2EClient, streamed 
 	} else if _, leaked := body["diagnostics"]; leaked {
 		return fmt.Errorf("%s response leaked Anthropic-only diagnostics: %s", client.name, truncateString(string(result.Body), 600))
 	}
-	if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !hasProtocolFieldDiagnostic(warnings, "dropped", "diagnostics") {
+	if warnings := result.Headers.Get(warningsHeader); !hasProtocolFieldDiagnostic(warnings, "dropped", "diagnostics") {
 		return fmt.Errorf("anthropic cache diagnostics omitted without a warning: %q", warnings)
 	}
 	return nil
@@ -153,7 +153,7 @@ func assertResponsesProviderDecorations(_ protocolCodecE2EClient, streamed bool,
 			return fmt.Errorf("response leaked provider-only %s: %s", field, truncateString(string(result.Body), 600))
 		}
 	}
-	warnings := result.Headers.Get("x-vsr-protocol-warnings")
+	warnings := result.Headers.Get(warningsHeader)
 	for _, field := range []string{"billing", "frequency_penalty", "presence_penalty", "tool_usage"} {
 		if !hasProtocolFieldDiagnostic(warnings, "dropped", field) {
 			return fmt.Errorf("responses provider field %s omitted without a warning: %q", field, warnings)

@@ -1,7 +1,9 @@
 import { useState } from 'react'
 
+import { effectiveChatEntrypoints } from '../utils/routingScopes'
 import ProductIcon from '../components/ProductIcon'
 import pageStyles from './ConfigPageEntrypointsRecipesSection.module.css'
+import type { BuiltInRecipeCatalog } from './configPageBuiltInRecipes'
 import {
   collectRecipeTargetModels,
   countRecipeEntrypoints,
@@ -9,6 +11,7 @@ import {
   isSyntheticDefaultRecipe,
   listRecipeProfiles,
 } from './configPageEntrypointsRecipesSupport'
+import type { MixtureRecipeChoice } from './configPageMixtureSupport'
 import type { ConfigData, EntrypointConfig, RecipeConfig } from './configPageSupport'
 
 interface EntrypointsListProps {
@@ -31,6 +34,14 @@ interface RecipesListProps {
   onDelete: (recipe: RecipeConfig) => void
 }
 
+interface BuiltInRecipesListProps {
+  catalog: BuiltInRecipeCatalog | null
+  failed: boolean
+  isReadonly: boolean
+  onRetry: () => void
+  onCreate: (recipe: MixtureRecipeChoice) => void
+}
+
 export function ConfigPageMoMEntrypointsList({
   config,
   isReadonly,
@@ -42,7 +53,7 @@ export function ConfigPageMoMEntrypointsList({
   onTopology,
 }: EntrypointsListProps) {
   const [search, setSearch] = useState('')
-  const entrypoints = config.entrypoints ?? []
+  const entrypoints = effectiveChatEntrypoints(config)
   const query = search.trim().toLowerCase()
   const filtered = entrypoints.filter(
     (entrypoint) =>
@@ -80,7 +91,8 @@ export function ConfigPageMoMEntrypointsList({
           const key = entrypoint.model_names.join('|')
           const recipe = getRecipeByName(config, entrypoint.recipe)
           const targetCount = collectRecipeTargetModels(recipe).length
-          const originalIndex = entrypoints.indexOf(entrypoint)
+          const originalIndex = (config.entrypoints ?? []).indexOf(entrypoint)
+          const builtin = originalIndex < 0
           return (
             <article key={key} className={pageStyles.portfolioItem}>
               <div
@@ -90,7 +102,10 @@ export function ConfigPageMoMEntrypointsList({
                   {entrypoint.model_names.map((name) => (
                     <code key={name}>{name}</code>
                   ))}
-                  <span>Routes through {entrypoint.recipe}</span>
+                  <span>
+                    Routes through {entrypoint.recipe}
+                    {builtin ? ' · Built-in default' : ''}
+                  </span>
                 </div>
                 <div className={pageStyles.portfolioMeta}>
                   <span>{targetCount} models</span>
@@ -133,15 +148,17 @@ export function ConfigPageMoMEntrypointsList({
                         <ProductIcon name="edit" />
                         Edit
                       </button>
-                      <button
-                        type="button"
-                        className={pageStyles.deleteAction}
-                        aria-label={`Delete ${entrypoint.model_names.join(', ')}`}
-                        onClick={() => onDelete(entrypoint, originalIndex)}
-                      >
-                        <ProductIcon name="trash" />
-                        Delete
-                      </button>
+                      {!builtin && (
+                        <button
+                          type="button"
+                          className={pageStyles.deleteAction}
+                          aria-label={`Delete ${entrypoint.model_names.join(', ')}`}
+                          onClick={() => onDelete(entrypoint, originalIndex)}
+                        >
+                          <ProductIcon name="trash" />
+                          Delete
+                        </button>
+                      )}
                     </>
                   ) : null}
                 </div>
@@ -263,6 +280,79 @@ export function ConfigPageMoMRecipesList({
         })}
         {filtered.length === 0 ? (
           <div className={pageStyles.emptyState}>{search ? 'No matches.' : 'No recipes yet.'}</div>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+export function ConfigPageMoMBuiltInRecipesList({
+  catalog,
+  failed,
+  isReadonly,
+  onRetry,
+  onCreate,
+}: BuiltInRecipesListProps) {
+  const recipes = (catalog?.bundles ?? []).flatMap((bundle) =>
+    bundle.recipes.map((recipe) => ({ bundle: bundle.name, recipe })),
+  )
+
+  return (
+    <section className={pageStyles.portfolioPanel}>
+      <div className={pageStyles.portfolioHeader}>
+        <div>
+          <span className={pageStyles.sectionEyebrow}>Installed with vLLM-SR</span>
+          <h2>Built-in recipes</h2>
+          <p>Maintained routing policies. Assign your models to publish one as a model.</p>
+        </div>
+        {failed ? (
+          <div className={pageStyles.portfolioActions}>
+            <button type="button" onClick={onRetry}>
+              <ProductIcon name="refresh" />
+              Retry
+            </button>
+          </div>
+        ) : null}
+      </div>
+      <div className={pageStyles.portfolioList}>
+        {recipes.map(({ bundle, recipe }) => (
+          <article key={`${bundle}/${recipe.name}`} className={pageStyles.portfolioItem}>
+            <div
+              className={`${pageStyles.portfolioItemMain} ${pageStyles.staticPortfolioItemMain}`}
+            >
+              <div className={pageStyles.portfolioIdentity}>
+                <strong>{recipe.name}</strong>
+                <span title={recipe.description}>{recipe.description || 'No description'}</span>
+              </div>
+              <div className={pageStyles.portfolioMeta}>
+                <span>
+                  {bundle} · {catalog?.catalog_version}
+                </span>
+                <span>{recipe.decisions.length} decisions</span>
+              </div>
+              <div className={pageStyles.rowActions}>
+                {!isReadonly ? (
+                  <button
+                    type="button"
+                    aria-label={`Create a model from built-in recipe ${recipe.name}`}
+                    onClick={() => onCreate({ bundle, name: recipe.name })}
+                  >
+                    <ProductIcon name="plus" />
+                    Create model
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </article>
+        ))}
+        {recipes.length === 0 ? (
+          <div className={pageStyles.emptyState} role={failed ? 'alert' : undefined}>
+            {failed
+              ? 'Built-in recipes could not be loaded from the installed vLLM-SR package.'
+              : catalog
+                ? 'No built-in recipes are installed.'
+                : 'Loading built-in recipes…'}
+          </div>
         ) : null}
       </div>
     </section>

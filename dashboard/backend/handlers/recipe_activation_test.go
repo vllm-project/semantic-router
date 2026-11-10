@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -334,9 +333,9 @@ func TestRecipeActivatorRevocationDuringPlanningLeavesNoDeactivationWrites(t *te
 		ConfigPath: configPath,
 		ConfigDir:  filepath.Dir(configPath),
 		Topology: &blockingActivationInventory{
-			runtimeTopologyReconciler: testTopologyForHotSwitch(),
-			entered:                   entered,
-			release:                   release,
+			runtimeTopologySource: testTopologyForHotSwitch(),
+			entered:               entered,
+			release:               release,
 		},
 		ApplyRuntime: func(path, _ string) (string, error) {
 			t.Error("revoked deactivation applied runtime")
@@ -377,7 +376,7 @@ func TestRecipeActivatorRevocationDuringPlanningLeavesNoDeactivationWrites(t *te
 }
 
 type blockingActivationInventory struct {
-	runtimeTopologyReconciler
+	runtimeTopologySource
 	entered chan struct{}
 	release chan struct{}
 }
@@ -385,7 +384,7 @@ type blockingActivationInventory struct {
 func (b *blockingActivationInventory) Inventory(ctx context.Context) (runtimeTopologyInventory, error) {
 	close(b.entered)
 	<-b.release
-	return b.runtimeTopologyReconciler.Inventory(ctx)
+	return b.runtimeTopologySource.Inventory(ctx)
 }
 
 func waitActivationPlanningBarrier(t *testing.T, entered, release chan struct{}) {
@@ -423,6 +422,7 @@ func TestRecipeActivatorRejectsManagementAPIAuthBeforeJournal(t *testing.T) {
 
 func assertManagementAuthRejectedBeforeJournal(t *testing.T, bearerSide string) {
 	t.Helper()
+	t.Setenv(recipe.ManagementCredentialEnv, testManagementCredential)
 	store, summary, configPath := importedActivationFixture(t, "accuracy")
 	if bearerSide == "current" {
 		mustWriteActivationConfig(t, configPath, withManagementBearer(mustReadFile(t, configPath)))
@@ -807,6 +807,23 @@ func TestRouterActivationVerifierPollsPendingUntilExactActiveHash(t *testing.T) 
 	}
 }
 
+func TestRouterActivationVerifierReturnsARefusalThatOnlyNeedsARestart(t *testing.T) {
+	expected := strings.Repeat("d", 64)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"generated_runtime_hash":"` + expected + `","active_runtime_hash":"old","activation_status":"rejected",` +
+			`"activation":{"document_hash":"sha256:` + expected + `","status":"rejected","reasons":[` +
+			`{"code":"restart_required","path":"listeners[0].port","message":"listener http changed its port"}]}}`))
+	}))
+	defer server.Close()
+	verify := newRouterActivationVerifier(server.URL, server.Client())
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	restart, ok := asRestartNeeded(verify(ctx, "sha256:"+expected))
+	if !ok || restart.detail != "listener http changed its port" {
+		t.Fatalf("verify() = %#v, want the Router's restart_required reason", restart)
+	}
+}
+
 func TestRouterActivationVerifierStopsOnContextDeadline(t *testing.T) {
 	expected := strings.Repeat("c", 64)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -842,13 +859,6 @@ func TestEnvoyActivationVerifierPollsUntilReady(t *testing.T) {
 	}
 }
 
-func TestRecipeRuntimeMaterializeArgsForceSideEffectFreePackageMode(t *testing.T) {
-	args := runtimeMaterializeArgs("/state/raw.yaml", "/state/realized.yaml", runtimeMaterialization{packageActivation: true})
-	if !slices.Contains(args, "--package-activation") {
-		t.Fatalf("runtime materialize args = %#v", args)
-	}
-}
-
 func importedActivationFixture(t *testing.T, recipeName string) (*recipe.Store, recipe.PackageSummary, string) {
 	t.Helper()
 	directory := filepath.Join("..", "..", "..", "config", "recipes", recipeName)
@@ -880,12 +890,7 @@ func activationRequest(summary recipe.PackageSummary) recipe.ActivateRequest {
 }
 
 func testTopologyForHotSwitch() *fakeRuntimeTopology {
-	return &fakeRuntimeTopology{inventory: runtimeTopologyInventory{
-		ContainerRunning: map[string]bool{
-			managedContainerNameForService("router"): true,
-			managedContainerNameForService("envoy"):  true,
-		},
-	}}
+	return &fakeRuntimeTopology{}
 }
 
 func withManagementBearer(config []byte) []byte {
@@ -893,7 +898,7 @@ func withManagementBearer(config []byte) []byte {
 }
 
 func withManagedPostgresReplay(config []byte) []byte {
-	return []byte(strings.Replace(string(config), "global:\n", "global:\n  services:\n    router_replay:\n      enabled: true\n      store_backend: postgres\n      postgres:\n        host: postgres\n        port: 5432\n        database: vsr\n        user: router\n        password: test-only\n        ssl_mode: disable\n        table_name: router_replay\n", 1))
+	return []byte(strings.Replace(string(config), "global:\n", "global:\n  plugins:\n    - type: router_replay\n      configuration:\n        enabled: true\n  services:\n    router_replay:\n      store_backend: postgres\n      postgres:\n        host: postgres\n        port: 5432\n        database: vsr\n        user: router\n        password: test-only\n        ssl_mode: disable\n        table_name: router_replay\n", 1))
 }
 
 func importRecipeIntoStore(t *testing.T, store *recipe.Store, name string) recipe.PackageSummary {

@@ -1,5 +1,7 @@
 import hashlib
 import json
+import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -7,6 +9,7 @@ from cli import core
 from cli import recipe_activation_recovery as recovery
 from cli import recipe_activation_transaction as activation_transaction
 from cli import recipe_topology_reconcile as topology
+from cli.recipe_activation_recovery_io import RecipeStoreAccessError
 from cli.recipe_package import RECIPE_FILES, recipe_digest
 
 TRANSACTION_ID = "0123456789abcdef0123456789abcdef"
@@ -45,14 +48,14 @@ def _write_valid_active_package(
 ) -> dict[str, object]:
     files = {
         "metadata.yaml": b"schema_version: vllm-sr/recipe-metadata/v1\nid: test\n",
-        "config.yaml": b"version: v0.3\nlisteners:\n  - port: 8899\n",
+        "config.yaml": b"version: v0.5\nlisteners:\n  - port: 8899\n",
         "probes.yaml": b"schema_version: vllm-sr/recipe-probes/v1\nname: test\n",
         "recipe.dsl": b'recipe "test" {}\n',
         "README.md": b"# Test Recipe\n",
     }
     raw_digest = _digest(files["config.yaml"])
     digest = recipe_digest(files)
-    realized = b"version: v0.3\nlisteners:\n  - port: 8899\nsetup:\n  mode: false\n"
+    realized = b"version: v0.5\nlisteners:\n  - port: 8899\nsetup:\n  mode: false\n"
 
     runtime_dir = tmp_path / ".vllm-sr"
     runtime_dir.mkdir(exist_ok=True)
@@ -83,8 +86,8 @@ def _write_valid_active_package(
 def _write_crashed_activation(
     tmp_path: Path, *, previous_pointer: dict[str, str] | None
 ) -> tuple[Path, Path, Path, bytes, bytes]:
-    previous_config = b"version: v0.3\nlisteners:\n  - port: 8899\n"
-    unverified_target = b"version: v0.3\nlisteners:\n  - port: 9999\n"
+    previous_config = b"version: v0.5\nlisteners:\n  - port: 8899\n"
+    unverified_target = b"version: v0.5\nlisteners:\n  - port: 9999\n"
     runtime_dir = tmp_path / ".vllm-sr"
     runtime_dir.mkdir()
     runtime_config = runtime_dir / "runtime-config.yaml"
@@ -214,6 +217,38 @@ def test_recovery_without_previous_package_removes_active_pointer(tmp_path: Path
     assert not (store_dir / "active.json").exists()
 
 
+def test_a_restored_pointer_stays_readable_by_the_dashboard(tmp_path: Path):
+    pointer = _previous_pointer(realized_digest="sha256:" + "e" * 64)
+    runtime_config, store_dir, _transaction_dir, _previous, _target = (
+        _write_crashed_activation(tmp_path, previous_pointer=pointer)
+    )
+
+    assert _recover(runtime_config, store_dir) is True
+
+    # The Dashboard reads the store through the group it shares with this user.
+    assert stat.S_IMODE((store_dir / "active.json").stat().st_mode) == 0o640
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "geteuid") or os.geteuid() == 0,
+    reason="root reads a store it is not given",
+)
+def test_a_store_this_user_cannot_read_says_how_to_share_it(tmp_path: Path):
+    active = _write_valid_active_package(tmp_path)
+    objects = active["store_dir"] / "objects"
+    objects.chmod(0)
+    try:
+        with pytest.raises(RecipeStoreAccessError) as raised:
+            recovery.active_recipe_package_for_stack(
+                state_root_dir=tmp_path, stack_name="vllm-sr"
+            )
+    finally:
+        objects.chmod(0o700)
+    message = str(raised.value)
+    assert str(active["store_dir"]) in message
+    assert f"sudo chgrp -R {os.getgid()} {active['store_dir']}" in message
+
+
 def test_active_recipe_package_for_stack_validates_full_state(tmp_path: Path):
     assert (
         recovery.active_recipe_package_for_stack(
@@ -340,7 +375,7 @@ def test_core_recovers_then_validates_before_cleanup_or_provision(
 ):
     events: list[str] = []
     config = tmp_path / "config.yaml"
-    config.write_text("version: v0.3\n", encoding="utf-8")
+    config.write_text("version: v0.5\n", encoding="utf-8")
     monkeypatch.setattr(core, "print_vllm_logo", lambda: None)
     monkeypatch.setattr(
         core,
@@ -619,7 +654,7 @@ def test_committing_activation_rejects_tampered_object_before_topology_cleanup(
     pointer = active["pointer"]
     transaction_dir = store_dir / "transactions" / TRANSACTION_ID
     transaction_dir.mkdir(parents=True)
-    previous = b"version: v0.3\nlisteners:\n  - port: 7777\n"
+    previous = b"version: v0.5\nlisteners:\n  - port: 7777\n"
     backup_path = transaction_dir / "previous-config.yaml"
     backup_path.write_bytes(previous)
     journal_path = store_dir / "activation-pending.json"
@@ -717,7 +752,7 @@ def test_core_recovers_before_loading_runtime_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     source = tmp_path / "config.yaml"
-    source.write_text("version: v0.3\n", encoding="utf-8")
+    source.write_text("version: v0.5\n", encoding="utf-8")
     runtime_config, _store_dir, _transaction_dir, previous, _target = (
         _write_crashed_activation(tmp_path, previous_pointer=None)
     )

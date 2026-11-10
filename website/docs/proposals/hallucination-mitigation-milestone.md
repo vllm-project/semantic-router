@@ -84,8 +84,7 @@ especially retrieval and tool-assisted workflows. It is not a general fact datab
 a substitute for domain review, or a guarantee that supported context is itself true.
 
 The current route-local plugin reads its model dependencies from the canonical module
-path below. The exhaustive reference configuration owns the detector and explainer
-details:
+path below. The exhaustive reference configuration owns the detector details (the old NLI explainer is retired):
 
 ```yaml
 global:
@@ -105,8 +104,9 @@ routing:
 ```
 
 The proposal does not require one detector architecture or one model vendor. The
-current hallucination plugin documentation remains the source of truth for behavior
-that is actually implemented.
+current [`response_guard`](../tutorials/plugin/response-guard) and
+[hallucination signal](../tutorials/signal/application/hallucination) documentation
+remains the source of truth for behavior that is actually implemented.
 
 ## Evaluation
 
@@ -133,7 +133,7 @@ model versions, prompt templates, and raw evaluation artifacts.
 
 ## References
 
-- [Current hallucination plugin guide](../tutorials/plugin/hallucination)
+- [Current response guard guide](../tutorials/plugin/response-guard)
 - [LettuceDetect](https://arxiv.org/abs/2502.17125)
 - [SelfCheckGPT](https://arxiv.org/abs/2303.08896)
 - [Self-Refine](https://arxiv.org/abs/2303.17651)

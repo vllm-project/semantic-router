@@ -49,13 +49,13 @@ model paths before applying one.
 | Sample | What it demonstrates |
 | --- | --- |
 | `vllm.ai_v1alpha1_semanticrouter_simple.yaml` | Small standalone CR with a KServe backend. |
-| `vllm.ai_v1alpha1_semanticrouter_gateway.yaml` | Standalone Router plus a user-managed `HTTPRoute` to Envoy port 8801. |
+| `vllm.ai_v1alpha1_semanticrouter_gateway.yaml` | Standalone Router plus a user-managed `HTTPRoute` to its listener port 8801. |
 | `vllm.ai_v1alpha1_semanticrouter_llamastack.yaml` | Label-based Llama Stack service discovery. |
 | `vllm.ai_v1alpha1_semanticrouter_openshift.yaml` | OpenShift-oriented workload and Route settings. |
 | `vllm.ai_v1alpha1_semanticrouter_route.yaml` | OpenShift Route creation. |
 | `vllm.ai_v1alpha1_semanticrouter_{redis,valkey,milvus,qdrant}_cache.yaml` | External response-cache backend configuration. |
 | `vllm.ai_v1alpha1_semanticrouter_hybrid_cache.yaml` | In-memory HNSW with persistent cache storage. |
-| `vllm.ai_v1alpha1_semanticrouter_mmbert.yaml` | mmBERT embedding configuration. |
+| `vllm.ai_v1alpha1_semanticrouter_embedding.yaml` | Response cache embedding view. |
 | `vllm.ai_v1alpha1_semanticrouter_complexity.yaml` | Complexity signals and conditional routing. |
 
 For example:
@@ -73,27 +73,35 @@ specific reconciler explicitly says otherwise.
 
 ## Deployment modes
 
-### Standalone
+### Standalone (default)
 
-Without `spec.gateway.existingRef`, the reconciled pod includes the local Envoy
-path used to send requests through the Router's ExtProc service. This is the
-self-contained mode for a cluster without a shared Gateway.
+Without `spec.gateway.existingRef`, the Router runs standalone
+(`-gateway=standalone`): it serves the OpenAI-compatible API itself on its
+listener `http-8801`, port **8801**, with no Envoy in the Pod, and answers
+`/health` and `/ready` there for the Pod's probes. The Service exposes port
+8801, the port the Operator's Envoy sidecar served in earlier releases, so
+clients and routes keep their target. This is the self-contained mode for a
+cluster without a shared Gateway.
+
+The Operator deletes the sidecar's `<name>-envoy-config` ConfigMap that
+earlier releases created once the rollout to the standalone Pod completes.
 
 ### Existing Gateway
 
 For ordinary Gateway HTTP forwarding, omit `spec.gateway.existingRef` and
 apply the Gateway sample's `HTTPRoute`. It targets the standalone Router
-Service's `envoy-http` port **8801**, where the Envoy sidecar invokes ExtProc.
-Keep the route in the Router Service namespace and allow that namespace on
-the Gateway listener. Verify `Accepted=True`, `ResolvedRefs=True`, and a real
-completion through the Gateway.
+Service's `http-8801` port **8801**, which the Router serves. Keep the route
+in the Router Service namespace and allow that namespace on the Gateway
+listener. Verify `Accepted=True`, `ResolvedRefs=True`, and a real completion
+through the Gateway.
 
 With `spec.gateway.existingRef`, the controller resolves the referenced Gateway
-and omits the sidecar. The Gateway must then own the inference data plane:
-configure its ExtProc integration with the Router Service's gRPC port (default
-**50051**) and routes to the real model Services. The Operator does not create
-those policies or an `HTTPRoute`. The Router `api` port (default **8080**) is
-for management requests, not an inference route backend.
+and runs the Router in extproc mode (`-gateway=extproc`). The Gateway must then
+own the inference data plane: configure its ExtProc integration with the Router
+Service's gRPC port (default **50051**) and routes to the real model Services.
+The Operator does not create those policies or an `HTTPRoute`. The Router `api`
+port (default **8080**) is for management requests, not an inference route
+backend.
 
 ### OpenShift Route
 
@@ -114,6 +122,46 @@ Each `spec.vllmEndpoints` entry uses one backend type:
 
 After changing discovery behavior, test missing, ambiguous, and cross-namespace
 references as well as the successful path.
+
+## Model deployments and the decision model
+
+`spec.config.model_deployments`, `model_bindings` and `decision_model` become
+`global.model_catalog.deployments`, `bindings` and `system.decision_model`.
+The Operator decodes the first two strictly against the Router's types, so a
+misspelled field fails reconciliation. The decision model must be a
+`model_runtime` or `systemone` deployment.
+
+The Operator writes no other system line and no module threshold that the
+resource doesn't set. A built-in signal that no binding names follows the
+decision model. An unset threshold comes from the deployment that answers the
+module: calibrated values for a built-in model, 0.5 for a remote `systemone`
+model.
+
+A remote deployment's key never goes in the resource. `auth.api_key_env` names
+a `spec.env` variable filled from a Secret:
+
+```yaml
+spec:
+  env:
+    - name: SYSTEMONE_KEY
+      valueFrom:
+        secretKeyRef: {name: systemone-credentials, key: api-key}
+  config:
+    model_deployments:
+      d3-remote:
+        provider: systemone
+        endpoint: https://systemone.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth: {api_key_env: SYSTEMONE_KEY}
+        timeout_ms: 1500
+      local-vela: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu}
+    decision_model: {deployment: d3-remote}
+    model_bindings:
+      pii: local-vela
+```
+
+The Operator mounts no Secret into the Router Pod, so `auth.api_key_file` is
+not available here.
 
 ## Develop and validate
 

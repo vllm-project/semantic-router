@@ -360,7 +360,7 @@ func workflowStreamingPauseChatBody(t *testing.T) []byte {
 
 func workflowChatBody(stream bool) []byte {
 	body := `{
-		"model":"MoM",
+		"model":"vllm-sr/auto",
 		"messages":[{"role":"user","content":"Use the lookup tool, then answer."}],
 		"tools":[{
 			"type":"function",
@@ -392,7 +392,7 @@ func workflowResumeChatBodyWithStream(t *testing.T, pauseBody []byte, stream boo
 	t.Helper()
 	assistant, toolCallID := assistantToolMessageFromClientBody(t, pauseBody)
 	body := map[string]interface{}{
-		"model": "MoM",
+		"model": "vllm-sr/auto",
 		"messages": []interface{}{
 			map[string]interface{}{"role": "user", "content": "Use the lookup tool, then answer."},
 			assistant,

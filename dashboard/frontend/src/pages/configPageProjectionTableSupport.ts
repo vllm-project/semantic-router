@@ -44,6 +44,9 @@ export const EMPTY_PARTITIONS: ProjectionPartition[] = []
 export const EMPTY_SCORES: ProjectionScore[] = []
 export const EMPTY_MAPPINGS: ProjectionMapping[] = []
 
+export const projectionInputSource = (input: ProjectionScoreInput): string =>
+  `${input.type}:${input.name ?? ''}`
+
 export const cloneProjections = (cfg: ConfigData): ConfigProjections => ({
   partitions: [...(cfg.projections?.partitions || [])],
   scores: [...(cfg.projections?.scores || [])],

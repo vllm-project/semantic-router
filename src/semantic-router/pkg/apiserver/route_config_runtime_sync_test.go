@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -139,6 +139,21 @@ func TestDetectPythonCLIRootRequiresRuntimeSyncModule(t *testing.T) {
 	}
 	if got := detectPythonCLIRoot(); got != cliRoot {
 		t.Fatalf("detectPythonCLIRoot() = %q, want %q", got, cliRoot)
+	}
+}
+
+func TestPlatformBrandingAloneDoesNotSyncRuntimeConfig(t *testing.T) {
+	sourcePath := filepath.Join(t.TempDir(), "config.yaml")
+	t.Setenv(runtimeConfigPathEnv, "")
+	t.Setenv(runtimeAlgorithmEnv, "")
+	t.Setenv("VLLM_SR_PLATFORM", "rocm")
+	t.Setenv("DASHBOARD_PLATFORM", "rocm")
+	// A sync would fail here: this CLI root has no runtime sync module.
+	t.Setenv("VLLM_SR_CLI_PATH", t.TempDir())
+
+	got, err := syncRuntimeConfigForCurrentRuntime(sourcePath)
+	if err != nil || got != sourcePath {
+		t.Fatalf("syncRuntimeConfigForCurrentRuntime() = %q, %v", got, err)
 	}
 }
 

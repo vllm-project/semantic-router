@@ -71,9 +71,9 @@ for the intended input lengths and deployment hardware. This setting can be
 updated through config hot reload;
 other HTTP routes keep their existing timeouts.
 
-A deadline returns `504 REQUEST_TIMEOUT` and cancels queued or cancellable
-inference. Native inference already running may finish later. Its model resources
-and admission slot remain held until it finishes, including during shutdown.
+A deadline returns `504 REQUEST_TIMEOUT` and cancels the preview's model calls:
+the model runtime skips work it has not started and finishes a pass already
+running. The preview's admission slot is free again once those calls return.
 `max_concurrency` is a positive worker limit, defaults to 16, and has no wait
 queue: when all slots are occupied, new previews return `429 OVERLOADED`.
 Changing this limit requires a deployment restart; hot reload rejects the change.
@@ -84,6 +84,38 @@ allowance and propagates client cancellation. Recipe probes retain their own
 `evaluation.request_timeout_seconds` caller budget in `probes.yaml`; configure
 it for the intended run, and allow at least five extra seconds in external HTTP
 clients or proxies when they need to receive the Router's timeout response.
+
+### Authz
+
+```yaml
+global:
+  services:
+    authz:
+      fail_open: false
+      identity:
+        user_id_header: x-authz-user-id
+        user_groups_header: x-authz-user-groups
+      providers:
+        - type: header-injection
+        - type: static-config
+      delegated_credential:
+        enabled: false
+        header: x-vsr-delegated-credential
+```
+
+`identity` names the headers an authenticating gateway sets for the user and
+their groups. `providers` is the credential chain for upstream provider keys:
+`header-injection` reads per-user keys an ext_authz service injected,
+`static-config` falls back to the `api_key` of the selected backend, and the
+first match wins; `fail_open` lets a request through with no key at all.
+
+`delegated_credential` is the source of delegated credentials: the header in
+which a deployment authenticator attaches the credential it issued the
+requesting user. Only an upstream whose auth is `credential: delegated` (a
+`backend_refs` entry or a deployment) receives it, under that upstream's auth
+header, and only from a call made for the request; a request without it is
+answered `401` before the call. See
+[Security Hardening](../../installation/security-hardening#delegate-the-users-credential-to-an-upstream).
 
 ### Response API
 
@@ -103,6 +135,8 @@ The `store_backend` field controls where response and conversation history is pe
 |---------|-----------|----------|
 | `redis` | Survives router restart, shared across replicas | Production (default) |
 | `memory` | Lost on router restart | Local development only |
+
+The `redis` store needs `redis.address` (or `cluster_addresses` in cluster mode). When the store cannot start, the router still starts, logs `response_api_store_init_failed`, and answers every `/v1/responses` request with 503 and code `response_store_unavailable`. Set `enabled: false` to serve no Responses API at all, which answers 404.
 
 ### Observability
 
@@ -139,16 +173,27 @@ Common Prometheus metric families:
 | Routing | `llm_model_routing_modifications_total`, `llm_routing_reason_codes_total` |
 | Selection | `llm_model_selection_total`, `llm_model_selection_duration_seconds`, `llm_model_inflight_requests` |
 | Looper | `llm_looper_attempts_total`, `llm_looper_attempt_duration_seconds`, `llm_looper_attempt_first_byte_seconds`, `llm_looper_attempt_tokens_total`, `llm_looper_attempt_cost_total`, `llm_looper_execution_duration_seconds` |
+| Request graphs | `llm_request_graph_node_duration_seconds` (by `node_type` and `template`) |
 | Cache | `llm_cache_plugin_hits_total`, `llm_cache_plugin_misses_total`, `llm_cache_warmth_estimate` |
 | RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
+| Router Memory | `llm_memory_retrieval_total` (`backend`, `status`), `llm_memory_retrieval_latency_seconds`, `llm_memory_retrieval_results`, `llm_memory_store_operations_total`, `llm_memory_cache_hits_total`, `llm_memory_cache_misses_total`, `llm_memory_extraction_total` |
 | Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
 | Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total` |
 | Signals | `llm_signal_extraction_total`, `llm_signal_match_total`, `llm_signal_extraction_latency_seconds` |
-| Complexity verdicts | `llm_complexity_verdict_total` (by `rule`, `verdict`, `source`), `llm_complexity_evaluation_failures_total` |
-| Remote classifier backends | `llm_remote_connector_requests_total` (by `operation`, `outcome`), `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
-| Recipe routing | `llm_entrypoint_requests_total`, `llm_recipe_selections_total`, `llm_routing_stage_duration_seconds` |
+| Configuration lifecycle | `llm_config_updates_total` (`source`, `result`, `stage`), `llm_config_update_duration_seconds`, `llm_config_active_version`, `llm_config_active_info` (`version`, `hash`), `llm_config_last_rejection_timestamp_seconds` |
+| Remote model calls | `llm_remote_connector_requests_total` (by `operation`, `outcome`), `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
+| Recipe routing | `llm_entrypoint_requests_total`, `llm_recipe_selections_total`, `llm_routing_stage_duration_seconds` (stages `signals`, `decision`, `algorithm`, `prompt_compression`), `llm_prompt_compression_total` (by `recipe` and `outcome`: `compressed`, `skipped_disabled`, `skipped_min_length`, `skipped_max_tokens`) |
+| Routing input | `llm_routing_input_removed_total` (by `kind`: `skipped_message`, `stripped_block`), from [`global.router.routing_input`](../signal/overview#choose-the-user-text-signals-read) |
+| Streamed request body | `llm_streamed_body_arrival_seconds`, `llm_streamed_body_bytes`, `llm_streamed_body_chunks` (by `recipe`; STREAMED and FULL_DUPLEX_STREAMED modes only) |
 | Projections | `llm_projection_score` (by configured recipe and projection name) |
 | Trace export | `llm_trace_export_spans_total` (by exporter batch result) |
+
+Router Memory counters use bounded labels only. See the [Router Memory Prometheus label release note](../../release-notes/router-memory-prometheus-labels).
+
+`llm_request_graph_node_duration_seconds` times each step of a request graph,
+such as a Looper template's algorithm and respond steps; a step that holds
+others counts their time too. `template` names the graph (`looper.fusion`, for
+example) and `node_type` the step's registered type.
 
 `llm_request_outcomes_total{traffic_kind="inference"}` counts public inference
 requests once at their terminal boundary. Authenticated internal looper requests
@@ -284,7 +329,8 @@ The Helm chart exposes the same gate as a top-level value
 without editing the embedded canonical config:
 
 ```bash
-helm install vsr ./deploy/helm/semantic-router \
+helm install vsr oci://ghcr.io/vllm-project/charts/semantic-router \
+  --version 0.0.0-latest \
   --set router.skipProcessing.enabled=true
 ```
 
@@ -294,13 +340,34 @@ or stripping the header on trust grounds. Background on the AI Gateway
 interop pattern that motivates this gate lives in
 [issue #1808](https://github.com/vllm-project/semantic-router/issues/1808).
 
+### Debug Headers
+
+`global.router.headers.debug` decides who may turn on the debug response
+header, `x-vsr-trace`, with `x-vsr-debug: true`. It names the signal and guard
+rules a request matched, so the default, `none`, ignores the request header
+from every client.
+`any` honors it from every client, for development and tests. `authenticated`
+honors it only from the users and groups in `debug_principals`, as the identity
+headers your authenticator sets assert them.
+
+```yaml
+global:
+  router:
+    headers:
+      debug: authenticated
+      debug_principals:
+        groups: [platform-sre]
+```
+
+See [VSR routing headers](../../troubleshooting/vsr-headers#the-trace) for
+what the trace carries.
+
 ### Router Replay
 
 ```yaml
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: postgres     # explicit durable, SQL-queryable audit storage
       async_writes: true
       postgres:
@@ -309,10 +376,14 @@ global:
         database: vsr
         user: router
         password: ${ROUTER_REPLAY_POSTGRES_PASSWORD}
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ```
 
-Router replay is disabled by default. Set `global.services.router_replay.enabled`
-to enable it router-wide; when it is on, a decision captures replay unless that
+Router replay is disabled by default. A `router_replay` plugin in
+`global.plugins` enables it router-wide; when it is on, a decision captures replay unless that
 decision adds a route-local `router_replay` plugin with `enabled: false`. A
 decision may also opt in explicitly. If no durable backend is configured, the
 default in-memory store is process-local and is lost on restart.

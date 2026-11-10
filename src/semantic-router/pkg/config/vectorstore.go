@@ -16,7 +16,11 @@ limitations under the License.
 
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+	"strings"
+)
 
 // VectorStoreConfig holds configuration for the vector store feature.
 type VectorStoreConfig struct {
@@ -34,13 +38,9 @@ type VectorStoreConfig struct {
 	// Default: 50
 	MaxFileSizeMB int `json:"max_file_size_mb,omitempty" yaml:"max_file_size_mb,omitempty"`
 
-	// EmbeddingModel specifies the model for document embeddings.
-	// Options: "bert" (default), "qwen3", "gemma", "mmbert", "multimodal"
-	EmbeddingModel string `json:"embedding_model,omitempty" yaml:"embedding_model,omitempty"`
-
-	// EmbeddingDimension is the dimensionality of the embedding vectors.
-	// Default: 0 (the prepared model's native output dimension).
-	EmbeddingDimension int `json:"embedding_dimension,omitempty" yaml:"embedding_dimension,omitempty"`
+	// Embedding names the deployment that embeds documents and queries, and
+	// the width of their vectors (default: the model's full output).
+	Embedding *EmbeddingBinding `json:"embedding,omitempty" yaml:"embedding,omitempty"`
 
 	// IngestionWorkers is the number of concurrent ingestion pipeline workers.
 	// Default: 2
@@ -135,7 +135,8 @@ type LlamaStackVectorStoreConfig struct {
 
 	// SearchType controls the search strategy used by Llama Stack.
 	// Options: "vector" (default, semantic only) or "hybrid" (vector + keyword
-	// with Reciprocal Rank Fusion). Hybrid requires the Milvus vector_io provider.
+	// with Reciprocal Rank Fusion). Hybrid requires a vector_io provider with
+	// keyword search, such as sqlite-vec or Milvus.
 	SearchType string `json:"search_type,omitempty" yaml:"search_type,omitempty"`
 }
 
@@ -202,7 +203,37 @@ func (c *VectorStoreConfig) Validate() error {
 	if err := validateVectorStoreMetadataStore(c); err != nil {
 		return err
 	}
+	if err := validateVectorStoreSupportedFormats(c.SupportedFormats); err != nil {
+		return err
+	}
 	return validateVectorStoreBackendConfig(c)
+}
+
+// VectorStoreFormatExtension normalizes a supported_formats entry to a
+// lowercase file extension with a leading dot.
+func VectorStoreFormatExtension(format string) string {
+	ext := strings.ToLower(strings.TrimSpace(format))
+	if ext != "" && !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	return ext
+}
+
+// VectorStoreTextFormats lists the supported_formats extensions that
+// vectorstore.ExtractText can read.
+var VectorStoreTextFormats = []string{".txt", ".md", ".json", ".csv", ".html", ".htm"}
+
+func validateVectorStoreSupportedFormats(formats []string) error {
+	for _, format := range formats {
+		if !slices.Contains(VectorStoreTextFormats, VectorStoreFormatExtension(format)) {
+			return fmt.Errorf(
+				"vector_store.supported_formats must contain only '%s', got '%s'",
+				strings.Join(VectorStoreTextFormats, "', '"),
+				format,
+			)
+		}
+	}
+	return nil
 }
 
 func validateVectorStoreBackendType(backendType string) error {
@@ -295,13 +326,10 @@ func validateVectorStoreMetadataStore(c *VectorStoreConfig) error {
 // ApplyDefaults fills in default values for unset fields.
 func (c *VectorStoreConfig) ApplyDefaults() {
 	if c.FileStorageDir == "" {
-		c.FileStorageDir = "/var/lib/vsr/data"
+		c.FileStorageDir = DefaultVectorStoreFileStorageDir
 	}
 	if c.MaxFileSizeMB <= 0 {
 		c.MaxFileSizeMB = 50
-	}
-	if c.EmbeddingModel == "" {
-		c.EmbeddingModel = "bert"
 	}
 	if c.IngestionWorkers <= 0 {
 		c.IngestionWorkers = 2

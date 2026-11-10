@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1550" height="1100" viewBox="0 0 1550 1100" role="img"><title>Composable vLLM Semantic Router</title><desc>Current native frontend composition; logical components and optional routing.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+<rect width="100%" height="100%" fill="#fff"/>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<text x="50" y="48.0" font-size="30" text-anchor="start" class="serif">(a) One frontend, composable intelligence</text>
+<text x="50" y="82.0" font-size="21" text-anchor="start" class="">Current implementation · logical components, not mandatory process boundaries</text>
+<rect x="110" y="142" width="660" height="112" rx="12" fill="#FFFFFF" stroke="#111" stroke-width="2.2"/>
+<text x="134" y="182.0" font-size="29" text-anchor="start" class="">Answering backends</text>
+<text x="440" y="223.0" font-size="24" text-anchor="middle" class="">vLLM  /  private services  /  hosted APIs</text>
+<rect x="110" y="320" width="660" height="322" rx="12" fill="#FFFFFF" stroke="#111" stroke-width="2.2" stroke-dasharray="9 7"/>
+<text x="134" y="360.0" font-size="29" text-anchor="start" class="">Decision Engine  ·  optional</text>
+<text x="440" y="396.0" font-size="23" text-anchor="middle" class="">Enabled routing policy and recipes</text>
+<g data-box="148.0 435 280 78">
+<rect x="148.0" y="435" width="280" height="78" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="288.0" y="468.12" font-size="24" text-anchor="middle" class="">Decisions</text>
+<text x="288.0" y="496.2" font-size="24" text-anchor="middle" class="">+ selection algorithm</text>
+</g>
+<g data-box="452.0 435 280 78">
+<rect x="452.0" y="435" width="280" height="78" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="592.0" y="468.365" font-size="23" text-anchor="middle" class="">Request / response</text>
+<text x="592.0" y="495.275" font-size="23" text-anchor="middle" class="">plugin hooks</text>
+</g>
+<g data-box="148.0 545 584 64">
+<rect x="148.0" y="545" width="584" height="64" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="440.0" y="585.5" font-size="25" text-anchor="middle" class="">Signals + projections</text>
+</g>
+<path d="M287,545 L287,513" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M440,320 L440,254" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="467" y="293.0" font-size="20" text-anchor="start" class="">Selected Chat backend</text>
+<rect x="940" y="142" width="500" height="500" rx="12" fill="#FFFFFF" stroke="#111" stroke-width="2.2" stroke-dasharray="9 7"/>
+<text x="964" y="182.0" font-size="29" text-anchor="start" class="">Serving Engine · Model Runtime</text>
+<text x="1190" y="216.0" font-size="20" text-anchor="middle" class="">Loaded for native APIs / model-backed tasks</text>
+<text x="1190" y="245.0" font-size="20" text-anchor="middle" class="">Worker outputs: answers / vectors / ranks</text>
+<g data-box="972.0 266 436 76">
+<rect x="972.0" y="266" width="436" height="76" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="1190.0" y="298.365" font-size="23" text-anchor="middle" class="">Managed workers</text>
+<text x="1190.0" y="325.275" font-size="23" text-anchor="middle" class="">or attached runtime endpoints</text>
+</g>
+<g data-box="972.0 384 436 76">
+<rect x="972.0" y="384" width="436" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1190.0" y="416.365" font-size="23" text-anchor="middle" class="">One pool per deployment</text>
+<text x="1190.0" y="443.275" font-size="23" text-anchor="middle" class="">compatible replicas</text>
+</g>
+<g data-box="972.0 508 436 92">
+<rect x="972.0" y="508" width="436" height="92" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="1190.0" y="548.365" font-size="23" text-anchor="middle" class="">Native APIs + task adapters</text>
+<text x="1190.0" y="575.275" font-size="23" text-anchor="middle" class="">capability and input validation</text>
+</g>
+<path d="M1190,508 L1190,460" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1190,384 L1190,342" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M770,577 L940,577" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="855" y="516.0" font-size="20" text-anchor="middle" class="">Model-backed</text>
+<text x="855" y="539.4" font-size="20" text-anchor="middle" class="">tasks, when used</text>
+<rect x="110" y="727" width="1330" height="198" rx="12" fill="#FFFFFF" stroke="#111" stroke-width="2.2"/>
+<text x="134" y="767.0" font-size="29" text-anchor="start" class="">Frontend  ·  shared across modes</text>
+<text x="136" y="801.0" font-size="23" text-anchor="start" class="">Listener access + model grants + protocol adapters</text>
+<g data-box="143.0 830 374 65">
+<rect x="143.0" y="830" width="374" height="65" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="330.0" y="871.0" font-size="25" text-anchor="middle" class="">Chat Completions</text>
+</g>
+<g data-box="588.0 830 374 65">
+<rect x="588.0" y="830" width="374" height="65" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="775.0" y="871.0" font-size="25" text-anchor="middle" class="">Responses</text>
+</g>
+<g data-box="1033.0 830 374 65">
+<rect x="1033.0" y="830" width="374" height="65" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="1220.0" y="871.0" font-size="25" text-anchor="middle" class="">System One</text>
+</g>
+<path d="M440,727 L440,642" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1190,727 L1190,642" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="455" y="689.0" font-size="21" text-anchor="start" class="">Routed requests</text>
+<text x="1205" y="689.0" font-size="21" text-anchor="start" class="">Direct native requests</text>
+<g data-box="345.0 983 860 64">
+<rect x="345.0" y="983" width="860" height="64" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="775.0" y="1023.5" font-size="25" text-anchor="middle" class="">Applications and agents</text>
+</g>
+<path d="M775,983 L775,925" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="775" y="1077.0" font-size="20" text-anchor="middle" class="">Dashed boundary: optional component. Models load only for active deployments.</text>
+</svg>

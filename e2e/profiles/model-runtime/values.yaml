@@ -1,0 +1,247 @@
+# The built-in model runtime end to end, on tiny random-weight fixture packages
+# (runtime_with_fixtures.py writes them; nothing is downloaded):
+#
+# - managed: the Router starts runtime processes itself, through
+#   VLLM_SRUN_COMMAND: an embedder on device auto, which joins the cpu device
+#   group, and a Decision 2.0 model, each in its own worker;
+# - attached: model-runtime-attached serves a decision model and a Vela 2.0
+#   model in one process, each selected by its model;
+# - fail-open: decision-offline points at a Service with no pods.
+#
+# testcases/model_runtime_*.go compare the Router's signals and routes with
+# the runtimes' own answers, so the fixtures' random weights need no planted
+# behaviour.
+config:
+  version: v0.5
+  listeners: []
+  providers:
+    defaults:
+      # Both are among the names the shared AIGatewayRoute matches.
+      model: general-expert
+    models:
+      - name: general-expert
+        provider_model_id: general-expert
+        backend_refs:
+          - name: local-vllm
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+      - name: math-expert
+        provider_model_id: math-expert
+        backend_refs:
+          - name: local-vllm
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  recipes:
+    - name: default
+      signals:
+        # Replaces the chart's default general domain, which would ask the
+        # system decision model this offline profile does not serve.
+        domains: []
+        # testcases/decision_runtime_routing.go asks the runtimes these questions.
+        systemone:
+          - name: answered
+            description: Matches whenever the managed decision model answers.
+            deployment: decision-fixture
+            question:
+              type: noul
+              instructions: Is this request about software?
+            predicate:
+              gte: 0
+            timeout_ms: 10000
+          - name: request_kind
+            description: Which kind of work the request asks for.
+            deployment: decision-fixture
+            question:
+              type: choice
+              instructions: What kind of work does this request ask for?
+              choices:
+                - key: code
+                  description: Writing, reviewing or debugging code
+                - key: math
+                  description: Mathematics or quantitative reasoning
+                - key: chat
+                  description: Anything else
+            timeout_ms: 10000
+          - name: attached_answered
+            description: Matches whenever the attached decision model answers.
+            deployment: attached-decisions
+            question:
+              type: noul
+              instructions: Does this request ask a question?
+            predicate:
+              gte: 0
+            timeout_ms: 10000
+          - name: offline
+            description: Asks a deployment with no runtime behind it.
+            deployment: decision-offline
+            question:
+              type: noul
+              instructions: Is this request about software?
+            predicate:
+              gte: 0
+          # testcases/decision_runtime_set_span.go asks the attached Vela 2.0
+          # fixture these questions. A zero threshold makes every label count,
+          # so the random weights still select labels and mark spans.
+          - name: topics
+            description: Which support topics the request mentions.
+            deployment: attached-vela2
+            question:
+              type: set
+              instructions: Which topics does the request mention?
+              labels:
+                - key: billing
+                  description: Payments, invoices or refunds
+                - key: shipping
+                  description: Deliveries, parcels or returns
+              threshold: 0
+            timeout_ms: 10000
+          - name: names
+            description: Where the request names a city or a person.
+            deployment: attached-vela2
+            question:
+              type: span
+              instructions: Which spans name a city or a person?
+              labels:
+                - key: city
+                  description: A city name
+                - key: person
+                  description: A person's name
+              threshold: 0
+            timeout_ms: 10000
+      decisions:
+        # An unknown answer never matches: the offline deployment never answers.
+        - name: offline_route
+          description: Fails open; never selected
+          priority: 500
+          rules:
+            operator: AND
+            on_unknown: no_match
+            conditions:
+              - type: systemone
+                name: offline
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: selector_route
+          description: Both runtimes answered; the managed decision model also chooses the model
+          priority: 400
+          rules:
+            operator: AND
+            on_unknown: no_match
+            conditions:
+              - type: systemone
+                name: answered
+              - type: systemone
+                name: attached_answered
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+            - model: math-expert
+              use_reasoning: false
+          algorithm:
+            type: systemone
+            systemone:
+              deployment: decision-fixture
+              instructions: Which model should answer this request?
+              candidates:
+                general-expert: General assistant for everyday requests
+                math-expert: Specialist for mathematics and quantitative reasoning
+              timeout_ms: 10000
+        # Keeps every systemone signal in use, so each request evaluates all of
+        # them and the signal tests can read their results.
+        - name: signals_route
+          description: Any systemone signal matched
+          priority: 300
+          rules:
+            operator: OR
+            on_unknown: no_match
+            conditions:
+              - {type: systemone, name: request_kind, label: code}
+              - {type: systemone, name: request_kind, label: math}
+              - {type: systemone, name: request_kind, label: chat}
+              - {type: systemone, name: topics, label: billing}
+              - {type: systemone, name: topics, label: shipping}
+              - {type: systemone, name: names, label: city}
+              - {type: systemone, name: names, label: person}
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: default-route
+          description: Fallback route
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+  global:
+    router:
+      strategy: priority
+    model_catalog:
+      embeddings:
+        default: {deployment: vela-embedding}
+      deployments:
+        # Managed: one independent decision-model worker.
+        decision-fixture:
+          provider: model_runtime
+          artifact: /tmp/vsr-fixtures/decision
+          device: cpu
+        # Managed: the cpu device group.
+        vela-embedding:
+          provider: model_runtime
+          artifact: /tmp/vsr-fixtures/embedding
+          # The Kind node has no GPU, so auto resolves to the CPU and this
+          # deployment joins the cpu device group.
+          device: auto
+          input:
+            max_tokens: 512
+            overflow: truncate
+        # Attached: one runtime process serving two models.
+        attached-decisions:
+          provider: model_runtime
+          endpoint: http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100
+          model: decision-a
+        attached-vela2:
+          provider: model_runtime
+          endpoint: http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100
+          model: vela2-a
+        decision-offline:
+          provider: model_runtime
+          endpoint: http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100
+    stores:
+      # The vector store embeds with embeddings.default, so the Router starts
+      # the managed embedding deployment for it; no request reads it.
+      vector_store:
+        enabled: true
+        backend_type: memory
+        file_storage_dir: /tmp/vsr-vector-store
+
+extraEnv:
+  - name: VLLM_SRUN_COMMAND
+    value: python3 /opt/vsr-e2e/runtime_with_fixtures.py
+  - name: VLLM_SRUN_DIR
+    value: /tmp/vsr-runtime
+  - name: HF_HUB_OFFLINE
+    value: "1"
+extraVolumes:
+  - name: model-runtime-e2e
+    configMap:
+      name: model-runtime-e2e
+      defaultMode: 493 # 0755
+extraVolumeMounts:
+  - name: model-runtime-e2e
+    mountPath: /opt/vsr-e2e
+    readOnly: true
+
+resources:
+  limits:
+    memory: 6Gi
+    cpu: "2"
+  requests:
+    memory: 2Gi
+    cpu: 500m
+persistence:
+  enabled: false

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"k8s.io/client-go/kubernetes"
-
 	"sigs.k8s.io/yaml"
 
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
@@ -149,10 +148,10 @@ func fetchDashboardYAMLConfig(ctx context.Context, client *http.Client, baseURL,
 
 // Check the deployed document, not just whether the file endpoint returned bytes.
 // The Router's strict parser owns full validation; this assertion proves the
-// Dashboard is reading that canonical provider/routing document.
+// Dashboard is reading that canonical provider/recipe document.
 func assertDashboardCanonicalConfig(document map[string]interface{}) error {
-	if document["version"] != "v0.3" {
-		return fmt.Errorf("expected canonical version v0.3, got %v", document["version"])
+	if document["version"] != "v0.5" {
+		return fmt.Errorf("expected canonical version v0.5, got %v", document["version"])
 	}
 	providers, ok := document["providers"].(map[string]interface{})
 	if !ok {
@@ -162,13 +161,14 @@ func assertDashboardCanonicalConfig(document map[string]interface{}) error {
 	if !ok || len(models) == 0 {
 		return fmt.Errorf("canonical config must declare provider models")
 	}
-	routing, ok := document["routing"].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("canonical config must declare routing")
+	recipes, ok := document["recipes"].([]interface{})
+	if !ok || len(recipes) == 0 {
+		return fmt.Errorf("canonical config must declare recipes")
 	}
-	decisions, ok := routing["decisions"].([]interface{})
+	recipe, _ := recipes[0].(map[string]interface{})
+	decisions, ok := recipe["decisions"].([]interface{})
 	if !ok || len(decisions) == 0 {
-		return fmt.Errorf("canonical config must declare routing decisions")
+		return fmt.Errorf("canonical config must declare decisions in its first recipe")
 	}
 	return nil
 }
@@ -176,14 +176,19 @@ func assertDashboardCanonicalConfig(document map[string]interface{}) error {
 // assertCanonicalConfigIdentity checks that a served config document is the
 // deployed dashboard fixture (e2e/profiles/dashboard/values.yaml) rather than
 // chart placeholders: the provider surface must declare base-model and the
-// routing surface must declare other_decision. Canonical-shape checks alone
+// first recipe must declare other_decision. Canonical-shape checks alone
 // cannot tell those apart, because a placeholder document can also be a
-// canonical v0.3 config with nonempty models and decisions.
+// canonical v0.5 config with nonempty models and decisions.
 func assertCanonicalConfigIdentity(doc map[string]interface{}) error {
 	if err := assertNamedEntry(doc, "providers", "models", "base-model"); err != nil {
 		return err
 	}
-	if err := assertNamedEntry(doc, "routing", "decisions", "other_decision"); err != nil {
+	recipes, _ := doc["recipes"].([]interface{})
+	if len(recipes) == 0 {
+		return fmt.Errorf("config declares no recipe")
+	}
+	recipe, _ := recipes[0].(map[string]interface{})
+	if err := assertNamedEntry(map[string]interface{}{"recipes[0]": recipe}, "recipes[0]", "decisions", "other_decision"); err != nil {
 		return err
 	}
 	return nil

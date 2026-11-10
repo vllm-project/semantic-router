@@ -7,39 +7,26 @@ type ScoreKind string
 
 const (
 	// ScoreKindNone marks a policy leaf. Keyword rules, conversation and
-	// metadata predicates, projection outputs, structural and event rules all
+	// metadata predicates, input modalities and projection outputs all
 	// restate a decision the operator already made, so they gate eligibility
 	// without adding evidence.
 	ScoreKindNone ScoreKind = ""
 	// ScoreKindProbability marks a model-reported probability.
 	ScoreKindProbability ScoreKind = "probability"
-	// ScoreKindSimilarity marks a vector similarity.
-	ScoreKindSimilarity ScoreKind = "similarity"
-	// ScoreKindUnknown marks evidence whose quantity depends on the backend
-	// that produced it. A complexity rule reports a calibrated probability
-	// through label_distribution.v1 and the magnitude of a prototype margin
-	// on the local path, and a jailbreak rule reports a classifier
-	// probability through BERT and a contrastive score under
-	// `method: contrastive`. Both write the same key, so the signal type does
-	// not establish the quantity and selection must not rank on it.
-	ScoreKindUnknown ScoreKind = "unknown"
 )
 
 // signalScoreKinds records the kind each evidence signal reports. A type is
-// absent from this map when it is policy, and maps to ScoreKindUnknown when
-// the quantity depends on the configured backend.
+// absent from this map when it is policy.
 var signalScoreKinds = map[string]ScoreKind{
-	SignalTypeDomain:     ScoreKindProbability,
-	SignalTypeClassifier: ScoreKindProbability,
-	SignalTypeSafety:     ScoreKindProbability,
-	SignalTypePreference: ScoreKindProbability,
-	SignalTypeEmbedding:  ScoreKindSimilarity,
-	SignalTypeReask:      ScoreKindSimilarity,
-	// A KB rule reports the similarity of the matched label, not a
-	// probability. See kbLabelMatchConfidence.
-	SignalTypeKB:         ScoreKindSimilarity,
-	SignalTypeComplexity: ScoreKindUnknown,
-	SignalTypeJailbreak:  ScoreKindUnknown,
+	// A systemone leaf reports the answer's probability: P(true), the chosen
+	// option's probability, or a Score answer's most likely level. The
+	// application signals ask through it and report the same.
+	SignalTypeSystemOne:    ScoreKindProbability,
+	SignalTypeDomain:       ScoreKindProbability,
+	SignalTypeSafety:       ScoreKindProbability,
+	SignalTypeJailbreak:    ScoreKindProbability,
+	SignalTypeComplexity:   ScoreKindProbability,
+	SignalTypeTurnRelation: ScoreKindProbability,
 }
 
 // SignalScoreKind reports the score kind of a signal type. Policy types report
@@ -48,9 +35,7 @@ func SignalScoreKind(signalType string) ScoreKind {
 	return signalScoreKinds[signalType]
 }
 
-// IsEvidenceSignal reports whether a signal type carries measured evidence. An
-// evidence leaf whose kind is unknown still counts as evidence, so a decision
-// that rests on it is not comparable rather than silently ranked on the rest.
+// IsEvidenceSignal reports whether a signal type carries measured evidence.
 func IsEvidenceSignal(signalType string) bool {
 	return SignalScoreKind(signalType) != ScoreKindNone
 }

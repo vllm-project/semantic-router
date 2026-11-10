@@ -136,6 +136,21 @@ function guideLink(repoRoot, path) {
   return `../${docPath}`
 }
 
+// The primitive's tutorial is signal/systemone.md; every other signal's lives
+// in the directory of its layer.
+export function signalTutorialType(tutorialRoot, tutorial) {
+  const parts = asPosix(relative(tutorialRoot, tutorial)).split('/')
+  if (parts.length === 1 && parts[0] === 'systemone.md') {
+    return 'primitive signal'
+  }
+  if (parts.length === 2 && ['application', 'heuristic'].includes(parts[0])) {
+    return `${parts[0]} signal`
+  }
+  throw new Error(
+    `Signal tutorial ${tutorial} must be signal/systemone.md or live directly under signal/application or signal/heuristic`,
+  )
+}
+
 function signalEntries(repoRoot) {
   const fragmentRoot = join(repoRoot, 'config', 'fragments', 'signal')
   const tutorialRoot = join(repoRoot, 'website', 'docs', 'tutorials', 'signal')
@@ -146,17 +161,10 @@ function signalEntries(repoRoot) {
       const fragmentDirectory = join(fragmentRoot, family)
       requireYamlFamily(fragmentDirectory, `Signal family ${family}`)
       const tutorial = findSingleTutorial(tutorialRoot, family)
-      const tutorialParts = asPosix(relative(tutorialRoot, tutorial)).split('/')
-      const tutorialType = tutorialParts[0]
-      if (tutorialParts.length !== 2 || !['heuristic', 'learned'].includes(tutorialType)) {
-        throw new Error(
-          `Signal tutorial ${tutorial} must live directly under signal/heuristic or signal/learned`,
-        )
-      }
 
       return {
         family,
-        type: `${tutorialType} signal`,
+        type: signalTutorialType(tutorialRoot, tutorial),
         goal: tutorialGoal(tutorial),
         fragmentPath: `config/fragments/signal/${family}/`,
         fragmentKind: 'directory',
@@ -165,7 +173,7 @@ function signalEntries(repoRoot) {
     })
 }
 
-function algorithmEntries(repoRoot, algorithmType) {
+function algorithmEntries(repoRoot, algorithmType, kind) {
   const fragmentRoot = join(repoRoot, 'config', 'fragments', 'algorithm', algorithmType)
   const tutorialRoot = join(
     repoRoot,
@@ -195,7 +203,7 @@ function algorithmEntries(repoRoot, algorithmType) {
 
     return {
       family,
-      type: `${algorithmType} algorithm`,
+      type: kind,
       goal: tutorialGoal(tutorial),
       fragmentPath: `config/fragments/algorithm/${algorithmType}/${filename}`,
       fragmentKind: 'file',
@@ -229,8 +237,8 @@ function pluginEntries(repoRoot) {
 export function discoverConfigurationCatalog(repoRoot) {
   return {
     signals: signalEntries(repoRoot),
-    selectionAlgorithms: algorithmEntries(repoRoot, 'selection'),
-    looperAlgorithms: algorithmEntries(repoRoot, 'looper'),
+    selectors: algorithmEntries(repoRoot, 'selection', 'selector'),
+    executors: algorithmEntries(repoRoot, 'looper', 'executor'),
     plugins: pluginEntries(repoRoot),
   }
 }
@@ -263,13 +271,13 @@ export function renderConfigurationCatalog(catalog) {
     '',
     catalogTable(catalog.signals),
     '',
-    '### Selection algorithms',
+    '### Selectors',
     '',
-    catalogTable(catalog.selectionAlgorithms),
+    catalogTable(catalog.selectors),
     '',
-    '### Looper algorithms',
+    '### Executors',
     '',
-    catalogTable(catalog.looperAlgorithms),
+    catalogTable(catalog.executors),
     '',
     '### Plugins and bundles',
     '',

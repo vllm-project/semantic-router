@@ -168,7 +168,7 @@ helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 		-f "$(HELM_BACKEND_TARGET_VALUES)" \
 		--namespace $(HELM_NAMESPACE) > "$(HELM_BACKEND_TARGET_OUTPUT)"
 	@for field in \
-		"base_url: https://provider.example/v1" \
+		"endpoint: https://provider.example/v1" \
 		"provider_model_id: provider/model-id" \
 		"api_key_env: PROVIDER_API_KEY" \
 		"X-Tenant: production" \
@@ -192,6 +192,10 @@ helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 		-s templates/deployment.yaml > "$(dir $(HELM_TEMPLATE_OUTPUT))extra-containers-template.yaml"
 	@"$(AGENT_PYTHON)" deploy/helm/check-extra-containers.py "$(dir $(HELM_TEMPLATE_OUTPUT))extra-containers-template.yaml"
 	@echo "Router extraContainers rendering verified"
+	@"$(AGENT_PYTHON)" deploy/helm/check-gateway-mode.py $(HELM_CHART_PATH)
+	@echo "Standalone and extproc gateway modes verified"
+	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_data_volume.py -v
+	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_grafana_live.py -v
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm CI validation completed successfully"
 
 helm-safety-validate: ## Validate Helm schema and local-state safety guards
@@ -482,8 +486,8 @@ _check-k8s:
 		echo "  - For remote clusters: check your kubeconfig and cluster connection"; \
 		echo ""; \
 		echo "$(YELLOW)[TIP]$(NC) You can use the following commands to start a local cluster:"; \
-		echo "  - minikube: make kube-up"; \
-		echo "  - kind: make kind-cluster-create"; \
+		echo "  - minikube: minikube start"; \
+		echo "  - kind: make create-cluster"; \
 		exit 1; \
 	fi
 	@echo "$(GREEN)[✓]$(NC) Kubernetes cluster is accessible"

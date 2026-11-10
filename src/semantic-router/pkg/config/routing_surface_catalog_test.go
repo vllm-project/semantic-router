@@ -20,8 +20,8 @@ func TestDecisionAlgorithmCatalog_AllTypesHaveTier(t *testing.T) {
 		if entry.Tier != "supported" && entry.Tier != "experimental" {
 			t.Errorf("Catalog entry %q has invalid Tier %q", entry.Type, entry.Tier)
 		}
-		if entry.Execution != AlgorithmExecutionSelector && entry.Execution != AlgorithmExecutionLooper {
-			t.Errorf("Catalog entry %q has invalid Execution %q", entry.Type, entry.Execution)
+		if entry.Kind != AlgorithmKindSelector && entry.Kind != AlgorithmKindExecutor {
+			t.Errorf("Catalog entry %q has invalid Kind %q", entry.Type, entry.Kind)
 		}
 		if entry.PayloadShape != "" && entry.PayloadShape != AlgorithmPayloadNested {
 			t.Errorf("Catalog entry %q has invalid payload shape %q", entry.Type, entry.PayloadShape)
@@ -34,7 +34,7 @@ func TestDecisionAlgorithmCatalog_AllTypesHaveTier(t *testing.T) {
 
 func TestDecisionAlgorithmRegistryOwnsEveryPayloadBlock(t *testing.T) {
 	algorithmType := reflect.TypeOf(AlgorithmConfig{})
-	for _, entry := range decisionAlgorithmRegistry {
+	for _, entry := range registeredSpecs(decisionAlgorithms) {
 		configField := entry.Catalog.ConfigField
 		if configField == "" {
 			if entry.IsConfigured != nil {
@@ -74,48 +74,42 @@ func TestDecisionAlgorithmRegistryOwnsEveryPayloadBlock(t *testing.T) {
 	}
 }
 
-func TestSupportedLooperAlgorithmTypes(t *testing.T) {
-	want := []string{
-		DecisionAlgorithmConfidence,
-		DecisionAlgorithmFusion,
-		DecisionAlgorithmRatings,
-		DecisionAlgorithmReMoM,
-		DecisionAlgorithmWorkflows,
+func TestAlgorithmCatalogSeparatesSelectorsFromExecutors(t *testing.T) {
+	selectors := []string{DecisionAlgorithmMultiFactor, DecisionAlgorithmRandom, DecisionAlgorithmStatic, DecisionAlgorithmSystemOne}
+	executors := []string{DecisionAlgorithmEscalate, DecisionAlgorithmFusion, DecisionAlgorithmRatings, DecisionAlgorithmReMoM, DecisionAlgorithmWorkflows}
+	if got := SupportedExecutorAlgorithmTypes(); !slices.Equal(got, executors) {
+		t.Fatalf("SupportedExecutorAlgorithmTypes() = %v, want %v", got, executors)
 	}
-	got := SupportedLooperAlgorithmTypes()
-
-	if len(got) != len(want) {
-		t.Fatalf("SupportedLooperAlgorithmTypes() = %v, want %v", got, want)
+	if got, want := SupportedDecisionAlgorithmTypes(), slices.Sorted(slices.Values(slices.Concat(selectors, executors))); !slices.Equal(got, want) {
+		t.Fatalf("SupportedDecisionAlgorithmTypes() = %v, want %v", got, want)
 	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("SupportedLooperAlgorithmTypes() = %v, want %v", got, want)
-		}
-		if !IsLooperAlgorithmType(got[i]) {
-			t.Errorf("IsLooperAlgorithmType(%q) = false, want true", got[i])
-		}
-		if !IsSupportedDecisionAlgorithmType(got[i]) {
-			t.Errorf("Looper algorithm %q is missing from the public decision catalog", got[i])
+	for _, algorithmType := range append(selectors, "unknown") {
+		if IsExecutorAlgorithmType(algorithmType) {
+			t.Errorf("IsExecutorAlgorithmType(%q) = true, want false", algorithmType)
 		}
 	}
-
-	for _, algorithmType := range []string{DecisionAlgorithmStatic, "rl_driven", "unknown"} {
-		if IsLooperAlgorithmType(algorithmType) {
-			t.Errorf("IsLooperAlgorithmType(%q) = true, want false", algorithmType)
+	for _, entry := range DecisionAlgorithmCatalog() {
+		wantAPIs := []InferenceAPI{ChatAPI}
+		if entry.Type == DecisionAlgorithmEscalate {
+			wantAPIs = []InferenceAPI{ChatAPI, SystemOneAPI}
+		}
+		if !slices.Equal(entry.APIs, wantAPIs) {
+			t.Errorf("algorithm %q serves %v, want %v", entry.Type, entry.APIs, wantAPIs)
+		}
+		if entry.Kind == AlgorithmKindExecutor && (!IsExecutorAlgorithmType(entry.Type) || entry.ConfigField != entry.Type) {
+			t.Errorf("executor %q must nest its settings under its type, got config field %q", entry.Type, entry.ConfigField)
 		}
 	}
 }
 
-func TestDecisionAlgorithmCatalog_PublicAlgorithmSurface(t *testing.T) {
-	publicTypes := []string{
-		"automix", "confidence", "fusion", "hybrid", "kmeans",
-		"knn", "latency_aware", "mlp", "multi_factor", "ratings",
-		"remom", "router_dc", "static", "svm",
-	}
-
-	for _, algType := range publicTypes {
-		if !IsSupportedDecisionAlgorithmType(algType) {
-			t.Errorf("public algorithm type %q is not supported", algType)
+func TestDecisionAlgorithmCatalog_RemovedAlgorithmsStayRemoved(t *testing.T) {
+	for _, removedType := range removedAlgorithmTypes {
+		if IsSupportedDecisionAlgorithmType(removedType) {
+			t.Errorf("removed algorithm type %q is still public", removedType)
+		}
+		spec := NewDecisionAlgorithmType(AlgorithmCatalogEntry{Type: removedType, DisplayName: "Removed", Tier: "experimental"}, AlgorithmOptions[struct{}]{})
+		if err := RegisterDecisionAlgorithm(spec); err == nil {
+			t.Errorf("a Router build registered the removed algorithm type %q", removedType)
 		}
 	}
 	for _, migratedType := range []string{"elo", "rl_driven", "gmtrouter", "session_aware"} {
@@ -135,6 +129,30 @@ func TestSignalCatalogSeparatesResponseOnlyObservationsFromDecisionInputs(t *tes
 	}
 }
 
+func TestGetAlgorithmTier(t *testing.T) {
+	tests := []struct {
+		algType      string
+		expectedTier string
+	}{
+		{"static", "supported"},
+		{"multi_factor", "supported"},
+		{"systemone", "supported"},
+		{"escalate", "supported"},
+		{"fusion", "experimental"},
+		{"workflows", "experimental"},
+		{"router_dc", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.algType, func(t *testing.T) {
+			tier := GetAlgorithmTier(tt.algType)
+			if tier != tt.expectedTier {
+				t.Errorf("GetAlgorithmTier(%q) = %q, want %q", tt.algType, tier, tt.expectedTier)
+			}
+		})
+	}
+}
+
 func TestSignalCatalogOwnsRuntimeObservationAndQualification(t *testing.T) {
 	for _, entry := range SignalCatalog() {
 		if entry.DecisionReferenceable && entry.ObservationKey == "" {
@@ -150,39 +168,12 @@ func TestSignalCatalogOwnsRuntimeObservationAndQualification(t *testing.T) {
 	if inputModality.ObservationKey != "input_modality" {
 		t.Fatalf("input_modality observation key = %q", inputModality.ObservationKey)
 	}
-	complexity, _ := LookupSignalCatalog(SignalTypeComplexity)
-	if complexity.ReferenceQualifier != SignalReferenceQualifierFixedSuffix {
-		t.Fatalf("complexity reference qualifier = %q", complexity.ReferenceQualifier)
+	for _, signalType := range []string{SignalTypeComplexity, SignalTypeTurnRelation, SignalTypeSafety, SignalTypeSystemOne} {
+		if entry, _ := LookupSignalCatalog(signalType); entry.ReferenceQualifier != SignalReferenceQualifierLabel {
+			t.Fatalf("%s reference qualifier = %q", signalType, entry.ReferenceQualifier)
+		}
 	}
-	classifier, _ := LookupSignalCatalog(SignalTypeClassifier)
-	if classifier.ReferenceQualifier != SignalReferenceQualifierLabel {
-		t.Fatalf("classifier reference qualifier = %q", classifier.ReferenceQualifier)
-	}
-}
-
-func TestGetAlgorithmTier(t *testing.T) {
-	tests := []struct {
-		algType      string
-		expectedTier string
-	}{
-		{"static", "supported"},
-		{"router_dc", "supported"},
-		{"latency_aware", "supported"},
-		{"hybrid", "supported"},
-		{"automix", "experimental"},
-		{"fusion", "experimental"},
-		{"knn", "experimental"},
-		{"kmeans", "experimental"},
-		{"svm", "experimental"},
-		{"mlp", "experimental"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.algType, func(t *testing.T) {
-			tier := GetAlgorithmTier(tt.algType)
-			if tier != tt.expectedTier {
-				t.Errorf("GetAlgorithmTier(%q) = %q, want %q", tt.algType, tier, tt.expectedTier)
-			}
-		})
+	if turnRelation, _ := LookupSignalCatalog(SignalTypeTurnRelation); turnRelation.ObservationKey != "turn_relation" {
+		t.Fatalf("turn_relation observation key = %q", turnRelation.ObservationKey)
 	}
 }

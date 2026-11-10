@@ -1,3 +1,4 @@
+import re
 import unittest
 from pathlib import Path
 
@@ -82,24 +83,67 @@ class KindBootstrapContractTests(unittest.TestCase):
         create = next(
             step for step in operator if "kind create cluster" in step.get("run", "")
         )
-        redis = next(
+        operator_images = next(
             step
             for step in operator
-            if "image: redis/redis-stack-server:" in step.get("run", "")
+            if step.get("uses") == "./.github/actions/load-ci-images"
         )
         self.assertLess(operator.index(operator_setup), operator.index(create))
-        self.assertLess(operator.index(create), operator.index(redis))
-        self.assertEqual(redis["if"], "matrix.cache-backend == 'redis'")
-        matrix = yaml.safe_load(WORKFLOWS[1].read_text())["jobs"]["integration-test"][
-            "strategy"
-        ]["matrix"]
-        self.assertEqual(
-            matrix,
-            {
-                "cache-backend": "${{ fromJSON(inputs.integration_matrix).*.cache-backend }}"
-            },
+        self.assertLess(operator.index(create), operator.index(operator_images))
+        self.assertNotIn(
+            "strategy",
+            yaml.safe_load(WORKFLOWS[1].read_text())["jobs"]["integration-test"],
         )
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+OPERATOR_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "operator-ci.yml"
+
+
+class OperatorRetryContractTests(unittest.TestCase):
+    """The operator job reaches the network, so one transient error must not fail it."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        workflow = yaml.safe_load(OPERATOR_WORKFLOW.read_text(encoding="utf-8"))
+        cls.steps = {
+            step["name"]: step.get("run", "")
+            for step in workflow["jobs"]["integration-test"]["steps"]
+            if "name" in step
+        }
+
+    def test_the_network_steps_use_the_shared_retry_helper(self) -> None:
+        for name in (
+            "Install kubectl",
+            "Create kind cluster",
+            "Install Gateway API CRDs",
+        ):
+            with self.subTest(step=name):
+                self.assertIn("source tools/ci/retry.sh", self.steps[name])
+                self.assertRegex(self.steps[name], r"retry_run [0-9]+ [0-9]+ ")
+
+    def test_the_kind_cluster_is_deleted_before_the_retry(self) -> None:
+        self.assertIn(
+            "RETRY_CLEANUP=delete_cluster retry_run 2 60 create_cluster",
+            self.steps["Create kind cluster"],
+        )
+
+    def test_the_retried_functions_chain_their_commands(self) -> None:
+        # bash suspends errexit inside the `if` that retry_run uses, so an
+        # unchained function reports the status of its last command only and the
+        # retry never fires.
+        for name, function in (
+            ("Install kubectl", "install_kubectl"),
+            ("Create kind cluster", "create_cluster"),
+        ):
+            with self.subTest(function=function):
+                body = re.search(
+                    rf"^{function}\(\) \{{(.*?)^\s*\}}$",
+                    self.steps[name],
+                    re.MULTILINE | re.DOTALL,
+                )
+                self.assertIsNotNone(body, f"{function} not found in {name}")
+                self.assertIn("&&", body.group(1))

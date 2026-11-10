@@ -1,6 +1,6 @@
 ---
 title: Entrypoints
-description: Expose stable virtual model names that select a routing recipe through the standard OpenAI-compatible model field.
+description: Expose stable virtual model names that select a routing recipe through the model field of supported inference APIs.
 ---
 
 # Entrypoints
@@ -8,14 +8,15 @@ description: Expose stable virtual model names that select a routing recipe thro
 ## Overview
 
 An entrypoint is a public virtual model name that maps to one recipe. Clients
-select it through the normal OpenAI-compatible `model` field, so they do not
-need a Router-specific API or header.
+select it through the `model` field in the supported Chat Completions, Responses,
+or Messages API, so they do not need a Router-specific API or header to select
+the recipe. See [Connect an agent harness](../../installation/agent-harness)
+for the client connection and session setup.
 
 ## What Problem Does It Solve?
 
-Entrypoints solve a common coupling problem: an application can ask for a
-stable objective such as `vllm-sr/mom-v1-flash` while operators change the models,
-thresholds, or algorithms behind that objective.
+Keep a stable name such as `vllm-sr/mom-v1-flash` in the harness while changing
+the models, thresholds, or algorithms behind it.
 
 ## When to Use
 
@@ -25,27 +26,32 @@ Create an entrypoint when you want to:
 - move a client between policy versions without exposing backend model IDs; or
 - run several isolated policies in one Router deployment.
 
-Use the configured auto alias when every routed request should use the default
-policy. Use a concrete provider model name only when the caller deliberately
-wants to bypass signals, decisions, algorithms, and route-local plugins.
+Use `vllm-sr/auto` or an explicitly declared default entrypoint when every routed
+request should use the default policy. Use a concrete provider model name only
+when the caller deliberately wants to bypass signals, decisions, algorithms,
+and route-local plugins.
 
 ## Configuration
 
-Each entrypoint lists one or more aliases and the named recipe they select:
+Each entrypoint lists one or more aliases and the recipe they select. With
+several recipes, exactly one chat entrypoint is marked `default: true`; its
+recipe is the default recipe:
 
 ```yaml
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names:
       - vllm-sr/mom-v1-flash
       - company/fast
     recipe: flash
-
 recipes:
+  - name: default
   - name: flash
     description: Low-latency routing for interactive requests.
-    routing:
-      strategy: priority
-      decisions: []
+    strategy: priority
+    decisions: []
 ```
 
 Both aliases select the same recipe. A client uses either name like any other
@@ -68,22 +74,39 @@ backend, the Router rewrites the request to that backend's model name.
 | Requested model | Router behavior |
 | --- | --- |
 | An `entrypoints[].model_names` value | Evaluate only the mapped recipe. |
-| `vllm-sr/auto`, `auto`, or another configured auto alias | Evaluate the `default` recipe from top-level `routing`. |
-| A configured ReMoM, Fusion, or Flow virtual slug | Run that looper in the `default` recipe. |
+| `vllm-sr/auto`, in a document with one recipe and no entrypoint for it | Evaluate that recipe. |
+| An explicitly declared ReMoM, Fusion, or Flow entrypoint | Evaluate its recipe; the matched decision selects the looper algorithm. |
 | A concrete provider model or LoRA name | Send directly to that backend without recipe routing. |
 
 Entrypoints are listed by `/v1/models` with routing metadata. Successful routed
 responses expose `x-vsr-selected-recipe`; Router Replay and Insights can also
 filter records by recipe.
 
+To rename the default entrypoint, give the entrypoint marked `default: true`
+your desired `model_names`. This replaces the built-in `vllm-sr/auto` name, so
+include that name explicitly if existing clients still need it. Bare `auto` and
+looper names have no implicit behavior.
+
+For example, to publish both the namespaced default and an older client's
+`auto` name:
+
+```yaml
+entrypoints:
+  - model_names: [vllm-sr/auto, auto]
+    recipe: default
+    default: true
+```
+
 ## Naming and validation rules
 
 Configuration loading rejects an entrypoint when:
 
 - `model_names` is empty or `recipe` names no configured recipe;
+- several recipes are declared and not exactly one chat entrypoint is marked
+  `default: true`;
 - the same virtual name is claimed by more than one entrypoint; or
-- a virtual name collides with a provider model, LoRA, auto alias, or looper
-  slug.
+- a virtual name collides with a provider model, LoRA, or another effective
+  entrypoint, including the built-in default name.
 
 Choose names that describe a durable client contract, not the current backend.
 Do not put tenant data or secrets in a name: entrypoints appear in model

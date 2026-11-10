@@ -201,8 +201,8 @@ log "starting fault proxy on :${SOAK_BACKEND_PORT} (response ${SOAK_RESPONSE_MOD
 PROXY_PID=$!
 wait_for_url fault-proxy "http://127.0.0.1:${SOAK_BACKEND_PORT}/health"
 
-export LD_LIBRARY_PATH="${SR_ROOT}/candle-binding/target/release:${SR_ROOT}/ml-binding/target/release:${SR_ROOT}/nlp-binding/target/release${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-export DYLD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
+# The router starts its classifiers in the model runtime (make model-runtime-install).
+export VLLM_SRUN_COMMAND="${VLLM_SRUN_COMMAND:-${SR_ROOT}/.venv-agent/bin/vllm-srun}"
 
 if [[ -z "${SOAK_CONFIG}" ]]; then
   derived_router="${SOAK_LOG_DIR}/config.soak.yaml"

@@ -1,8 +1,11 @@
 package config
 
 import (
+	"strings"
+
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // ConfigSource defines where to load dynamic configuration from.
@@ -15,66 +18,27 @@ const (
 	ConfigSourceKubernetes ConfigSource = "kubernetes"
 )
 
-// Model role constants for external models.
-const (
-	ModelRoleGuardrail        = "guardrail"
-	ModelRoleClassification   = "classification"
-	ModelRoleScoring          = "scoring"
-	ModelRolePreference       = "preference"
-	ModelRoleMemoryRewrite    = "memory_rewrite"
-	ModelRoleMemoryExtraction = "memory_extraction"
-)
-
-// PromptGuardConfig.Variant values, selecting which local Candle-backed
-// jailbreak classifier variant to use. Mutually exclusive with Protocol - see
-// PromptGuardConfig's doc comment. An empty/unset value passed directly to
-// createJailbreakInference falls back to PromptGuardVariantCandle. This is
-// NOT the same as the canonical-config default: canonical resolution starts
-// from defaultPromptGuardModule()'s baseline (PromptGuardVariantMmBERT32K,
-// matching the bundled mmbert32k model it also defaults ModelID to) and
-// overlays user YAML, so a canonical-resolved config with no explicit
-// variant gets mmbert32k, not candle. A user who wants the plain candle
-// variant under canonical resolution must set variant: candle explicitly.
-const (
-	// PromptGuardVariantCandle runs the bundled Candle model locally
-	// (LoRA/BERT auto-detect, falling back to ModernBERT).
-	PromptGuardVariantCandle = "candle"
-	// PromptGuardVariantMmBERT32K runs the bundled mmBERT-32K model locally
-	// (32K context, YaRN RoPE, multilingual).
-	PromptGuardVariantMmBERT32K = "mmbert32k"
-)
-
-// PromptGuardConfig.OnError values live in classifier_on_error.go as
-// OnErrorAllow/OnErrorBlock - shared with every other pluggable classifier
-// backend (CategoryModel, PIIModel, ClassifierSignalRule), not just prompt
-// guard.
-
 // Signal type constants for rule conditions.
 const (
 	SignalTypeKeyword       = "keyword"
-	SignalTypeEmbedding     = "embedding"
 	SignalTypeDomain        = "domain"
 	SignalTypeFactCheck     = "fact_check"
 	SignalTypeUserFeedback  = "user_feedback"
-	SignalTypeReask         = "reask"
-	SignalTypePreference    = "preference"
 	SignalTypeLanguage      = "language"
 	SignalTypeContext       = "context"
-	SignalTypeStructure     = "structure"
 	SignalTypeComplexity    = "complexity"
 	SignalTypeModality      = "modality"
 	SignalTypeAuthz         = "authz"
 	SignalTypeJailbreak     = "jailbreak"
 	SignalTypeHallucination = "hallucination"
 	SignalTypePII           = "pii"
-	SignalTypeKB            = "kb"
 	SignalTypeConversation  = "conversation"
-	SignalTypeEvent         = "event"
 	SignalTypeProjection    = "projection"
 )
 
 // API format constants for model backends.
 const (
+	APIFormatSystemOne = "systemone"
 	APIFormatOpenAI    = "openai"
 	APIFormatResponses = "responses"
 	APIFormatAnthropic = "anthropic"
@@ -93,6 +57,7 @@ const (
 
 // RouterConfig represents the main configuration for the LLM Router.
 type RouterConfig struct {
+	KVTransfer   *KVTransferConfig `yaml:"-"`
 	ConfigSource ConfigSource      `yaml:"config_source,omitempty"`
 	MoMRegistry  map[string]string `yaml:"mom_registry,omitempty"`
 	// SkipExternalAssetValidation is set only for untrusted read-only
@@ -106,15 +71,16 @@ type RouterConfig struct {
 	RoutingFragmentOnly bool `yaml:"-" json:"-"`
 
 	// Static global configuration.
+	RoutingDefaults  RoutingDefaults `yaml:"-" json:"-"`
 	InlineModels     `yaml:",inline"`
-	ExternalModels   []ExternalModelConfig `yaml:"external_models,omitempty"`
 	SemanticCache    `yaml:"semantic_cache"`
-	Memory           MemoryConfig        `yaml:"memory"`
-	VectorStore      *VectorStoreConfig  `yaml:"vector_store,omitempty"`
-	ResponseAPI      ResponseAPIConfig   `yaml:"response_api"`
-	RouterReplay     RouterReplayConfig  `yaml:"router_replay"`
-	StartupStatus    StartupStatusConfig `yaml:"startup_status"`
-	Looper           LooperConfig        `yaml:"looper,omitempty"`
+	Memory           MemoryConfig            `yaml:"memory"`
+	VectorStore      *VectorStoreConfig      `yaml:"vector_store,omitempty"`
+	ToolSessions     *ToolSessionStoreConfig `yaml:"tool_sessions,omitempty"`
+	ResponseAPI      ResponseAPIConfig       `yaml:"response_api"`
+	RouterReplay     RouterReplayConfig      `yaml:"router_replay"`
+	StartupStatus    StartupStatusConfig     `yaml:"startup_status"`
+	Looper           LooperConfig            `yaml:"looper,omitempty"`
 	LLMObservability `yaml:",inline"`
 	APIServer        `yaml:",inline"`
 	RouterOptions    `yaml:",inline"`
@@ -126,18 +92,20 @@ type RouterConfig struct {
 	IntelligentRouting `yaml:",inline"`
 	Entrypoints        []EntrypointMapping `yaml:"-"`
 	Recipes            []RoutingRecipe     `yaml:"-"`
+	// GlobalPlugins are global.plugins, the default plugins of every
+	// decision and of a request that matches none.
+	GlobalPlugins []DecisionPlugin `yaml:"-" json:"-"`
 	// RoutingScope is populated only on immutable recipe views.
-	RoutingScope  RecipeName `yaml:"-"`
+	RoutingScope RecipeName `yaml:"-"`
+	// defaultRecipe names the default recipe; empty is DefaultRecipeName.
+	defaultRecipe RecipeName
 	BackendModels `yaml:",inline"`
-	ToolSelection `yaml:",inline"`
 
 	Authz         AuthzConfig         `yaml:"authz,omitempty"`
 	RateLimit     RateLimitConfig     `yaml:"ratelimit,omitempty"`
 	ManagementAPI ManagementAPIConfig `yaml:"management_api,omitempty"`
 
-	// Runtime-only knowledge bases loaded from global.model_catalog.
-	KnowledgeBases []KnowledgeBaseConfig `yaml:"knowledge_bases,omitempty"`
-	ConfigBaseDir  string                `yaml:"-"`
+	ConfigBaseDir string `yaml:"-"`
 	// DocumentHash identifies the exact YAML document from which this immutable
 	// runtime snapshot was parsed. Management APIs use it to distinguish a
 	// persisted config from the config that has completed hot reload.
@@ -156,6 +124,33 @@ type AuthzConfig struct {
 	FailOpen  bool                  `yaml:"fail_open,omitempty"`
 	Identity  IdentityConfig        `yaml:"identity,omitempty"`
 	Providers []AuthzProviderConfig `yaml:"providers,omitempty"`
+	// DelegatedCredential is the source of delegated credentials: the
+	// trusted authentication result header that carries the requesting
+	// user's credential for upstreams whose auth is credential: delegated.
+	DelegatedCredential DelegatedCredentialConfig `yaml:"delegated_credential,omitempty"`
+}
+
+// DelegatedCredentialConfig declares the credential a deployment
+// authenticator issues for the user of an authenticated request. The Router
+// trusts it exactly as it trusts the identity headers: the gateway in front
+// removes client-supplied copies, and a standalone listener drops them unless
+// it trusts identity headers. The value is presented only to an upstream
+// whose auth is credential: delegated, under that upstream's auth header, by
+// a call made for the request, and never to any other upstream. Disabled by
+// default.
+type DelegatedCredentialConfig struct {
+	Enabled bool `yaml:"enabled,omitempty"`
+	// Header is the request header the authenticator sets; default
+	// x-vsr-delegated-credential.
+	Header string `yaml:"header,omitempty"`
+}
+
+// GetHeader returns the configured header name, lowercased, or the default.
+func (c DelegatedCredentialConfig) GetHeader() string {
+	if header := strings.ToLower(strings.TrimSpace(c.Header)); header != "" {
+		return header
+	}
+	return headers.VSRDelegatedCredential
 }
 
 // IdentityConfig controls how the router reads user identity from request headers.
@@ -166,14 +161,14 @@ type IdentityConfig struct {
 
 func (ic IdentityConfig) GetUserIDHeader() string {
 	if ic.UserIDHeader == "" {
-		return "x-authz-user-id"
+		return headers.AuthzUserID
 	}
 	return ic.UserIDHeader
 }
 
 func (ic IdentityConfig) GetUserGroupsHeader() string {
 	if ic.UserGroupsHeader == "" {
-		return "x-authz-user-groups"
+		return headers.AuthzUserGroups
 	}
 	return ic.UserGroupsHeader
 }
@@ -209,17 +204,57 @@ type RateLimitMatch struct {
 	Model string `yaml:"model,omitempty"`
 }
 
-type ToolSelection struct {
-	Tools ToolsConfig `yaml:"tools"`
-}
-
 type Listener struct {
 	Name    string `yaml:"name"`
 	Address string `yaml:"address"`
 	Port    int    `yaml:"port"`
 	Timeout string `yaml:"timeout,omitempty"`
-	// APIKeys are client bearer credentials enforced by the CLI-managed Envoy listener.
+	// APIKeys are client bearer credentials the listener enforces, in
+	// standalone mode and in the CLI-managed Envoy listener.
 	APIKeys []string `yaml:"api_keys,omitempty"`
+	// Models, when set, are the only request models a standalone listener
+	// accepts, by exact `model` value; others get 403 model_not_allowed and
+	// /v1/models lists only these. Empty accepts every model.
+	Models []string `yaml:"models,omitempty"`
+	// SystemOne explicitly publishes native decision inference independently
+	// from the Chat/Responses model allow-list. Omission keeps it private.
+	SystemOne *ListenerSystemOne `yaml:"systemone,omitempty"`
+	// TLS, when set, makes a standalone Router serve this listener over TLS.
+	TLS *ListenerTLS `yaml:"tls,omitempty"`
+	// Identity, when set, decides whether the listener keeps the client
+	// identity headers its requests carry: a standalone Router does, and so
+	// does the Envoy listener the CLI generates for --gateway extproc.
+	Identity *ListenerIdentity `yaml:"identity,omitempty"`
+}
+
+type ListenerSystemOne struct {
+	Models []string `yaml:"models"`
+	// MaxDeadlineMs bounds how long the listener waits for a model it calls
+	// directly, however long a request's options.deadline_ms asks for.
+	// Omitted, it is DefaultSystemOneMaxDeadlineMs.
+	MaxDeadlineMs *int `yaml:"max_deadline_ms,omitempty"`
+}
+
+// ListenerIdentity names the identity sources a listener trusts. It trusts
+// none by default: with no authenticator in front of the Router, a client
+// could claim any identity, so its identity headers are dropped.
+type ListenerIdentity struct {
+	// TrustHeaders keeps the identity headers (the x-authz-* set and the
+	// names global.services.authz.identity sets) that an authenticating proxy
+	// or a trusted application in front of the listener asserts.
+	TrustHeaders bool `yaml:"trust_headers,omitempty"`
+	// TrustedPeers, when set, keeps those headers only on connections whose
+	// peer address is in one of these CIDRs; X-Forwarded-For is never read.
+	// Empty, every peer of a listener that trusts headers is trusted. Only a
+	// standalone Router checks it; the CLI refuses it for --gateway extproc.
+	TrustedPeers []string `yaml:"trusted_peers,omitempty"`
+}
+
+// ListenerTLS is a listener's server certificate for one-way TLS. Relative
+// paths are relative to the configuration's directory.
+type ListenerTLS struct {
+	CertFile string `yaml:"cert_file"`
+	KeyFile  string `yaml:"key_file"`
 }
 
 type APIServer struct {
@@ -232,14 +267,22 @@ type LLMObservability struct {
 }
 
 type RouterOptions struct {
-	AutoModelName             string               `yaml:"auto_model_name,omitempty"`
-	AutoModelNames            []string             `yaml:"auto_model_names,omitempty"`
-	IncludeConfigModelsInList bool                 `yaml:"include_config_models_in_list,omitempty"`
-	ClearRouteCache           bool                 `yaml:"clear_route_cache"`
-	StreamedBodyMode          bool                 `yaml:"streamed_body_mode,omitempty"`
-	MaxStreamedBodyBytes      int64                `yaml:"max_streamed_body_bytes,omitempty"`
-	StreamedBodyTimeoutSec    int                  `yaml:"streamed_body_timeout_sec,omitempty"`
-	SkipProcessing            SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+	RouterEnabled          *bool                `yaml:"router_enabled,omitempty"`
+	ListBackendModels      bool                 `yaml:"list_backend_models,omitempty"`
+	ClearRouteCache        bool                 `yaml:"clear_route_cache"`
+	StreamedBodyMode       bool                 `yaml:"streamed_body_mode,omitempty"`
+	MaxStreamedBodyBytes   int64                `yaml:"max_streamed_body_bytes,omitempty"`
+	StreamedBodyTimeoutSec int                  `yaml:"streamed_body_timeout_sec,omitempty"`
+	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+	AllowLossyTranslation  []string             `yaml:"allow_lossy_translation,omitempty"`
+	RoutingInput           RoutingInputConfig   `yaml:"routing_input,omitempty"`
+	Headers                RouterHeadersConfig  `yaml:"headers,omitempty"`
+}
+
+// RoutingEnabled controls the recipe pipeline independently of the frontend
+// and its model deployments. Omission preserves the default Router mode.
+func (c *RouterConfig) RoutingEnabled() bool {
+	return c != nil && (c.RouterEnabled == nil || *c.RouterEnabled)
 }
 
 // SkipProcessingConfig gates the x-vsr-skip-processing request header.
@@ -252,34 +295,44 @@ func (s SkipProcessingConfig) IsEnabled() bool {
 	return s.Enabled
 }
 
-// InlineModels captures built-in model families and prompt-processing settings.
+// InlineModels captures the model catalog: deployments, bindings, admission
+// and the decision and embedding models.
 type InlineModels struct {
-	EmbeddingModels         `yaml:"embedding_models"`
-	Classifier              `yaml:"classifier"`
-	ComplexityModel         ComplexityModelConfig         `yaml:"complexity_model,omitempty"`
-	PromptCompression       PromptCompressionConfig       `yaml:"prompt_compression"`
-	PromptGuard             PromptGuardConfig             `yaml:"prompt_guard"`
-	HallucinationMitigation HallucinationMitigationConfig `yaml:"hallucination_mitigation"`
-	SafetyModels            SafetyModelsConfig            `yaml:"safety_models"`
-	FeedbackDetector        FeedbackDetectorConfig        `yaml:"feedback_detector"`
-	ModalityDetector        ModalityDetectorConfig        `yaml:"modality_detector"`
-	ModelAdmission          map[string]AdmissionConfig    `yaml:"model_admission,omitempty"`
-	GlobalModelBindings     map[string]ModelBinding       `yaml:"global_model_bindings,omitempty"`
-	ModelDeployments        map[string]ModelDeployment    `yaml:"model_deployments,omitempty"`
+	ModelAdmission       map[string]AdmissionConfig `yaml:"model_admission,omitempty"`
+	ModelSignalTimeoutMs int                        `yaml:"model_signal_timeout_ms,omitempty"`
+	GlobalModelBindings  map[string]ModelBinding    `yaml:"global_model_bindings,omitempty"`
+	ModelDeployments     map[string]ModelDeployment `yaml:"model_deployments,omitempty"`
+	// DecisionModel is global.model_catalog.system.decision_model, resolved
+	// to its canonical name.
+	DecisionModel string `yaml:"decision_model,omitempty"`
+	// EmbeddingDeployment is global.model_catalog.embeddings.default's
+	// deployment.
+	EmbeddingDeployment string `yaml:"embedding_deployment,omitempty"`
+	// FormWarnings are the renamed forms the document was written in, which
+	// it was read as their canonical forms (config_forms.go).
+	FormWarnings []ConfigWarning `yaml:"-" json:"-"`
+
+	// scopedBindings are a recipe scope's own bindings, before the global
+	// ones (ConfigForRecipe); nil outside a recipe scope.
+	scopedBindings map[string]ModelBinding
 }
 
 // IntelligentRouting captures user-facing signal and decision configuration.
 type IntelligentRouting struct {
 	CandidateRequirements *CandidateRequirements  `yaml:"candidate_requirements,omitempty"`
-	DataPolicy            *RoutingDataPolicy      `yaml:"data_policy,omitempty"`
 	ModelBindings         map[string]ModelBinding `yaml:"model_bindings,omitempty"`
-	Signals               `yaml:",inline"`
-	Projections           Projections              `yaml:"projections,omitempty"`
-	Decisions             []Decision               `yaml:"decisions,omitempty"`
-	Strategy              RoutingStrategy          `yaml:"strategy,omitempty"`
-	Fallback              *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
-	ModelSelection        ModelSelectionConfig     `yaml:"model_selection,omitempty"`
-	ReasoningConfig       `yaml:",inline"`
+	// Plugins are the recipe's declared plugins, the layer between
+	// GlobalPlugins and a decision's own; DefaultPlugins are the two layered,
+	// what a request that matches no decision runs.
+	Plugins         []DecisionPlugin `yaml:"-" json:"-"`
+	DefaultPlugins  []DecisionPlugin `yaml:"-" json:"-"`
+	Signals         `yaml:",inline"`
+	Projections     Projections              `yaml:"projections,omitempty"`
+	Decisions       []Decision               `yaml:"decisions,omitempty"`
+	Strategy        RoutingStrategy          `yaml:"strategy,omitempty"`
+	Fallback        *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	ModelSelection  ModelSelectionConfig     `yaml:"model_selection,omitempty"`
+	ReasoningConfig `yaml:",inline"`
 }
 
 // BackendModels captures configured backend endpoints and model metadata.
@@ -289,6 +342,10 @@ type BackendModels struct {
 	DefaultQualityIndex string                     `yaml:"-"`
 	VLLMEndpoints       []VLLMEndpoint             `yaml:"vllm_endpoints"`
 	ProviderProfiles    map[string]ProviderProfile `yaml:"provider_profiles,omitempty"`
+	// ProviderModelOrder lists providers.models aliases in authored order.
+	// VLLMEndpoints are sorted by alias, but the data plane's default route
+	// serves the first authored model that has a backend.
+	ProviderModelOrder []string `yaml:"-" json:"-"`
 }
 
 type ReasoningConfig struct {

@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1460" height="1410" viewBox="0 0 1460 1410" role="img"><title>Vela 2.0 decoder router and broad SpanHeadV2</title><desc>Vela 2.0 decoder-family SpanHeadV2. Word vectors select the first subword state of each word in the target repeated after the labels; label vectors average each label block. Word LayerNorm is followed by centering over words. Label LayerNorm is followed by a learned 64-slot embedding and centering over labels when there are at least two labels. Scaled bilinear and additive GELU MLP branches produce word-by-label logits. Router and broad heads have independent parameters and are selected per question. Calibration and span decoding operate after this selection. The registered but unused Linear(H,1) module is omitted. H is 1024/2560/4096, d is 256; slots above 63 reuse slot 63. Long targets use overlapping windows and average logits before sigmoid.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<rect x="35" y="305" width="1365" height="985" rx="23" fill="#F4F4F4" stroke="#111" stroke-width="2.2"/>
+<text x="730" y="1270.0" font-size="27" text-anchor="middle" class="serif">Selected SpanHeadV2</text>
+<g data-box="380.0 1166 700 80">
+<rect x="380.0" y="1166" width="700" height="80" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="730" y="1199.385" font-size="27" text-anchor="middle" class="">Span-question hidden states</text>
+<text x="730" y="1230.975" font-size="27" text-anchor="middle" class="">H = 1024 / 2560 / 4096</text>
+</g>
+<g data-box="67.5 1050 475 78">
+<rect x="67.5" y="1050" width="475" height="78" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="305" y="1082.385" font-size="27" text-anchor="middle" class="">First subword per word</text>
+<text x="305" y="1113.975" font-size="27" text-anchor="middle" class="">X ∈ ℝᵂˣᴴ</text>
+</g>
+<g data-box="817.5 1050 475 78">
+<rect x="817.5" y="1050" width="475" height="78" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1055" y="1082.385" font-size="27" text-anchor="middle" class="">Mean per label block</text>
+<text x="1055" y="1113.975" font-size="27" text-anchor="middle" class="">A ∈ ℝᴸˣᴴ</text>
+</g>
+<path d="M730,1166 L730,1147 L305,1147 L305,1128" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M730,1147 L1055,1147 L1055,1128" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="730" cy="1147" r="3.5" fill="#111"/>
+<g data-box="135.0 951 340 58">
+<rect x="135.0" y="951" width="340" height="58" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="305" y="988.84" font-size="26" text-anchor="middle" class="">Word LayerNorm</text>
+</g>
+<g data-box="885.0 951 340 58">
+<rect x="885.0" y="951" width="340" height="58" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="1055" y="988.84" font-size="26" text-anchor="middle" class="">Label LayerNorm</text>
+</g>
+<path d="M305,1050 L305,1009" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1055,1050 L1055,1009" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="135.0 857 340 70">
+<rect x="135.0" y="857" width="340" height="70" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="305" y="885.63" font-size="26" text-anchor="middle" class="">Subtract word mean</text>
+<text x="305" y="916.05" font-size="26" text-anchor="middle" class="">over W words</text>
+</g>
+<path d="M305,951 L305,927" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="1055" cy="888" r="20" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="1055" y="896.99" font-size="29" text-anchor="middle" class="">+</text>
+<path d="M1055,951 L1055,908" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1146.0 854 244 68">
+<rect x="1146.0" y="854" width="244" height="68" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="1268" y="881.875" font-size="25" text-anchor="middle" class="">Slot embedding</text>
+<text x="1268" y="911.125" font-size="25" text-anchor="middle" class="">64 × H</text>
+</g>
+<path d="M1146,888 L1075,888" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="885.0 776 340 70">
+<rect x="885.0" y="776" width="340" height="70" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="1055" y="804.63" font-size="26" text-anchor="middle" class="">Subtract label mean</text>
+<text x="1055" y="835.05" font-size="26" text-anchor="middle" class="">only when L ≥ 2</text>
+</g>
+<path d="M1055,868 L1055,846" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="63.0 636 262 76">
+<rect x="63.0" y="636" width="262" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="194" y="667.875" font-size="25" text-anchor="middle" class="">Word K</text>
+<text x="194" y="697.125" font-size="25" text-anchor="middle" class="">H → 256, no bias</text>
+</g>
+<g data-box="370.0 636 262 76">
+<rect x="370.0" y="636" width="262" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="501" y="667.875" font-size="25" text-anchor="middle" class="">Label Q</text>
+<text x="501" y="697.125" font-size="25" text-anchor="middle" class="">H → 256, no bias</text>
+</g>
+<g data-box="716.0 636 268 76">
+<rect x="716.0" y="636" width="268" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="850" y="667.875" font-size="25" text-anchor="middle" class="">Word M</text>
+<text x="850" y="697.125" font-size="25" text-anchor="middle" class="">H → 256, bias</text>
+</g>
+<g data-box="1128.0 636 262 76">
+<rect x="1128.0" y="636" width="262" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1259" y="667.875" font-size="25" text-anchor="middle" class="">Label N</text>
+<text x="1259" y="697.125" font-size="25" text-anchor="middle" class="">H → 256, no bias</text>
+</g>
+<path d="M305,857 L305,825 L194,825 L194,712" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M305,825 L850,825 L850,712" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="305" cy="825" r="3.5" fill="#111"/>
+<path d="M1055,776 L1055,750 L1259,750 L1259,712" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M841,750 L859,750" fill="none" stroke="#FFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1055,750 L501,750 L501,712" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="1055" cy="750" r="3.5" fill="#111"/>
+<g data-box="73.0 465 548 78">
+<rect x="73.0" y="465" width="548" height="78" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="347" y="497.875" font-size="25" text-anchor="middle" class="">Scaled word × label product</text>
+<text x="347" y="527.125" font-size="25" text-anchor="middle" class="">K(Xc) Q(Ac)ᵀ / √256</text>
+</g>
+<path d="M194,636 L194,590 L255,590 L255,543" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M501,636 L501,590 L439,590 L439,543" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="1105" cy="563" r="19" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="1105" y="571.99" font-size="29" text-anchor="middle" class="">+</text>
+<path d="M850,636 L850,563 L1086,563" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1259,636 L1259,563 L1124,563" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="985.0 463 240 58">
+<rect x="985.0" y="463" width="240" height="58" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="1105" y="501.18" font-size="27" text-anchor="middle" class="">GELU</text>
+</g>
+<path d="M1105,544 L1105,521" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="937.5 371 335 76">
+<rect x="937.5" y="371" width="335" height="76" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1105" y="402.875" font-size="25" text-anchor="middle" class="">Scalar projection vᵀ</text>
+<text x="1105" y="432.125" font-size="25" text-anchor="middle" class="">256 → 1</text>
+</g>
+<path d="M1105,463 L1105,447" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="730" cy="332" r="21" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="730" y="340.99" font-size="29" text-anchor="middle" class="">+</text>
+<path d="M347,465 L347,332 L709,332" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1105,371 L1105,332 L751,332" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="233.0 220 430 76">
+<rect x="233.0" y="220" width="430" height="76" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="448" y="251.38500000000002" font-size="27" text-anchor="middle" class="">Word × label logits</text>
+<text x="448" y="282.975" font-size="27" text-anchor="middle" class="">Z ∈ ℝᵂˣᴸ</text>
+</g>
+<path d="M730,311 L730,309 L448,309 L448,296" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="233.0 123 430 64">
+<rect x="233.0" y="123" width="430" height="64" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="448" y="164.18" font-size="27" text-anchor="middle" class="">Sigmoid(Z / Tselected)</text>
+</g>
+<path d="M448,220 L448,187" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="210.5 27 475 64">
+<rect x="210.5" y="27" width="475" height="64" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="448" y="67.84" font-size="26" text-anchor="middle" class="">Threshold + span decoding</text>
+</g>
+<path d="M448,123 L448,91" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="804.0 225 282 70">
+<rect x="804.0" y="225" width="282" height="70" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="945" y="254.12000000000003" font-size="24" text-anchor="middle" class="">Router weights θr</text>
+<text x="945" y="282.20000000000005" font-size="24" text-anchor="middle" class="">PII / Halu / Toxic</text>
+</g>
+<g data-box="1121.0 225 282 70">
+<rect x="1121.0" y="225" width="282" height="70" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1262" y="254.12000000000003" font-size="24" text-anchor="middle" class="">Broad weights θb</text>
+<text x="1262" y="282.20000000000005" font-size="24" text-anchor="middle" class="">Open extraction</text>
+</g>
+<g data-box="827.5 118 555 82">
+<rect x="827.5" y="118" width="555" height="82" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1105" y="153.12" font-size="24" text-anchor="middle" class="">Choose one parameter set</text>
+<text x="1105" y="181.2" font-size="24" text-anchor="middle" class="">head override or label dispatch</text>
+</g>
+<path d="M945,225 L945,211 L1020,211 L1020,200" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+<path d="M1262,225 L1262,211 L1190,211 L1190,200" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+<path d="M1382.5,159 L1430,159 L1430,595 L1400,595" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6"/>
+<text x="1110" y="52.0" font-size="25" text-anchor="middle" class="">Independent parameters; one head per question</text>
+<text x="730" y="1370.0" font-size="31" text-anchor="middle" class="serif">(j) SpanHeadV2: word–label scoring with head selection</text>
+</svg>

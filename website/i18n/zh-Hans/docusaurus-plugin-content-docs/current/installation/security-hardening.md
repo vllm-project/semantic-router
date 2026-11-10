@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 title: 安全加固
 description: 保护推理监听器、控制面板、凭据、回放数据、存储和容器运行时访问。
 translation:
-  source_commit: "33349fdab9ad294da19ebd11588f8adbe8771b4a"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/security-hardening.md"
   outdated: false
 ---
@@ -17,7 +18,7 @@ Semantic Router 位于客户端和模型 provider 之间的请求路径上。将
 
 ```mermaid
 flowchart LR
-    Client["Client"] --> Listener["Public Envoy listener"]
+    Client["Client"] --> Listener["Standalone frontend / external gateway"]
     Listener --> Router["Semantic Router"]
     Router --> Provider["Model providers"]
     Admin["Authenticated Dashboard / API"] --> Router
@@ -36,19 +37,18 @@ flowchart LR
 
 ## 保护公共监听器
 
-维护中的 Envoy 配置会在客户端请求到达 Router 之前移除内部控制标头。在提供自定义 Envoy 或网关配置时也要这样做。内部示例如下：
+standalone 前端会移除不受信任的身份和代理控制标头。请分别配置 listener API key、Chat 模型允许列表和原生模型访问权限，见 [Gateway 模式](gateway-modes)。Dashboard 登录凭据不能代替公网推理凭据。
+
+维护中的 Envoy 配置也会移除内部控制标头。自定义 Envoy 或网关配置应保持该边界，例如：
 
 ```yaml
 request_headers_to_remove:
-  - x-vsr-looper-request
-  - x-vsr-looper-secret
-  - x-vsr-looper-decision
-  - x-vsr-looper-iteration
   - x-authz-user-id
   - x-authz-user-groups
+  - x-vsr-delegated-credential
 ```
 
-不要将 Router 管理、指标、ExtProc 或支撑存储端口作为公共推理端点暴露。在受信任边界终止客户端身份验证，并仅允许该组件提供身份标头。
+不要将 Router 管理、指标、ExtProc 或支撑存储端口作为公共推理端点暴露。在受信任边界终止客户端身份验证，并仅允许该组件提供身份标头和下文所述的委托凭据。
 
 相关控制面板权限包括：
 
@@ -72,9 +72,53 @@ api_key: ${MODEL_API_KEY}
 
 不要提交字面 API 密钥、密码、授权标头、凭据查询参数，或包含用户信息的 URL。
 
-对于 `vllm-sr serve --target k8s`，CLI 将敏感环境值放入限定到命名空间和 Helm release 的不可变 Secret revision。Helm values 和 Deployment 按名称引用 Secret；它们不包含凭据值。失败的升级会保持先前的工作负载和 Secret 处于活动状态。仅在不再被引用后，才移除 release 拥有的旧 revision。
+对于 `vllm-sr serve --target kubernetes`，CLI 将敏感环境值放入限定到命名空间和 Helm release 的不可变 Secret revision。Helm values 和 Deployment 按名称引用 Secret；它们不包含凭据值。失败的升级会保持先前的工作负载和 Secret 处于活动状态。仅在不再被引用后，才移除 release 拥有的旧 revision。
 
 现有的 chart 原生 Secret 引用（例如控制面板 JWT Secret）仍是外部对象，不会被复制到 CLI 管理的 Secret。对每个手动管理的 Secret 使用相同的命名空间和 release 所有权纪律。
+
+### 把用户的凭据委托给上游 {#delegate-the-users-credential-to-an-upstream}
+
+当 Router 位于进行身份验证的部署层之后，而某个上游自行按用户授权（例如为每个用户签发虚拟密钥的 LiteLLM、one-api 或类似中转，或按用户计量的决策模型 API）时，可以让身份验证器把它为该用户签发的凭据交给 Router，并把该上游的 auth 设为 `credential: delegated`。向部署层验证客户端身份的凭据和发给上游的凭据是两个独立的信任对象：Router 从不转发客户端原始的 `Authorization` 标头。
+
+```yaml
+global:
+  services:
+    authz:
+      delegated_credential:
+        enabled: true
+        header: x-vsr-delegated-credential   # 默认值；由身份验证器设置
+  model_catalog:
+    deployments:
+      team-decisions:
+        provider: systemone
+        endpoint: https://decisions.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth:
+          credential: delegated              # 决策模型部署
+providers:
+  models:
+    - name: gpt-4o
+      provider_model_id: gpt-4o
+      api_format: openai
+      backend_refs:
+        - name: litellm
+          endpoint: https://litellm.internal/v1
+          provider: openai-compatible
+          auth:
+            credential: delegated            # 提供方后端
+```
+
+Router 调用的每个上游都使用同一种形状的 `auth` 块：提供方后端、决策模型或远程 embedding 部署、`escalate` 阶段的评审模型以及 `api_format: systemone` 目标都一样。它的模式是静态密钥（`auth.api_key_env` 或 `auth.api_key_file`，或后端的 `api_key`），其调用以 Router 的身份进行；`credential: delegated`，其调用携带发起请求的用户的凭据；或者两者都不设，不发送凭据。
+
+该约定默认关闭。启用后：
+
+- 委托凭据和身份标头一样，是身份验证的输出。随附的 Envoy 配置（`vllm-sr serve --gateway extproc` 和 `deploy/local/envoy.yaml`）在 ext_proc 之前的过滤器中移除客户端提供的副本；`vllm-sr` 模板也会移除自定义的 `header`，`deploy/local/envoy.yaml` 只列出默认名称。两者都不运行身份验证器，因此签发该凭据的部署要把身份验证器放在该过滤器之后、ext_proc 之前，`delegated-credential` E2E 配置就是这样做的。自定义网关配置也必须如此：`request_headers_to_remove` 只在 ext_proc 之后生效。standalone listener 会从 Chat 和 System One 请求中一并丢弃该标头，除非设置了 `identity.trust_headers`。只有请求同时携带已认证用户（`global.services.authz.identity.user_id_header`）时，Router 才保留该值。
+- `header` 必须是专用标头。配置会拒绝携带客户端凭据的标头（`Authorization`、`api-key`、`x-api-key` 等）或身份标头。
+- Router 在每个分支上都会从每个上游请求中移除该标头，并在日志中脱敏。它是 Router 从身份验证器读取、而不是丢弃的唯一 `x-vsr-*` 请求标头，标头注册表把它记为内部密钥：任何响应、`x-vsr-trace` 成员、Router Replay 记录和缓存键都不会携带它。只有 auth 为 `credential: delegated` 的上游会收到该值，它放在该上游的认证标头中并带上其前缀（OpenAI 兼容后端或 System One API 为 `Authorization: Bearer <credential>`），替换客户端在该标头中发送的内容。客户端的其他凭据标头会被移除，因此在 `x-api-key` 上认证的后端不会同时收到客户端的 `Authorization`。
+- 主体是调用的属性。为客户端请求发起的调用携带该请求的凭据：主分发、回退尝试、Looper 跳转、System One 决策模型调用、`escalate` 评审、`api_format: systemone` 目标、响应检查和召回 embedding。请求没有携带凭据时，Router 在调用之前返回 `401`。Router 代表自己发起的调用（探测、模型列表读取、`router_replay.shadow` 副本、自动输出的 render、存储构建、管理诊断）从不携带它，委托上游会拒绝这些调用。
+- 配置会拒绝：同时设置静态密钥的委托上游，共享密钥因此永远不会悄悄顶替；未启用约定的委托上游；只有 Router 自身调用能到达的委托上游，或 Router 自身调用必须到达的委托上游（向量存储写入、记忆存储、`model_runtime` 端点的健康检查和准备、`router_replay.shadow`、自动输出）；未声明 `capabilities.dimensions` 的委托 `openai_embeddings` 部署；以及同一集群中的委托后端和静态后端。
+- 用某个用户的凭据得到的答案只会返回给该用户。只要有上游是委托的，每个 `response_cache` 都保持默认的 `scope: user`，Router 也不会为其他请求保留委托部署的决策模型答案或 embedding。Router 从不把两个客户端请求放进同一个上游调用，因此批量的 System One 调用只携带一个请求的问题和该请求的凭据。
+- 调用方归属以及租户、配额、预算或支出策略都由上游负责。
 
 ### 隔离 sr-bench 凭据
 
@@ -112,11 +156,10 @@ Dashboard 代理服务器配置的 sr-bench origin，并传递已认证的用户
 | Router | 是 | 是 |
 | Envoy、控制面板 | 是 | 否 |
 | Jaeger、Prometheus、Grafana | 是 | 否 |
-| OpenClaw 工作负载 | 是 | 否 |
 
 Router 是唯一同时位于两者上的容器。请求通过应用网络到达它；它通过数据网络到达存储。命名栈会为这两个名称加前缀，因此两个栈互不共享。即使 Milvus 目前还没有自己的凭据，它也会加入数据网络。
 
-这关闭了东西向可达性。应用网络上的容器——sidecar 或为 OpenClaw 工作负载选择的镜像——根本无法打开到 `vllm-sr-redis:6379` 或 `vllm-sr-postgres:5432` 的连接。存储端口仅发布在 `127.0.0.1` 上，从而从主机侧关闭相同暴露。
+这关闭了东西向可达性。应用网络上的容器（例如 sidecar）根本无法打开到 `vllm-sr-redis:6379` 或 `vllm-sr-postgres:5432` 的连接。存储端口仅发布在 `127.0.0.1` 上，从而从主机侧关闭相同暴露。
 
 它不约束能够到达容器运行时的调用者。这样的调用者可以将容器附加到任何网络，因此该拆分是工作负载的边界，而不是运行时套接字的边界。
 
@@ -150,9 +193,23 @@ docker run --rm -v <volume>:/v:ro alpine ls /v
 
 然后针对已识别的卷启动容器，或将其内容复制到栈的命名卷（`vllm-sr-postgres-data` / `vllm-sr-redis-data`，命名栈带栈前缀）。CLI 不会猜测哪个孤立卷是你的。
 
-**配方激活报告凭据不可读。** 控制面板可以在激活配方时启动托管存储，但它作为单独、信任度更低的账户运行——它持有容器运行时套接字，而这正是这些凭据要远离的对象——因此它不能读取凭据状态，也不会猜测哪个卷保存数据。从拥有该栈的账户运行 `vllm-sr serve` 以预配存储，然后再次激活配方。
-
 **对已轮换的栈使用较旧的 CLI。** 它将无法认证。这是预期结果。升级 CLI，或通过容器运行时手动重置密码。
+
+## 保护本地栈的管理凭据
+
+控制面板使用一个服务凭据（`dashboard_control_plane` 角色）调用 Router 管理 API。当配方开启 bearer 认证时，Router 只接受持有该凭据的控制面板。两个容器都由 `vllm-sr serve` 创建，因此由它拥有这个值：
+
+- 如果你在它的环境中设置了 `VLLM_SR_DASHBOARD_RECIPE_TOKEN`（64 个小写十六进制字符，例如 `openssl rand -hex 32` 的输出），它就使用该值，并且从不把它写入磁盘。
+- 否则，栈会在首次启动时生成一个，并保存在 `<state-root>/.vllm-sr/management-credential/dashboard[.<stack>].json`，模式 `0600`，位于已验证所有者的 `0700` 目录中。
+- 控制面板总会收到它；当 Router 的运行时配置绑定它时，Router 也会收到。两者都以继承的环境名称接收，它不会出现在 `docker` 命令行、生成的配置文件、配方存储或日志记录中，控制面板也不在磁盘上保留副本。配方不能把这个名称绑定为自己的环境输入。
+
+能读取它的是：运行 `vllm-sr serve` 的用户、Router 和控制面板进程，以及任何能通过容器运行时检查这些容器的人。要轮换它，删除状态文件并运行 `vllm-sr serve`：它会生成新值，并用新值重建 Router 和控制面板。
+
+### 配方存储权限 {#recipe-store-permissions}
+
+`vllm-sr serve` 在启动栈之前读取控制面板的配方存储，并完成中断的激活，使用的是运行它的用户。因此存储 `<state-root>/.vllm-sr/recipe-store/<stack>` 与该用户的组共享：其中的文件组可读，目录组可写。外层的 `.vllm-sr` 只对其所有者和控制面板开放，所以其他主机用户无法到达存储；存储中只有包和配置文档，没有凭据。
+
+较早版本的控制面板写入的存储只对控制面板的账户开放。如果 `vllm-sr serve` 报告无法读取它，请用它打印的命令（`chgrp -R` 到你的组并 `chmod -R g+rwX`）共享一次；此后控制面板会保持共享。无 root 的 Docker 和 Podman 会把容器用户映射到其他主机 ID，因此在那里这种共享到达不了主机用户。
 
 ## 复核已存储的请求数据
 
@@ -169,13 +226,22 @@ docker run --rm -v <volume>:/v:ro alpine ls /v
 
 配方 Model Card 描述每个维护中配方的签入回放和缓存行为。部署指南见[数据与存储](storage-overview)。
 
+## 复核决策模型读取的内容 {#review-what-the-decision-model-reads}
+
+每个路由判断都是向决策模型提出的问题，所以问题解析到的模型会看到该问题读取的请求部分：
+
+- **默认在本地。** 什么都不配置时，每个问题都询问本地的 `primary` 部署，个人数据规则也在那里运行。绑定或规则的 `deployment` 会把问题移到别处；决策模型在远程时，请显式绑定 `pii` 和 `hallucination`。
+- **远程模型会收到它评判的内容。** `systemone` 部署会收到其问题读取的状态部分：请求、之前的轮次、工具结果、模型的答案、候选，以及图片问题中的图片。[哪些数据会离开本机](../system-one/deployments#what-leaves-the-host)按信号列出了这些部分。远程嵌入提供方会收到它要嵌入的文本。
+- **防护可以失败开放或失败关闭。** 模型没有给出答案的 `jailbreak` 或 `pii` 规则不匹配，除非设置了 `on_unknown: match`；模型没能读到的文本按攻击或个人数据计入。
+- **遮蔽覆盖最终请求。** `masking` 插件替换发往提供方的请求中每个文本位置的个人数据，包括检索到的文档和工具结果；拿不到 span 时以失败关闭。
+- **Router 自有的请求头受保护。** `header_mutation` 不能写入 Router 自有的请求头或路由键，客户端发送的内部请求头会被丢弃，调试细节只发给 `global.router.headers.debug` 允许的调用方。
+- **授权是一个信号。** `role_bindings` 条件根据网关声明的身份，决定谁可以到达哪些路由和工具；只有设置了 `identity.trust_headers: true` 时，才信任客户端发送的身份请求头。
+
 ## 限制容器运行时访问 {#limit-container-runtime-access}
 
-某些控制面板工作流可以管理本地容器。仅当它是具有安全所有者和组模式的 Unix 套接字时，CLI 才会挂载容器运行时套接字；它拒绝符号链接、全局可访问的套接字和不安全的组所有权。控制面板在容器内重复该检查，并以非 root 用户运行。
+`vllm-sr serve` 是本地栈中唯一使用容器运行时的部分。它创建、重建和停止栈的容器，并应用控制面板中保存的、需要重新创建容器的每项更改。没有任何栈容器挂载运行时套接字，控制面板镜像中也没有容器 CLI。控制面板以非 root 用户运行，从 Router 和 Envoy 的 HTTP 探测以及 CLI 在运行时配置旁保存的文件读取服务状态，从有界日志 spool 读取服务日志。
 
-当套接字缺失或被拒绝时，Router 和控制面板仍会启动，但容器管理功能会将运行时报告为不可用。不要将套接字设为全局可写以绕过此保护。对非默认的无 root 运行时套接字使用 `VLLM_SR_CONTAINER_SOCKET`，并验证其用户命名空间和补充组映射。
-
-如果部署不需要控制面板管理的容器，不要挂载运行时套接字。
+请把对运行时的访问视为对栈的管理员访问。能到达运行时的调用者可以读取容器环境（包括管理凭据），也可以绕过存储密码。只把套接字留给运行时的管理员，不要把它挂载进栈容器。
 
 ## 生产检查清单
 
@@ -189,4 +255,4 @@ docker run --rm -v <volume>:/v:ro alpine ls /v
 - [ ] 在绕过策略不可接受的地方设置严格的失败行为。
 - [ ] 按与其他凭据相同的计划轮换本地栈的存储凭据。
 - [ ] 测试备份、恢复、凭据轮换、升级和回滚。
-- [ ] 除非工作流需要，否则不要挂载容器运行时套接字。
+- [ ] 不要把容器运行时套接字挂载进任何栈容器；只有 `vllm-sr serve` 使用运行时。

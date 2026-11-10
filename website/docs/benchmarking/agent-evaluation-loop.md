@@ -76,12 +76,6 @@ a discussion of agents or a request for one independent worker. The workflow
 handles its internal stages; users should not have to name them to request
 collaboration.
 
-Check that multilingual examples survive prototype compression. A rule-local
-`prototype_scoring` override stays with the Recipe, while an omitted override
-inherits global settings. Use `enabled: false` to retain all deduplicated
-candidates, and specify `best_weight` and `top_m` for their combined score.
-Measure the effect before replacing the baseline.
-
 ## Validate and preview the candidate
 
 Discover the running contract before editing configuration:
@@ -96,8 +90,10 @@ vllm-sr config plan --config candidate.yaml \
 ```
 
 Apply a hot-reloadable change with `vllm-sr config apply`. If the plan reports
-`RESTART_REQUIRED`, use the deployment workflow. For an authorized local-stack
-replacement, run `vllm-sr serve --config candidate.yaml --replace-active-config`.
+`RESTART_REQUIRED`, use the deployment workflow; on a local stack,
+`vllm-sr config apply` saves the change and the next `vllm-sr serve` applies
+it. For an authorized local-stack replacement, run
+`vllm-sr serve --config candidate.yaml --replace-active-config`.
 Confirm readiness and the active revision before testing.
 
 Set `ENTRYPOINT` to the published entrypoint you are evaluating, then preview a
@@ -151,7 +147,7 @@ completion budget that fits the actual input and leaves room for the final
 answer. When the request omits a limit, a configured
 `request_params.default_max_tokens` supplies the decision default; otherwise
 the backend default applies. For supported vLLM deployments,
-[`default_max_tokens: auto`](../installation/configuration#recipe-wide-candidate-and-replay-policies)
+[`default_max_tokens: auto`](../installation/configuration#recipe-candidate-requirements)
 uses each model's remaining native capacity. Keep the selector's output cost
 forecast separate from this capacity and report the effective deployment limits.
 
@@ -166,16 +162,16 @@ stage actually ran.
 
 ## Test retrieval, risk handling, and agent continuity
 
-**Retrieval.** Attach [RAG and neural reranking](../tutorials/plugin/rag#neural-reranking)
-to a path with a real knowledge base. Retrieve a wider candidate set and use
-`rag.rerank` to retain the most relevant documents. Check document identities,
+**Retrieval.** Attach a [context plugin with a RAG source](../tutorials/plugin/context#rag-sources)
+to a path with a real knowledge base. Recall a wider candidate set and let the
+source's relevance judge retain the most relevant documents. Check document identities,
 retrieval coverage, ranking, grounded answers, and added latency. Preview selects
 the plugin; a routed request executes it. Start with a single-model path before
 adding retrieval to every stage of a multi-model workflow.
 
-**Risk handling.** [Guard](../tutorials/signal/learned/jailbreak) detects prompt
-attacks; [Safety and Hazard](../tutorials/signal/learned/safety) identify content
-risks and categories. Test harmful facilitation against help-seeking and benign
+**Risk handling.** [Jailbreak](../tutorials/signal/application/jailbreak) detects prompt
+attacks; [Safety](../tutorials/signal/application/safety) identifies content
+risks and harm categories. Test harmful facilitation against help-seeking and benign
 analysis before choosing refusal rules. PII can select a restricted model pool;
 it does not redact content or establish a provider's retention policy.
 

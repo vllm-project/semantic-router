@@ -100,7 +100,7 @@ configuration, send the authored YAML to `POST /api/v1/config/validate`:
 
 ```json
 {
-  "yaml": "version: v0.3\nrouting: {}\nglobal: {}\n"
+  "yaml": "version: v0.5\nrecipes:\n  - name: default\nglobal: {}\n"
 }
 ```
 
@@ -141,9 +141,9 @@ time. Kubernetes defers routing contracts until `IntelligentPool` and
 settings and validates routing references, recipe compatibility, and signal
 rules before activating the candidate. Deployment definitions are static;
 routing and recipe bindings are compiled only at the complete-config stage.
-PII and Prompt Guard backend settings, error policies, and window geometry are
-checked during static loading. Window provider and input-budget compatibility
-are checked for each recipe at the complete-config stage.
+Each recipe's signal rules are checked against the deployments they resolve to
+(question types, span capability, input modalities) at the complete-config
+stage.
 Invalid candidates report `ValidationFailed` on the CRDs and leave the active
 configuration in place.
 
@@ -164,11 +164,14 @@ An automation or deployment agent should:
    surface references;
 5. omit the bootstrap-only `setup` block and call the semantic validation endpoint;
 6. plan the mutation; apply a hot-reloadable change with the returned
-   `current_etag` in `If-Match`, or use the deployment workflow when listener
-   or provider topology returns `RESTART_REQUIRED` (for local Docker, use the
-   explicit `vllm-sr serve --config <candidate> --replace-active-config`
-   operation after approval);
-7. poll `activation_status` and probe the Envoy data plane before keeping the
+   `current_etag` in `If-Match`. A change the running Router can't take returns
+   `RESTART_REQUIRED`: a listener change in standalone mode, or a listener or
+   provider topology change with `--gateway extproc`. On local Docker,
+   `vllm-sr config apply` saves such a change and the next `vllm-sr serve`
+   applies it (or, after approval, run the explicit
+   `vllm-sr serve --config <candidate> --replace-active-config`); elsewhere,
+   use the deployment workflow;
+7. poll `activation_status` and probe the data plane before keeping the
    change.
 
 Agents should never infer a field from an example or send unknown keys when a
@@ -196,7 +199,7 @@ make check
 ```
 
 The repository tracks exactly one full schema at
-`src/semantic-router/pkg/configschema/router-config-v0.3.schema.json`. The
+`src/semantic-router/pkg/configschema/router-config-v0.5.schema.json`. The
 generator also emits a small TypeScript import/typing adapter, but no second
 JSON copy. Packaging stages the canonical artifact into wheels and container
 images without writing generated files back into the worktree. CI fails when

@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -54,7 +54,7 @@ func TestHybridPolarityLookupAndService(t *testing.T) {
 				searchCalls := 0
 				milvus := &MilvusCache{
 					enabled: true, config: milvusCacheTestConfig("Strong"),
-					embeddingModel: "bert", embeddingProvider: provider,
+					embeddingDeployment: "qwen3-embedding", embeddingProvider: provider,
 					queryByIDFn: func(_ context.Context, id, model string) (client.ResultSet, error) {
 						require.Equal(t, "candidate-id", id)
 						require.Equal(t, expectedModel, model)
@@ -78,7 +78,7 @@ func TestHybridPolarityLookupAndService(t *testing.T) {
 					service := NewResponseCacheService(NewLegacyBackendAdapter(hybrid, HybridCacheType), ResponseCacheServiceOptions{L1MaxEntries: -1})
 					identity := CacheIdentity{Partition: CachePartition{RequestModel: "tenant-a", Protocol: "openai:body"}, SemanticQuery: query}
 					expectedModel = service.ResolveIdentity(identity).SemanticPartitionKey()
-					result, err := service.LookupSemantic(context.Background(), SemanticLookup{Identity: identity, Threshold: 0.8})
+					result, err := semanticHit(service.LookupSemantic(context.Background(), SemanticLookup{Identity: identity, Bounds: atThreshold(0.8)}))
 					require.NoError(t, err)
 					require.Equal(t, tc.wantResponse != "", result.Found)
 					require.Equal(t, tc.wantResponse, string(result.ResponseBody))
@@ -130,7 +130,7 @@ func TestHybridPolarityMissPreservesNegativeScore(t *testing.T) {
 	cfg := milvusCacheTestConfig("Strong")
 	cfg.Collection.VectorField.MetricType = "IP"
 	milvus := &MilvusCache{
-		enabled: true, config: cfg, embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(),
+		enabled: true, config: cfg, embeddingDeployment: "qwen3-embedding", embeddingProvider: cacheTestEmbeddingProvider(),
 		queryByIDFn: func(context.Context, string, string) (client.ResultSet, error) {
 			// The nearest HNSW record belongs to a different model partition.
 			return nil, nil
@@ -156,7 +156,7 @@ func TestHybridHitReportsNegationGuard(t *testing.T) {
 			storedAt := time.Now().Truncate(time.Second)
 			milvus := &MilvusCache{
 				enabled: true, config: milvusCacheTestConfig("Strong"),
-				embeddingModel: "bert", embeddingProvider: cacheTestEmbeddingProvider(),
+				embeddingDeployment: "qwen3-embedding", embeddingProvider: cacheTestEmbeddingProvider(),
 				queryByIDFn: func(context.Context, string, string) (client.ResultSet, error) {
 					return client.ResultSet{
 						entity.NewColumnVarChar("query", []string{tc.cached}),

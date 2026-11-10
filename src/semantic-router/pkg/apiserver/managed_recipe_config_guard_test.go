@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -43,19 +43,6 @@ func assertManagedStateBlocksWriters(t *testing.T, stateName string) {
 		t.Run(testCase.name, func(t *testing.T) {
 			assertManagedWriterBlocked(t, testCase, configPath, original)
 		})
-	}
-}
-
-func managedConfigWriterTestCases(server *ClassificationAPIServer) []configWriterTestCase {
-	return []configWriterTestCase{
-		{name: "router patch", request: httptest.NewRequest(http.MethodPatch, "/api/v1/config", bytes.NewBufferString(`{}`)), handle: server.handleConfigPatch},
-		{name: "router put", request: httptest.NewRequest(http.MethodPut, "/api/v1/config", bytes.NewBufferString(`{}`)), handle: server.handleConfigPut},
-		{name: "router rollback", request: httptest.NewRequest(http.MethodPost, "/api/v1/config/rollback", bytes.NewBufferString(`{}`)), handle: server.handleConfigRollback},
-		{name: "recipe put", request: requestWithPathValue(http.MethodPut, "/api/v1/config/recipes/named", "name", "named"), handle: server.handlePutRecipe},
-		{name: "recipe delete", request: requestWithPathValue(http.MethodDelete, "/api/v1/config/recipes/named", "name", "named"), handle: server.handleDeleteRecipe},
-		{name: "kb create", request: httptest.NewRequest(http.MethodPost, "/api/v1/storage/knowledge-bases", bytes.NewBufferString(`{}`)), handle: server.handleCreateKnowledgeBase},
-		{name: "kb update", request: requestWithPathValue(http.MethodPut, "/api/v1/storage/knowledge-bases/named", "name", "named"), handle: server.handleUpdateKnowledgeBase},
-		{name: "kb delete", request: requestWithPathValue(http.MethodDelete, "/api/v1/storage/knowledge-bases/named", "name", "named"), handle: server.handleDeleteKnowledgeBase},
 	}
 }
 
@@ -255,4 +242,14 @@ func requestWithPathValue(method, target, key, value string) *http.Request {
 	request := httptest.NewRequest(method, target, bytes.NewBufferString(`{}`))
 	request.SetPathValue(key, value)
 	return request
+}
+
+func managedConfigWriterTestCases(server *ClassificationAPIServer) []configWriterTestCase {
+	return []configWriterTestCase{
+		{name: "router patch", request: httptest.NewRequest(http.MethodPatch, "/api/v1/config", bytes.NewBufferString(`{}`)), handle: server.handleConfigPatch},
+		{name: "router put", request: httptest.NewRequest(http.MethodPut, "/api/v1/config", bytes.NewBufferString(`{}`)), handle: server.handleConfigPut},
+		{name: "router rollback", request: httptest.NewRequest(http.MethodPost, "/api/v1/config/rollback", bytes.NewBufferString(`{}`)), handle: server.handleConfigRollback},
+		{name: "recipe put", request: requestWithPathValue(http.MethodPut, "/api/v1/config/recipes/named", "name", "named"), handle: server.handlePutRecipe},
+		{name: "recipe delete", request: requestWithPathValue(http.MethodDelete, "/api/v1/config/recipes/named", "name", "named"), handle: server.handleDeleteRecipe},
+	}
 }

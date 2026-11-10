@@ -34,6 +34,17 @@ LLMAIL_SHA256 = {
 }
 
 
+def training_contract():
+    """The sequence_repair contract. The released Vela Guard uses CLS pooling, and the
+    trainer keeps the base model's mean pooling unless the contract names one."""
+    return {
+        "id2label": {i: label for label, i in LABEL2ID.items()},
+        "label2id": LABEL2ID,
+        "problem_type": "single_label_classification",
+        "classifier_pooling": "cls",
+    }
+
+
 def annotation_conflicts(annotations, known=None):
     """Keep conflicts even when one phase has already discarded that text."""
     known = {} if known is None else known
@@ -241,15 +252,7 @@ def main():
             "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
         }
     (args.output / "contract.json").write_text(
-        json.dumps(
-            {
-                "id2label": {i: label for label, i in LABEL2ID.items()},
-                "label2id": LABEL2ID,
-                "problem_type": "single_label_classification",
-            },
-            indent=2,
-        )
-        + "\n"
+        json.dumps(training_contract(), indent=2) + "\n"
     )
     (args.output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(json.dumps(manifest, indent=2))

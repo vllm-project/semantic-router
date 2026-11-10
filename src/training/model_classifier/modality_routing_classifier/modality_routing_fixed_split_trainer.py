@@ -39,7 +39,7 @@ Usage:
     # Candidate (DistilBERT student, distilled from the published baseline)
     python modality_routing_fixed_split_trainer.py \\
         --model distilbert-base-uncased \\
-        --teacher-model-path llm-semantic-router/mmbert32k-modality-router-merged \\
+        --teacher-model-path vllm-sr/mmbert32k-modality-router-merged \\
         --train-file exported_modality_routing_dataset/train.jsonl \\
         --val-file exported_modality_routing_dataset/validation.jsonl \\
         --temperature 3.0 --kd-alpha 0.5 \\

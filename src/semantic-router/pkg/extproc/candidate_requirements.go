@@ -50,19 +50,52 @@ func (r *OpenAIRouter) validateModelDemand(requirements *config.CandidateRequire
 	return requirementErr
 }
 
-func (r *OpenAIRouter) eligibleDemandModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, demand selection.CandidateDemand) ([]config.ModelRef, error) {
-	return eligibleModelRefsByDemand(refs, func(ref config.ModelRef) error {
-		return r.validateModelDemand(requirements, ref.Model, demand)
+// eligibleDemandModelRefs drops demand's reserves when it falls back.
+func (r *OpenAIRouter) eligibleDemandModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, demand *selection.CandidateDemand, minimum int) ([]config.ModelRef, error) {
+	eligible, dropped, err := eligibleModelRefsWithReserveFallback(refs, minimum, func(ref config.ModelRef, countReserves bool) error {
+		if countReserves {
+			return r.validateModelDemand(requirements, ref.Model, *demand)
+		}
+		return r.validateModelDemand(requirements, ref.Model, demand.WithoutReserves())
 	})
+	if dropped {
+		*demand = demand.WithoutReserves()
+	}
+	return eligible, err
 }
 
 // Strict live selection must qualify each model against the wire request it
 // would actually receive. Anthropic-only controls can be safely projected for
 // one backend format and unsupported for another.
-func (r *OpenAIRouter) eligibleRequestModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, request *llmprotocol.Request, decision *config.Decision) ([]config.ModelRef, error) {
-	return eligibleModelRefsByDemand(refs, func(ref config.ModelRef) error {
-		return r.candidateCapabilityMismatch(ref, request, decision, requirements, nil)
+func (r *OpenAIRouter) eligibleRequestModelRefs(requirements *config.CandidateRequirements, refs []config.ModelRef, request *llmprotocol.Request, decision *config.Decision, minimum int, ctx *RequestContext) ([]config.ModelRef, error) {
+	eligible, dropped, err := eligibleModelRefsWithReserveFallback(refs, minimum, func(ref config.ModelRef, countReserves bool) error {
+		return r.candidateCapabilityMismatch(ref, request, decision, requirements, nil, countReserves)
 	})
+	if dropped {
+		dropContextReserves(ctx, decision.Name)
+	}
+	return eligible, err
+}
+
+// eligibleModelRefsWithReserveFallback is the window filter's reserve fallback
+// for known limits: when the full estimate leaves fewer distinct candidates
+// than minimum, it qualifies refs without the estimate's reserves and keeps
+// that pool if it is larger. It reports whether it fell back.
+func eligibleModelRefsWithReserveFallback(refs []config.ModelRef, minimum int, admit func(config.ModelRef, bool) error) ([]config.ModelRef, bool, error) {
+	eligible, err := eligibleModelRefsByDemand(refs, func(ref config.ModelRef) error { return admit(ref, true) })
+	usable := distinctModelRefCount(eligible)
+	if usable >= minimum {
+		return eligible, false, err
+	}
+	fallback, fallbackErr := eligibleModelRefsByDemand(refs, func(ref config.ModelRef) error { return admit(ref, false) })
+	if distinctModelRefCount(fallback) > usable {
+		return fallback, true, fallbackErr
+	}
+	if usable > 0 {
+		return eligible, false, err
+	}
+	// The refusal reports the count it rests on.
+	return fallback, false, fallbackErr
 }
 
 func eligibleModelRefsByDemand(refs []config.ModelRef, admit func(config.ModelRef) error) ([]config.ModelRef, error) {
@@ -103,9 +136,9 @@ func (r *OpenAIRouter) decisionEligibleModelRefs(decision *config.Decision, ctx 
 	}
 	requirements := r.candidateRequirements(ctx)
 	if !selection.CandidateRequirementsEnabled(requirements) {
-		return r.contextEligibleDecisionModelRefs(decision.ModelRefs, decision.Name, ctx.VSRContextTokenCount, ctx)
+		return r.contextEligibleDecisionModelRefs(decision.ModelRefs, decision.Name, ctx.VSRContextTokenCount, minimumContextCandidates(decision), ctx)
 	}
-	eligible, err := r.eligibleRequestModelRefs(requirements, decision.ModelRefs, ctx.SemanticRequest, decision)
+	eligible, err := r.eligibleRequestModelRefs(requirements, decision.ModelRefs, ctx.SemanticRequest, decision, minimumContextCandidates(decision), ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -151,8 +184,11 @@ func (r *OpenAIRouter) validateDispatchRequirements(request *llmprotocol.Request
 	if !allowed {
 		return fmt.Errorf("%w: model %q is outside the selected decision's permission scope", selection.ErrNoEligibleCandidates, dispatch.logicalModel)
 	}
-	model := dispatch.logicalModel
-	if decision != nil {
+	model := dispatch.effectiveBackendModel()
+	if model == dispatch.logicalModel && ctx != nil {
+		model = ctx.backendModelForCandidate(dispatch.logicalModel)
+	}
+	if model == dispatch.logicalModel && decision != nil {
 		for _, ref := range decision.ModelRefs {
 			if ref.LoRAName == model && ref.LoRAName != "" {
 				model = ref.Model
@@ -160,13 +196,14 @@ func (r *OpenAIRouter) validateDispatchRequirements(request *llmprotocol.Request
 			}
 		}
 	}
-	return r.validateModelDemand(requirements, model, selection.DemandForRequest(request))
+	// A refusal rests on the estimate without reserves.
+	return r.validateModelDemand(requirements, model, selection.DemandForRequest(request).WithoutReserves())
 }
 
 func (r *OpenAIRouter) strictRouteActionDestination(decision *config.Decision, demand selection.CandidateDemand, requirements *config.CandidateRequirements) (string, error) {
 	refs := []config.ModelRef{{Model: strings.TrimSpace(decision.Action.Destination)}}
 	refs = append(refs, decision.ModelRefs...)
-	eligible, err := r.eligibleDemandModelRefs(requirements, refs, demand)
+	eligible, err := r.eligibleDemandModelRefs(requirements, refs, &demand, 1)
 	if err != nil {
 		return "", err
 	}

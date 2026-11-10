@@ -14,15 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package selection provides advanced model selection algorithms for intelligent routing.
-// It implements multiple selection strategies including Elo rating, RouterDC (dual-contrastive
-// learning), AutoMix (POMDP-based), and hybrid approaches that combine multiple techniques.
-//
-// Reference papers:
-//   - Elo: RouteLLM (arXiv:2406.18665) - Weighted Elo using Bradley-Terry model
-//   - RouterDC: Query-Based Router by Dual Contrastive Learning (arXiv:2409.19886)
-//   - AutoMix: Automatically Mixing Language Models (arXiv:2310.12963)
-//   - Hybrid LLM: Cost-Efficient Quality-Aware Query Routing (arXiv:2404.14618)
+// Package selection implements the selectors, which choose one of a
+// decision's candidate models before it is called: static, random,
+// multi_factor and systemone, and the session-aware policy Router Learning
+// applies over them.
 package selection
 
 import (
@@ -40,66 +35,19 @@ import (
 type SelectionMethod string
 
 const (
-	// MethodElo uses Elo rating system with Bradley-Terry model
-	// Models are scored based on pairwise comparisons using preference feedback
-	MethodElo SelectionMethod = "elo"
-
-	// MethodRouterDC uses dual-contrastive learning for query-to-model routing
-	// Learns query embeddings that match well with specific model capabilities
-	MethodRouterDC SelectionMethod = "router_dc"
-
-	// MethodAutoMix uses POMDP-based cascaded routing with self-verification
-	// Routes to smaller models first, escalates based on self-verification confidence
-	MethodAutoMix SelectionMethod = "automix"
-
-	// MethodHybrid combines multiple selection techniques with configurable weights
-	// Allows blending Elo, embedding similarity, and cost considerations
-	MethodHybrid SelectionMethod = "hybrid"
-
 	// MethodStatic uses static scores from configuration (default behavior)
 	MethodStatic SelectionMethod = "static"
-
-	// MethodKNN uses K-Nearest Neighbors for query-based model selection
-	// Finds similar historical queries and uses quality-weighted voting
-	// Reference: FusionFactory (arXiv:2507.10540) query-level fusion
-	MethodKNN SelectionMethod = "knn"
-
-	// MethodKMeans uses KMeans clustering for model selection
-	// Clusters queries and assigns models based on quality+latency scores
-	// Reference: Avengers-Pro (arXiv:2508.12631) performance-efficiency routing
-	MethodKMeans SelectionMethod = "kmeans"
-
-	// MethodSVM uses Support Vector Machine for model classification
-	// Learns decision boundaries between model preferences using RBF kernel
-	// Reference: FusionFactory (arXiv:2507.10540), Avengers-Pro (arXiv:2508.12631)
-	MethodSVM SelectionMethod = "svm"
-
-	// MethodMLP uses Multi-Layer Perceptron for GPU-accelerated model selection
-	// Neural network classifier using Candle for efficient GPU inference
-	// Reference: FusionFactory (arXiv:2507.10540) query-level fusion via MLP routers
-	MethodMLP SelectionMethod = "mlp"
-
-	// MethodRLDriven uses reinforcement learning for personalized model selection
-	// Implements Router-R1 reward structure (format, outcome, cost) for RL training
-	// Reference: Router-R1 (arXiv:2506.09033)
-	MethodRLDriven SelectionMethod = "rl_driven"
-
-	// MethodGMTRouter uses heterogeneous graph learning for personalized routing
-	// Learns user preferences from multi-turn interactions using HGT message passing
-	// Reference: GMTRouter (arXiv:2511.08590)
-	MethodGMTRouter SelectionMethod = "gmtrouter"
-
-	// MethodLatencyAware uses TPOT/TTFT percentile data for latency-aware model selection
-	// Selects the fastest model from candidates based on configured latency percentiles
-	MethodLatencyAware SelectionMethod = "latency_aware"
 
 	// MethodMultiFactor combines quality/latency/cost/load signals via a
 	// weighted score with optional SLO ceilings. Issue #37.
 	MethodMultiFactor SelectionMethod = "multi_factor"
 
-	// MethodPrompt uses a concrete helper LLM to choose one declared candidate
-	// through a runtime-owned structured output contract.
-	MethodPrompt SelectionMethod = "prompt"
+	// MethodRandom picks uniformly from the eligible candidates. No learned state.
+	MethodRandom SelectionMethod = "random"
+
+	// MethodSystemOne asks a System One model to choose one declared
+	// candidate; its probabilities are the candidate scores.
+	MethodSystemOne SelectionMethod = "systemone"
 
 	// MethodSessionAware wraps a base selector with agentic session policy:
 	// it keeps tool loops and hot multi-turn continuations on the current model
@@ -125,17 +73,11 @@ type DependencyType string
 const (
 	// DependencyExternalService requires a separate running service (HTTP server, etc.)
 	DependencyExternalService DependencyType = "external_service"
-
-	// DependencyPretrainedModel requires pre-trained model artifacts on disk
-	DependencyPretrainedModel DependencyType = "pretrained_model"
-
-	// DependencyEmbeddingFunc requires an embedding function (provided by the router)
-	DependencyEmbeddingFunc DependencyType = "embedding_function"
 )
 
 // Dependency describes an external dependency required by an algorithm
 type Dependency struct {
-	// Name is a human-readable name (e.g., "AutoMix Verifier Server")
+	// Name is a human-readable name (e.g., "Decision model runtime")
 	Name string
 
 	// Type classifies the dependency
@@ -156,10 +98,6 @@ type SelectionContext struct {
 	// Query is the user's input query text
 	Query string
 
-	// QueryEmbedding is the precomputed embedding vector for the query (optional)
-	// If nil, selectors that need embeddings will compute them on demand
-	QueryEmbedding []float32
-
 	// ConversationHistory provides prior messages for context-aware selection
 	ConversationHistory []string
 
@@ -172,7 +110,7 @@ type SelectionContext struct {
 	RecipeName config.RecipeName
 
 	// CategoryName is the detected domain category (e.g., "physics", "math")
-	// Used by ML selectors to create feature vectors with category one-hot encoding
+	// Used by the static selector's category scores and the session policy
 	CategoryName string
 
 	// CandidateModels is the list of models to select from
@@ -190,16 +128,7 @@ type SelectionContext struct {
 	// CandidateDemands contains provider-rendered budgets for automatic output.
 	CandidateDemands map[string]CandidateDemand
 
-	// CostWeight indicates how much to weight cost in selection (0.0-1.0)
-	// Higher values prefer cheaper models
-	CostWeight float64
-
-	// QualityWeight indicates how much to weight quality/score (0.0-1.0)
-	// Higher values prefer higher-quality models
-	QualityWeight float64
-
-	// UserID identifies the user for personalized selection (optional)
-	// When set, enables per-user preference learning in RL-driven selection
+	// UserID identifies the user for session telemetry and learning traces (optional)
 	UserID string
 
 	// SessionID identifies the conversation session for multi-turn context (optional)
@@ -215,12 +144,6 @@ type SelectionContext struct {
 	// session_aware selection. The flat SessionID remains the shared
 	// correlation key for selectors that do not need richer session facts.
 	AgenticSession *AgenticSessionContext
-
-	// LatencyAwareTPOTPercentile is the configured TPOT percentile (1-100) for latency_aware selection
-	LatencyAwareTPOTPercentile int
-
-	// LatencyAwareTTFTPercentile is the configured TTFT percentile (1-100) for latency_aware selection
-	LatencyAwareTTFTPercentile int
 
 	// CacheAffinityCtx carries request-time session signals for cache-affinity estimation.
 	CacheAffinityCtx *CacheAffinityContext
@@ -288,13 +211,6 @@ type SelectionResult struct {
 	// dispatch trace. Weighted objectives omit it.
 	MultiFactor *selectiontrace.MultiFactorObjective
 
-	// Prompt-helper telemetry is populated only by MethodPrompt.
-	HelperModel            string
-	HelperPromptTokens     int64
-	HelperCompletionTokens int64
-	HelperTotalTokens      int64
-	HelperLatencyMs        int64
-
 	// SessionPolicy records the session-aware stay/switch policy trace when
 	// Method is session_aware.
 	SessionPolicy *SessionPolicyTrace
@@ -308,58 +224,11 @@ type Selector interface {
 	// Method returns the selection method type
 	Method() SelectionMethod
 
-	// UpdateFeedback allows the selector to learn from user feedback
-	// This is primarily used by Elo and learning-based methods
-	UpdateFeedback(ctx context.Context, feedback *Feedback) error
-
 	// Tier returns the production readiness classification of this algorithm
 	Tier() AlgorithmTier
 
 	// ExternalDependencies returns the list of external dependencies this algorithm requires
 	ExternalDependencies() []Dependency
-}
-
-// Feedback represents user feedback for model comparison
-type Feedback struct {
-	// Query is the original query that was processed
-	Query string
-
-	// Response is the model's response text (optional)
-	// Used for response embedding in GMTRouter (Paper G4)
-	Response string
-
-	// WinnerModel is the model that was preferred
-	WinnerModel string
-
-	// LoserModel is the model that was not preferred (can be empty for single feedback)
-	LoserModel string
-
-	// Tie indicates if both models performed equally
-	Tie bool
-
-	// DecisionName is the category/decision context
-	DecisionName string
-
-	// Timestamp is when the feedback was recorded
-	Timestamp int64
-
-	// UserID identifies the user providing feedback (optional)
-	// When set, enables per-user preference learning
-	UserID string
-
-	// SessionID identifies the session for multi-turn context (optional)
-	SessionID string
-
-	// ConversationID identifies a run within the session (optional)
-	ConversationID string
-
-	// FeedbackType indicates the type of implicit feedback (optional)
-	// Values: "satisfied", "need_clarification", "wrong_answer", "want_different"
-	FeedbackType string
-
-	// Confidence indicates the confidence in this feedback (0.0-1.0)
-	// Used for implicit feedback where detection may be uncertain
-	Confidence float64
 }
 
 // Registry maintains available selection methods and their configurations

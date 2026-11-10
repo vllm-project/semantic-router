@@ -18,7 +18,7 @@ DATA_DIR="${DATA_DIR:-${SCRIPT_DIR}/data}"
 OUTPUT_DIR="${OUTPUT_DIR:-${SCRIPT_DIR}/output/haldetect-32k}"
 
 # Model settings (from TRAINING_32K.md)
-MODEL_NAME="${MODEL_NAME:-llm-semantic-router/modernbert-base-32k}"
+MODEL_NAME="${MODEL_NAME:-vllm-sr/modernbert-base-32k}"
 MAX_LENGTH="${MAX_LENGTH:-8192}"
 BATCH_SIZE="${BATCH_SIZE:-8}"
 LEARNING_RATE="${LEARNING_RATE:-1e-5}"

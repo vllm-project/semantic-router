@@ -6,14 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
 func TestLooperReasoningSurvivesProviderBoundary(t *testing.T) {
@@ -35,16 +34,11 @@ func TestLooperReasoningSurvivesProviderBoundary(t *testing.T) {
 			router := &OpenAIRouter{
 				Config: cfg, Cache: &spyCache{}, CredentialResolver: newTestCredentialResolver(cfg),
 			}
-			ctx := &RequestContext{Headers: map[string]string{}}
-			requestHeaders := newRequestHeaders("POST", "/v1/chat/completions")
-			for key, value := range map[string]string{
-				headers.VSRLooperRequest: "true", headers.VSRInternalAuth: internalauth.Token(),
-				headers.VSRLooperDecision: test.decision, headers.VSRSelectedRecipe: test.recipe,
-			} {
-				requestHeaders.RequestHeaders.Headers.Headers = append(
-					requestHeaders.RequestHeaders.Headers.Headers, &core.HeaderValue{Key: key, Value: value},
-				)
+			ctx := &RequestContext{
+				Headers: map[string]string{},
+				Hop:     &routing.Hop{Decision: test.decision, Recipe: test.recipe},
 			}
+			requestHeaders := newRequestHeaders("POST", "/v1/chat/completions")
 			_, err = router.handleRequestHeaders(requestHeaders, ctx)
 			require.NoError(t, err)
 			require.True(t, ctx.LooperRequest)
@@ -85,7 +79,7 @@ func TestLooperReasoningSurvivesProviderBoundary(t *testing.T) {
 }
 
 var looperReasoningWireConfig = `
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: worker-alias
@@ -95,26 +89,28 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: 127.0.0.1:8000
-routing: {}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 recipes:
-` + looperReasoningWireRecipe("quiet", false) + looperReasoningWireRecipe("thinking", true)
+  - name: default` + looperReasoningWireRecipe("quiet", false) + looperReasoningWireRecipe("thinking", true)
 
 func looperReasoningWireRecipe(name string, enabled bool) string {
 	return fmt.Sprintf(`
   - name: %s
-    routing:
-      decisions:
-        - name: shared
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: worker-alias
-              use_reasoning: %t
-          plugins:
-            - type: system_prompt
-              configuration:
-                system_prompt: "Stage instruction."
-                mode: insert
+    decisions:
+      - name: shared
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: worker-alias
+            use_reasoning: %t
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: "Stage instruction."
+              mode: insert
 `, name, enabled)
 }

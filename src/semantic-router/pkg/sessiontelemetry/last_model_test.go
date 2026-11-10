@@ -72,3 +72,28 @@ func TestRecordLastModelEnforcesSizeCap(t *testing.T) {
 		t.Fatalf("session count %d exceeds cap %d", n, maxLastModelSessions)
 	}
 }
+
+func TestLastModelEvictionScanThrottled(t *testing.T) {
+	ResetLastModelForTesting()
+	t.Cleanup(ResetLastModelForTesting)
+	base := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	s := globalLastModelStore
+	s.mu.Lock()
+	s.evictExpiredLocked(base)
+	s.sessions["stale"] = &lastModelState{model: "m", lastSeen: base.Add(-2 * ttl)}
+	s.evictExpiredLocked(base.Add(evictInterval / 2))
+	_, present := s.sessions["stale"]
+	s.mu.Unlock()
+	if !present {
+		t.Fatal("sweep must be skipped within evictInterval of the last sweep")
+	}
+
+	s.mu.Lock()
+	s.evictExpiredLocked(base.Add(evictInterval + time.Second))
+	_, present = s.sessions["stale"]
+	s.mu.Unlock()
+	if present {
+		t.Fatal("sweep must run once evictInterval has elapsed")
+	}
+}

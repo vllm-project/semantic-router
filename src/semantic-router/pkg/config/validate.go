@@ -35,6 +35,13 @@ func collectUnknownFieldsRecursive(raw map[string]interface{}, t reflect.Type, p
 	if len(known) == 0 {
 		return // opaque/schemaless struct (e.g., StructuredPayload) — skip
 	}
+	// A struct that inlines extension blocks accepts the registered ones;
+	// their own types validate what is inside.
+	if extensible, ok := reflect.New(t).Interface().(interface{ extensionFields() []string }); ok {
+		for _, name := range extensible.extensionFields() {
+			known[name] = fieldEntry{}
+		}
+	}
 	for key := range raw {
 		entry, ok := known[key]
 		if !ok {
@@ -47,6 +54,9 @@ func collectUnknownFieldsRecursive(raw map[string]interface{}, t reflect.Type, p
 
 func formatUnknownField(key, path string, known map[string]fieldEntry) string {
 	fullPath := joinPath(path, key)
+	if reason := explainUnknownField(key, path); reason != "" {
+		return fmt.Sprintf("unknown field %q in %s: %s", key, displayPath(fullPath), reason)
+	}
 	if suggestion := closestField(key, known); suggestion != "" {
 		return fmt.Sprintf("unknown field %q in %s; did you mean %q?", key, displayPath(fullPath), suggestion)
 	}

@@ -20,14 +20,16 @@ To avoid a host port conflict, set `VLLM_SR_BENCH_PORT` to an absolute port from
 only the worker's loopback host port; its container port remains 8090 and the
 stack port offset is not added to the override.
 
-When only the selected Dashboard image changes, `serve` upgrades its managed
-worker after verifying the same launch settings, store and credentials. The CLI
-briefly pauses the worker to check its durable journal before replacing it.
-Active runs and dataset preparations block the upgrade and resume unchanged.
-Finish or cancel runs and wait for preparations to finish before retrying.
-Saved results remain in the same store. A stopped worker, changed
-credentials or changed launch settings still require explicit reconciliation.
-The container runtime must support pausing for this image upgrade.
+`serve` reuses a running worker whose image, launch settings, store and
+credentials are unchanged. When any of them changes, for example a new
+Dashboard image, host alias, port or credential, `serve` replaces the worker
+it started. First it briefly pauses the worker to check the worker's own
+durable journal. Saved results remain in that store. If the journal shows
+active runs or dataset preparations, or cannot be read, the worker resumes
+unchanged. A stopped worker and a container without the sr-bench label are
+also left as they are. In each of these cases `serve` logs a warning and
+still starts Router and Dashboard; run `serve` again once the worker is idle.
+The container runtime must support pausing for this check.
 
 The core container has no Docker socket or GPU passthrough and does not include
 all upstream harness dependencies. For the code and agent adapters, prepare a

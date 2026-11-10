@@ -40,7 +40,7 @@ func testAnthropicMessagesRequest(ctx context.Context, client *kubernetes.Client
 	defer stop()
 
 	resp, err := sendAnthropicMessagesRequest(ctx, anthropicMessagesRequestBody{
-		Model:     "MoM",
+		Model:     "vllm-sr/auto",
 		MaxTokens: 64,
 		Messages: []anthropicMessage{
 			{Role: "user", Content: "Explain the difference between TCP and UDP."},
@@ -132,6 +132,8 @@ func sendAnthropicMessagesRequest(
 	// anthropic-version is required by the official Anthropic API. The router
 	// does not currently gate on it but real SDK clients always send it.
 	req.Header.Set("anthropic-version", "2023-06-01")
+	// Asks for x-vsr-trace, which the profile's global.router.headers.debug allows.
+	req.Header.Set("x-vsr-debug", "true")
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	resp, err := httpClient.Do(req)

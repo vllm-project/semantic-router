@@ -152,22 +152,6 @@ test.describe('Playground Chat Component', () => {
     await page.goto('/playground')
   })
 
-  test('defaults HireClaw mode off for a fresh session', async ({ page }) => {
-    const menu = await openComposerAddMenu(page)
-    const hireClawToggle = menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' })
-
-    await expect(hireClawToggle).toBeVisible()
-    await expect(hireClawToggle).toHaveAttribute('aria-checked', 'false')
-    await expect(
-      menu.getByRole('menuitemcheckbox', { name: /Open ClawRoom view|Exit ClawRoom view/i }),
-    ).toHaveCount(0)
-
-    const storedValue = await page.evaluate(() =>
-      window.localStorage.getItem('sr:playground:claw-mode'),
-    )
-    expect(storedValue).toBe('false')
-  })
-
   test('renders chat interface', async ({ page }) => {
     // Verify main elements are present
     await expect(page.getByPlaceholder('Ask me anything...')).toBeVisible()
@@ -243,7 +227,7 @@ test.describe('Playground Chat Component', () => {
     await expect(selector).toContainText('vllm-sr/mom-v1-flash')
   })
 
-  test('sends ordinary chat through the advertised default when Fusion is available', async ({
+  test('sends ordinary chat through the advertised default alias when Fusion is available', async ({
     page,
   }) => {
     await page.unroute('**/api/router/v1/models*')
@@ -270,23 +254,24 @@ test.describe('Playground Chat Component', () => {
       const request = route.request().postDataJSON()
       requests.push(request)
       await route.fulfill({
-        status: request.model === 'vllm-sr/auto' ? 200 : 400,
+        status: request.model === 'auto' ? 200 : 400,
         contentType: 'application/json',
         body: chatJsonBody('Hello!'),
       })
     })
     await page.reload({ waitUntil: 'domcontentloaded' })
     const selector = page.getByTestId('playground-composer-model-select')
-    await expect(selector).toContainText('vllm-sr/auto')
+    await expect(selector).toContainText('auto')
     await page.getByPlaceholder('Ask me anything...').fill('Hello!')
     await page.getByRole('button', { name: 'Send message', exact: true }).click()
     await expect(
       page.locator('[data-message-role="assistant"] [data-message-content]'),
     ).toContainText('Hello!')
     expect(requests).toHaveLength(1)
-    expect(requests[0].model).toBe('vllm-sr/auto')
+    expect(requests[0].model).toBe('auto')
     await selector.click()
-    await expect(page.getByRole('option')).toHaveCount(2)
+    await expect(page.getByRole('option')).toHaveCount(3)
+    await expect(page.getByRole('option', { name: /vllm-sr\/auto/ })).toBeVisible()
     await page.getByRole('option', { name: /vllm-sr\/fusion/ }).click()
     await expect(selector).toContainText('vllm-sr/fusion')
   })
@@ -305,7 +290,6 @@ test.describe('Playground Chat Component', () => {
     const menu = page.getByRole('menu', { name: 'Add to prompt' })
     const attachFiles = menu.getByRole('menuitem', { name: 'Attach files' })
     const webSearch = menu.getByRole('menuitemcheckbox', { name: 'Disable Web Search' })
-    const hireClaw = menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' })
 
     await expect(menu).toBeVisible()
     await expect(trigger).toHaveAttribute('aria-expanded', 'true')
@@ -313,7 +297,7 @@ test.describe('Playground Chat Component', () => {
     await expect(webSearch).toHaveAttribute('aria-checked', 'true')
 
     await page.keyboard.press('End')
-    await expect(hireClaw).toBeFocused()
+    await expect(webSearch).toBeFocused()
     await page.keyboard.press('Home')
     await expect(attachFiles).toBeFocused()
 
@@ -440,7 +424,6 @@ test.describe('Playground Chat Component', () => {
               prompt: 'Restore this legacy task',
               createdAt: Date.now(),
               requestOptions: {
-                enableClawMode: false,
                 enableWebSearch: false,
                 model: 'MoM',
               },
@@ -481,7 +464,7 @@ test.describe('Playground Chat Component', () => {
     }
   })
 
-  test('rejects a MoM-only discovery response and never submits the retired alias', async ({
+  test('rejects legacy discovery entries without routing metadata and never infers an alias', async ({
     page,
   }) => {
     await page.unroute('**/api/router/v1/models*')
@@ -497,7 +480,6 @@ test.describe('Playground Chat Component', () => {
               object: 'model',
               owned_by: 'vllm-semantic-router',
               description: 'Intelligent Router for Mixture-of-Models',
-              routing: { resolution: 'virtual', selectable: true, default_route: true },
             },
           ],
         }),
@@ -546,7 +528,10 @@ test.describe('Playground Chat Component', () => {
 
     const shell = page.getByTestId('playground-sidebar-shell')
     await expect(shell).toBeVisible()
-    const sidebarItem = shell.getByRole('button', { name: 'Saved conversation preview' })
+    const sidebarItem = shell.getByRole('button', {
+      name: 'Saved conversation preview',
+      exact: true,
+    })
 
     await page.getByRole('button', { name: 'Open sidebar' }).click()
     await expect(sidebarItem).toBeVisible()
@@ -726,6 +711,7 @@ test.describe('Playground Chat Component', () => {
   test('preserves markdown list formatting when citations are present', async ({ page }) => {
     await page.evaluate(() => {
       const now = Date.now()
+      window.localStorage.setItem('sr:playground:active-conversation', 'citation-conversation')
       window.localStorage.setItem(
         'sr:chat:conversations',
         JSON.stringify([
@@ -908,7 +894,7 @@ test.describe('Playground Chat Component', () => {
     await page.waitForTimeout(900)
 
     const sidebarShell = page.getByTestId('playground-sidebar-shell')
-    const sessionAButton = sidebarShell.getByRole('button', { name: sessionAPrompt })
+    const sessionAButton = sidebarShell.getByRole('button', { name: sessionAPrompt, exact: true })
     if (
       (await sessionAButton.count()) === 0 ||
       !(await sessionAButton
@@ -970,6 +956,7 @@ test.describe('Playground Chat Component', () => {
         },
       ]
 
+      window.localStorage.setItem('sr:playground:active-conversation', 'recent-conversation')
       window.localStorage.setItem(
         'sr:chat:conversations',
         JSON.stringify([
@@ -993,7 +980,10 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByText('Short reply for the currently selected session.')).toBeVisible()
 
     const sidebarShell = page.getByTestId('playground-sidebar-shell')
-    const longHistoryButton = sidebarShell.getByRole('button', { name: 'Long history session' })
+    const longHistoryButton = sidebarShell.getByRole('button', {
+      name: 'Long history session',
+      exact: true,
+    })
     if (
       (await longHistoryButton.count()) === 0 ||
       !(await longHistoryButton
@@ -1400,6 +1390,19 @@ test.describe('Playground Chat Component', () => {
       .poll(() => readStoredQueuePrompts(page))
       .toEqual(['Second queued task', 'Third queued task'])
 
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const queuedConversations = Object.keys(
+            JSON.parse(window.localStorage.getItem('sr:playground:queue') || '{}'),
+          )
+          return queuedConversations.includes(
+            window.localStorage.getItem('sr:playground:active-conversation') || '',
+          )
+        }),
+      )
+      .toBe(true)
+
     await page.reload({ waitUntil: 'domcontentloaded' })
 
     const restoredQueue = page.getByTestId('playground-task-queue')
@@ -1575,6 +1578,7 @@ test.describe('Playground Chat Component', () => {
         ]
       }).flat()
 
+      window.localStorage.setItem('sr:playground:active-conversation', 'seeded-conversation')
       window.localStorage.setItem(
         'sr:chat:conversations',
         JSON.stringify([

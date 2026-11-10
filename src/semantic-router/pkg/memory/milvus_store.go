@@ -3,8 +3,8 @@ package memory
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
@@ -29,10 +29,6 @@ type MilvusStore struct {
 	maxRetries      int
 	retryBaseDelay  time.Duration
 	embeddingConfig EmbeddingConfig // Unified embedding configuration
-	// Milvus access tracking is a read-modify-upsert operation. Serialize it
-	// within this store so concurrent background retrieval batches cannot lose
-	// access-count increments by reading the same previous record.
-	retrievalUpdateMu sync.Mutex
 }
 
 // MilvusStoreOptions contains configuration for creating a MilvusStore
@@ -73,7 +69,7 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 
 	// Use default config if not provided
 	cfg := options.Config
-	if cfg.EmbeddingModel == "" {
+	if reflect.ValueOf(cfg).IsZero() {
 		cfg = DefaultMemoryConfig()
 		if options.EmbeddingConfig != nil && options.EmbeddingConfig.Provider != nil {
 			cfg.Milvus.Dimension = options.Config.Milvus.Dimension
@@ -85,7 +81,7 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 	if options.EmbeddingConfig != nil {
 		embeddingCfg = *options.EmbeddingConfig
 	} else {
-		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelBERT}
+		embeddingCfg = defaultEmbeddingConfig()
 	}
 
 	dimension, err := StorageDimension(cfg.Milvus.Dimension, embeddingCfg)
@@ -114,7 +110,7 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 
 	logging.ComponentEvent("memory", "milvus_store_initialized", map[string]interface{}{
 		"collection_name": store.collectionName,
-		"embedding_model": store.embeddingConfig.Model,
+		"embedding":       store.embeddingConfig.Deployment,
 		"dimension":       store.config.Milvus.Dimension,
 	})
 

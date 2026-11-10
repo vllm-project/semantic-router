@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -25,7 +25,7 @@ func TestPreviewUsesClassifierSnapshotHashAndChecksPrecondition(t *testing.T) {
 		{hash, http.StatusOK}, {strings.Repeat("b", 64), http.StatusPreconditionFailed}, {"invalid", http.StatusBadRequest},
 	} {
 		request := httptest.NewRequest(http.MethodPost, apiRoutingPreviewPath, strings.NewReader(`{"text":"hello"}`))
-		request.Header.Set(headers.SRBenchExpectedConfigHash, tc.expected)
+		request.Header.Set(headers.VSRBenchExpectedConfigHash, tc.expected)
 		response := httptest.NewRecorder()
 		api.handleEvalClassification(response, request)
 		if response.Code != tc.status {

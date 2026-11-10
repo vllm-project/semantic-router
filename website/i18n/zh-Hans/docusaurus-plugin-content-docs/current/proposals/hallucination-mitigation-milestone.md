@@ -1,10 +1,11 @@
 ---
+is_mtpe: false
 title: TruthLens：实时幻觉缓解
 description: 提出网关级框架，用于检测和缓解无依据的模型响应。
 created: 2025-12-02
 status: 提案
 translation:
-  source_commit: "56547832d4a4094c8ddaa58ca3f4121769e6d712"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/proposals/hallucination-mitigation-milestone.md"
   outdated: false
 ---
@@ -74,7 +75,7 @@ flowchart LR
 
 TruthLens 面向可对照所提供证据检查的响应，尤其是检索和工具辅助工作流。它不是通用事实数据库、领域审阅的替代，也不保证受支持上下文本身为真。
 
-当前路由本地插件从其下方的规范模块路径读取模型依赖。详尽参考配置拥有检测器和解释器细节：
+当前路由本地插件从其下方的规范模块路径读取模型依赖。详尽参考配置拥有检测器（旧 NLI 解释器已退役）细节：
 
 ```yaml
 global:
@@ -93,7 +94,7 @@ routing:
             hallucination_action: header
 ```
 
-提案不要求一种检测器架构或一家模型供应商。当前幻觉插件文档仍是实际已实现行为的事实来源。
+提案不要求一种检测器架构或一家模型供应商。当前的 [`response_guard`](../tutorials/plugin/response-guard) 与[幻觉信号](../tutorials/signal/application/hallucination)文档仍是实际已实现行为的事实来源。
 
 ## 评估 {#evaluation}
 
@@ -118,7 +119,7 @@ routing:
 
 ## 参考资料 {#references}
 
-- [当前幻觉插件指南](../tutorials/plugin/hallucination)
+- [当前响应守卫指南](../tutorials/plugin/response-guard)
 - [LettuceDetect](https://arxiv.org/abs/2502.17125)
 - [SelfCheckGPT](https://arxiv.org/abs/2303.08896)
 - [Self-Refine](https://arxiv.org/abs/2303.17651)

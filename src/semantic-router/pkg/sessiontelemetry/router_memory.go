@@ -43,6 +43,10 @@ type RouterSessionSnapshot struct {
 	TurnCount   int
 	SwitchCount int
 	ModelTurns  map[string]int
+	// UserTurnCount counts committed requests outside a tool loop, so it moves
+	// with user input rather than with tool hops or client-side history edits.
+	UserTurnCount       int `json:"user_turn_count,omitempty"`
+	LastReleaseUserTurn int `json:"last_release_user_turn,omitempty"`
 
 	CumulativePromptTokens          int64
 	CumulativeCachedTokens          int64
@@ -72,6 +76,8 @@ type SessionDecisionParams struct {
 	DecisionName      string
 	TurnIndex         int
 	ActiveToolLoop    bool
+	UserTurn          bool
+	Released          bool
 	Policy            map[string]interface{}
 	Timestamp         time.Time
 }
@@ -84,6 +90,8 @@ type SessionUsageParams struct {
 	PromptTokens                int
 	CachedPromptTokens          int
 	CacheWriteTokens            int
+	CacheWrite5mTokens          int
+	CacheWrite1hTokens          int
 	EstimatedCachedPromptTokens int
 	CompletionTokens            int
 	Cost                        float64
@@ -108,6 +116,9 @@ type routerSessionState struct {
 	switchCount int
 	modelTurns  map[string]int
 
+	userTurnCount       int
+	lastReleaseUserTurn int
+
 	cumulativePrompt                int64
 	cumulativeCached                int64
 	cumulativeCacheWrite            int64
@@ -128,9 +139,10 @@ type routerSessionState struct {
 }
 
 type routerSessionMemoryStore struct {
-	mu       sync.Mutex
-	sessions map[string]*routerSessionState
-	nowFn    func() time.Time
+	mu        sync.Mutex
+	sessions  map[string]*routerSessionState
+	nowFn     func() time.Time
+	lastEvict time.Time
 }
 
 var globalRouterSessionMemory = &routerSessionMemoryStore{
@@ -168,7 +180,7 @@ func RecordSessionDecision(p SessionDecisionParams) {
 		now = s.nowFn()
 	}
 	s.evictExpiredLocked(now)
-	st := s.sessionLocked(p.SessionID)
+	st := s.sessionLocked(p.SessionID, now)
 	if p.UserID != "" {
 		st.userID = p.UserID
 	}
@@ -191,6 +203,12 @@ func RecordSessionDecision(p SessionDecisionParams) {
 		st.turnCount++
 	}
 	st.modelTurns[p.SelectedModel]++
+	if p.UserTurn {
+		st.userTurnCount++
+		if p.Released {
+			st.lastReleaseUserTurn = st.userTurnCount
+		}
+	}
 	st.activeToolLoop = p.ActiveToolLoop
 	st.lastDecisionName = p.DecisionName
 	if p.Policy != nil {
@@ -217,16 +235,18 @@ func RecordSessionUsage(p SessionUsageParams) {
 		now = s.nowFn()
 	}
 	s.evictExpiredLocked(now)
-	st := s.sessionLocked(p.SessionID)
+	st := s.sessionLocked(p.SessionID, now)
 	if st.turnCount == 0 {
 		st.currentModel = p.Model
 	}
 	st.lastSeen = now
 	usage := modelpricing.Normalize(modelpricing.Usage{
-		PromptTokens:      p.PromptTokens,
-		CachedInputTokens: p.CachedPromptTokens,
-		CacheWriteTokens:  p.CacheWriteTokens,
-		CompletionTokens:  p.CompletionTokens,
+		PromptTokens:       p.PromptTokens,
+		CachedInputTokens:  p.CachedPromptTokens,
+		CacheWriteTokens:   p.CacheWriteTokens,
+		CacheWrite5mTokens: p.CacheWrite5mTokens,
+		CacheWrite1hTokens: p.CacheWrite1hTokens,
+		CompletionTokens:   p.CompletionTokens,
 	})
 	st.cumulativePrompt += int64(usage.PromptTokens)
 	st.cumulativeCached += int64(usage.CachedInputTokens)
@@ -292,6 +312,8 @@ func routerSessionSnapshot(sessionID string, now time.Time, mutate bool) (Router
 		TurnCount:                       st.turnCount,
 		SwitchCount:                     st.switchCount,
 		ModelTurns:                      cloneIntMap(st.modelTurns),
+		UserTurnCount:                   st.userTurnCount,
+		LastReleaseUserTurn:             st.lastReleaseUserTurn,
 		CumulativePromptTokens:          st.cumulativePrompt,
 		CumulativeCachedTokens:          st.cumulativeCached,
 		CumulativeCacheWriteTokens:      st.cumulativeCacheWrite,
@@ -310,9 +332,11 @@ func routerSessionSnapshot(sessionID string, now time.Time, mutate bool) (Router
 	return snapshot, true
 }
 
-func (s *routerSessionMemoryStore) sessionLocked(sessionID string) *routerSessionState {
+// sessionLocked returns the live session or a fresh one. An entry idle past
+// routerMemoryTTL starts over: the throttled sweep may not have removed it yet.
+func (s *routerSessionMemoryStore) sessionLocked(sessionID string, now time.Time) *routerSessionState {
 	st := s.sessions[sessionID]
-	if st != nil {
+	if st != nil && now.Sub(st.lastSeen) <= routerMemoryTTL {
 		return st
 	}
 	if len(s.sessions) >= maxRouterSessions {
@@ -326,7 +350,14 @@ func (s *routerSessionMemoryStore) sessionLocked(sessionID string) *routerSessio
 	return st
 }
 
+// evictExpiredLocked is throttled to one full sweep per evictInterval, like
+// evictLocked; sessionLocked resets expired entries the sweep has not reached.
+// Callers must hold s.mu.
 func (s *routerSessionMemoryStore) evictExpiredLocked(now time.Time) {
+	if !s.lastEvict.IsZero() && now.Sub(s.lastEvict) < evictInterval {
+		return
+	}
+	s.lastEvict = now
 	for k, v := range s.sessions {
 		if now.Sub(v.lastSeen) > routerMemoryTTL {
 			delete(s.sessions, k)
@@ -438,6 +469,7 @@ func ResetRouterSessionMemoryForTesting() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sessions = make(map[string]*routerSessionState)
+	s.lastEvict = time.Time{}
 }
 
 // routerSessionCount returns the number of tracked sessions (tests only).

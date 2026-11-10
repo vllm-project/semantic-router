@@ -71,6 +71,7 @@ jobs:
         run: |
           python tools/ci/prepare_dev_package.py \
             --source-date-epoch "$(git show -s --format=%ct HEAD)" \
+            --source-revision "$(git rev-parse HEAD)" \
             --github-output "$GITHUB_OUTPUT"
 
       - name: Validate package version
@@ -125,7 +126,7 @@ jobs:
           RELEASE_VERSION: ${{ steps.dev.outputs.version || inputs.version }}
         run: |
           python -m pip install --upgrade pip
-          python -m pip install build twine pyyaml
+          python -m pip install build==1.6.1 twine==7.0.0 PyYAML==6.0.3
           if [[ "$PACKAGE_CHANNEL" == "stable" ]]; then
             python ../../tools/release/snapshot_model_catalog.py \
               --check --version "$RELEASE_VERSION"
@@ -181,7 +182,7 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          python -m pip install build twine PyYAML==6.0.3 jsonschema==4.26.0
+          python -m pip install build==1.6.1 twine==7.0.0 PyYAML==6.0.3 jsonschema==4.26.0
           TAG="${RELEASE_TAG:-v${RELEASE_VERSION}}"
           python tools/ci/package_contract.py --build-only --mode release \
             --tag "$TAG" --output .agent-harness/package
@@ -189,17 +190,18 @@ jobs:
 
       - name: Verify installed wheel capabilities
         if: inputs.channel == 'dev'
-        run: python tools/ci/check_cli_wheel.py src/vllm-sr/dist/*.whl
+        run: python tools/ci/check_cli_wheel.py src/vllm-sr/dist/*.whl --image-tag "$(git rev-parse HEAD)"
 
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: vllm-sr-dist
           path: src/vllm-sr/dist/*
           retention-days: 7
 
   testpypi:
     name: Publish to TestPyPI
-    if: github.event_name == 'workflow_dispatch' && !inputs.build-only
+    if: github.event_name == 'workflow_dispatch' && !inputs.build-only && inputs.channel != 'dev'
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -208,7 +210,7 @@ jobs:
           name: vllm-sr-dist
           path: dist
 
-      - run: pip install twine
+      - run: pip install twine==7.0.0
 
       - name: Publish explicit test package
         env:
@@ -223,9 +225,10 @@ jobs:
       && !inputs.build-only
       && (inputs.prebuilt-dist || needs.build.result == 'success')
       && github.repository == 'vllm-project/semantic-router'
-      && github.event_name == 'push'
-      && ((inputs.channel == 'dev' && github.ref == 'refs/heads/main')
-        || (inputs.channel == 'stable' && startsWith(github.ref, 'refs/tags/v')))
+      && ((inputs.channel == 'dev' && inputs.prebuilt-dist
+          && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+        || (inputs.channel == 'stable' && github.event_name == 'push'
+          && startsWith(github.ref, 'refs/tags/v')))
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -248,7 +251,7 @@ jobs:
           MODE: ${{ inputs.channel == 'dev' && 'main' || 'release' }}
           TAG: ${{ inputs.tag }}
         run: python tools/ci/package_contract.py --verify-dist --output dist --mode "$MODE" --tag "$TAG"
-      - run: pip install twine
+      - run: pip install twine==7.0.0
 
       - name: Publish verified package
         env:

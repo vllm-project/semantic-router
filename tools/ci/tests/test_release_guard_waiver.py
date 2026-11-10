@@ -19,7 +19,7 @@ class ReleaseGuardWaiverTests(unittest.TestCase):
         record = {
             "id": "e2e.production-stack",
             "profile": "production-stack",
-            "runtime": "candle",
+            "runtime": "model-runtime",
             "device": "cpu",
             "known_issue_waiver": GUARD_WAIVER,
         }

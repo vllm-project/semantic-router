@@ -1,94 +1,47 @@
 ---
+is_mtpe: false
 translation:
-  source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
+  source_commit: "72b3d17c5fdcaa506e603b1697fdb2d4b6318a6e"
   source_file: "docs/tutorials/algorithm/selection/latency-aware.md"
-  outdated: false
+  outdated: true
 ---
 
-# 延迟感知选择
+# 按延迟选择
 
 ## 概览
 
-`latency_aware` 用观测到的 TTFT 和 TPOT 百分位对合格候选排序，并选择相对延迟分数最低的那个。
+要选择最快的可用候选，只在延迟上为 [Multi Factor](./multi-factor) 加权。它按配置的百分位上观测到的延迟为候选排序，并选择最快的一个。这取代了已移除的 `latency_aware` 选择器。
 
 ## 主要优势
 
-- 用对该路由重要的延迟百分位比较候选。
-- 平衡 **TPOT**（Time Per Output Token）和 **TTFT**（Time To First Token）。
-- 没有需要管理的模型状态 — 完全由运行时指标驱动。
-- 适合响应性比绝对质量更重要的路由。
+- 使用对该路由重要的延迟百分位来比较候选。
+- 无需管理模型状态：完全由运行时指标驱动。
+- 之后可以在不改变算法类型的情况下加入 SLO 上限、成本或负载。
 
-## 算法原理
+## 它解决什么问题？
 
-延迟感知选择使用从运行时指标收集的**基于百分位的延迟统计**，为每个候选模型打分：
-
-1. **指标查找**：对每个候选模型，从指标存储中按配置百分位获取 TPOT 和 TTFT 值。
-2. **打分**：计算综合延迟分数。越低越好（更快）。
-3. **选择**：返回综合延迟分数最低的候选。
-
-对每个启用的指标，选择器把候选的百分位值除以拥有完整数据的候选中的最佳值，然后对这些比值取平均：
-
-$$\text{score}(m) = \operatorname{mean}_{x \in M}
-\frac{x(m)}{\min_j x(j)}$$
-
-这里 $M$ 包含配置的 TTFT 和/或 TPOT 测量。分数越低越好。这些是相对排序，不是 SLO 上限。
-
-## 选择流程
-
-```mermaid
-flowchart TD
-    A[Request arrives] --> B[Decision matched]
-    B --> C[algorithm.type = latency_aware]
-    C --> D{Percentile config set?}
-    D -- No --> E[Fallback to first candidate]
-    D -- Yes --> F[For each candidate model]
-    F --> G[Fetch TPOT at configured percentile]
-    F --> H[Fetch TTFT at configured percentile]
-    G --> I[Compute composite latency score]
-    H --> I
-    I --> J[Select model with lowest score]
-    J --> K[Return SelectionResult with latency metrics]
-```
-
-## 解决什么问题？
-
-有些路由更关心响应性，而不是绝对模型质量。
-`latency_aware` 用观测到的 TTFT 和 TPOT 统计比较已经合格的候选，而不是静态假设。当策略需要在其他因素之外再设显式延迟上限时，使用 `multi_factor`。
+有些路由更在意响应速度而不是模型的绝对质量。只按延迟加权的 `multi_factor` 使用观测到的延迟统计，而不是静态假设，来比较已经可用的候选。
 
 ## 何时使用
 
-- 路由有多个可行候选，应由延迟决定胜者。
-- TTFT 和 TPOT 都应影响胜者。
-- 路由匹配后，延迟应是主要平局打破者。
-- 你有可靠的延迟指标流入指标存储。
-
-## 已知限制
-
-- **需要运行时指标**：如果所有候选都缺少百分位数据，会带警告回退到第一个候选。
-- **忽略质量**：纯基于延迟 — 可能选中质量较低但更快的模型。
-- **冷启动**：没有历史延迟数据的新模型会被跳过。
-- 无法考虑查询复杂度 — 使用聚合百分位。
+- 路由有多个可行候选，且应由延迟决定胜出者。
+- 你希望得到快速响应，又不想硬编码某一个模型。
 
 ## 配置
 
 ```yaml
 algorithm:
-  type: latency_aware
-  latency_aware:
-    tpot_percentile: 90        # Compare each model's observed P90 TPOT
-    ttft_percentile: 95        # Compare each model's observed P95 TTFT
-    description: "Prefer the lowest relative P90 TPOT and P95 TTFT"
+  type: multi_factor
+  multi_factor:
+    weights:
+      latency: 1
+    latency_percentile: 90
 ```
 
-### 参数
+`latency_percentile` 选择比较每个候选时使用的观测延迟百分位。默认情况下，`multi_factor` 比较每个输出 token 的时间（TPOT）；当某个候选没有 TPOT 样本时，比较其首 token 时间（TTFT）。设置 `latency_metric: ttft` 或 `tpot` 可只比较一种测量值。延迟观测值只在单个 Router 进程内有效；它不是集群级的调度器。SLO 上限和其他因素见 [Multi Factor](./multi-factor)。
 
-| 参数 | 类型 | 默认值 | 说明 |
-|-----------|------|---------|-------------|
-| `tpot_percentile` | int | 未设置（`0`） | 要比较的 TPOT 百分位（`1`–`100`） |
-| `ttft_percentile` | int | 未设置（`0`） | 要比较的 TTFT 百分位（`1`–`100`） |
-| `description` | string | — | 延迟策略的可读描述 |
+### 从 latency_aware 迁移
 
-至少配置一个百分位。同时使用两者，可以让选择器同时考虑生成速度和首 token 时间。
+`vllm-sr config migrate` 把 `latency_aware` 改写为这种 `multi_factor` 加权。只设置了一个百分位的块会保留其度量（`latency_metric`）和百分位。同时设置了 `tpot_percentile` 和 `ttft_percentile` 的块会在 TPOT 百分位上比较 TPOT，并附带一条需要复核的说明：`multi_factor` 只比较一种测量值，而 `latency_aware` 会对两者取平均。
 
-延迟观测由每个 Router 进程持有，因此副本可能做出不同选择，新启动的进程在缺少数据时会回退。该选择器不强制延迟上限，也不考虑模型质量或价格。完整示例见：
-[`config/fragments/algorithm/selection/latency-aware.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/latency-aware.yaml)。
+可复用片段：[`config/fragments/algorithm/selection/latency-aware.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/latency-aware.yaml)。

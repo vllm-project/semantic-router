@@ -1,12 +1,13 @@
-version: v0.3
+version: v0.5
 
 listeners: []
 
 providers:
   defaults:
     reasoning_effort: high
-routing:
-  signals: {}
+recipes:
+  - name: default
+    signals: {}
 
 global:
   router:
@@ -15,8 +16,6 @@ global:
     api:
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
         metrics:
           enabled: true
           detailed_goroutine_tracking: true
@@ -40,56 +39,18 @@ global:
           service_version: v0.1.0
           deployment_environment: development
   stores:
-    semantic_cache:
-      enabled: true
+    response_cache:
       backend_type: memory
-      similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo
-      embedding_model: mmbert
-  integrations:
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: 0.2
-      tools_db_path: config/tools_db.json
-      fallback_to_empty: true
-  model_catalog:
-    embeddings:
-      semantic:
-        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
-        use_cpu: true
-        embedding_config:
-          model_type: mmbert
-          preload_embeddings: true
-          target_dimension: 768
-          target_layer: 22
-          enable_soft_matching: true
-          top_k: 1
-          min_score_threshold: 0.5
-    system:
-      prompt_guard: models/mmbert32k-jailbreak-detector-merged
-      domain_classifier: models/mmbert32k-intent-classifier-merged
-      pii_classifier: models/mmbert32k-pii-detector-merged
-    modules:
-      prompt_guard:
+  plugins:
+    - type: response_cache
+      configuration:
         enabled: true
-        model_ref: prompt_guard
-        threshold: 0.7
-        use_cpu: true
-        variant: mmbert32k
-        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-      classifier:
-        domain:
-          model_ref: domain_classifier
-          threshold: 0.5
-          use_cpu: true
-          variant: mmbert32k
-          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
-        pii:
-          model_ref: pii_classifier
-          use_mmbert_32k: true
-          threshold: 0.9
-          use_cpu: true
-          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
+        scope: global
+        semantic:
+          match:
+            recall:
+              top_k: 1
+              min_similarity: 0.8

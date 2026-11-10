@@ -1304,3 +1304,98 @@
     verification: imported
     source: https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf
     redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-gpqa-diamond@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    samples_per_prompt: 8
+  metrics:
+    accuracy: 0.717
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
+    redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-mmlu-pro@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    metric_variant: exact_match
+  metrics:
+    accuracy: 0.727
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
+    redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-aime-2025@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    samples_per_prompt: 64
+  metrics:
+    pass_at_1: 0.586
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
+    redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-math-500@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: huggingfaceh4/math-500@1.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    reported_measure: accuracy
+  metrics:
+    pass_at_1: 0.946
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
+    redistributable: true
+- id: moonshot/kimi-linear-48b-a3b-instruct-report-livecodebench-v6@1.0.0
+  model: moonshot/kimi-linear-48b-a3b-instruct
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: default
+  subject:
+    variant: Kimi-Linear-Instruct
+    source_kind: official_technical_report
+    table: Table 9
+    dataset_release: v6
+  metrics:
+    pass_at_1: 0.457
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/abs/2510.26692v2
+    redistributable: true

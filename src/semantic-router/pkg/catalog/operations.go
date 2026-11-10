@@ -12,8 +12,10 @@ type ResolvedOperation struct {
 }
 
 // ResolveOperation resolves the wire path and query policy for one provider operation.
+// It runs per request and only reads the definitions, so it skips the
+// defensive copies Provider and Protocol make.
 func (registry *Registry) ResolveOperation(providerID, protocolID, operationID, basePath string) (ResolvedOperation, error) {
-	provider, ok := registry.Provider(providerID)
+	provider, ok := registry.providers[providerID]
 	if !ok {
 		return ResolvedOperation{}, fmt.Errorf("unknown provider ID %q", providerID)
 	}
@@ -27,7 +29,7 @@ func (registry *Registry) ResolveOperation(providerID, protocolID, operationID, 
 	if !containsString(provider.SupportedOperations, operationKey) {
 		return ResolvedOperation{}, fmt.Errorf("provider %q does not support operation %q", providerID, operationKey)
 	}
-	protocol, ok := registry.Protocol(protocolID)
+	protocol, ok := registry.protocols[protocolID]
 	if !ok {
 		return ResolvedOperation{}, fmt.Errorf("unknown protocol %q", protocolID)
 	}

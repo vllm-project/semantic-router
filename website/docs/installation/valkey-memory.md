@@ -137,13 +137,21 @@ workflow.
 
 ## Configure the Router
 
-Add the Valkey memory backend to your `config.yaml`:
+Add the Valkey memory backend to your `config.yaml`. A `context` plugin with a
+`memory` source reads and writes it: in `global.plugins` for every request, as
+here, or in a decision's plugins (see
+[Per-Decision Memory Source](#per-decision-memory-source)).
 
 ```yaml
 global:
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        sources:
+          - type: memory
   stores:
     memory:
-      enabled: true
       backend: valkey
       auto_store: true
       valkey:
@@ -153,11 +161,10 @@ global:
         timeout: 10
         collection_prefix: "mem:"
         index_name: mem_idx
-        dimension: 384               # Must match your embedding model
+        dimension: 256               # Vela Embedding: 64, 128, 256, 512 or 768
         metric_type: COSINE           # COSINE, L2, or IP
         index_m: 16
         index_ef_construction: 256
-      embedding_model: bert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.40
       hybrid_search: true
@@ -165,9 +172,13 @@ global:
       adaptive_threshold: true
 ```
 
-The threshold in this example is calibrated for `bert` (`mom-embedding-light`)
-with weighted hybrid scoring. Other embedding models and search modes need
-their own recall and unrelated-query checks before choosing a threshold.
+`dimension` must be a size the embedding model serves. With any other size the
+router logs `Failed to create memory store: … Memory will be disabled` and
+runs without memory.
+
+The 0.40 threshold is a starting point for weighted hybrid scoring, not a
+calibrated value. Each embedding model, vector size and search mode needs its
+own recall and unrelated-query checks before you choose a threshold.
 Lower thresholds can also retrieve superseded facts alongside corrections;
 check updated facts before relying on the example in production.
 
@@ -182,7 +193,7 @@ check updated facts before relying on the example in production.
 | `timeout` | `10` | Connection timeout in seconds |
 | `collection_prefix` | `mem:` | Key prefix for HASH documents |
 | `index_name` | `mem_idx` | FT.CREATE index name |
-| `dimension` | derived | Embedding vector dimension; when omitted, `mmbert` uses 256 and current other memory embedding models use 384 |
+| `dimension` | derived | Embedding vector dimension; when omitted, Vela Embedding uses 256, another deployment the store's `embedding.dimension` or its full width |
 | `metric_type` | `COSINE` | Distance metric: `COSINE`, `L2`, or `IP` |
 | `index_m` | `16` | HNSW M parameter (links per node) |
 | `index_ef_construction` | `256` | HNSW build-time search width |
@@ -197,7 +208,6 @@ keep the password in an environment-backed secret:
 global:
   stores:
     memory:
-      enabled: true
       backend: valkey
       valkey:
         host: valkey.example.internal
@@ -221,24 +231,30 @@ You can layer a Redis/Valkey hot cache in front of the Valkey memory store for f
         key_prefix: "memory_cache:"
 ```
 
-## Per-Decision Memory Plugin
+Every store, update, or delete invalidates that user's cached retrievals. For the next 10 seconds that user's retrievals go to the memory store and are not cached, so a deleted memory cannot be written back into the cache by a slower or slightly stale read.
 
-Routes can override global memory settings using the `memory` plugin:
+## Per-Decision Memory Source
+
+Routes can override global memory settings with a memory source of the
+`context` plugin:
 
 ```yaml
-routing:
-  decisions:
-    - name: personalized_route
-      plugins:
-        - type: memory
-          configuration:
-            enabled: true
-            retrieval_limit: 10
-            similarity_threshold: 0.60
-            auto_store: true
+recipes:
+  - name: default
+    decisions:
+      - name: personalized_route
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: memory
+                  match:
+                    recall: {method: embedding, top_k: 10, min_similarity: 0.60}
+                  store: {auto: true}
 ```
 
-See the [Memory plugin tutorial](/docs/tutorials/plugin/memory) for details.
+See the [memory source tutorial](../tutorials/plugin/context.md#memory-sources) for details.
 
 ## Performance Tuning
 

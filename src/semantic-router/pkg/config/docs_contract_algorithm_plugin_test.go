@@ -9,52 +9,54 @@ import (
 )
 
 var algorithmTutorialBuckets = map[string]string{
-	"automix":       "selection",
-	"confidence":    "looper",
+	"escalate":      "looper",
 	"fusion":        "looper",
-	"hybrid":        "selection",
-	"kmeans":        "selection",
-	"knn":           "selection",
 	"latency-aware": "selection",
-	"mlp":           "selection",
 	"multi-factor":  "selection",
+	"random":        "selection",
 	"ratings":       "looper",
 	"remom":         "looper",
-	"router-dc":     "selection",
 	"static":        "selection",
-	"svm":           "selection",
 	"workflows":     "looper",
-	"prompt":        "selection",
+	"systemone":     "selection",
 }
 
 var retiredAlgorithmTutorialDocs = []string{
 	repoRel("website", "docs", "tutorials", "algorithm", "selection.md"),
 	repoRel("website", "docs", "tutorials", "algorithm", "looper.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "native"),
+	repoRel("website", "docs", "tutorials", "algorithm", "looper", "confidence.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "automix.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "hybrid.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "kmeans.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "knn.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "mlp.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "prompt.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "router-dc.md"),
+	repoRel("website", "docs", "tutorials", "algorithm", "selection", "svm.md"),
 }
 
 var pluginTutorialBuckets = map[string]string{
-	"content-safety":      "safety-and-generation",
-	"context-compression": "response-and-mutation",
-	"fast-response":       "response-and-mutation",
-	"hallucination":       "safety-and-generation",
-	"header-mutation":     "response-and-mutation",
-	"memory":              "retrieval-and-memory",
-	"prompt-cache":        "retrieval-and-memory",
-	"rag":                 "retrieval-and-memory",
-	"request-params":      "response-and-mutation",
-	"response-jailbreak":  "safety-and-generation",
-	"router-replay":       "retrieval-and-memory",
-	"shadow-dispatch":     "retrieval-and-memory",
-	"response-cache":      "retrieval-and-memory",
-	"system-prompt":       "response-and-mutation",
-	"tool-selection":      "response-and-mutation",
-	"tools":               "response-and-mutation",
+	"content-safety":  "safety-and-generation",
+	"context":         "retrieval-and-memory",
+	"fast-response":   "response-and-mutation",
+	"header-mutation": "response-and-mutation",
+	"masking":         "response-and-mutation",
+	"prompt-cache":    "retrieval-and-memory",
+	"request-params":  "response-and-mutation",
+	"response-guard":  "safety-and-generation",
+	"router-replay":   "retrieval-and-memory",
+	"response-cache":  "retrieval-and-memory",
+	"system-prompt":   "response-and-mutation",
+	"tools":           "response-and-mutation",
 }
 
 var retiredPluginTutorialDocs = []string{
 	repoRel("website", "docs", "tutorials", "plugin", "response-and-mutation.md"),
 	repoRel("website", "docs", "tutorials", "plugin", "retrieval-and-memory.md"),
 	repoRel("website", "docs", "tutorials", "plugin", "safety-and-generation.md"),
+	repoRel("website", "docs", "tutorials", "plugin", "hallucination.md"),
+	repoRel("website", "docs", "tutorials", "plugin", "response-jailbreak.md"),
 }
 
 func assertAlgorithmTutorialDocsMatchConfigHierarchy(t *testing.T, root string) {

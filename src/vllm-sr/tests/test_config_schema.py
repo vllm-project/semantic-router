@@ -18,11 +18,12 @@ def test_bundled_schema_exposes_router_surface_catalog() -> None:
     Draft202012Validator.check_schema(document)
     catalog = routing_surface_catalog()
 
-    assert document["$id"].endswith("router-config-v0.3.schema.json")
+    assert document["$id"].endswith("router-config-v0.5.schema.json")
     assert "setup" not in document["properties"]
     assert "hallucination" in surface_types("signals")
     assert "multi_factor" in surface_types("algorithms")
-    assert "shadow_dispatch" in surface_types("plugins")
+    assert "router_replay" in surface_types("plugins")
+    assert "shadow_dispatch" not in surface_types("plugins")
     assert catalog["validation"]["endpoint"] == "/api/v1/config/validate"
 
 
@@ -145,10 +146,7 @@ def test_config_init_creates_valid_minimal_template_without_overwriting(
     assert created.exit_code == 0, created.output
     config = safe_load_router_config(output.read_text(encoding="utf-8"))
     assert validate_config_structure(config) == []
-    assert config["providers"]["models"][0]["name"] == (
-        config["routing"]["modelCards"][0]["name"]
-    )
-    assert config["routing"]["decisions"][0]["modelRefs"][0]["model"] == (
+    assert config["recipes"][0]["decisions"][0]["modelRefs"][0]["model"] == (
         config["providers"]["models"][0]["name"]
     )
 
@@ -169,6 +167,22 @@ def test_python_progressive_index_covers_every_surface_catalog() -> None:
 def test_reference_config_matches_generated_structure() -> None:
     repository_root = Path(__file__).resolve().parents[3]
     with (repository_root / "config" / "config.yaml").open(encoding="utf-8") as stream:
+        config = safe_load_router_config(stream)
+
+    assert validate_config_structure(config) == []
+
+
+@pytest.mark.parametrize(
+    "config_path",
+    sorted(
+        (Path(__file__).resolve().parents[3] / "config" / "recipes").glob(
+            "*/config.yaml"
+        )
+    ),
+    ids=lambda path: path.parent.name,
+)
+def test_maintained_recipes_match_generated_structure(config_path: Path) -> None:
+    with config_path.open(encoding="utf-8") as stream:
         config = safe_load_router_config(stream)
 
     assert validate_config_structure(config) == []
@@ -217,7 +231,7 @@ def test_memory_persistence_resource_bounds_in_generated_schema(
         "huge": 2**63 - 1,
     }[boundary]
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {"stores": {"memory": {"persistence": {field: value}}}},
     }
     errors = validate_config_structure(config)
@@ -231,7 +245,7 @@ def test_memory_persistence_resource_bounds_in_generated_schema(
 @pytest.mark.parametrize("field", ["timeout_seconds", "shutdown_grace_seconds"])
 def test_memory_persistence_schema_rejects_negative_durations(field: str) -> None:
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {"stores": {"memory": {"persistence": {field: -1}}}},
     }
     errors = validate_config_structure(config)

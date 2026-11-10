@@ -6,7 +6,6 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -108,6 +107,9 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	dispatch.decisionName = decisionName
 	dispatch.useReasoning = useReasoning
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
+	if response.GetImmediateResponse() != nil {
+		return response, nil
+	}
 	common := response.GetRequestBody().GetResponse()
 	if common == nil {
 		return r.createErrorResponse(500, "Failed to build provider dispatch"), nil
@@ -117,9 +119,8 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	}
 	common.HeaderMutation.RemoveHeaders = append(
 		common.HeaderMutation.RemoveHeaders,
-		looperInternalHeadersForRemoval()...,
+		providerBoundRemovals()...,
 	)
-	setHeaderValue(common.HeaderMutation, headers.VSRSelectedModel, modelName)
 	return r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 }
 
@@ -149,7 +150,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	r.hydrateLooperRoutingContext(ctx)
-	decisionName := headerValueCI(ctx, headers.VSRLooperDecision)
+	decisionName := looperHopDecision(ctx)
 	decision, fallback := r.resolveLooperDecision(modelName, decisionName, ctx)
 	if fallback != nil {
 		return fallback, nil
@@ -167,12 +168,17 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	if response := r.runLooperInternalPlugins(ctx, decisionName); response != nil {
 		return response, nil
 	}
-	compressionErr := r.applySemanticContextCompression(ctx, request)
-	if compressionErr != nil {
-		return r.createErrorResponse(
-			500,
-			"Context compression failed under fail_closed policy",
-		), nil
+	// Recovery follow-ups already carry uncompressed retrieved payloads and
+	// the reserved retrieve tool. Re-compressing that hop fails closed on
+	// vsr_context_retrieve injection.
+	if !isContextRecoveryFollowupRequest(request) {
+		compressionErr := r.applySemanticContextCompression(ctx, request)
+		if compressionErr != nil {
+			return r.createErrorResponse(
+				500,
+				"Context compression failed under fail_closed policy",
+			), nil
+		}
 	}
 	err = r.modifyRequestBodyForLooper(
 		request,
@@ -242,7 +248,8 @@ func (r *OpenAIRouter) prepareLooperInternalContext(
 	ctx.VSRSelectedModel = modelName
 	ctx.RequestModel = modelName
 
-	if replayCfg := r.effectiveReplayConfigForRequest(ctx, decision); replayCfg != nil {
+	ctx.RouterReplayPluginConfig = r.effectiveReplayConfigForRequest(ctx, decision)
+	if replayCfg := ctx.RouterReplayPluginConfig; replayCfg != nil {
 		cfgCopy := *replayCfg
 		ctx.RouterReplayPluginConfig = &cfgCopy
 		logging.ComponentDebugEvent("extproc", "looper_router_replay_enabled", map[string]interface{}{
@@ -286,7 +293,8 @@ func (r *OpenAIRouter) parseLooperRequestForPlugins(
 		})
 		return nil, err
 	}
-	ctx.UserContent = extractSemanticRequestSignals(ctx.SemanticRequest).UserContent
+	snapshot := extractSemanticRequestSignalsWith(ctx.SemanticRequest, r.routingInputSelector())
+	ctx.UserContent, ctx.RoutingInput = snapshot.UserContent, snapshot.RoutingInput
 	return ctx.SemanticRequest, nil
 }
 
@@ -300,10 +308,6 @@ func (r *OpenAIRouter) runLooperInternalPlugins(
 
 	if response, shouldReturn := r.handleCaching(ctx, decisionName); shouldReturn {
 		return response
-	}
-
-	if err := r.executeRAGPlugin(ctx, decisionName); err != nil {
-		return r.createErrorResponse(503, fmt.Sprintf("RAG failed: %v", err))
 	}
 
 	return nil

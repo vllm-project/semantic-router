@@ -2,7 +2,6 @@ package embedding
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 )
 
@@ -21,11 +20,7 @@ func (p *identityViewProvider) RepresentationIdentity(options Options, policy st
 	if options.Dimension > 0 {
 		d.Dimension = options.Dimension
 	}
-	raw, err := json.Marshal(d)
-	if err != nil {
-		return ContentIdentity{}, err
-	}
-	return IdentityFromDescriptor(raw, policy)
+	return IdentityForRuntime(d, policy)
 }
 
 func (p *identityViewProvider) CacheIdentityForOptions(options Options) string {
@@ -36,14 +31,14 @@ func (p *identityViewProvider) CacheIdentityForOptions(options Options) string {
 func (p *identityViewProvider) CacheIdentity() string { return p.CacheIdentityForOptions(Options{}) }
 
 func TestOwnedProviderViewsKeepResourceAndSeparateRepresentations(t *testing.T) {
-	fn, err := NewFuncProvider("candle", 768, func(context.Context, string) ([]float32, error) {
+	fn, err := NewFuncProvider("model_runtime", 768, func(context.Context, string) ([]float32, error) {
 		t.Fatal("identity invoked inference")
 		return nil, nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := &identityViewProvider{FuncProvider: fn, descriptor: descriptorFixture()}
+	base := &identityViewProvider{FuncProvider: fn, descriptor: runtimeDescriptorFixture()}
 	set := NewSet(map[string]Provider{"mmbert": base}, "mmbert")
 	full, _ := set.Get("mmbert", 0, 0)
 	explicit, _ := set.Get("mmbert", base.descriptor.Dimension, base.descriptor.Layer)

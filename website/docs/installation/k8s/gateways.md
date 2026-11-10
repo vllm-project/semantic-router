@@ -10,6 +10,12 @@ Envoy ExtProc. The routing policy stays the same; the gateway-specific resources
 determine when ExtProc runs, how the selected model reaches a backend, and which
 component owns authentication or traffic policy.
 
+Each integration runs the Helm chart with `gateway.mode: extproc`, which its
+values file under `deploy/kubernetes/` sets: the Router then serves ext_proc
+gRPC on port 50051 for the gateway. Set the same value when you write your own
+values. The chart's default, `standalone`, needs no gateway: the Router serves
+the OpenAI-compatible API on its own listeners.
+
 ## Choose an integration
 
 | Existing data plane | Start with | What it owns |

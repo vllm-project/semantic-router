@@ -23,13 +23,13 @@ const (
 	learningPolicyFieldCurrentModel      routerLearningPolicyField = "current_model"
 	learningPolicyFieldBaseSelectedModel routerLearningPolicyField = "base_selected_model"
 	learningPolicyFieldSelectedModel     routerLearningPolicyField = "selected_model"
-	learningPolicyFieldSelectedScore     routerLearningPolicyField = "selected_score"
 	learningPolicyFieldHardLocked        routerLearningPolicyField = "hard_locked"
 	learningPolicyFieldHardLockReason    routerLearningPolicyField = "hard_lock_reason"
 	learningPolicyFieldDecisionReason    routerLearningPolicyField = "decision_reason"
 	learningPolicyFieldDecision          routerLearningPolicyField = "decision"
 	learningPolicyFieldDecisionTier      routerLearningPolicyField = "decision_tier"
 	learningPolicyFieldRescue            routerLearningPolicyField = "rescue"
+	learningPolicyFieldRelease           routerLearningPolicyField = "release"
 )
 
 type routerLearningPolicyField string

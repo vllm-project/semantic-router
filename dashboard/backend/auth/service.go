@@ -48,6 +48,14 @@ type Service struct {
 // ErrBootstrapClosed is returned by BootstrapRegister when an admin already exists.
 var ErrBootstrapClosed = errors.New("bootstrap is disabled")
 
+// ErrInvalidCredentials and ErrUserNotActive are returned by Login for user-visible
+// rejection cases; all other Login errors are store failures that handlers must not
+// echo to the client.
+var (
+	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrUserNotActive      = errors.New("user is not active")
+)
+
 type TokenClaims struct {
 	UserID string `json:"userId"`
 	Email  string `json:"email"`
@@ -141,15 +149,15 @@ func (s *Service) Login(ctx context.Context, email, password string) (string, *U
 	id, e, n, role, status, _, _, _, hash, err := s.store.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", nil, errors.New("invalid credentials")
+			return "", nil, ErrInvalidCredentials
 		}
 		return "", nil, err
 	}
 	if status != "active" {
-		return "", nil, errors.New("user is not active")
+		return "", nil, ErrUserNotActive
 	}
 	if !s.VerifyPassword(hash, password) {
-		return "", nil, errors.New("invalid credentials")
+		return "", nil, ErrInvalidCredentials
 	}
 	if updateErr := s.store.UpdateLoginTime(ctx, id); updateErr != nil {
 		return "", nil, updateErr

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -52,7 +53,7 @@ func testLooperRatingsHappyPath(ctx context.Context, client *kubernetes.Clientse
 	}
 	defer stopPortForward()
 
-	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", looperRatingsProbeKeyword, 30*time.Second)
+	response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", looperRatingsProbeKeyword, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("ratings request failed: %w", err)
 	}
@@ -62,18 +63,23 @@ func testLooperRatingsHappyPath(ctx context.Context, client *kubernetes.Clientse
 	}
 
 	expectedHeaders := map[string]string{
-		"x-vsr-selected-decision":        "looper_ratings_decision",
-		"x-vsr-response-path":            "looper",
-		"x-vsr-looper-algorithm":         "ratings",
-		"x-vsr-looper-models-used":       "ratings-model-a,ratings-model-b",
-		"x-vsr-looper-iterations":        "2",
-		"x-vsr-looper-prompt-tokens":     "10",
-		"x-vsr-looper-completion-tokens": "6",
-		"x-vsr-looper-total-tokens":      "16",
+		"x-vsr-selected-decision": "looper_ratings_decision",
+		"x-vsr-response-path":     "looper",
 	}
 	for name, want := range expectedHeaders {
 		if got := response.Headers.Get(name); got != want {
 			return fmt.Errorf("header %s = %q, want %q", name, got, want)
+		}
+	}
+	looper := routerTrace(response.Headers)["looper"]
+	if got := strings.Join(looper.Items, ","); got != "ratings-model-a,ratings-model-b" {
+		return fmt.Errorf("looper models = %q, want ratings-model-a,ratings-model-b", got)
+	}
+	for name, want := range map[string]string{
+		"algorithm": "ratings", "iterations": "2", "prompt_tokens": "10", "completion_tokens": "6", "total_tokens": "16",
+	} {
+		if got := looper.Params[name]; got != want {
+			return fmt.Errorf("looper %s = %q, want %q", name, got, want)
 		}
 	}
 

@@ -5,15 +5,16 @@
 `workflows` runs a bounded, multi-step Router Flow behind one
 OpenAI-compatible model name.
 
-The runtime also supports a direct Flow model slug through
-`global.integrations.looper.flow.model_names`. The built-in default is
-`vllm-sr/flow`. Direct Flow calls evaluate only decisions with
-`algorithm.type=workflows`; they do not silently fall back to normal single-model
-routes.
+Flow coordinates model workers within that configured workflow. The calling
+agent harness owns the outer agent loop, task state, and tool execution
+permissions. When Flow returns a tool call, the harness executes it and sends
+the result back so Flow can resume its pending workflow.
+
+Expose `flow` through an ordinary `entrypoints` mapping to a recipe. The public name has no built-in dispatch behavior: the selected recipe evaluates its signals and decisions, and `algorithm.type=workflows` activates the algorithm. Use a dedicated recipe when this entrypoint should run only flow policies.
 
 ## Key Advantages
 
-- Exposes a multi-step agent workflow as one model name: `vllm-sr/flow`.
+- Exposes a bounded multi-model workflow as one model name: `vllm-sr/flow`.
 - Keeps worker boundaries explicit: dynamic planners may only use the decision's
   `modelRefs`.
 - Supports both static role plans and dynamic planner-generated workflows.
@@ -30,7 +31,7 @@ surface as small as `vllm-sr/flow`.
 
 ## When to Use
 
-- A route should expose a single model name but run a bounded micro-agent flow.
+- A route should expose a single model name but run a bounded multi-model workflow.
 - The worker pool should come from the decision's `modelRefs`.
 - You want static low-latency templates for predictable tasks.
 - You want dynamic planner-generated workflows for harder reasoning, coding, or
@@ -38,17 +39,17 @@ surface as small as `vllm-sr/flow`.
 
 ## Configuration
 
-Register the direct model slug:
+Map the public name to the recipe shown below. Declare it as its own recipe, and point the entrypoint at it, to isolate it from the other recipes.
 
 ```yaml
+entrypoints:
+  - model_names: [vllm-sr/flow]
+    recipe: default
 global:
   integrations:
     looper:
-      endpoint: http://localhost:8899/v1/chat/completions
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
+      max_response_bytes_mb: 32
       flow:
-        model_names:
-          - vllm-sr/flow
         state:
           store_backend: file
           ttl_seconds: 1800
@@ -59,28 +60,29 @@ global:
 Configure a dynamic Flow decision:
 
 ```yaml
-routing:
-  decisions:
-    - name: coding_flow
-      description: Coordinate coding work through planned worker steps.
-      priority: 100
-      output_contract: Preserve any explicit output format exactly.
-      modelRefs:
-        - model: openrouter/gemini-pro
-        - model: openrouter/deepseek
-        - model: qwen/qwen3.6-rocm
-      algorithm:
-        type: workflows
-        workflows:
-          mode: dynamic
-          planner:
-            model: qwen-coordinator
-            max_completion_tokens: 2048
-          max_steps: 6
-          max_parallel: 3
-          round_timeout_seconds: 90
-          min_successful_responses: 2
+recipes:
+  - name: default
+    decisions:
+      - name: coding_flow
+        description: Coordinate coding work through planned worker steps.
+        priority: 100
+        output_contract: Preserve any explicit output format exactly.
+        modelRefs:
+          - model: openrouter/gemini-pro
+          - model: openrouter/deepseek
+          - model: qwen/qwen3.6-rocm
+        algorithm:
+          type: workflows
           on_error: skip
+          workflows:
+            mode: dynamic
+            planner:
+              model: qwen-coordinator
+              max_completion_tokens: 2048
+            max_steps: 6
+            max_parallel: 3
+            round_timeout_seconds: 90
+            min_successful_responses: 2
 ```
 
 `output_contract` is decision-scoped prompt text. Use it for benchmark or
@@ -99,7 +101,8 @@ makes no model calls. An explicit planner override keeps that target and must
 pass the same stage checks; it is not replaced by another model on failure.
 If no eligible planner exists, the request fails closed. An explicit planner
 may be a separately configured helper outside the worker `modelRefs`, but must
-still have an operator-assigned backend. Worker calls remain constrained to
+still have an operator-assigned backend in `providers.models[].backend_refs`;
+without one, the configuration fails to load. Worker calls remain constrained to
 `modelRefs`; the executor rejects a plan that names a worker outside that list.
 Planner selection does not reduce a configured minimum of distinct successful
 workers.
@@ -123,38 +126,38 @@ Static mode uses an explicit role plan. Each role model must be in the
 decision's `modelRefs`.
 
 ```yaml
-routing:
-  decisions:
-    - name: static_flow
-      description: Coordinate a fixed sequence of worker roles.
-      priority: 100
-      modelRefs:
-        - model: qwen-worker
-        - model: deepseek-worker
-      algorithm:
-        type: workflows
-        workflows:
-          mode: static
-          roles:
-            - name: thinker
-              models: [qwen-worker]
-            - name: worker
-              models: [deepseek-worker]
-            - name: verifier
-              models: [qwen-worker]
-          final:
-            model: qwen-worker
-          max_steps: 3
-          max_parallel: 1
-          round_timeout_seconds: 90
+recipes:
+  - name: default
+    decisions:
+      - name: static_flow
+        description: Coordinate a fixed sequence of worker roles.
+        priority: 100
+        modelRefs:
+          - model: qwen-worker
+          - model: deepseek-worker
+        algorithm:
+          type: workflows
           on_error: skip
+          workflows:
+            mode: static
+            roles:
+              - name: thinker
+                models: [qwen-worker]
+              - name: worker
+                models: [deepseek-worker]
+              - name: verifier
+                models: [qwen-worker]
+            final:
+              model: qwen-worker
+            max_steps: 3
+            max_parallel: 1
+            round_timeout_seconds: 90
 ```
 
 ## Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/flow"]` | Direct request model slugs that trigger Flow execution |
 | `state.store_backend` | string | `file` | Pending tool-call workflow state backend: `memory`, `file`, or `redis` |
 | `state.ttl_seconds` | int | `1800` | TTL for pending tool-call workflow state |
 | `mode` | string | `static` | `static` role execution or `dynamic` planner-generated execution |
@@ -172,7 +175,7 @@ routing:
 | `min_successful_responses` | int | all models | Continue a parallel step once this many workers succeed |
 | `temperature` | float | request default | Temperature for planner, worker, and synthesis calls |
 | `include_intermediate_responses` | bool | `true` | Include Flow plan and worker outputs in the response trace |
-| `on_error` | string | `fail` | `fail` on worker error or `skip` failed workers when at least one worker succeeds |
+| `algorithm.on_error` | string | `fail` | Set beside `type`, not in this block: `fail` on worker error or `skip` failed workers when at least one worker succeeds |
 
 Every static role and every planner-generated step must contain at least
 `min_successful_responses` Models. A plan that cannot satisfy its configured
@@ -256,7 +259,7 @@ serving the valid answer. It does not truncate trace JSON or answer text.
 
 OpenAI Responses and Anthropic Messages responses omit this Chat-specific
 extension. Both an unsupported target protocol and a size-based omission emit a
-`x-vsr-protocol-warnings` response header with action `dropped`, field `flow`,
+`x-vsr-warnings` response header with action `dropped`, field `flow`,
 and reason `router_extension_unsupported_protocol` or
 `router_extension_size_limit`. The warning also accompanies immediate Looper
 responses. Required answer content remains subject to the normal protocol

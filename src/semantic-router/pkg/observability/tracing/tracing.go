@@ -317,6 +317,8 @@ const (
 	AttrCacheLookupTimeMs       = "cache.lookup_time_ms"
 	AttrCacheNegationGuard      = "cache.negation_guard"
 	AttrCacheWriteSkippedReason = "cache.write_skipped_reason"
+	AttrResponseGuardOutcome    = "response_guard.outcome"
+	AttrResponseGuardBuffered   = "response_guard.buffered"
 )
 
 // Current runtime phase spans; plugin and looper spans carry inherited recipe identity.
@@ -338,4 +340,15 @@ const (
 
 	// Model invocation layer (Layer 4)
 	SpanUpstreamRequest = "semantic_router.upstream.request"
+	// SpanUpstreamAttempt is one try of an upstream call against one endpoint.
+	SpanUpstreamAttempt = "semantic_router.upstream.attempt"
+)
+
+// Upstream attempt attributes.
+const (
+	AttrUpstreamCluster  = "upstream.cluster"
+	AttrUpstreamEndpoint = "upstream.endpoint"
+	AttrUpstreamAttempt  = "upstream.attempt"
+	AttrUpstreamOutcome  = "upstream.outcome"
+	AttrHTTPStatusCode   = "http.status_code"
 )

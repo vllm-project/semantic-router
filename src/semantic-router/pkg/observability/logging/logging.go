@@ -175,37 +175,36 @@ func ErrorEvent(event string, fields map[string]interface{}) {
 	logEventAt(zapcore.ErrorLevel, event, fields)
 }
 
-func logEventAt(level zapcore.Level, event string, fields map[string]interface{}) {
-	prepared := prepareEventFields(event, fields)
-	zfields := make([]zap.Field, 0, len(prepared))
-	for k, v := range prepared {
-		zfields = append(zfields, zap.Any(k, v))
-	}
-
-	logger := zap.L().With(zfields...)
-	switch level {
-	case zapcore.DebugLevel:
-		logger.Debug(event)
-	case zapcore.WarnLevel:
-		logger.Warn(event)
-	case zapcore.ErrorLevel:
-		logger.Error(event)
-	case zapcore.FatalLevel:
-		logger.Fatal(event)
-	default:
-		logger.Info(event)
+// logEventAt encodes the fields only once the logger has decided to write the
+// entry: the production sampler drops most repeats of a busy event, and a
+// request-path event must not pay for an entry nobody writes. extra fields
+// follow the caller's.
+func logEventAt(level zapcore.Level, event string, fields map[string]interface{}, extra ...zap.Field) {
+	if entry := zap.L().Check(eventLevel(level), event); entry != nil {
+		entry.Write(eventFields(event, fields, extra)...)
 	}
 }
 
-func prepareEventFields(event string, fields map[string]interface{}) map[string]interface{} {
-	prepared := make(map[string]interface{}, len(fields)+1)
+// eventLevel is the level an event helper logs at: anything but debug, warn,
+// error and fatal logs at info.
+func eventLevel(level zapcore.Level) zapcore.Level {
+	switch level {
+	case zapcore.DebugLevel, zapcore.WarnLevel, zapcore.ErrorLevel, zapcore.FatalLevel:
+		return level
+	default:
+		return zapcore.InfoLevel
+	}
+}
+
+func eventFields(event string, fields map[string]interface{}, extra []zap.Field) []zap.Field {
+	zfields := make([]zap.Field, 0, len(fields)+1+len(extra))
 	for k, v := range fields {
-		prepared[k] = v
+		zfields = append(zfields, zap.Any(k, v))
 	}
-	if _, ok := prepared["event"]; !ok {
-		prepared["event"] = event
+	if _, ok := fields["event"]; !ok {
+		zfields = append(zfields, zap.String("event", event))
 	}
-	return prepared
+	return append(zfields, extra...)
 }
 
 // Helper printf-style wrappers to ease migration from log.Printf.
@@ -228,7 +227,7 @@ func DebugEnabled() bool { return zap.L().Core().Enabled(zapcore.DebugLevel) }
 //	log := logging.WithComponent("extproc")
 //	log.Infof("request received")   // {"component":"extproc","level":"info",...}
 func WithComponent(name string) *zap.SugaredLogger {
-	return zap.L().With(zap.String(componentKey, name)).Sugar()
+	return zap.L().With(zap.String(componentKey, componentName(name))).Sugar()
 }
 
 // ComponentEvent is like LogEvent but includes the "component" field.
@@ -257,9 +256,29 @@ func ComponentFatalEvent(component, event string, fields map[string]interface{})
 }
 
 func logComponentEventAt(level zapcore.Level, component, event string, fields map[string]interface{}) {
-	prepared := prepareEventFields(event, fields)
-	if _, ok := prepared[componentKey]; !ok {
-		prepared[componentKey] = component
+	if _, ok := fields[componentKey]; ok {
+		logEventAt(level, event, fields)
+		return
 	}
-	logEventAt(level, event, prepared)
+	logEventAt(level, event, fields, zap.String(componentKey, componentName(component)))
+}
+
+// ComponentEventFunc is like ComponentEvent for an event on the request path:
+// fields runs only when the entry is written, so an entry the sampler drops
+// costs nothing to build.
+func ComponentEventFunc(component, event string, fields func() map[string]interface{}) {
+	logComponentEventFuncAt(zapcore.InfoLevel, component, event, fields)
+}
+
+func logComponentEventFuncAt(level zapcore.Level, component, event string, fields func() map[string]interface{}) {
+	entry := zap.L().Check(eventLevel(level), event)
+	if entry == nil {
+		return
+	}
+	built := fields()
+	var extra []zap.Field
+	if _, ok := built[componentKey]; !ok {
+		extra = []zap.Field{zap.String(componentKey, componentName(component))}
+	}
+	entry.Write(eventFields(event, built, extra)...)
 }

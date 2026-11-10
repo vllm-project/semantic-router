@@ -37,7 +37,17 @@ class DocsBuildTests(unittest.TestCase):
             "DOCS_TEST_ROOT": str(self.root),
             "DOCS_TEST_LOG": str(self.log),
         }
-        self.environment.pop("VLLM_SR_DOCS_PYTHON", None)
+        # Nested make must use this fixture's interpreter, not command-line
+        # overrides inherited from the parent test runner.
+        for name in (
+            "VLLM_SR_DOCS_PYTHON",
+            "DOCS_PYTHON",
+            "MODEL_CATALOG_PYTHON",
+            "MAKEFLAGS",
+            "MFLAGS",
+            "MAKEOVERRIDES",
+        ):
+            self.environment.pop(name, None)
         self.bootstrap = self.bin / "bootstrap-python"
         self.write_executable(
             self.bootstrap,

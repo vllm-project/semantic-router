@@ -24,9 +24,8 @@ type recordJSONFields Record
 
 type recordJSON struct {
 	recordJSONFields
-	ConfidenceScore             *float64 `json:"confidence_score"`
-	JailbreakConfidence         *float32 `json:"jailbreak_confidence,omitempty"`
-	ResponseJailbreakConfidence *float32 `json:"response_jailbreak_confidence,omitempty"`
+	ConfidenceScore     *float64 `json:"confidence_score"`
+	JailbreakConfidence *float32 `json:"jailbreak_confidence,omitempty"`
 }
 
 // JSONWire is the shared representation for serialization and schema discovery.
@@ -39,8 +38,7 @@ func (r Record) JSONWire() any {
 	}
 	return recordJSON{
 		recordJSONFields: recordJSONFields(r), ConfidenceScore: score,
-		JailbreakConfidence:         availableFloat32(r.JailbreakConfidence, r.JailbreakScoreAvailable),
-		ResponseJailbreakConfidence: availableFloat32(r.ResponseJailbreakConfidence, r.ResponseJailbreakScoreAvailable),
+		JailbreakConfidence: availableFloat32(r.JailbreakConfidence, r.JailbreakScoreAvailable),
 	}
 }
 

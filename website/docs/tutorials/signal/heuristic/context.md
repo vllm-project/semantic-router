@@ -3,7 +3,7 @@
 ## Overview
 
 `context` detects requests that need a larger effective context window. Define
-context rules under `routing.signals.context`.
+context rules under `recipes[].signals.context`.
 
 This family is heuristic: it routes from token-window requirements rather than classifier inference.
 
@@ -32,13 +32,14 @@ Use `context` when:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    context:
-      - name: long_context
-        min_tokens: 32K
-        max_tokens: 256K
-        description: Requests that need a larger effective context window.
+recipes:
+  - name: default
+    signals:
+      context:
+        - name: long_context
+          min_tokens: 32K
+          max_tokens: 256K
+          description: Requests that need a larger effective context window.
 ```
 
 Use `context` when the router should switch candidates based on prompt length or expected context demand.
@@ -56,7 +57,7 @@ Each rule is an inclusive token band: it matches when
 - Setting `min_tokens` equal to `max_tokens` is an exact-match band for that
   one token count.
 - Every matching rule is reported, in configuration order. Overlapping bands
-  are allowed and both names appear in `x-vsr-matched-context`.
+  are allowed and both appear in the `signals` member of `x-vsr-trace` as `context:<name>`.
 - Gaps and overlaps between bands are logged as warnings when the config
   loads. Requests inside a gap match no context rule.
 - Validation rejects a rule with neither limit, unparsable, negative, or
@@ -77,18 +78,19 @@ Router expands it when the config loads, so the CLI accepts that band with a
 warning instead of checking it.
 
 ```yaml
-routing:
-  signals:
-    context:
-      - name: short_context
-        min_tokens: 0
-        max_tokens: 8K
-      - name: medium_context
-        min_tokens: 8001
-        max_tokens: 64K
-      - name: long_context
-        min_tokens: 64001
-        description: Open-ended band; matches everything above 64K tokens.
+recipes:
+  - name: default
+    signals:
+      context:
+        - name: short_context
+          min_tokens: 0
+          max_tokens: 8K
+        - name: medium_context
+          min_tokens: 8001
+          max_tokens: 64K
+        - name: long_context
+          min_tokens: 64001
+          description: Open-ended band; matches everything above 64K tokens.
 ```
 
 Context bands are routing signals only. They do not change model
@@ -98,11 +100,16 @@ filters candidates.
 ## Dependencies and Limitations
 
 Token estimates depend on the request representation and are not a guarantee
-that a backend accepts the resulting prompt. Keep model-card context windows
+that a backend accepts the resulting prompt. Prose starts at about four bytes
+per token. The Router then learns the ratio from provider-reported prompt
+usage, but only for requests with at least 4 KiB of text. On shorter requests
+the chat-template overhead dominates the reported count. Keep model-card context windows
 accurate and allow room for generated output. Before selection, the Router
 removes decision candidates whose configured, positive context window is
 smaller than the estimated request. Missing context metadata remains eligible
 for backward compatibility; if every candidate has a known insufficient
-window, the Router rejects the request instead of forwarding it to an
-ineligible backend. See a complete example:
+window, the Router counts the request again without the estimate's reserves
+for structured data and media, keeps the candidates that count fits, and
+rejects the request only when it fits none of them instead of forwarding it to
+an ineligible backend. The backend still checks the real length. See a complete example:
 [`config/fragments/signal/context/long-context.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/context/long-context.yaml).

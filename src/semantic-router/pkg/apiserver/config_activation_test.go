@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -19,7 +19,7 @@ import (
 
 func TestConfigHashReportsExactCandidateFailureAndRecovery(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(path, []byte("version: v0.3\nrouting: {}\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("version: v0.5\nrecipes: [{name: default}]\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	hash, err := configFileHash(path)

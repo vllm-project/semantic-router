@@ -102,6 +102,21 @@ runtime edits.
 {{- end }}
 
 {{/*
+The decision model the chart last wrote into the live config, from the live
+ConfigMap's annotation; empty on install.
+*/}}
+{{- define "semantic-router.appliedDecisionModel" -}}
+{{- if .Release.IsUpgrade -}}
+{{- $current := lookup "v1" "ConfigMap" (include "semantic-router.namespace" .) (include "semantic-router.configMapName" .) -}}
+{{- if $current -}}
+{{- $metadata := (get $current "metadata") | default (dict) -}}
+{{- $annotations := (get $metadata "annotations") | default (dict) -}}
+{{- get $annotations "semantic-router.vllm.ai/decision-model" | default "" -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Get the dashboard service account name
 */}}
 {{- define "semantic-router.dashboardServiceAccountName" -}}
@@ -121,6 +136,47 @@ Get the PVC name
 {{- else }}
 {{- printf "%s-models" (include "semantic-router.fullname" .) }}
 {{- end }}
+{{- end }}
+
+{{/*
+Get the Router data directory PVC name
+*/}}
+{{- define "semantic-router.dataPvcName" -}}
+{{- if .Values.data.persistence.existingClaim }}
+{{- .Values.data.persistence.existingClaim }}
+{{- else }}
+{{- printf "%s-data" (include "semantic-router.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/*
+"true" when extraVolumeMounts supplies the Router's data directory, which then
+replaces the chart's data volume.
+*/}}
+{{- define "semantic-router.customDataMount" -}}
+{{- $custom := false -}}
+{{- range .Values.extraVolumeMounts -}}
+{{- if eq (trimSuffix "/" (.mountPath | default "")) "/var/lib/vsr" -}}
+{{- $custom = true -}}
+{{- end -}}
+{{- end -}}
+{{- $custom -}}
+{{- end }}
+
+{{/*
+The install note for a vector store that keeps its uploaded files in the
+chart's data directory while that is an emptyDir, which a new Pod starts empty.
+*/}}
+{{- define "semantic-router.dataVolumeNote" -}}
+{{- $effective := include "semantic-router.effectiveConfig" . | fromYaml -}}
+{{- $vectorStore := dig "global" "stores" "vector_store" (dict) $effective -}}
+{{- $fileDir := (get $vectorStore "file_storage_dir") | default "/var/lib/vsr/data" -}}
+{{- $onDataVolume := or (eq $fileDir "/var/lib/vsr") (hasPrefix "/var/lib/vsr/" $fileDir) -}}
+{{- if and (get $vectorStore "enabled") $onDataVolume (not .Values.data.persistence.enabled) (ne (include "semantic-router.customDataMount" .) "true") -}}
+NOTE: The vector store keeps uploaded files in the Router's data directory,
+/var/lib/vsr, an emptyDir that a new Pod starts empty. To keep them across
+Pod replacement, upgrade with --set data.persistence.enabled=true.
+{{- end -}}
 {{- end }}
 
 {{/*
@@ -170,6 +226,72 @@ Resolve Jaeger OTLP endpoint for dependency-based deployments.
 {{- define "semantic-router.jaeger.otlpEndpoint" -}}
 {{- $serviceName := .Values.dependencies.observability.jaeger.serviceName | default (printf "%s-jaeger" .Release.Name) -}}
 {{- printf "%s:%d" $serviceName (int .Values.dependencies.observability.jaeger.otlpGrpcPort) -}}
+{{- end }}
+
+{{/*
+The gateway mode: standalone (the Router serves config.listeners) or extproc
+(the Router serves Envoy's ext_proc gRPC for a gateway in front of it).
+*/}}
+{{- define "semantic-router.gatewayMode" -}}
+{{- $mode := dig "mode" "standalone" (.Values.gateway | default (dict)) -}}
+{{- if not (has $mode (list "standalone" "extproc")) -}}
+{{- fail (printf "gateway.mode must be standalone or extproc, not %q" $mode) -}}
+{{- end -}}
+{{- $mode -}}
+{{- end }}
+
+{{/*
+The standalone listeners, derived once from the effective config. The
+container ports, the Service, the probes, the Ingress default and the
+Dashboard's target all read this list. A port the Router itself or an earlier
+listener already takes fails the render, since every listener binds all of the
+pod's addresses. So does the ext_proc port: a gateway that still calls it must
+not reach an HTTP listener there.
+*/}}
+{{- define "semantic-router.listeners" -}}
+{{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
+{{- $taken := dict -}}
+{{- $_ := set $taken (toString (int .Values.service.api.targetPort)) "the Router API (service.api.targetPort)" -}}
+{{- $_ := set $taken (toString (int .Values.service.metrics.targetPort)) "the Router metrics (service.metrics.targetPort)" -}}
+{{- $_ := set $taken (toString (int .Values.service.grpc.targetPort)) "the ext_proc port (service.grpc.targetPort)" -}}
+{{- $listeners := list -}}
+{{- range $index, $listener := (get $config "listeners") | default (list) -}}
+{{-   $name := toString ((get $listener "name") | default (printf "listeners[%d]" $index)) -}}
+{{-   $port := int ((get $listener "port") | default 0) -}}
+{{-   if or (lt $port 1) (gt $port 65535) -}}
+{{-     fail (printf "listener %s needs a port between 1 and 65535" $name) -}}
+{{-   end -}}
+{{-   $key := toString $port -}}
+{{-   if hasKey $taken $key -}}
+{{-     fail (printf "listener %s uses port %d, which %s already takes; give the listener another port, or set gateway.mode=extproc to keep an Envoy-based gateway in front of the Router" $name $port (get $taken $key)) -}}
+{{-   end -}}
+{{-   $_ := set $taken $key (printf "listener %s" $name) -}}
+{{-   $tls := not (empty ((get $listener "tls") | default (dict))) -}}
+{{-   $scheme := ternary "https" "http" $tls -}}
+{{-   $listeners = append $listeners (dict "name" $name "port" $port "portName" (printf "%s-%d" $scheme $port) "scheme" $scheme "tls" $tls) -}}
+{{- end -}}
+{{- if eq (len $listeners) 0 -}}
+{{- fail "gateway.mode=standalone serves config.listeners, and the config has none; add one (for example http-8899 on port 8899) or set gateway.mode=extproc" -}}
+{{- end -}}
+{{- toYaml (dict "items" $listeners) -}}
+{{- end }}
+
+{{/*
+The listener that probes and the Dashboard use: the first one without TLS, or
+the first listener when all of them serve TLS.
+*/}}
+{{- define "semantic-router.primaryListener" -}}
+{{- $listeners := (include "semantic-router.listeners" . | fromYaml).items -}}
+{{- $primary := dict -}}
+{{- range $listeners -}}
+{{-   if and (empty $primary) (not .tls) -}}
+{{-     $primary = . -}}
+{{-   end -}}
+{{- end -}}
+{{- if empty $primary -}}
+{{-   $primary = first $listeners -}}
+{{- end -}}
+{{- toYaml $primary -}}
 {{- end }}
 
 {{/*

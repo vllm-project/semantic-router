@@ -3,6 +3,8 @@ package config
 import (
 	"slices"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 type UnknownPolicy string
@@ -41,48 +43,52 @@ type DecisionAction struct {
 
 // Decision represents a routing decision that combines multiple rules with boolean logic.
 type Decision struct {
-	Name                string                     `yaml:"name"`
-	Description         string                     `yaml:"description,omitempty"`
-	Priority            int                        `yaml:"priority,omitempty"`
-	Tier                int                        `yaml:"tier,omitempty"`
-	OutputContract      string                     `yaml:"output_contract,omitempty" json:"output_contract,omitempty"`
-	OutputContractSpec  *OutputContractSpec        `yaml:"output_contract_spec,omitempty" json:"output_contract_spec,omitempty"`
-	Rules               RuleCombination            `yaml:"rules"`
-	Action              *DecisionAction            `yaml:"action,omitempty" json:"action,omitempty"`
-	ModelRefs           []ModelRef                 `yaml:"modelRefs,omitempty"`
-	Algorithm           *AlgorithmConfig           `yaml:"algorithm,omitempty"`
-	Adaptations         DecisionAdaptationsConfig  `yaml:"adaptations,omitempty"`
+	Name               string                     `yaml:"name"`
+	Description        string                     `yaml:"description,omitempty"`
+	Priority           int                        `yaml:"priority,omitempty"`
+	Tier               int                        `yaml:"tier,omitempty"`
+	OutputContract     string                     `yaml:"output_contract,omitempty" json:"output_contract,omitempty"`
+	OutputContractSpec *OutputContractSpec        `yaml:"output_contract_spec,omitempty" json:"output_contract_spec,omitempty"`
+	Rules              RuleCombination            `yaml:"rules"`
+	Action             *DecisionAction            `yaml:"action,omitempty" json:"action,omitempty"`
+	ModelRefs          []ModelRef                 `yaml:"modelRefs,omitempty"`
+	Algorithm          *AlgorithmConfig           `yaml:"algorithm,omitempty"`
+	Adaptations        DecisionAdaptationsConfig  `yaml:"adaptations,omitempty"`
+	Reliability        *DecisionReliability       `yaml:"reliability,omitempty" json:"reliability,omitempty"`
+	Fallback           *fallback.FallbackOverride `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	// Plugins are the decision's effective plugins: its own layered over its
+	// recipe's and global.plugins (DeclaredPlugins are its own).
 	Plugins             []DecisionPlugin           `yaml:"plugins,omitempty"`
 	CandidateIterations []CandidateIterationConfig `yaml:"candidateIterations,omitempty"`
-	// Emits carries declarative side-effect directives produced by EMIT blocks
-	// inside the matching decision branch. The slice preserves DSL declaration
-	// order so round-trip decompilation stays stable.
-	Emits []EmitDirective `yaml:"emits,omitempty" json:"emits,omitempty"`
+	// Retention says what the Router keeps of the decision's answers.
+	Retention *DecisionRetention `yaml:"retention,omitempty" json:"retention,omitempty"`
+	// Output says which media the decision's answers carry; OutputContract
+	// and OutputContractSpec shape the text of an answer.
+	Output *DecisionOutput `yaml:"output,omitempty" json:"output,omitempty"`
 	// Annotations carries bounded, non-executable decision metadata for replay
-	// and transport projections. Executable behavior belongs in Emits or Plugins.
+	// and transport projections. Executable behavior belongs in Plugins or the
+	// decision's attributes.
 	Annotations map[string]interface{} `yaml:"annotations,omitempty" json:"annotations,omitempty"`
+
+	// declaredPlugins are the decision's own plugins once the loader layered
+	// Plugins (pluginsLayered).
+	declaredPlugins []DecisionPlugin
+	pluginsLayered  bool
 }
 
-// EmitDirective is a tagged-union wrapper for declarative directives emitted
-// by a decision branch. The initial supported Kind is "retention".
-type EmitDirective struct {
-	Kind      string              `yaml:"kind" json:"kind"`
-	Retention *RetentionDirective `yaml:"retention,omitempty" json:"retention,omitempty"`
-}
-
-// RetentionDirective expresses keep / drop / prefer-retain semantics over the
-// Router-owned response content. All fields are tri-state pointers so we can
-// distinguish "unset" from an explicit zero value.
+// DecisionRetention expresses keep / drop / prefer-retain semantics over the
+// Router-owned response content of a decision. All fields are tri-state
+// pointers so we can distinguish "unset" from an explicit zero value.
 //
 // Runtime consumes Drop (response-cache, memory, and Responses-object write
 // suppression), TTLTurns (per-entry cache TTL override), and KeepCurrentModel
 // (model-switch-gate forced stay). Drop does not delete existing objects or
 // disable explicit history reads, telemetry, or backend-side persistence.
-// PreferPrefixRetention is emitted to the pool as an x-vsr-retention-prefer-prefix
-// header; its session-aware scoring bias and KV-cache eviction integration are
-// follow-up work. All set fields are also observed via log + trace attributes
-// and emitted as x-vsr-retention-* response headers (issues #1747, #2009).
-type RetentionDirective struct {
+// PreferPrefixRetention is only reported; its session-aware scoring bias and
+// KV-cache eviction integration are follow-up work. All set fields are also
+// observed via log + trace attributes and reported in the retention member of
+// x-vsr-trace (issues #1747, #2009).
+type DecisionRetention struct {
 	Drop                  *bool `yaml:"drop,omitempty" json:"drop,omitempty"`
 	TTLTurns              *int  `yaml:"ttl_turns,omitempty" json:"ttl_turns,omitempty"`
 	KeepCurrentModel      *bool `yaml:"keep_current_model,omitempty" json:"keep_current_model,omitempty"`
@@ -106,60 +112,30 @@ type CandidateIterationOutputConfig struct {
 	Value string `yaml:"value,omitempty"`
 }
 
-// AlgorithmConfig defines how multiple models should be executed and aggregated.
+// AlgorithmConfig is how a decision uses its candidate models: a selector
+// chooses one before calling it, an executor calls several and returns one
+// response. Each type's settings are the block named after it; Budget and
+// OnError are the executors' shared settings.
 type AlgorithmConfig struct {
-	Type              string                       `yaml:"type"`
-	MinimumCandidates int                          `yaml:"minimum_candidates,omitempty"`
-	Confidence        *ConfidenceAlgorithmConfig   `yaml:"confidence,omitempty"`
-	Ratings           *RatingsAlgorithmConfig      `yaml:"ratings,omitempty"`
-	ReMoM             *ReMoMAlgorithmConfig        `yaml:"remom,omitempty"`
-	Fusion            *FusionAlgorithmConfig       `yaml:"fusion,omitempty"`
-	Workflows         *WorkflowsAlgorithmConfig    `yaml:"workflows,omitempty"`
-	Elo               *EloSelectionConfig          `yaml:"-"`
-	RouterDC          *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
-	AutoMix           *AutoMixSelectionConfig      `yaml:"automix,omitempty"`
-	Hybrid            *HybridSelectionConfig       `yaml:"hybrid,omitempty"`
-	RLDriven          *RLDrivenSelectionConfig     `yaml:"-"`
-	GMTRouter         *GMTRouterSelectionConfig    `yaml:"-"`
-	LatencyAware      *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
-	MultiFactor       *MultiFactorSelectionConfig  `yaml:"multi_factor,omitempty"`
-	Prompt            *PromptSelectionConfig       `yaml:"prompt,omitempty"`
-	SessionAware      *SessionAwareSelectionConfig `yaml:"-"`
-	OnError           string                       `yaml:"on_error,omitempty"`
+	Type              string                      `yaml:"type"`
+	MinimumCandidates int                         `yaml:"minimum_candidates,omitempty"`
+	Budget            *AlgorithmBudget            `yaml:"budget,omitempty"`
+	OnError           string                      `yaml:"on_error,omitempty"`
+	MultiFactor       *MultiFactorSelectionConfig `yaml:"multi_factor,omitempty"`
+	SystemOne         *SystemOneSelectionConfig   `yaml:"systemone,omitempty"`
+	Escalate          *EscalateAlgorithmConfig    `yaml:"escalate,omitempty"`
+	Fusion            *FusionAlgorithmConfig      `yaml:"fusion,omitempty"`
+	ReMoM             *ReMoMAlgorithmConfig       `yaml:"remom,omitempty"`
+	Ratings           *RatingsAlgorithmConfig     `yaml:"ratings,omitempty"`
+	Workflows         *WorkflowsAlgorithmConfig   `yaml:"workflows,omitempty"`
+	// Extensions holds the blocks of algorithm types registered outside the
+	// Router, each under its type's name.
+	Extensions map[string]*StructuredPayload `yaml:",inline" json:"-" jsonschema:"-"`
 }
 
-// PromptSelectionConfig configures deterministic, prompt-driven selection
-// among a decision's ModelRefs. The runtime owns the structured output schema,
-// temperature, token bound, candidate descriptions, and fallback behavior.
-type PromptSelectionConfig struct {
-	Model          string `yaml:"model"`
-	Instructions   string `yaml:"instructions"`
-	TimeoutSeconds int    `yaml:"timeout_seconds,omitempty"`
-}
-
-type ConfidenceAlgorithmConfig struct {
-	ConfidenceMethod    string               `yaml:"confidence_method,omitempty"`
-	Threshold           float64              `yaml:"threshold,omitempty"`
-	HybridWeights       *HybridWeightsConfig `yaml:"hybrid_weights,omitempty"`
-	OnError             string               `yaml:"on_error,omitempty"`
-	EscalationOrder     string               `yaml:"escalation_order,omitempty"`
-	CostQualityTradeoff float64              `yaml:"cost_quality_tradeoff,omitempty"`
-	TokenFilter         string               `yaml:"token_filter,omitempty"`
-
-	// VerifierServerURL points to the AutoMix self-verification server when
-	// confidence_method=automix_entailment. The server implements few-shot
-	// entailment verification per arXiv:2310.12963 §3.2 and is reached over
-	// HTTP via selection.AutoMixVerifierClient. A reference implementation
-	// lives at src/training/model_selection/rl_model_selection/automix_verifier.py.
-	// Required when confidence_method=automix_entailment and rejected otherwise.
-	VerifierServerURL string `yaml:"verifier_server_url,omitempty"`
-
-	// VerifierTimeoutSeconds bounds each verifier HTTP call. Defaults to 60
-	// when zero, matching selection.NewAutoMixVerifierClient. Only consulted
-	// when confidence_method=automix_entailment and is rejected otherwise.
-	VerifierTimeoutSeconds int   `yaml:"verifier_timeout_seconds,omitempty"`
-	MaxResponseBytes       int64 `yaml:"max_response_bytes,omitempty"`
-}
+// extensionFields are the keys Extensions may hold: the registered
+// algorithm types the Router does not build in.
+func (*AlgorithmConfig) extensionFields() []string { return extensionAlgorithmTypes() }
 
 type HybridWeightsConfig struct {
 	LogprobWeight float64 `yaml:"logprob_weight,omitempty"`
@@ -167,8 +143,7 @@ type HybridWeightsConfig struct {
 }
 
 type RatingsAlgorithmConfig struct {
-	MaxConcurrent int    `yaml:"max_concurrent,omitempty"`
-	OnError       string `yaml:"on_error,omitempty"`
+	MaxConcurrent int `yaml:"max_concurrent,omitempty"`
 }
 
 type ReMoMAlgorithmConfig struct {
@@ -184,7 +159,6 @@ type ReMoMAlgorithmConfig struct {
 	MaxCompletionTokens          *int    `yaml:"max_completion_tokens,omitempty"`
 	RoundTimeoutSeconds          int     `yaml:"round_timeout_seconds,omitempty"`
 	MinSuccessfulResponses       int     `yaml:"min_successful_responses,omitempty"`
-	OnError                      string  `yaml:"on_error,omitempty"`
 	ShuffleSeed                  int     `yaml:"shuffle_seed,omitempty"`
 	IncludeIntermediateResponses bool    `yaml:"include_intermediate_responses,omitempty"`
 	MaxResponsesPerRound         int     `yaml:"max_responses_per_round,omitempty"`

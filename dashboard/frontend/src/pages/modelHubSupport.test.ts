@@ -147,9 +147,9 @@ describe('model hub presentation support', () => {
     const rows = modelHubRows(catalog, filters())
     const first = paginateModelHubRows(rows, 1, 24)
     const beyondEnd = paginateModelHubRows(rows, 100_000, 24)
-    expect(first.items).toHaveLength(24)
+    expect(first.items).toHaveLength(6)
     expect(first.start).toBe(1)
-    expect(first.end).toBe(24)
+    expect(first.end).toBe(6)
     expect(beyondEnd.page).toBe(beyondEnd.totalPages)
     expect(beyondEnd.end).toBe(rows.length)
   })
@@ -238,7 +238,7 @@ describe('model hub Arena navigation', () => {
     const rows = modelHubRows(catalog, filters())
     const target = rows[27]
 
-    expect(modelHubPageForModel(rows, target.model.id, 10)).toBe(3)
+    expect(modelHubPageForModel(rows, target.model.id, 10)).toBe(5)
     expect(modelHubPageForModel(rows, 'missing/model', 10)).toBe(1)
   })
 })

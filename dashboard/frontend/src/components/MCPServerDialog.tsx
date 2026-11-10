@@ -50,7 +50,6 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = ({
     ...(server?.connection?.headers || {}),
   }))
   const [timeout, setTimeout] = useState(server?.options?.timeout?.toString() || '30000')
-  const [autoReconnect, setAutoReconnect] = useState(server?.options?.autoReconnect ?? true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -73,7 +72,6 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = ({
     url,
     headers,
     timeout,
-    autoReconnect,
   }
   const hiddenArgumentsNeedResolution = hiddenArgumentsBlockCommandChange(
     server,
@@ -291,17 +289,6 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = ({
               onChange={(event) => setTimeout(event.target.value)}
               placeholder="30000"
             />
-          </div>
-
-          <div className={styles.formGroup}>
-            <label className={styles.checkboxLabel}>
-              <input
-                type="checkbox"
-                checked={autoReconnect}
-                onChange={(event) => setAutoReconnect(event.target.checked)}
-              />
-              <span>Auto Reconnect</span>
-            </label>
           </div>
 
           <div className={styles.formGroup}>

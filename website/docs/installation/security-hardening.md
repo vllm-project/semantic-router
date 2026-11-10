@@ -17,7 +17,7 @@ controls of the surrounding platform.
 
 ```mermaid
 flowchart LR
-    Client["Client"] --> Listener["Public Envoy listener"]
+    Client["Client"] --> Listener["Standalone frontend / external gateway"]
     Listener --> Router["Semantic Router"]
     Router --> Provider["Model providers"]
     Admin["Authenticated Dashboard / API"] --> Router
@@ -36,23 +36,26 @@ Review each boundary separately:
 
 ## Protect the public listener
 
-The maintained Envoy configuration removes internal control headers before a
-client request reaches the Router. Do the same when supplying a custom Envoy or
-gateway configuration. Internal examples include:
+The standalone frontend strips untrusted identity and proxy-control headers.
+Configure listener API keys, Chat model allowlists, and native model grants
+separately; see [Gateway Modes](gateway-modes). Do not treat a Dashboard login
+as a public inference credential.
+
+The maintained Envoy configuration also removes internal control headers. Keep
+that boundary when supplying a custom Envoy or gateway configuration. Internal
+examples include:
 
 ```yaml
 request_headers_to_remove:
-  - x-vsr-looper-request
-  - x-vsr-looper-secret
-  - x-vsr-looper-decision
-  - x-vsr-looper-iteration
   - x-authz-user-id
   - x-authz-user-groups
+  - x-vsr-delegated-credential
 ```
 
 Do not expose Router management, metrics, ExtProc, or backing-store ports as
 public inference endpoints. Terminate client authentication at a trusted
-boundary and allow only that component to supply identity headers.
+boundary and allow only that component to supply identity headers and the
+delegated credential described below.
 
 Relevant Dashboard permissions include:
 
@@ -81,7 +84,7 @@ api_key: ${MODEL_API_KEY}
 Do not commit literal API keys, passwords, authorization headers, credential
 query parameters, or URLs containing user information.
 
-For `vllm-sr serve --target k8s`, the CLI places sensitive environment values
+For `vllm-sr serve --target kubernetes`, the CLI places sensitive environment values
 in an immutable Secret revision scoped to the namespace and Helm release. Helm
 values and the Deployment reference the Secret by name; they do not contain
 the credential value. A failed upgrade keeps the previous workload and Secret
@@ -91,6 +94,106 @@ referenced.
 Existing chart-native Secret references, such as a Dashboard JWT Secret, remain
 external objects and are not copied into the CLI-managed Secret. Use the same
 namespace and release ownership discipline for every manually managed Secret.
+
+### Delegate the user's credential to an upstream
+
+When the Router sits behind an authenticating deployment layer and an upstream
+authorizes each user itself (a LiteLLM, one-api, or similar relay issuing
+per-user virtual keys, or a decision-model API metered per user), let the
+authenticator hand the Router the credential it issued that user, and mark the
+upstream's auth `credential: delegated`. The credential that authenticates the
+client to the deployment and the credential meant for the upstream are
+separate trust objects: the Router never forwards the client's raw
+`Authorization` header.
+
+```yaml
+global:
+  services:
+    authz:
+      delegated_credential:
+        enabled: true
+        header: x-vsr-delegated-credential   # default; set by the authenticator
+  model_catalog:
+    deployments:
+      team-decisions:
+        provider: systemone
+        endpoint: https://decisions.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth:
+          credential: delegated              # a decision-model deployment
+providers:
+  models:
+    - name: gpt-4o
+      provider_model_id: gpt-4o
+      api_format: openai
+      backend_refs:
+        - name: litellm
+          endpoint: https://litellm.internal/v1
+          provider: openai-compatible
+          auth:
+            credential: delegated            # a provider backend
+```
+
+Every upstream the Router calls takes one `auth` block of one shape: a
+provider backend, a decision-model or remote embedding deployment, the judge
+model of an `escalate` stage and an `api_format: systemone` target alike. Its
+mode is a static key (`auth.api_key_env` or `auth.api_key_file`, or a backend's
+`api_key`), whose calls act as the Router; `credential: delegated`, whose calls
+carry the requesting user's credential; or neither, which sends no credential.
+
+The contract is disabled by default. Once enabled:
+
+- The delegated credential is an authentication output like the identity
+  headers. The shipped Envoy configurations (`vllm-sr serve --gateway extproc`
+  and `deploy/local/envoy.yaml`) remove a client-supplied copy in a filter
+  ahead of ext_proc; the `vllm-sr` template removes a custom `header` too, and
+  `deploy/local/envoy.yaml` names only the default. Neither runs an
+  authenticator, so a deployment that issues the credential places its
+  authenticator after that filter and before ext_proc, as the
+  `delegated-credential` E2E profile does. A custom gateway configuration must
+  do the same: `request_headers_to_remove` runs only after ext_proc. A
+  standalone listener drops the header, from Chat and System One requests
+  alike, unless `identity.trust_headers` is set. The Router keeps the value
+  only when the request also carries the authenticated user
+  (`global.services.authz.identity.user_id_header`).
+- `header` must name a dedicated header. Configuration rejects one that
+  carries a client credential (`Authorization`, `api-key`, `x-api-key`, and
+  similar) or an identity header.
+- The Router removes the header from every upstream request, on every branch,
+  and redacts it from logs. It is the one `x-vsr-*` request header the Router
+  reads from the authenticator instead of dropping, and the header registry
+  records it as an internal secret: no response, `x-vsr-trace` member, Router
+  Replay record or cache key carries it. Only an upstream whose auth is
+  `credential: delegated` receives the value, under that upstream's auth
+  header with its prefix (`Authorization: Bearer <credential>` for an
+  OpenAI-compatible backend or a System One API), replacing whatever the
+  client sent there. The client's other credential headers are removed, so a
+  backend that authenticates on `x-api-key` does not also receive the client's
+  `Authorization`.
+- The principal is a property of the call. A call made for a client request
+  carries that request's credential: primary dispatch, fallback attempts,
+  Looper hops, System One decision-model calls, `escalate` judges,
+  `api_format: systemone` targets, response checks and recall embeddings.
+  When the request carries none, the Router answers `401` before the call.
+  Calls the Router makes on its own behalf (probes, model listings,
+  `router_replay.shadow` copies, automatic-output render, store building,
+  management diagnostics) never carry it, and a delegated upstream refuses
+  them.
+- Configuration rejects a delegated upstream that also names a static key, so
+  a shared key can never stand in silently; one without the contract enabled;
+  one that only the Router's own calls reach, or that a Router-own call must
+  reach (vector store ingestion, memory storage, a `model_runtime` endpoint's
+  health checks and preparation, `router_replay.shadow`, automatic output); a
+  delegated `openai_embeddings` deployment without `capabilities.dimensions`;
+  and a delegated and a static backend in one cluster.
+- An answer obtained with one user's credential is served back only to that
+  user. While any upstream is delegated, every `response_cache` keeps its
+  default `scope: user`, and the Router keeps no decision-model answer or
+  embedding of a delegated deployment for another request. The Router never
+  puts two client requests in one upstream call, so a batched System One call
+  carries one request's questions and that request's credential.
+- Caller attribution and any tenant, quota, budget, or spend policy stay with
+  the upstream.
 
 ### Isolate sr-bench credentials
 
@@ -155,15 +258,14 @@ The local stack runs on two bridge networks.
 | Router | yes | yes |
 | Envoy, Dashboard | yes | no |
 | Jaeger, Prometheus, Grafana | yes | no |
-| OpenClaw workloads | yes | no |
 
 Router is the only container on both. Requests reach it over the application
 network; it reaches the stores over the data network. A named stack prefixes
 both names, so two stacks share neither. Milvus joins the data network even
 though it has no credentials of its own yet.
 
-This closes east-west reachability. A container on the application network --
-a sidecar or an image chosen for an OpenClaw workload -- cannot
+This closes east-west reachability. A container on the application network,
+such as a sidecar, cannot
 open a connection to `vllm-sr-redis:6379` or `vllm-sr-postgres:5432` at all. The
 storage ports remain published on `127.0.0.1` only, which closes the same
 exposure from the host side.
@@ -226,17 +328,49 @@ the stack's named volume (`vllm-sr-postgres-data` / `vllm-sr-redis-data`, with
 the stack prefix for a named stack). The CLI does not guess which orphaned
 volume is yours.
 
-**Recipe activation reports that the credentials are not readable.** Dashboard
-can start a managed store while activating a Recipe, but it runs as a separate,
-less trusted account -- it holds the container-runtime socket, which is exactly
-what these credentials are kept away from -- so it cannot read the credential
-state, and it will not guess which volume holds the data. Run `vllm-sr serve`
-from the account that owns the stack to provision the store, then activate the
-Recipe again.
-
 **An older CLI is used against a rotated stack.** It will fail to authenticate.
 That is the intended outcome. Either upgrade the CLI, or reset the passwords by
 hand through the container runtime.
+
+## Secure the local stack's management credential
+
+The Dashboard calls the Router management API with one service credential, the
+`dashboard_control_plane` role. When a Recipe turns on bearer authentication,
+the Router accepts the Dashboard only with that credential. `vllm-sr serve`
+creates both containers, so it owns the value:
+
+- It uses `VLLM_SR_DASHBOARD_RECIPE_TOKEN` from its own environment when you
+  set it (64 lowercase hexadecimal characters, such as the output of
+  `openssl rand -hex 32`), and never writes that value down.
+- Otherwise the stack generates one on its first start and keeps it in
+  `<state-root>/.vllm-sr/management-credential/dashboard[.<stack>].json`, mode
+  `0600`, in an owner-verified `0700` directory.
+- The Dashboard always receives it, and the Router whenever its runtime config
+  binds it, as an inherited environment name. It never appears in a `docker`
+  command line, a generated config file, the Recipe store or a log record, and
+  the Dashboard keeps no copy on disk. A Recipe cannot bind the name as one of
+  its environment inputs.
+
+Who can read it: the user who runs `vllm-sr serve`, the Router and Dashboard
+processes, and anyone who can inspect the containers through the container
+runtime. To rotate it, delete the state file and run `vllm-sr serve`: it
+generates a new value and recreates the Router and the Dashboard with it.
+
+### Recipe store permissions
+
+`vllm-sr serve` reads the Dashboard's Recipe store before it starts the stack
+and finishes interrupted activations, as the user who runs it. The store,
+`<state-root>/.vllm-sr/recipe-store/<stack>`, is therefore shared with that
+user's group: its files are group-readable and its directories group-writable.
+`.vllm-sr` around it stays open to its owner and the Dashboard only, so other
+host users cannot reach the store, and the store holds package and config
+documents only, no credential.
+
+A store written by an earlier Dashboard is private to the Dashboard's account.
+If `vllm-sr serve` reports that it cannot read it, share it once with the
+command it prints (`chgrp -R` to your group and `chmod -R g+rwX`); the Dashboard
+keeps it shared from then on. Rootless Docker and Podman map container users to
+other host IDs, so this sharing does not reach the host user there.
 
 ## Review stored request data
 
@@ -258,22 +392,50 @@ Recipe Model Cards describe the checked-in replay and cache behavior for each
 maintained recipe. See [Data and Storage](storage-overview) for deployment
 guides.
 
+## Review what the decision model reads
+
+Every routing judgment is a question to the decision model, so the model a
+question resolves to sees the parts of the request the question reads:
+
+- **Local by default.** With nothing configured, every question asks the
+  local `primary` deployment, and personal-data rules run there. A binding or
+  a rule's `deployment` moves a question elsewhere; bind `pii` and
+  `hallucination` explicitly when the decision model is remote.
+- **Remote models receive what they judge.** A `systemone` deployment receives
+  the state parts its questions read: the request, the earlier turns, the
+  tool results, the model's answer, a candidate, and the images of image
+  questions. [What leaves the host](../system-one/deployments#what-leaves-the-host)
+  lists them per signal. A remote embedding provider receives the text it
+  embeds.
+- **Guards can fail open or closed.** A `jailbreak` or `pii` rule whose model
+  gives no answer does not match unless it sets `on_unknown: match`; text the
+  model could not read counts as an attack or as personal data.
+- **Masking covers the final request.** The `masking` plugin replaces personal
+  data in every text position of the provider-bound request, including
+  retrieved documents and tool results, and fails closed when it cannot get
+  spans.
+- **Router-owned headers are protected.** `header_mutation` cannot write
+  Router-owned headers or the route key, internal headers a client sends are
+  dropped, and debug detail reaches only the callers
+  `global.router.headers.debug` allows.
+- **Authorization is a signal.** `role_bindings` conditions decide who may
+  reach which route and tools, from identity the gateway asserts; client-sent
+  identity headers are trusted only with `identity.trust_headers: true`.
+
 ## Limit container-runtime access
 
-Some Dashboard workflows can manage local containers. The CLI mounts a
-container-runtime socket only when it is a Unix socket with a safe owner and
-group mode; it rejects symlinks, world-accessible sockets, and unsafe group
-ownership. The Dashboard repeats the check inside the container and runs as a
-non-root user.
+`vllm-sr serve` is the only part of the local stack that uses the container
+runtime. It creates, recreates and stops the stack's containers, and applies
+every change saved in the Dashboard that needs them created anew. No stack
+container mounts the runtime socket, and the Dashboard image contains no
+container CLI. The Dashboard runs as a non-root user and reads service status
+from the Router's and Envoy's HTTP probes and the files the CLI keeps beside
+the runtime config, and service logs from the bounded log spool.
 
-When the socket is missing or rejected, Router and Dashboard still start, but
-container-management features report the runtime as unavailable. Do not make a
-socket world-writable to bypass this protection. Use
-`VLLM_SR_CONTAINER_SOCKET` for a non-default rootless runtime socket and verify
-its user-namespace and supplementary-group mapping.
-
-If the deployment does not need Dashboard-managed containers, do not mount a
-runtime socket.
+Treat access to the runtime as administrator access to the stack. A caller who
+can reach it can read container environments, including the management
+credential, and bypass the storage passwords. Keep the socket to the runtime's
+administrators, and do not mount it into a stack container.
 
 ## Production checklist
 
@@ -291,5 +453,5 @@ runtime socket.
 - [ ] Rotate the local stack's storage credentials on the same schedule as
       every other credential.
 - [ ] Test backup, restore, credential rotation, upgrade, and rollback.
-- [ ] Leave the container-runtime socket unmounted unless a workflow requires
-      it.
+- [ ] Keep the container-runtime socket out of every stack container; only
+      `vllm-sr serve` uses the runtime.

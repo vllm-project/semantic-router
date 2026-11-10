@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1800" height="1010" viewBox="0 0 1800 1010">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10Z" fill="context-stroke"/></marker></defs>
+<rect width="1800" height="1010" fill="white"/>
+<text x="65" y="82" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="46" font-weight="700" text-anchor="start">Small first. Upgrade only when needed.</text>
+<text x="65" y="132" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="27" font-weight="400" text-anchor="start">Kai answers the original questions. The cascade checks those answers.</text>
+<rect x="398" y="189" width="1337" height="710" rx="22" fill="#faf9fc" stroke="#ded9e7" stroke-width="2" />
+<rect x="434" y="215" width="254" height="42" rx="21" fill="#f0ebfa" stroke="#f0ebfa" stroke-width="2" /><text x="561.0" y="244" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="600" text-anchor="middle" data-box="434 215 254 42">vllm-sr/auto</text>
+<text x="1700" y="245" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="600" text-anchor="end">SELECTED CASCADE</text>
+<rect x="65" y="388" width="270" height="190" rx="16" fill="white" stroke="#ddd7e7" stroke-width="2" />
+<text x="200" y="438" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="29" font-weight="700" text-anchor="middle">Your request</text>
+<text x="200" y="481" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="23" font-weight="400" text-anchor="middle">Input + questions</text>
+<rect x="88" y="511" width="71" height="42" rx="21" fill="#eeedf0" stroke="#eeedf0" stroke-width="2" /><text x="123.5" y="540" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="600" text-anchor="middle" data-box="88 511 71 42">C</text>
+<rect x="165" y="511" width="71" height="42" rx="21" fill="#eeedf0" stroke="#eeedf0" stroke-width="2" /><text x="200.5" y="540" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="600" text-anchor="middle" data-box="165 511 71 42">S</text>
+<rect x="242" y="511" width="71" height="42" rx="21" fill="#eeedf0" stroke="#eeedf0" stroke-width="2" /><text x="277.5" y="540" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="600" text-anchor="middle" data-box="242 511 71 42">N</text>
+<path d="M335 480 H443" fill="none" stroke="#211b35" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="450" y="365" width="350" height="232" rx="16" fill="#fff3df" stroke="#dca04e" stroke-width="2" />
+<text x="480" y="409" fill="#bc711a" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="600" text-anchor="start">01  FIRST ANSWER</text>
+<text x="480" y="463" fill="#bc711a" font-family="DejaVu Sans,sans-serif" font-size="38" font-weight="700" text-anchor="start">Kai 0.6B</text>
+<text x="480" y="504" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="23" font-weight="400" text-anchor="start">Original input + questions</text>
+<text x="480" y="552" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="23" font-weight="400" text-anchor="start">Answers + probabilities</text>
+<path d="M800 480 H886" fill="none" stroke="#211b35" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<path d="M1030 363 L1170 480 L1030 597 L890 480Z" fill="#f0ebfa" stroke="#7051bb" stroke-width="2.5"/>
+<text x="1030" y="452" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="27" font-weight="600" text-anchor="middle">Check</text>
+<text x="1030" y="489" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="25" font-weight="600" text-anchor="middle">probabilities</text>
+<text x="1030" y="520" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="18" font-weight="400" text-anchor="middle">against thresholds</text>
+<path d="M1030 363 V306 H1545 V367" fill="none" stroke="#27775d" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<text x="1288" y="290" fill="#27775d" font-family="DejaVu Sans,sans-serif" font-size="24" font-weight="600" text-anchor="middle">PASS · return Kai</text>
+<rect x="1370" y="372" width="350" height="218" rx="16" fill="white" stroke="#8f829f" stroke-width="2" />
+<text x="1545" y="425" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="30" font-weight="700" text-anchor="middle">Native response</text>
+<text x="1545" y="469" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="23" font-weight="400" text-anchor="middle">Same answer schema</text>
+<rect x="1387" y="511" width="103" height="42" rx="21" fill="#f0ebfa" stroke="#f0ebfa" stroke-width="2" /><text x="1438.5" y="540" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="600" text-anchor="middle" data-box="1387 511 103 42">choice</text>
+<rect x="1495" y="511" width="103" height="42" rx="21" fill="#f0ebfa" stroke="#f0ebfa" stroke-width="2" /><text x="1546.5" y="540" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="600" text-anchor="middle" data-box="1495 511 103 42">score</text>
+<rect x="1603" y="511" width="99" height="42" rx="21" fill="#f0ebfa" stroke="#f0ebfa" stroke-width="2" /><text x="1652.5" y="540" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="600" text-anchor="middle" data-box="1603 511 99 42">noul</text>
+<path d="M1030 597 V674" fill="none" stroke="#7051bb" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<text x="1061" y="641" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="23" font-weight="600" text-anchor="start">OTHERWISE · upgrade</text>
+<rect x="852" y="681" width="356" height="175" rx="16" fill="#f0ebfa" stroke="#a68dcb" stroke-width="2" />
+<text x="883" y="722" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="600" text-anchor="start">02  STRONGER ANSWER</text>
+<text x="883" y="774" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="37" font-weight="700" text-anchor="start">Vega 27B</text>
+<text x="883" y="819" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="24" font-weight="400" text-anchor="start">Same original request</text>
+<path d="M1208 770 H1545 V596" fill="none" stroke="#7051bb" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<text x="1252" y="745" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="23" font-weight="600" text-anchor="start">Valid response</text>
+<text x="480" y="649" fill="#bc711a" font-family="DejaVu Sans,sans-serif" font-size="23" font-weight="400" text-anchor="start">One model call so far</text>
+<text x="65" y="944" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="22" font-weight="400" text-anchor="start">C = choice   S = score   N = noul</text>
+<text x="1735" y="944" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="22" font-weight="400" text-anchor="end">Up to 2 model calls · no valid final answer → unresolved</text>
+</svg>

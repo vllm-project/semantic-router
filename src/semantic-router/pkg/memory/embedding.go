@@ -3,28 +3,24 @@ package memory
 import (
 	"context"
 	"fmt"
-	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
-// EmbeddingModelType represents supported embedding model types
-type EmbeddingModelType string
-
-const (
-	EmbeddingModelBERT   EmbeddingModelType = "bert"
-	EmbeddingModelMMBERT EmbeddingModelType = "mmbert"
-	EmbeddingModelMulti  EmbeddingModelType = "multimodal"
-	EmbeddingModelQwen3  EmbeddingModelType = "qwen3"
-	EmbeddingModelGemma  EmbeddingModelType = "gemma"
-)
-
-// EmbeddingConfig holds the embedding model configuration
+// EmbeddingConfig holds the embedding deployment memories are embedded with
+// and the view they read.
 type EmbeddingConfig struct {
-	Provider  embedding.Provider // Prepared by the generation owner; never closed by the store.
-	Model     EmbeddingModelType
-	Dimension int // Target dimension for Matryoshka models (default: 256 for mmbert)
-	Layer     int // Target layer for 2D Matryoshka early exit (0 = full model, recommended for search/RAG)
+	Provider   embedding.Provider // Prepared by the generation owner; never closed by the store.
+	Deployment string
+	Dimension  int // Width of the vectors (0: the model's full output)
+	Layer      int // Target layer for 2D Matryoshka early exit (0 = full model, recommended for search/RAG)
+}
+
+// defaultEmbeddingConfig embeds with Vela Embedding at its memory view, for
+// stores built without an embedding configuration.
+func defaultEmbeddingConfig() EmbeddingConfig {
+	return EmbeddingConfig{Deployment: config.EmbeddingDefaultDeployment, Dimension: config.VelaEmbeddingMemoryDimension}
 }
 
 // GenerateEmbedding generates an embedding for callers without a request context.
@@ -42,36 +38,19 @@ func GenerateEmbeddingWithContext(ctx context.Context, text string, cfg Embeddin
 		return nil, err
 	}
 	if cfg.Provider == nil && deterministicEmbeddingsEnabled() {
-		if strings.EqualFold(strings.TrimSpace(string(cfg.Model)), "multimodal") && cfg.Dimension <= 0 {
-			return nil, fmt.Errorf("simulated multimodal memory requires an explicit dimension")
-		}
 		return generateDeterministicEmbedding(text, cfg), nil
 	}
-	modelName := strings.ToLower(strings.TrimSpace(string(cfg.Model)))
-	options := embedding.Options{}
-	switch modelName {
-	case "qwen3", "gemma", "bert", "":
-		// These paths have always requested the provider's full output.
-	case "mmbert":
-		options = embedding.Options{Dimension: cfg.Dimension, Layer: cfg.Layer}
-		if options.Dimension <= 0 {
-			options.Dimension = 256
-		}
-	case "multimodal":
-		dimension, err := embedding.ResolveDimension(cfg.Provider, cfg.Dimension)
-		if err != nil {
+	if cfg.Dimension > 0 {
+		if _, err := embedding.ResolveDimension(cfg.Provider, cfg.Dimension); err != nil {
 			return nil, err
 		}
-		options.Dimension = dimension
-	default:
-		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelName)
 	}
-	vector, err := embedding.Embed(ctx, cfg.Provider, text, options)
+	vector, err := embedding.Embed(ctx, cfg.Provider, text, embedding.Options{Dimension: cfg.Dimension, Layer: cfg.Layer})
 	if err != nil {
-		return nil, fmt.Errorf("%s embedding failed: %w", modelName, err)
+		return nil, fmt.Errorf("%s embedding failed: %w", cfg.Deployment, err)
 	}
-	if modelName == "multimodal" && len(vector) != options.Dimension {
-		return nil, fmt.Errorf("multimodal embedding returned %d values, expected %d", len(vector), options.Dimension)
+	if cfg.Dimension > 0 && len(vector) != cfg.Dimension {
+		return nil, fmt.Errorf("%s embedding returned %d values, expected %d", cfg.Deployment, len(vector), cfg.Dimension)
 	}
 	return vector, nil
 }
@@ -90,14 +69,29 @@ func embedForWrite(ctx context.Context, text string, cfg EmbeddingConfig) ([]flo
 	return vector, nil
 }
 
+// memoryUpdateEmbedding keeps an existing vector only when its content still
+// describes the memory being written. An explicitly supplied vector is
+// authoritative; otherwise changed content must be embedded before persistence.
+func memoryUpdateEmbedding(ctx context.Context, memory, existing *Memory, cfg EmbeddingConfig) ([]float32, error) {
+	if len(memory.Embedding) > 0 {
+		return memory.Embedding, nil
+	}
+	if existing != nil && memory.Content == existing.Content && len(existing.Embedding) > 0 {
+		return existing.Embedding, nil
+	}
+
+	vector, err := embedForWrite(ctx, memory.Content, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate embedding: %w", err)
+	}
+	return vector, nil
+}
+
 // StorageDimension binds a fixed-width index to its prepared representation.
 // Store-only callers without a provider must supply an explicit schema width.
 func StorageDimension(configured int, cfg EmbeddingConfig) (int, error) {
 	if configured == 0 {
 		configured = cfg.Dimension
-	}
-	if configured == 0 && cfg.Model == EmbeddingModelMMBERT {
-		configured = 256
 	}
 	if cfg.Provider != nil {
 		return embedding.ResolveDimension(cfg.Provider, configured)

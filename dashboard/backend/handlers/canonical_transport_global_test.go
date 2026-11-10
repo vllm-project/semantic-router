@@ -129,7 +129,7 @@ func TestConfigEditorSparseGlobalRoundTrip(t *testing.T) {
 				t.Fatal(err)
 			}
 			read := httptest.NewRecorder()
-			ConfigHandler(configPath)(read, httptest.NewRequest(http.MethodGet, "/api/router/config/all", nil))
+			ConfigHandler(configPath, false)(read, httptest.NewRequest(http.MethodGet, "/api/router/config/all", nil))
 			if read.Code != http.StatusOK {
 				t.Fatalf("read config: %s", read.Body.String())
 			}
@@ -172,18 +172,18 @@ func TestSetupPatchWithoutGlobalPreservesExistingOverride(t *testing.T) {
 
 func TestConfigTransportPreservesGlobalEnvironmentReferences(t *testing.T) {
 	t.Setenv("TRANSPORT_MODEL_PATH", "resolved-path-must-not-be-persisted")
-	input := []byte("global:\n  model_catalog:\n    embeddings:\n      semantic:\n        qwen3_model_path: ${TRANSPORT_MODEL_PATH}\n")
+	input := []byte("global:\n  stores:\n    memory:\n      milvus:\n        address: ${TRANSPORT_MODEL_PATH}\n")
 	config, err := decodeYAMLTaggedBytes[canonicalConfigTransport](input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.Global.ModelCatalog.Embeddings.Semantic.Qwen3ModelPath != "${TRANSPORT_MODEL_PATH}" {
+	if config.Global.Stores.Memory.Milvus.Address != "${TRANSPORT_MODEL_PATH}" {
 		t.Fatal("transport expanded an environment reference into persisted configuration")
 	}
 }
 
 func TestConfigTransportResolvesGlobalAliasesFromOtherSections(t *testing.T) {
-	input := []byte("version: v0.3\nlisteners: &empty []\nglobal:\n  model_catalog:\n    kbs: *empty\n")
+	input := []byte("version: v0.5\nlisteners: &empty []\nglobal:\n  router:\n    headers:\n      session_id_headers: *empty\n")
 	config, err := decodeYAMLTaggedBytes[canonicalConfigTransport](input)
 	if err != nil {
 		t.Fatal(err)

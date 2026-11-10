@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -166,6 +166,11 @@ func TestRouterReplayViewerRedactionCoversListDetailAndTrajectory(t *testing.T) 
 			name: "trajectory",
 			path: "/api/v1/observability/replays/trajectory?session_id=session-1",
 			body: `{"object":"router_replay.trajectory","session_id":"session-1","messages":[{"role":"user","content":"private-canary"},{"role":"assistant","tool_calls":[{"id":"call-1","type":"function","function":{"name":"lookup","arguments":"private-canary"}}]},{"role":"tool","content":"private-canary","tool_call_id":"call-1"}]}`,
+		},
+		{
+			name: "captured tool results",
+			path: "/api/v1/observability/replays/replay-2",
+			body: `{"id":"replay-2","decision":"agent-loop","request_body":"{\"messages\":[{\"role\":\"tool\",\"content\":\"private-canary\"}]}","tool_trace":{"steps":[{"type":"client_tool_result","tool_call_id":"call-1","status":"succeeded","output":"private-canary","truncated":true}]}}`,
 		},
 	}
 	for _, test := range tests {

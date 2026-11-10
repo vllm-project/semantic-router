@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -143,13 +143,14 @@ func apiRoutes() []apiRoute {
 		applyRouteContract(apiRouterReplayRoutes(), routeContract("observability", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiResponseCacheRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiContextCompressionRoutes(), routeContract("plugins", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
+		applyRouteContract(apiSystemOneRoutes(), routeContract("diagnostics", APIPlaneDiagnostic, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
+		applyRouteContract(apiSystemOneRoutingRoutes(), routeContract("diagnostics", APIPlaneDiagnostic, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiModelDiagnosticRoutes(), routeContract("diagnostics", APIPlaneDiagnostic, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiPluginRoutes(), routeContract("plugins", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiManagementAuditRoutes(), routeContract("observability", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceOperator)),
 		applyRouteContract(apiPluginObservabilityRoutes(), routeContract("observability", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiContextRecoveryRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiConfigRoutes(), routeContract("config", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
-		applyRouteContract(apiKnowledgeBaseRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiMemoryRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityAdvanced, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiVectorStoreRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),
 		applyRouteContract(apiFileRoutes(), routeContract("storage", APIPlaneManagement, APIVisibilityPrimary, APIAudienceAgent, APIAudienceOperator)),

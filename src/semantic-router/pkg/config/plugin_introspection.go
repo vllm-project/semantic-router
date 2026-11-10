@@ -5,14 +5,7 @@ import "reflect"
 // DecodeDecisionPlugin validates and decodes a plugin through the canonical
 // registry. Management consumers must not maintain another plugin inventory.
 func DecodeDecisionPlugin(plugin DecisionPlugin) (interface{}, error) {
-	if err := validateDecisionPluginPayload("plugin", 0, plugin); err != nil {
-		return nil, err
-	}
-	payload := newDecisionPluginPayload(plugin.Type)
-	if err := plugin.Configuration.DecodeInto(payload); err != nil {
-		return nil, err
-	}
-	return payload, nil
+	return DecodeDecisionPluginAt(PluginAt{Decision: "plugin", Type: plugin.Type}, plugin)
 }
 
 // DecisionPluginEnabled reports the declared policy activation. It does not

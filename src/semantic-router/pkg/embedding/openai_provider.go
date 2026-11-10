@@ -16,6 +16,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -32,12 +33,15 @@ type OpenAICompatibleConfig struct {
 	BaseURL           string
 	Model             string
 	APIKeyEnv         string
-	TimeoutSeconds    int
+	TimeoutSeconds    float64
 	MaxRetries        int
 	MaxResponseBytes  int64
 	Dimensions        int
 	ExpectedDimension int
 	HTTPClient        *http.Client
+	// Deployment, when set, is the openai_embeddings deployment whose
+	// connection block (auth, headers, tls, limits) every call uses.
+	Deployment *config.ModelDeployment
 }
 
 type OpenAICompatibleProvider struct {
@@ -52,6 +56,13 @@ type OpenAICompatibleProvider struct {
 	dimensions        int
 	expectedDimension int
 	client            *http.Client
+}
+
+// EmbedFullInput relies on the OpenAI embeddings contract: an input beyond the
+// model's limit is rejected. The client sends the complete text and never asks
+// the server to truncate it; endpoint errors remain errors for the consumer.
+func (p *OpenAICompatibleProvider) EmbedFullInput(ctx context.Context, text string) ([]float32, error) {
+	return p.Embed(ctx, text)
 }
 
 type embeddingsRequest struct {
@@ -86,7 +97,7 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 		return nil, fmt.Errorf("embedding endpoint model is required for backend %q", config.EmbeddingBackendOpenAICompatible)
 	}
 	if cfg.ExpectedDimension > 0 && cfg.Dimensions > 0 && cfg.ExpectedDimension != cfg.Dimensions {
-		return nil, fmt.Errorf("embedding endpoint dimensions (%d) must match target_dimension (%d)", cfg.Dimensions, cfg.ExpectedDimension)
+		return nil, fmt.Errorf("embedding endpoint dimensions (%d) must match the expected dimension (%d)", cfg.Dimensions, cfg.ExpectedDimension)
 	}
 	if cfg.TimeoutSeconds < 0 {
 		return nil, fmt.Errorf("embedding endpoint timeout_seconds must be non-negative")
@@ -96,11 +107,10 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 		return nil, err
 	}
 
-	timeoutSeconds := cfg.TimeoutSeconds
-	if timeoutSeconds == 0 {
-		timeoutSeconds = defaultTimeoutSeconds
+	timeout := config.DurationFromSeconds(cfg.TimeoutSeconds)
+	if timeout == 0 {
+		timeout = time.Duration(defaultTimeoutSeconds) * time.Second
 	}
-	timeout := time.Duration(timeoutSeconds) * time.Second
 	client := cfg.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: timeout}
@@ -121,6 +131,16 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 		dimensions:        cfg.Dimensions,
 		expectedDimension: cfg.ExpectedDimension,
 		client:            client,
+	}
+	if cfg.HTTPClient == nil && cfg.Deployment != nil {
+		deployment := *cfg.Deployment
+		deployment.Endpoint = endpoint
+		remote, err := connector.ForDeployment(deployment, connector.Options{AttemptTimeout: timeout, MaxRetries: 0, MaxRequestBytes: 16 * 1024 * 1024, MaxResponseBytes: maxResponseBytes, MaxErrorBytes: maxErrorBodyBytes})
+		if err != nil {
+			return nil, err
+		}
+		provider.connector, provider.apiKey, provider.apiKeyEnv = remote, "", ""
+		return provider, nil
 	}
 	if cfg.HTTPClient == nil {
 		remote, err := connector.New(endpoint, func(_ context.Context, req *http.Request) error {
@@ -259,6 +279,12 @@ func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []s
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
+	// The normal connector path accounts for its own calls. Only this
+	// mutually exclusive injected-client path needs a reservation here.
+	if budgetErr := budget.Consume(attemptCtx); budgetErr != nil {
+		_ = req.Body.Close()
+		return nil, budgetErr
+	}
 	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, err

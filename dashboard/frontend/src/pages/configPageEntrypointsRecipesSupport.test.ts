@@ -8,6 +8,7 @@ import {
   isSyntheticDefaultRecipe,
   listRecipeProfiles,
   normalizeEntrypointModelNames,
+  requireEntrypointModelNames,
   validateEntrypointForm,
   validateRecipeForm,
 } from './configPageEntrypointsRecipesSupport'
@@ -59,7 +60,6 @@ const baseConfig = (): ConfigData => ({
       },
     },
   ],
-  global: { router: { auto_model_names: ['vllm-sr/auto'] } },
 })
 
 describe('entrypoints and recipes support', () => {
@@ -71,11 +71,39 @@ describe('entrypoints and recipes support', () => {
     ).toEqual(['vllm-sr/mom-v1-flash', 'vllm-sr/mom-v1-vault'])
   })
 
-  it('rejects duplicate and reserved entrypoint model IDs', () => {
+  it('requires at least one public model name', () => {
+    expect(requireEntrypointModelNames([' my/vault ', 'my/vault', 'vault'])).toEqual([
+      'my/vault',
+      'vault',
+    ])
+    expect(() => requireEntrypointModelNames([' '])).toThrow(
+      'Add at least one request-facing model name.',
+    )
+  })
+
+  it('rejects duplicate mappings but allows former special names as ordinary aliases', () => {
     const config = baseConfig()
     expect(() =>
       validateEntrypointForm(
         { modelNames: 'vllm-sr/mom-v1-blend', recipe: 'default' },
+        config,
+        models,
+        null,
+      ),
+    ).toThrow(/already mapped/)
+    for (const modelNames of ['vllm-sr/auto', 'MoM', 'auto', 'vllm-sr/fusion', 'vllm-sr/remom']) {
+      expect(() =>
+        validateEntrypointForm({ modelNames, recipe: 'default' }, config, models, null),
+      ).not.toThrow()
+    }
+  })
+
+  it('reserves the effective builtin default only when no default override exists', () => {
+    const config = baseConfig()
+    config.entrypoints = []
+    expect(() =>
+      validateEntrypointForm(
+        { modelNames: 'vllm-sr/auto', recipe: 'frontier' },
         config,
         models,
         null,
@@ -88,61 +116,7 @@ describe('entrypoints and recipes support', () => {
         models,
         null,
       ),
-    ).toThrow(/reserved/)
-    config.global = { router: { auto_model_name: ' router/custom-auto ' } }
-    expect(() =>
-      validateEntrypointForm(
-        { modelNames: 'router/custom-auto', recipe: 'default' },
-        config,
-        models,
-        null,
-      ),
-    ).toThrow(/reserved/)
-    config.global = {
-      integrations: {
-        looper: {
-          fusion: { model_names: ['router/custom-fusion'] },
-        },
-      },
-    } as ConfigData['global']
-    expect(() =>
-      validateEntrypointForm(
-        { modelNames: 'router/custom-fusion', recipe: 'default' },
-        config,
-        models,
-        null,
-      ),
-    ).toThrow(/direct router dispatch/)
-    expect(() =>
-      validateEntrypointForm(
-        { modelNames: 'vllm-sr/fusion', recipe: 'default' },
-        config,
-        models,
-        null,
-      ),
     ).not.toThrow()
-    config.global = undefined
-    config.routing = {
-      ...config.routing,
-      decisions: [
-        {
-          name: 'remom-route',
-          description: 'Direct ReMoM route',
-          priority: 1,
-          rules: { operator: 'AND', conditions: [] },
-          modelRefs: [],
-          algorithm: { type: 'remom' },
-        },
-      ],
-    }
-    expect(() =>
-      validateEntrypointForm(
-        { modelNames: 'vllm-sr/remom', recipe: 'default' },
-        config,
-        models,
-        null,
-      ),
-    ).toThrow(/direct router dispatch/)
   })
 
   it('rejects entrypoint IDs that collide with physical models', () => {

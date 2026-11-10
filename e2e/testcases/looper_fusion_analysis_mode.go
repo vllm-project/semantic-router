@@ -70,7 +70,7 @@ func testLooperFusionAnalysisModes(ctx context.Context, client *kubernetes.Clien
 	}
 
 	for _, tc := range tests {
-		response, err := sendLocalChatCompletion(ctx, localPort, "MoM", tc.probe, 30*time.Second)
+		response, err := sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", tc.probe, 30*time.Second)
 		if err != nil {
 			return fmt.Errorf("fusion %s request failed: %w", tc.name, err)
 		}
@@ -86,8 +86,8 @@ func testLooperFusionAnalysisModes(ctx context.Context, client *kubernetes.Clien
 		if len(payload.Choices) != 1 || payload.Choices[0].Message.Content != tc.wantAnswer {
 			return fmt.Errorf("fusion %s answer = %#v, want %q", tc.name, payload.Choices, tc.wantAnswer)
 		}
-		if got := response.Headers.Get("x-vsr-looper-iterations"); got != tc.wantIterations {
-			return fmt.Errorf("fusion %s iterations header = %q, want %q", tc.name, got, tc.wantIterations)
+		if got := traceParam(response.Headers, "looper", "iterations"); got != tc.wantIterations {
+			return fmt.Errorf("fusion %s looper iterations = %q, want %q", tc.name, got, tc.wantIterations)
 		}
 		if payload.Usage.TotalTokens != tc.wantTotalTokens {
 			return fmt.Errorf("fusion %s total_tokens = %d, want %d", tc.name, payload.Usage.TotalTokens, tc.wantTotalTokens)

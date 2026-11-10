@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 title: 自定义模型
 description: 为私有、自托管或新发布的模型配置可选元数据和同构后端副本。
 translation:
-  source_commit: "2b7519a84aec96963b02a3534e82908beba33f76"
+  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/custom-models.md"
   outdated: false
 ---
@@ -14,8 +15,7 @@ translation:
 ## 绑定自定义模型
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   defaults:
     model: private-chat
@@ -28,19 +28,17 @@ providers:
           provider: vllm
           endpoint: model-gateway.example:8000
           protocol: http
-
-routing:
-  modelCards:
-    - name: private-chat
       display_name: Private Chat
       context_window_size: 131072
       capabilities: [chat, tools]
       tags: [private, production]
+recipes:
+  - name: default
 ```
 
-对于自定义 Model，`routing.modelCards[].name` 必须等于 Model 别名。card 是可选的：当 Router 只需要后端绑定时可以省略。如果省略 `provider_model_id`，上游 ID 默认等于别名；当已服务的 checkpoint 使用另一个名称时，请显式设置。
+对于自定义 Model，`providers.models[].name` 必须等于 Model 别名。card 是可选的：当 Router 只需要后端绑定时可以省略。如果省略 `provider_model_id`，上游 ID 默认等于别名；当已服务的 checkpoint 使用另一个名称时，请显式设置。
 
-Model Card 元数据还可以包含发布者、展示、分发和 LoRA。它不得包含凭据、价格或评估记录。价格放在 `providers.models[].pricing`，记录放在顶层 `evaluation.records[]`，凭据放在后端绑定中，最好通过 `api_key_env`。
+Model Card 元数据还可以包含发布者、展示、分发和 LoRA。它不得包含凭据、价格或评估记录。价格放在 `providers.models[].pricing`，记录放在顶层 `evaluation.records[]`，凭据放在后端 ref 的 `auth` 中，通过 `auth.api_key_env` 提供。
 
 ## 添加评估证据
 
@@ -65,13 +63,13 @@ evaluation:
 推理是可选的，支持两种形式：
 
 ```yaml
-# 复用一个内置家族。
+# Reuse one built-in family.
 reasoning:
   family: qwen3
 ```
 
 ```yaml
-# 当没有匹配的内置家族时，定义模型本地家族。
+# Define a model-local family when no built-in family matches.
 reasoning:
   type: reasoning_effort
   parameter: reasoning_effort
@@ -110,7 +108,7 @@ providers:
 
 ## 使用控制面板
 
-打开 **Build → Models → Add Model**：
+打开 **Build → Routing → Models → Add Model**：
 
 - 选择 Provider，并在连接流程中输入自定义模型 ID；或
 - 选择 **Manual setup**，编辑完整的身份、推理、Model Card、定价、可靠性和后端引用字段。

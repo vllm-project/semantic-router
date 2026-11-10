@@ -25,7 +25,7 @@ function buildConfig() {
       name,
       provider_model_id: `physical/Qwen-Scale-${String(index).padStart(3, '0')}`,
       api_format: 'openai',
-      reasoning_family: reasoningFamily,
+      reasoning: reasoningFamily ? { family: reasoningFamily } : undefined,
       backend_refs:
         index % 2 === 0
           ? [
@@ -42,53 +42,47 @@ function buildConfig() {
         prompt_per_1m: index / 100,
         completion_per_1m: index / 50,
       },
+      description:
+        index === 299
+          ? 'Unique needle model for large inventory search coverage.'
+          : `Scale-test routing model ${index}`,
+      capabilities: index % 2 === 0 ? ['chat', 'reasoning'] : ['chat'],
+      tags: [index % 2 === 0 ? 'rocm' : 'fallback'],
+      param_size: `${8 + (index % 4) * 8}B`,
     }
   })
 
   return {
-    version: 'v0.3',
+    version: 'v0.5',
     listeners: [{ name: 'public', address: '0.0.0.0', port: 8801 }],
     providers: {
       defaults: {
-        default_model: DEFAULT_MODEL,
-        reasoning_families: {
-          'family-alpha': { type: 'reasoning_effort', parameter: 'reasoning_effort' },
-          'family-beta': { type: 'chat_template_kwargs', parameter: 'thinking' },
-        },
+        model: DEFAULT_MODEL,
       },
       models,
     },
-    routing: {
-      modelCards: models.map((model, index) => ({
-        name: model.name,
-        description:
-          index === 299
-            ? 'Unique needle model for large inventory search coverage.'
-            : `Scale-test routing model ${index}`,
-        capabilities: index % 2 === 0 ? ['chat', 'reasoning'] : ['chat'],
-        tags: [index % 2 === 0 ? 'rocm' : 'fallback'],
-        modality: 'text',
-        param_size: `${8 + (index % 4) * 8}B`,
-      })),
-      signals: {},
-      decisions: [
-        {
-          name: 'protected-production-route',
-          description: 'Keeps one non-default model protected by a routing reference.',
-          priority: 1,
-          rules: { operator: 'AND' as const, conditions: [] },
-          modelRefs: [
-            {
-              model: REFERENCED_MODEL,
-              use_reasoning: false,
-              weight: 1,
-            },
-          ],
-        },
-      ],
-    },
+    recipes: [
+      {
+        name: 'default',
+        signals: {},
+        decisions: [
+          {
+            name: 'protected-production-route',
+            description: 'Keeps one non-default model protected by a routing reference.',
+            priority: 1,
+            rules: { operator: 'AND' as const, conditions: [] },
+            modelRefs: [
+              {
+                model: REFERENCED_MODEL,
+                use_reasoning: false,
+                weight: 1,
+              },
+            ],
+          },
+        ],
+      },
+    ],
     global: {},
-    plugins: {},
   }
 }
 
@@ -161,13 +155,63 @@ async function mockLargeModelInventory(
   return { writes }
 }
 
+function inventoryTable(page: Page) {
+  return page.getByRole('table').filter({
+    has: page.getByRole('columnheader', { name: 'Model Name', exact: true }),
+  })
+}
+
+function inventoryPagination(page: Page) {
+  // Inventory and Evaluation Evidence each have their own model pagination.
+  return inventoryTable(page).locator('../..').getByRole('group', { name: 'models pagination' })
+}
+
+async function showTwentyFiveModels(page: Page) {
+  const pagination = inventoryPagination(page)
+  await expect(pagination).toContainText(`1–5 of ${MODEL_COUNT} models`)
+  await pagination.getByLabel('Rows').selectOption('25')
+  await expect(pagination).toContainText(`1–25 of ${MODEL_COUNT} models`)
+}
+
 test.describe('Models inventory at 300+ scale', () => {
+  test('keeps pricing clear of actions at 1320px', async ({ page }) => {
+    await page.setViewportSize({ width: 1320, height: 549 })
+    await mockLargeModelInventory(page)
+    await page.goto('/config/models')
+
+    const table = inventoryTable(page)
+    const pricing = table.getByRole('columnheader', { name: 'Pricing', exact: true })
+    await expect(pricing).toBeVisible()
+    const viewButton = page.getByRole('button', { name: `View ${DEFAULT_MODEL}`, exact: true })
+    const row = table.getByRole('row').filter({ has: viewButton })
+
+    // Text visibility alone misses a sticky Actions cell covering Pricing.
+    // Measure before clicking, since Playwright may scroll the table for us.
+    for (const [price, actions] of [
+      [pricing, table.getByRole('columnheader', { name: 'Actions', exact: true })],
+      [
+        row.getByRole('cell', { name: '$0.00 / 1M', exact: true }),
+        row.getByRole('cell').filter({ has: viewButton }),
+      ],
+    ]) {
+      const priceBounds = await price.boundingBox()
+      const actionBounds = await actions.boundingBox()
+      expect(priceBounds).not.toBeNull()
+      expect(actionBounds).not.toBeNull()
+      expect(actionBounds!.x).toBeGreaterThanOrEqual(priceBounds!.x + priceBounds!.width - 1)
+    }
+
+    await row.getByRole('button', { name: `View ${DEFAULT_MODEL}`, exact: true }).click()
+    await expect(page.getByRole('dialog', { name: `Model: ${DEFAULT_MODEL}` })).toBeVisible()
+  })
+
   test('adds and edits one model with one canonical write per action', async ({ page }) => {
     test.setTimeout(90_000)
     const { writes } = await mockLargeModelInventory(page)
     await page.goto('/config/models')
+    await showTwentyFiveModels(page)
 
-    await expect(page.getByText(`1–25 of ${MODEL_COUNT} models`, { exact: true })).toBeVisible()
+    await expect(inventoryPagination(page)).toContainText(`1–25 of ${MODEL_COUNT} models`)
     await page.getByRole('button', { name: 'Add Model' }).click()
 
     const addDialog = page.getByRole('dialog', { name: 'Add models' })
@@ -190,14 +234,12 @@ test.describe('Models inventory at 300+ scale', () => {
 
     await advancedSettings.click()
     await connectionDialog.getByLabel('Name prefix Optional').fill('model-305-added')
-    await connectionDialog.getByLabel('Reasoning family Optional').selectOption('family-alpha')
+    await connectionDialog.getByLabel('Reasoning family Optional').selectOption('qwen3')
     await connectionDialog
       .getByLabel('Description Optional')
       .fill('Added from the 305-model inventory.')
-    await connectionDialog.getByLabel('Modality Optional').selectOption('ar')
     await connectionDialog.getByLabel('Parameter size Optional').fill('32B')
     await connectionDialog.getByLabel('Context window Optional').fill('131072')
-    await connectionDialog.getByLabel('Quality score 0–1').fill('0.91')
     await connectionDialog.getByLabel('Capabilities Comma separated').fill('chat, reasoning')
     await connectionDialog.getByLabel('Tags Comma separated').fill('rocm, new')
     await connectionDialog.getByLabel('Input cost Optional').fill('0.25')
@@ -212,9 +254,10 @@ test.describe('Models inventory at 300+ scale', () => {
     expect(addedConfig).not.toHaveProperty('signals')
     expect(addedConfig).not.toHaveProperty('decisions')
     expect(addedConfig).not.toHaveProperty('model_config')
-    expect(addedConfig.version).toBe('v0.3')
+    expect(addedConfig.version).toBe('v0.5')
+    expect(addedConfig.providers.defaults.model).toBe(DEFAULT_MODEL)
+    expect(addedConfig.providers.defaults).not.toHaveProperty('default_model')
     expect(addedConfig.providers.models).toHaveLength(MODEL_COUNT + 1)
-    expect(addedConfig.routing.modelCards).toHaveLength(MODEL_COUNT + 1)
     expect(
       addedConfig.providers.models.find(
         (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
@@ -223,12 +266,12 @@ test.describe('Models inventory at 300+ scale', () => {
       name: 'model-305-added/physical/Qwen-Scale-305',
       provider_model_id: 'physical/Qwen-Scale-305',
       api_format: 'openai',
-      reasoning_family: 'family-alpha',
+      reasoning: { family: 'qwen3' },
       backend_refs: [
         {
           name: 'vllm-primary',
-          base_url: 'http://localhost:8000/v1',
-          provider: 'openai',
+          endpoint: 'http://localhost:8000/v1',
+          provider: 'vllm',
           api_key: 'test-provider-key',
         },
       ],
@@ -240,24 +283,16 @@ test.describe('Models inventory at 300+ scale', () => {
         cache_write_per_1m: 0.25,
       },
       reliability: { retry_count: 2, lb_policy: 'LEAST_REQUEST' },
-    })
-    expect(
-      addedConfig.routing.modelCards.find(
-        (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
-      ),
-    ).toMatchObject({
       description: 'Added from the 305-model inventory.',
       capabilities: ['chat', 'reasoning'],
       tags: ['rocm', 'new'],
-      modality: 'ar',
       param_size: '32B',
       context_window_size: 131072,
-      quality_score: 0.91,
     })
 
     const search = page.getByPlaceholder('Search name, ID, family, tag, or capability...')
     await search.fill('model-305-added/physical/Qwen-Scale-305')
-    await expect(page.getByText('1–1 of 1 models', { exact: true })).toBeVisible()
+    await expect(inventoryPagination(page)).toContainText('1–1 of 1 models')
     await page.getByRole('button', { name: 'Edit model-305-added/physical/Qwen-Scale-305' }).click()
 
     const editDialog = page.getByRole('dialog', {
@@ -277,20 +312,14 @@ test.describe('Models inventory at 300+ scale', () => {
     expect(editedConfig).not.toHaveProperty('signals')
     expect(editedConfig).not.toHaveProperty('decisions')
     expect(editedConfig).not.toHaveProperty('model_config')
+    expect(editedConfig.providers.defaults.model).toBe(DEFAULT_MODEL)
     expect(editedConfig.providers.models).toHaveLength(MODEL_COUNT + 1)
-    expect(editedConfig.routing.modelCards).toHaveLength(MODEL_COUNT + 1)
     expect(
       editedConfig.providers.models.find(
         (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
       ),
     ).toMatchObject({
       provider_model_id: 'physical/Qwen-Scale-305-v2',
-    })
-    expect(
-      editedConfig.routing.modelCards.find(
-        (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
-      ),
-    ).toMatchObject({
       description: 'Updated without shrinking the large inventory.',
       tags: ['rocm', 'updated'],
     })
@@ -302,11 +331,12 @@ test.describe('Models inventory at 300+ scale', () => {
     await page.setViewportSize({ width: 1440, height: 1000 })
     await mockLargeModelInventory(page)
     await page.goto('/config/models')
+    await showTwentyFiveModels(page)
 
     await expect(page.getByRole('heading', { name: 'Models', exact: true }).first()).toBeVisible()
-    await expect(page.getByText(`1–25 of ${MODEL_COUNT} models`, { exact: true })).toBeVisible()
+    await expect(inventoryPagination(page)).toContainText(`1–25 of ${MODEL_COUNT} models`)
     await expect(page.getByRole('button', { name: /^Expand model-/ })).toHaveCount(25)
-    await expect(page.getByText(DEFAULT_MODEL, { exact: true })).toBeVisible()
+    await expect(inventoryTable(page).getByText(DEFAULT_MODEL, { exact: true })).toBeVisible()
     await expect(page.getByText('model-024', { exact: true })).toBeVisible()
 
     const modelHeader = page.getByRole('columnheader', { name: 'Model Name' })
@@ -319,24 +349,23 @@ test.describe('Models inventory at 300+ scale', () => {
       .toBeGreaterThanOrEqual(124)
     await expect(pricingHeader).toHaveText('Pricing')
 
-    await page
-      .getByRole('group', { name: 'models pagination' })
+    await inventoryPagination(page)
       .getByRole('button', { name: 'Next page' })
       .click()
-    await expect(page.getByText(`26–50 of ${MODEL_COUNT} models`, { exact: true })).toBeVisible()
+    await expect(inventoryPagination(page)).toContainText(`26–50 of ${MODEL_COUNT} models`)
     await expect(page.getByText('model-025', { exact: true })).toBeVisible()
     await expect(page.getByText('model-049', { exact: true })).toBeVisible()
-    await expect(page.getByText(DEFAULT_MODEL, { exact: true })).toHaveCount(0)
+    await expect(inventoryTable(page).getByText(DEFAULT_MODEL, { exact: true })).toHaveCount(0)
 
     await page.getByLabel('Reasoning family').selectOption('family-alpha')
-    await expect(page.getByText('1–25 of 102 models', { exact: true })).toBeVisible()
-    await expect(page.getByText(DEFAULT_MODEL, { exact: true })).toBeVisible()
+    await expect(inventoryPagination(page)).toContainText('1–25 of 102 models')
+    await expect(inventoryTable(page).getByText(DEFAULT_MODEL, { exact: true })).toBeVisible()
 
     await page.getByRole('button', { name: 'Clear filters' }).click()
     await page
       .getByPlaceholder('Search name, ID, family, tag, or capability...')
       .fill('model-299-needle')
-    await expect(page.getByText('1–1 of 1 models', { exact: true })).toBeVisible()
+    await expect(inventoryPagination(page)).toContainText('1–1 of 1 models')
     await expect(page.getByText('model-299-needle', { exact: true })).toBeVisible()
     await expect(page.getByText('physical/Qwen-Scale-299', { exact: true })).toBeVisible()
   })
@@ -346,8 +375,9 @@ test.describe('Models inventory at 300+ scale', () => {
   }) => {
     await mockLargeModelInventory(page)
     await page.goto('/config/models')
+    await showTwentyFiveModels(page)
 
-    const viewButton = page.getByRole('button', { name: `View ${DEFAULT_MODEL}` })
+    const viewButton = inventoryTable(page).getByRole('button', { name: `View ${DEFAULT_MODEL}` })
     await viewButton.focus()
     await viewButton.click()
 
@@ -374,6 +404,7 @@ test.describe('Models inventory at 300+ scale', () => {
   }) => {
     const { writes } = await mockLargeModelInventory(page)
     await page.goto('/config/models')
+    await showTwentyFiveModels(page)
 
     await expect(page.getByLabel(`Select model ${DEFAULT_MODEL}`)).toBeDisabled()
     await expect(page.getByLabel(`Select model ${REFERENCED_MODEL}`)).toBeDisabled()
@@ -393,8 +424,7 @@ test.describe('Models inventory at 300+ scale', () => {
     expect(writes).toHaveLength(0)
 
     await page.getByLabel('Select model model-002').check()
-    await page
-      .getByRole('group', { name: 'models pagination' })
+    await inventoryPagination(page)
       .getByRole('button', { name: 'Next page' })
       .click()
     await page.getByLabel('Select model model-026').check()
@@ -426,6 +456,7 @@ test.describe('Models inventory at 300+ scale', () => {
     await dialog.getByRole('button', { name: 'Delete models' }).click()
 
     await expect.poll(() => writes.length).toBe(1)
+    expect(writes[0].providers.defaults.model).toBe(DEFAULT_MODEL)
     const savedModelNames = writes[0].providers.models.map((model) => model.name)
     expect(savedModelNames).toHaveLength(MODEL_COUNT - 2)
     expect(savedModelNames).not.toContain('model-002')
@@ -437,14 +468,15 @@ test.describe('Models inventory at 300+ scale', () => {
   test('hides every write affordance when explicit permissions are read-only', async ({ page }) => {
     const { writes } = await mockLargeModelInventory(page, { readonlyUser: true })
     await page.goto('/config/models')
+    await showTwentyFiveModels(page)
 
-    await expect(page.getByText(`1–25 of ${MODEL_COUNT} models`, { exact: true })).toBeVisible()
+    await expect(inventoryPagination(page)).toContainText(`1–25 of ${MODEL_COUNT} models`)
     await expect(page.getByRole('button', { name: 'Add Model' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Add Family' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: /^Edit model-/ })).toHaveCount(0)
     await expect(page.getByRole('button', { name: /^Delete model-/ })).toHaveCount(0)
     await expect(page.getByRole('checkbox', { name: /^Select model / })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: `View ${DEFAULT_MODEL}` })).toBeVisible()
+    await expect(inventoryTable(page).getByRole('button', { name: `View ${DEFAULT_MODEL}` })).toBeVisible()
     expect(writes).toHaveLength(0)
   })
 })

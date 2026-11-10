@@ -95,7 +95,7 @@ func writeWorkflowPlannerToolSchemaResponse(
 	payload map[string]interface{},
 ) {
 	t.Helper()
-	if r.Header.Get("x-vsr-looper-iteration") != "1" {
+	if r.Header.Get(testHopIteration) != "1" {
 		_, _ = w.Write(workflowChatCompletion("qwen-coordinator", "final answer"))
 		return
 	}

@@ -10,10 +10,22 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 )
 
-func TestEmbeddingConsumerUsesSelectedRecipeBinding(t *testing.T) {
+// ragEmbeddingDecisions are decisions whose RAG source embeds its queries
+// with deployment, or embeddings.default without one.
+func ragEmbeddingDecisions(deployment string) []config.Decision {
+	backend := map[string]any{"collection": "docs"}
+	if deployment != "" {
+		backend["embedding"] = map[string]any{"deployment": deployment}
+	}
+	return []config.Decision{{Name: "nearest", Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(map[string]any{
+		"enabled": true, "sources": []any{map[string]any{"type": config.ContextSourceRAG, "backend": "milvus", "backend_config": backend}},
+	})}}}}
+}
+
+func TestRAGQueryEmbeddingUsesTheSelectedRecipesDeployment(t *testing.T) {
 	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request struct {
 			Model string   `json:"model"`
@@ -35,53 +47,55 @@ func TestEmbeddingConsumerUsesSelectedRecipeBinding(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 	}))
 	defer endpoint.Close()
-	cfg := &config.RouterConfig{}
-	cfg.EmbeddingConfig.ModelType = "remote"
-	cfg.EmbeddingConfig.TargetDimension = 2
-	cfg.Tools.Enabled = true
-	cfg.ModelSelection.Enabled = true
-	cfg.ModelSelection.ML.ModelsPath = "test-selection"
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"default-embedding": {Provider: "http", ExternalModel: "default"}, "named-embedding": {Provider: "http", ExternalModel: "named"}}
-	cfg.ExternalModels = []config.ExternalModelConfig{{Name: "default", ModelName: "default", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: endpoint.URL}}, {Name: "named", ModelName: "named", ModelEndpoint: config.ClassifierVLLMEndpoint{Address: endpoint.URL}}}
-	binding := func(deployment string) map[string]config.ModelBinding {
-		return map[string]config.ModelBinding{"embedding": {Deployment: deployment, Contract: "embedding.v1", Adapter: "openai_compatible"}}
+	remote := func(model string) config.ModelDeployment {
+		return config.ModelDeployment{Provider: config.OpenAIEmbeddingsProvider, Endpoint: endpoint.URL, Model: model, Capabilities: &config.DeploymentCapabilities{Dimensions: 2}}
 	}
-	cfg.ModelBindings = binding("default-embedding")
-	cfg.Recipes = []config.RoutingRecipe{{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{ModelBindings: binding("default-embedding")}}, {Name: "named", Profile: config.RoutingProfile{ModelBindings: binding("named-embedding")}}}
+	cfg := &config.RouterConfig{}
+	cfg.EmbeddingDeployment = "default-embedding"
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"default-embedding": remote("default"), "named-embedding": remote("named")}
+	cfg.Decisions = ragEmbeddingDecisions("")
+	cfg.Recipes = []config.RoutingRecipe{
+		{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{Decisions: ragEmbeddingDecisions("")}},
+		{Name: "named", Profile: config.RoutingProfile{Decisions: ragEmbeddingDecisions("named-embedding")}},
+	}
 	cfg.Entrypoints = []config.EntrypointMapping{{ModelNames: []string{"named-entry"}, Recipe: "named"}}
-	runtime := native.New(nil)
+	runtime := serving.New(nil, nil)
 	defaultSet, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, runtime)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer defaultSet.Close()
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil, classification.RecipeRuntimeOptions{Runtime: runtime, Embeddings: defaultSet})
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, classification.RecipeRuntimeOptions{Runtime: runtime, Embeddings: defaultSet})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer classifiers.Close()
 	router := &OpenAIRouter{Config: cfg, Embeddings: defaultSet, Classifier: classifiers.Default(), RecipeClassifiers: classifiers}
 	for _, tc := range []struct {
-		recipe int
-		want   int
-	}{{0, 0}, {1, 1}} {
+		recipe     int
+		binding    *config.EmbeddingBinding
+		want       int
+		unprepared string
+	}{
+		{0, nil, 0, "named-embedding"},
+		{1, &config.EmbeddingBinding{Deployment: "named-embedding"}, 1, "default-embedding"},
+	} {
 		request := &RequestContext{}
 		request.Routing.SelectRecipe(&cfg.Recipes[tc.recipe])
-		provider, err := router.embeddingsForRequest(request).Get("", 0, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-		vector, err := provider.Embed(context.Background(), "query")
+		vector, err := router.ragQueryEmbedding(context.Background(), "query", request, tc.binding)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if len(vector) != 2 || vector[tc.want] != 1 {
 			t.Fatalf("recipe %s got %v", cfg.Recipes[tc.recipe].Name, vector)
 		}
+		if router.embeddingsForRequest(request).Has(tc.unprepared) {
+			t.Fatalf("recipe %s prepared %s, which none of its sources names", cfg.Recipes[tc.recipe].Name, tc.unprepared)
+		}
 	}
 	unknown := &RequestContext{}
 	unknown.Routing.SelectRecipe(&config.RoutingRecipe{Name: "foreign"})
 	if _, err := router.embeddingsForRequest(unknown).Default(); err == nil {
-		t.Fatal("foreign recipe borrowed default embedding binding")
+		t.Fatal("foreign recipe borrowed the default embedding")
 	}
 }

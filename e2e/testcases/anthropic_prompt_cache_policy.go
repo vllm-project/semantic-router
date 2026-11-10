@@ -114,10 +114,10 @@ func validatePromptCachePolicyInsertion(
 		fmt.Printf(
 			"[PromptCache] mode=%s action=%q reason=%q inserted=%q preserved=%q instruction_markers=%d tool_markers=%d message_markers=%d instruction_ttl=%q tool_ttl=%q\n",
 			mode,
-			response.Headers.Get("x-vsr-prompt-cache-action"),
-			response.Headers.Get("x-vsr-prompt-cache-reason"),
-			response.Headers.Get("x-vsr-prompt-cache-inserted"),
-			response.Headers.Get("x-vsr-prompt-cache-preserved"),
+			traceValue(response.Headers, "prompt_cache"),
+			traceParam(response.Headers, "prompt_cache", "reason"),
+			traceParam(response.Headers, "prompt_cache", "inserted"),
+			traceParam(response.Headers, "prompt_cache", "preserved"),
 			promptCacheBlockMarkerCount(providerRequest.System),
 			promptCacheToolMarkerCount(providerRequest.Tools),
 			promptCacheMessageMarkerCount(providerRequest.Messages),
@@ -161,18 +161,20 @@ func validatePromptCachePolicyEmptyInstruction(
 	if err != nil {
 		return err
 	}
-	if len(providerRequest.System) != 3 ||
-		!matchesCacheControl(providerRequest.System[1].CacheControl, "ephemeral", "1h") ||
-		providerRequest.System[2].CacheControl != nil {
+	if len(providerRequest.System) != 2 ||
+		providerRequest.System[0].Text != "Stable preface" ||
+		providerRequest.System[1].Text != "Reusable instructions" ||
+		providerRequest.System[0].CacheControl != nil ||
+		!matchesCacheControl(providerRequest.System[1].CacheControl, "ephemeral", "1h") {
 		return fmt.Errorf("empty instruction marker mismatch: %s", truncateString(string(forwarded), 800))
 	}
 	if verbose {
 		fmt.Printf(
-			"[PromptCache] mode=empty-trailing action=%q inserted=%q instruction_markers=%d empty_marked=%t\n",
-			response.Headers.Get("x-vsr-prompt-cache-action"),
-			response.Headers.Get("x-vsr-prompt-cache-inserted"),
+			"[PromptCache] mode=empty-trailing action=%q inserted=%q instruction_markers=%d forwarded_blocks=%d\n",
+			traceValue(response.Headers, "prompt_cache"),
+			traceParam(response.Headers, "prompt_cache", "inserted"),
 			promptCacheBlockMarkerCount(providerRequest.System),
-			providerRequest.System[2].CacheControl != nil,
+			len(providerRequest.System),
 		)
 	}
 	return nil
@@ -216,10 +218,10 @@ func validatePromptCachePolicyCallerPrecedence(
 	if verbose {
 		fmt.Printf(
 			"[PromptCache] mode=caller action=%q reason=%q inserted=%q preserved=%q instruction_markers=%d tool_markers=%d message_markers=%d instruction_ttl=%q\n",
-			response.Headers.Get("x-vsr-prompt-cache-action"),
-			response.Headers.Get("x-vsr-prompt-cache-reason"),
-			response.Headers.Get("x-vsr-prompt-cache-inserted"),
-			response.Headers.Get("x-vsr-prompt-cache-preserved"),
+			traceValue(response.Headers, "prompt_cache"),
+			traceParam(response.Headers, "prompt_cache", "reason"),
+			traceParam(response.Headers, "prompt_cache", "inserted"),
+			traceParam(response.Headers, "prompt_cache", "preserved"),
 			promptCacheBlockMarkerCount(providerRequest.System),
 			promptCacheToolMarkerCount(providerRequest.Tools),
 			promptCacheMessageMarkerCount(providerRequest.Messages),
@@ -266,10 +268,10 @@ func validateDisabledPromptCachePolicy(
 	if verbose {
 		fmt.Printf(
 			"[PromptCache] mode=disabled action=%q reason=%q inserted=%q preserved=%q instruction_markers=%d tool_markers=%d message_markers=%d\n",
-			response.Headers.Get("x-vsr-prompt-cache-action"),
-			response.Headers.Get("x-vsr-prompt-cache-reason"),
-			response.Headers.Get("x-vsr-prompt-cache-inserted"),
-			response.Headers.Get("x-vsr-prompt-cache-preserved"),
+			traceValue(response.Headers, "prompt_cache"),
+			traceParam(response.Headers, "prompt_cache", "reason"),
+			traceParam(response.Headers, "prompt_cache", "inserted"),
+			traceParam(response.Headers, "prompt_cache", "preserved"),
 			promptCacheBlockMarkerCount(providerRequest.System),
 			promptCacheToolMarkerCount(providerRequest.Tools),
 			promptCacheMessageMarkerCount(providerRequest.Messages),
@@ -280,7 +282,7 @@ func validateDisabledPromptCachePolicy(
 
 func promptCachePolicyRequest(probe string, stream bool) map[string]any {
 	return map[string]any{
-		"model":      "MoM",
+		"model":      "vllm-sr/auto",
 		"max_tokens": 16,
 		"stream":     stream,
 		"messages": []any{
@@ -366,15 +368,12 @@ func expectPromptCacheReceipt(
 	inserted string,
 	preserved string,
 ) error {
-	expected := map[string]string{
-		"x-vsr-prompt-cache-action":    action,
-		"x-vsr-prompt-cache-reason":    reason,
-		"x-vsr-prompt-cache-inserted":  inserted,
-		"x-vsr-prompt-cache-preserved": preserved,
+	if got := traceValue(headers, "prompt_cache"); got != action {
+		return fmt.Errorf("prompt_cache = %q, want %q", got, action)
 	}
-	for name, want := range expected {
-		if got := headers.Get(name); got != want {
-			return fmt.Errorf("%s = %q, want %q", name, got, want)
+	for param, want := range map[string]string{"reason": reason, "inserted": inserted, "preserved": preserved} {
+		if got := traceParam(headers, "prompt_cache", param); got != want {
+			return fmt.Errorf("prompt_cache %s = %q, want %q", param, got, want)
 		}
 	}
 	return nil

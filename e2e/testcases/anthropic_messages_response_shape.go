@@ -60,7 +60,7 @@ func testAnthropicMessagesResponseShape(ctx context.Context, client *kubernetes.
 	defer stop()
 
 	resp, err := sendAnthropicMessagesRequest(ctx, anthropicMessagesRequestBody{
-		Model:     "MoM",
+		Model:     "vllm-sr/auto",
 		MaxTokens: 64,
 		Messages: []anthropicMessage{
 			{Role: "user", Content: "Say hi in one word."},

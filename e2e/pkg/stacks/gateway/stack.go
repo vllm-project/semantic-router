@@ -19,7 +19,7 @@ const (
 	deploymentEnvoyGateway   = "envoy-gateway"
 	deploymentAIGateway      = "ai-gateway-controller"
 
-	imageRepository = "ghcr.io/vllm-project/semantic-router/extproc"
+	imageRepository = "ghcr.io/vllm-project/semantic-router/vllm-sr"
 	imagePullPolicy = "Never"
 
 	timeoutServiceRetry   = 10 * time.Minute
@@ -253,9 +253,14 @@ func (s *Stack) UninstallCore(ctx context.Context, opts *framework.TeardownOptio
 func (s *Stack) semanticRouterInstallOptions(opts *framework.SetupOptions) helm.InstallOptions {
 	installOptions := helm.SemanticRouterRelease.Clone()
 	setValues := map[string]string{
+		// Envoy Gateway and Envoy AI Gateway call the Router over ext_proc.
+		"gateway.mode":     "extproc",
 		"image.repository": imageRepository,
 		"image.tag":        opts.ImageTag,
 		"image.pullPolicy": imagePullPolicy,
+		// The suites assert the matched signals and other debug headers, which
+		// the Router sends no client by default.
+		"config.global.router.headers.debug": "any",
 	}
 	for key, value := range s.config.SemanticRouterSet {
 		setValues[key] = value

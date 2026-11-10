@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1840" viewBox="0 0 1600 1840" role="img"><title>Vela 2.0 Gated-DeltaNet: exact operator detail</title><desc>Bottom-to-top activation flow: pre-normalized hidden states; fused QKV projection, causal depthwise convolution and SiLU, Q/K head repetition and L2 normalization, chunk gated delta update with independent prefix state, per-value-head RMSNorm before SiLU output gating, and output projection. The three model sizes have independent parameters.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<text x="480" y="120.0" font-size="27" text-anchor="middle" class="math">Mixer output  ·  L × d</text>
+<g data-box="285.0 165 390 68">
+<rect x="285.0" y="165" width="390" height="68" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="480" y="207.84" font-size="26" text-anchor="middle" class="">Output Linear: Dv → d</text>
+</g>
+<path d="M480,165 L480,135" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="285.0 305 390 64">
+<rect x="285.0" y="305" width="390" height="64" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="480" y="345.84" font-size="26" text-anchor="middle" class="">Concatenate V heads</text>
+</g>
+<path d="M480,305 L480,233" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="480" cy="425" r="21" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="480" y="434.61" font-size="31" text-anchor="middle" class="">⊙</text>
+<path d="M480,404 L480,369" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="285.0 505 390 65">
+<rect x="285.0" y="505" width="390" height="65" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="480" y="546.34" font-size="26" text-anchor="middle" class="">RMSNorm: 128 / V head</text>
+</g>
+<path d="M480,505 L480,446" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="150.0 635 660 116">
+<rect x="150.0" y="635" width="660" height="116" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="480" y="672.25" font-size="25" text-anchor="middle" class="">Chunk Gated Delta Rule</text>
+<text x="480" y="701.5" font-size="25" text-anchor="middle" class="">decay g · update β</text>
+<text x="480" y="730.75" font-size="25" text-anchor="middle" class="">prefix: S₀ = 0; question: S₀ = Sₚ</text>
+</g>
+<path d="M480,635 L480,570" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="1180" y="122.0" font-size="27" text-anchor="middle" class="">Per-head Delta state</text>
+<text x="1180" y="165.0" font-size="27" text-anchor="middle" class="math">Dₜ = exp(gₜ) Sₜ₋₁</text>
+<text x="1180" y="196.59" font-size="27" text-anchor="middle" class="math">δₜ = βₜ (vₜ − Dₜᵀ kₜ)</text>
+<text x="1180" y="228.18" font-size="27" text-anchor="middle" class="math">Sₜ = Dₜ + kₜ δₜᵀ</text>
+<text x="1180" y="259.77" font-size="27" text-anchor="middle" class="math">oₜ = Sₜᵀ q̄ₜ</text>
+<text x="1180" y="315.0" font-size="25" text-anchor="middle" class="math">q̄ = L2Norm(q) / √128</text>
+<text x="1180" y="350.0" font-size="25" text-anchor="middle" class="">State per V head: 128 × 128</text>
+<text x="1180" y="385.0" font-size="24" text-anchor="middle" class="">Prefix starts at zero; questions fork Sₚ</text>
+<g data-box="110.0 1270 440 82">
+<rect x="110.0" y="1270" width="440" height="82" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="330" y="1304.6299999999999" font-size="26" text-anchor="middle" class="">Fused QKV Linear</text>
+<text x="330" y="1335.05" font-size="26" text-anchor="middle" class="">d → 2Dk + Dv</text>
+</g>
+<g data-box="75.0 1145 510 84">
+<rect x="75.0" y="1145" width="510" height="84" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="330" y="1180.875" font-size="25" text-anchor="middle" class="">Causal depthwise Conv1D</text>
+<text x="330" y="1210.125" font-size="25" text-anchor="middle" class="">k = 4 · prefix tail + own block</text>
+</g>
+<path d="M330,1270 L330,1229" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="185.0 1048 290 58">
+<rect x="185.0" y="1048" width="290" height="58" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="330" y="1086.18" font-size="27" text-anchor="middle" class="">SiLU</text>
+</g>
+<path d="M330,1145 L330,1106" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="75.0 945 510 65">
+<rect x="75.0" y="945" width="510" height="65" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="330" y="986.0" font-size="25" text-anchor="middle" class="">Split Q / K / V into heads</text>
+</g>
+<path d="M330,1048 L330,1010" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="72.5 870 345 58">
+<rect x="72.5" y="870" width="345" height="58" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="245" y="907.16" font-size="24" text-anchor="middle" class="">Repeat Q/K heads 1× or 2×</text>
+</g>
+<g data-box="80.0 770 330 80">
+<rect x="80.0" y="770" width="330" height="80" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="245" y="803.875" font-size="25" text-anchor="middle" class="">L2Norm(Q, K)</text>
+<text x="245" y="833.125" font-size="25" text-anchor="middle" class="">Q scale: 1 / √128</text>
+</g>
+<path d="M245,945 L245,928" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M510,945 L510,780 L630,780 L630,751" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="542" y="858.0" font-size="26" text-anchor="middle" class="math">V</text>
+<path d="M245,870 L245,850" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M245,770 L245,751" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="655.0 1270 290 82">
+<rect x="655.0" y="1270" width="290" height="82" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="800" y="1319.84" font-size="26" text-anchor="middle" class="">Linear a: d → hv</text>
+</g>
+<circle cx="800" cy="1214" r="20" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="800" y="1223.3" font-size="30" text-anchor="middle" class="">+</text>
+<path d="M800,1270 L800,1234" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="600.0 1182 160 63">
+<rect x="600.0" y="1182" width="160" height="63" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="680" y="1222.0" font-size="25" text-anchor="middle" class="">dt bias</text>
+</g>
+<path d="M760,1214 L780,1214" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="655.0 1085 290 65">
+<rect x="655.0" y="1085" width="290" height="65" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="800" y="1126.34" font-size="26" text-anchor="middle" class="">Softplus</text>
+</g>
+<path d="M800,1194 L800,1150" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="800" cy="1007" r="20" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="800" y="1016.3" font-size="30" text-anchor="middle" class="">⊙</text>
+<path d="M800,1085 L800,1027" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="895.0 975 280 64">
+<rect x="895.0" y="975" width="280" height="64" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1035" y="1015.84" font-size="26" text-anchor="middle" class="">−exp(A log)</text>
+</g>
+<path d="M895,1007 L820,1007" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M800,987 L850,987 L850,725 L810,725" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="884" y="825.0" font-size="27" text-anchor="middle" class="math">g</text>
+<g data-box="977.5 1270 285 82">
+<rect x="977.5" y="1270" width="285" height="82" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1120" y="1319.84" font-size="26" text-anchor="middle" class="">Linear b: d → hv</text>
+</g>
+<g data-box="997.5 1135 245 66">
+<rect x="997.5" y="1135" width="245" height="66" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="1120" y="1176.84" font-size="26" text-anchor="middle" class="">Sigmoid</text>
+</g>
+<path d="M1120,1270 L1120,1201" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1120,1135 L1120,1095 L1238,1095 L1238,681 L810,681" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="1270" y="860.0" font-size="27" text-anchor="middle" class="math">β</text>
+<g data-box="1295.0 1270 270 82">
+<rect x="1295.0" y="1270" width="270" height="82" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1430" y="1319.84" font-size="26" text-anchor="middle" class="">Linear z: d → Dv</text>
+</g>
+<g data-box="1302.5 1090 255 66">
+<rect x="1302.5" y="1090" width="255" height="66" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1430" y="1132.18" font-size="27" text-anchor="middle" class="">SiLU(z)</text>
+</g>
+<path d="M1430,1270 L1430,1156" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1430,1090 L1430,425 L501,425" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="1458" y="845.0" font-size="25" text-anchor="start" class="">z gate</text>
+<g data-box="235.0 1450 1130 70">
+<rect x="235.0" y="1450" width="1130" height="70" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="800" y="1494.18" font-size="27" text-anchor="middle" class="">H = RMSNorm(X)  ·  L × d</text>
+</g>
+<path d="M800,1450 L800,1390" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M330,1390 L1430,1390" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="800" cy="1390" r="3.5" fill="#111"/>
+<path d="M330,1390 L330,1352" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="330" cy="1390" r="3.5" fill="#111"/>
+<path d="M800,1390 L800,1352" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1120,1390 L1120,1352" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="1120" cy="1390" r="3.5" fill="#111"/>
+<path d="M1430,1390 L1430,1352" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="1430" cy="1390" r="3.5" fill="#111"/>
+<path d="M70,1542 L1530,1542" fill="none" stroke="#111" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="160" y="1570.0" font-size="25" text-anchor="middle" class="">Model</text>
+<text x="430" y="1570.0" font-size="25" text-anchor="middle" class="">d</text>
+<text x="740" y="1570.0" font-size="25" text-anchor="middle" class="">Q/K heads / V heads</text>
+<text x="1115" y="1570.0" font-size="25" text-anchor="middle" class="">Q/K repetition</text>
+<text x="1420" y="1570.0" font-size="25" text-anchor="middle" class="">Dv</text>
+<path d="M70,1585 L1530,1585" fill="none" stroke="#111" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="160" y="1623.0" font-size="25" text-anchor="middle" class="">0.8B</text>
+<text x="430" y="1623.0" font-size="25" text-anchor="middle" class="">1024</text>
+<text x="740" y="1623.0" font-size="25" text-anchor="middle" class="">16 / 16</text>
+<text x="1115" y="1623.0" font-size="25" text-anchor="middle" class="">1×</text>
+<text x="1420" y="1623.0" font-size="25" text-anchor="middle" class="">2048</text>
+<text x="160" y="1661.0" font-size="25" text-anchor="middle" class="">4B</text>
+<text x="430" y="1661.0" font-size="25" text-anchor="middle" class="">2560</text>
+<text x="740" y="1661.0" font-size="25" text-anchor="middle" class="">16 / 32</text>
+<text x="1115" y="1661.0" font-size="25" text-anchor="middle" class="">2×</text>
+<text x="1420" y="1661.0" font-size="25" text-anchor="middle" class="">4096</text>
+<text x="160" y="1699.0" font-size="25" text-anchor="middle" class="">9B</text>
+<text x="430" y="1699.0" font-size="25" text-anchor="middle" class="">4096</text>
+<text x="740" y="1699.0" font-size="25" text-anchor="middle" class="">16 / 32</text>
+<text x="1115" y="1699.0" font-size="25" text-anchor="middle" class="">2×</text>
+<text x="1420" y="1699.0" font-size="25" text-anchor="middle" class="">4096</text>
+<path d="M70,1715 L1530,1715" fill="none" stroke="#111" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="800" y="1747.0" font-size="24" text-anchor="middle" class="">Dk = 2048; dk = dv = 128. Independent checkpoints; shared operator topology.</text>
+<text x="800" y="1800.0" font-size="31" text-anchor="middle" class="serif">(g) Gated-DeltaNet: convolution, delta update and gated readout</text>
+</svg>

@@ -6,31 +6,31 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-func warnUnguardedClassifierConditions(decision Decision) {
+func warnUnguardedSystemOneConditions(decision Decision) {
 	if decision.Rules.OnUnknown != "" {
 		return
 	}
-	for _, name := range unguardedClassifierConditions(&decision.Rules) {
+	for _, name := range unguardedSystemOneConditions(&decision.Rules) {
 		logging.Warnf(
-			"decision '%s': classifier condition %q evaluates as unknown when its backend fails; set rules.on_unknown or the condition's on_error",
+			"decision '%s': condition %q evaluates as unknown when its model backend fails; set rules.on_unknown or the condition's on_error",
 			decision.Name, name,
 		)
 	}
 }
 
-func unguardedClassifierConditions(node *RuleNode) []string {
+func unguardedSystemOneConditions(node *RuleNode) []string {
 	if node == nil {
 		return nil
 	}
 	if node.IsLeaf() {
-		if strings.EqualFold(node.Type, SignalTypeClassifier) && node.OnError == "" {
+		if strings.EqualFold(node.Type, SignalTypeSystemOne) && node.OnError == "" {
 			return []string{node.Name}
 		}
 		return nil
 	}
 	var names []string
 	for i := range node.Conditions {
-		names = append(names, unguardedClassifierConditions(&node.Conditions[i])...)
+		names = append(names, unguardedSystemOneConditions(&node.Conditions[i])...)
 	}
 	return names
 }

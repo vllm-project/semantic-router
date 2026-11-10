@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package benchmarks
 
@@ -15,16 +15,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 )
 
-const (
-	cacheEmbeddingModelType  = "mmbert"
-	cacheEmbeddingDeployment = "perf-cache-embedding"
-)
+const cacheEmbeddingDeployment = "perf-cache-embedding"
 
 var (
 	cacheEmbeddingOnce     sync.Once
 	cacheEmbeddingErr      error
 	cacheEmbeddingOwner    *embedding.Set
 	cacheEmbeddingProvider embedding.Provider
+	// The width and layer the response cache embeds with.
+	cacheEmbeddingDimension, cacheEmbeddingLayer int
 )
 
 func cacheEmbeddingDevice() string {
@@ -34,14 +33,21 @@ func cacheEmbeddingDevice() string {
 	return "cpu"
 }
 
-func cacheEmbeddingConfig(spec config.ResolvedModelBinding) *config.RouterConfig {
+// cacheEmbeddingConfig is a configuration whose semantic response cache, in
+// memory, recalls with the benchmark's embedding deployment.
+func cacheEmbeddingConfig(spec config.ResolvedModelBinding) (*config.RouterConfig, error) {
 	cfg := &config.RouterConfig{}
-	cfg.EmbeddingConfig.ModelType = cacheEmbeddingModelType
-	cfg.SemanticCache.Enabled = true
-	cfg.SemanticCache.EmbeddingModel = cacheEmbeddingModelType
-	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: cacheEmbeddingDeployment, Contract: "embedding.v1", Adapter: cacheEmbeddingModelType}}
+	cfg.SemanticCache.InUse = true
+	cfg.GlobalPlugins = []config.DecisionPlugin{{
+		Type:          config.DecisionPluginResponseCache,
+		Configuration: config.MustStructuredPayload(map[string]any{"enabled": true}),
+	}}
+	if err := cfg.LayerPlugins(); err != nil {
+		return nil, err
+	}
+	cfg.EmbeddingDeployment = cacheEmbeddingDeployment
 	cfg.ModelDeployments = map[string]config.ModelDeployment{cacheEmbeddingDeployment: spec.Deployment}
-	return cfg
+	return cfg, nil
 }
 
 // Prepare the shared response-cache owner used by the router and retain it
@@ -49,8 +55,17 @@ func cacheEmbeddingConfig(spec config.ResolvedModelBinding) *config.RouterConfig
 func initCacheEmbeddingModels(b *testing.B) embedding.Provider {
 	b.Helper()
 	cacheEmbeddingOnce.Do(func() {
-		spec := benchmarkModel(b, "embedding", "embedding.v1")
-		cfg := cacheEmbeddingConfig(spec)
+		// benchmarkDeployment stops this benchmark (b.Fatalf) inside Do, and Do
+		// still counts as done, so later benchmarks fail on this error unless
+		// setup ends.
+		cacheEmbeddingErr = errors.New("prepare Vela embedding: an earlier benchmark stopped while preparing it")
+		spec := benchmarkDeployment(b, "embedding", cacheEmbeddingDeployment, benchmarkInput)
+		cfg, err := cacheEmbeddingConfig(spec)
+		if err != nil {
+			cacheEmbeddingErr = fmt.Errorf("configure the response cache: %w", err)
+			return
+		}
+		_, cacheEmbeddingDimension, cacheEmbeddingLayer = cfg.ResponseCacheEmbedding()
 		set, err := modelruntime.PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, benchmarkRuntime)
 		if err != nil {
 			cacheEmbeddingErr = fmt.Errorf("prepare Vela embedding: %w", err)
@@ -63,11 +78,9 @@ func initCacheEmbeddingModels(b *testing.B) embedding.Provider {
 		}
 		cacheEmbeddingOwner = set
 		cacheEmbeddingProvider = provider
+		cacheEmbeddingErr = nil
 	})
 	if cacheEmbeddingErr != nil {
-		if missingBenchModels(cacheEmbeddingErr) {
-			b.Skipf("Failed to initialize embedding models: %v", cacheEmbeddingErr)
-		}
 		b.Fatal(cacheEmbeddingErr)
 	}
 	recordModelIdentity(b, "embedding")

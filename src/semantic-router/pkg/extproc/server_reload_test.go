@@ -10,16 +10,14 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
-var expectedAMDModelPaths = []string{
-	"models/Vela-1.0-Encoder-307M-Embedding",
-	"models/Vela-1.0-Encoder-307M-Domain",
-	"models/Vela-1.0-Encoder-307M-FactCheck",
-	"models/Vela-1.0-Encoder-307M-Feedback",
-}
+// The balance recipe routes on decision-model questions; the model runtime
+// serves that model, so the router downloads nothing for it.
+var expectedAMDModelPaths = []string{}
 
 func TestReloadRejectsPreviewAdmissionChangeBeforePreparation(t *testing.T) {
 	restore := stubReloadSeams(t)
@@ -48,39 +46,66 @@ func TestReloadRejectsPreviewAdmissionChangeBeforePreparation(t *testing.T) {
 	}
 }
 
-func TestReloadRejectsLiveArtifactMutationBeforeDownload(t *testing.T) {
+func TestReloadChecksGatewayCapabilitiesBeforePreparation(t *testing.T) {
 	restore := stubReloadSeams(t)
 	defer restore()
-	artifact := t.TempDir()
-	weights := filepath.Join(artifact, "model.safetensors")
-	if err := os.WriteFile(weights, []byte("live weights"), 0o600); err != nil {
+	previous := &OpenAIRouter{Config: &config.RouterConfig{}}
+	server := &Server{service: NewRouterService(previous)}
+	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
+		t.Fatal("a rejected candidate reached runtime preparation")
+		return nil, nil
+	}
+	candidate := &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{{
+		Name: "slow", Reliability: &config.DecisionReliability{IdleTimeout: "5s"},
+	}}}}
+	for _, source := range []string{"file", "kubernetes"} {
+		err := server.reloadRouterFromConfig(source, "config.yaml", candidate)
+		reasons := configsnapshot.ReasonsOf(err)
+		if len(reasons) != 1 || reasons[0].Code != configsnapshot.CodeUnsupported ||
+			reasons[0].Path != "recipes[default].decisions[slow].reliability" || !strings.Contains(err.Error(), "--gateway standalone") {
+			t.Fatalf("%s reload error = %v (%+v)", source, err, reasons)
+		}
+		if server.service.GetRouter() != previous {
+			t.Fatal("a rejected candidate replaced the live generation")
+		}
+	}
+	if err := checkGatewayCapabilities(candidate, config.GatewayStandalone); err != nil {
+		t.Fatalf("the native gateway honors every reliability field: %v", err)
+	}
+}
+
+func TestReloadRefusesUnwritableStorageBeforePreparation(t *testing.T) {
+	restore := stubReloadSeams(t)
+	defer restore()
+	previous := &OpenAIRouter{Config: &config.RouterConfig{}}
+	server := &Server{service: NewRouterService(previous)}
+	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
+		t.Fatal("a rejected candidate reached runtime preparation")
+		return nil, nil
+	}
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	makeConfig := func(revision string) *config.RouterConfig {
-		cfg := &config.RouterConfig{MoMRegistry: map[string]string{artifact: "test/model"}}
-		cfg.CategoryModel.ModelID = artifact
-		cfg.CategoryMappingPath = filepath.Join(artifact, "labels.json")
-		cfg.Decisions = []config.Decision{{Name: "route", Rules: config.RuleNode{Type: config.SignalTypeDomain, Name: "billing"}}}
-		cfg.ModelDeployments = map[string]config.ModelDeployment{"intent": {Provider: "candle", Artifact: artifact, Revision: revision}}
-		cfg.ModelBindings = map[string]config.ModelBinding{"domain_classifier": {Deployment: "intent", Contract: "label_distribution.v1", Adapter: "mmbert32k"}}
-		return cfg
+	candidate := &config.RouterConfig{VectorStore: &config.VectorStoreConfig{
+		Enabled: true, FileStorageDir: filepath.Join(file, "data"),
+	}}
+	for _, source := range []string{"file", "kubernetes"} {
+		err := server.reloadRouterFromConfig(source, "config.yaml", candidate)
+		reasons := configsnapshot.ReasonsOf(err)
+		if len(reasons) != 1 || reasons[0].Stage != configsnapshot.StageValidate ||
+			reasons[0].Code != configsnapshot.CodeStorageUnavailable ||
+			reasons[0].Path != "global.stores.vector_store.file_storage_dir" ||
+			!strings.Contains(err.Error(), "not a directory") {
+			t.Fatalf("%s reload error = %v (%+v)", source, err, reasons)
+		}
+		if server.service.GetRouter() != previous {
+			t.Fatal("a rejected candidate replaced the live generation")
+		}
 	}
-	previous := &OpenAIRouter{Config: makeConfig(strings.Repeat("a", 40))}
-	server := &Server{service: NewRouterService(previous)}
-	ensureReloadConfigModels = func(*config.RouterConfig) error {
-		t.Fatal("download may mutate live weights and must not run")
-		return nil
-	}
-	err := server.reloadRouterFromConfig("file", "config.yaml", makeConfig(strings.Repeat("b", 40)))
-	if err == nil || !strings.Contains(err.Error(), "in use") {
-		t.Fatalf("reload error = %v, want live artifact rejection", err)
-	}
-	if server.service.GetRouter() != previous || server.CurrentConfig() != previous.Config {
-		t.Fatal("rejected artifact candidate replaced the live generation")
-	}
-	data, readErr := os.ReadFile(weights)
-	if readErr != nil || string(data) != "live weights" {
-		t.Fatalf("live artifact changed: %q %v", data, readErr)
+	candidate.VectorStore.FileStorageDir = t.TempDir()
+	if err := checkLocalStorage(candidate); err != nil {
+		t.Fatalf("a writable directory was refused: %v", err)
 	}
 }
 
@@ -110,7 +135,7 @@ func TestReloadRouterFromFileEnsuresAMDModelsBeforeSwap(t *testing.T) {
 		t.Fatalf("router swap did not install candidate config")
 	}
 
-	wantOrder := []string{"parse", "ensure", "build", "warmup", "replace"}
+	wantOrder := []string{"parse", "ensure", "build", "replace"}
 	if !reflect.DeepEqual(order, wantOrder) {
 		t.Fatalf("reload order = %v, want %v", order, wantOrder)
 	}
@@ -146,10 +171,6 @@ func TestReloadRouterFromFileDoesNotSwapWhenModelEnsureFails(t *testing.T) {
 	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		t.Fatalf("buildReloadRouter() should not be called on ensure failure")
 		return nil, nil
-	}
-	warmupReloadRouter = func(router *OpenAIRouter) error {
-		t.Fatalf("warmupReloadRouter() should not be called on ensure failure")
-		return nil
 	}
 	replaceReloadConfig = func(cfg *config.RouterConfig) {
 		t.Fatalf("replaceReloadConfig() should not be called on ensure failure")
@@ -241,14 +262,6 @@ func stubReloadBuild(t *testing.T, candidateCfg *config.RouterConfig, order *[]s
 
 func stubReloadWarmup(t *testing.T, candidateCfg *config.RouterConfig, order *[]string) {
 	t.Helper()
-
-	warmupReloadRouter = func(router *OpenAIRouter) error {
-		appendReloadStep(order, "warmup")
-		if router == nil || router.Config != candidateCfg {
-			t.Fatalf("warmupReloadRouter() router config mismatch")
-		}
-		return nil
-	}
 }
 
 func stubReloadReplace(t *testing.T, candidateCfg *config.RouterConfig, order *[]string) {
@@ -272,14 +285,12 @@ func stubReloadSeams(t *testing.T) func() {
 	originalParse := parseReloadConfig
 	originalEnsure := ensureReloadConfigModels
 	originalBuild := buildReloadRouter
-	originalWarmup := warmupReloadRouter
 	originalReplace := replaceReloadConfig
 
 	return func() {
 		parseReloadConfig = originalParse
 		ensureReloadConfigModels = originalEnsure
 		buildReloadRouter = originalBuild
-		warmupReloadRouter = originalWarmup
 		replaceReloadConfig = originalReplace
 	}
 }

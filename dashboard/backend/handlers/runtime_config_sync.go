@@ -30,10 +30,6 @@ func syncRuntimeConfigForCurrentRuntime(configPath string) (string, error) {
 		return syncRuntimeConfigLocally(configPath)
 	}
 
-	if getDockerContainerStatus(managedRuntimeSyncContainerName()) == "running" {
-		return syncRuntimeConfigInManagedContainer()
-	}
-
 	return filepath.Clean(configPath), nil
 }
 
@@ -69,31 +65,9 @@ func isExplicitRuntimeConfigPath(configPath string) bool {
 	return runtimePath != "" && filepath.Clean(configPath) == filepath.Clean(runtimePath)
 }
 
-func syncRuntimeConfigInManagedContainer() (string, error) {
-	containerName := managedRuntimeSyncContainerName()
-	pythonBinary := "python3"
-	if managedRuntimeUsesSplitContainers() {
-		pythonBinary = dashboardVenvPythonPath
-	}
-	managedConfigPath := configuredRuntimeConfigPath(legacyManagedContainerConfigPath)
-	output, err := execInManagedContainer(
-		containerName,
-		30*time.Second,
-		pythonBinary,
-		"-c",
-		buildRuntimeSyncPythonScript("/app", managedConfigPath),
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to sync runtime config in %s: %w (output: %s)", containerName, err, strings.TrimSpace(output))
-	}
-	return parseRuntimeSyncOutput(output, managedConfigPath), nil
-}
-
 func hasRuntimeOverrideEnv() bool {
 	return strings.TrimSpace(os.Getenv("VLLM_SR_RUNTIME_CONFIG_PATH")) != "" ||
-		strings.TrimSpace(os.Getenv("VLLM_SR_ALGORITHM_OVERRIDE")) != "" ||
-		strings.TrimSpace(os.Getenv("VLLM_SR_PLATFORM")) != "" ||
-		strings.TrimSpace(os.Getenv("DASHBOARD_PLATFORM")) != ""
+		strings.TrimSpace(os.Getenv("VLLM_SR_ALGORITHM_OVERRIDE")) != ""
 }
 
 func runRuntimeSyncPython(timeout time.Duration, cliRoot string, configPath string, workDir string) (string, error) {
@@ -169,8 +143,7 @@ from cli.commands.runtime_support import sync_runtime_config
 
 config_path = Path(%q)
 algorithm = (os.getenv("VLLM_SR_ALGORITHM_OVERRIDE") or "").strip() or None
-platform = (os.getenv("VLLM_SR_PLATFORM") or os.getenv("DASHBOARD_PLATFORM") or "").strip() or None
-effective = sync_runtime_config(config_path, algorithm=algorithm, platform=platform)
+effective = sync_runtime_config(config_path, algorithm=algorithm)
 print(str(effective))
 `, cliRoot, configPath)
 }

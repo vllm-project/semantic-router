@@ -1,0 +1,39 @@
+---
+title: 路由器 OpenAPI 参考
+sidebar_label: OpenAPI 参考
+description: 检索生成的 vLLM Semantic Router 管理 API 契约。
+hide_table_of_contents: true
+translation:
+  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_file: "docs/api/openapi.mdx"
+  outdated: false
+---
+
+import OpenAPIReference from '@site/src/components/OpenAPIReference'
+
+# 路由器 OpenAPI 参考 {#router-openapi-reference}
+
+本探索器由服务 `GET /openapi.json` 的同一份 Router 路由目录生成。该目录同时拥有每个操作的权限、敏感度和变更审计动作，因此运行时发现与本页不会维护两套策略表。Agent 应直接查询运行中的 Router：
+
+```bash
+# Compact endpoint discovery
+curl -sS http://localhost:8080/api/v1
+
+# One operation, without loading the complete document
+curl -sS 'http://localhost:8080/openapi.json?path=/api/v1/config&method=PATCH'
+
+# Complete OpenAPI document
+curl -sS http://localhost:8080/openapi.json
+```
+
+控制面板只是面向人的代理，不是 Agent 或 Router 运行所必需的。
+
+本规范描述 Router 的**管理监听器**。被路由的模型流量经过 Envoy，遵循单独的[推理 API 契约](./router)。因此存储路由仅以 `/api/v1/storage/files` 和 `/api/v1/storage/vector-stores` 出现；Router 不发布 `/v1/files` 或 `/v1/vector_stores` 别名。
+
+生成的契约声明运行时可配置的 Bearer 方案，以及每个操作所需的权限。管理认证关闭时，非健康检查操作也接受匿名访问；设为 `bearer` 时，发送 `Authorization: Bearer <token>`。
+
+JSON 请求字段由各处理器解码的 Go 请求类型生成。`yaml` 字段内的配置值由[配置 Schema](./configuration-schema) 定义，该契约也可从 Router 的 `GET /api/v1/config/schema` 独立获取。
+
+配置变更请求仅接受 YAML，并要求在 `If-Match` 中提供当前 ETag。在 `PATCH` 或 `PUT` 之前，使用 `POST /api/v1/config/plan` 获取 ETag 和候选身份。
+
+<OpenAPIReference />

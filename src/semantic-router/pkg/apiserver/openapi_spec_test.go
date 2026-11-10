@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -13,35 +13,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configschema"
 )
-
-func TestKnowledgeBaseOpenAPIDocumentsPendingPublication(t *testing.T) {
-	spec := (&ClassificationAPIServer{}).generateOpenAPISpec()
-	collection := spec.Paths[apiStorageKnowledgeBasesPath]
-	item := spec.Paths[apiStorageKnowledgeBasesPath+"/{name}"]
-	for _, operation := range []*OpenAPIOperation{collection.Post, item.Put, item.Delete} {
-		if operation == nil {
-			t.Fatal("missing knowledge-base mutation operation")
-		}
-		pending, ok := operation.Responses["202"]
-		if !ok || pending.Content["application/json"].Schema.Properties["generated_runtime_hash"].Type != "string" {
-			t.Fatalf("pending response missing exact candidate hash: %+v", operation.Responses)
-		}
-		// A Kubernetes ConfigMap target reports "persisted" on this same 202,
-		// since activation there needs a restart rather than a poll (#3814).
-		if !strings.Contains(pending.Description, "Kubernetes ConfigMap") {
-			t.Fatalf("202 response does not document the persisted (restart-required) case: %q", pending.Description)
-		}
-		if !strings.Contains(operation.Responses["409"].Description, "CONFIG_ACTIVATION_PENDING") {
-			t.Fatal("pending mutation conflict was not documented")
-		}
-	}
-	if _, ok := collection.Post.Responses["201"]; !ok {
-		t.Fatal("create success status was not documented")
-	}
-	if _, ok := collection.Get.Responses["202"]; ok {
-		t.Fatal("read operation incorrectly documents candidate persistence")
-	}
-}
 
 func TestOpenAPISpecUsesRouteBodyMetadata(t *testing.T) {
 	apiServer := &ClassificationAPIServer{}
@@ -153,7 +124,7 @@ func TestOpenAPISpecPublishesInvocationParameters(t *testing.T) {
 		}
 	}
 	requireOpenAPIParameter(t, eval.Parameters, "trace", "query", false, "boolean")
-	requireOpenAPIParameter(t, eval.Parameters, "x-sr-bench-expected-config-hash", "header", false, "string")
+	requireOpenAPIParameter(t, eval.Parameters, "x-vsr-bench-expected-config-hash", "header", false, "string")
 	if _, ok := eval.Responses["200"].Headers["x-vsr-config-hash"]; !ok {
 		t.Fatal("Preview snapshot receipt is undocumented")
 	}
@@ -270,6 +241,9 @@ func TestOpenAPISpecEndpoint(t *testing.T) {
 	assertOpenAPIPathsAbsent(t, spec, []string{
 		"/config/classification",
 		"/config/system-prompts",
+		"/api/v1/diagnostics/embeddings",
+		"/api/v1/diagnostics/similarity",
+		"/api/v1/diagnostics/similarity/batch",
 	})
 }
 
@@ -472,9 +446,6 @@ func documentedOpenAPIPaths() []string {
 		"/api/v1",
 		"/api/v1/diagnostics/classify/batch",
 		"/api/v1/routing/preview",
-		"/api/v1/diagnostics/nli",
-		"/api/v1/diagnostics/embeddings",
-		"/api/v1/diagnostics/similarity/batch",
 		"/openapi.json",
 		"/docs",
 		"/api/v1/config",

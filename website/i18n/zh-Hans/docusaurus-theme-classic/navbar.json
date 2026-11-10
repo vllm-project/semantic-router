@@ -83,9 +83,13 @@
     "message": "模型库",
     "description": "Navbar item with label Models"
   },
-  "item.label.Latest": {
-    "message": "最新版",
-    "description": "Navbar item with label Latest"
+  "item.label.Latest (unreleased)": {
+    "message": "最新版（未发布）",
+    "description": "Navbar item with label Latest (unreleased)"
+  },
+  "item.label.v0.4": {
+    "message": "v0.4",
+    "description": "Navbar item with label v0.4"
   },
   "item.label.v0.3": {
     "message": "v0.3",

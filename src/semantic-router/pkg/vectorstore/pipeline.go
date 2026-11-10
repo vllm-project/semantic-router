@@ -25,7 +25,7 @@ import (
 )
 
 // Embedder generates vector embeddings from text. Implementations
-// wrap the actual embedding model (e.g. Candle FFI). Embed takes a
+// wrap the actual embedding model (e.g. a model runtime deployment). Embed takes a
 // context so a cancelled lifecycle or request aborts embedding work at
 // the next checkpoint instead of running to completion.
 type Embedder interface {
@@ -185,18 +185,17 @@ func (p *IngestionPipeline) Stop(ctx context.Context) error {
 	}
 	var queued []IngestionJob
 	if state == stateRunning {
+	drain:
 		for {
 			select {
 			case job := <-gen.jobQueue:
 				queued = append(queued, job)
 			default:
 				close(gen.stopCh)
-				state = stateStopping
-				goto drained
+				break drain
 			}
 		}
 	}
-drained:
 	p.lifecycleMu.Unlock()
 	// Persistence is best effort, as it was for individual job failures. The
 	// in-memory status/count transition is applied for every drained job before

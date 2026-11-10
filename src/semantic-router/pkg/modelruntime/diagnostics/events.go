@@ -28,6 +28,8 @@ func ErrorClass(err error) string {
 		return "closed"
 	case errors.Is(err, binding.ErrCapability):
 		return "capability"
+	case errors.Is(err, binding.ErrScanBudget):
+		return "scan_budget"
 	case errors.Is(err, binding.ErrInputLimit), errors.Is(err, tasks.ErrTokenSpansTruncated):
 		return "input_limit"
 	case errors.Is(err, binding.ErrInvalidInput):

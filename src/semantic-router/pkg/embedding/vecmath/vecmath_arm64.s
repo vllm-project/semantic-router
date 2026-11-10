@@ -1,0 +1,224 @@
+//go:build arm64 && !purego
+
+#include "textflag.h"
+
+// Each kernel keeps eight vector accumulators so consecutive FMAs do not wait
+// on each other, reduces them in a fixed tree, then folds the scalar tail
+// into lane 0. The assembler has no vector FADD or FSUB, so a fused
+// multiply-add by a vector of ones stands in for them: x*1 is exact, so the
+// fused operation rounds once, as FADD and FSUB do.
+
+// func dotNEON(a, b []float32) float32
+TEXT ·dotNEON(SB), NOSPLIT, $0-52
+	MOVD a_base+0(FP), R0
+	MOVD a_len+8(FP), R2
+	MOVD b_base+24(FP), R1
+	VEOR V0.B16, V0.B16, V0.B16
+	VEOR V1.B16, V1.B16, V1.B16
+	VEOR V2.B16, V2.B16, V2.B16
+	VEOR V3.B16, V3.B16, V3.B16
+	VEOR V4.B16, V4.B16, V4.B16
+	VEOR V5.B16, V5.B16, V5.B16
+	VEOR V6.B16, V6.B16, V6.B16
+	VEOR V7.B16, V7.B16, V7.B16
+	CMP  $32, R2
+	BLT  dot_by4
+
+dot_by32:
+	VLD1.P 64(R0), [V16.S4, V17.S4, V18.S4, V19.S4]
+	VLD1.P 64(R0), [V20.S4, V21.S4, V22.S4, V23.S4]
+	VLD1.P 64(R1), [V24.S4, V25.S4, V26.S4, V27.S4]
+	VLD1.P 64(R1), [V28.S4, V29.S4, V30.S4, V31.S4]
+	VFMLA  V24.S4, V16.S4, V0.S4
+	VFMLA  V25.S4, V17.S4, V1.S4
+	VFMLA  V26.S4, V18.S4, V2.S4
+	VFMLA  V27.S4, V19.S4, V3.S4
+	VFMLA  V28.S4, V20.S4, V4.S4
+	VFMLA  V29.S4, V21.S4, V5.S4
+	VFMLA  V30.S4, V22.S4, V6.S4
+	VFMLA  V31.S4, V23.S4, V7.S4
+	SUB    $32, R2
+	CMP    $32, R2
+	BGE    dot_by32
+
+dot_by4:
+	CMP    $4, R2
+	BLT    dot_reduce
+	VLD1.P 16(R0), [V16.S4]
+	VLD1.P 16(R1), [V24.S4]
+	VFMLA  V24.S4, V16.S4, V0.S4
+	SUB    $4, R2
+	B      dot_by4
+
+dot_reduce:
+	FMOVS $(1.0), F31
+	VDUP  V31.S[0], V31.S4
+	VFMLA V31.S4, V1.S4, V0.S4
+	VFMLA V31.S4, V3.S4, V2.S4
+	VFMLA V31.S4, V5.S4, V4.S4
+	VFMLA V31.S4, V7.S4, V6.S4
+	VFMLA V31.S4, V2.S4, V0.S4
+	VFMLA V31.S4, V6.S4, V4.S4
+	VFMLA V31.S4, V4.S4, V0.S4
+	VMOV  V0.S[1], V1
+	VMOV  V0.S[2], V2
+	VMOV  V0.S[3], V3
+	FADDS F1, F0, F0
+	FADDS F3, F2, F2
+	FADDS F2, F0, F0
+
+dot_by1:
+	CBZ     R2, dot_done
+	FMOVS.P 4(R0), F16
+	FMOVS.P 4(R1), F24
+	FMADDS  F24, F0, F16, F0
+	SUB     $1, R2
+	B       dot_by1
+
+dot_done:
+	FMOVS F0, ret+48(FP)
+	RET
+
+// func dot64NEON(a, b []float64) float64
+TEXT ·dot64NEON(SB), NOSPLIT, $0-56
+	MOVD a_base+0(FP), R0
+	MOVD a_len+8(FP), R2
+	MOVD b_base+24(FP), R1
+	VEOR V0.B16, V0.B16, V0.B16
+	VEOR V1.B16, V1.B16, V1.B16
+	VEOR V2.B16, V2.B16, V2.B16
+	VEOR V3.B16, V3.B16, V3.B16
+	VEOR V4.B16, V4.B16, V4.B16
+	VEOR V5.B16, V5.B16, V5.B16
+	VEOR V6.B16, V6.B16, V6.B16
+	VEOR V7.B16, V7.B16, V7.B16
+	CMP  $16, R2
+	BLT  dot64_by2
+
+dot64_by16:
+	VLD1.P 64(R0), [V16.D2, V17.D2, V18.D2, V19.D2]
+	VLD1.P 64(R0), [V20.D2, V21.D2, V22.D2, V23.D2]
+	VLD1.P 64(R1), [V24.D2, V25.D2, V26.D2, V27.D2]
+	VLD1.P 64(R1), [V28.D2, V29.D2, V30.D2, V31.D2]
+	VFMLA  V24.D2, V16.D2, V0.D2
+	VFMLA  V25.D2, V17.D2, V1.D2
+	VFMLA  V26.D2, V18.D2, V2.D2
+	VFMLA  V27.D2, V19.D2, V3.D2
+	VFMLA  V28.D2, V20.D2, V4.D2
+	VFMLA  V29.D2, V21.D2, V5.D2
+	VFMLA  V30.D2, V22.D2, V6.D2
+	VFMLA  V31.D2, V23.D2, V7.D2
+	SUB    $16, R2
+	CMP    $16, R2
+	BGE    dot64_by16
+
+dot64_by2:
+	CMP    $2, R2
+	BLT    dot64_reduce
+	VLD1.P 16(R0), [V16.D2]
+	VLD1.P 16(R1), [V24.D2]
+	VFMLA  V24.D2, V16.D2, V0.D2
+	SUB    $2, R2
+	B      dot64_by2
+
+dot64_reduce:
+	FMOVD $(1.0), F31
+	VDUP  V31.D[0], V31.D2
+	VFMLA V31.D2, V1.D2, V0.D2
+	VFMLA V31.D2, V3.D2, V2.D2
+	VFMLA V31.D2, V5.D2, V4.D2
+	VFMLA V31.D2, V7.D2, V6.D2
+	VFMLA V31.D2, V2.D2, V0.D2
+	VFMLA V31.D2, V6.D2, V4.D2
+	VFMLA V31.D2, V4.D2, V0.D2
+	VMOV  V0.D[1], V1
+	FADDD F1, F0, F0
+
+dot64_by1:
+	CBZ     R2, dot64_done
+	FMOVD.P 8(R0), F16
+	FMOVD.P 8(R1), F24
+	FMADDD  F24, F0, F16, F0
+	SUB     $1, R2
+	B       dot64_by1
+
+dot64_done:
+	FMOVD F0, ret+48(FP)
+	RET
+
+// func squaredDistance64NEON(a, b []float64) float64
+TEXT ·squaredDistance64NEON(SB), NOSPLIT, $0-56
+	MOVD  a_base+0(FP), R0
+	MOVD  a_len+8(FP), R2
+	MOVD  b_base+24(FP), R1
+	VEOR  V0.B16, V0.B16, V0.B16
+	VEOR  V1.B16, V1.B16, V1.B16
+	VEOR  V2.B16, V2.B16, V2.B16
+	VEOR  V3.B16, V3.B16, V3.B16
+	VEOR  V4.B16, V4.B16, V4.B16
+	VEOR  V5.B16, V5.B16, V5.B16
+	VEOR  V6.B16, V6.B16, V6.B16
+	VEOR  V7.B16, V7.B16, V7.B16
+	FMOVD $(1.0), F15
+	VDUP  V15.D[0], V15.D2
+	CMP   $16, R2
+	BLT   dist_by2
+
+dist_by16:
+	VLD1.P 64(R0), [V16.D2, V17.D2, V18.D2, V19.D2]
+	VLD1.P 64(R0), [V20.D2, V21.D2, V22.D2, V23.D2]
+	VLD1.P 64(R1), [V24.D2, V25.D2, V26.D2, V27.D2]
+	VLD1.P 64(R1), [V28.D2, V29.D2, V30.D2, V31.D2]
+	VFMLS  V15.D2, V24.D2, V16.D2
+	VFMLS  V15.D2, V25.D2, V17.D2
+	VFMLS  V15.D2, V26.D2, V18.D2
+	VFMLS  V15.D2, V27.D2, V19.D2
+	VFMLS  V15.D2, V28.D2, V20.D2
+	VFMLS  V15.D2, V29.D2, V21.D2
+	VFMLS  V15.D2, V30.D2, V22.D2
+	VFMLS  V15.D2, V31.D2, V23.D2
+	VFMLA  V16.D2, V16.D2, V0.D2
+	VFMLA  V17.D2, V17.D2, V1.D2
+	VFMLA  V18.D2, V18.D2, V2.D2
+	VFMLA  V19.D2, V19.D2, V3.D2
+	VFMLA  V20.D2, V20.D2, V4.D2
+	VFMLA  V21.D2, V21.D2, V5.D2
+	VFMLA  V22.D2, V22.D2, V6.D2
+	VFMLA  V23.D2, V23.D2, V7.D2
+	SUB    $16, R2
+	CMP    $16, R2
+	BGE    dist_by16
+
+dist_by2:
+	CMP    $2, R2
+	BLT    dist_reduce
+	VLD1.P 16(R0), [V16.D2]
+	VLD1.P 16(R1), [V24.D2]
+	VFMLS  V15.D2, V24.D2, V16.D2
+	VFMLA  V16.D2, V16.D2, V0.D2
+	SUB    $2, R2
+	B      dist_by2
+
+dist_reduce:
+	VFMLA V15.D2, V1.D2, V0.D2
+	VFMLA V15.D2, V3.D2, V2.D2
+	VFMLA V15.D2, V5.D2, V4.D2
+	VFMLA V15.D2, V7.D2, V6.D2
+	VFMLA V15.D2, V2.D2, V0.D2
+	VFMLA V15.D2, V6.D2, V4.D2
+	VFMLA V15.D2, V4.D2, V0.D2
+	VMOV  V0.D[1], V1
+	FADDD F1, F0, F0
+
+dist_by1:
+	CBZ     R2, dist_done
+	FMOVD.P 8(R0), F16
+	FMOVD.P 8(R1), F24
+	FSUBD   F24, F16, F16
+	FMADDD  F16, F0, F16, F0
+	SUB     $1, R2
+	B       dist_by1
+
+dist_done:
+	FMOVD F0, ret+48(FP)
+	RET

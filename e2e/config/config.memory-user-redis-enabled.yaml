@@ -4,12 +4,15 @@
 #
 # Usage: point your router's CONFIG_FILE to this file (or merge redis_cache into your config).
 
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8888
     address: 0.0.0.0
     port: 8888
     timeout: 300s
+    # The tests stand in for an authenticating proxy: they send x-authz-user-id.
+    identity:
+      trust_headers: true
 providers:
   defaults:
     model: qwen3
@@ -22,49 +25,53 @@ providers:
           weight: 1
           endpoint: host.docker.internal:8000
           protocol: http
-routing:
-  modelCards:
-    - name: qwen3
-      modality: text
-  signals:
-    domains:
-      - name: general
-        description: General queries for memory testing
-        mmlu_categories: [other]
-    keywords: []
-  decisions:
-    - name: default_route
-      description: Default route for memory testing
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: qwen3
-          use_reasoning: false
-      plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance.
-            mode: insert
-        - type: memory
-          configuration:
-            enabled: true
-            retrieval_limit: 5
-            similarity_threshold: 0.60
-            auto_store: false
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: general
+          description: General queries for memory testing
+          labels: [other]
+      keywords: []
+    decisions:
+      - name: default_route
+        description: Default route for memory testing
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: general
+        modelRefs:
+          - model: qwen3
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance.
+              mode: insert
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: memory
+                  match:
+                    recall:
+                      method: embedding
+                      top_k: 5
+                      min_similarity: 0.60
+                  store:
+                    auto: false
 global:
   stores:
     memory:
-      enabled: true
       auto_store: false
+      query_rewrite:
+        deployment: memory-rewriter
       milvus:
         address: host.docker.internal:19530
         collection: memory_test_ci
         dimension: 768
-      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.60
       redis_cache:
@@ -75,27 +82,15 @@ global:
         key_prefix: "memory_cache:"
         password: ""
   model_catalog:
-    embeddings:
-      semantic:
-        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-        use_cpu: true
-        embedding_config:
-          model_type: mmbert
-          target_dimension: 768
-    external:
-      - llm_provider: vllm
-        model_role: memory_rewrite
-        llm_endpoint:
-          address: host.docker.internal
-          port: 8000
-          protocol: http
-        llm_model_name: qwen3
-        llm_timeout_seconds: 30
-      - llm_provider: vllm
-        model_role: memory_extraction
-        llm_endpoint:
-          address: host.docker.internal
-          port: 8000
-          protocol: http
-        llm_model_name: qwen3
-        llm_timeout_seconds: 30
+    deployments:
+      memory-rewriter:
+        provider: openai_chat
+        endpoint: http://host.docker.internal:8000/v1
+        model: qwen3
+        timeout_ms: 30000
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        sources:
+          - type: memory

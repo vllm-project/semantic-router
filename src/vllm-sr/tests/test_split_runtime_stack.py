@@ -53,11 +53,6 @@ def _option_values(command, option):
 def _stub_valid_container_cli(monkeypatch, tmp_path):
     docker_bin = tmp_path / "docker"
     docker_bin.write_text("")
-    monkeypatch.setattr(
-        container_start,
-        "resolve_container_cli_path",
-        lambda preferred_path=None: str(docker_bin),
-    )
     return docker_bin
 
 
@@ -76,7 +71,7 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.5\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
@@ -97,7 +92,6 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
         {"TARGET_ROUTER_API_URL": "http://stale-router:8080"},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         network_name="vllm-sr-network",
-        openclaw_network_name="vllm-sr-network",
         minimal=False,
     )
 
@@ -154,7 +148,7 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
 def test_split_runtime_uses_explicit_envoy_log_level(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.5\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
     monkeypatch.setenv("VLLM_SR_ENVOY_LOG_LEVEL", "DeBuG")
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
@@ -200,10 +194,7 @@ def test_split_runtime_rejects_invalid_envoy_log_level_before_preparing_paths(
 def test_split_runtime_honors_management_listener_port(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\n"
-        "listeners:\n  - name: public\n    address: 0.0.0.0\n    port: 8899\n"
-        "global:\n  services:\n    management_api:\n"
-        "      bind_address: 0.0.0.0\n      port: 9090\n"
+        "version: v0.5\nlisteners:\n  - name: public\n    address: 0.0.0.0\n    port: 8899\nglobal:\n  services:\n    management_api:\n      bind_address: 0.0.0.0\n      port: 9090\n"
     )
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
@@ -241,7 +232,7 @@ def test_split_runtime_rejects_management_listener_unreachable_from_dashboard(
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\n"
+        "version: v0.5\n"
         "listeners:\n  - name: public\n    address: 0.0.0.0\n    port: 8899\n"
         "global:\n  services:\n    management_api:\n"
         f"      bind_address: {bind_address}\n      port: 8080\n"
@@ -273,11 +264,7 @@ def test_split_runtime_rejects_management_listener_unreachable_from_dashboard(
 def test_split_runtime_rejects_invalid_management_auth_exposure(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\n"
-        "listeners:\n  - name: public\n    address: 0.0.0.0\n    port: 8899\n"
-        "global:\n  services:\n    management_api:\n"
-        "      bind_address: 0.0.0.0\n      port: 8080\n"
-        "      remote_exposure: true\n      auth:\n        mode: disabled\n"
+        "version: v0.5\nlisteners:\n  - name: public\n    address: 0.0.0.0\n    port: 8899\nglobal:\n  services:\n    management_api:\n      bind_address: 0.0.0.0\n      port: 8080\n      remote_exposure: true\n      auth:\n        mode: disabled\n"
     )
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
@@ -304,7 +291,7 @@ def test_split_runtime_rejects_invalid_management_auth_exposure(tmp_path, monkey
 def test_envoy_host_publish_preserves_loopback_listener_address(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\nlisteners:\n  - name: local-http\n    address: 127.0.0.1\n    port: 8899\n"
+        "version: v0.5\nlisteners:\n  - name: local-http\n    address: 127.0.0.1\n    port: 8899\n"
     )
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
@@ -324,7 +311,6 @@ def test_envoy_host_publish_preserves_loopback_listener_address(tmp_path, monkey
         {},
         [{"name": "local-http", "address": "127.0.0.1", "port": 8899}],
         network_name="vllm-sr-network",
-        openclaw_network_name="vllm-sr-network",
         minimal=False,
     )
 
@@ -336,7 +322,7 @@ def test_envoy_host_publish_preserves_loopback_listener_address(tmp_path, monkey
 def test_envoy_host_publish_brackets_ipv6_listener_address(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\nlisteners:\n  - name: local-v6\n    address: ::1\n    port: 8899\n"
+        "version: v0.5\nlisteners:\n  - name: local-v6\n    address: ::1\n    port: 8899\n"
     )
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
@@ -356,7 +342,6 @@ def test_envoy_host_publish_brackets_ipv6_listener_address(tmp_path, monkeypatch
         {},
         [{"name": "local-v6", "address": "::1", "port": 8899}],
         network_name="vllm-sr-network",
-        openclaw_network_name="vllm-sr-network",
         minimal=False,
     )
 
@@ -370,7 +355,7 @@ def test_container_start_vllm_sr_uses_role_specific_runtime_images(
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.5\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
@@ -391,7 +376,6 @@ def test_container_start_vllm_sr_uses_role_specific_runtime_images(
         {},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         network_name="vllm-sr-network",
-        openclaw_network_name="vllm-sr-network",
         minimal=False,
     )
 
@@ -411,7 +395,7 @@ def test_container_start_vllm_sr_skips_dashboard_image_resolution_in_minimal_mod
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.5\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
     captured_kwargs = {}
 
@@ -432,7 +416,6 @@ def test_container_start_vllm_sr_skips_dashboard_image_resolution_in_minimal_mod
         {},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         network_name="vllm-sr-network",
-        openclaw_network_name="vllm-sr-network",
         minimal=True,
     )
 
@@ -471,7 +454,6 @@ def test_container_start_vllm_sr_creates_router_and_envoy_standby_in_setup_mode(
         {"VLLM_SR_SETUP_MODE": "true", "DASHBOARD_SETUP_MODE": "true"},
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         network_name="vllm-sr-network",
-        openclaw_network_name="vllm-sr-network",
         minimal=False,
     )
 
@@ -549,9 +531,6 @@ def test_start_vllm_sr_creates_and_connects_shared_network_without_observability
         runtime_lifecycle, "container_exec", lambda *args, **kwargs: (0, "ok", "")
     )
     monkeypatch.setattr(
-        runtime_lifecycle, "load_openclaw_registry", lambda *args, **kwargs: []
-    )
-    monkeypatch.setattr(
         runtime_lifecycle, "container_logs", lambda *args, **kwargs: None
     )
 
@@ -564,9 +543,7 @@ def test_start_vllm_sr_creates_and_connects_shared_network_without_observability
 
     assert create_calls[0][1] == ("vllm-sr-network",)
     assert start_calls[0][2]["network_name"] == "vllm-sr-network"
-    assert start_calls[0][2]["openclaw_network_name"] == "vllm-sr-network"
     assert start_calls[0][2]["runtime_config_file"] == config_path
-    assert "TARGET_FLEET_SIM_URL" not in start_calls[0][2]["env_vars"]
     assert [call[1] for call in connect_calls] == [
         ("vllm-sr-network", "vllm-sr-router-container"),
         ("vllm-sr-network", "vllm-sr-envoy-container"),

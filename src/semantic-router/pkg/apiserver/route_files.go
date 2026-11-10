@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 /*
 Copyright 2025 vLLM Semantic Router.
@@ -28,6 +28,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
@@ -96,11 +97,7 @@ func (s *ClassificationAPIServer) uploadLimits() (int64, map[string]bool) {
 	if len(cfg.VectorStore.SupportedFormats) > 0 {
 		documentExtensions = make(map[string]bool, len(cfg.VectorStore.SupportedFormats))
 		for _, format := range cfg.VectorStore.SupportedFormats {
-			ext := strings.ToLower(strings.TrimSpace(format))
-			if ext != "" && !strings.HasPrefix(ext, ".") {
-				ext = "." + ext
-			}
-			documentExtensions[ext] = true
+			documentExtensions[config.VectorStoreFormatExtension(format)] = true
 		}
 	}
 	return uploadMaxBytes(cfg.VectorStore.MaxFileSizeMB), documentExtensions

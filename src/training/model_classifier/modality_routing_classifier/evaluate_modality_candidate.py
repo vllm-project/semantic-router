@@ -31,7 +31,7 @@ Usage:
         --test-file exported_modality_routing_dataset/test.jsonl \\
         --train-file exported_modality_routing_dataset/train.jsonl \\
         --val-file exported_modality_routing_dataset/validation.jsonl \\
-        --published-baseline-model-path llm-semantic-router/mmbert32k-modality-router-merged \\
+        --published-baseline-model-path vllm-sr/mmbert32k-modality-router-merged \\
         --clean-baseline-model-path models/mmbert32k-modality-router-clean-merged \\
         --candidate-model-path models/distilbert-modality-router-candidate-merged \\
         --output-report modality_candidate_eval_report.json

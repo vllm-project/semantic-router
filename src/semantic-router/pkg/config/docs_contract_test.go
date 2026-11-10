@@ -33,7 +33,7 @@ var configContractRequiredDocs = []docNeedles{
 			"exhaustive canonical reference config",
 			"`config/fragments/signal/`",
 			"`tutorials/signal/heuristic/`",
-			"`tutorials/signal/learned/`",
+			"`tutorials/signal/application/`",
 			"`config/fragments/decision/`",
 			"`config/fragments/algorithm/`",
 			"`config/fragments/plugin/`",
@@ -45,7 +45,8 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "installation", "configuration.md"),
 		needles: []string{
-			"version:\nlisteners:\nproviders:\nevaluation:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
+			"version:\nlisteners:\nproviders:\nevaluation:\nrecipes:\nentrypoints:\nglobal:",
+			"## Defaults and overrides",
 			"`providers.defaults.model`",
 			"vllm-sr config validate --config config.yaml",
 			"Environment references and secrets",
@@ -58,8 +59,8 @@ var configContractRequiredDocs = []docNeedles{
 		path: repoRel("website", "docs", "installation", "configuration-workflows.md"),
 		needles: []string{
 			"Choose one primary source of truth",
-			"vllm-sr serve --target k8s --config config.yaml",
-			"`spec.config.routing`",
+			"vllm-sr serve --target kubernetes --config config.yaml",
+			"`spec.config.recipes`",
 			"Routing DSL",
 			"Avoid split ownership",
 		},
@@ -113,20 +114,13 @@ var configContractRequiredDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "docs", "training", "ml-model-selection.md"),
-		needles: []string{
-			"global:\n  router:\n    model_selection:",
-			"routing:\n  decisions:",
-		},
-	},
-	{
 		path: repoRel("website", "docs", "training", "model-performance-eval.md"),
 		needles: []string{
 			"listeners: []",
 			"providers:\n  defaults:",
-			"routing:\n  modelCards:",
+			"recipes:\n  - name: default",
 			"model_catalog:",
-			"modules:",
+			"embeddings:",
 		},
 	},
 	{
@@ -160,14 +154,14 @@ var configContractRequiredDocs = []docNeedles{
 			"endpoint: 10.0.0.1:8000",
 			"[config/config.yaml]",
 			"global:\n  stores:\n    response_cache:",
-			"global:\n  model_catalog:\n    modules:\n      classifier:",
-			"routing:\n  decisions:",
+			"recipes:\n  - name: default\n    signals:\n      domains:",
+			"recipes:\n  - name: default\n    decisions:",
 		},
 	},
 	{
 		path: repoRel("website", "docs", "overview", "semantic-router-overview.md"),
 		needles: []string{
-			"Envoy presents the request to the Router.",
+			"The standalone frontend, or an ExtProc gateway, presents it to the Router.",
 			"**Entrypoint**",
 			"**Recipe**",
 			"direct selection",
@@ -177,8 +171,8 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("src", "vllm-sr", "README.md"),
 		needles: []string{
-			"`routing.decisions[]`",
-			"routing:\n  decisions:",
+			"`recipes[].decisions[]`",
+			"recipes:\n  - name: default\n    decisions:",
 			"vllm-sr config migrate --config old-config.yaml",
 		},
 	},
@@ -189,7 +183,7 @@ var configContractRequiredDocs = []docNeedles{
 			"`vsr_canonical_patch_recommendation.json`",
 			"providers:\n  defaults:\n    reasoning_effort:",
 			"reasoning:\n        family: qwen3",
-			"routing:\n  decisions:",
+			"recipes:\n  - name: default\n    decisions:",
 		},
 	},
 	{
@@ -197,17 +191,8 @@ var configContractRequiredDocs = []docNeedles{
 		needles: []string{
 			"providers:\n  models:",
 			"backend_refs:",
-			"global:\n  model_catalog:\n    modules:\n      prompt_guard:",
-			"global:\n  model_catalog:\n    modules:\n      hallucination_mitigation:",
-		},
-	},
-	{
-		path: repoRel("bench", "cpu-vs-gpu", "README.md"),
-		needles: []string{
-			"`config-bench.yaml`",
-			"`config-bench-candle.yaml`",
-			"`global.router.streamed_body.enabled`",
-			"`bench-3way.sh`",
+			"recipes:\n  - name: default\n    signals:\n      fact_check:",
+			"plugins:\n  - type: response_guard",
 		},
 	},
 	{
@@ -221,7 +206,7 @@ var configContractRequiredDocs = []docNeedles{
 		path: repoRel("website", "docs", "installation", "k8s", "operator.md"),
 		needles: []string{
 			"kind: SemanticRouter",
-			"`spec.config.routing`",
+			"`spec.config.recipes`",
 			"`spec.vllmEndpoints[]`",
 			"| `service` |",
 			"| `kserve` |",
@@ -236,7 +221,7 @@ var configContractRequiredDocs = []docNeedles{
 			"kind: SemanticRouter",
 			"kubectl explain semanticrouter.spec --recursive",
 			"`vllmEndpoints`",
-			"`config.routing`",
+			"`config.recipes`",
 			"`status.observedGeneration`",
 		},
 	},
@@ -244,23 +229,6 @@ var configContractRequiredDocs = []docNeedles{
 		path: "deploy/helm/README.md",
 		needles: []string{
 			"providers:\n    defaults:",
-		},
-	},
-	{
-		path: "tools/test/services/mcp-classifier-server/README.md",
-		needles: []string{
-			"providers:\n  defaults:",
-			"routing:\n  modelCards:",
-			"global:\n  model_catalog:\n    modules:\n      classifier:",
-		},
-	},
-	{
-		path: repoRel("src", "semantic-router", "pkg", "modelselection", "README.md"),
-		needles: []string{
-			"global:\n  router:\n    model_selection:",
-			"providers:\n  models:",
-			"backend_refs:",
-			"routing:\n  decisions:",
 		},
 	},
 }
@@ -278,14 +246,6 @@ var configContractForbiddenDocs = []docNeedles{
 			"global:\n  classifier:",
 			"global:\n  prompt_guard:",
 			"global:\n  modules:",
-		},
-	},
-	{
-		path: repoRel("website", "docs", "training", "ml-model-selection.md"),
-		needles: []string{
-			"config:\n  model_selection:",
-			"\nmodel_selection:\n",
-			"\nembedding_models:\n",
 		},
 	},
 	{
@@ -371,12 +331,7 @@ var configContractForbiddenDocs = []docNeedles{
 			"\nvllm_endpoints:\n",
 			"\nmodel_config:\n",
 			"\nhallucination_mitigation:\n",
-		},
-	},
-	{
-		path: repoRel("bench", "cpu-vs-gpu", "README.md"),
-		needles: []string{
-			"streamed_body_mode",
+			"model_catalog:\n    modules:",
 		},
 	},
 	{
@@ -398,21 +353,6 @@ var configContractForbiddenDocs = []docNeedles{
 		path: "deploy/helm/README.md",
 		needles: []string{
 			"providers:\n    default_model:",
-		},
-	},
-	{
-		path: "tools/test/services/mcp-classifier-server/README.md",
-		needles: []string{
-			"\nclassifier:\n",
-			"categories: []",
-		},
-	},
-	{
-		path: repoRel("src", "semantic-router", "pkg", "modelselection", "README.md"),
-		needles: []string{
-			"\nvllm_endpoints:\n",
-			"\nmodel_config:\n",
-			"access_key:",
 		},
 	},
 	{
@@ -452,17 +392,19 @@ var latestTutorialOverviewDocs = []docNeedles{
 		path: repoRel("website", "docs", "tutorials", "signal", "overview.md"),
 		needles: []string{
 			"Signals turn request facts into names",
+			"### The System One Primitive",
+			"### Application Signals",
 			"### Heuristic Signals",
-			"### Learned Signals",
+			"[System One](./systemone)",
 			"[Keyword](./heuristic/keyword)",
-			"[Domain](./learned/domain)",
+			"[Domain](./application/domain)",
 		},
 	},
 	{
 		path: repoRel("website", "docs", "tutorials", "decision", "overview.md"),
 		needles: []string{
 			"Signals tell the Router what it detected",
-			"`routing.decisions`",
+			"`recipes[].decisions`",
 			"`decision.algorithm`",
 			"`decision.plugins`",
 		},
@@ -471,17 +413,17 @@ var latestTutorialOverviewDocs = []docNeedles{
 		path: repoRel("website", "docs", "tutorials", "algorithm", "overview.md"),
 		needles: []string{
 			"An algorithm runs after a decision matches",
-			"### Selection Algorithms",
-			"### Looper Algorithms",
+			"### Selectors",
+			"### Executors",
 			"[Static](./selection/static)",
-			"[Confidence](./looper/confidence)",
+			"[Escalate](./looper/escalate)",
 		},
 	},
 	{
 		path: repoRel("website", "docs", "tutorials", "plugin", "overview.md"),
 		needles: []string{
 			"Plugins add route-local behavior after a decision matches",
-			"`routing.decisions[].plugins`",
+			"`recipes[].decisions[].plugins`",
 			"[Fast Response](./fast-response)",
 			"[Response Cache](./response-cache)",
 		},
@@ -518,11 +460,13 @@ var latestTutorialOverviewForbidden = []docNeedles{
 var latestTutorialSidebarRequired = []string{
 	"label: 'Signals'",
 	"label: 'Heuristic'",
-	"label: 'Learned'",
+	"label: 'Application'",
+	"label: 'System One'",
+	"'system-one/overview'",
 	"label: 'Decisions'",
 	"label: 'Algorithms'",
-	"label: 'Selection'",
-	"label: 'Looper'",
+	"label: 'Selectors'",
+	"label: 'Executors'",
 	"label: 'Plugins'",
 	"label: 'Response and Mutation'",
 	"label: 'Retrieval and Memory'",

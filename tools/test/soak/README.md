@@ -57,10 +57,10 @@ three deltas:
 - `global.stores.response_cache` is disabled, because the fixed prompt
   rotation would otherwise short-circuit at a warm semantic cache
 
-Like `config.e2e.yaml` it leaves `global.model_catalog` unset, so the real
-Candle/CGO classifiers load and stay hot — that is the memory behaviour the
-soak measures. Set `SOAK_CONFIG=<path>` to skip derivation and use your own
-config.
+Like `config.e2e.yaml` it leaves `global.model_catalog` unset, so the router
+starts its classifiers in managed model runtime processes and keeps them hot.
+Heap profiles cover the router process; the runtime processes hold the model
+memory. Set `SOAK_CONFIG=<path>` to skip derivation and use your own config.
 
 ## Derived envoy config
 

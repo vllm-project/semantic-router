@@ -132,8 +132,18 @@ type ExactLookup struct {
 }
 
 type SemanticLookup struct {
-	Identity  CacheIdentity
-	Threshold float32
+	Identity CacheIdentity
+	// Bounds bound the cached requests the lookup recalls.
+	Bounds SimilarityBounds
+	MaxAge *time.Duration
+}
+
+// SemanticRecall is what a semantic lookup recalled: the fresh cached entries
+// within its bounds, most similar first, each with the cached request it
+// answered, and the closest similarity it saw, kept or not.
+type SemanticRecall struct {
+	Candidates []CacheResult
+	Closest    float32
 }
 
 type CacheWrite struct {
@@ -150,6 +160,7 @@ type CacheResult struct {
 	HitKind       HitKind              `json:"hit_kind"`
 	Source        CacheSource          `json:"source,omitempty"`
 	Similarity    float32              `json:"similarity,omitempty"`
+	Query         string               `json:"-"`
 	NegationGuard NegationGuardOutcome `json:"negation_guard,omitempty"`
 	Age           time.Duration        `json:"-"`
 	AgeKnown      bool                 `json:"-"`
@@ -174,7 +185,7 @@ type ExactStore interface {
 }
 
 type SemanticStore interface {
-	LookupSemantic(context.Context, SemanticLookup) (CacheResult, error)
+	LookupSemantic(context.Context, SemanticLookup) (SemanticRecall, error)
 	StoreSemantic(context.Context, CacheWrite) error
 }
 

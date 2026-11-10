@@ -41,39 +41,51 @@ type Capabilities struct {
 }
 
 type GuardPreviewRuntime interface {
-	PreviewResponseJailbreak(context.Context, ResponseJailbreakPreviewRequest) (GuardPreviewResponse, error)
-	PreviewHallucination(context.Context, HallucinationPreviewRequest) (GuardPreviewResponse, error)
+	PreviewResponseGuard(context.Context, ResponseGuardPreviewRequest) (ResponseGuardPreviewResponse, error)
 }
 
-type ResponseJailbreakPreviewRequest struct {
+// ResponseGuardPreviewRequest is an answer for a binding's response_guard to
+// read: the question it answered, its grounding context (retrieved documents
+// and tool results) and the answer itself.
+type ResponseGuardPreviewRequest struct {
 	Binding  Binding       `json:"binding"`
 	Mode     ExecutionMode `json:"mode,omitempty"`
+	Question string        `json:"question"`
+	Context  string        `json:"context,omitempty"`
 	Response string        `json:"response"`
 }
 
-type HallucinationPreviewRequest struct {
-	Binding         Binding       `json:"binding"`
-	Mode            ExecutionMode `json:"mode,omitempty"`
-	Question        string        `json:"question"`
-	Context         string        `json:"context"`
-	Response        string        `json:"response"`
-	FactCheckNeeded bool          `json:"fact_check_needed"`
+// ResponseGuardPreviewResponse is what the guard does with the answer: block,
+// annotate with warnings, or none, each rule's outcome in order up to the
+// first that blocks, and the response-stage signals the rules read.
+type ResponseGuardPreviewResponse struct {
+	Guarantees
+	Binding  Binding                      `json:"binding"`
+	Action   string                       `json:"action"`
+	Warnings []string                     `json:"warnings,omitempty"`
+	Reason   string                       `json:"reason,omitempty"`
+	Rules    []ResponseGuardRuleOutcome   `json:"rules,omitempty"`
+	Signals  []ResponseGuardSignalOutcome `json:"signals,omitempty"`
 }
 
-type GuardPreviewResponse struct {
-	Guarantees
-	Binding          Binding  `json:"binding"`
-	Enabled          bool     `json:"enabled"`
-	Eligible         bool     `json:"eligible"`
-	Resolved         bool     `json:"resolved"`
-	Detected         bool     `json:"detected"`
-	Action           string   `json:"action"`
+// ResponseGuardRuleOutcome is one rule's reading of the answer: matched,
+// not_matched or unknown, the action it applies and the warning codes it
+// annotates with.
+type ResponseGuardRuleOutcome struct {
+	State        string   `json:"state"`
+	Action       string   `json:"action,omitempty"`
+	Warnings     []string `json:"warnings,omitempty"`
+	MatchedRules []string `json:"matched_rules,omitempty"`
+}
+
+// ResponseGuardSignalOutcome is one response-stage rule's reading of the
+// answer, under its type:name key: detected, not_detected or unavailable
+// (with the failure code as reason), its score, and the evidence behind it.
+type ResponseGuardSignalOutcome struct {
+	Signal           string   `json:"signal"`
+	Verdict          string   `json:"verdict"`
 	Reason           string   `json:"reason,omitempty"`
-	DetectionSource  string   `json:"detection_source"`
-	Score            *float32 `json:"score,omitempty"`
-	ScoreKind        string   `json:"score_kind,omitempty"`
-	Label            string   `json:"label,omitempty"`
-	MatchedRules     []string `json:"matched_rules,omitempty"`
+	Score            *float64 `json:"score,omitempty"`
 	UnsupportedSpans []string `json:"unsupported_spans,omitempty"`
 }
 

@@ -1,10 +1,10 @@
 replicaCount: 1
 image:
-  repository: ghcr.io/vllm-project/semantic-router/extproc
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -21,56 +21,54 @@ config:
           - name: test-endpoint
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    decisions:
-      - name: workflow_decision
-        description: Workflow decision for testing pause and resume
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: keyword
-              name: workflow_keyword
-        algorithm:
-          type: workflows
-          workflows:
-            mode: dynamic
-            planner:
-              model: openai/workflow-planner
-            max_steps: 2
+  recipes:
+    - name: default
+      decisions:
+        - name: workflow_decision
+          description: Workflow decision for testing pause and resume
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: workflow_keyword
+          algorithm:
+            type: workflows
             on_error: skip
-            final:
-              model: openai/gpt-oss-20b
-        modelRefs:
-          - model: openai/gpt-oss-20b
-      - name: default_decision
-        description: Default catch-all decision
-        priority: 1
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: other
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
-    signals:
-      keywords:
-        - name: workflow_keyword
-          operator: OR
-          keywords:
-            - "workflow"
-            - "workflows"
-            - "workflow_pause_resume"
-          case_sensitive: false
-      domains:
-        - name: other
-          description: General knowledge and miscellaneous topics
-          mmlu_categories:
-            - other
-    modelCards:
-      - name: openai/gpt-oss-20b
-      - name: openai/workflow-planner
+            workflows:
+              mode: dynamic
+              planner:
+                model: openai/workflow-planner
+              max_steps: 2
+              final:
+                model: openai/gpt-oss-20b
+          modelRefs:
+            - model: openai/gpt-oss-20b
+        - name: default_decision
+          description: Default catch-all decision
+          priority: 1
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: other
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+      signals:
+        keywords:
+          - name: workflow_keyword
+            operator: OR
+            keywords:
+              - "workflow"
+              - "workflows"
+              - "workflow_pause_resume"
+            case_sensitive: false
+        domains:
+          - name: other
+            description: General knowledge and miscellaneous topics
+            labels:
+              - other
   global:
     router:
       strategy: priority
@@ -94,8 +92,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: false
@@ -104,19 +100,9 @@ config:
       observability:
         tracing:
           enabled: false
-    stores:
-      response_cache:
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
-      vector_store:
-        embedding_model: mmbert
     integrations:
       looper:
-        endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/chat/completions
         flow:
-          model_names:
-            - openai/gpt-oss-20b
           state:
             store_backend: redis
             ttl_seconds: 1800
@@ -125,32 +111,13 @@ config:
               db: 0
               password: ""
               key_prefix: "vllm-sr:flow:state:"
-    model_catalog:
-      kbs: []
-      modules:
-        prompt_guard:
-          enabled: false
-          model_ref: ""
-          model_id: ""
-          jailbreak_mapping_path: ""
-        classifier:
-          domain:
-            model_ref: ""
-            model_id: ""
-            category_mapping_path: ""
-            use_mmbert_32k: false
-          pii:
-            model_ref: ""
-            model_id: ""
-            pii_mapping_path: ""
-            use_mmbert_32k: false
 resources:
   limits:
     cpu: '2'
-    memory: 2Gi
+    memory: 10Gi
   requests:
     cpu: 500m
-    memory: 1Gi
+    memory: 2Gi
 
 # E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
 persistence:

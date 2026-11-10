@@ -132,10 +132,18 @@ func (m *mockMemoryStore) List(_ context.Context, opts memory.ListOptions) (*mem
 	if limit > 100 {
 		limit = 100
 	}
+	if opts.Offset < 0 {
+		return nil, fmt.Errorf("offset must be non-negative")
+	}
+	if opts.Offset < len(matching) {
+		matching = matching[opts.Offset:]
+	} else {
+		matching = nil
+	}
 	if limit < len(matching) {
 		matching = matching[:limit]
 	}
-	return &memory.ListResult{Memories: matching, Total: total, Limit: limit}, nil
+	return &memory.ListResult{Memories: matching, Total: total, Limit: limit, Offset: opts.Offset}, nil
 }
 
 func (m *mockMemoryStore) Forget(_ context.Context, id string) error {

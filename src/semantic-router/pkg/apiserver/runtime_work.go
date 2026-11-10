@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package apiserver
 
@@ -15,9 +15,10 @@ type retainedAPIResult[T any] struct {
 }
 
 // runRetainedAPIWork separates request cancellation from runtime ownership.
-// The HTTP caller can stop waiting at its deadline, while a nonpreemptible
-// provider keeps its leases and server drain registration until it returns.
-// The caller supplies its domain's already-acquired leases/admission ticket.
+// The HTTP caller stops waiting at its deadline; the model call ends with the
+// same context, and the work keeps its leases and server drain registration
+// until it has returned. The caller supplies its domain's already-acquired
+// leases and admission ticket.
 func runRetainedAPIWork[T any](ctx context.Context, release func(), invoke func(context.Context) (T, error)) (T, error) {
 	var zero T
 	if err := ctx.Err(); err != nil {
@@ -48,7 +49,7 @@ func runRetainedAPIWork[T any](ctx context.Context, release func(), invoke func(
 	case <-ctx.Done():
 		return zero, ctx.Err()
 	case result := <-completed:
-		// A deadline wins over a late successful native return.
+		// A deadline wins over a late successful return.
 		if err := ctx.Err(); err != nil {
 			return zero, err
 		}

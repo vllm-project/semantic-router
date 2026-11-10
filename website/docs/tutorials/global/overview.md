@@ -36,24 +36,28 @@ global:
         enabled: true
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
 ```
 
-Global configuration has five groups:
+Global configuration has six groups:
 
 | Group | Owns | Guide |
 |---|---|---|
-| `global.router` | Router engine controls, selection defaults, streamed-body policy, learning | [Algorithms](../algorithm/overview), [Router Learning](../learning/overview) |
+| `global.router` | Router engine controls, selection defaults, streamed-body policy, routing input, learning | [Algorithms](../algorithm/overview), [Router Learning](../learning/overview), [Routing input](../signal/overview#choose-the-user-text-signals-read) |
 | `global.services` | API, Response API, observability, authz, rate limits, management API, startup status, replay | [API and Observability](./api-and-observability) |
 | `global.stores` | response cache, memory, vector store | [Stores and Tools](./stores-and-tools) |
-| `global.integrations` | tool catalog and Looper endpoint/state | [Stores and Tools](./stores-and-tools) |
-| `global.model_catalog` | embeddings, system models, external helpers, knowledge bases, capability modules | [Router Runtime](../../installation/native-backends) |
+| `global.integrations` | tool catalog and Looper runtime/state | [Stores and Tools](./stores-and-tools) |
+| `global.model_catalog` | deployments, bindings, admission, the embedding and decision models | [Model runtime](../../model-runtime/overview.md) |
+| `global.plugins` | the default plugins every request runs, such as `context` (memory, `compress.signals`) and `router_replay` | [Plugins](../plugin/overview) |
 
 Entrypoints and named recipes are top-level objects rather than global
 settings; see [Virtual Models](./entrypoints-and-recipes).
 Remote text embeddings are covered in
-[Runtime embeddings](../../installation/runtime/embeddings).
+[Embeddings](../../model-runtime/guides/embeddings.md).
 
 ## Operational Boundaries
 

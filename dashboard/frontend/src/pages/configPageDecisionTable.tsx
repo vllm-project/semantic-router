@@ -1,6 +1,8 @@
 import type { Column } from '../components/DataTable'
 import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
+import { X_VSR_SELECTED_DECISION } from '../generated/vsrHeaders'
 import styles from './ConfigPage.module.css'
+import { isSingleConditionRules } from './configPageDecisionFormSupport'
 import type { DecisionConfig } from './configPageSupport'
 import { TABLE_COLUMN_WIDTH } from './configPageSupport'
 
@@ -11,7 +13,7 @@ export const decisionColumns: Column<DecisionConfig>[] = [
     sortable: true,
     render: (row) => (
       <span style={{ fontWeight: 600 }}>
-        {formatRoutingMetadataValue('x-vsr-selected-decision', row.name)}
+        {formatRoutingMetadataValue(X_VSR_SELECTED_DECISION, row.name)}
       </span>
     ),
   },
@@ -32,7 +34,7 @@ export const decisionColumns: Column<DecisionConfig>[] = [
     header: 'Conditions',
     width: TABLE_COLUMN_WIDTH.medium,
     render: (row) => {
-      const count = row.rules?.conditions?.length || 0
+      const count = isSingleConditionRules(row.rules) ? 1 : row.rules?.conditions?.length || 0
       return (
         <span>
           {count} {count === 1 ? 'condition' : 'conditions'}

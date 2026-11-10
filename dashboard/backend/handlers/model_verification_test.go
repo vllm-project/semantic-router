@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
@@ -368,48 +369,52 @@ func TestModelVerificationHandlerRateLimitsPerAuthenticatedUserAndAudits(t *test
 func TestModelVerificationServiceCoalescesConcurrentRequestsPerModel(t *testing.T) {
 	t.Parallel()
 
-	var providerCalls atomic.Int32
-	started := make(chan struct{})
-	release := make(chan struct{})
-	client := modelVerificationRoundTripper(func(*http.Request) (*http.Response, error) {
-		if providerCalls.Add(1) == 1 {
-			close(started)
-		}
-		<-release
-		return modelVerificationHTTPResponse(http.StatusOK, `{"choices":[{"message":{"content":"OK shared"}}]}`), nil
-	})
-	config := modelVerificationTestConfig(t, "https://provider.example", "openai", "")
-	service := newModelVerificationService("active-config.yaml", modelVerificationOptions{
-		client:     client,
-		loadConfig: func(string) (*routerconfig.RouterConfig, error) { return config, nil },
-	})
+	synctest.Test(t, func(t *testing.T) {
+		var providerCalls atomic.Int32
+		started := make(chan struct{})
+		release := make(chan struct{})
+		client := modelVerificationRoundTripper(func(*http.Request) (*http.Response, error) {
+			if providerCalls.Add(1) == 1 {
+				close(started)
+			}
+			<-release
+			return modelVerificationHTTPResponse(http.StatusOK, `{"choices":[{"message":{"content":"OK shared"}}]}`), nil
+		})
+		config := modelVerificationTestConfig(t, "https://provider.example", "openai", "")
+		service := newModelVerificationService("active-config.yaml", modelVerificationOptions{
+			client:     client,
+			loadConfig: func(string) (*routerconfig.RouterConfig, error) { return config, nil },
+		})
 
-	type result struct {
-		response ModelVerificationResponse
-		err      error
-	}
-	results := make(chan result, 2)
-	go func() {
-		response, err := service.Verify(context.Background(), "logical-model")
-		results <- result{response: response, err: err}
-	}()
-	<-started
-	go func() {
-		response, err := service.Verify(context.Background(), "logical-model")
-		results <- result{response: response, err: err}
-	}()
-	time.Sleep(10 * time.Millisecond)
-	close(release)
-
-	for range 2 {
-		result := <-results
-		if result.err != nil || !result.response.Verified {
-			t.Fatalf("shared verification = %#v, %v", result.response, result.err)
+		type result struct {
+			response ModelVerificationResponse
+			err      error
 		}
-	}
-	if providerCalls.Load() != 1 {
-		t.Fatalf("provider calls = %d, want 1", providerCalls.Load())
-	}
+		results := make(chan result, 2)
+		go func() {
+			response, err := service.Verify(context.Background(), "logical-model")
+			results <- result{response: response, err: err}
+		}()
+		<-started
+		go func() {
+			response, err := service.Verify(context.Background(), "logical-model")
+			results <- result{response: response, err: err}
+		}()
+		// Keep the provider blocked until the second caller joins the in-flight request.
+		// A wall-clock delay can release it before that goroutine runs on a busy host.
+		synctest.Wait()
+		close(release)
+
+		for range 2 {
+			result := <-results
+			if result.err != nil || !result.response.Verified {
+				t.Fatalf("shared verification = %#v, %v", result.response, result.err)
+			}
+		}
+		if providerCalls.Load() != 1 {
+			t.Fatalf("provider calls = %d, want 1", providerCalls.Load())
+		}
+	})
 }
 
 func TestModelVerificationServiceDoesNotReuseInflightResultAfterBackendChange(t *testing.T) {

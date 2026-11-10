@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot/historylock"
 )
 
 // config.yaml can carry plaintext provider credentials, so every copy the
@@ -223,6 +225,11 @@ func createConfigBackup(configDir string, existingData []byte) (string, error) {
 	if err := ensureConfigSnapshotDir(backupDir); err != nil {
 		return "", fmt.Errorf("prepare config backup directory: %w", err)
 	}
+	unlock, err := historylock.Lock(backupDir)
+	if err != nil {
+		return "", fmt.Errorf("lock config backup directory: %w", err)
+	}
+	defer unlock()
 	repairConfigSnapshotPermissions(configDir)
 
 	now := time.Now()
@@ -295,12 +302,17 @@ func snapshotCurrentConfigBeforeRollback(configPath string, configDir string) ([
 	}
 
 	backupDir := configBackupDir(configDir)
-	if err := ensureConfigSnapshotDir(backupDir); err != nil {
+	if err = ensureConfigSnapshotDir(backupDir); err != nil {
 		return nil, fmt.Errorf("prepare config backup directory: %w", err)
 	}
+	unlock, err := historylock.Lock(backupDir)
+	if err != nil {
+		return nil, fmt.Errorf("lock config backup directory: %w", err)
+	}
+	defer unlock()
 	repairConfigSnapshotPermissions(configDir)
 
-	if _, err := writeVersionedConfigBackup(backupDir, existingData, time.Now()); err != nil {
+	if _, err = writeVersionedConfigBackup(backupDir, existingData, time.Now()); err != nil {
 		return nil, fmt.Errorf("snapshot current config before rollback: %w", err)
 	}
 
@@ -361,8 +373,19 @@ func listConfigVersions(configPath string) ([]ConfigVersion, error) {
 	return versions, nil
 }
 
-// cleanupBackups removes old backups beyond maxBackups
+// cleanupBackups removes old backups beyond maxBackups, with the files the
+// Router keeps beside a version it recorded. It holds the directory's lock,
+// as the Router does when it writes there.
 func cleanupBackups(backupDir string) {
+	if _, err := os.Lstat(backupDir); err != nil {
+		return
+	}
+	unlock, err := historylock.Lock(backupDir)
+	if err != nil {
+		log.Printf("Warning: skipped config backup cleanup: %v", err)
+		return
+	}
+	defer unlock()
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {
 		return
@@ -388,8 +411,14 @@ func cleanupBackups(backupDir string) {
 		path := filepath.Join(backupDir, backups[i].Name())
 		if err := os.Remove(path); err != nil {
 			log.Printf("Warning: failed to remove old backup %s: %v", path, err)
-		} else {
-			log.Printf("Removed old backup: %s", backups[i].Name())
+			continue
+		}
+		log.Printf("Removed old backup: %s", backups[i].Name())
+		base := strings.TrimSuffix(path, ".yaml")
+		for _, sidecar := range []string{base + ".source", base + ".snapshot.json"} {
+			if err := os.Remove(sidecar); err != nil && !errors.Is(err, os.ErrNotExist) {
+				log.Printf("Warning: failed to remove %s: %v", sidecar, err)
+			}
 		}
 	}
 }

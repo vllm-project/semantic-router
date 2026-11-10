@@ -5,7 +5,8 @@ import (
 	"strings"
 )
 
-func validateProjectionContracts(cfg *RouterConfig) error {
+func validateProjectionContracts(cfg *RouterConfig) (err error) {
+	defer func() { err = cfg.inRecipe(err) }()
 	if err := validateProjectionPartitions(cfg); err != nil {
 		return err
 	}
@@ -30,36 +31,37 @@ func validateProjectionContracts(cfg *RouterConfig) error {
 }
 
 func validateProjectionPartitions(cfg *RouterConfig) error {
-	declaredTypes := projectionPartitionMemberTypes(cfg)
+	domains := make(map[string]bool, len(cfg.Categories))
+	for _, category := range cfg.Categories {
+		domains[category.Name] = true
+	}
 	for _, partition := range cfg.Projections.Partitions {
-		if err := validateProjectionPartition(partition, declaredTypes); err != nil {
+		if err := validateProjectionPartition(partition, domains); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func validateProjectionPartition(partition ProjectionPartition, declaredTypes map[string]string) error {
+func validateProjectionPartition(partition ProjectionPartition, domains map[string]bool) error {
 	if len(partition.Members) == 0 {
-		return fmt.Errorf("routing.projections.partitions[%q]: members cannot be empty", partition.Name)
+		return fmt.Errorf("projections.partitions[%q]: members cannot be empty", partition.Name)
 	}
 	if err := validateProjectionPartitionSemantics(partition); err != nil {
 		return err
 	}
 	if partition.Default == "" {
-		return fmt.Errorf("routing.projections.partitions[%q]: default is required", partition.Name)
+		return fmt.Errorf("projections.partitions[%q]: default is required", partition.Name)
 	}
-	memberType, err := projectionPartitionMemberType(partition, declaredTypes)
-	if err != nil {
-		return err
+	for _, member := range partition.Members {
+		if !domains[member] {
+			return fmt.Errorf("projections.partitions[%q]: member %q is not a declared domain signal", partition.Name, member)
+		}
 	}
 	if err := validateProjectionPartitionTemperature(partition); err != nil {
 		return err
 	}
-	if err := validateProjectionPartitionDefault(partition); err != nil {
-		return err
-	}
-	return validateProjectionPartitionType(partition, memberType)
+	return validateProjectionPartitionDefault(partition)
 }
 
 func validateProjectionPartitionSemantics(partition ProjectionPartition) error {
@@ -68,73 +70,25 @@ func validateProjectionPartitionSemantics(partition ProjectionPartition) error {
 		return nil
 	default:
 		return fmt.Errorf(
-			"routing.projections.partitions[%q]: unsupported semantics %q (supported: exclusive, softmax_exclusive)",
+			"projections.partitions[%q]: unsupported semantics %q (supported: exclusive, softmax_exclusive)",
 			partition.Name,
 			partition.Semantics,
 		)
 	}
 }
 
-func projectionPartitionMemberType(
-	partition ProjectionPartition,
-	declaredTypes map[string]string,
-) (string, error) {
-	memberType := ""
-	for _, member := range partition.Members {
-		currentType, ok := declaredTypes[member]
-		if !ok {
-			return "", fmt.Errorf("routing.projections.partitions[%q]: member %q is not a declared domain or embedding signal", partition.Name, member)
-		}
-		if memberType == "" {
-			memberType = currentType
-			continue
-		}
-		if currentType != memberType {
-			return "", fmt.Errorf(
-				"routing.projections.partitions[%q]: members must share one supported type (domain or embedding), found %q and %q",
-				partition.Name,
-				memberType,
-				currentType,
-			)
-		}
-	}
-	return memberType, nil
-}
-
 func validateProjectionPartitionTemperature(partition ProjectionPartition) error {
 	if partition.Semantics == "softmax_exclusive" && partition.Temperature <= 0 {
-		return fmt.Errorf("routing.projections.partitions[%q]: softmax_exclusive requires temperature > 0", partition.Name)
+		return fmt.Errorf("projections.partitions[%q]: softmax_exclusive requires temperature > 0", partition.Name)
 	}
 	return nil
 }
 
 func validateProjectionPartitionDefault(partition ProjectionPartition) error {
 	if !containsProjectionMember(partition.Members, partition.Default) {
-		return fmt.Errorf("routing.projections.partitions[%q]: default %q must also appear in members", partition.Name, partition.Default)
+		return fmt.Errorf("projections.partitions[%q]: default %q must also appear in members", partition.Name, partition.Default)
 	}
 	return nil
-}
-
-func validateProjectionPartitionType(partition ProjectionPartition, memberType string) error {
-	if memberType != SignalTypeDomain && memberType != SignalTypeEmbedding {
-		return fmt.Errorf(
-			"routing.projections.partitions[%q]: members must use domain or embedding signals, found %q",
-			partition.Name,
-			memberType,
-		)
-	}
-	return nil
-}
-
-func projectionPartitionMemberTypes(cfg *RouterConfig) map[string]string {
-	types := make(map[string]string, len(cfg.Categories)+len(cfg.EmbeddingRules))
-	for _, category := range cfg.Categories {
-		types[category.Name] = SignalTypeDomain
-	}
-	for _, rule := range cfg.EmbeddingRules {
-		types[rule.Name] = SignalTypeEmbedding
-	}
-	return types
 }
 
 func containsProjectionMember(members []string, target string) bool {
@@ -229,7 +183,7 @@ func validateProjectionScoreDependencyOrder(scores []ProjectionScore, mappings [
 		}
 		if state[name] == visiting {
 			return fmt.Errorf(
-				"routing.projections.scores: dependency cycle detected: %s",
+				"projections.scores: dependency cycle detected: %s",
 				formatCyclePath(path, name),
 			)
 		}
@@ -238,7 +192,7 @@ func validateProjectionScoreDependencyOrder(scores []ProjectionScore, mappings [
 		for _, dep := range adj[name] {
 			if _, ok := nameIndex[dep]; !ok {
 				return fmt.Errorf(
-					"routing.projections.scores[%q]: projection input references undefined score %q",
+					"projections.scores[%q]: projection input references undefined score %q",
 					name, dep,
 				)
 			}
@@ -269,17 +223,17 @@ func validateProjectionScore(
 	outputToSource map[string]string,
 ) error {
 	if score.Name == "" {
-		return fmt.Errorf("routing.projections.scores: name cannot be empty")
+		return fmt.Errorf("projections.scores: name cannot be empty")
 	}
 	if _, exists := names[score.Name]; exists {
-		return fmt.Errorf("routing.projections.scores[%q]: duplicate score name", score.Name)
+		return fmt.Errorf("projections.scores[%q]: duplicate score name", score.Name)
 	}
 	names[score.Name] = struct{}{}
 	if score.Method != "weighted_sum" {
-		return fmt.Errorf("routing.projections.scores[%q]: unsupported method %q (supported: weighted_sum)", score.Name, score.Method)
+		return fmt.Errorf("projections.scores[%q]: unsupported method %q (supported: weighted_sum)", score.Name, score.Method)
 	}
 	if len(score.Inputs) == 0 {
-		return fmt.Errorf("routing.projections.scores[%q]: inputs cannot be empty", score.Name)
+		return fmt.Errorf("projections.scores[%q]: inputs cannot be empty", score.Name)
 	}
 	for _, input := range score.Inputs {
 		if err := validateProjectionScoreInput(score.Name, input, declaredSignals, cfg, outputToSource); err != nil {
@@ -298,22 +252,31 @@ func validateProjectionScoreInput(
 ) error {
 	if !isProjectionInputTypeSupported(input.Type) {
 		return fmt.Errorf(
-			"routing.projections.scores[%q]: input %s(%q) uses unsupported type %q",
+			"projections.scores[%q]: input %s(%q) uses unsupported type %q",
 			scoreName,
 			input.Type,
 			input.Name,
 			input.Type,
 		)
 	}
-	if strings.EqualFold(input.Type, ProjectionInputKBMetric) {
-		return validateKBMetricProjectionInput(cfg, scoreName, input)
-	}
 	if strings.EqualFold(input.Type, SignalTypeProjection) {
 		return validateProjectionInputProjectionRef(scoreName, input, outputToSource)
 	}
+	if strings.EqualFold(input.Type, SignalTypeSystemOne) {
+		if err := validateSystemOneProjectionInput(cfg, scoreName, input); err != nil {
+			return err
+		}
+		return validateProjectionInputValueSource(scoreName, input)
+	}
+	if signalType := strings.ToLower(strings.TrimSpace(input.Type)); IsApplicationSignalType(signalType) {
+		if err := validateApplicationProjectionInput(cfg, scoreName, signalType, input); err != nil {
+			return err
+		}
+		return validateProjectionInputValueSource(scoreName, input)
+	}
 	if !projectionInputDeclared(declaredSignals, input.Type, input.Name) {
 		return fmt.Errorf(
-			"routing.projections.scores[%q]: input %s(%q) is not declared in routing.signals",
+			"projections.scores[%q]: input %s(%q) is not declared in the recipe's signals",
 			scoreName,
 			input.Type,
 			input.Name,
@@ -322,10 +285,66 @@ func validateProjectionScoreInput(
 	return validateProjectionInputValueSource(scoreName, input)
 }
 
+// validateApplicationProjectionInput checks an application signal input: a
+// declared rule, or "<rule>:<label>" for one option of its preset, whose
+// value is that option's probability.
+func validateApplicationProjectionInput(cfg *RouterConfig, scoreName, signalType string, input ProjectionScoreInput) error {
+	name, option, labelled := strings.Cut(input.Name, ":")
+	rule, ok := cfg.ApplicationRuleByName(signalType, name)
+	if !ok {
+		return fmt.Errorf(
+			"projections.scores[%q]: input %s(%q) is not declared in the recipe's signals",
+			scoreName,
+			input.Type,
+			input.Name,
+		)
+	}
+	if labelled && !stringSliceContains(rule.Rule.Question.OptionKeys(), option) {
+		return fmt.Errorf(
+			"projections.scores[%q]: input %s(%q) names %q, which is not a %s label; the labels are %s",
+			scoreName,
+			input.Type,
+			input.Name,
+			option,
+			signalType,
+			strings.Join(rule.Rule.Question.OptionKeys(), ", "),
+		)
+	}
+	return nil
+}
+
+// validateSystemOneProjectionInput checks a systemone input: a declared rule,
+// or "<rule>:<option>" for one option of a choice, set or span question,
+// whose value is that option's probability.
+func validateSystemOneProjectionInput(cfg *RouterConfig, scoreName string, input ProjectionScoreInput) error {
+	name, option, labelled := strings.Cut(input.Name, ":")
+	rule := systemOneRuleByName(cfg.SystemOneRules, name)
+	if rule == nil {
+		return fmt.Errorf(
+			"projections.scores[%q]: input %s(%q) is not declared in the recipe's signals",
+			scoreName,
+			input.Type,
+			input.Name,
+		)
+	}
+	if labelled && (!rule.Question.Labelled() || !stringSliceContains(rule.Question.OptionKeys(), option)) {
+		return fmt.Errorf(
+			"projections.scores[%q]: input %s(%q) names %q, which is not an option of the %s question %q",
+			scoreName,
+			input.Type,
+			input.Name,
+			option,
+			rule.Question.Type,
+			rule.Name,
+		)
+	}
+	return nil
+}
+
 func validateProjectionInputProjectionRef(scoreName string, input ProjectionScoreInput, outputToSource map[string]string) error {
 	if input.Name == "" {
 		return fmt.Errorf(
-			"routing.projections.scores[%q]: projection input requires a name referencing a declared score or mapping output",
+			"projections.scores[%q]: projection input requires a name referencing a declared score or mapping output",
 			scoreName,
 		)
 	}
@@ -335,7 +354,7 @@ func validateProjectionInputProjectionRef(scoreName string, input ProjectionScor
 	case ProjectionValueSourceConfidence:
 		if _, ok := outputToSource[input.Name]; !ok {
 			return fmt.Errorf(
-				"routing.projections.scores[%q]: projection input %q with value_source \"confidence\" references undefined mapping output",
+				"projections.scores[%q]: projection input %q with value_source \"confidence\" references undefined mapping output",
 				scoreName,
 				input.Name,
 			)
@@ -343,7 +362,7 @@ func validateProjectionInputProjectionRef(scoreName string, input ProjectionScor
 		return nil
 	default:
 		return fmt.Errorf(
-			"routing.projections.scores[%q]: projection input %q has unsupported value_source %q (supported: score, confidence)",
+			"projections.scores[%q]: projection input %q has unsupported value_source %q (supported: score, confidence)",
 			scoreName,
 			input.Name,
 			input.ValueSource,
@@ -357,7 +376,7 @@ func validateProjectionInputValueSource(scoreName string, input ProjectionScoreI
 		return nil
 	default:
 		return fmt.Errorf(
-			"routing.projections.scores[%q]: input %s(%q) has unsupported value_source %q (supported: binary, confidence, raw)",
+			"projections.scores[%q]: input %s(%q) has unsupported value_source %q (supported: binary, confidence, raw)",
 			scoreName,
 			input.Type,
 			input.Name,
@@ -369,27 +388,19 @@ func validateProjectionInputValueSource(scoreName string, input ProjectionScoreI
 func projectionDeclaredSignals(cfg *RouterConfig) map[string]map[string]struct{} {
 	declared := map[string]map[string]struct{}{
 		SignalTypeKeyword:       collectKeywordRuleNames(cfg.KeywordRules),
-		SignalTypeEmbedding:     collectEmbeddingRuleNames(cfg.EmbeddingRules),
-		SignalTypeDomain:        collectDomainNames(cfg.Categories),
-		SignalTypeFactCheck:     collectFactCheckRuleNames(cfg.FactCheckRules),
-		SignalTypeUserFeedback:  collectUserFeedbackRuleNames(cfg.UserFeedbackRules),
-		SignalTypeReask:         collectReaskRuleNames(cfg.ReaskRules),
-		SignalTypePreference:    collectPreferenceRuleNames(cfg.PreferenceRules),
 		SignalTypeLanguage:      collectLanguageRuleNames(cfg.LanguageRules),
 		SignalTypeContext:       collectContextRuleNames(cfg.ContextRules),
-		SignalTypeStructure:     collectStructureRuleNames(cfg.StructureRules),
-		SignalTypeComplexity:    collectComplexityRuleNames(cfg.ComplexityRules),
-		SignalTypeModality:      collectModalityRuleNames(cfg.ModalityRules),
-		SignalTypeAuthz:         collectRoleBindingNames(cfg.GetRoleBindings()),
-		SignalTypeJailbreak:     collectJailbreakRuleNames(cfg.JailbreakRules),
-		SignalTypeSafety:        collectSafetyRuleNames(cfg.SafetyRules),
-		SignalTypePII:           collectPIIRuleNames(cfg.PIIRules),
-		SignalTypeKB:            collectKBRuleNames(cfg.KBRules),
+		SignalTypeAuthz:         collectRoleBindingRoles(cfg.GetRoleBindings()),
 		SignalTypeConversation:  collectConversationRuleNames(cfg.ConversationRules),
-		SignalTypeEvent:         collectEventRuleNames(cfg.EventRules),
 		SignalTypeMetadata:      collectMetadataRuleNames(cfg.MetadataRules),
-		SignalTypeClassifier:    collectClassifierRuleNames(cfg.ClassifierRules),
 		SignalTypeInputModality: collectInputModalityRuleNames(cfg.InputModalityRules),
+		SignalTypeSystemOne:     collectSystemOneRuleNames(cfg.SystemOneRules),
+	}
+	for _, spec := range cfg.applicationRuleSpecs() {
+		if declared[spec.signalType] == nil {
+			declared[spec.signalType] = map[string]struct{}{}
+		}
+		declared[spec.signalType][spec.name] = struct{}{}
 	}
 	return declared
 }
@@ -399,19 +410,7 @@ func projectionInputDeclared(declared map[string]map[string]struct{}, signalType
 	if !ok {
 		return false
 	}
-	if signalType == SignalTypeComplexity {
-		return complexityNameDeclared(names, name)
-	}
 	_, exists := names[name]
-	return exists
-}
-
-func complexityNameDeclared(names map[string]struct{}, name string) bool {
-	baseName := name
-	if idx := strings.Index(name, ":"); idx > 0 {
-		baseName = name[:idx]
-	}
-	_, exists := names[baseName]
 	return exists
 }
 
@@ -434,17 +433,17 @@ func validateProjectionMapping(
 	outputNames map[string]struct{},
 ) error {
 	if mapping.Name == "" {
-		return fmt.Errorf("routing.projections.mappings: name cannot be empty")
+		return fmt.Errorf("projections.mappings: name cannot be empty")
 	}
 	if _, exists := scoreNames[mapping.Source]; !exists {
-		return fmt.Errorf("routing.projections.mappings[%q]: source %q is not a declared projection score", mapping.Name, mapping.Source)
+		return fmt.Errorf("projections.mappings[%q]: source %q is not a declared projection score", mapping.Name, mapping.Source)
 	}
 	switch mapping.Method {
 	case "", ProjectionMappingMethodThresholdBands, ProjectionMappingMethodMultiEmit:
 		// supported (empty defaults to threshold_bands)
 	default:
 		return fmt.Errorf(
-			"routing.projections.mappings[%q]: unsupported method %q (supported: %s, %s)",
+			"projections.mappings[%q]: unsupported method %q (supported: %s, %s)",
 			mapping.Name,
 			mapping.Method,
 			ProjectionMappingMethodThresholdBands,
@@ -452,11 +451,11 @@ func validateProjectionMapping(
 		)
 	}
 	if len(mapping.Outputs) == 0 {
-		return fmt.Errorf("routing.projections.mappings[%q]: outputs cannot be empty", mapping.Name)
+		return fmt.Errorf("projections.mappings[%q]: outputs cannot be empty", mapping.Name)
 	}
 	if mapping.Method == ProjectionMappingMethodMultiEmit && len(mapping.Outputs) < 2 {
 		return fmt.Errorf(
-			"routing.projections.mappings[%q]: method %q requires at least 2 outputs (a single-output multi_emit is equivalent to threshold_bands)",
+			"projections.mappings[%q]: method %q requires at least 2 outputs (a single-output multi_emit is equivalent to threshold_bands)",
 			mapping.Name,
 			ProjectionMappingMethodMultiEmit,
 		)
@@ -481,7 +480,7 @@ func validateProjectionCalibration(mapping ProjectionMapping) error {
 		return nil
 	default:
 		return fmt.Errorf(
-			"routing.projections.mappings[%q]: unsupported calibration method %q (supported: sigmoid_distance)",
+			"projections.mappings[%q]: unsupported calibration method %q (supported: sigmoid_distance)",
 			mapping.Name,
 			mapping.Calibration.Method,
 		)
@@ -494,10 +493,10 @@ func validateProjectionMappingOutput(
 	outputNames map[string]struct{},
 ) error {
 	if output.Name == "" {
-		return fmt.Errorf("routing.projections.mappings[%q]: output name cannot be empty", mappingName)
+		return fmt.Errorf("projections.mappings[%q]: output name cannot be empty", mappingName)
 	}
 	if _, exists := outputNames[output.Name]; exists {
-		return fmt.Errorf("routing.projections.mappings[%q]: duplicate output name %q", mappingName, output.Name)
+		return fmt.Errorf("projections.mappings[%q]: duplicate output name %q", mappingName, output.Name)
 	}
 	if err := validateProjectionOutputThresholds(mappingName, output); err != nil {
 		return err
@@ -509,73 +508,18 @@ func validateProjectionMappingOutput(
 func validateProjectionOutputThresholds(mappingName string, output ProjectionMappingOutput) error {
 	if output.GT == nil && output.GTE == nil && output.LT == nil && output.LTE == nil {
 		return fmt.Errorf(
-			"routing.projections.mappings[%q].outputs[%q]: at least one threshold bound is required",
+			"projections.mappings[%q].outputs[%q]: at least one threshold bound is required",
 			mappingName,
 			output.Name,
 		)
 	}
 	if output.GT != nil && output.GTE != nil {
-		return fmt.Errorf("routing.projections.mappings[%q].outputs[%q]: cannot set both gt and gte", mappingName, output.Name)
+		return fmt.Errorf("projections.mappings[%q].outputs[%q]: cannot set both gt and gte", mappingName, output.Name)
 	}
 	if output.LT != nil && output.LTE != nil {
-		return fmt.Errorf("routing.projections.mappings[%q].outputs[%q]: cannot set both lt and lte", mappingName, output.Name)
+		return fmt.Errorf("projections.mappings[%q].outputs[%q]: cannot set both lt and lte", mappingName, output.Name)
 	}
 	return nil
-}
-
-func validateKBMetricProjectionInput(
-	cfg *RouterConfig,
-	scoreName string,
-	input ProjectionScoreInput,
-) error {
-	if input.KB == "" {
-		return fmt.Errorf("routing.projections.scores[%q]: kb_metric inputs require kb", scoreName)
-	}
-	// Projection validation needs the KB config map but not the on-disk manifest;
-	// treat any kb_metric-referenced KB as referenced so its config flows through
-	// without forcing us to load asset files for unrelated KBs. See #1829.
-	referenced := referencedKnowledgeBaseNames(cfg)
-	referenced[input.KB] = struct{}{}
-	kbs, _, err := knowledgeBaseDefinitions(cfg, referenced)
-	if err != nil {
-		return err
-	}
-	kb, ok := kbs[input.KB]
-	if !ok {
-		return fmt.Errorf(
-			"routing.projections.scores[%q]: kb_metric input references unknown kb %q",
-			scoreName,
-			input.KB,
-		)
-	}
-	if input.Metric != KBMetricBestScore && input.Metric != KBMetricBestMatchedScore && !kbMetricDeclared(kb, input.Metric) {
-		return fmt.Errorf(
-			"routing.projections.scores[%q]: kb_metric input for kb %q uses unsupported metric %q",
-			scoreName,
-			input.KB,
-			input.Metric,
-		)
-	}
-	switch strings.ToLower(strings.TrimSpace(input.ValueSource)) {
-	case "", ProjectionValueSourceScore:
-		return nil
-	default:
-		return fmt.Errorf(
-			"routing.projections.scores[%q]: kb_metric input for kb %q has unsupported value_source %q (supported: score)",
-			scoreName,
-			input.KB,
-			input.ValueSource,
-		)
-	}
-}
-
-func kbMetricDeclared(kb KnowledgeBaseConfig, metricName string) bool {
-	for _, metric := range kb.Metrics {
-		if metric.Name == metricName {
-			return true
-		}
-	}
-	return false
 }
 
 func validateDecisionProjectionReferences(decisionName string, node *RuleNode, outputs map[string]struct{}) error {
@@ -586,7 +530,7 @@ func validateDecisionProjectionReferences(decisionName string, node *RuleNode, o
 	if strings.EqualFold(node.Type, SignalTypeProjection) {
 		if _, ok := outputs[node.Name]; !ok {
 			return fmt.Errorf(
-				"decision %q references projection %q, but no routing.projections.mappings output declares that name",
+				"decision %q references projection %q, but no projections.mappings output of the recipe declares that name",
 				decisionName,
 				node.Name,
 			)

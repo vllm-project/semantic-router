@@ -32,7 +32,8 @@ describe('LayoutMobileNavigation contract', () => {
     expect(markup).toContain('Current')
     expect(markup).toContain('data-mobile-nav-control="true"')
     expect(markup).toContain('Routing')
-    expect(markup).toContain('Integrations')
+    expect(markup).not.toContain('Integrations')
+    expect(markup).not.toContain('Knowledge Base')
     expect(markup).toContain('href="/config/models"')
   })
 
@@ -85,6 +86,8 @@ describe('LayoutMobileNavigation contract', () => {
       ),
     )
 
+    expect(markup).toContain('href="/config/mcp"')
+    expect(markup).toContain('Integrations')
     expect(markup).toContain('href="/api/router/docs"')
     expect(markup).toContain('target="_blank"')
   })

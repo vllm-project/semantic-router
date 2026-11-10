@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Terse: wants a short, direct reply",
+    "description": "A request for a short, no-elaboration reply resembles the terse_answers examples, not the detailed_answers ones",
+    "query": "Please keep your reply short and to the point, no need to explain further. __SYSTEMONE_CHOICE__ terse_answers",
+    "expected_decision": "terse_preference_routing",
+    "expected_matched_signal": "preference:terse_answers",
+    "should_match": true
+  },
+  {
+    "name": "Detailed: wants full step-by-step reasoning",
+    "description": "A request for full reasoning and no skipped steps resembles the detailed_answers examples, not the terse_answers ones",
+    "query": "Please explain your full reasoning and go through this step by step, don't leave anything out. __SYSTEMONE_CHOICE__ detailed_answers",
+    "expected_decision": "detailed_preference_routing",
+    "expected_matched_signal": "preference:detailed_answers",
+    "should_match": true
+  },
+  {
+    "name": "No preference expressed",
+    "description": "A plain factual question expresses no preference, so the rule chooses none and the request takes the default route",
+    "query": "What's the capital of France? __SYSTEMONE_CHOICE__ none",
+    "expected_decision": "default-route",
+    "expected_matched_signal": "preference:none",
+    "should_match": true
+  }
+]

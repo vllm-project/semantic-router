@@ -1,11 +1,14 @@
 """Generate the two bench router configs (grounding on / off) from config/config.yaml.
 
 Both configs are identical except ``algorithm.fusion.grounding.enabled``. They:
-  - add a deterministic ``deliberate_sentinel`` regex keyword rule + a top-priority
-    fusion decision keyed to it (the harness prepends the sentinel to every prompt),
-  - bind the fusion panel/judge to a local Ollama proxy via provider backend_refs,
-  - wire the NLI model (models/mom-halugate-explainer) so PANEL-mode grounding
-    actually fires instead of silently falling back to plain fusion.
+  - replace the recipes with one: a deterministic ``deliberate_sentinel`` regex
+    keyword rule and a top-priority fusion decision keyed to it (the harness
+    prepends the sentinel to every prompt), served under ``vllm-sr/fusion``,
+  - add the local Ollama panel/judge as provider models, with their model facts
+    and an operator rating.
+Grounding asks the decision model's hallucination preset about each answer,
+against the context, or against every peer answer in ``panel`` mode; the Router
+starts that model for a fusion decision that grounds.
 
 Usage:
     .venv-bench/bin/python -m bench.grounded_fusion.make_configs \
@@ -20,10 +23,11 @@ import copy
 import yaml
 
 SENTINEL = "deliberate-eval"
+FUSION_MODEL = "vllm-sr/fusion"
 PANEL = ["qwen3:8b", "llama3.1:8b", "gemma3:12b"]
 JUDGE = "qwen3:14b"
 OLLAMA_BACKEND = {
-    "base_url": "http://localhost:11435/v1",
+    "endpoint": "http://localhost:11435/v1",
     "provider": "ollama",
     "chat_path": "/chat/completions",
 }
@@ -41,24 +45,19 @@ def _ollama_provider_model(name: str) -> dict:
                 **OLLAMA_BACKEND,
             }
         ],
-    }
-
-
-def _model_card(name: str) -> dict:
-    return {
-        "name": name,
         "param_size": "8B",
         "context_window_size": 32768,
         "description": f"Local Ollama model {name} for the grounded-fusion benchmark.",
         "capabilities": ["chat", "reasoning"],
-        "evaluations": [
-            {
-                "benchmark": "vllm-sr/operator-rating@1.0.0",
-                "metrics": {"score": 0.7},
-            }
-        ],
-        "modality": "ar",
         "tags": ["bench", "ollama"],
+    }
+
+
+def _rating(name: str) -> dict:
+    return {
+        "model": name,
+        "benchmark": "vllm-sr/operator-rating@1.0.0",
+        "metrics": {"score": 0.7},
     }
 
 
@@ -86,6 +85,7 @@ def _fusion_decision(grounding_on: bool, policy: str = "weight") -> dict:
         ],
         "algorithm": {
             "type": "fusion",
+            "on_error": "skip",
             "fusion": {
                 "model": JUDGE,
                 "analysis_models": PANEL,
@@ -97,11 +97,10 @@ def _fusion_decision(grounding_on: bool, policy: str = "weight") -> dict:
                 "temperature": 0.0,
                 "include_analysis": True,
                 "include_intermediate_responses": True,
-                "on_error": "skip",
                 "judge_prompt_version": "fusion-v1",
                 "grounding": {
                     "enabled": grounding_on,
-                    "reference": "panel",  # DRACO ships no context -> cross-model NLI
+                    "reference": "panel",  # DRACO ships no context -> answers read against peers
                     # policy controls how the score is used. weight (default, no
                     # drop) is the production default; filter (hard-drop below
                     # min_score) is known to hurt on contested factual items and is
@@ -110,7 +109,7 @@ def _fusion_decision(grounding_on: bool, policy: str = "weight") -> dict:
                     "policy": policy,
                     "min_score": 0.34,
                     "min_keep": 1,
-                    "nli_contradiction_penalty": 1.0,
+                    "contradiction_penalty": 1.0,
                     "on_error": "fail" if grounding_on else "skip",
                 },
             },
@@ -118,40 +117,47 @@ def _fusion_decision(grounding_on: bool, policy: str = "weight") -> dict:
     }
 
 
+def _bench_recipe(grounding_on: bool, policy: str) -> dict:
+    # Only what the benchmark needs: the sentinel keyword rule and the fusion
+    # decision keyed to it.
+    return {
+        "name": "default",
+        "signals": {"keywords": [_sentinel_rule()]},
+        "decisions": [_fusion_decision(grounding_on, policy)],
+    }
+
+
 def build(base: dict, grounding_on: bool, policy: str = "weight") -> dict:
     c = copy.deepcopy(base)
 
-    # provider models + matching modelCards for the local Ollama panel/judge
-    # (every providers.models entry must have a routing.modelCards entry)
     existing = {m["name"] for m in c["providers"]["models"]}
-    cards = {m["name"] for m in c["routing"]["modelCards"]}
+    rated = {r["model"] for r in c.setdefault("evaluation", {}).get("records", [])}
     for name in [*PANEL, JUDGE]:
         if name not in existing:
             c["providers"]["models"].append(_ollama_provider_model(name))
-        if name not in cards:
-            c["routing"]["modelCards"].append(_model_card(name))
+        if name not in rated:
+            c["evaluation"].setdefault("records", []).append(_rating(name))
 
-    # Reduce routing to ONLY what the benchmark needs: a single regex keyword
-    # signal + a single fusion decision keyed to it. This avoids building the
-    # embedding-backed domain/complexity classifiers (which need a working
-    # embedding model and otherwise fatal at startup) -- the benchmark routes
-    # purely on the sentinel the harness prepends to every prompt.
-    c["routing"]["signals"] = {"keywords": [_sentinel_rule()]}
-    c["routing"].pop("projections", None)
-    c["routing"]["decisions"] = [_fusion_decision(grounding_on, policy)]
+    c["recipes"] = [_bench_recipe(grounding_on, policy)]
+    c["entrypoints"] = [
+        {"model_names": [FUSION_MODEL], "recipe": "default", "default": True}
+    ]
 
-    # disable external-dependency stores (milvus/redis/llama_stack) for a
-    # self-contained local run -- otherwise startup fatals on missing services.
-    for store in ("semantic_cache", "memory", "vector_store"):
-        if store in c["global"].get("stores", {}):
-            c["global"]["stores"][store]["enabled"] = False
+    # Drop the request plugins (the context plugin recalls from the memory
+    # store) and the external-dependency stores (llama_stack, redis) for a
+    # self-contained local run; startup otherwise fails on missing services.
+    c["global"]["plugins"] = []
+    stores = c["global"].get("stores", {})
+    if "vector_store" in stores:
+        stores["vector_store"]["enabled"] = False
+    stores.pop("tool_sessions", None)
 
-    # Ensure hallucination_mitigation is enabled so the detector + NLI model init
-    # (initializeHallucinationDetector -> wireFusionGroundingBackends). The NLI
-    # model for PANEL-mode grounding comes from the `explainer` block
-    # (models/mom-halugate-explainer), which the reference config already sets.
-    hm = c["global"]["model_catalog"]["modules"]["hallucination_mitigation"]
-    hm["enabled"] = True
+    # No authenticator fronts the local run, and the bench recipe asks no
+    # delegated deployment; one that nothing asks fails to load.
+    deployments = c["global"].get("model_catalog", {}).get("deployments", {})
+    for name, deployment in list(deployments.items()):
+        if (deployment.get("auth") or {}).get("credential") == "delegated":
+            del deployments[name]
     return c
 
 

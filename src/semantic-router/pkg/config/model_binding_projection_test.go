@@ -2,28 +2,19 @@ package config
 
 import "testing"
 
-func TestModelBindingProjectionKeepsCanonicalSourceImmutable(t *testing.T) {
-	cfg := &RouterConfig{}
-	cfg.CategoryModel.ModelID = "models/default"
-	cfg.CategoryModel.Variant = "modernbert"
-	cfg.ModelDeployments = map[string]ModelDeployment{"private": {Provider: "candle", Artifact: "/mounted/private", Revision: "pin"}}
-	cfg.ModelBindings = map[string]ModelBinding{"domain_classifier": {Deployment: "private", Contract: "label_distribution.v1", Adapter: "mmbert32k", MappingPath: "/mounted/maps/domain.json"}}
-	cfg.RoutingScope = "private"
-	plan, err := CompileModelBindings(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	projected, err := ProjectRecipeModelBindings(cfg, plan, "private")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if projected.CategoryModel.ModelID != "/mounted/private" || projected.CategoryMappingPath != "/mounted/maps/domain.json" || projected.CategoryModel.Variant != "" {
-		t.Fatalf("incorrect projection: %#v", projected.CategoryModel)
-	}
-	if cfg.CategoryModel.ModelID != "models/default" || cfg.CategoryModel.Variant != "modernbert" || cfg.CategoryMappingPath != "" {
-		t.Fatal("source mutated")
-	}
-	if _, err := ProjectRecipeModelBindings(cfg, plan, "other"); err == nil {
-		t.Fatal("foreign recipe binding resolved")
+func TestServedModelPrefersTheArtifact(t *testing.T) {
+	for _, tc := range []struct {
+		deployment ModelDeployment
+		want       string
+	}{
+		{ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "vllm-sr/Vela-1.0-Encoder-307M-Domain"}, "vllm-sr/Vela-1.0-Encoder-307M-Domain"},
+		{ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "/models/domain", Endpoint: "http://runtime:8100"}, "/models/domain"},
+		{ModelDeployment{Provider: ModelRuntimeProvider, Endpoint: "http://runtime:8100"}, "domain-a"},
+		{ModelDeployment{Provider: ModelRuntimeProvider, Endpoint: "http://runtime:8100", Model: "vela-domain"}, "vela-domain"},
+		{ModelDeployment{Provider: OpenAIChatProvider, Endpoint: "http://chat:9000/v1", Model: "chat"}, ""},
+	} {
+		if got := tc.deployment.ServedModel("domain-a"); got != tc.want {
+			t.Errorf("%+v: ServedModel = %q, want %q", tc.deployment, got, tc.want)
+		}
 	}
 }

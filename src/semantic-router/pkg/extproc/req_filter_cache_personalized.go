@@ -9,10 +9,7 @@ import (
 )
 
 func personalizedExactCacheEnabled(ctx *RequestContext) bool {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
-		return false
-	}
-	plugin := ctx.VSRSelectedDecision.GetResponseCacheConfig()
+	plugin := requestResponseCache(ctx)
 	return plugin != nil &&
 		plugin.Enabled &&
 		plugin.Personalized != nil &&
@@ -25,6 +22,10 @@ func (r *OpenAIRouter) lookupPersonalizedExactCache(
 	selectedModel string,
 ) (*ext_proc.ProcessingResponse, bool) {
 	if !canUsePersonalizedExactCache(ctx) {
+		return nil, false
+	}
+	if !r.cacheBackendEnabled() {
+		applyRequestCacheControls(ctx)
 		return nil, false
 	}
 	if !preparePersonalizedCacheIdentity(ctx, selectedModel) {

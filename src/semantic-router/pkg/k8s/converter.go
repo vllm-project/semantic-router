@@ -34,8 +34,8 @@ type CRDConverter struct{}
 // NewCRDConverter creates a new CRD converter
 func NewCRDConverter() *CRDConverter { return &CRDConverter{} }
 
-// Convert builds a canonical v0.3 config from IntelligentPool/IntelligentRoute
-// CRDs plus a static canonical base.
+// Convert builds a canonical v0.5 config from IntelligentPool/IntelligentRoute
+// CRDs plus a static canonical base: the route is its one recipe.
 func (c *CRDConverter) Convert(
 	pool *v1alpha1.IntelligentPool,
 	route *v1alpha1.IntelligentRoute,
@@ -52,19 +52,22 @@ func (c *CRDConverter) Convert(
 	if err != nil {
 		return nil, err
 	}
-	canonical.Version = "v0.3"
+	canonical.Version = config.CanonicalConfigVersion
 
 	canonical.Providers.Defaults.DefaultModel = pool.Spec.DefaultModel
-	canonical.Routing.ModelCards = convertRoutingModelCards(pool.Spec.Models)
-	canonical.Routing.Signals = convertSignals(route.Spec.Signals)
-	canonical.Routing.Decisions = make([]config.Decision, 0, len(route.Spec.Decisions))
+	recipe := config.CanonicalRecipe{
+		Name:      string(config.DefaultRecipeName),
+		Signals:   convertSignals(route.Spec.Signals),
+		Decisions: make([]config.Decision, 0, len(route.Spec.Decisions)),
+	}
 	for _, decision := range route.Spec.Decisions {
 		configDecision, err := c.convertDecision(decision)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert decision %s: %w", decision.Name, err)
 		}
-		canonical.Routing.Decisions = append(canonical.Routing.Decisions, configDecision)
+		recipe.Decisions = append(recipe.Decisions, configDecision)
 	}
+	canonical.Recipes = []config.CanonicalRecipe{recipe}
 
 	canonical.Providers.Models = mergeProviderMetadata(canonical.Providers.Models, convertProviderMetadata(pool.Spec.Models))
 	return canonical, nil
@@ -127,80 +130,40 @@ func (c *CRDConverter) convertDecision(decision v1alpha1.Decision) (config.Decis
 		})
 	}
 
+	configDecision.Reliability = convertDecisionReliability(decision.Reliability)
+	decisionFallback, err := convertDecisionFallback(decision.Fallback)
+	if err != nil {
+		return config.Decision{}, fmt.Errorf("invalid fallback in decision %s: %w", decision.Name, err)
+	}
+	configDecision.Fallback = decisionFallback
+
 	return configDecision, nil
-}
-
-func convertRoutingModelCards(models []v1alpha1.ModelConfig) []config.RoutingModel {
-	if len(models) == 0 {
-		return nil
-	}
-
-	cards := make([]config.RoutingModel, 0, len(models))
-	for _, model := range models {
-		cardName := model.Catalog
-		if cardName == "" {
-			cardName = model.Name
-		}
-		card := config.RoutingModel{
-			Name: cardName,
-		}
-		if len(model.LoRAs) > 0 {
-			card.LoRAs = make([]config.LoRAAdapter, len(model.LoRAs))
-			for i, lora := range model.LoRAs {
-				card.LoRAs[i] = config.LoRAAdapter{
-					Name:        lora.Name,
-					Description: lora.Description,
-				}
-			}
-		}
-		cards = append(cards, card)
-	}
-	return cards
 }
 
 func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 	converted := config.CanonicalSignals{
 		Keywords:     make([]config.KeywordRule, 0, len(signals.Keywords)),
-		Embeddings:   make([]config.EmbeddingRule, 0, len(signals.Embeddings)),
 		Domains:      make([]config.Category, 0, len(signals.Domains)),
 		Context:      make([]config.ContextRule, 0, len(signals.ContextRules)),
-		Structure:    make([]config.StructureRule, 0, len(signals.Structure)),
 		FactCheck:    make([]config.FactCheckRule, 0, len(signals.FactCheckRules)),
 		Conversation: make([]config.ConversationRule, 0, len(signals.Conversation)),
-		EventRules:   make([]config.EventRule, 0, len(signals.Events)),
 	}
 
 	for _, signal := range signals.Keywords {
 		converted.Keywords = append(converted.Keywords, config.KeywordRule{
 			Name:          signal.Name,
+			Description:   signal.Description,
 			Operator:      signal.Operator,
 			Keywords:      signal.Keywords,
+			Method:        signal.Method,
 			CaseSensitive: signal.CaseSensitive,
-		})
-	}
-
-	for _, signal := range signals.Embeddings {
-		converted.Embeddings = append(converted.Embeddings, config.EmbeddingRule{
-			Name:                      signal.Name,
-			SimilarityThreshold:       signal.Threshold,
-			Candidates:                signal.Candidates,
-			ImageCandidates:           signal.ImageCandidates,
-			NegativeCandidates:        signal.NegativeCandidates,
-			NegativeImageCandidates:   signal.NegativeImageCandidates,
-			AggregationMethodConfiged: config.AggregationMethod(signal.AggregationMethod),
-			QueryModality:             config.QueryModality(signal.QueryModality),
-			PrototypeScoring:          convertPrototypeScoring(signal.PrototypeScoring),
+			Count:         convertNumericPredicate(signal.Count),
+			Density:       convertNumericPredicate(signal.Density),
 		})
 	}
 
 	for _, domain := range signals.Domains {
-		converted.Domains = append(converted.Domains, config.Category{
-			CategoryMetadata: config.CategoryMetadata{
-				Name:           domain.Name,
-				Description:    domain.Description,
-				MMLUCategories: []string{domain.Name},
-			},
-		})
+		converted.Domains = append(converted.Domains, config.Category{Name: domain.Name, Description: domain.Description})
 	}
 
 	for _, rule := range signals.ContextRules {
@@ -209,24 +172,6 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 			MinTokens:   config.TokenCount(rule.MinTokens),
 			MaxTokens:   config.TokenCount(rule.MaxTokens),
 			Description: rule.Description,
-		})
-	}
-
-	for _, rule := range signals.Structure {
-		converted.Structure = append(converted.Structure, config.StructureRule{
-			Name:        rule.Name,
-			Description: rule.Description,
-			Feature: config.StructureFeature{
-				Type: rule.Feature.Type,
-				Source: config.StructureSource{
-					Type:          rule.Feature.Source.Type,
-					Pattern:       rule.Feature.Source.Pattern,
-					Keywords:      append([]string(nil), rule.Feature.Source.Keywords...),
-					CaseSensitive: rule.Feature.Source.CaseSensitive,
-					Sequences:     append([][]string(nil), rule.Feature.Source.Sequences...),
-				},
-			},
-			Predicate: convertNumericPredicate(rule.Predicate),
 		})
 	}
 
@@ -252,23 +197,6 @@ func convertSignals(signals v1alpha1.Signals) config.CanonicalSignals {
 		})
 	}
 
-	converted.EventRules = convertEventSignals(signals.Events)
-
-	return converted
-}
-
-func convertEventSignals(rules []v1alpha1.EventSignal) []config.EventRule {
-	converted := make([]config.EventRule, 0, len(rules))
-	for _, rule := range rules {
-		converted = append(converted, config.EventRule{
-			Name:        rule.Name,
-			Description: rule.Description,
-			EventTypes:  append([]string(nil), rule.EventTypes...),
-			Severities:  append([]string(nil), rule.Severities...),
-			ActionCodes: append([]string(nil), rule.ActionCodes...),
-			Temporal:    rule.Temporal,
-		})
-	}
 	return converted
 }
 
@@ -292,8 +220,8 @@ func convertProviderMetadata(models []v1alpha1.ModelConfig) []config.CanonicalPr
 			Catalog:   model.Catalog,
 			Reasoning: convertModelReasoning(model.Reasoning),
 		}
-		if model.Pricing == nil && providerModel.Catalog == "" && providerModel.Reasoning == nil {
-			continue
+		for _, lora := range model.LoRAs {
+			providerModel.LoRAs = append(providerModel.LoRAs, config.LoRAAdapter{Name: lora.Name, Description: lora.Description})
 		}
 		if model.Pricing != nil {
 			providerModel.Pricing = config.ModelPricing{
@@ -379,12 +307,15 @@ func mergeCanonicalProviderMetadata(
 	if len(overlay.ExternalModelIDs) > 0 {
 		existing.ExternalModelIDs = overlay.ExternalModelIDs
 	}
+	if len(overlay.LoRAs) > 0 {
+		existing.LoRAs = overlay.LoRAs
+	}
 	return existing
 }
 
 func cloneCanonicalConfig(base *config.CanonicalConfig) (*config.CanonicalConfig, error) {
 	if base == nil {
-		return &config.CanonicalConfig{Version: "v0.3"}, nil
+		return &config.CanonicalConfig{Version: config.CanonicalConfigVersion}, nil
 	}
 
 	data, err := yamlv3.Marshal(base)
@@ -413,12 +344,10 @@ func validatePluginConfiguration(pluginType string, rawConfig []byte) error {
 }
 
 var pluginConfigurationValidators = map[string]func([]byte) error{
-	"semantic-cache":  validateSemanticCachePluginConfig,
+	"response_cache":  validateResponseCachePluginConfig,
 	"system_prompt":   validateSystemPromptPluginConfig,
 	"header_mutation": validateHeaderMutationPluginConfig,
 	"router_replay":   validateRouterReplayPluginConfig,
-	"shadow_dispatch": validateShadowDispatchPluginConfig,
-	"tool_selection":  validateToolSelectionPluginConfigRaw,
 }
 
 func decodePluginConfiguration(rawConfig []byte, target any) error {
@@ -427,21 +356,10 @@ func decodePluginConfiguration(rawConfig []byte, target any) error {
 	return decoder.Decode(target)
 }
 
-func validateToolSelectionPluginConfigRaw(rawConfig []byte) error {
-	var cfg config.ToolSelectionPluginConfig
+func validateResponseCachePluginConfig(rawConfig []byte) error {
+	var cfg config.ResponseCachePluginConfig
 	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
-		return fmt.Errorf("failed to unmarshal tool_selection config: %w", err)
-	}
-	if err := cfg.Validate(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func validateSemanticCachePluginConfig(rawConfig []byte) error {
-	var cfg config.SemanticCachePluginConfig
-	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
-		return fmt.Errorf("failed to unmarshal semantic-cache config: %w", err)
+		return fmt.Errorf("failed to unmarshal response_cache config: %w", err)
 	}
 	return nil
 }
@@ -480,17 +398,6 @@ func validateHeaderMutationEntries(operation string, headers []config.HeaderPair
 	return nil
 }
 
-func validateShadowDispatchPluginConfig(rawConfig []byte) error {
-	var cfg config.ShadowDispatchPluginConfig
-	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
-		return fmt.Errorf("failed to unmarshal shadow_dispatch config: %w", err)
-	}
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("shadow_dispatch %w", err)
-	}
-	return nil
-}
-
 func validateRouterReplayPluginConfig(rawConfig []byte) error {
 	var cfg config.RouterReplayPluginConfig
 	if err := decodePluginConfiguration(rawConfig, &cfg); err != nil {
@@ -501,6 +408,9 @@ func validateRouterReplayPluginConfig(rawConfig []byte) error {
 	}
 	if cfg.MaxBodyBytes < 0 {
 		return fmt.Errorf("router_replay max_body_bytes cannot be negative")
+	}
+	if err := cfg.Shadow.Validate(); err != nil {
+		return fmt.Errorf("router_replay shadow %w", err)
 	}
 	return nil
 }

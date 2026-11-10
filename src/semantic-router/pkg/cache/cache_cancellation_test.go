@@ -1,4 +1,4 @@
-//go:build !windows && cgo
+//go:build !windows
 
 package cache
 
@@ -15,14 +15,14 @@ import (
 var _ = Describe("Cache lookup cancellation and miss contract (#2473)", func() {
 	const threshold = float32(0.75)
 
-	newSeededBackend := func() CacheBackend {
+	newSeededBackend := func() LegacyCacheBackend {
 		backend, err := NewCacheBackend(CacheConfig{
 			EmbeddingProvider:   cacheTestEmbeddingProvider(),
 			BackendType:         InMemoryCacheType,
 			Enabled:             true,
 			SimilarityThreshold: threshold,
 			MaxEntries:          16,
-			EmbeddingModel:      "bert",
+			EmbeddingDeployment: "qwen3-embedding",
 		})
 		Expect(err).NotTo(HaveOccurred())
 
@@ -43,7 +43,7 @@ var _ = Describe("Cache lookup cancellation and miss contract (#2473)", func() {
 // specCancelledContextShortCircuits pins the best-effort half of the contract:
 // an already-cancelled context short-circuits before the embed starts, and the
 // lookup returns the context error instead of a possibly stale hit.
-func specCancelledContextShortCircuits(newSeededBackend func() CacheBackend, threshold float32) {
+func specCancelledContextShortCircuits(newSeededBackend func() LegacyCacheBackend, threshold float32) {
 	Context("with an already-cancelled context", func() {
 		It("short-circuits before embedding and returns context.Canceled, not a hit", func() {
 			backend := newSeededBackend()
@@ -70,7 +70,7 @@ func specCancelledContextShortCircuits(newSeededBackend func() CacheBackend, thr
 // is a miss that still reports its own rejected candidate: the score is what
 // makes the miss diagnosable against the threshold on the debug and Replay
 // surfaces, and it is request-owned now that it rides LookupResult.
-func specBelowThresholdMissReportsCandidateScore(newSeededBackend func() CacheBackend, threshold float32) {
+func specBelowThresholdMissReportsCandidateScore(newSeededBackend func() LegacyCacheBackend, threshold float32) {
 	Context("with a below-threshold query", func() {
 		It("returns no response and the rejected candidate's similarity", func() {
 			backend := newSeededBackend()
@@ -100,7 +100,7 @@ func specBelowThresholdMissReportsCandidateScore(newSeededBackend func() CacheBa
 // a short-circuit inside the embed would surface it wrapped as "failed to
 // generate embedding: ...", so a future ctxErr call added before the embed fails
 // these specs instead of silently moving them to another branch.
-func specNonInterruptibleEmbedCancellation(newSeededBackend func() CacheBackend) {
+func specNonInterruptibleEmbedCancellation(newSeededBackend func() LegacyCacheBackend) {
 	Context("with a context cancelled during a non-interruptible embedding", func() {
 		It("AddEntry returns the context error and publishes no entry", func() {
 			backend := newSeededBackend()

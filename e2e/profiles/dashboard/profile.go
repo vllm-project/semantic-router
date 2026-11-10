@@ -11,7 +11,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -27,9 +26,7 @@ const (
 	dashboardManifestDir = "deploy/kubernetes/observability/dashboard"
 
 	// dashboardE2EDeploymentManifest is the E2E-specific deployment for the dashboard.
-	// It intentionally omits the ml-training-service sidecar (unavailable in CI)
-	// and sets ML_PIPELINE_ENABLED=false. All other spec comes from the same image
-	// and configmap as the production deployment.
+	// It uses the same image and configmap as the production deployment.
 	dashboardE2EDeploymentManifest = "e2e/profiles/dashboard/dashboard-deployment.yaml"
 	dashboardE2EPVCManifest        = "e2e/profiles/dashboard/dashboard-pvc.yaml"
 	srBenchE2EManifest             = "e2e/profiles/dashboard/sr-bench-deployment.yaml"

@@ -17,6 +17,7 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlparse
 
+from cli.config_recipe_scopes import recipe_scopes
 from cli.runtime_stack import RuntimeStackLayout
 from cli.utils import get_logger
 
@@ -28,7 +29,6 @@ CANONICAL_SERVICE_DEFAULTS: dict[str, dict[str, object]] = {
         "store_backend": "redis",
     },
     "router_replay": {
-        "enabled": False,
         "store_backend": "memory",
     },
     "startup_status": {
@@ -36,9 +36,12 @@ CANONICAL_SERVICE_DEFAULTS: dict[str, dict[str, object]] = {
     },
 }
 
+# The services and stores only the routing pipeline reads. Engine mode never
+# builds that pipeline, so a stack that cannot enable routing leaves them out.
+ROUTING_SERVICE_KEYS = frozenset({"response_api", "router_replay"})
+
 CANONICAL_STORE_DEFAULTS: dict[str, dict[str, object]] = {
     "response_cache": {
-        "enabled": True,
         "backend_type": "memory",
     },
 }
@@ -59,16 +62,22 @@ def is_setup_mode_config(config: Mapping[str, Any]) -> bool:
 
 
 def detect_canonical_storage_backends(
-    config: Mapping[str, Any], stack_layout: RuntimeStackLayout | None = None
+    config: Mapping[str, Any],
+    stack_layout: RuntimeStackLayout | None = None,
+    *,
+    routing: bool = True,
 ) -> set[str]:
     """Return provisionable backends implied by canonical service and store defaults.
 
     When a stack layout is supplied, canonical omitted service endpoints are
     resolved to that stack while explicit external endpoints are never
-    converted into speculative local sidecars.
+    converted into speculative local sidecars. Without *routing*, the services
+    and the response cache of the routing pipeline need no backend.
     """
     backends: set[str] = set()
     for service_key in CANONICAL_SERVICE_DEFAULTS:
+        if not routing and service_key in ROUTING_SERVICE_KEYS:
+            continue
         backend = effective_service_backend(config, service_key)
         if backend in {"redis", "postgres", "milvus"} and (
             stack_layout is None
@@ -76,7 +85,7 @@ def detect_canonical_storage_backends(
         ):
             backends.add(backend)
 
-    if _response_cache_requires_managed_milvus(config, stack_layout):
+    if routing and _response_cache_requires_managed_milvus(config, stack_layout):
         backends.add("milvus")
 
     vs_metadata = _vector_store_metadata_backend(config)
@@ -205,16 +214,7 @@ def _response_cache_milvus_connection_host(config: Mapping[str, Any]) -> str | N
 
 
 def _response_cache_mapping(stores: Mapping[str, Any]) -> object:
-    canonical = stores.get("response_cache")
-    legacy = stores.get("semantic_cache")
-    if canonical is not None:
-        if legacy is not None:
-            log.warning(
-                "Ignoring deprecated global.stores.semantic_cache because "
-                "global.stores.response_cache is configured"
-            )
-        return canonical
-    return legacy
+    return stores.get("response_cache")
 
 
 def effective_service_backend(
@@ -226,9 +226,37 @@ def effective_service_backend(
         return None
     if service_config.get("enabled") is False:
         return None
+    if service_key == "router_replay" and not _router_replay_in_use(config):
+        return None
 
     backend = str(service_config.get("store_backend") or "").strip().lower()
     return backend or None
+
+
+def _router_replay_in_use(config: Mapping[str, Any]) -> bool:
+    """A router_replay plugin turns capture on: in global.plugins, in a
+    recipe's plugins, or in a decision's."""
+    global_config = config.get("global")
+    plugin_lists = [
+        global_config.get("plugins") if isinstance(global_config, Mapping) else None
+    ]
+    for _, recipe in recipe_scopes(dict(config)):
+        plugin_lists.append(recipe.get("plugins"))
+        decisions = recipe.get("decisions")
+        for decision in decisions if isinstance(decisions, list) else []:
+            if isinstance(decision, Mapping):
+                plugin_lists.append(decision.get("plugins"))
+    for plugins in plugin_lists:
+        for plugin in plugins if isinstance(plugins, list) else []:
+            if not isinstance(plugin, Mapping) or plugin.get("type") != "router_replay":
+                continue
+            configuration = plugin.get("configuration")
+            if (
+                isinstance(configuration, Mapping)
+                and configuration.get("enabled") is True
+            ):
+                return True
+    return False
 
 
 def _services_mapping(config: Mapping[str, Any]) -> Mapping[str, Any] | object:
