@@ -26,7 +26,7 @@ Those decisions are everywhere: route an intent, gate an action by confidence, c
 
 That vision is deeply aligned with **vLLM Semantic Router**: understand each request, apply policy, and choose what should happen next. It is why we invested in **Decision 1.0: six open-weight Decision Foundation Models**—and why we will keep improving them in the open.
 
-[**Read the paper →**](/decision-paper) · [**Explore the six models →**](https://huggingface.co/collections/vllm-sr/decision-10) · [**Try Decision Studio →**](https://huggingface.co/spaces/vllm-sr/decision-studio)
+[**Explore the six models →**](https://huggingface.co/collections/vllm-sr/decision-10) · [**Try Decision Studio →**](https://huggingface.co/spaces/vllm-sr/decision-studio)
 
 <!-- truncate -->
 

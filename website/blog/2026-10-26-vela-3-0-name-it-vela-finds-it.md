@@ -5,6 +5,7 @@ description: "Six open routing models, 0.3B to 27B, that answer the router's dec
 authors: [adaamko, Xunzhuo]
 tags: [vela, routing-models, zero-shot, ner, relation-extraction, classification, semantic-router]
 image: /img/blog/vela-3-0/launch-poster.jpg
+featured: true
 ---
 
 import { ArticleChartGallery, ArticleFigure, ArticleMetrics, ArticleVideo } from '@site/src/components/ArticleMedia';

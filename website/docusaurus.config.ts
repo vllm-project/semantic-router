@@ -559,11 +559,6 @@ const config: Config = {
               to: '/vision-paper',
             },
             {
-              label: 'Decision Paper',
-              to: '/decision-paper',
-            },
-
-            {
               label: 'License',
               href: 'https://github.com/vllm-project/semantic-router/blob/main/LICENSE',
             },
