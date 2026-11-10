@@ -280,7 +280,7 @@ recipes:
 | A recipe's `data_policy` | The recipe's `router_replay` plugin: `enabled: false` for `replay: false`, `capture_personal_data: false` for `replay_personal_data: false`, on its decisions too |
 | `emits[].retention` | The decision's [`retention`](../tutorials/decision/retention) attribute |
 | `masking` `threshold` | `masking.signal`, naming a `pii` rule whose `predicate` applies |
-| `system_prompt` `mode: append` | `mode: replace`, which is what it did |
+| `system_prompt` `mode: append` | `mode: replace`, which drops every system and developer instruction the caller sent, where `append` replaced only the first system message |
 | `request_params` `strip_unknown` | Removed: the Router never read it, and it refuses a request field the client's wire format does not declare |
 
 `global.model_catalog.modules` is removed. Its `prompt_compression` compressed

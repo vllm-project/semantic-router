@@ -168,6 +168,44 @@ func TestSystemPromptReplaceDropsEveryCallerInstruction(t *testing.T) {
 	}
 }
 
+// replace drops what the caller sent, not the context the context plugin
+// already wrote into the system prompt: the dispatched system message is the
+// Router's prompt followed by each source's context.
+func TestSystemPromptReplaceKeepsInjectedContext(t *testing.T) {
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	request, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIChatV1,
+		[]byte(`{"model":"m","messages":[{"role":"system","content":"CLIENT_SYS"},{"role":"user","content":"hi"}]}`))
+	require.NoError(t, err)
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, &request)
+	contextPlugin := config.ContextPluginConfig{Enabled: true, Injection: &config.ContextInjectionConfig{Mode: config.ContextInjectionSystemPrompt}}
+	decision := config.Decision{Name: "support", Plugins: []config.DecisionPlugin{
+		{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(contextPlugin)},
+		{Type: config.DecisionPluginSystemPrompt, Configuration: config.MustStructuredPayload(config.SystemPromptPluginConfig{SystemPrompt: "ROUTER_PROMPT", Mode: config.SystemPromptModeReplace})},
+	}}
+	ctx.VSRSelectedDecision = &decision
+	require.NoError(t, router.injectContext(ctx, &contextPlugin, config.ContextSourceRAG, "RETRIEVED_DOC"))
+	require.NoError(t, router.injectContext(ctx, &contextPlugin, config.ContextSourceMemory, "REMEMBERED_FACT"))
+
+	_, err = router.prepareProviderDispatch(&request, model, decision.Name, false, ctx)
+	require.NoError(t, err)
+	body, err := router.encodeDispatchRequest(ctx)
+	require.NoError(t, err)
+
+	var dispatched struct {
+		Messages []struct {
+			Role    string          `json:"role"`
+			Content json.RawMessage `json:"content"`
+		} `json:"messages"`
+	}
+	require.NoError(t, json.Unmarshal(body, &dispatched))
+	require.Len(t, dispatched.Messages, 2, "%s", body)
+	assert.Equal(t, "system", dispatched.Messages[0].Role)
+	system := string(dispatched.Messages[0].Content)
+	prompt, retrieved, remembered := strings.Index(system, "ROUTER_PROMPT"), strings.Index(system, "RETRIEVED_DOC"), strings.Index(system, "REMEMBERED_FACT")
+	assert.True(t, prompt >= 0 && prompt < retrieved && retrieved < remembered, "system message %s", system)
+	assert.NotContains(t, string(body), "CLIENT_SYS")
+}
+
 func decisionWithSystemPrompt(name string, prompt string) config.Decision {
 	return config.Decision{
 		Name: name,

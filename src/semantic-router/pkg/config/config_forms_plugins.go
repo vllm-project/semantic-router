@@ -62,7 +62,7 @@ var pluginForms = []ConfigForm{
 		Match: hasUnknownSystemPromptMode,
 		Describe: func(at FormMatch) (string, string) {
 			mode := scalarAt(mappingValue(at.Node, "configuration"), "mode")
-			return fmt.Sprintf("system_prompt mode %q is neither insert nor replace", mode), "mode: replace, which is what it did"
+			return fmt.Sprintf("system_prompt mode %q is neither insert nor replace", mode), "mode: replace, which now drops every system and developer instruction the caller sent, not only the first system message"
 		},
 		Migrate: func(m *Migration, at FormMatch) error {
 			m.Set(ensureMapping(at.Node, "configuration"), "mode", Scalar(SystemPromptModeReplace))

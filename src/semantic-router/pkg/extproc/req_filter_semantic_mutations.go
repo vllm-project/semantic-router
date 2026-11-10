@@ -178,7 +178,11 @@ func (r *OpenAIRouter) addSemanticSystemPromptIfConfigured(
 	start := time.Now()
 	_, span := tracing.StartPluginSpan(ctx.TraceContext, "system_prompt", decisionName)
 	mode := decision.GetSystemPromptMode()
+	routerContext := contextPromptBlocks(ctx, request, mode)
 	injected := llmprotocol.SetSystemInstruction(request, promptConfig.SystemPrompt, mode)
+	if len(routerContext) > 0 {
+		request.Instructions[0].Content = append(request.Instructions[0].Content, routerContext...)
+	}
 	latency := time.Since(start).Milliseconds()
 	tracing.SetSpanAttributes(span,
 		attribute.Bool("system_prompt.injected", injected),
@@ -189,6 +193,21 @@ func (r *OpenAIRouter) addSemanticSystemPromptIfConfigured(
 	ctx.VSRInjectedSystemPrompt = true
 	logging.Infof("Applied system instruction for decision %q to model %q", decisionName, model)
 	return true, nil
+}
+
+// contextPromptBlocks are the blocks the context plugin put at the front of
+// the first system instruction. replace keeps them after its prompt: it drops
+// what the caller sent, not the context the Router retrieved.
+func contextPromptBlocks(ctx *RequestContext, request *llmprotocol.Request, mode string) []llmprotocol.Content {
+	if mode == config.SystemPromptModeInsert {
+		return nil
+	}
+	for _, instruction := range request.Instructions {
+		if instruction.Role == llmprotocol.RoleSystem {
+			return instruction.Content[:min(ctx.contextPrefixBlocks, len(instruction.Content))]
+		}
+	}
+	return nil
 }
 
 func (r *OpenAIRouter) applySemanticRequestParams(

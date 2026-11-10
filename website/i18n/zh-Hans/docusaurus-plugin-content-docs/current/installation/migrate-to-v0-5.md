@@ -252,7 +252,7 @@ recipes:
 | 配方的 `data_policy` | 配方的 `router_replay` 插件：`replay: false` 对应 `enabled: false`，`replay_personal_data: false` 对应 `capture_personal_data: false`，其决策上的插件也一样 |
 | `emits[].retention` | 决策的 [`retention`](../tutorials/decision/retention) 属性 |
 | `masking` 的 `threshold` | `masking.signal`，指定一条 `pii` 规则，使用它的 `predicate` |
-| `system_prompt` 的 `mode: append` | `mode: replace`，这正是它原来的行为 |
+| `system_prompt` 的 `mode: append` | `mode: replace`，它丢弃调用方发送的所有 system 和 developer 指令，而 `append` 只替换第一条 system 消息 |
 | `request_params` 的 `strip_unknown` | 已移除：路由器从未读取它，并且会拒绝客户端线路格式未声明的请求字段 |
 
 `global.model_catalog.modules` 已移除。它的 `prompt_compression` 压缩路由信号读取的文本，现在是 `global.plugins` 中 `context` 插件的 `compress.signals` 块；配方自己的 `context` 插件可以覆盖它，决策的插件不能包含它：
