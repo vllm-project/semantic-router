@@ -58,7 +58,7 @@ decision, algorithm, plugin and global block.
 | `timeout` | The whole call, including its streamed response; it also bounds a stalled stream. `0s` lifts both limits. To lift only one model's call limit, set that model's `total_timeout: 0s`. | `300s` |
 | `api_keys` | Client API keys the listener requires. | none |
 | `models` | The chat models the listener accepts. | empty: all |
-| `systemone.models` | The native System One models the listener publishes, separate from `models`. | none |
+| `systemone.models` | The native System One models the listener publishes, separate from `models`. Standalone mode serves them; `--gateway extproc` refuses the field. | none |
 | `systemone.max_deadline_ms` | The longest a System One request waits for a model. | 10 minutes |
 | `tls.cert_file`, `tls.key_file` | One-way TLS. | off |
 | `identity.trust_headers`, `identity.trusted_peers` | The identity sources the listener trusts, in standalone mode. | none |

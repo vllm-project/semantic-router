@@ -133,7 +133,8 @@ class Listener(BaseModel):
     systemone: Optional[ListenerSystemOne] = Field(
         default=None,
         description="Publish native System One inference for these exact public "
-        "model IDs. Omitted keeps the API private; Chat model access is unchanged.",
+        "model IDs. Omitted keeps the API private; Chat model access is unchanged. "
+        "Standalone mode serves it; --gateway extproc rejects it.",
     )
     tls: Optional[ListenerTLS] = Field(
         default=None,

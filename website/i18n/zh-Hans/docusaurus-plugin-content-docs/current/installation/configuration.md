@@ -56,7 +56,7 @@ global:
 | `timeout` | 整个调用的时长，包括流式响应；它同时限制停滞的流。`0s` 取消这两个限制。若只想取消某个模型的调用时长限制，请为该模型设置 `total_timeout: 0s`。 | `300s` |
 | `api_keys` | listener 要求的客户端 API key。 | 无 |
 | `models` | listener 接受的对话模型。 | 空：全部接受 |
-| `systemone.models` | listener 发布的原生 System One 模型，与 `models` 相互独立。 | 无 |
+| `systemone.models` | listener 发布的原生 System One 模型，与 `models` 相互独立。由 standalone 模式提供；`--gateway extproc` 拒绝该字段。 | 无 |
 | `systemone.max_deadline_ms` | System One 请求等待模型的最长时间。 | 10 分钟 |
 | `tls.cert_file`、`tls.key_file` | 单向 TLS。 | 关闭 |
 | `identity.trust_headers`、`identity.trusted_peers` | listener 在 standalone 模式下信任的身份来源。 | 无 |
