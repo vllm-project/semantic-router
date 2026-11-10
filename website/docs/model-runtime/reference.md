@@ -620,7 +620,8 @@ about a video keeps `limits.video_max_seconds`.
 **Errors.** On `/v1/systemone` a request any of whose questions fails is
 answered as a whole, as System One answers it, so that every answer a client
 receives has its question's type: `{"error": {"code": "question_failed", "question_error",
-"reason", "question", "message"}}`, 422 for `invalid_question`, 400 for
+"reason", "question", "message"}}` (in a batch, with the question's entry as `"state"`),
+422 for `invalid_question`, 400 for
 `max_length_exceeded`, `scan_budget_exceeded` and `invalid_input`, 500 for
 `invalid_model_output`, 503 for `unavailable` and 504 for `deadline_exceeded`.
 The first failed question decides, and the message lists them all.

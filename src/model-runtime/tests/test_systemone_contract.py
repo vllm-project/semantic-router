@@ -840,6 +840,32 @@ def test_systemone_fails_the_request_and_decisions_the_question(client):
     }
 
 
+def test_systemone_names_the_batch_entry_whose_question_failed(client):
+    box = {"type": "box", "instructions": "x"}
+    body = {
+        "states": {
+            "turn": {"state": "x", "questions": {"q": NOUL}},
+            "history": {"state": "y", "questions": {"q": box}},
+        }
+    }
+    systemone = client.post("/v1/systemone", json=body)
+    assert systemone.status_code == 422
+    assert systemone.json()["error"] | {"message": None} == {
+        "code": "question_failed",
+        "question_error": "invalid_question",
+        "reason": "box_unsupported",
+        "question": "q",
+        "state": "history",
+        "message": None,
+    }
+    entry = {"state": "x", "questions": {"q": box}}
+    for path, status in (("/v1/decisions", 400), ("/v1/systemone", 422)):
+        refused = client.post(path, json={"states": {"a": entry, "b": entry}})
+        error = refused.json()["error"]
+        assert refused.status_code == status
+        assert (error["question"], error["state"]) == ("q", "a")
+
+
 def test_long_context_reads_past_the_validated_length(validated_runtime):
     from starlette.testclient import TestClient
     from vllm_srun.api.app import create_app

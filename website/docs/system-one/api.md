@@ -193,8 +193,8 @@ deployment's `capabilities` instead (see
 
 On `POST /v1/systemone`, the first question that cannot be answered, in
 request order, answers the whole request. The body's `code` is
-`question_failed`, with the failed `question`, its `question_error` and a
-`reason`:
+`question_failed`, with the failed `question`, its `question_error`, a
+`reason` and, in a batch, the name of the question's entry as `state`:
 
 | Question error | Status | Means |
 | --- | --- | --- |

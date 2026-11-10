@@ -190,7 +190,7 @@ func TestPublicSystemOneAnswersAFailedQuestionAsTheWholeRequest(t *testing.T) {
 	}
 	batch := []byte(`{"model":"vllm-sr/test","states":{"s1":{"state":"s","questions":{"q":{"type":"noul","instructions":"?"}}},"s2":{"state":"t","questions":{"r":{"type":"noul","instructions":"?"}}}}}`)
 	sink.response = `{"model":"private","states":{"s1":{"model":"private","answers":{"q":{"type":"noul","noul":0.5}},"usage":{"input_tokens":1,"output_tokens":0}},"s2":{"model":"private","answers":{"r":{"type":"noul","error":"deadline_exceeded","reason":"deadline"}},"usage":{"input_tokens":1,"output_tokens":0}}},"usage":{"input_tokens":2,"output_tokens":0}}`
-	if status, answer := send(handler, "/v1/systemone", batch, nil); status != 504 || answer["question"] != "r" {
+	if status, answer := send(handler, "/v1/systemone", batch, nil); status != 504 || answer["question"] != "r" || answer["state"] != "s2" {
 		t.Fatalf("a failed question of a batch entry => %d %v", status, answer)
 	}
 	sink.status, sink.response = 400, `{"error":{"code":"invalid_request","message":"no question is valid (box: ...)","reason":"box_unsupported","question":"box"}}`
@@ -199,6 +199,10 @@ func TestPublicSystemOneAnswersAFailedQuestionAsTheWholeRequest(t *testing.T) {
 	}
 	if status, answer := send(handler, "/v1/decisions", body, nil); status != 400 || answer["code"] != "invalid_request" || !strings.Contains(answer["message"], "box questions") {
 		t.Fatalf("a request without a valid question on /v1/decisions => %d %v", status, answer)
+	}
+	sink.response = `{"error":{"code":"invalid_request","message":"no question is valid (states.s1.questions.q: ...)","reason":"box_unsupported","question":"q","state":"s1"}}`
+	if status, answer := send(handler, "/v1/systemone", batch, nil); status != 422 || answer["question"] != "q" || answer["state"] != "s1" {
+		t.Fatalf("a batch without a valid question on /v1/systemone => %d %v", status, answer)
 	}
 }
 

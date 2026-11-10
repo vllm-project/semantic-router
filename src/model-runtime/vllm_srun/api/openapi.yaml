@@ -74,7 +74,7 @@ paths:
         first failed question in request order gives the status (`invalid_question` 422;
         `max_length_exceeded`, `scan_budget_exceeded` and `invalid_input` 400; `invalid_model_output` 500;
         `unavailable` 503; `deadline_exceeded` 504) and the body is `question_failed` with that question's
-        `question_error`, `reason` and `question` ID, and the
+        `question_error`, `reason` and `question` ID (in a batch, with its entry's name as `state`), and the
         message lists every failed question. System One answers carry no per-question error, and the official
         SDKs validate each answer by its type. Bodies, compression and headers are read as /v1/decisions reads
         them.
@@ -1389,6 +1389,9 @@ components:
           description: |
             The question whose failure answers the request: on POST /v1/systemone, and on a request none of whose
             questions is valid.
+        state:
+          type: string
+          description: In a batch, the name of the entry `question` belongs to.
         question_error:
           $ref: '#/components/schemas/ItemError'
           description: The failed question's code (`question_failed`).

@@ -55,10 +55,11 @@ var requestReasons = map[string]string{
 	"request_tokens":       "the request has more tokens than the model reads",
 }
 
-// questionFailure is a failed question that answers a whole System One request.
+// questionFailure is a failed question that answers a whole System One
+// request, and its entry's name in a batch.
 type questionFailure struct {
-	id, code, reason string
-	failed           int
+	id, state, code, reason string
+	failed                  int
 }
 
 type answerOutcome struct {
@@ -70,7 +71,7 @@ type answerOutcome struct {
 // a standard request, or of a batch's entries in order.
 func failedQuestion(result map[string]json.RawMessage) (questionFailure, bool) {
 	var found questionFailure
-	scan := func(raw json.RawMessage) {
+	scan := func(raw json.RawMessage, state string) {
 		var answers map[string]answerOutcome
 		if json.Unmarshal(raw, &answers) != nil {
 			return
@@ -82,17 +83,17 @@ func failedQuestion(result map[string]json.RawMessage) (questionFailure, bool) {
 			}
 			found.failed++
 			if found.failed == 1 {
-				found.id, found.code, found.reason = id, outcome.Error, outcome.Reason
+				found.id, found.state, found.code, found.reason = id, state, outcome.Error, outcome.Reason
 			}
 		}
 	}
-	scan(result["answers"])
+	scan(result["answers"], "")
 	var states map[string]struct {
 		Answers json.RawMessage `json:"answers"`
 	}
 	if raw, present := result["states"]; present && json.Unmarshal(raw, &states) == nil {
 		for _, name := range orderedKeys(raw) {
-			scan(states[name].Answers)
+			scan(states[name].Answers, name)
 		}
 	}
 	return found, found.failed > 0
@@ -106,12 +107,13 @@ func refusedQuestion(status int, body []byte, systemOne bool) (questionFailure, 
 			Code     string `json:"code"`
 			Reason   string `json:"reason"`
 			Question string `json:"question"`
+			State    string `json:"state"`
 		} `json:"error"`
 	}
 	if !systemOne || status != http.StatusBadRequest || json.Unmarshal(body, &answer) != nil || answer.Error.Question == "" {
 		return questionFailure{}, false
 	}
-	return questionFailure{id: answer.Error.Question, code: "invalid_question", reason: answer.Error.Reason, failed: 1}, true
+	return questionFailure{id: answer.Error.Question, state: answer.Error.State, code: "invalid_question", reason: answer.Error.Reason, failed: 1}, true
 }
 
 func writeQuestionFailure(w http.ResponseWriter, failure questionFailure) {
@@ -131,10 +133,14 @@ func writeQuestionFailure(w http.ResponseWriter, failure questionFailure) {
 	if failure.failed > 1 {
 		message += fmt.Sprintf(" (%d questions failed; POST /v1/decisions answers each one)", failure.failed)
 	}
-	writeErrorBody(w, status, map[string]any{
+	fields := map[string]any{
 		"code": "question_failed", "type": "systemone_error", "question_error": failure.code,
 		"reason": failure.reason, "question": failure.id, "message": message,
-	})
+	}
+	if failure.state != "" {
+		fields["state"] = failure.state
+	}
+	writeErrorBody(w, status, fields)
 }
 
 // orderedKeys are the keys of a JSON object in document order.

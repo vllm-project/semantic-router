@@ -194,6 +194,7 @@ def join_states(
             f"no question is valid ({reasons})",
             answers[0][2].get("reason"),
             question=answers[0][1],
+            state=answers[0][0],
         )
         return error.status, error.body()
     first = outcomes[0][1]
@@ -216,8 +217,9 @@ def as_systemone(status: int, body: dict[str, Any]) -> tuple[int, dict[str, Any]
     System One answers carry no per-question error, and the official SDKs
     validate each answer by its type, so the first failed question (of a
     standard request, or of a batch's entries in order) answers the request
-    with its code, fixed reason and ID; the message lists every failure. A
-    request none of whose questions is valid is that question's error too.
+    with its code, fixed reason and ID, and in a batch its entry's name; the
+    message lists every failure. A request none of whose questions is valid is
+    that question's error too.
     """
     if status == HTTPStatus.OK:
         failures = [
@@ -239,13 +241,14 @@ def as_systemone(status: int, body: dict[str, Any]) -> tuple[int, dict[str, Any]
             + (f": {answer['message']}" if answer.get("message") else "")
             for question_id, answer, name in failures
         )
-        question_id, answer, _ = failures[0]
+        question_id, answer, name = failures[0]
         error = RuntimeServiceError(
             QUESTION_FAILED,
             f"{len(failures)} question(s) cannot be answered: {listed}",
             answer.get("reason"),
             question=question_id,
             question_error=answer["error"],
+            state=name,
         )
         return error.status, error.body()
     refused = body.get("error") if isinstance(body, dict) else None
@@ -260,6 +263,7 @@ def as_systemone(status: int, body: dict[str, Any]) -> tuple[int, dict[str, Any]
             refused.get("reason"),
             question=refused["question"],
             question_error=INVALID_QUESTION,
+            state=refused.get("state"),
         )
         return error.status, error.body()
     return status, body

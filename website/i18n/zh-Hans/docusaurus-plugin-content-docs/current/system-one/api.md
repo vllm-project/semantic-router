@@ -168,7 +168,7 @@ curl -s localhost:8100/v1/systemone -H 'content-type: application/json' -d '{
 
 ## 错误和限制 {#errors-and-limits}
 
-在 `POST /v1/systemone` 上，按请求顺序第一个无法回答的问题决定整个请求的响应。响应体的 `code` 为 `question_failed`，并给出失败的 `question`、它的 `question_error` 和 `reason`：
+在 `POST /v1/systemone` 上，按请求顺序第一个无法回答的问题决定整个请求的响应。响应体的 `code` 为 `question_failed`，并给出失败的 `question`、它的 `question_error` 和 `reason`；在批量请求中，还以 `state` 给出该问题所在条目的名称：
 
 | 问题错误 | 状态码 | 含义 |
 | --- | --- | --- |

@@ -21,15 +21,18 @@ import (
 // fakeSystemOneAPI is a System One API that answers every choice question
 // "a", of a standard request or of each entry of a batch, and refuses a body
 // that mixes the two forms. It fails a call that asks failing as a whole on
-// that question, or every call with status.
+// that question, or every call with status. With failingIn, failing fails
+// only about that text, and a batch's failure names its entry, as the model
+// runtime names it.
 type fakeSystemOneAPI struct {
-	mu      sync.Mutex
-	calls   []systemOneCall
-	batches []bool
-	failing string
-	status  int
-	listing string
-	hold    chan struct{}
+	mu        sync.Mutex
+	calls     []systemOneCall
+	batches   []bool
+	failing   string
+	failingIn string
+	status    int
+	listing   string
+	hold      chan struct{}
 }
 
 // systemOneCall is one call the API answered: the questions about each state
@@ -87,12 +90,19 @@ func (f *fakeSystemOneAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"error":{"code":"unavailable"}}`))
 		return
 	}
-	for _, ids := range call {
-		if slices.Contains(ids, f.failing) {
-			w.WriteHeader(http.StatusUnprocessableEntity)
-			_, _ = w.Write([]byte(`{"error":{"code":"question_failed","question":"` + f.failing + `","question_error":"invalid_question"}}`))
-			return
+	for text, ids := range call {
+		if !slices.Contains(ids, f.failing) || f.failingIn != "" && text != f.failingIn {
+			continue
 		}
+		entry := ""
+		for name, state := range body.States {
+			if f.failingIn != "" && state.State == text {
+				entry = `,"state":"` + name + `"`
+			}
+		}
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"error":{"code":"question_failed","question":"` + f.failing + `"` + entry + `,"question_error":"invalid_question"}}`))
+		return
 	}
 	answers := func(questions map[string]json.RawMessage) map[string]any {
 		answered := make(map[string]any, len(questions))
@@ -292,6 +302,56 @@ func TestARetryAsksOnlyTheStatesWithOtherQuestions(t *testing.T) {
 			for _, response := range responses[1:] {
 				if answer := response.Answers["good"]; answer.Choice != "a" || answer.Error != "" {
 					t.Fatalf("good: %+v, want answered", answer)
+				}
+			}
+		})
+	}
+}
+
+// A question the API fails about one entry of a batch, and names that entry,
+// is unknown about that entry only: a long earlier turn does not fail the
+// same question about the current one.
+func TestAQuestionFailedAboutOneEntryIsAnsweredAboutTheOthers(t *testing.T) {
+	texts := []string{"a long earlier turn", "What is 2+2?"}
+	for name, tc := range map[string]struct {
+		questions []string
+		retried   systemOneCall
+		forms     []bool
+	}{
+		"only that question":    {[]string{"jailbreak"}, systemOneCall{texts[1]: {"jailbreak"}}, []bool{true, false}},
+		"with another question": {[]string{"domain", "jailbreak"}, systemOneCall{texts[0]: {"domain"}, texts[1]: {"domain", "jailbreak"}}, []bool{true, true}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			api := &fakeSystemOneAPI{failing: "jailbreak", failingIn: texts[0]}
+			remote := fakeRemote(t, "hosted-entry-failure", api, config.ModelDeployment{})
+			questions := make([]Question, 0, len(tc.questions))
+			for _, id := range tc.questions {
+				questions = append(questions, choiceQuestion(id))
+			}
+			responses := make([]Response, len(texts))
+			askers := make([]asker, len(texts))
+			for index, text := range texts {
+				askers[index] = asker{deployments: []string{"hosted-entry-failure"}, ask: func(ctx context.Context) error {
+					var err error
+					responses[index], err = remote.Decide(ctx, "hosted-entry-failure", Request{State: text, Questions: questions})
+					return err
+				}}
+			}
+			if _, errs := runStage(DefaultBundleWindow, askers...); errors.Join(errs...) != nil {
+				t.Fatal(errors.Join(errs...))
+			}
+			calls := api.answered()
+			if len(calls) != 2 || !slices.Equal(api.forms(), tc.forms) || !equalCall(calls[1], tc.retried) {
+				t.Fatalf("calls %v (batch %v), want the stage's call and a retry about %v", calls, api.forms(), tc.retried)
+			}
+			if answer := responses[0].Answers["jailbreak"]; answer.Error != "invalid_question" {
+				t.Fatalf("jailbreak about %q: %+v, want unknown", texts[0], answer)
+			}
+			for index, response := range responses {
+				for _, id := range tc.questions {
+					if answer := response.Answers[id]; (index > 0 || id != "jailbreak") && (answer.Choice != "a" || answer.Error != "") {
+						t.Fatalf("%s about %q: %+v, want answered", id, texts[index], answer)
+					}
 				}
 			}
 		})
