@@ -2404,12 +2404,11 @@ func TestFallbackResponsesAPIStreamingWithPersistence(t *testing.T) {
 }
 
 // guardedFallbackAnswer drives a fallback whose candidate's answer the
-// decision's response_guard scores at jailbreak and blocks over its
+// decision's response_guard reads with server and blocks over its jailbreak
 // threshold, for a client that streams or not, with an exact response cache
 // on the decision. It returns the Router's reply and the cache.
-func guardedFallbackAnswer(t *testing.T, streaming bool, jailbreak float32) (*ext_proc.ImmediateResponse, *RequestContext, *mockStreamingCache) {
+func guardedFallbackAnswer(t *testing.T, streaming bool, server *responseStageDecider) (*ext_proc.ImmediateResponse, *RequestContext, *mockStreamingCache) {
 	t.Helper()
-	server := newJailbreakDecider(jailbreak)
 	router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
 	responseCache := &mockStreamingCache{}
 	router.Cache = responseCache
@@ -2499,14 +2498,14 @@ func guardedFallbackAnswer(t *testing.T, streaming bool, jailbreak float32) (*ex
 	if procResp == nil || procResp.GetImmediateResponse() == nil {
 		t.Fatalf("expected ImmediateResponse from fallback, got: %#v", procResp)
 	}
-	if matched, _ := ctx.ResponseGuard.jailbreakFinding(); matched != (jailbreak > 0.5) {
-		t.Fatalf("the guard recorded a response jailbreak = %v at score %v", matched, jailbreak)
+	if matched, _ := ctx.ResponseGuard.jailbreakFinding(); matched != (server.jailbreak > 0.5) {
+		t.Fatalf("the guard recorded a response jailbreak = %v at score %v", matched, server.jailbreak)
 	}
 	return procResp.GetImmediateResponse(), ctx, responseCache
 }
 
 func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
-	imm, _, responseCache := guardedFallbackAnswer(t, false, 0.95)
+	imm, _, responseCache := guardedFallbackAnswer(t, false, newJailbreakDecider(0.95))
 	if imm.GetStatus().GetCode() != typev3.StatusCode_Forbidden {
 		t.Fatalf("expected HTTP 403 Forbidden due to response jailbreak block, got: %v", imm.GetStatus().GetCode())
 	}
@@ -2527,7 +2526,7 @@ func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
 // The guard passes the candidate's answer: the cache keeps the answer the
 // client received.
 func TestFallbackAnswerTheGuardPassesIsCached(t *testing.T) {
-	imm, _, responseCache := guardedFallbackAnswer(t, false, 0.01)
+	imm, _, responseCache := guardedFallbackAnswer(t, false, newJailbreakDecider(0.01))
 	if imm.GetStatus().GetCode() != typev3.StatusCode_OK {
 		t.Fatalf("status = %v, want the candidate's answer", imm.GetStatus().GetCode())
 	}
@@ -2539,7 +2538,7 @@ func TestFallbackAnswerTheGuardPassesIsCached(t *testing.T) {
 // A streaming client receives a blocked fallback answer's refusal as a
 // stream, as it receives a blocked held stream's.
 func TestFallbackResponsePolicyRefusesAStreamingClientInStreamForm(t *testing.T) {
-	imm, ctx, responseCache := guardedFallbackAnswer(t, true, 0.95)
+	imm, ctx, responseCache := guardedFallbackAnswer(t, true, newJailbreakDecider(0.95))
 	body := string(imm.GetBody())
 	reply := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_ImmediateResponse{ImmediateResponse: imm}}
 	if imm.GetStatus().GetCode() != typev3.StatusCode_OK || immediateHeaderValue(reply, "content-type") != "text/event-stream" {
@@ -2557,6 +2556,21 @@ func TestFallbackResponsePolicyRefusesAStreamingClientInStreamForm(t *testing.T)
 	}
 	if responseCache.exactAdded || responseCache.addEntryCalled {
 		t.Fatal("a fallback answer the guard blocked was written to the response cache")
+	}
+}
+
+// A streaming client whose fallback answer the guard could not read for want
+// of the request's delegated credential receives the 401's refusal as a
+// stream, and none of the answer.
+func TestFallbackRefusesAStreamingClientWithoutTheDelegatedCredential(t *testing.T) {
+	imm, _, responseCache := guardedFallbackAnswer(t, true, newDelegatedDecider())
+	body := string(imm.GetBody())
+	if imm.GetStatus().GetCode() != typev3.StatusCode_OK || !strings.HasPrefix(body, `data: {"error":`) ||
+		!strings.Contains(body, delegatedCredentialMessage) || strings.Contains(body, unsafeAnswer) {
+		t.Fatalf("reply = %d %s, want one error chunk naming the missing credential and none of the answer", imm.GetStatus().GetCode(), body)
+	}
+	if responseCache.exactAdded || responseCache.addEntryCalled {
+		t.Fatal("a fallback answer refused for the missing credential was written to the response cache")
 	}
 }
 

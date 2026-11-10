@@ -92,7 +92,7 @@ func (r *OpenAIRouter) handleHeldStreamBody(body []byte, endOfStream bool, ctx *
 
 // releaseHeldStream applies the buffered response policy to the answer of a
 // held stream: the client receives the held events, or the events of the
-// answer with the guard's notes, or the guard's refusal.
+// answer with the guard's notes, or the policy's refusal.
 func (r *OpenAIRouter) releaseHeldStream(ctx *RequestContext, semanticResponse *llmprotocol.Response) *ext_proc.ProcessingResponse {
 	hold := ctx.ResponseGuardHold
 	answer, err := r.encodeClientResponse(*semanticResponse, ctx)
@@ -107,9 +107,9 @@ func (r *OpenAIRouter) releaseHeldStream(ctx *RequestContext, semanticResponse *
 	plan := r.prepareResponsePolicy(ctx, semanticResponse, answer)
 	hold.outcome = ctx.ResponseGuard.outcome()
 	metrics.RecordResponseGuardBuffered(requestDecisionStateKey(ctx), hold.outcome)
-	if rule := ctx.ResponseGuard.blocking(); rule != nil {
+	if plan.blocked != nil {
 		plan.commit()
-		return r.refuseHeldStream(ctx, responseGuardRefusal(rule))
+		return r.refuseHeldStream(ctx, plan.refusal)
 	}
 	// The cache keeps the answer the client receives, as a buffered answer's.
 	frames, delivered := hold.frames, answer
@@ -201,11 +201,10 @@ func responseGuardRefusal(rule *responseGuardRuleRun) *llmprotocol.ProtocolError
 }
 
 // streamedFallbackRefusal answers a streaming client whose fallback answer
-// the guard blocked: the refusal in its protocol's streaming form, as for a
-// held stream.
-func (r *OpenAIRouter) streamedFallbackRefusal(ctx *RequestContext) *ext_proc.ProcessingResponse {
-	refusal := r.encodeStreamRefusal(ctx, responseGuardRefusal(ctx.ResponseGuard.blocking()))
-	return r.buildFallbackImmediateResponse(refusal, "text/event-stream", ctx)
+// the response policy refused: the refusal in its protocol's streaming form,
+// as for a held stream.
+func (r *OpenAIRouter) streamedFallbackRefusal(ctx *RequestContext, refusal *llmprotocol.ProtocolError) *ext_proc.ProcessingResponse {
+	return r.buildFallbackImmediateResponse(r.encodeStreamRefusal(ctx, refusal), "text/event-stream", ctx)
 }
 
 // encodeStreamRefusal renders protocolError as a stream of the client's
