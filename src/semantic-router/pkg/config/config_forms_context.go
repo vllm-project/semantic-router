@@ -476,7 +476,7 @@ func contextConfiguration(m *Migration, at FormMatch) (*yaml.Node, error) {
 		return configuration, nil
 	}
 	configuration := mappingNode("enabled", boolNode(true))
-	if globalMemory(at.Root) && pluginOfType(at.Parent, "memory") == nil {
+	if inheritedMemory(at) && pluginOfType(at.Parent, "memory") == nil {
 		m.Set(configuration, "sources", &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Content: []*yaml.Node{mappingNode("type", Scalar(ContextSourceMemory))}})
 		m.Changed(at.Path, "the global memory now reaches this decision through its context plugin's memory source")
 	}
@@ -496,16 +496,34 @@ func globalMemory(root *yaml.Node) bool {
 		pluginOfType(mappingValue(mappingAt(context, "configuration"), "sources"), ContextSourceMemory) != nil
 }
 
+// inheritedMemory reports whether the context plugin of the decision at, when
+// it lists no sources, retrieves memory: its recipe's context plugin decides
+// when that plugin lists sources, the global memory otherwise.
+func inheritedMemory(at FormMatch) bool {
+	for i := len(at.Ancestors) - 1; i >= 0; i-- {
+		holder := at.Ancestors[i]
+		if mappingValue(holder, "decisions") == nil {
+			continue
+		}
+		recipe := pluginOfType(mappingValue(holder, "plugins"), DecisionPluginContext)
+		if sources := mappingValue(mappingAt(recipe, "configuration"), "sources"); sources != nil {
+			return pluginOfType(sources, ContextSourceMemory) != nil
+		}
+		break
+	}
+	return globalMemory(at.Root)
+}
+
 // keepGlobalMemoryOff writes sources: [] in the configuration of a decision's
 // context plugin that lists none, for a decision that did not retrieve the
-// global memory: written sources replace the inherited ones.
+// memory it would inherit: written sources replace the inherited ones.
 func keepGlobalMemoryOff(m *Migration, at FormMatch, configuration *yaml.Node) {
-	if configuration == nil || mappingValue(configuration, "sources") != nil || !globalMemory(at.Root) {
+	if configuration == nil || mappingValue(configuration, "sources") != nil || !inheritedMemory(at) {
 		return
 	}
 	m.Set(configuration, "sources", sequenceOf())
 	orderKeys(configuration, contextKeyOrder)
-	m.Changed(at.Path, "the decision did not retrieve the global memory, so its context plugin writes sources: []; one that lists no sources inherits the memory source of global.plugins")
+	m.Changed(at.Path, "the decision did not retrieve memory, so its context plugin writes sources: []; one that lists no sources inherits the memory source of its recipe or global.plugins")
 }
 
 // sourceNode is a source of a type with an old plugin's fields but those

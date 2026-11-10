@@ -13,6 +13,7 @@ providers:
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
 recipes:
   - name: default
+    plugins: RECIPE
     decisions:
       - name: assistant
         priority: 100
@@ -22,12 +23,14 @@ recipes:
 global: GLOBAL
 `
 
-// The global memory off, on by the memory store's switch, and on as the
-// memory source of global.plugins' context plugin.
+// The memory a decision inherits off, on by the memory store's switch, on
+// as the memory source of global.plugins' context plugin, and on as the
+// memory source of its recipe's context plugin.
 var contextFormsGlobals = map[string]string{
 	"off":            `{stores: {memory: {enabled: false, backend: milvus, milvus: {address: "127.0.0.1:19530"}}}}`,
 	"store switch":   `{stores: {memory: {enabled: true, backend: milvus, milvus: {address: "127.0.0.1:19530"}}}}`,
 	"global.plugins": `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}}, plugins: [{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]}`,
+	"recipe":         `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}}}`,
 }
 
 // The old plugins of a decision that turn memory on or off, or bring other
@@ -45,7 +48,7 @@ var contextFormsPlugins = map[string]string{
 // turned it off, or an enabled memory plugin turned it on, in either plugin
 // order.
 func TestMigrateKeepsWhetherADecisionRetrievesMemory(t *testing.T) {
-	for _, global := range []string{"off", "store switch", "global.plugins"} {
+	for _, global := range []string{"off", "store switch", "global.plugins", "recipe"} {
 		for _, memory := range []string{"", "memory on", "memory off"} {
 			for _, other := range []string{"", "rag", "compression", "context"} {
 				orders := [][]string{{memory, other}}
@@ -60,7 +63,11 @@ func TestMigrateKeepsWhetherADecisionRetrievesMemory(t *testing.T) {
 						}
 					}
 					t.Run(global+"/"+strings.Join(order, ","), func(t *testing.T) {
-						doc := strings.NewReplacer("PLUGINS", strings.Join(plugins, ", "), "GLOBAL", contextFormsGlobals[global]).Replace(contextFormsDoc)
+						recipe := "[]"
+						if global == "recipe" {
+							recipe = `[{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]`
+						}
+						doc := strings.NewReplacer("PLUGINS", strings.Join(plugins, ", "), "GLOBAL", contextFormsGlobals[global], "RECIPE", recipe).Replace(contextFormsDoc)
 						migrated, _, err := MigrateConfig([]byte(doc))
 						if err != nil {
 							t.Fatalf("migrate: %v", err)
