@@ -44,14 +44,20 @@ var removedSignalTypeForms = []ConfigForm{
 		What:    "the reask signal is a turn_relation rule",
 		Becomes: "signals.turn_relation with labels [reask]; input.previous_turns is twice lookback_turns",
 		Migrate: func(m *Migration, at FormMatch) error {
+			asked := map[int]string{}
 			for _, rule := range sequenceItems(at.Node) {
+				name := scalarAt(rule, "name")
 				next := copiedRule(rule, "name", "description")
 				setNode(next, "labels", stringSequence("reask"))
-				// lookback_turns counted user turns; previous_turns counts each
-				// of them and the answer that followed it.
-				if turns, ok := intAt(rule, "lookback_turns"); ok {
-					setNode(next, "input", newMapping("previous_turns", intNode(2*turns)))
+				// lookback_turns (default 1) counted user turns; previous_turns
+				// counts each of them and the answer that followed it.
+				lookback, ok := intAt(rule, "lookback_turns")
+				if !ok || lookback < 1 {
+					lookback = 1
 				}
+				turns := min(2*lookback, MaxSystemOnePreviousTurns)
+				setNode(next, "input", newMapping("previous_turns", intNode(turns)))
+				noteReaskRewrite(m, at.Path+"["+name+"]", name, lookback, turns, asked)
 				if scalarAt(rule, "threshold") != "" {
 					m.Note(at.Path, "a reask rule's threshold has no counterpart: the decision model tells a re-ask from the turns themselves")
 				}
@@ -268,6 +274,68 @@ var removedSignalTypeForms = []ConfigForm{
 	},
 }
 
+// noteReaskRewrite says what a reask rule's turn_relation rule does not keep:
+// the streak, the turns past what turn_relation reads, and a question another
+// rule of the recipe asks already. asked holds the first rule of each count of
+// previous turns.
+func noteReaskRewrite(m *Migration, path, name string, lookback, turns int, asked map[int]string) {
+	if turns < 2*lookback {
+		m.Note(path, fmt.Sprintf("lookback_turns %d is %d turns; a turn_relation rule reads at most %d, so input.previous_turns is %d", lookback, 2*lookback, MaxSystemOnePreviousTurns, turns))
+	}
+	if lookback > 1 {
+		m.Note(path, fmt.Sprintf("v0.5 has no streak: lookback_turns %d matched only when the current turn repeated each of the %d previous user turns, "+
+			"and then no reask rule of fewer lookback turns matched; the turn_relation rule matches a first re-ask too. To approximate the streak, ask "+
+			`signals.systemone: [{name: %s, question: {type: noul, instructions: "Does the latest user message repeat the request of each of the %d user messages before it?"}, input: {previous_turns: %d}}]`,
+			lookback, lookback, name, lookback, turns))
+	}
+	if first, ok := asked[turns]; ok {
+		m.Note(path, fmt.Sprintf("turn_relation rule %s asks what %s asks, a re-ask within the previous %d turns: keep one", name, first, turns))
+		return
+	}
+	asked[turns] = name
+}
+
+// domainNeverMatches is why a condition on a domain rule named for no domain
+// never matches.
+var domainNeverMatches = neverMatches{
+	why:     "a domain rule named for no domain without mmlu_categories matched no domain the classifier reported",
+	restore: "to route on it, declare it with labels naming the domains it means",
+}
+
+// unmatchedDomain reports whether a domain rule never matched before v0.5:
+// the domain classifier reported supported domains only, which a rule matched
+// by its mmlu_categories or by its name in any case, so a rule with neither
+// whose name is no domain matched nothing.
+func unmatchedDomain(rule *yaml.Node) bool {
+	return mappingValue(rule, "labels") == nil && mappingValue(rule, "mmlu_categories") == nil &&
+		!IsSupportedRoutingDomainName(strings.ToLower(scalarAt(rule, "name")))
+}
+
+// unmatchedDomainRule reports whether a recipe's signals declare the domain
+// rule name, and it never matched.
+func unmatchedDomainRule(signals *yaml.Node, name string) bool {
+	return slices.ContainsFunc(sequenceAt(signals, "domains"), func(rule *yaml.Node) bool {
+		return scalarAt(rule, "name") == name && unmatchedDomain(rule)
+	})
+}
+
+// namedWithLabel reports whether a condition or score input of a rule's
+// recipe names one of the rule's options, as a condition's label or as the
+// input "<rule>:<label>". So a v0.5 rule without labels is read, whatever its
+// name; before v0.5, a user_feedbacks or modality rule's name chose its option.
+func namedWithLabel(at FormMatch, signalType string) bool {
+	name, recipe := scalarAt(at.Node, "name"), scopeRouting(at.Root, at.Path)
+	for _, pattern := range []string{"decisions[].rules.**", "projections.scores[].inputs[]"} {
+		for _, use := range matchPattern(recipe, strings.Split(pattern, ".")) {
+			named := scalarAt(use.Node, "name")
+			if hasType(signalType)(use.Node, "") && ((named == name && scalarAt(use.Node, "label") != "") || strings.HasPrefix(named, name+":")) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // kbNeverMatches is why a kb condition never matches.
 var kbNeverMatches = neverMatches{
 	why:     "no v0.5 signal reads a knowledge base",
@@ -359,6 +427,43 @@ var applicationFieldForms = []ConfigForm{
 	},
 	{
 		Code:  CodeInvalidValue,
+		Paths: conditionPaths,
+		MatchAt: func(at FormMatch) bool {
+			return hasType(SignalTypeDomain)(at.Node, at.Path) && unmatchedDomainRule(scopeSignals(at.Root, at.Path), scalarAt(at.Node, "name"))
+		},
+		What:    "a domain condition reads a domain rule named for no domain, which never matched",
+		Becomes: "nothing: the condition never matches, so migrate drops a decision that needs it, its term of an OR and a score input on it",
+		Migrate: func(m *Migration, at FormMatch) error {
+			if strings.Contains(at.Path, ".projections.") {
+				dropScoreInput(m, at, "domain "+scalarAt(at.Node, "name"), domainNeverMatches)
+				return nil
+			}
+			signals := scopeSignals(m.Root(), at.Path)
+			settleRemovedCondition(m, at, "domain rule", func(node *yaml.Node) bool {
+				return hasType(SignalTypeDomain)(node, "") && unmatchedDomainRule(signals, scalarAt(node, "name"))
+			}, domainNeverMatches)
+			return nil
+		},
+	},
+	{
+		Code:    CodeInvalidValue,
+		Paths:   RoutingScopes("signals.domains[]"),
+		Match:   func(node *yaml.Node, _ string) bool { return unmatchedDomain(node) },
+		What:    "a domain rule without labels or mmlu_categories whose name is no domain never matched, since the domain classifier reports domains",
+		Becomes: "drop it; to route on it, set labels to the domains it means",
+		Migrate: func(m *Migration, at FormMatch) error {
+			name := scalarAt(at.Node, "name")
+			m.Note(at.Path, "domain rule "+name+" is dropped: "+domainNeverMatches.why+"; "+domainNeverMatches.restore)
+			removeItem(at.Parent, at.Node)
+			if len(at.Parent.Content) == 0 {
+				m.Delete(at.Above(2), "domains")
+				deleteEmpty(at.Above(3), "signals")
+			}
+			return nil
+		},
+	},
+	{
+		Code:  CodeInvalidValue,
 		Paths: RoutingScopes("signals.fact_check[]"),
 		Match: func(node *yaml.Node, _ string) bool {
 			return scalarAt(node, "name") == "no_fact_check_needed" && mappingValue(node, "labels") == nil
@@ -378,9 +483,9 @@ var applicationFieldForms = []ConfigForm{
 	{
 		Code:  CodeInvalidValue,
 		Paths: RoutingScopes("signals.user_feedbacks[]"),
-		Match: func(node *yaml.Node, _ string) bool {
-			_, legacy := legacyFeedbackLabels[scalarAt(node, "name")]
-			return legacy && mappingValue(node, "labels") == nil
+		MatchAt: func(at FormMatch) bool {
+			_, legacy := legacyFeedbackLabels[scalarAt(at.Node, "name")]
+			return legacy && mappingValue(at.Node, "labels") == nil && !namedWithLabel(at, SignalTypeUserFeedback)
 		},
 		Describe: func(at FormMatch) (string, string) {
 			return "a user_feedbacks rule's name no longer chooses its feedback", "labels: [" + legacyFeedbackLabels[scalarAt(at.Node, "name")] + "]"
@@ -393,9 +498,9 @@ var applicationFieldForms = []ConfigForm{
 	{
 		Code:  CodeInvalidValue,
 		Paths: RoutingScopes("signals.modality[]"),
-		Match: func(node *yaml.Node, _ string) bool {
-			_, legacy := legacyModalityLabels[scalarAt(node, "name")]
-			return legacy && mappingValue(node, "labels") == nil
+		MatchAt: func(at FormMatch) bool {
+			_, legacy := legacyModalityLabels[scalarAt(at.Node, "name")]
+			return legacy && mappingValue(at.Node, "labels") == nil && !namedWithLabel(at, SignalTypeModality)
 		},
 		Describe: func(at FormMatch) (string, string) {
 			return "a modality rule's name no longer chooses its output (AR, DIFFUSION and BOTH are text, image and text_image)", "labels: [" + legacyModalityLabels[scalarAt(at.Node, "name")] + "]"
@@ -441,6 +546,10 @@ var applicationFieldForms = []ConfigForm{
 		What:    "a jailbreak rule's threshold, direction and include_history are its predicate, stage and input.history, and method and patterns are removed",
 		Becomes: "predicate: {gte: <threshold>}, stage, input.history",
 		Migrate: func(m *Migration, at FormMatch) error {
+			if threshold := scalarAt(at.Node, "threshold"); threshold != "" && scalarAt(at.Node, "method") == "contrastive" {
+				m.Note(at.Path, "threshold "+threshold+" bounded a contrastive score, the closest jailbreak pattern's similarity less the closest benign pattern's, "+
+					"not a probability: re-fit predicate.gte "+threshold+" against real traffic, or drop the predicate for the answering model's calibrated threshold")
+			}
 			moveThreshold(m, at.Node, "gte")
 			if scalarAt(at.Node, "direction") == SystemOneStageResponse {
 				setNode(at.Node, "stage", Scalar(SystemOneStageResponse))

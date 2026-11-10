@@ -292,6 +292,7 @@ def _application_field_forms(data: dict[str, Any]) -> Iterator[Form]:
             "a user_feedbacks rule's name no longer chooses its feedback",
             f"labels: [{LEGACY_FEEDBACK_LABELS[name]}]",
         ),
+        signal_type="user_feedback",
     )
     yield from _unlabeled_rules(
         data,
@@ -301,6 +302,7 @@ def _application_field_forms(data: dict[str, Any]) -> Iterator[Form]:
             "a modality rule's name no longer chooses its output (AR, DIFFUSION and BOTH are text, image and text_image)",
             f"labels: [{LEGACY_MODALITY_LABELS[name]}]",
         ),
+        signal_type="modality",
     )
     yield from _rules_with_any_key(
         data,
@@ -441,12 +443,40 @@ def _unlabeled_rules(
     collection: str,
     legacy: Callable[[str], bool],
     describe: Callable[[str], tuple[str, str]],
+    signal_type: str = "",
 ) -> Iterator[Form]:
+    """Rules without labels whose name chose their option. With signal_type, a
+    rule a condition or score input names with one of its options is a v0.5
+    rule without labels, whatever its name, and is left alone."""
+
     for prefix, routing in recipe_scopes(data):
         for path, rule in _rules(prefix, routing, collection):
             name = rule.get("name")
-            if isinstance(name, str) and legacy(name) and "labels" not in rule:
+            if (
+                isinstance(name, str)
+                and legacy(name)
+                and "labels" not in rule
+                and not (signal_type and _named_with_label(routing, signal_type, name))
+            ):
                 yield (path, "invalid_value", *describe(name))
+
+
+def _named_with_label(routing: dict[str, Any], signal_type: str, name: str) -> bool:
+    nodes = [
+        node
+        for decision in _mappings(routing.get("decisions"))
+        for _, node in _walk("", decision.get("rules"))
+    ]
+    for score in _mappings(_mapping_at(routing, "projections").get("scores")):
+        nodes.extend(_mappings(score.get("inputs")))
+    return any(
+        node.get("type") == signal_type
+        and (
+            (node.get("name") == name and bool(node.get("label")))
+            or str(node.get("name", "")).startswith(name + ":")
+        )
+        for node in nodes
+    )
 
 
 def _rules_with_any_key(

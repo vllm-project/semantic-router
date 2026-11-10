@@ -115,3 +115,45 @@ def test_parsing_refuses_a_removed_application_form(tmp_path):
         ),
     ):
         parse_user_config(str(path), log_summary=False)
+
+
+def test_a_rule_without_labels_whose_conditions_name_its_option_is_v05():
+    # A v0.5 user_feedbacks or modality rule without labels matches nothing
+    # itself, whatever it is called; its conditions name the option as their
+    # label, or a score input as "<rule>:<label>". The Router loads it.
+    config = {
+        "recipes": [
+            {
+                "name": "default",
+                "signals": {
+                    "user_feedbacks": [{"name": "satisfied"}],
+                    "modality": [{"name": "AR"}],
+                },
+                "projections": {
+                    "scores": [
+                        {
+                            "name": "s",
+                            "inputs": [{"type": "modality", "name": "AR:text"}],
+                        }
+                    ]
+                },
+                "decisions": [
+                    {
+                        "name": "happy",
+                        "rules": {
+                            "type": "user_feedback",
+                            "name": "satisfied",
+                            "label": "SAT",
+                        },
+                    }
+                ],
+            }
+        ]
+    }
+    assert removed_application_forms(config) == []
+    config["recipes"][0]["decisions"][0]["rules"].pop("label")
+    assert removed_application_forms(config) == [
+        "recipes[default].signals.user_feedbacks[satisfied]: invalid_value: a "
+        "user_feedbacks rule's name no longer chooses its feedback; run `vllm-sr "
+        "config migrate` (labels: [SAT])"
+    ]

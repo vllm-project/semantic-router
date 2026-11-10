@@ -178,15 +178,16 @@ recipes:
 | `signals.decision`, `algorithm.type: decision` | `systemone` (loads with a warning) |
 | `domains[].mmlu_categories` | `domains[].labels` |
 | Domain conditions that declared their own domains | One `domains` rule per domain the conditions name |
-| `jailbreak` `threshold`, `direction`, `include_history` | `predicate`, `stage`, `input.history` |
+| A `domains` rule without `labels` or `mmlu_categories` whose name is no domain | Dropped: the classifier reported domains, so it never matched; so are a decision that needs it, its term of an `OR` and a score input on it (migrate notes each) |
+| `jailbreak` `threshold`, `direction`, `include_history` | `predicate`, `stage`, `input.history`; a `method: contrastive` threshold bounded a similarity gap, not a probability, and migrate notes to re-fit it |
 | `jailbreak` `method`, `jailbreak_patterns`, `benign_patterns` | Removed: the decision model reads the request. For a deterministic hard block, write the patterns as a [`keywords`](../tutorials/signal/heuristic/keyword) rule that a blocking decision reads |
 | `jailbreak` and `pii` rules under `on_error: block` | `on_unknown: match` on the rules |
 | `safety` `threshold`, `labels`, `unsafe_labels`, `model` | `predicate`; `labels` name [harm categories](../system-one/reference#harm-categories); `deployment` |
 | `safety` `hazard` | The [harm categories](../system-one/reference#harm-categories) its `categories` name, in the rule's `labels`, with `hazard.threshold` as the `predicate`; the unsafe `threshold` has no counterpart, and a rule whose categories name none keeps the unsafe verdict (migrate notes both) |
 | `pii` `threshold`, `pii_types_allowed`, `include_history`, `source: tool_result` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results` |
 | `fact_check` rule named `no_fact_check_needed` without labels | `labels: [NO_FACT_CHECK_NEEDED]` with a predicate |
-| `user_feedbacks` and `modality` rules whose name chose the option | The option in `labels` |
-| `reasks`, `topic_continuity` | `turn_relation` with `labels` |
+| `user_feedbacks` and `modality` rules without `labels` whose name chose the option | The option in `labels`, unless a condition names one of the rule's options as its `label`, or a score input as `<rule>:<label>`: that rule is written for v0.5 and stays as it is |
+| `reasks`, `topic_continuity` | `turn_relation` with `labels`; a reask rule's streak over a `lookback_turns` above 1 has no counterpart, `input.previous_turns` stops at 32, and migrate notes both |
 | `complexity` example banks and thresholds; `name: difficulty:hard` conditions | `complexity`; `{name: difficulty, label: hard}` |
 | `modality` names `AR`, `DIFFUSION`, `BOTH`; the keyword fallback | `labels` `text`, `image`, `text_image`; the fallback becomes a `keywords` rule (review) |
 | `classifiers`, `preferences`, text `embeddings` rules | [`systemone` questions](../system-one/custom-questions#questions-that-replace-removed-signals) |
@@ -251,8 +252,8 @@ recipes:
 
 | Before | After |
 | --- | --- |
-| `prompt`, `router_dc` | `systemone`, which asks the decision model with the same instructions or the candidates' descriptions |
-| `knn`, `kmeans`, `svm`, `mlp` | `systemone`, or `static` for a decision with one candidate; the trained model is not used |
+| `prompt`, `router_dc` | `systemone`, which asks the decision model with the same instructions or the candidates' descriptions, or `static` as for `knn` |
+| `knn`, `kmeans`, `svm`, `mlp` | `systemone`, or `static` for a decision with one candidate or whose `modelRefs` repeat a model, as one model's LoRA adapters do (migrate notes it); the trained model is not used |
 | `automix`, `hybrid`, `latency_aware` | `multi_factor`, with weights migrate writes out |
 | `confidence` (Looper) | `escalate` with `escalate.accept.confidence` |
 | `cascade` (System One) | `escalate` with `escalate.stages` |
