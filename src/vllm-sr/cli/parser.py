@@ -28,6 +28,7 @@ from cli.config_tools_forms import removed_tools_forms
 from cli.config_schema.validation import validate_config_structure
 from cli.config_yaml import safe_load_router_config
 from cli.context_bands import references_environment
+from cli.decision_rule_limits import validate_decision_rule_limits
 from cli.models import REMOVED_BACKEND_REF_FIELDS, UserConfig
 from cli.utils import get_logger
 
@@ -252,6 +253,12 @@ def parse_user_config_data(
     data: Dict[str, Any], *, log_summary: bool = True
 ) -> UserConfig:
     """Apply the parse_user_config checks to an already loaded document."""
+    try:
+        validate_decision_rule_limits(data)
+    except ValueError as error:
+        raise ConfigParseError(
+            f"Configuration schema validation failed:\n  • {error}"
+        ) from error
     data = read_renamed_forms(data)
     _reject_invalid_config_surfaces(data)
 

@@ -15,6 +15,9 @@ func Decompile(cfg *config.RouterConfig) (string, error) {
 }
 
 func DecompileToAST(cfg *config.RouterConfig) *Program {
+	if err := config.ValidateDecisionRuleLimits(cfg); err != nil {
+		return nil
+	}
 	prog := DecompileRoutingToAST(topLevelView(cfg))
 	appendConfigScopesToAST(prog, cfg)
 	return prog
@@ -100,12 +103,17 @@ func stringsToArray(items []string) ArrayValue {
 }
 
 func Format(input string) (string, error) {
+	return FormatWithLimits(input, config.DecisionRuleLimits{})
+}
+
+// FormatWithLimits keeps the enclosing budget during compile/decompile formatting.
+func FormatWithLimits(input string, limits config.DecisionRuleLimits) (string, error) {
 	prog, errs := Parse(input)
 	if len(errs) > 0 {
 		return "", fmt.Errorf("parse errors: %v", errs)
 	}
 
-	cfg, compileErrs := CompileAST(prog)
+	cfg, compileErrs := CompileASTWithLimits(prog, limits)
 	if len(compileErrs) > 0 {
 		return "", fmt.Errorf("compile errors: %v", compileErrs)
 	}

@@ -143,6 +143,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
+| `decision_rule_limits` _[DecisionRuleLimitsConfig](#decisionrulelimitsconfig)_ | DecisionRuleLimits bounds each decision's rule tree across all recipes. |  | Optional: \{\} <br /> |
 | `routing` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Routing is removed: the router configuration has no top-level routing<br />block. Its fields are the recipe named default under config.recipes. A<br />resource that sets it is refused. |  | Type: object <br />Optional: \{\} <br /> |
 | `recipes` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Recipes contains canonical recipes[]: each recipe's signals,<br />projections, decisions, model_bindings and plugins. It is preserved as<br />objects so the operator passes the router-owned contract through<br />without lagging behind every router schema addition. The fields a<br />recipe named default sets replace the operator's default recipe's. |  | Optional: \{\} <br /> |
 | `entrypoints` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Entrypoints contains canonical entrypoints[]: the public model names of<br />each recipe. Several recipes need them, with exactly one marked<br />default: true. |  | Optional: \{\} <br /> |
@@ -241,6 +242,20 @@ _Appears in:_
 | `retry_back_off_base` _string_ | RetryBackOffBase is the base of the randomized exponential wait between<br />retries (standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
 | `retry_back_off_max` _string_ | RetryBackOffMax caps that wait (standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
 | `retry_after_max` _string_ | RetryAfterMax honors a response's Retry-After up to this bound<br />(standalone mode only) |  | Pattern: `^([0-9]+(\.[0-9]+)?(ns\|us\|ms\|s\|m\|h))+$` <br />Optional: \{\} <br /> |
+
+#### DecisionRuleLimitsConfig
+
+DecisionRuleLimitsConfig configures positive per-decision budgets. The root
+has depth one, and operators and leaves both count toward MaxNodes.
+
+_Appears in:_
+
+- [ConfigSpec](#configspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `max_depth` _integer_ | MaxDepth defaults to 16 when omitted. | 16 | Minimum: 1 <br />Optional: \{\} <br /> |
+| `max_nodes` _integer_ | MaxNodes defaults to 256 when omitted. | 256 | Minimum: 1 <br />Optional: \{\} <br /> |
 
 #### EmbeddingBinding
 

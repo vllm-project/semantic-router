@@ -21,11 +21,12 @@ func DSLEditorHandler(operation string) http.HandlerFunc {
 			return
 		}
 		var input struct {
-			Source *string `json:"source"`
+			Source   *string `json:"source"`
+			BaseYAML string  `json:"baseYaml,omitempty"`
 		}
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2*maxDSLSourceBytes))
 		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&input); err != nil || input.Source == nil || len(*input.Source) > maxDSLSourceBytes {
+		if err := decoder.Decode(&input); err != nil || input.Source == nil || len(*input.Source) > maxDSLSourceBytes || len(input.BaseYAML) > maxDSLSourceBytes {
 			http.Error(w, "Expected bounded JSON source", http.StatusBadRequest)
 			return
 		}
@@ -47,15 +48,15 @@ func DSLEditorHandler(operation string) http.HandlerFunc {
 		var result any
 		switch operation {
 		case "compile":
-			result = editor.Compile(*input.Source)
+			result = editor.CompileWithBase(*input.Source, input.BaseYAML)
 		case "validate":
-			result = editor.Validate(*input.Source)
+			result = editor.ValidateWithBase(*input.Source, input.BaseYAML)
 		case "parse":
-			result = editor.Parse(*input.Source)
+			result = editor.ParseWithBase(*input.Source, input.BaseYAML)
 		case "decompile":
 			result = editor.Decompile(*input.Source)
 		case "format":
-			result = editor.Format(*input.Source)
+			result = editor.FormatWithBase(*input.Source, input.BaseYAML)
 		default:
 			http.NotFound(w, r)
 			return

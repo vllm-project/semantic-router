@@ -71,6 +71,9 @@ func (r *SemanticRouter) ValidateDelete(_ context.Context, _ runtime.Object) (ad
 
 // validateSemanticRouter validates the SemanticRouter resource
 func (r *SemanticRouter) validateSemanticRouter() error {
+	if err := r.ValidateDecisionRuleLimits(); err != nil {
+		return err
+	}
 	// Validate autoscaling configuration
 	if r.Spec.Autoscaling.Enabled != nil && *r.Spec.Autoscaling.Enabled {
 		if err := r.validateAutoscaling(); err != nil {

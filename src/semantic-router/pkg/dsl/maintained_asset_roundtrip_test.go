@@ -3,11 +3,11 @@ package dsl
 import (
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -73,9 +73,26 @@ func TestMaintainedBalanceRoutingAssetsStayInSync(t *testing.T) {
 	prog := mustLoadMaintainedBalanceDSLProgram(t, maintainedBalanceAsset("recipe.dsl"))
 	want := mustCompileMaintainedRoutingDSL(t, prog)
 	got := mustLoadMaintainedBalanceRoutingYAML(t, maintainedBalanceAsset("config.yaml"))
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("maintained DSL/YAML examples diverged (-want +got):\n%s", cmp.Diff(want, got))
+	if diff := cmp.Diff(want, got, compareDSLRootLeaves(), cmpopts.IgnoreUnexported(config.Decision{})); diff != "" {
+		t.Fatalf("maintained DSL/YAML examples diverged (-want +got):\n%s", diff)
 	}
+}
+
+// DSL has no unary AND spelling. Single-signal WHEN now emits a bare leaf,
+// while maintained YAML may explicitly retain AND([leaf]). Compare these two
+// root spellings only; budget tests still count the explicit wrapper as a node.
+func compareDSLRootLeaves() cmp.Option {
+	return cmp.FilterPath(func(path cmp.Path) bool {
+		field, ok := path.Last().(cmp.StructField)
+		return ok && field.Name() == "Rules"
+	}, cmp.Transformer("DSLRootLeaf", func(node config.RuleNode) config.RuleNode {
+		if node.Operator == "AND" && len(node.Conditions) == 1 && node.Conditions[0].Type != "" {
+			leaf := node.Conditions[0]
+			leaf.OnUnknown = node.OnUnknown
+			return leaf
+		}
+		return node
+	}))
 }
 
 func TestMaintainedBalanceWarningBudgetStaysBelowCeiling(t *testing.T) {

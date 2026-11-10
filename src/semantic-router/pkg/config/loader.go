@@ -206,6 +206,9 @@ func parseYAMLBytesWithOptions(
 // decodeYAMLBytes builds a config without the checks of finalizeParsedConfig.
 // A non-nil expand rewrites the raw document before it is decoded.
 func decodeYAMLBytes(data []byte, expand func(map[string]interface{})) (*RouterConfig, error) {
+	if _, err := DecisionRuleLimitsFromYAML(data); err != nil {
+		return nil, err
+	}
 	written := data
 	data, formWarnings, err := applyConfigForms(data, configForms)
 	if err != nil {

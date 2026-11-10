@@ -28,6 +28,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    PrivateAttr,
     StrictBool,
     StrictStr,
     field_validator,
@@ -40,6 +41,7 @@ from .config_contract import UnknownPolicy
 from .config_schema import routing_surface_catalog, surface_types
 from .context_bands import normalize_token_count, validate_context_band
 from .durations import parse_duration
+from .decision_rule_limits import validate_decision_rule_limits
 
 RoutingStrategy = Literal["priority", "confidence"]
 DEFAULT_RECIPE_NAME = "default"
@@ -508,6 +510,25 @@ class Rules(BaseModel):
     conditions: List[Condition] = Field(default_factory=list)
     on_unknown: Optional[UnknownPolicy] = None
     on_error: Optional[str] = None
+    _bare_leaf: bool = PrivateAttr(default=False)
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def preserve_authored_shape(cls, data, handler):
+        rules = handler(data)
+        if isinstance(data, dict):
+            rules._bare_leaf = "type" in data and "operator" not in data
+        return rules
+
+    @model_serializer(mode="wrap")
+    def serialize_authored_shape(self, handler):
+        data = handler(self)
+        if self._bare_leaf and data.get("conditions"):
+            leaf = data["conditions"][0]
+            if "on_unknown" in data:
+                leaf["on_unknown"] = data["on_unknown"]
+            return leaf
+        return data
 
     @model_validator(mode="before")
     @classmethod
@@ -2414,6 +2435,12 @@ class UserConfig(BaseModel):
     entrypoints: List[Entrypoint] = Field(default_factory=list)
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_rule_tree_budgets(cls, data):
+        validate_decision_rule_limits(data)
+        return data
 
     @field_validator("global_")
     @classmethod

@@ -9,6 +9,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, validators
 
+from ..decision_rule_limits import validate_decision_rule_limits
 from . import schema_document
 
 _ENV_REFERENCE = re.compile(r"^\$\{[^{}]+\}$")
@@ -59,6 +60,10 @@ def _normalise_scalar(value: Any) -> Any:
 def validate_config_structure(data: dict[str, Any]) -> list[str]:
     """Return stable JSON-Schema errors without applying Router semantics."""
 
+    try:
+        validate_decision_rule_limits(data)
+    except ValueError as error:
+        return [str(error)]
     document = _normalise_scalar(copy.deepcopy(data))
     validator = ConfigSchemaValidator(schema_document())
     errors = sorted(

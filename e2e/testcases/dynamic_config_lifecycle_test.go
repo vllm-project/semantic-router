@@ -139,6 +139,10 @@ func newLifecycleTestDriver(t *testing.T, admissionReject bool) *dynamicConfigLi
 				}
 				ready, reason, message = "False", "ValidationFailed", "decision lifecycle_rejected references unknown model: "+lifecycleMissing
 			}
+			conditions, _, _ := unstructured.NestedSlice(decisions[len(decisions)-1].(map[string]interface{}), "signals", "conditions")
+			if len(conditions) == lifecycleRuleNodes {
+				ready, reason, message = "False", "ValidationFailed", "decision lifecycle_oversized: rules.conditions[7]: node count 9 exceeds max_nodes=8"
+			}
 		}
 		candidate.SetGeneration(route.GetGeneration() + 1)
 		setLifecycleTestStatus(candidate, ready, reason, message)
@@ -171,19 +175,22 @@ func TestLifecycleRecordsAllGenerationsAndRestoresOriginalSpec(t *testing.T) {
 	if err = lifecycle.run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(lifecycle.phases) != 5 {
+	if len(lifecycle.phases) != 6 {
 		t.Fatalf("phases = %+v", lifecycle.phases)
 	}
 	for i, phase := range lifecycle.phases {
 		if phase.Route.Generation != int64(i+1) || phase.Route.ReadyGeneration != int64(i+1) {
 			t.Fatalf("phase %d lost generation evidence: %+v", i, phase)
 		}
-		if i > 0 && i < 4 && len(phase.Responses) != lifecycleSamples {
+		if i > 0 && i < 5 && len(phase.Responses) != lifecycleSamples {
 			t.Fatalf("phase %s did not require every routed sample", phase.Name)
 		}
 	}
 	if phase := lifecycle.phases[2]; phase.Route.Ready != "False" || phase.Responses[0].Decision != "lifecycle_active" {
 		t.Fatalf("rejection did not verify previous routing: %+v", phase)
+	}
+	if phase := lifecycle.phases[3]; phase.Route.Ready != "False" || !strings.Contains(phase.Route.Message, "max_nodes=8") || phase.Responses[0].Decision != "lifecycle_active" {
+		t.Fatalf("oversized rejection did not verify previous routing: %+v", phase)
 	}
 	restored, err := lifecycle.route.Get(context.Background(), lifecycleRouteName, metav1.GetOptions{})
 	if err != nil || !reflect.DeepEqual(restored.Object["spec"], original.Object["spec"]) {

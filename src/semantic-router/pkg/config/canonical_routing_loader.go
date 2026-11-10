@@ -13,13 +13,37 @@ import (
 // cross-reference checks so DSL compile/decompile flows can round-trip
 // fragments.
 func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
+	return ParseRoutingYAMLBytesWithLimits(data, DecisionRuleLimits{})
+}
+
+// ParseRoutingYAMLBytesWithLimits applies an enclosing document's limits to a
+// routing fragment; standalone fragments use ParseRoutingYAMLBytes defaults.
+func ParseRoutingYAMLBytesWithLimits(data []byte, limits DecisionRuleLimits) (*RouterConfig, error) {
+	raw, err := parseRawConfigMap(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
+	}
+	depth, nodes, err := limits.Effective()
+	if err != nil {
+		return nil, err
+	}
+	budgetDocument := map[string]interface{}{
+		"recipes": raw["recipes"],
+		"global": map[string]interface{}{"router": map[string]interface{}{
+			"decision_rule_limits": map[string]interface{}{"max_depth": depth, "max_nodes": nodes},
+		}},
+	}
+	if _, limitsErr := validateRawDecisionRuleLimits(budgetDocument); limitsErr != nil {
+		return nil, limitsErr
+	}
+
 	data, formWarnings, err := applyConfigForms(data, configForms)
 	if err != nil {
 		return nil, err
 	}
-	raw, err := parseRawConfigMap(data)
+	raw, err = parseRawConfigMap(data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
+		return nil, err
 	}
 
 	// Fragments share the canonical routing vocabulary while omitting only
@@ -36,6 +60,7 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 		return nil, err
 	}
 	cfg := DefaultGlobalConfig()
+	cfg.DecisionRuleLimits = limits
 	cfg.RoutingFragmentOnly = true
 	cfg.FormWarnings = formWarnings
 	routing := &CanonicalConfig{Recipes: doc.Recipes, Entrypoints: doc.Entrypoints}

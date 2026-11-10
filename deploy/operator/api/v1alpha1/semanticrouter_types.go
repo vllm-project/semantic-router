@@ -275,6 +275,9 @@ type DecisionModelBinding struct {
 
 // ConfigSpec defines the semantic router configuration
 type ConfigSpec struct {
+	// DecisionRuleLimits bounds each decision's rule tree across all recipes.
+	// +optional
+	DecisionRuleLimits *DecisionRuleLimitsConfig `json:"decision_rule_limits,omitempty" yaml:"decision_rule_limits,omitempty"`
 	// Routing is removed: the router configuration has no top-level routing
 	// block. Its fields are the recipe named default under config.recipes. A
 	// resource that sets it is refused.
@@ -435,6 +438,21 @@ type ConfigSpec struct {
 	// STREAMED or FullDuplexStreamed mode for it to take effect.
 	// +optional
 	StreamedBody *StreamedBodyConfig `json:"streamed_body,omitempty"`
+}
+
+// DecisionRuleLimitsConfig configures positive per-decision budgets. The root
+// has depth one, and operators and leaves both count toward MaxNodes.
+type DecisionRuleLimitsConfig struct {
+	// MaxDepth defaults to 16 when omitted.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=16
+	MaxDepth *int `json:"max_depth,omitempty" yaml:"max_depth,omitempty"`
+	// MaxNodes defaults to 256 when omitted.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=256
+	MaxNodes *int `json:"max_nodes,omitempty" yaml:"max_nodes,omitempty"`
 }
 
 // StreamedBodyConfig defines streamed request body handling.

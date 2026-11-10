@@ -91,6 +91,7 @@ func assertMultiObjectiveRoutingScopesEqual(
 		config.CanonicalConfigFromRouterConfig(original).Recipes,
 		config.CanonicalConfigFromRouterConfig(recompiled).Recipes,
 		cmpopts.IgnoreUnexported(config.Decision{}),
+		compareDSLRootLeaves(),
 		cmp.Comparer(func(left, right config.StructuredPayload) bool {
 			var leftValue, rightValue interface{}
 			if json.Unmarshal(left.Raw, &leftValue) != nil ||

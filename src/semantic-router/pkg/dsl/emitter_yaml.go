@@ -104,6 +104,9 @@ func addKeyValue(mapNode *yaml.Node, key string, value interface{}) {
 //	spec.config        ← canonical routing and supported runtime modules
 //	spec.vllmEndpoints ← model backends converted to K8s-native service references
 func EmitCRD(cfg *config.RouterConfig, name, namespace string) ([]byte, error) {
+	if err := config.ValidateDecisionRuleLimits(cfg); err != nil {
+		return nil, err
+	}
 	if len(cfg.Entrypoints) > 0 {
 		return nil, fmt.Errorf("SemanticRouter CRD does not support entrypoints; use canonical YAML")
 	}
@@ -188,6 +191,7 @@ func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 	}
 
 	// Infrastructure configs that ConfigSpec supports
+	moveKey(flat, configSpec, "decision_rule_limits")
 	moveKey(flat, configSpec, "classifier")
 	moveKey(flat, configSpec, "prompt_guard")
 	moveKey(flat, configSpec, "semantic_cache")
@@ -258,7 +262,11 @@ func moveKey(src, dst map[string]interface{}, key string) {
 // EmitHelm emits a Helm values fragment that only carries the DSL-owned routing
 // surface under the chart's canonical `config:` key.
 func EmitHelm(cfg *config.RouterConfig) ([]byte, error) {
+	if err := config.ValidateDecisionRuleLimits(cfg); err != nil {
+		return nil, err
+	}
 	type helmValuesConfig struct {
+		Global      map[string]interface{}       `yaml:"global,omitempty"`
 		Version     string                       `yaml:"version"`
 		Providers   *routingFragmentProviders    `yaml:"providers,omitempty"`
 		Recipes     []config.CanonicalRecipe     `yaml:"recipes,omitempty"`
@@ -270,6 +278,9 @@ func EmitHelm(cfg *config.RouterConfig) ([]byte, error) {
 		Version:     config.CanonicalConfigVersion,
 		Recipes:     canonical.Recipes,
 		Entrypoints: canonical.Entrypoints,
+	}
+	if cfg.DecisionRuleLimits.MaxDepth != nil || cfg.DecisionRuleLimits.MaxNodes != nil {
+		fragment.Global = map[string]interface{}{"router": map[string]interface{}{"decision_rule_limits": cfg.DecisionRuleLimits}}
 	}
 	if models := modelFactEntries(cfg); len(models) > 0 {
 		fragment.Providers = &routingFragmentProviders{Models: models}
@@ -289,6 +300,16 @@ func EmitHelm(cfg *config.RouterConfig) ([]byte, error) {
 // and entrypoints with the compiled ones and its model facts with the MODEL
 // declarations', and emits a complete canonical config YAML.
 func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, error) {
+	limits, err := config.DecisionRuleLimitsFromYAML(baseYAML)
+	if err != nil {
+		return nil, err
+	}
+	if cfg == nil {
+		return nil, fmt.Errorf("cannot merge a nil routing config")
+	}
+	scoped := *cfg
+	scoped.DecisionRuleLimits = limits
+	cfg = &scoped
 	var base map[string]interface{}
 	if err := yaml.Unmarshal(baseYAML, &base); err != nil {
 		return nil, fmt.Errorf("failed to parse base YAML: %w", err)

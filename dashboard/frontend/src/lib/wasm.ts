@@ -27,11 +27,11 @@ import type {
 declare global {
   interface Window {
     Go: new () => GoInstance
-    signalCompile: (dsl: string) => string
-    signalValidate: (dsl: string) => string
-    signalParseAST: (dsl: string) => string
+    signalCompile: (dsl: string, baseYaml?: string) => string
+    signalValidate: (dsl: string, baseYaml?: string) => string
+    signalParseAST: (dsl: string, baseYaml?: string) => string
     signalDecompile: (yaml: string) => string
-    signalFormat: (dsl: string) => string
+    signalFormat: (dsl: string, baseYaml?: string) => string
   }
 }
 
@@ -304,19 +304,19 @@ export const wasmBridge: WasmBridge = {
 
   init,
 
-  compile(dsl: string): CompileResult {
+  compile(dsl: string, baseYaml?: string): CompileResult {
     assertReady()
-    return parseResult<CompileResult>(window.signalCompile(dsl))
+    return parseResult<CompileResult>(window.signalCompile(dsl, baseYaml))
   },
 
-  validate(dsl: string): ValidateResult {
+  validate(dsl: string, baseYaml?: string): ValidateResult {
     assertReady()
-    return parseResult<ValidateResult>(window.signalValidate(dsl))
+    return parseResult<ValidateResult>(window.signalValidate(dsl, baseYaml))
   },
 
-  parseAST(dsl: string): ParseASTResult {
+  parseAST(dsl: string, baseYaml?: string): ParseASTResult {
     assertReady()
-    return parseResult<ParseASTResult>(window.signalParseAST(dsl))
+    return parseResult<ParseASTResult>(window.signalParseAST(dsl, baseYaml))
   },
 
   decompile(yaml: string): DecompileResult {
@@ -324,8 +324,8 @@ export const wasmBridge: WasmBridge = {
     return parseResult<DecompileResult>(window.signalDecompile(yaml))
   },
 
-  format(dsl: string): FormatResult {
+  format(dsl: string, baseYaml?: string): FormatResult {
     assertReady()
-    return parseResult<FormatResult>(window.signalFormat(dsl))
+    return parseResult<FormatResult>(window.signalFormat(dsl, baseYaml))
   },
 }

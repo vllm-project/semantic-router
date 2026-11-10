@@ -4,19 +4,22 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl/editor"
 	"syscall/js"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl/editor"
 )
 
-type CompileResult = editor.CompileResult
-type DiagnosticJSON = editor.DiagnosticJSON
-type QuickFixJSON = editor.QuickFixJSON
-type ValidateResult = editor.ValidateResult
-type SymbolTableJSON = editor.SymbolTableJSON
-type SymbolInfoJSON = editor.SymbolInfoJSON
-type DecompileResult = editor.DecompileResult
-type FormatResult = editor.FormatResult
-type ParseASTResult = editor.ParseASTResult
+type (
+	CompileResult   = editor.CompileResult
+	DiagnosticJSON  = editor.DiagnosticJSON
+	QuickFixJSON    = editor.QuickFixJSON
+	ValidateResult  = editor.ValidateResult
+	SymbolTableJSON = editor.SymbolTableJSON
+	SymbolInfoJSON  = editor.SymbolInfoJSON
+	DecompileResult = editor.DecompileResult
+	FormatResult    = editor.FormatResult
+	ParseASTResult  = editor.ParseASTResult
+)
 
 func main() {
 	js.Global().Set("signalCompile", js.FuncOf(compile))
@@ -33,14 +36,14 @@ func compile(_ js.Value, args []js.Value) interface{} {
 	if len(args) < 1 {
 		return marshalJSON(CompileResult{Error: "signalCompile requires 1 argument: dslSource"})
 	}
-	return marshalJSON(editor.Compile(args[0].String()))
+	return marshalJSON(editor.CompileWithBase(args[0].String(), optionalBaseYAML(args)))
 }
 
 func validate(_ js.Value, args []js.Value) interface{} {
 	if len(args) < 1 {
 		return marshalJSON(ValidateResult{Error: "signalValidate requires 1 argument: dslSource"})
 	}
-	return marshalJSON(editor.Validate(args[0].String()))
+	return marshalJSON(editor.ValidateWithBase(args[0].String(), optionalBaseYAML(args)))
 }
 
 func decompile(_ js.Value, args []js.Value) interface{} {
@@ -54,14 +57,21 @@ func format(_ js.Value, args []js.Value) interface{} {
 	if len(args) < 1 {
 		return marshalJSON(FormatResult{Error: "signalFormat requires 1 argument: dslSource"})
 	}
-	return marshalJSON(editor.Format(args[0].String()))
+	return marshalJSON(editor.FormatWithBase(args[0].String(), optionalBaseYAML(args)))
 }
 
 func parseAST(_ js.Value, args []js.Value) interface{} {
 	if len(args) < 1 {
 		return marshalJSON(ParseASTResult{Error: "signalParseAST requires 1 argument: dslSource"})
 	}
-	return marshalJSON(editor.Parse(args[0].String()))
+	return marshalJSON(editor.ParseWithBase(args[0].String(), optionalBaseYAML(args)))
+}
+
+func optionalBaseYAML(args []js.Value) string {
+	if len(args) > 1 && args[1].Type() == js.TypeString {
+		return args[1].String()
+	}
+	return ""
 }
 
 func marshalJSON(v interface{}) string {
