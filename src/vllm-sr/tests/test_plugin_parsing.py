@@ -96,7 +96,6 @@ decisions:
           blocked_params: ["logprobs"]
           max_tokens_limit: 256
           max_n: 1
-          strip_unknown: true
       - type: "response_guard"
         configuration:
           rules:

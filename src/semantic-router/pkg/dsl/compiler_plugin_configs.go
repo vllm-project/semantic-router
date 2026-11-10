@@ -237,8 +237,5 @@ func (c *Compiler) compileRequestParamsPluginConfig(fields map[string]Value) con
 	if v, ok := getIntField(fields, "max_n"); ok {
 		cfg.MaxN = &v
 	}
-	if v, ok := getBoolField(fields, "strip_unknown"); ok {
-		cfg.StripUnknown = v
-	}
 	return cfg
 }

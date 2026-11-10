@@ -29575,9 +29575,6 @@
                       "max_tokens_limit": {
                         "nullable": true,
                         "type": "integer"
-                      },
-                      "strip_unknown": {
-                        "type": "boolean"
                       }
                     },
                     "additionalProperties": false

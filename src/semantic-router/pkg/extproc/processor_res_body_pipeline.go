@@ -174,8 +174,9 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 		return &responsePolicyPlan{blocked: r.encodeImmediateResponseForClient(refused, ctx), refusal: ctx.ImmediateProtocolError}
 	}
 	if rule := ctx.ResponseGuard.blocking(); rule != nil {
+		ctx.ResponsePath = headers.ResponsePathBlocked
 		return &responsePolicyPlan{
-			blocked: r.createErrorResponse(403, responseGuardBlockMessage(rule)),
+			blocked: r.createErrorResponseOnPath(403, responseGuardBlockMessage(rule), ctx.ResponsePath),
 			refusal: responseGuardRefusal(rule),
 			commitFunc: func() {
 				r.recordRouterReplayResponseGuard(ctx)

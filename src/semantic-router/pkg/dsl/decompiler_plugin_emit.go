@@ -122,9 +122,6 @@ func emitRequestParamsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 	if cfg.MaxN != nil {
 		fmt.Fprintf(sb, "    max_n: %d\n", *cfg.MaxN)
 	}
-	if cfg.StripUnknown {
-		fmt.Fprintf(sb, "    strip_unknown: true\n")
-	}
 }
 
 func emitHeaderMutationPluginConfig(sb *strings.Builder, p *config.DecisionPlugin) {

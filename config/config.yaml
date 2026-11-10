@@ -1386,7 +1386,6 @@ recipes:
               default_max_tokens: 4096
               max_tokens_limit: 8192
               max_n: 4
-              strip_unknown: false
 
       - name: support_selection_route
         description: Embedding-driven support route that escalates only when the derived projection band says the request is not a simple support query; the decision model picks the model by its description.
