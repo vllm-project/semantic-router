@@ -1,609 +1,220 @@
-.stage {
-  --terrain-model-gap: 2.5rem;
+.masthead {
   position: relative;
   isolation: isolate;
-  display: grid;
-  grid-template-rows: minmax(36rem, 1fr) auto;
-  min-height: calc(100vh - var(--site-header-height));
-  min-height: calc(100svh - var(--site-header-height));
-  overflow: hidden;
-  background: var(--site-bg);
-  color: var(--site-text);
-}
-
-.heroBackdrop {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.heroGlow {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(2px);
-  opacity: 0.9;
-  will-change: transform, opacity;
-  animation: hero-glow-drift 18s var(--site-ease-out) infinite alternate;
-}
-
-.heroGlow[data-glow='a'] {
-  top: -18%;
-  left: calc(50% - min(36vw, 23rem));
-  width: min(72vw, 46rem);
-  height: min(40vw, 22rem);
-  background: radial-gradient(
-    ellipse at center,
-    color-mix(in srgb, var(--site-brand-blue) 14%, transparent) 0%,
-    color-mix(in srgb, var(--site-brand-blue) 5%, transparent) 42%,
-    transparent 72%
-  );
-  animation-duration: 22s;
-}
-
-.heroGlow[data-glow='b'] {
-  top: 28%;
-  left: -8%;
-  width: min(52vw, 30rem);
-  height: min(52vw, 30rem);
-  background: radial-gradient(
-    circle at center,
-    color-mix(in srgb, var(--site-brand-blue-deep) 18%, transparent) 0%,
-    transparent 68%
-  );
-  animation-duration: 26s;
-  animation-delay: -4s;
-}
-
-.heroGlow[data-glow='c'] {
-  right: -6%;
-  bottom: 8%;
-  width: min(48vw, 26rem);
-  height: min(48vw, 26rem);
-  background: radial-gradient(
-    circle at center,
-    color-mix(in srgb, var(--site-brand-blue-light) 16%, transparent) 0%,
-    transparent 70%
-  );
-  animation-duration: 20s;
-  animation-delay: -9s;
-}
-
-.heroGrid {
-  position: absolute;
-  inset: 0;
-  opacity: 0.45;
-  background-image:
-    linear-gradient(
-      color-mix(in srgb, var(--site-border) 70%, transparent) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--site-border) 70%, transparent) 1px,
-      transparent 1px
-    );
-  background-size: 4.5rem 4.5rem;
-  mask-image: radial-gradient(ellipse 70% 55% at 50% 32%, #000 18%, transparent 78%);
-  -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 32%, #000 18%, transparent 78%);
-}
-
-@keyframes hero-glow-drift {
-  from {
-    transform: translate3d(0, 0, 0) scale(1);
-    opacity: 0.78;
-  }
-
-  to {
-    transform: translate3d(1.5%, -2%, 0) scale(1.06);
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .heroGlow {
-    animation: none;
-  }
-}
-
-.terrain {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  overflow: hidden;
-  background: var(--site-bg);
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  pointer-events: none;
-  user-select: none;
-}
-
-.terrainCanvas {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  cursor: grab;
-  opacity: 0.74;
-  pointer-events: auto;
-  touch-action: pan-y;
-}
-
-.terrainCanvas[data-dragging='true'] {
-  cursor: grabbing;
-}
-
-.terrainHud,
-.terrainLegend {
-  position: absolute;
-  z-index: 1;
-  pointer-events: none;
-  text-transform: uppercase;
-}
-
-.terrainHud {
-  top: 1.5rem;
-  left: 1.5rem;
-  display: grid;
-  gap: 0.45rem;
-  color: var(--site-muted);
-  font-size: 0.625rem;
-  letter-spacing: 0.1em;
-}
-
-.terrainHud div {
-  display: grid;
-  grid-template-columns: 5.5rem auto;
-  gap: 1rem;
-}
-
-.terrainHud span {
-  color: var(--site-text);
-}
-
-.terrainLegend {
-  right: 1.5rem;
-  bottom: 7.8rem;
-  display: grid;
-  gap: 0.35rem;
-}
-
-.terrainLegendItem {
   display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  color: var(--site-muted);
-  font-size: 0.56rem;
-  letter-spacing: 0.05em;
+  flex-direction: column;
+  min-height: max(660px, 100vh);
+  min-height: max(660px, 100svh);
+  overflow: hidden;
+  background: var(--paper);
 }
 
-.terrainLegendItem > span {
-  width: 0.5rem;
-  height: 0.5rem;
-}
-
-.terrainLegendItem strong {
-  color: var(--site-muted-bright);
-  font-weight: 500;
-}
-
-.terrainCrosshair {
-  position: absolute;
-  top: 48%;
-  left: 70%;
-  width: 2.5rem;
-  height: 2.5rem;
-  transform: translate(-50%, -50%);
-}
-
-.terrainCrosshair::before,
-.terrainCrosshair::after {
+/* Porcelain light with three glows at the field's height; at night the same glows over ink. */
+.masthead::before {
   content: '';
   position: absolute;
-  background: var(--site-muted);
+  z-index: -2;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 50% at 50% 0%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(24% 16% at 50% 80%, rgba(214, 172, 228, 0.24), rgba(214, 172, 228, 0) 80%),
+    radial-gradient(36% 20% at 18% 74%, rgba(255, 196, 168, 0.26), rgba(255, 196, 168, 0) 78%),
+    radial-gradient(40% 22% at 80% 72%, rgba(178, 194, 246, 0.3), rgba(178, 194, 246, 0) 78%),
+    linear-gradient(180deg, #fcfbf8 0%, #faf8f3 50%, #f8f4ec 82%, var(--paper) 100%);
 }
 
-.terrainCrosshair::before {
-  top: 50%;
-  left: 0;
+:global([data-theme='dark']) .masthead::before {
+  background:
+    radial-gradient(60% 50% at 50% 0%, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 72%),
+    radial-gradient(24% 16% at 50% 80%, rgba(162, 131, 240, 0.13), rgba(162, 131, 240, 0) 80%),
+    radial-gradient(36% 20% at 18% 74%, rgba(239, 86, 48, 0.12), rgba(239, 86, 48, 0) 78%),
+    radial-gradient(40% 22% at 80% 72%, rgba(91, 130, 224, 0.15), rgba(91, 130, 224, 0) 78%),
+    linear-gradient(180deg, #171a21 0%, #15171d 50%, #13151a 82%, var(--paper) 100%);
+}
+
+/* The canvas is sized in whole blocks by field.ts and may overflow the field; it must not be squeezed. */
+.field {
+  position: absolute;
+  z-index: -1;
   right: 0;
-  height: 1px;
-}
-
-.terrainCrosshair::after {
-  top: 0;
   bottom: 0;
-  left: 50%;
-  width: 1px;
-}
-
-.hero {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  min-height: 0;
-  align-items: center;
-  padding: clamp(2rem, 5vh, 3.5rem) 0 clamp(1rem, 2.5vh, 1.75rem);
+  left: 0;
+  height: 60svh;
+  overflow: hidden;
   pointer-events: none;
 }
 
-.heroInner {
-  display: grid;
-  width: min(100%, 84rem);
-  gap: clamp(1.5rem, 3.2vh, 2.25rem);
-  margin: 0 auto;
+.field canvas {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  max-width: none;
+  visibility: hidden;
+  image-rendering: pixelated;
 }
 
-.intro {
-  position: relative;
-  display: grid;
-  width: 100%;
-  justify-items: start;
-  gap: 1.3rem;
-  text-align: left;
-  pointer-events: auto;
+.field[data-state='on'] canvas {
+  visibility: visible;
 }
 
-.introCopy {
-  display: grid;
-  max-width: 62rem;
-  gap: 1.15rem;
-  min-width: 0;
+.inner {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: min(100% - 2 * var(--gut), var(--wrap));
+  margin-inline: auto;
+  padding: calc(var(--site-header-height) + clamp(20px, 3.5vh, 44px)) 0 clamp(220px, 34svh, 380px);
+  text-align: center;
 }
 
-.stage .title {
+.masthead .title {
   margin: 0;
-  color: var(--site-text);
-  font-size: clamp(2.6rem, 5.2vw, 4.75rem);
-  font-weight: 560;
-  letter-spacing: -0.045em;
-  line-height: 1.08;
+  color: var(--ink);
+  font: 500 clamp(60px, 8.6vw, 132px) / 0.92 var(--serif);
+  letter-spacing: -0.034em;
   text-wrap: balance;
 }
 
-.stage .title .accent {
+/* The accent words in italic, from the fast side's ember into the slow side's indigo. */
+.accent {
   display: block;
-  color: var(--site-accent-strong);
-  font-weight: inherit;
+  padding-right: 0.04em;
+  color: #7a3a5e;
+  font-style: italic;
 }
 
-.dek {
-  max-width: 44rem;
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-size: clamp(1rem, 1.3vw, 1.125rem);
-  line-height: 1.5;
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .accent {
+    background: var(--duo-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
 }
 
-.dek strong {
-  color: var(--site-text);
-  font-weight: 700;
+.masthead .slogan {
+  max-width: 30em;
+  margin: clamp(22px, 3.4vh, 34px) 0 0;
+  color: #2a2f3a;
+  font: 500 clamp(24px, 2.5vw, 36px) / 1.2 var(--serif);
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+
+:global([data-theme='dark']) .masthead .slogan {
+  color: var(--ink-2);
+}
+
+.slogan em {
+  color: var(--ember-text);
+  font-style: italic;
 }
 
 .actions {
-  display: grid;
-  width: min(100%, 24.5rem);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.actions .primaryCta,
-.actions .secondaryCta {
-  min-height: 3.1rem;
-  gap: 0.55rem;
-  padding-inline: 0.85rem;
-  border-radius: 0.7rem;
-  font-size: 0.88rem;
-  font-weight: 650;
-  letter-spacing: 0;
-  text-transform: none;
-  white-space: nowrap;
-}
-
-/* Match the shared CTA and hover palette in both color modes. */
-.actions .primaryCta {
-  border-color: var(--site-cta-border);
-  background: var(--site-cta-bg);
-  color: var(--site-cta-text);
-  box-shadow: var(--site-cta-shadow);
-}
-
-.actions .primaryCta:hover,
-.actions .primaryCta:focus-visible {
-  border-color: var(--site-cta-border-hover);
-  background: var(--site-cta-bg-hover);
-  color: var(--site-cta-text);
-}
-
-.film {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  margin: 0;
-  overflow: hidden;
-  border: 1px solid var(--site-border-strong);
-  border-radius: 1.25rem;
-  background: #04060c;
-  box-shadow:
-    var(--site-shadow-raised),
-    0 2.5rem 7rem -2.5rem rgba(48, 162, 255, 0.32);
-  pointer-events: auto;
-}
-
-.filmVideo {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  background: #04060c;
-}
-
-/* The poster's title sits in the upper half, so the play control stays low. */
-.filmPlay {
-  position: absolute;
-  inset: 0;
   display: flex;
-  align-items: flex-end;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  padding: 0 0 7%;
-  border: 0;
-  border-radius: inherit;
-  background: transparent;
-  color: #fff;
-  cursor: pointer;
+  gap: 14px;
+  margin-top: clamp(30px, 4.6vh, 44px);
 }
 
-.filmPlayPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.85rem;
-  padding: 0.55rem 1.3rem 0.55rem 0.55rem;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 999px;
-  background: rgba(8, 12, 22, 0.42);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  font-size: 0.95rem;
-  font-weight: 620;
-  letter-spacing: 0.01em;
-  transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease;
+.masthead .quiet {
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 13.5px;
 }
 
-.filmPlayIcon {
-  display: grid;
-  width: 2.6rem;
-  height: 2.6rem;
-  place-items: center;
-  border-radius: 50%;
-  background: #fff;
-  color: #04060c;
+.quiet a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: var(--hair-2);
+  text-underline-offset: 0.2em;
+  transition: color 0.2s, text-decoration-color 0.2s;
 }
 
-.filmPlayIcon svg {
-  width: 1.2rem;
-  height: 1.2rem;
-  margin-left: 0.12rem;
-  fill: currentColor;
+.quiet a:hover,
+.quiet a:focus-visible {
+  color: var(--ink);
+  text-decoration-color: var(--ember);
 }
 
-.filmDuration {
-  color: rgba(255, 255, 255, 0.62);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.8rem;
-  font-weight: 500;
+.duration {
+  font-family: var(--mono);
+  font-size: 12.5px;
 }
 
-.filmPlay:hover .filmPlayPill,
-.filmPlay:focus-visible .filmPlayPill {
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(8, 12, 22, 0.62);
-  transform: scale(1.04);
+/* The title is there from the first paint; the lines under it rise. */
+.inner > :not(.title) {
+  animation: rise 1.1s var(--ease) both;
 }
 
-.filmPlay:focus-visible {
-  outline: 2px solid var(--site-accent-strong);
-  outline-offset: -4px;
+.inner > .slogan {
+  animation-delay: 0.15s;
 }
 
-.modelBand {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  min-height: 5.75rem;
-  align-items: center;
-  padding: 1.05rem 0 1.2rem;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--site-bg) 16%, transparent), color-mix(in srgb, var(--site-bg) 94%, transparent) 38%);
+.inner > .actions {
+  animation-delay: 0.25s;
 }
 
-.modelViewport {
-  overflow: hidden;
-  width: 100%;
-  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+.inner > .quiet {
+  animation-delay: 0.35s;
 }
 
-.modelTrack,
-.modelSequence {
-  display: flex;
-  width: max-content;
-  min-width: max-content;
-  align-items: center;
-  gap: var(--terrain-model-gap);
-}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
 
-.modelTrack {
-  animation: terrain-model-scroll 105s linear infinite;
-  will-change: transform;
-}
-
-.modelBand:hover .modelTrack {
-  animation-play-state: paused;
-}
-
-.model {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0.85rem;
-  color: var(--site-muted);
-  white-space: nowrap;
-}
-
-.model svg {
-  width: 2.4rem;
-  height: 2.4rem;
-  opacity: 0.9;
-}
-
-.model strong {
-  color: var(--site-muted-bright);
-  font-size: 1.1rem;
-  font-weight: 590;
-  letter-spacing: -0.01em;
-}
-
-@keyframes terrain-model-scroll {
   to {
-    transform: translate3d(calc(-50% - (var(--terrain-model-gap) / 2)), 0, 0);
+    opacity: 1;
+    transform: none;
   }
 }
 
-@media (max-width: 996px) {
-  .stage {
-    grid-template-rows: minmax(32rem, 1fr) auto;
-  }
-
-  .terrainLegend {
-    display: none;
-  }
-
-  .terrainCrosshair {
-    left: 76%;
-  }
-
-  .hero {
-    padding: 2.25rem 0 2rem;
-  }
+:global(html[lang='zh-Hans']) .masthead .title {
+  font-size: clamp(48px, 7vw, 108px);
+  letter-spacing: 0;
+  line-height: 1.1;
 }
 
-@media (max-width: 640px) {
-  .stage {
-    --terrain-model-gap: 1.6rem;
-    grid-template-rows: auto auto;
-    min-height: 0;
-  }
-
-  .terrainCanvas {
-    opacity: 0.58;
-    pointer-events: none;
-  }
-
-  .terrainHud {
-    top: 1rem;
-    left: 1rem;
-    opacity: 0.75;
-  }
-
-  .terrainHud div:nth-child(2),
-  .terrainHud div:nth-child(3) {
-    display: none;
-  }
-
-  .terrainCrosshair {
-    top: 22%;
-    left: 82%;
-  }
-
-  .hero {
-    padding: 1.75rem 0 0.75rem;
-  }
-
-  .stage .title {
-    font-size: clamp(2.4rem, 8.8vw, 3.5rem);
-  }
-
-  .actions .primaryCta,
-  .actions .secondaryCta {
-    font-size: 0.83rem;
-    padding-inline: 0.55rem;
-  }
-
-  .film {
-    border-radius: 0.9rem;
-  }
-
-  .filmPlay {
-    padding-bottom: 5%;
-  }
-
-  .filmPlayPill {
-    gap: 0.6rem;
-    padding: 0.35rem 0.95rem 0.35rem 0.35rem;
-    font-size: 0.82rem;
-  }
-
-  .filmPlayIcon {
-    width: 2rem;
-    height: 2rem;
-  }
-
-  .filmPlayIcon svg {
-    width: 0.95rem;
-    height: 0.95rem;
-  }
-
-  .modelBand {
-    min-height: 5.2rem;
-    padding: 1rem 0 1.1rem;
-  }
-
-  .model svg {
-    width: 2.1rem;
-    height: 2.1rem;
-  }
-
-  .model strong {
-    font-size: 0.98rem;
-  }
+:global(html[lang='zh-Hans']) .masthead .slogan {
+  letter-spacing: 0;
 }
 
-@media (max-height: 800px) and (min-width: 641px) {
-  .stage {
-    grid-template-rows: minmax(29rem, 1fr) auto;
+@media (max-width: 600px) {
+  .inner {
+    padding: calc(var(--site-header-height) + 36px) 0 clamp(190px, 28svh, 240px);
   }
 
-  .hero {
-    padding-top: 1.75rem;
-    padding-bottom: 1.5rem;
+  .masthead .title {
+    font-size: clamp(46px, 13.5vw, 72px);
+    line-height: 0.95;
   }
 
-  .modelBand {
-    min-height: 4.8rem;
-    padding: 0.8rem 0;
+  :global(html[lang='zh-Hans']) .masthead .title {
+    font-size: clamp(38px, 11vw, 56px);
   }
 
-  .model svg {
-    width: 2rem;
-    height: 2rem;
+  .masthead .slogan {
+    font-size: clamp(21px, 6vw, 26px);
   }
 
-  .model strong {
-    font-size: 0.95rem;
+  .field {
+    height: 50svh;
   }
-}
 
-@media (max-width: 380px) {
   .actions {
-    width: 100%;
-    grid-template-columns: 1fr;
+    flex-direction: column;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .modelTrack {
+  .inner > * {
     animation: none;
   }
 }

@@ -27,8 +27,6 @@ The `vllm-sr-wordmark-dark` and `vllm-sr-wordmark-light` PNG/SVG pairs each cont
 the same artwork, including the original yellow and blue V. Both are
 2160 × 690 pixels.
 
-`atmosphere.webp` is the generated background plate.
-
 ## README logo wall
 
 The repository README shows `ecosystem-light-theme.png` on GitHub's light theme

@@ -732,6 +732,12 @@ const config: Config = {
         href: 'https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=JetBrains+Mono:wght@400;500;600&display=swap',
       },
     },
+    // The homepage's Cormorant faces. Not in the homepage's <Head>: it re-inserts its tags on hydration, and the faces
+    // would vanish for a few frames. The files load only where the family is used.
+    {
+      tagName: 'link',
+      attributes: { rel: 'stylesheet', href: '/fonts/cormorant.css' },
+    },
     {
       tagName: 'script',
       attributes: { type: 'application/ld+json' },
