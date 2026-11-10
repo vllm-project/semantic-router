@@ -291,3 +291,96 @@ func TestADecisionTurnsOffAnInheritedResponseGuard(t *testing.T) {
 		}
 	}
 }
+
+// cachedDefaultsConfig caches the answers of requests that match no decision
+// and sets the system prompt they run, both in global.plugins.
+func cachedDefaultsConfig(prompt string) string {
+	return fmt.Sprintf(`
+version: v0.5
+providers:
+  defaults:
+    model: model-a
+  models:
+    - name: model-a
+      provider_model_id: model-a-instruct
+      api_format: openai
+      backend_refs:
+        - name: a-primary
+          endpoint: 127.0.0.1:18000
+          protocol: http
+          provider: vllm
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: routed
+          operator: OR
+          keywords: ["__routed__"]
+    decisions:
+      - name: routed
+        priority: 10
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: routed
+        modelRefs:
+          - model: model-a
+            use_reasoning: false
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
+global:
+  stores:
+    response_cache:
+      backend_type: memory
+      max_entries: 100
+      ttl_seconds: 3600
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        mode: exact
+        scope: global
+    - type: system_prompt
+      configuration:
+        system_prompt: %q
+`, prompt)
+}
+
+// A request that matches no decision is cached under the plugins it ran: once
+// the global system prompt changes, the same request reaches the model again
+// instead of receiving the answer the old prompt produced.
+func TestTheResponseCacheKeysARequestByTheDefaultPluginsItRan(t *testing.T) {
+	english, err := config.ParseYAMLBytes([]byte(cachedDefaultsConfig("Answer in English.")))
+	if err != nil {
+		t.Fatalf("parse config: %v", err)
+	}
+	korean, err := config.ParseYAMLBytes([]byte(cachedDefaultsConfig("Answer in Korean.")))
+	if err != nil {
+		t.Fatalf("parse config: %v", err)
+	}
+	for mode, engineFor := range looperAdapters {
+		t.Run(mode, func(t *testing.T) {
+			before, after := newParityRouter(t, english), newParityRouter(t, korean)
+			// One store across the configuration change, as a shared backend keeps it.
+			after.Cache, after.ResponseCache = before.Cache, before.ResponseCache
+			request := guardCacheRequest(llmprotocol.OpenAIChatV1, "how fast is light ("+mode+")", false)
+			assertGuardDelivered(t, answerGuardedRequest(t, engineFor(before), request, false, false), benignAnswer)
+			assertGuardDelivered(t, answerGuardedRequest(t, engineFor(before), request, false, true), benignAnswer)
+
+			plan, err := engineFor(after).Plan(t.Context(), request())
+			if err != nil {
+				t.Fatalf("plan: %v", err)
+			}
+			t.Cleanup(func() { plan.Finish(nil) })
+			if plan.Call == nil {
+				t.Fatalf("the answer under the old system prompt was served: %d %s", plan.Immediate.Status, drainResponse(t, plan.Immediate))
+			}
+			if !strings.Contains(string(plan.Call.Request.Body), "Answer in Korean.") {
+				t.Fatalf("the request did not run the new system prompt: %s", plan.Call.Request.Body)
+			}
+		})
+	}
+}
