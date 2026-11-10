@@ -206,6 +206,12 @@ When a worker or the final synthesizer returns `tool_calls`, Flow:
 5. continues that agent's tool loop until it produces content, then resumes the
    remaining workflow.
 
+Each response's `usage` counts the model calls made for that request only, so a
+resumed turn does not report the earlier turns' calls again. A resumed
+workflow's final answer follows `output_contract_spec`, and under
+`on_error: skip` a failed final synthesis serves a worker's answer, as on a
+first turn.
+
 Each worker has its own message history. A later step's `access_list`
 exposes only prior step or agent outputs, never another worker's raw tool calls
 or tool-result trajectory:

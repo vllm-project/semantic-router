@@ -624,7 +624,7 @@ func (l *FusionLooper) formatFusionStreamingResponse(
 		err  error
 	)
 	if finalResp.HasToolCalls {
-		body, err = buildFusionStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw, backendFinishReason(finalResp))
+		body, err = buildStreamingToolCallSSE(id, timestamp, finalResp)
 		if err != nil {
 			return nil, err
 		}

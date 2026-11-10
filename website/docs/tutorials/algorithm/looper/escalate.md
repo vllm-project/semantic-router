@@ -103,7 +103,11 @@ scores only the generated tool-call arguments instead of every token;
 
 `systemone: {gte, deployment, timeout_ms}` asks the decision model, or the
 named System One deployment, its `answer_check` preset question about the
-request and the candidate's answer. `refusal: false` asks the `refusal`
+request and the candidate's answer. The request is the user's own words in the
+last user turn that has some: its string content or its joined text parts,
+without `<system-reminder>` blocks. A turn of reminders only leaves the request
+to an earlier turn, and when no turn has words of its own, the last turn's
+reminders are the request. `refusal: false` asks the `refusal`
 preset question; `refusal: true` is rejected, because it would accept only
 refusals. Both checks are one decision-model call per judged answer; the call
 counts against the executor's `deadline` but not its `max_calls`. An answer

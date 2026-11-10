@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
+	"regexp"
 	"sort"
 	"strings"
 	"text/template"
@@ -669,43 +670,58 @@ func (l *ReMoMLooper) sortAndShuffle(cfg *config.ReMoMAlgorithmConfig, responses
 
 // Helper functions
 
-// extractOriginalContent extracts the last user message content
+// systemReminderBlock is the client context coding agents such as Claude Code
+// put next to the user's own words.
+var systemReminderBlock = regexp.MustCompile(`(?s)<system-reminder>.*?</system-reminder>`)
+
+// extractOriginalContent returns the question every Looper stage asks about:
+// the user's own words in the last user turn that has some, from its string
+// content or its joined text parts, without <system-reminder> blocks. A turn
+// of reminders only, such as a Claude Code tool-result turn, leaves the
+// question to an earlier turn. When no turn has words of its own, the last
+// turn's reminders are the question.
 func extractOriginalContent(req *openai.ChatCompletionNewParams) string {
 	if req == nil {
 		return ""
 	}
-
-	// Marshal to JSON and parse to extract messages
-	data, err := json.Marshal(req)
-	if err != nil {
-		return ""
-	}
-
-	var reqMap map[string]interface{}
-	if err := json.Unmarshal(data, &reqMap); err != nil {
-		return ""
-	}
-
-	messages, ok := reqMap["messages"].([]interface{})
-	if !ok || len(messages) == 0 {
-		return ""
-	}
-
-	// Find last user message
-	for i := len(messages) - 1; i >= 0; i-- {
-		msg, ok := messages[i].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		role, _ := msg["role"].(string)
-		if role == "user" {
-			if content, ok := msg["content"].(string); ok {
-				return content
+	reminders := ""
+	for i := len(req.Messages) - 1; i >= 0; i-- {
+		if user := req.Messages[i].OfUser; user != nil {
+			words, text := userTurnText(user.Content)
+			if words != "" {
+				return words
+			}
+			if reminders == "" {
+				reminders = text
 			}
 		}
 	}
+	return reminders
+}
 
-	return ""
+// userTurnText returns a user turn's text, string content or text parts
+// joined, and the words left once its <system-reminder> blocks are removed.
+// Reminders are removed from the joined text, so one split across parts goes
+// too, and words that are only whitespace are none.
+func userTurnText(content openai.ChatCompletionUserMessageParamContentUnion) (words, text string) {
+	var texts []string
+	if content.OfString.Value != "" {
+		texts = append(texts, content.OfString.Value)
+	}
+	for _, part := range content.OfArrayOfContentParts {
+		if part.OfText != nil && part.OfText.Text != "" {
+			texts = append(texts, part.OfText.Text)
+		}
+	}
+	text = strings.Join(texts, "\n")
+	words = text
+	if systemReminderBlock.MatchString(text) {
+		words = strings.TrimSpace(systemReminderBlock.ReplaceAllString(text, ""))
+	}
+	if strings.TrimSpace(words) == "" {
+		words = ""
+	}
+	return words, text
 }
 
 // cloneMessages creates a deep copy of messages

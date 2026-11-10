@@ -722,6 +722,7 @@ func (l *WorkflowsLooper) resumeWorkflowToolCallWithState(
 		return nil, false, false, fmt.Errorf("workflow tool state missing")
 	}
 	state := claim.State
+	clearReportedUsage(state)
 	cfg, err := resolvedWorkflowPlannerForResume(cfg, state, workerModels)
 	if err != nil {
 		return nil, false, false, err
@@ -736,6 +737,9 @@ func (l *WorkflowsLooper) resumeWorkflowToolCallWithState(
 		return nil, false, false, err
 	}
 	resp, agentReq, err := l.callWorkflowAgentAfterTool(ctx, req, cfg, state, toolMessages)
+	if err != nil && workflowToolPhase(state) == workflowToolPhaseFinal {
+		resp, err = workflowFinalOrFallback(req, cfg, state.StepResults, nil, err)
+	}
 	if err != nil {
 		return nil, false, false, err
 	}
