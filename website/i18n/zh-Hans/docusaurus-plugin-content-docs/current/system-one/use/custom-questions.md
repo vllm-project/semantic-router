@@ -101,7 +101,7 @@ recipes:
 
 ## 4. 依据答案匹配 {#4-match-on-the-answer}
 
-- `labels` 指定 `choice`、`set` 或 `span` 的哪些选项匹配该规则；条件仍可用 `label` 指定任意选项。
+- `labels` 指定 `choice`、`set` 或 `span` 的哪些选项匹配该规则；`choice` 上的条件仍可用 `label` 指定任意选项，`set` 或 `span` 上的条件只能指定计入的标签。
 - `predicate` 是答案必须满足的界限：`noul` 是 P(是)，`score` 是期望等级，其他是某个标签的概率。没有它时，`noul` 在 0.5 匹配，`choice` 匹配其选中的选项。
 - 条件可以加上自己的 `predicate`，因此两个决策可以用不同强度读取同一条规则。
 

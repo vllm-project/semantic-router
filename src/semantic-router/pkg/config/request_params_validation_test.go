@@ -43,7 +43,7 @@ func TestRequestParamsDefaultValidationAndRoundTrip(t *testing.T) {
 	if again.Decisions[0].GetRequestParamsConfig().DefaultMaxTokens.Value != 4096 {
 		t.Fatal("canonical export lost output default")
 	}
-	legacy, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, "strip_unknown: true")))
+	legacy, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, "max_n: 1")))
 	if err != nil {
 		t.Fatal(err)
 	}

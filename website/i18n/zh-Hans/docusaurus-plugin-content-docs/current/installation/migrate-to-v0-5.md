@@ -150,15 +150,17 @@ recipes:
 | `signals.decision`、`algorithm.type: decision` | `systemone`（加载时给出警告） |
 | `domains[].mmlu_categories` | `domains[].labels` |
 | 自行声明领域的 domain 条件 | 为条件指定的每个领域各写一条 `domains` 规则 |
-| `jailbreak` 的 `threshold`、`direction`、`include_history` | `predicate`、`stage`、`input.history` |
+| 没有 `labels` 或 `mmlu_categories`、名称是其他大小写形式领域的 `domains` 规则（如 `Math`） | 改为小写的领域名，规则以及引用它的每个条件、分数输入和分区一并修改 |
+| 没有 `labels` 或 `mmlu_categories`、名称又不是领域的 `domains` 规则 | 删除：分类器只报告领域，这条规则从未匹配过；需要它的决策、它在 `OR` 中的那一项和读取它的分数输入也一并删除（migrate 会逐一说明）。投影分区引用的规则保留并写成 `labels: [other]`，因为分区的默认成员曾匹配它。加载时会提示近似领域的名称（如 `maths`）只要仍有条件读取它，就保留该错误 |
+| `jailbreak` 的 `threshold`、`direction`、`include_history` | `predicate`、`stage`、`input.history`；`method: contrastive` 的阈值界定的是相似度之差而不是概率，migrate 会提示重新拟合 |
 | `jailbreak` 的 `method`、`jailbreak_patterns`、`benign_patterns` | 已移除：决策模型直接读取请求。需要确定性的硬拦截时，把这些模式写成一条 [`keywords`](../tutorials/signal/heuristic/keyword) 规则，并由一个拦截决策读取它 |
 | `on_error: block` 下的 `jailbreak` 和 `pii` 规则 | 规则上的 `on_unknown: match` |
 | `safety` 的 `threshold`、`labels`、`unsafe_labels`、`model` | `predicate`；`labels` 指定[危害类别](../system-one/reference/presets#harm-categories)；`deployment` |
 | `safety` 的 `hazard` | 它的 `categories` 对应的[危害类别](../system-one/reference/presets#harm-categories)写进规则的 `labels`，`hazard.threshold` 成为 `predicate`；不安全判定的 `threshold` 没有对应项，类别都对应不上的规则保留不安全判定（migrate 会说明这两点） |
 | `pii` 的 `threshold`、`pii_types_allowed`、`include_history`、`source: tool_result` | `predicate`、`ignore_labels`、`input.history`、`input.tool_results` |
 | 名为 `no_fact_check_needed` 且没有 labels 的 `fact_check` 规则 | `labels: [NO_FACT_CHECK_NEEDED]` 加一个 predicate |
-| 以名称决定选项的 `user_feedbacks` 和 `modality` 规则 | 把选项写进 `labels` |
-| `reasks`、`topic_continuity` | 带 `labels` 的 `turn_relation` |
+| 没有 `labels`、以名称决定选项的 `user_feedbacks` 和 `modality` 规则 | 把选项写进 `labels`；若有条件以 `label` 指定该规则的某个选项，或有分数输入写成 `<rule>:<label>`，该规则是按 v0.5 写的，保持原样 |
+| `reasks`、`topic_continuity` | 带 `labels` 的 `turn_relation`；`lookback_turns` 大于 1 的 reask 规则要求的连续重问没有对应项，`input.previous_turns` 最多为 32，migrate 会说明这两点 |
 | `complexity` 的示例库和阈值；`name: difficulty:hard` 条件 | `complexity`；`{name: difficulty, label: hard}` |
 | `modality` 名称 `AR`、`DIFFUSION`、`BOTH`；关键词回退 | `labels` `text`、`image`、`text_image`；回退变为一条 `keywords` 规则（需检查） |
 | `classifiers`、`preferences`、文本 `embeddings` 规则 | [`systemone` 问题](../system-one/use/custom-questions#questions-that-replace-removed-signals) |
@@ -223,8 +225,8 @@ recipes:
 
 | 之前 | 之后 |
 | --- | --- |
-| `prompt`、`router_dc` | `systemone`，用同样的说明或候选描述询问决策模型 |
-| `knn`、`kmeans`、`svm`、`mlp` | `systemone`，只有一个候选的决策为 `static`；不再使用训练出的模型 |
+| `prompt`、`router_dc` | `systemone`，用同样的说明或候选描述询问决策模型；无可选候选时与 `knn` 一样为 `static` |
+| `knn`、`kmeans`、`svm`、`mlp` | `systemone`，每个模型只保留第一个 `modelRefs` 项（migrate 会说明丢弃的 LoRA 适配器）；所有候选都是同一个模型（例如只有一个候选，或同一模型的多个 LoRA 适配器）时为 `static`；不再使用训练出的模型 |
 | `automix`、`hybrid`、`latency_aware` | `multi_factor`，由 migrate 写出权重 |
 | `confidence`（Looper） | 带 `escalate.accept.confidence` 的 `escalate` |
 | `cascade`（System One） | 带 `escalate.stages` 的 `escalate` |
@@ -252,7 +254,8 @@ recipes:
 | 配方的 `data_policy` | 配方的 `router_replay` 插件：`replay: false` 对应 `enabled: false`，`replay_personal_data: false` 对应 `capture_personal_data: false`，其决策上的插件也一样 |
 | `emits[].retention` | 决策的 [`retention`](../tutorials/decision/retention) 属性 |
 | `masking` 的 `threshold` | `masking.signal`，指定一条 `pii` 规则，使用它的 `predicate` |
-| `system_prompt` 的 `mode: append` | `mode: replace`，这正是它原来的行为 |
+| `system_prompt` 的 `mode: append` | `mode: replace`，它丢弃调用方发送的所有 system 和 developer 指令，而 `append` 只替换第一条 system 消息 |
+| `request_params` 的 `strip_unknown` | 已移除：路由器从未读取它，并且会拒绝客户端线路格式未声明的请求字段 |
 
 `global.model_catalog.modules` 已移除。它的 `prompt_compression` 压缩路由信号读取的文本，现在是 `global.plugins` 中 `context` 插件的 `compress.signals` 块；配方自己的 `context` 插件可以覆盖它，决策的插件不能包含它：
 
@@ -406,7 +409,7 @@ providers:
 | `provider: candle`、`ort` 或 `openvino` | `provider: model_runtime`，保留其设备，并使用其工件的 Hub 仓库；`precision`、`profile` 等引擎字段见[迁移到模型运行时](../model-runtime/deploy/migrate) |
 | `global.model_catalog.external[]` | 已移除；`memory_rewrite` 模型改为一个由 `global.stores.memory.query_rewrite` 指定的 `openai_chat` 部署，它的访问密钥改为环境变量 |
 | 后端的 `base_url`、`api_key_env`、`auth_header`、`auth_prefix`、`extra_headers` | `endpoint`（完整 URL）、`auth: {header, prefix, api_key_env}`、`headers` |
-| `global.router.auto_model_names`、`auto_model_name` | 默认配方的一个入口，使用上一版本所服务的名称：`auto_model_names`，否则为 `vllm-sr/auto`、`auto` 和 `auto_model_name`；文件自己写了默认配方的入口时，新入口放在它旁边，原入口的名称保持不变 |
+| `global.router.auto_model_names`、`auto_model_name` | 默认配方的一个入口，使用上一版本所服务的名称：`auto_model_names`，否则为 `vllm-sr/auto`、`auto` 和 `auto_model_name`（未设置时为 `MoM`），因此两者都没写的早期版本文件会得到 `vllm-sr/auto`、`auto` 和 `MoM`，但已被某个配置模型占用的名称除外，对它的请求现在会到达该模型；文件自己写了默认配方的入口时，新入口放在它旁边，原入口的名称保持不变，另一个入口已服务的名称也仍归该入口 |
 | `global.router.include_config_models_in_list` | `global.router.list_backend_models` |
 | `global.integrations.looper.endpoint` | 已移除：Router 在进程内发起 Looper 的模型调用 |
 | `global.integrations.looper.<algorithm>.model_names` | 使用这些名称的入口，指向迁移写出的配方：默认配方中只保留运行该算法的决策 |
@@ -414,7 +417,7 @@ providers:
 
 后端内联的 `api_key` 仍可加载，但不能与 `auth.api_key_env` 同时使用。[迁移模型资源](./model-resource-migration)完整展示了每种写法。
 
-Looper 算法的 `model_names` 让 `model` 为其中某个名称的请求只经过默认配方中运行该算法的决策（`flow` 对应 `workflows` 决策）。迁移保留了这一行为：为每个列表写出一个以默认配方和算法命名的配方，它是默认配方的副本，只保留这些决策；再写出一个使用这些名称、指向该配方的入口。多出一个配方后，默认配方的入口会标记为 `default: true`。唯一的变化是：这些决策都不匹配的请求，现在与其他入口一样转到默认模型，以前则会失败。没有任何决策运行过的名称从未服务过请求，迁移会将其删除。
+Looper 算法的 `model_names` 让 `model` 为其中某个名称的请求只经过默认配方中运行该算法的决策（`flow` 对应 `workflows` 决策）。迁移保留了这一行为：为每个列表写出一个以默认配方和算法命名的配方，它是默认配方的副本，只保留这些决策；再写出一个使用这些名称、指向该配方的入口。多出一个配方后，默认配方的入口会标记为 `default: true`。唯一的变化是：这些决策都不匹配的请求，现在与其他入口一样转到默认模型，以前则会失败。没有任何决策运行过的名称从未服务过请求，迁移会将其删除。v0.3 文件若没有为默认配方的决策所运行的某个算法列出名称，则该算法服务的是其内置名称 `vllm-sr/remom`、`vllm-sr/fusion` 或 `vllm-sr/flow`，迁移以同样的方式写出该名称。v0.3 文件的入口若使用了 v0.4 默认服务的名称，例如 `vllm-sr/auto`、`MoM` 或 `vllm-sr/fusion`，则它是为 v0.4 与 v0.5 之间的 main 编写的：v0.4 拒绝这些入口名称，而 main 只服务入口，因此迁移不会为它写出其他名称。
 
 ```yaml removed
 global:
@@ -436,7 +439,8 @@ recipes:
     description: The fusion decisions of recipe default
     # 默认配方的信号与设置，只保留其 fusion 决策
 entrypoints:
-  - model_names: [vllm-sr/auto]
+  # 自动模型名称，这里的文件没有写出任何名称
+  - model_names: [vllm-sr/auto, auto, MoM]
     recipe: default
     default: true
   - model_names: [vllm-sr/fusion]

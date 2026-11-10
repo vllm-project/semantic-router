@@ -67,7 +67,7 @@ providers:
           protocol: http
 ```
 
-Canonical v0.3 has no user-authored global family registry. The legacy
+Canonical v0.5 has no user-authored global family registry. The legacy
 `providers.defaults.reasoning_families` plus per-model `reasoning_family`
 combination migrates to `providers.models[].reasoning`: built-in IDs become a
 `family` reference, while custom definitions are copied inline onto each custom
@@ -108,7 +108,8 @@ recipes:
           operator: AND
           conditions:
             - type: complexity
-              name: needs_reasoning:hard
+              name: needs_reasoning
+              label: hard
         modelRefs:
           - model: private-reasoner
             use_reasoning: true

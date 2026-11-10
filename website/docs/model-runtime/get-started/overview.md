@@ -15,7 +15,7 @@ features use. You don't install it separately: it ships inside the Router
 images, and the Router starts and supervises it for you.
 
 ```bash title="Serve a decision model and ask it directly"
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
+vllm-sr serve vllm-sr/vela3-fast --engine --platform cpu
 curl -s localhost:8899/v1/systemone/models
 ```
 
@@ -62,8 +62,8 @@ request paths.
 - **Startup waits for required models.** Attached model readiness follows the
   [readiness rules](../deploy/readiness-and-monitoring.md#when-a-model-is-not-ready).
 - **A slow model never stalls a request.** The signal deadline bounds how long
-  a request waits; unfinished signals follow their configured error or
-  unscanned policy.
+  a request waits; an unfinished signal gives no answer and resolves through
+  its `on_error` or `on_unknown` policy.
 
 ## What you can rely on
 

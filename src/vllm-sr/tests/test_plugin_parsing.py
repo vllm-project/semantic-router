@@ -7,11 +7,13 @@ import yaml
 from pydantic import ValidationError as PydanticValidationError
 
 from cli.models import (
+    FastResponsePluginConfig,
     PluginConfig,
     PluginType,
     RouterReplayPluginConfig,
     ContextPluginConfig,
     ContextSource,
+    ResponseGuardPluginConfig,
     ToolsPluginConfig,
 )
 from cli.parser import ConfigParseError, parse_user_config
@@ -75,7 +77,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -94,7 +96,6 @@ decisions:
           blocked_params: ["logprobs"]
           max_tokens_limit: 256
           max_n: 1
-          strip_unknown: true
       - type: "response_guard"
         configuration:
           rules:
@@ -112,6 +113,15 @@ decisions:
             assert len(errors) == 0, f"Unexpected validation errors: {errors}"
         finally:
             os.unlink(temp_path)
+
+    @pytest.mark.parametrize(
+        "model", [FastResponsePluginConfig, ResponseGuardPluginConfig]
+    )
+    def test_enabled_false_alone_turns_off_an_inherited_plugin(self, model):
+        """A decision turns off an inherited plugin with enabled: false alone."""
+        assert model(enabled=False).enabled is False
+        with pytest.raises(PydanticValidationError):
+            model()
 
 
 class TestRouterReplayPluginConfig:
@@ -191,7 +201,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -287,7 +297,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -332,7 +342,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -507,7 +517,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"

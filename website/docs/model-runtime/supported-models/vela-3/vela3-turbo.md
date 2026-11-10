@@ -22,8 +22,8 @@ Vela 3.0 on d3-turbo, the largest Vela: it answers each request on d3-turbo's st
 | Parameters | 27.6B loaded |
 | Backbone | Qwen3.5 text |
 | Base package | [`vllm-sr/d3-turbo`](https://huggingface.co/vllm-sr/d3-turbo) at `da17b5d0c860` |
-| Precision (`--dtype auto`) | BF16 on every device |
-| Weights | about 55.3 GB at BF16 |
+| Precision (`--dtype auto`) | BF16 on a GPU, FP32 on a CPU |
+| Weights | about 55.3 GB at BF16, 110.5 GB at FP32 |
 | Device memory | 72 GiB or more |
 | Reads | text, image, video |
 

@@ -6,7 +6,7 @@ slug: /model-runtime/overview
 description: Router 询问的决策模型和嵌入模型运行在内置模型运行时中。从这里开始。
 is_mtpe: false
 translation:
-  source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
+  source_commit: "0811a3cb7de0e30e3dc2282233f573d554691bf1"
   source_file: "docs/model-runtime/get-started/overview.md"
   outdated: false
 ---
@@ -16,7 +16,7 @@ translation:
 **内置模型运行时**为 Router 在处理每个请求时所咨询的模型提供服务：回答每个 System One 问题的[决策模型](../../system-one/get-started/overview.md)，以及召回功能使用的嵌入模型。你不需要单独安装它：它随 Router 镜像一起发布，由 Router 为你启动和监管。
 
 ```bash title="Serve a decision model and ask it directly"
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
+vllm-sr serve vllm-sr/vela3-fast --engine --platform cpu
 curl -s localhost:8899/v1/systemone/models
 ```
 
@@ -49,7 +49,7 @@ curl -s localhost:8899/v1/systemone/models
 
 - **只加载你用到的。** 内置功能会自动解析其默认模型（[为信号选择模型](../../installation/choose-a-model-for-a-signal.md)）。Router 只为有内容解析到的部署以及显式发布的原生模型启动托管 worker。未使用的部署不加载任何权重。
 - **启动时等待所需的模型。** 附加模型的就绪遵循[就绪规则](../deploy/readiness-and-monitoring.md#when-a-model-is-not-ready)。
-- **慢模型绝不会卡住请求。** 信号截止时间限定请求的等待时长；未完成的信号遵循其配置的错误或未扫描策略。
+- **慢模型绝不会卡住请求。** 信号截止时间限定请求的等待时长；未完成的信号没有答案，按其 `on_error` 或 `on_unknown` 策略处理。
 
 ## 你可以依赖什么 {#what-you-can-rely-on}
 

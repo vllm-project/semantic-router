@@ -574,16 +574,13 @@ class ServedModel:
         self.scheduler.start()
         self.health.set("warming", "running the golden check")
         assert self.family is not None and self.package is not None
-        goldens = self.family.golden(self.package)
-        if self.dtype != "auto":
-            # References are recorded at the published precision.
-            goldens = [{**golden, "expected": {}} for golden in goldens]
         self.health.golden = golden_check(
             self.golden_surface,
             model.golden_compare,
-            goldens,
+            self.family.golden(self.package),
             placement.device.accelerator,
             placement.accelerator.golden_reference(placement.device),
+            self.dtype,
         )
         if self.dtype != "auto" and self.health.golden.status == "unverified":
             self.health.golden = replace(
@@ -1379,9 +1376,9 @@ class Runtime:
             elif states is None:
                 joined.append(outcomes[start])
             else:
-                joined.append(
-                    join_states(outcomes[start : start + len(states)], states)
-                )
+                end = start + len(states)
+                entries = [body for _, body, _ in parts[start:end]]
+                joined.append(join_states(outcomes[start:end], states, entries))
         return joined
 
     async def _serve_parts(

@@ -5,7 +5,7 @@
   "plugins": [
     {
       "name": "vsr",
-      "source": "./src/claude-code",
+      "source": "./src/agent-harness/claude-code",
       "description": "Routes subagents by difficulty, escalates when you push back, redacts personal data and secrets, shields against prompt injection, guards risky Bash commands, and checks answers against what Claude read. Run /vsr:setup after installing."
     }
   ]

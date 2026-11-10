@@ -22,8 +22,8 @@ Vela 3.0 on d3-lite: trained adapters for the built-in questions, spans, and ima
 | Parameters | 0.903B loaded |
 | Backbone | Qwen3.5 text |
 | Base package | [`vllm-sr/d3-lite`](https://huggingface.co/vllm-sr/d3-lite) at `9c10703193af` |
-| Precision (`--dtype auto`) | BF16 on every device |
-| Weights | about 1.8 GB at BF16 |
+| Precision (`--dtype auto`) | BF16 on a GPU, FP32 on a CPU |
+| Weights | about 1.8 GB at BF16, 3.6 GB at FP32 |
 | Device memory | 4 GiB or more |
 | Reads | text, image, video |
 

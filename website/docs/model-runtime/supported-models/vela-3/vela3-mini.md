@@ -22,8 +22,8 @@ Vela 3.0 on d3-mini: more accuracy than vela3-lite, with the built-in questions 
 | Parameters | 4.79B loaded |
 | Backbone | Qwen3.5 text |
 | Base package | [`vllm-sr/d3-mini`](https://huggingface.co/vllm-sr/d3-mini) at `566da0ea398e` |
-| Precision (`--dtype auto`) | BF16 on every device |
-| Weights | about 9.6 GB at BF16 |
+| Precision (`--dtype auto`) | BF16 on a GPU, FP32 on a CPU |
+| Weights | about 9.6 GB at BF16, 19.2 GB at FP32 |
 | Device memory | 16 GiB or more |
 | Reads | text, image, video |
 

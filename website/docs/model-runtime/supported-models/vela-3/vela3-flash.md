@@ -22,8 +22,8 @@ Vela 3.0 on d3-flash: a 9B decision model with trained adapters for the built-in
 | Parameters | 8.83B loaded |
 | Backbone | Qwen3.5 text |
 | Base package | [`vllm-sr/d3-flash`](https://huggingface.co/vllm-sr/d3-flash) at `8b35c853b90e` |
-| Precision (`--dtype auto`) | BF16 on every device |
-| Weights | about 17.7 GB at BF16 |
+| Precision (`--dtype auto`) | BF16 on a GPU, FP32 on a CPU |
+| Weights | about 17.7 GB at BF16, 35.3 GB at FP32 |
 | Device memory | 32 GiB or more |
 | Reads | text, image, video |
 
