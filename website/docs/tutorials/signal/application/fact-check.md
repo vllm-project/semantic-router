@@ -4,7 +4,7 @@
 
 `fact_check` detects requests whose answer relies on factual claims that should be verified.
 It asks the `fact_check`
-[preset](../../../system-one/reference#preset-catalog), "Does answering this
+[preset](../../../system-one/reference/presets#preset-catalog), "Does answering this
 request require checking facts?", with the options `FACT_CHECK_NEEDED` and
 `NO_FACT_CHECK_NEEDED`. It flags the need; it does not check any fact.
 
@@ -74,7 +74,7 @@ its calibrated threshold is close to 1. On another model, write a
 
 The decision model answers every fact-check rule, unless the `fact_check`
 binding or the rule's `deployment` names another; see
-[Choose a deployment](../../../system-one/deployments). vela3-fast, the Vela
+[Choose a deployment](../../../system-one/deploy/deployments). vela3-fast, the Vela
 3.0 d3 sizes and Vela 2.0 have trained forms of the question. It reads the
 current user turn.
 

@@ -154,7 +154,7 @@ and the single generation backend determines answer capabilities.
 
 ## References
 
-- [System One: choose a deployment](https://vllm-sr.ai/docs/next/system-one/deployments)
-- [AMD installation](https://vllm-sr.ai/docs/next/installation/amd-rocm)
-- [Embeddings](https://vllm-sr.ai/docs/next/model-runtime/guides/embeddings)
+- [System One: choose a deployment](https://vllm-sr.ai/docs/system-one/deploy/deployments)
+- [AMD installation](https://vllm-sr.ai/docs/installation/amd-rocm)
+- [Embeddings](https://vllm-sr.ai/docs/model-runtime/guides/embeddings)
 - [Recipe authoring and conformance](../CONFORMANCE.md)

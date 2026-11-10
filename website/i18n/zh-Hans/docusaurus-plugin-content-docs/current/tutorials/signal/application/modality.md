@@ -10,7 +10,7 @@ translation:
 
 ## 概述 {#overview}
 
-`modality` 读取请求要求的输出：文本、图片、文本加图片、语音、音频或视频。它提出 `modality` [预设](../../../system-one/reference#preset-catalog)问题：“What kind of output does this request ask for?”，有八个选项：`text`、`image`、`text_image`、`image_edit`、`speech`、`audio`、`video` 和 `video_edit`。
+`modality` 读取请求要求的输出：文本、图片、文本加图片、语音、音频或视频。它提出 `modality` [预设](../../../system-one/reference/presets#preset-catalog)问题：“What kind of output does this request ask for?”，有八个选项：`text`、`image`、`text_image`、`image_edit`、`speech`、`audio`、`video` 和 `video_edit`。
 
 ## 主要优势 {#key-advantages}
 
@@ -64,6 +64,6 @@ recipes:
 
 ### 回答问题的模型 {#the-model-that-answers}
 
-除非 `modality` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有模态规则；见[选择部署](../../../system-one/deployments)。vela3-fast 和 Vela 3.0 的 d3 规格在其中三个选项 `text`、`image` 和 `text_image` 上训练过（训练形式中为 `AR`、`DIFFUSION` 和 `BOTH`，再映射回来）；需要其他选项的问题以零样本方式提出。它读取当前用户轮次，并截断到模型的输入长度。
+除非 `modality` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有模态规则；见[选择部署](../../../system-one/deploy/deployments)。vela3-fast 和 Vela 3.0 的 d3 规格在其中三个选项 `text`、`image` 和 `text_image` 上训练过（训练形式中为 `AR`、`DIFFUSION` 和 `BOTH`，再映射回来）；需要其他选项的问题以零样本方式提出。它读取当前用户轮次，并截断到模型的输入长度。
 
 为早期版本编写的配置把规则命名为 `AR`、`DIFFUSION` 和 `BOTH`，由名称决定输出。`vllm-sr config migrate` 会给这类规则补上 `labels`。完整示例见 [`config/fragments/signal/modality/multimodal.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/modality/multimodal.yaml)。
