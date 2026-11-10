@@ -18,13 +18,6 @@ from cli.bootstrap import (
 from cli.commands.runtime_config_mutation import (
     _apply_algorithm_override,
     _normalized_algorithm_override,
-    _platform_requires_gpu_defaults,
-    apply_platform_gpu_defaults,
-)
-from cli.commands.runtime_kb import (
-    _sync_runtime_kb_store,
-    _validate_package_kb_paths,
-    _validate_runtime_kb_paths,
 )
 from cli.commands.runtime_management_credentials import (
     management_credential_env_names,
@@ -136,7 +129,7 @@ def config_env_references(config_path: Path | str | None) -> set[str]:
     if config_path is None:
         return set()
     try:
-        document = yaml.safe_load(Path(config_path).read_text())
+        document = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError):
         return set()
 
@@ -169,7 +162,7 @@ def required_config_env_references(config_path: Path | str | None) -> set[str]:
     if config_path is None:
         return set()
     try:
-        document = yaml.safe_load(Path(config_path).read_text())
+        document = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError):
         return set()
 
@@ -414,65 +407,35 @@ def _resolve_effective_config_document(
     config_path: Path,
     algorithm: str | None,
     setup_mode: bool,
-    platform: str | None,
     *,
-    package_activation: bool = False,
     materialize_local_runtime: bool = True,
-    bootstrap_kb: bool = True,
 ) -> tuple[dict[str, object], bool]:
-    with config_path.open() as handle:
+    with config_path.open(encoding="utf-8") as handle:
         config = yaml.safe_load(handle) or {}
 
-    if package_activation:
-        _validate_package_kb_paths(config)
-        kb_runtime_required, changed = False, False
-    elif materialize_local_runtime and bootstrap_kb:
-        kb_runtime_required, changed = _sync_runtime_kb_store(config, config_path)
-    elif materialize_local_runtime:
-        _validate_runtime_kb_paths(config)
-        kb_runtime_required, changed = False, False
-    else:
-        kb_runtime_required, changed = False, False
+    changed = False
     if not setup_mode and materialize_local_runtime:
         stack = resolve_runtime_stack()
         changed = inject_local_service_runtime_defaults(config, stack) or changed
         changed = inject_local_store_runtime_defaults(config, stack) or changed
         changed = apply_local_tracing_endpoint(config, stack) or changed
     normalized_algorithm = _normalized_algorithm_override(algorithm, setup_mode)
-    apply_gpu_defaults = _platform_requires_gpu_defaults(platform)
-    if (
-        not kb_runtime_required
-        and not normalized_algorithm
-        and not apply_gpu_defaults
-        and not changed
-    ):
-        return config, False
-
     if normalized_algorithm:
         changed = _apply_algorithm_override(config, normalized_algorithm) or changed
-
-    changed = apply_platform_gpu_defaults(config, platform) or changed
-    return config, changed or kb_runtime_required
+    return config, changed
 
 
 def build_effective_config_bytes(
     config_path: Path,
     algorithm: str | None,
     setup_mode: bool,
-    platform: str | None,
-    *,
-    package_activation: bool = False,
-    bootstrap_kb: bool = True,
 ) -> bytes:
-    """Build config bytes, optionally bootstrapping local KB files."""
+    """Build the effective config bytes."""
 
     config, changed = _resolve_effective_config_document(
         config_path,
         algorithm,
         setup_mode,
-        platform,
-        package_activation=package_activation,
-        bootstrap_kb=bootstrap_kb,
     )
     if not changed:
         return config_path.read_bytes()
@@ -483,7 +446,6 @@ def build_effective_config_document(
     config_path: Path,
     algorithm: str | None,
     setup_mode: bool,
-    platform: str | None,
     *,
     materialize_local_runtime: bool = True,
 ) -> dict[str, object]:
@@ -493,7 +455,6 @@ def build_effective_config_document(
         config_path,
         algorithm,
         setup_mode,
-        platform,
         materialize_local_runtime=materialize_local_runtime,
     )
     return config
@@ -504,46 +465,26 @@ def realize_runtime_config(
     target_path: Path,
     *,
     algorithm: str | None = None,
-    platform: str | None = None,
-    package_activation: bool = False,
     managed_listener: bool = False,
-    skip_kb_bootstrap: bool = False,
 ) -> Path:
     """Realize one raw config at an explicit runtime-owned path.
 
-    The raw source is never changed. Runtime defaults and current CLI
-    algorithm/platform transforms are applied before a strict atomic replace of
-    ``target_path``. Managed listener validation precedes KB bootstrap; callers
-    can skip bootstrap to validate a candidate without changing its KB files.
+    The raw source is never changed. Runtime defaults and the CLI's algorithm
+    override are applied before a strict atomic replace of ``target_path``. A
+    managed listener is validated before publication.
     """
 
     if algorithm is None:
         algorithm = os.getenv(RUNTIME_ALGORITHM_OVERRIDE_ENV, "").strip() or None
-    if platform is None:
-        platform = (
-            os.getenv("VLLM_SR_PLATFORM", "").strip()
-            or os.getenv("DASHBOARD_PLATFORM", "").strip()
-            or None
-        )
 
     effective = build_effective_config_bytes(
         source_path,
         algorithm=algorithm,
         setup_mode=is_setup_mode_config(source_path),
-        platform=platform,
-        package_activation=package_activation,
-        bootstrap_kb=not (skip_kb_bootstrap or managed_listener),
     )
     if managed_listener:
         prepared = UserConfig.model_validate(yaml.safe_load(effective), extra="allow")
         resolve_managed_management_listener(prepared, resolve_runtime_stack())
-        if not skip_kb_bootstrap and not package_activation:
-            effective = build_effective_config_bytes(
-                source_path,
-                algorithm=algorithm,
-                setup_mode=is_setup_mode_config(source_path),
-                platform=platform,
-            )
     return write_runtime_config_bytes(target_path, effective)
 
 
@@ -551,7 +492,6 @@ def resolve_effective_config_path(
     config_path: Path,
     algorithm: str | None,
     setup_mode: bool,
-    platform: str | None,
     *,
     materialize_local_runtime: bool = True,
 ) -> Path:
@@ -561,7 +501,6 @@ def resolve_effective_config_path(
         config_path,
         algorithm,
         setup_mode,
-        platform,
         materialize_local_runtime=materialize_local_runtime,
     )
     return _finalize_runtime_config_write(
@@ -571,15 +510,12 @@ def resolve_effective_config_path(
     )
 
 
-def sync_runtime_config(
-    config_path: Path, algorithm: str | None = None, platform: str | None = None
-) -> Path:
+def sync_runtime_config(config_path: Path, algorithm: str | None = None) -> Path:
     """Regenerate the internal runtime config from the user-facing source config."""
     return resolve_effective_config_path(
         config_path=config_path,
         algorithm=algorithm,
         setup_mode=is_setup_mode_config(config_path),
-        platform=platform,
     )
 
 

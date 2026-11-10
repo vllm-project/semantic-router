@@ -1,6 +1,6 @@
 // Package upstream sends routed requests to model backends in process, doing
 // what the CLI-managed Envoy does for upstream traffic: one cluster per
-// provider model alias, selected by the route key (the x-selected-model
+// provider model alias, selected by the route key (the x-vsr-route-model
 // value), with the endpoints, load balancing, connection pools, host and path
 // rewrites, route headers and upstream TLS that the Envoy template renders.
 //

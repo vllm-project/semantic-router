@@ -742,7 +742,7 @@
       "get": {
         "operationId": "listDecisionRoutes",
         "summary": "List active System One routes",
-        "description": "Reads the configured frontend without probing models. available describes routing availability, not backend health. Each route includes model, recipe, algorithms, question_types, and execution_timeout_ms. The timeout is the largest algorithm execution deadline in the recipe; signals have separate timeouts.",
+        "description": "Reads the configured frontend without probing models. available describes routing availability, not backend health. Each route includes model, recipe, algorithms, question_types, and execution_timeout_ms. The timeout is the largest algorithm budget deadline in the recipe; it bounds signals and the selected algorithm together.",
         "tags": [
           "decision-model"
         ],
@@ -850,7 +850,7 @@
             }
           },
           "503": {
-            "description": "The route is unavailable, the request was canceled, or the cascade could not resolve the request",
+            "description": "The route is unavailable, the request was canceled, or no escalate stage could resolve the request",
             "content": {
               "application/json": {
                 "schema": {
@@ -884,7 +884,7 @@
       "post": {
         "operationId": "runDecisionRoute",
         "summary": "Run an active System One route",
-        "description": "Runs an operator diagnostic using configured management credentials. Browser credentials are not forwarded; no public listener API key is needed. The frontend validates the native request and owns route selection. The selected algorithm controls its execution deadline and physical call budget; signals use their own timeouts.",
+        "description": "Runs an operator diagnostic using configured management credentials. Browser credentials are not forwarded; no public listener API key is needed. The frontend validates the native request and owns route selection. Signals and the selected algorithm share one deadline and physical call ledger, with per-decision limits tightening the request ceiling.",
         "tags": [
           "decision-model"
         ],
@@ -1018,7 +1018,7 @@
             }
           },
           "503": {
-            "description": "The route is unavailable, the request was canceled, or the cascade could not resolve the request",
+            "description": "The route is unavailable, the request was canceled, or no escalate stage could resolve the request",
             "content": {
               "application/json": {
                 "schema": {
@@ -1912,245 +1912,6 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
-    "/api/ml-pipeline/benchmark": {
-      "post": {
-        "operationId": "postApiMlPipelineBenchmark",
-        "summary": "POST /api/ml-pipeline/benchmark",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "required",
-        "x-vllm-sr-audit-action": "ml.benchmark",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 33554432,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/ml-pipeline/config": {
-      "post": {
-        "operationId": "postApiMlPipelineConfig",
-        "summary": "POST /api/ml-pipeline/config",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "required",
-        "x-vllm-sr-audit-action": "ml.config",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 4194304,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/ml-pipeline/download/{subpath}": {
-      "get": {
-        "operationId": "getApiMlPipelineDownloadSubpath",
-        "summary": "GET /api/ml-pipeline/download/",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "parameters": [
-          {
-            "name": "subpath",
-            "in": "path",
-            "description": "Remaining path below the registered subtree pattern.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "secret",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "required",
-        "x-vllm-sr-audit-action": "mlpipeline.manage.read",
-        "x-vllm-sr-csrf": false,
-        "x-vllm-sr-route-pattern": "/api/ml-pipeline/download/",
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/ml-pipeline/jobs": {
-      "get": {
-        "operationId": "getApiMlPipelineJobs",
-        "summary": "GET /api/ml-pipeline/jobs",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": false,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/ml-pipeline/jobs/{subpath}": {
-      "get": {
-        "operationId": "getApiMlPipelineJobsSubpath",
-        "summary": "GET /api/ml-pipeline/jobs/",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "parameters": [
-          {
-            "name": "subpath",
-            "in": "path",
-            "description": "Remaining path below the registered subtree pattern.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": false,
-        "x-vllm-sr-route-pattern": "/api/ml-pipeline/jobs/",
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/ml-pipeline/stream/{subpath}": {
-      "get": {
-        "operationId": "getApiMlPipelineStreamSubpath",
-        "summary": "GET /api/ml-pipeline/stream/",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "parameters": [
-          {
-            "name": "subpath",
-            "in": "path",
-            "description": "Remaining path below the registered subtree pattern.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": false,
-        "x-vllm-sr-route-pattern": "/api/ml-pipeline/stream/",
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/ml-pipeline/train": {
-      "post": {
-        "operationId": "postApiMlPipelineTrain",
-        "summary": "POST /api/ml-pipeline/train",
-        "tags": [
-          "ml-pipeline"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "mlpipeline.manage",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "ml",
-        "x-vllm-sr-audit-mode": "required",
-        "x-vllm-sr-audit-action": "ml.train",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 67108864,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
     "/api/models/catalog": {
       "get": {
         "operationId": "getApiModelsCatalog",
@@ -2871,6 +2632,358 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/api/recipes/builtin": {
+      "get": {
+        "operationId": "listBuiltinRecipes",
+        "summary": "List the Recipes installed with vllm-sr",
+        "description": "Reads the bundles packaged with the Dashboard. Each decision states the distinct models it needs; a decision that responds without calling a backend has a null algorithm and needs none.",
+        "tags": [
+          "recipes"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Installed bundles, their recipes, and each decision's candidate pool",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bundles": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "recipes": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "decisions": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "algorithm": {
+                                        "nullable": true,
+                                        "type": "string"
+                                      },
+                                      "description": {
+                                        "type": "string"
+                                      },
+                                      "minimum_candidates": {
+                                        "type": "integer"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "name",
+                                      "description",
+                                      "algorithm",
+                                      "minimum_candidates"
+                                    ]
+                                  }
+                                },
+                                "description": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "description",
+                                "decisions"
+                              ]
+                            }
+                          },
+                          "sha256": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "sha256",
+                          "recipes"
+                        ]
+                      }
+                    },
+                    "catalog_version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "catalog_version",
+                    "bundles"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is missing or invalid",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller lacks the permission, or the origin or CSRF check failed",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The installed vllm-sr package returned an invalid listing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The installed vllm-sr package could not be run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "config.read",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "typed"
+      }
+    },
+    "/api/recipes/builtin/compose": {
+      "post": {
+        "operationId": "composeBuiltinRecipe",
+        "summary": "Compose a built-in Recipe into the current config",
+        "description": "Returns the current config with the recipe added, each decision that calls a backend bound to its models, and an entrypoint for model_names. Nothing is written: save the result with POST /api/router/config/update. The installed vllm-sr CLI applies the binding rules and validates the result.",
+        "tags": [
+          "recipes"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "requestBody": {
+          "description": "Installed recipe, model refs for each decision that calls a backend, and public model names",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "bindings": {
+                    "nullable": true,
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  },
+                  "bundle": {
+                    "type": "string"
+                  },
+                  "model_names": {
+                    "nullable": true,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "recipe": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "bundle",
+                  "recipe",
+                  "bindings",
+                  "model_names"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Composed canonical config",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "nullable": true,
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "error invalid_request for a malformed body, or recipe_rejected with the CLI's reason, such as an unknown model, too few candidates, a recipe the config already contains, or a public name in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is missing or invalid",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "JSON when the Dashboard is read-only (error readonly_mode); text when the caller lacks the permission or the origin or CSRF check failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request exceeds 64 KiB",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The installed vllm-sr package could not run the composition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "config.write",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "config",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 65536,
+        "x-vllm-sr-schema-status": "typed"
+      }
+    },
     "/api/router/api/v1": {
       "get": {
         "operationId": "getApiRouterApiV1",
@@ -3184,35 +3297,6 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
-    "/api/router/api/v1/diagnostics/embeddings": {
-      "post": {
-        "operationId": "postApiRouterApiV1DiagnosticsEmbeddings",
-        "summary": "POST /api/router/api/v1/diagnostics/embeddings",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "evaluation.run",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "evaluation",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
     "/api/router/api/v1/diagnostics/models": {
       "get": {
         "operationId": "getApiRouterApiV1DiagnosticsModels",
@@ -3328,35 +3412,6 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
-    "/api/router/api/v1/diagnostics/models/rerank": {
-      "post": {
-        "operationId": "postApiRouterApiV1DiagnosticsModelsRerank",
-        "summary": "POST /api/router/api/v1/diagnostics/models/rerank",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "evaluation.run",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "evaluation",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
     "/api/router/api/v1/diagnostics/models/systemone": {
       "get": {
         "operationId": "getApiRouterApiV1DiagnosticsModelsSystemone",
@@ -3416,93 +3471,6 @@
       "post": {
         "operationId": "postApiRouterApiV1DiagnosticsModelsTokens",
         "summary": "POST /api/router/api/v1/diagnostics/models/tokens",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "evaluation.run",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "evaluation",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/router/api/v1/diagnostics/nli": {
-      "post": {
-        "operationId": "postApiRouterApiV1DiagnosticsNli",
-        "summary": "POST /api/router/api/v1/diagnostics/nli",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "evaluation.run",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "evaluation",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/router/api/v1/diagnostics/similarity": {
-      "post": {
-        "operationId": "postApiRouterApiV1DiagnosticsSimilarity",
-        "summary": "POST /api/router/api/v1/diagnostics/similarity",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "evaluation.run",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "evaluation",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/router/api/v1/diagnostics/similarity/batch": {
-      "post": {
-        "operationId": "postApiRouterApiV1DiagnosticsSimilarityBatch",
-        "summary": "POST /api/router/api/v1/diagnostics/similarity/batch",
         "tags": [
           "router"
         ],
@@ -3699,10 +3667,10 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
-    "/api/router/api/v1/observability/plugins/context_compression/stats": {
+    "/api/router/api/v1/observability/plugins/context/compression/stats": {
       "get": {
         "operationId": "getApiRouterApiV1ObservabilityPluginsContextCompressionStats",
-        "summary": "GET /api/router/api/v1/observability/plugins/context_compression/stats",
+        "summary": "GET /api/router/api/v1/observability/plugins/context/compression/stats",
         "tags": [
           "router"
         ],
@@ -3881,10 +3849,10 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
-    "/api/router/api/v1/plugins/context_compression/capabilities": {
+    "/api/router/api/v1/plugins/context/compression/capabilities": {
       "get": {
         "operationId": "getApiRouterApiV1PluginsContextCompressionCapabilities",
-        "summary": "GET /api/router/api/v1/plugins/context_compression/capabilities",
+        "summary": "GET /api/router/api/v1/plugins/context/compression/capabilities",
         "tags": [
           "router"
         ],
@@ -3909,10 +3877,10 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
-    "/api/router/api/v1/plugins/context_compression/health": {
+    "/api/router/api/v1/plugins/context/compression/health": {
       "get": {
         "operationId": "getApiRouterApiV1PluginsContextCompressionHealth",
-        "summary": "GET /api/router/api/v1/plugins/context_compression/health",
+        "summary": "GET /api/router/api/v1/plugins/context/compression/health",
         "tags": [
           "router"
         ],
@@ -3937,10 +3905,10 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
-    "/api/router/api/v1/plugins/context_compression/preview": {
+    "/api/router/api/v1/plugins/context/compression/preview": {
       "post": {
         "operationId": "postApiRouterApiV1PluginsContextCompressionPreview",
-        "summary": "POST /api/router/api/v1/plugins/context_compression/preview",
+        "summary": "POST /api/router/api/v1/plugins/context/compression/preview",
         "tags": [
           "router"
         ],
@@ -3958,6 +3926,38 @@
           }
         },
         "x-vllm-sr-permission": "evaluation.run",
+        "x-vllm-sr-sensitivity": "sensitive",
+        "x-vllm-sr-resource-owner": "evaluation",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": true,
+        "x-vllm-sr-max-body-bytes": 16777216,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
+    "/api/router/api/v1/plugins/context/preview": {
+      "post": {
+        "operationId": "postApiRouterApiV1PluginsContextPreview",
+        "summary": "POST /api/router/api/v1/plugins/context/preview",
+        "tags": [
+          "router"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-permission": "evaluation.run",
+        "x-vllm-sr-additional-permissions": [
+          "config.read"
+        ],
         "x-vllm-sr-sensitivity": "sensitive",
         "x-vllm-sr-resource-owner": "evaluation",
         "x-vllm-sr-audit-mode": "none",
@@ -3995,35 +3995,6 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
-    "/api/router/api/v1/plugins/hallucination/preview": {
-      "post": {
-        "operationId": "postApiRouterApiV1PluginsHallucinationPreview",
-        "summary": "POST /api/router/api/v1/plugins/hallucination/preview",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "evaluation.run",
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "evaluation",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
     "/api/router/api/v1/plugins/header_mutation/preview": {
       "post": {
         "operationId": "postApiRouterApiV1PluginsHeaderMutationPreview",
@@ -4047,38 +4018,6 @@
         "x-vllm-sr-permission": "config.read",
         "x-vllm-sr-sensitivity": "sensitive",
         "x-vllm-sr-resource-owner": "config",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/router/api/v1/plugins/rag/preview": {
-      "post": {
-        "operationId": "postApiRouterApiV1PluginsRagPreview",
-        "summary": "POST /api/router/api/v1/plugins/rag/preview",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "evaluation.run",
-        "x-vllm-sr-additional-permissions": [
-          "config.read"
-        ],
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "evaluation",
         "x-vllm-sr-audit-mode": "none",
         "x-vllm-sr-csrf": true,
         "x-vllm-sr-max-body-bytes": 16777216,
@@ -4114,10 +4053,10 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
-    "/api/router/api/v1/plugins/response_jailbreak/preview": {
+    "/api/router/api/v1/plugins/response_guard/preview": {
       "post": {
-        "operationId": "postApiRouterApiV1PluginsResponseJailbreakPreview",
-        "summary": "POST /api/router/api/v1/plugins/response_jailbreak/preview",
+        "operationId": "postApiRouterApiV1PluginsResponseGuardPreview",
+        "summary": "POST /api/router/api/v1/plugins/response_guard/preview",
         "tags": [
           "router"
         ],
@@ -4166,38 +4105,6 @@
         "x-vllm-sr-permission": "config.read",
         "x-vllm-sr-sensitivity": "sensitive",
         "x-vllm-sr-resource-owner": "config",
-        "x-vllm-sr-audit-mode": "none",
-        "x-vllm-sr-csrf": true,
-        "x-vllm-sr-max-body-bytes": 16777216,
-        "x-vllm-sr-schema-status": "undocumented"
-      }
-    },
-    "/api/router/api/v1/plugins/tool_selection/preview": {
-      "post": {
-        "operationId": "postApiRouterApiV1PluginsToolSelectionPreview",
-        "summary": "POST /api/router/api/v1/plugins/tool_selection/preview",
-        "tags": [
-          "router"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "sessionCookie": []
-          }
-        ],
-        "responses": {
-          "default": {
-            "description": "Response body is not yet described by the Dashboard contract."
-          }
-        },
-        "x-vllm-sr-permission": "evaluation.run",
-        "x-vllm-sr-additional-permissions": [
-          "config.read"
-        ],
-        "x-vllm-sr-sensitivity": "sensitive",
-        "x-vllm-sr-resource-owner": "evaluation",
         "x-vllm-sr-audit-mode": "none",
         "x-vllm-sr-csrf": true,
         "x-vllm-sr-max-body-bytes": 16777216,
@@ -8666,7 +8573,6 @@
                               "runtime_config_not_writable",
                               "sr_bench_auth_unconfigured",
                               "upstream_unreachable",
-                              "ml_pipeline_disabled",
                               "mcp_disabled"
                             ]
                           },

@@ -1,0 +1,13 @@
+plugin:
+  type: tools
+  configuration:
+    enabled: true
+    # The decision model adds the catalog tools the request needs, after the
+    # request's own: one call asks tool_need and tool_rank together.
+    select:
+      mode: add
+      tools_db_path: config/tools_db.json
+      match:
+        judge: {preset: tool_rank, top_k: 5, min_ratio: 0.1}
+      need_threshold: 0.5
+      on_error: skip

@@ -20,7 +20,7 @@ main = importlib.import_module("cli.main").main
 
 
 _VALID_CONFIG = {
-    "version": "v0.3",
+    "version": "v0.5",
     "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
     "providers": {
         "defaults": {"model": "test-model"},
@@ -39,18 +39,20 @@ _VALID_CONFIG = {
             }
         ],
     },
-    "routing": {
-        "modelCards": [{"name": "test-model"}],
-        "decisions": [
-            {
-                "name": "default-route",
-                "description": "fallback",
-                "priority": 100,
-                "rules": {"operator": "AND", "conditions": []},
-                "modelRefs": [{"model": "test-model"}],
-            }
-        ],
-    },
+    "recipes": [
+        {
+            "name": "default",
+            "decisions": [
+                {
+                    "name": "default-route",
+                    "description": "fallback",
+                    "priority": 100,
+                    "rules": {"operator": "AND", "conditions": []},
+                    "modelRefs": [{"model": "test-model"}],
+                }
+            ],
+        }
+    ],
 }
 
 

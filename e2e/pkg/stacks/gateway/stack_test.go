@@ -22,6 +22,13 @@ func TestSemanticRouterInstallOptionsUsesBaseValuesFileByDefault(t *testing.T) {
 	}
 }
 
+func TestSemanticRouterInstallOptionsLetsTheSuitesReadDebugHeaders(t *testing.T) {
+	opts := New(Config{Name: "unit-test"}).semanticRouterInstallOptions(&framework.SetupOptions{ImageTag: "test-image"})
+	if got := opts.Set["config.global.router.headers.debug"]; got != "any" {
+		t.Fatalf("config.global.router.headers.debug = %q, want any", got)
+	}
+}
+
 func TestSemanticRouterInstallOptionsAppendsWorkspaceOverlay(t *testing.T) {
 	stack := New(Config{
 		Name:                     "unit-test",

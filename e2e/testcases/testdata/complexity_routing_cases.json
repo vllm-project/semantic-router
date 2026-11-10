@@ -2,7 +2,7 @@
   {
     "name": "Hard: termination proof and complexity bound",
     "description": "A request to prove termination and derive a running-time bound resembles the hard candidates, not the easy ones",
-    "query": "Prove this recursive algorithm always terminates and derive a tight bound on its worst-case time complexity.",
+    "query": "Prove this recursive algorithm always terminates and derive a tight bound on its worst-case time complexity. __SYSTEMONE_CHOICE__ hard",
     "expected_decision": "complexity_hard_routing",
     "expected_matched_signal": "task_difficulty:hard",
     "should_match": true
@@ -10,7 +10,7 @@
   {
     "name": "Hard: weigh conflicting arguments under uncertainty",
     "description": "A request to weigh opposing forecasts and defend one resembles the hard candidates in a different domain",
-    "query": "Two economists give opposite forecasts about inflation. Weigh their competing arguments and defend which forecast is more credible given the uncertainty.",
+    "query": "Two economists give opposite forecasts about inflation. Weigh their competing arguments and defend which forecast is more credible given the uncertainty. __SYSTEMONE_CHOICE__ hard",
     "expected_decision": "complexity_hard_routing",
     "expected_matched_signal": "task_difficulty:hard",
     "should_match": true
@@ -18,7 +18,7 @@
   {
     "name": "Easy: retrieve a stated fact",
     "description": "Reading a value stated in the supplied text resembles the easy candidates, not the hard ones",
-    "query": "In the email below, what time does the delivery arrive? 'Your package will arrive at 4pm on Friday.'",
+    "query": "In the email below, what time does the delivery arrive? 'Your package will arrive at 4pm on Friday.' __SYSTEMONE_CHOICE__ easy",
     "expected_decision": "complexity_easy_routing",
     "expected_matched_signal": "task_difficulty:easy",
     "should_match": true
@@ -26,7 +26,7 @@
   {
     "name": "Easy: reformat supplied items",
     "description": "Copying supplied items into another format resembles the easy candidates in a different task shape",
-    "query": "Rewrite this list as one comma-separated line: red, green, blue.",
+    "query": "Rewrite this list as one comma-separated line: red, green, blue. __SYSTEMONE_CHOICE__ easy",
     "expected_decision": "complexity_easy_routing",
     "expected_matched_signal": "task_difficulty:easy",
     "should_match": true

@@ -22,19 +22,19 @@ func TestImageFileFixtureDeclaresModelCapabilities(t *testing.T) {
 	}
 	var values struct {
 		Config struct {
-			Routing struct {
-				ModelCards []struct {
+			Providers struct {
+				Models []struct {
 					Name         string   `json:"name"`
 					Capabilities []string `json:"capabilities"`
-				} `json:"modelCards"`
-			} `json:"routing"`
+				} `json:"models"`
+			} `json:"providers"`
 		} `json:"config"`
 	}
 	if err := json.Unmarshal(document, &values); err != nil {
 		t.Fatal(err)
 	}
 	cards := make(map[string][]string)
-	for _, card := range values.Config.Routing.ModelCards {
+	for _, card := range values.Config.Providers.Models {
 		cards[card.Name] = card.Capabilities
 	}
 	for model, want := range map[string][]string{

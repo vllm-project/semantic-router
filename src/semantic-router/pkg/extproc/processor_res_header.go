@@ -8,11 +8,12 @@ import (
 
 // handleResponseHeaders processes the response headers.
 func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (response *ext_proc.ProcessingResponse, err error) {
-	defer func() { bindAutomaticOutputResponseHeaders(response, ctx) }()
+	defer func() { removeProviderRouterHeaders(response, v) }()
 	// Preserve the provider's actual HTTP status even on the skip-processing
 	// path, without invoking routing, plugins or additional metrics there.
 	if ctx != nil && v != nil {
 		ctx.UpstreamStatusCode = getStatusFromHeaders(v.ResponseHeaders.GetHeaders())
+		ctx.UpstreamResponseGzip = isGzipContentEncoding(v.ResponseHeaders.GetHeaders())
 	}
 	if skipResp := r.handleSkipProcessingResponseHeaders(v, ctx); skipResp != nil {
 		return skipResp, nil
@@ -45,9 +46,10 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 	// processing from attempting fallback and emitting an invalid ImmediateResponse.
 	if ctx != nil {
 		ctx.ResponseHeadersContinued = true
+		r.recordBenchmarkInferenceCall(ctx, outcome.isSuccessful)
 	}
 
-	headerMutation := buildResponseHeaderMutation(ctx, outcome.isSuccessful)
+	headerMutation := buildResponseHeaderMutation(ctx)
 	headerMutation = mergeHeaderMutations(headerMutation, r.runResponseExtensions(ctx, outcome.statusCode))
 	headerMutation = mergeHeaderMutations(headerMutation, buildResponseStreamingMutation(ctx, outcome))
 	// Response headers are sent before the body is decoded. A same-format Chat
@@ -58,5 +60,20 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		headerMutation = mergeHeaderMutations(headerMutation,
 			&ext_proc.HeaderMutation{RemoveHeaders: []string{"content-length"}})
 	}
-	return buildResponseHeadersContinueResponse(headerMutation, ctx != nil && ctx.IsStreamingResponse), nil
+	response = buildResponseHeadersContinueResponse(headerMutation, ctx != nil && ctx.IsStreamingResponse)
+	holdStreamForResponseGuard(ctx, response)
+	return response, nil
+}
+
+// removeProviderRouterHeaders removes the Router's namespace from a
+// provider's response on every path, skipped requests included, before the
+// Router's own headers are set.
+func removeProviderRouterHeaders(response *ext_proc.ProcessingResponse, v *ext_proc.ProcessingRequest_ResponseHeaders) {
+	common := response.GetResponseHeaders().GetResponse()
+	if common == nil || v == nil {
+		return
+	}
+	if names := providerRouterHeaders(v.ResponseHeaders.GetHeaders()); len(names) > 0 {
+		common.HeaderMutation = mergeHeaderMutations(&ext_proc.HeaderMutation{RemoveHeaders: names}, common.HeaderMutation)
+	}
 }

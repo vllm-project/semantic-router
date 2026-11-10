@@ -1,0 +1,34 @@
+# The CLI's layout before config v0.3, schema v0.1: signals and decisions at
+# the top level, models that name their endpoints, access key, reasoning
+# family and quality score, and the defaults beside the models. The version
+# refuses the document whole; migrate writes it in the v0.3 layout and then
+# as v0.5, in one run.
+version: v0.1
+listeners:
+  - {name: http-8888, address: 0.0.0.0, port: 8888, timeout: 300s}
+signals:
+  keywords:
+    - {name: math_keywords, operator: OR, keywords: [calculate, equation]}
+decisions:
+  - name: math
+    priority: 100
+    rules:
+      operator: OR
+      conditions: [{type: keyword, name: math_keywords}]
+    modelRefs: [{model: qwen3, use_reasoning: true}]
+providers:
+  models:
+    - name: qwen3
+      reasoning_family: qwen3
+      endpoints:
+        - {name: primary, weight: 100, endpoint: "127.0.0.1:8000", protocol: http}
+      access_key: written-inline-test-key
+      quality_score: 0.9
+    - name: hosted
+      reasoning_family: deepseek
+      backend_refs: [{name: hosted, endpoint: "127.0.0.1:8001", protocol: http, type: vllm}]
+      access_key: written-inline-test-key
+  default_model: qwen3
+  reasoning_families:
+    qwen3: {type: chat_template_kwargs, parameter: enable_thinking}
+  default_reasoning_effort: medium

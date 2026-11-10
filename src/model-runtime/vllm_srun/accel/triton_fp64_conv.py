@@ -29,18 +29,19 @@ BLOCK = 256
 CHUNK = 64  # FLA's chunk: a segmented call's chunk index
 
 
+# The length and strides stay runtime arguments: as constexprs they would compile the kernel again for every input length.
 @triton.jit
 def _causal_silu(
     X, W, Y,
-    L: tl.constexpr, D: tl.constexpr, N: tl.constexpr,
-    S0: tl.constexpr, S1: tl.constexpr, S2: tl.constexpr,
+    L, D: tl.constexpr,
+    S0, S1, S2,
     K: tl.constexpr, BLOCK: tl.constexpr,
 ):  # fmt: skip
+    b = tl.program_id(1)
     i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
-    valid = i < N
+    valid = i < L * D
     d = i % D
-    t = (i // D) % L
-    b = i // (D * L)
+    t = i // D
     acc = tl.full((BLOCK,), 0, tl.float64)
     for k in tl.static_range(K):
         pos = t - (K - 1) + k
@@ -51,7 +52,7 @@ def _causal_silu(
         acc = tl.fma(x, w, acc)
     v = acc.to(tl.float32).to(X.dtype.element_ty).to(tl.float32)
     y = tl.div_rn(v, 1.0 + libdevice.exp(-v))
-    tl.store(Y + i, y, mask=valid)
+    tl.store(Y + b * L * D + i, y, mask=valid)
 
 
 def causal_silu(hidden_states: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
@@ -62,9 +63,8 @@ def causal_silu(hidden_states: torch.Tensor, weight: torch.Tensor) -> torch.Tens
         device=hidden_states.device,
         dtype=hidden_states.dtype,
     )
-    count = batch * length * channels
-    _causal_silu[(triton.cdiv(count, BLOCK),)](
-        hidden_states, weight, out, length, channels, count, *hidden_states.stride(), TAPS, BLOCK,
+    _causal_silu[(triton.cdiv(length * channels, BLOCK), batch)](
+        hidden_states, weight, out, length, channels, *hidden_states.stride(), TAPS, BLOCK,
         num_warps=4, enable_fp_fusion=False,
     )  # fmt: skip
     return out.transpose(1, 2)

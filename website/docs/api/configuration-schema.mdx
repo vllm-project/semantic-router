@@ -22,7 +22,7 @@ agents to load the full schema first:
 ```bash
 vllm-sr config schema
 vllm-sr config schema --section providers.models
-vllm-sr config schema --section routing.decisions.modelRefs
+vllm-sr config schema --section recipes[].decisions.modelRefs
 vllm-sr config schema --section routing --expanded
 vllm-sr config schema --surface algorithm:multi_factor
 vllm-sr config schema --full
