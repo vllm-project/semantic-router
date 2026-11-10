@@ -225,8 +225,13 @@ def undo_changes(manifest_dir: Path) -> list[str]:
         current = probe.raw(probe.old_text())
         restore = {}
         for key, entry in item["keys"].items():
-            if current[key] == entry["written"]:
+            now, written = current[key], entry["written"]
+            if now == written:
                 restore[key] = entry["before"]
+            elif key == "file" and now and now.startswith(written):
+                # the Codex TUI appends tables of its own, such as [tui], to the profile
+                tail = now[len(written) :].lstrip("\n")
+                restore[key] = (entry["before"] or "") + tail
             else:
                 what = path if key == "file" else f"{key} in {path}"
                 report.append(f"kept {what}: it was changed after vllm-sr connect")

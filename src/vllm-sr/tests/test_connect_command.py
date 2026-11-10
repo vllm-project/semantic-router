@@ -150,15 +150,25 @@ def test_codex_profile_holds_the_provider_and_undo_restores_the_old_one(tmp_path
 
 
 def test_undo_removes_what_it_created_and_keeps_what_changed_since(tmp_path):
-    hc.apply_changes([hc.codex_change(tmp_path, "p", "http://gw", "m", "K")], tmp_path)
-    hc.undo_changes(tmp_path)
-    assert not (tmp_path / "p.config.toml").exists()
-
-    hc.apply_changes([hc.codex_change(tmp_path, "p", "http://gw", "m", "K")], tmp_path)
     profile = tmp_path / "p.config.toml"
-    profile.write_text(profile.read_text() + "model_context_window = 1\n")
+    change = hc.codex_change(tmp_path, "p", "http://gw", "m", "K")
+    hc.apply_changes([change], tmp_path)
+    hc.undo_changes(tmp_path)
+    assert not profile.exists()
+
+    hc.apply_changes([change], tmp_path)
+    # the Codex TUI appends its own tables after the profile's text
+    profile.write_text(
+        profile.read_text() + "\n[tui]\nscreen_reader_detection_done = true\n"
+    )
+    hc.undo_changes(tmp_path)
+    assert profile.read_text() == "[tui]\nscreen_reader_detection_done = true\n"
+
+    profile.unlink()
+    hc.apply_changes([change], tmp_path)
+    profile.write_text(profile.read_text().replace("http://gw", "http://other"))
     report = hc.undo_changes(tmp_path)
-    assert "model_context_window" in profile.read_text()
+    assert "http://other" in profile.read_text()
     assert any(line.startswith("kept ") for line in report)
 
 
