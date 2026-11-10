@@ -66,11 +66,11 @@ func retentionTTLOverrideSeconds(ctx *RequestContext) (int, bool) {
 
 // applyRetentionTTLOverride returns the cache-write TTL (seconds) to use: the
 // decision's retention `ttl_turns` shortens the base TTL and never lengthens
-// it. A negative base (the store's default) takes ttl_turns, and a zero base
-// (no store) stays zero. Callers compute the base TTL (the plugin's
-// ttl_seconds bounded by the caller's ttl) first and pass it here. This runs
-// only after the drop gate (ShouldSkipCacheWrite); drop and ttl_turns are
-// mutually exclusive by validation.
+// it. A negative base (a store without expiry) takes ttl_turns, and a zero
+// base (no store) stays zero. Callers compute the base TTL (the plugin's
+// ttl_seconds, else the store's, bounded by the caller's ttl) first and pass
+// it here. This runs only after the drop gate (ShouldSkipCacheWrite); drop
+// and ttl_turns are mutually exclusive by validation.
 func applyRetentionTTLOverride(base int, ctx *RequestContext) int {
 	if override, ok := retentionTTLOverrideSeconds(ctx); ok && (base < 0 || override < base) {
 		return override

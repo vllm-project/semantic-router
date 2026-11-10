@@ -72,9 +72,13 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 		ctx.CacheIdentity = responseCacheIdentity(ctx, ctx.CacheRequestModel)
 	}
 
+	// Without a plugin ttl_seconds the entry lives the store's ttl_seconds,
+	// which a caller's ttl and ttl_turns may only shorten.
 	ttlSeconds := -1
 	if plugin := requestResponseCache(ctx); plugin != nil && plugin.TTLSeconds != nil {
 		ttlSeconds = *plugin.TTLSeconds
+	} else if r.Config != nil && r.Config.SemanticCache.TTLSeconds > 0 {
+		ttlSeconds = r.Config.SemanticCache.TTLSeconds
 	}
 	ttlSeconds = applyResponseCacheRequestTTL(ctx, ttlSeconds)
 	ttlSeconds = applyRetentionTTLOverride(ttlSeconds, ctx)
