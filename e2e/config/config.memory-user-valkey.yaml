@@ -134,7 +134,6 @@ global:
         index_ef_construction: 256
       default_retrieval_limit: 5
       default_similarity_threshold: 0.45
-    response_cache:
   plugins:
     - type: context
       configuration:

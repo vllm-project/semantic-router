@@ -312,3 +312,29 @@ def test_custom_evaluation_requires_versioned_namespace():
                 },
             }
         )
+
+
+def test_unquoted_measured_at_date_loads_as_the_router_reads_it(tmp_path):
+    """YAML reads an unquoted 2026-09-09 as a date; the Router keeps the text."""
+    from cli.parser import parse_user_config
+
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """version: v0.5
+providers:
+  models:
+    - name: private-chat
+evaluation:
+  records:
+    - model: private-chat
+      benchmark: acme/legal-reasoning@1.0.0
+      metrics: {accuracy: 0.61}
+      measured_at: 2026-09-09
+recipes:
+  - name: default
+""",
+        encoding="utf-8",
+    )
+
+    config = parse_user_config(str(config_path), log_summary=False)
+    assert config.evaluation.records[0].measured_at == "2026-09-09"

@@ -160,7 +160,7 @@ algorithm:
 |-----------|------|---------|-------------|
 | `breadth_schedule` | list[int] | **required** | Parallel calls before the final synthesis call (e.g., `[3, 2]`) |
 | `model_distribution` | string | `weighted` | Strategy: `weighted`, `equal`, `round_robin`, `first_only` |
-| `temperature` | float | `1.0` | Temperature for model calls |
+| `temperature` | float | the request's | Temperature for model calls |
 | `include_reasoning` | bool | `false` | Include reasoning content in synthesis prompts |
 | `compaction_strategy` | string | `full` | Strategy: `full` or `last_n_tokens` |
 | `compaction_tokens` | int | `1000` | Tokens to keep for `last_n_tokens` compaction |
@@ -169,9 +169,13 @@ algorithm:
 | `max_completion_tokens` | int | request default | Maximum completion tokens applied to every ReMoM subrequest |
 | `round_timeout_seconds` | int | — | Maximum seconds to wait for a round before using partial responses when `algorithm.on_error: skip` |
 | `min_successful_responses` | int | — | Return from a parallel round after this many successful responses |
-| `shuffle_seed` | int | `42` | Random seed for response shuffling |
-| `include_intermediate_responses` | bool | `true` | Include intermediate responses in output |
+| `shuffle_seed` | int | `0` | Random seed for response shuffling |
+| `include_intermediate_responses` | bool | `false` | Include intermediate responses in output |
 | `max_responses_per_round` | int | — | Maximum responses to keep per round |
+
+Without a `remom` block, ReMoM runs `breadth_schedule: [4]` with
+`temperature: 1.0`, `shuffle_seed: 42` and `include_intermediate_responses:
+true`.
 
 `algorithm.on_error`, beside the type, decides what a failed call does: `skip`
 (the default) continues with the responses that succeeded, `fail` ends the run.

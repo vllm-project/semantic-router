@@ -9,41 +9,24 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, validators
 
+from cli.context_bands import references_environment
+
 from . import schema_document
 
-_ENV_REFERENCE = re.compile(r"^\$\{[^{}]+\}$")
+_CONST = Draft202012Validator.VALIDATORS["const"]
 
 
-def _environment_reference(value: Any) -> bool:
-    return isinstance(value, str) and _ENV_REFERENCE.fullmatch(value) is not None
+def _const(validator, const, instance, schema):
+    # The Router expands an environment reference to text before it decodes a
+    # field, so a reference can stand for a text constant such as the "auto"
+    # of a number-or-auto field. A number or boolean field takes no text.
+    if isinstance(const, str) and isinstance(instance, str):
+        if references_environment(instance):
+            return
+    yield from _CONST(validator, const, instance, schema)
 
 
-_BASE_TYPE_CHECKER = Draft202012Validator.TYPE_CHECKER
-
-
-def _number_or_environment(_checker, value: Any) -> bool:
-    return _BASE_TYPE_CHECKER.is_type(value, "number") or _environment_reference(value)
-
-
-def _integer_or_environment(_checker, value: Any) -> bool:
-    return _BASE_TYPE_CHECKER.is_type(value, "integer") or _environment_reference(value)
-
-
-def _boolean_or_environment(_checker, value: Any) -> bool:
-    return _BASE_TYPE_CHECKER.is_type(value, "boolean") or _environment_reference(value)
-
-
-_CONFIG_TYPE_CHECKER = _BASE_TYPE_CHECKER.redefine_many(
-    {
-        "number": _number_or_environment,
-        "integer": _integer_or_environment,
-        "boolean": _boolean_or_environment,
-    }
-)
-ConfigSchemaValidator = validators.extend(
-    Draft202012Validator,
-    type_checker=_CONFIG_TYPE_CHECKER,
-)
+_Validator = validators.extend(Draft202012Validator, {"const": _const})
 
 
 def _normalise_scalar(value: Any) -> Any:
@@ -60,7 +43,7 @@ def validate_config_structure(data: dict[str, Any]) -> list[str]:
     """Return stable JSON-Schema errors without applying Router semantics."""
 
     document = _normalise_scalar(copy.deepcopy(data))
-    validator = ConfigSchemaValidator(schema_document())
+    validator = _Validator(schema_document())
     errors = sorted(
         validator.iter_errors(document),
         key=lambda error: (
