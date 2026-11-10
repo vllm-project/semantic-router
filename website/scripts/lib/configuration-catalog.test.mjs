@@ -10,6 +10,7 @@ import {
   GENERATED_CATALOG_START,
   replaceGeneratedCatalog,
   renderConfigurationCatalog,
+  signalTutorialType,
 } from './configuration-catalog.mjs'
 
 test('extracts the first sentence from the Overview prose', () => {
@@ -45,15 +46,31 @@ test('requires exactly one Overview section', () => {
 test('rejects missing and ambiguous tutorial matches', () => {
   const root = mkdtempSync(join(tmpdir(), 'configuration-catalog-'))
   mkdirSync(join(root, 'heuristic'), { recursive: true })
-  mkdirSync(join(root, 'learned'), { recursive: true })
+  mkdirSync(join(root, 'application'), { recursive: true })
 
   assert.throws(() => findSingleTutorial(root, 'keyword'), /No tutorial named keyword\.md/)
 
   writeFileSync(join(root, 'heuristic', 'keyword.md'), '# Keyword\n')
   assert.equal(findSingleTutorial(root, 'keyword'), join(root, 'heuristic', 'keyword.md'))
 
-  writeFileSync(join(root, 'learned', 'keyword.md'), '# Duplicate\n')
+  writeFileSync(join(root, 'application', 'keyword.md'), '# Duplicate\n')
   assert.throws(() => findSingleTutorial(root, 'keyword'), /Ambiguous tutorial for keyword/)
+})
+
+test('types a signal by the layer its tutorial lives in', () => {
+  const root = join(tmpdir(), 'signal')
+
+  assert.equal(signalTutorialType(root, join(root, 'systemone.md')), 'primitive signal')
+  assert.equal(signalTutorialType(root, join(root, 'application', 'pii.md')), 'application signal')
+  assert.equal(signalTutorialType(root, join(root, 'heuristic', 'keyword.md')), 'heuristic signal')
+  assert.throws(
+    () => signalTutorialType(root, join(root, 'learned', 'pii.md')),
+    /must be signal\/systemone\.md or live directly under signal\/application or signal\/heuristic/,
+  )
+  assert.throws(
+    () => signalTutorialType(root, join(root, 'pii.md')),
+    /must be signal\/systemone\.md/,
+  )
 })
 
 test('replaces only the marked generated catalog block', () => {
@@ -66,20 +83,19 @@ test('replaces only the marked generated catalog block', () => {
   )
 })
 
-test('publishes native System One algorithms separately from Chat algorithms', () => {
+test('publishes selectors and executors as separate tables', () => {
   const entry = {
-    family: 'cascade',
-    type: 'native algorithm',
-    goal: 'Keep the typed request together.',
-    fragmentPath: 'config/fragments/algorithm/native/cascade.yaml',
+    family: 'escalate',
+    type: 'executor',
+    goal: 'Call the candidates in order until one answer is accepted.',
+    fragmentPath: 'config/fragments/algorithm/looper/escalate.yaml',
     fragmentKind: 'file',
-    guide: '../tutorials/algorithm/native/cascade',
+    guide: '../tutorials/algorithm/looper/escalate',
   }
   const catalog = renderConfigurationCatalog({
-    signals: [], selectionAlgorithms: [], looperAlgorithms: [],
-    nativeAlgorithms: [entry], plugins: [],
+    signals: [], selectors: [], executors: [entry], plugins: [],
   })
-  assert.match(catalog, /### Native System One algorithms/)
-  assert.match(catalog, /`cascade` — native algorithm/)
-  assert.match(catalog, /tutorials\/algorithm\/native\/cascade/)
+  assert.match(catalog, /### Selectors/)
+  assert.match(catalog, /### Executors\n\n.*\n.*\n\| `escalate` — executor/)
+  assert.doesNotMatch(catalog, /Native System One/)
 })

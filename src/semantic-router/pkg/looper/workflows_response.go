@@ -73,7 +73,7 @@ func formatWorkflowJSONResponse(
 					"role":    "assistant",
 					"content": finalResp.Content,
 				},
-				"finish_reason": workflowFinalFinishReason(finalResp),
+				"finish_reason": backendFinishReason(finalResp),
 			},
 		},
 		"usage": usage.Map(),
@@ -94,12 +94,27 @@ func formatWorkflowJSONResponse(
 	}, cfg, trace)
 }
 
-func workflowFinalFinishReason(resp *ModelResponse) string {
+// backendFinishReason is the finish_reason the backend gave the response an
+// executor serves, so a cut or filtered answer is not published as complete.
+func backendFinishReason(resp *ModelResponse) string {
 	if resp.Parsed != nil && len(resp.Parsed.Choices) > 0 && resp.Parsed.Choices[0].FinishReason != "" {
 		return resp.Parsed.Choices[0].FinishReason
 	}
+	// A streamed response has no parsed completion; its last chunk that
+	// finishes the choice carries the reason.
+	reason := "stop"
+	for _, data := range resp.StreamingChunks {
+		var chunk struct {
+			Choices []struct {
+				FinishReason string `json:"finish_reason"`
+			} `json:"choices"`
+		}
+		if json.Unmarshal([]byte(data), &chunk) == nil && len(chunk.Choices) > 0 && chunk.Choices[0].FinishReason != "" {
+			reason = chunk.Choices[0].FinishReason
+		}
+	}
 	// Locally assembled responses may not carry a backend completion.
-	return "stop"
+	return reason
 }
 
 func formatWorkflowToolCallJSONResponse(
@@ -148,7 +163,7 @@ func formatWorkflowStreamingResponse(
 		err  error
 	)
 	if finalResp.HasToolCalls {
-		body, err = buildWorkflowStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw)
+		body, err = buildWorkflowStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw, backendFinishReason(finalResp))
 		if err != nil {
 			return nil, err
 		}
@@ -166,6 +181,7 @@ func buildWorkflowStreamingToolCallSSE(
 	created int64,
 	model string,
 	raw []byte,
+	finishReason string,
 ) ([]byte, error) {
 	toolCalls, err := fusionToolCallDeltasFromRaw(raw)
 	if err != nil {
@@ -187,7 +203,7 @@ func buildWorkflowStreamingToolCallSSE(
 	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, map[string]interface{}{
 		"index":         0,
 		"delta":         map[string]interface{}{},
-		"finish_reason": "tool_calls",
+		"finish_reason": toolCallFinishReason(finishReason),
 	}, nil))
 	return appendSSEDone(body), nil
 }
@@ -215,7 +231,7 @@ func buildWorkflowStreamingSSE(
 	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, map[string]interface{}{
 		"index":         0,
 		"delta":         map[string]interface{}{},
-		"finish_reason": workflowFinalFinishReason(finalResp),
+		"finish_reason": backendFinishReason(finalResp),
 	}, nil))
 	return appendSSEDone(body)
 }

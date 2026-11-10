@@ -24,8 +24,14 @@ func TestValidateDecisionAction(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			cfg := &RouterConfig{
-				IntelligentRouting: IntelligentRouting{Decisions: []Decision{{Name: "guard", Rules: test.rules, Action: test.action}}},
-				BackendModels:      BackendModels{ModelConfig: map[string]ModelParams{"safe-model": {}}},
+				IntelligentRouting: IntelligentRouting{
+					Signals: Signals{
+						JailbreakRules: []JailbreakRule{{Name: "prompt_injection"}},
+						KeywordRules:   []KeywordRule{{Name: "x", Operator: "OR", Keywords: []string{"x"}}},
+					},
+					Decisions: []Decision{{Name: "guard", Rules: test.rules, Action: test.action}},
+				},
+				BackendModels: BackendModels{ModelConfig: map[string]ModelParams{"safe-model": {}}},
 			}
 			err := validateDecisionModelContracts(cfg)
 			if test.wantErr == "" && err != nil {

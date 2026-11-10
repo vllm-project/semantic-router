@@ -126,9 +126,8 @@ func newShadowTestRouter(t *testing.T, backend *shadowTestBackend) (*OpenAIRoute
 	return router, primaryModel
 }
 
-func shadowTestPluginConfig() *config.ShadowDispatchPluginConfig {
-	return &config.ShadowDispatchPluginConfig{
-		Enabled:        true,
+func shadowTestPluginConfig() *config.RouterReplayShadowConfig {
+	return &config.RouterReplayShadowConfig{
 		Model:          shadowTestModel,
 		TimeoutSeconds: 5,
 	}
@@ -145,7 +144,7 @@ func runShadowRequest(
 	t *testing.T,
 	router *OpenAIRouter,
 	primaryModel string,
-	pluginCfg *config.ShadowDispatchPluginConfig,
+	pluginCfg *config.RouterReplayShadowConfig,
 	mutate func(ctx *RequestContext),
 ) shadowRun {
 	t.Helper()
@@ -156,7 +155,7 @@ func runShadowRequestWithReasoning(
 	t *testing.T,
 	router *OpenAIRouter,
 	primaryModel string,
-	pluginCfg *config.ShadowDispatchPluginConfig,
+	pluginCfg *config.RouterReplayShadowConfig,
 	mutate func(ctx *RequestContext),
 	useReasoning bool,
 ) shadowRun {
@@ -179,7 +178,9 @@ func runShadowRequestWithReasoning(
 	}
 	ctx.RouterReplayID = replayID
 	ctx.RouterReplayRecorder = recorder
-	ctx.ShadowDispatchPluginConfig = pluginCfg
+	if pluginCfg != nil {
+		ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, Shadow: pluginCfg}
+	}
 	if mutate != nil {
 		mutate(ctx)
 	}
@@ -455,9 +456,7 @@ func TestShadowDispatchSamplingAndSkipRules(t *testing.T) {
 		ctx.LooperRequest = true
 	})
 
-	disabled := shadowTestPluginConfig()
-	disabled.Enabled = false
-	runShadowRequest(t, router, primaryModel, disabled, nil)
+	runShadowRequest(t, router, primaryModel, nil, nil)
 
 	waitForShadow(t, router)
 	if got := backend.requestCount(); got != 0 {
@@ -549,7 +548,7 @@ func TestShadowDispatchRendersShadowModelWhenPrimaryReplaysClientBytes(t *testin
 	}
 	ctx.RouterReplayID = replayID
 	ctx.RouterReplayRecorder = recorder
-	ctx.ShadowDispatchPluginConfig = shadowTestPluginConfig()
+	ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, Shadow: shadowTestPluginConfig()}
 
 	response, err := router.handleEntrypointModelRouting(
 		request, primaryModel, decision.Name, entropy.ReasoningDecision{}, primaryModel, ctx,
@@ -938,11 +937,10 @@ func TestShadowOutcomeSurvivesRouterAssignedReplayID(t *testing.T) {
 	}
 	ctx.VSRSelectedDecision = decision
 	ctx.VSRSelectedDecisionName = decision.Name
-	ctx.ShadowDispatchPluginConfig = shadowTestPluginConfig()
 	// The router assigns the id, the way it does in production, so the recorder
 	// is reached through the router rather than handed to the context.
 	router.ReplayRecorder = recorder
-	ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true}
+	ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, Shadow: shadowTestPluginConfig()}
 
 	if _, err := router.handleEntrypointModelRouting(
 		request, "virtual", decision.Name, entropy.ReasoningDecision{}, primaryModel, ctx,

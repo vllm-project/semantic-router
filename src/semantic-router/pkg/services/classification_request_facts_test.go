@@ -10,12 +10,10 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 )
 
 func TestClassificationServiceEvaluatesRequestEnvelopeFacts(t *testing.T) {
 	equalsCanary := "canary"
-	minBytes := 4.0
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
 			Signals: config.Signals{
@@ -26,30 +24,15 @@ func TestClassificationServiceEvaluatesRequestEnvelopeFacts(t *testing.T) {
 						Equals: &equalsCanary,
 					},
 				}},
-				ConversationRules: []config.ConversationRule{{
-					Name: "has-image",
-					Feature: config.ConversationFeature{
-						Type:   "exists",
-						Source: config.ConversationSource{Type: "image_content"},
-					},
-				}},
-				StructureRules: []config.StructureRule{{
-					Name: "raw-bytes",
-					Feature: config.StructureFeature{
-						Type:   "count",
-						Source: config.StructureSource{Type: "text_bytes"},
-					},
-					Predicate: &config.NumericPredicate{GTE: &minBytes},
-				}},
+				InputModalityRules: []config.InputModalityRule{{Name: "has-image", Modality: config.InputModalityImage}},
 			},
 			Decisions: []config.Decision{
 				requestFactDecision("metadata-route", config.SignalTypeMetadata, "canary", 30),
-				requestFactDecision("image-route", config.SignalTypeConversation, "has-image", 20),
-				requestFactDecision("bytes-route", config.SignalTypeStructure, "raw-bytes", 10),
+				requestFactDecision("image-route", config.SignalTypeInputModality, "has-image", 20),
 			},
 		},
 	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifier, err := classification.NewClassifier(cfg)
 	require.NoError(t, err)
 	service := NewClassificationService(classifier, cfg)
 
@@ -72,34 +55,7 @@ func TestClassificationServiceEvaluatesRequestEnvelopeFacts(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, imageResponse.DecisionResult)
 	require.Equal(t, "image-route", imageResponse.DecisionResult.DecisionName)
-	require.Equal(t, float64(1), imageResponse.SignalValues["conversation:has-image"])
-
-	bytesResponse, err := service.ClassifyIntentForEval(context.Background(), IntentRequest{
-		Messages: []IntentMessage{{
-			Role:    "user",
-			Content: mustMessageContent(t, " \t \n"),
-		}},
-	})
-	require.NoError(t, err)
-	require.NotNil(t, bytesResponse.DecisionResult)
-	require.Equal(t, "bytes-route", bytesResponse.DecisionResult.DecisionName)
-	require.Equal(t, float64(4), bytesResponse.SignalValues["structure:raw-bytes"])
-
-	topLevelBytesResponse, err := service.ClassifyIntentForEval(context.Background(), IntentRequest{
-		Text: " \t \n",
-	})
-	require.NoError(t, err)
-	require.NotNil(t, topLevelBytesResponse.DecisionResult)
-	require.Equal(
-		t,
-		"bytes-route",
-		topLevelBytesResponse.DecisionResult.DecisionName,
-	)
-	require.Equal(
-		t,
-		float64(4),
-		topLevelBytesResponse.SignalValues["structure:raw-bytes"],
-	)
+	require.Equal(t, float64(1), imageResponse.SignalValues["input_modality:has-image"])
 }
 
 func TestClassificationServiceContextSignalUsesFullRequestTokenFloor(t *testing.T) {
@@ -129,7 +85,7 @@ func TestClassificationServiceContextSignalUsesFullRequestTokenFloor(t *testing.
 			},
 		},
 	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifier, err := classification.NewClassifier(cfg)
 	require.NoError(t, err)
 	service := NewClassificationService(classifier, cfg)
 
@@ -188,112 +144,4 @@ func requestFactDecision(
 			Name: signalName,
 		},
 	}
-}
-
-func TestClassifyIntentForEvalReturnsDiagnosticsWhenFailRequest(t *testing.T) {
-	threshold := 0.5
-	cfg := &config.RouterConfig{
-		ExternalModels: []config.ExternalModelConfig{{
-			Name:           "risk-judge",
-			ModelRole:      config.ModelRoleClassification,
-			ModelName:      "risk-judge",
-			TimeoutSeconds: 1,
-			ModelEndpoint: config.ClassifierVLLMEndpoint{
-				Address:  "127.0.0.1",
-				Port:     1,
-				Protocol: "http",
-			},
-		}},
-		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{
-				ClassifierRules: []config.ClassifierSignalRule{{
-					Name:         "risk",
-					Type:         "llm",
-					Model:        "risk-judge",
-					Labels:       []string{"SAFE", "RISKY"},
-					Instructions: "Classify.",
-				}},
-			},
-			Decisions: []config.Decision{{
-				Name: "guarded",
-				Rules: config.RuleNode{
-					Type:      config.SignalTypeClassifier,
-					Name:      "risk",
-					Label:     "RISKY",
-					Predicate: &config.NumericPredicate{GTE: &threshold},
-					OnUnknown: config.RuleOnUnknownFailRequest,
-				},
-			}},
-		},
-	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
-	require.NoError(t, err)
-	service := NewClassificationService(classifier, cfg)
-
-	for name, trace := range map[string]bool{"without trace": false, "with trace": true} {
-		t.Run(name, func(t *testing.T) {
-			response, evalErr := service.ClassifyIntentForEval(context.Background(), IntentRequest{
-				Text:    "hello",
-				Options: &IntentOptions{Trace: trace},
-			})
-			require.ErrorIs(t, evalErr, decision.ErrDecisionUnresolved)
-			require.NotNil(t, response)
-			require.NotEmpty(t, response.DecisionError)
-			require.Equal(t, trace, len(response.EvalTrace) > 0)
-		})
-	}
-}
-
-func TestClassifyIntentScopesSignalsToDefaultRecipeDecisions(t *testing.T) {
-	equalsCanary := "canary"
-	cfg := &config.RouterConfig{
-		ExternalModels: []config.ExternalModelConfig{{
-			Name:           "unrelated-judge",
-			ModelRole:      config.ModelRoleClassification,
-			ModelName:      "unrelated-judge",
-			TimeoutSeconds: 1,
-			ModelEndpoint: config.ClassifierVLLMEndpoint{
-				Address:  "127.0.0.1",
-				Port:     1,
-				Protocol: "http",
-			},
-		}},
-		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{
-				MetadataRules: []config.MetadataRule{{
-					Name: "canary",
-					Key:  "cohort",
-					Predicate: config.MetadataPredicate{
-						Equals: &equalsCanary,
-					},
-				}},
-				ClassifierRules: []config.ClassifierSignalRule{{
-					Name:         "other-recipe-risk",
-					Type:         "llm",
-					Model:        "unrelated-judge",
-					Labels:       []string{"SAFE", "RISKY"},
-					Instructions: "Classify.",
-				}},
-			},
-			Decisions: []config.Decision{
-				requestFactDecision(
-					"metadata-route",
-					config.SignalTypeMetadata,
-					"canary",
-					10,
-				),
-			},
-		},
-	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
-	require.NoError(t, err)
-	service := NewClassificationService(classifier, cfg)
-
-	response, err := service.ClassifyIntent(context.Background(), IntentRequest{
-		Metadata: map[string]string{"cohort": "canary"},
-	})
-	require.NoError(t, err)
-	require.NotNil(t, response.DecisionResult)
-	require.Equal(t, "metadata-route", response.DecisionResult.DecisionName)
-	require.NotContains(t, response.SignalErrors, "classifier:other-recipe-risk")
 }

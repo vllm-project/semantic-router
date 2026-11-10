@@ -20,7 +20,7 @@ def _split_runtime_topology(monkeypatch):
 def _start(tmp_path, monkeypatch, gateway):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 127.0.0.1\n    port: 8899\n"
+        "version: v0.5\nlisteners:\n  - name: http-8899\n    address: 127.0.0.1\n    port: 8899\n"
     )
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     resolved_images = []

@@ -254,7 +254,7 @@ func TestRoutingTraceRAGErrorOmitsPrivateCause(t *testing.T) {
 	_, span := tracing.StartSpan(t.Context(), tracing.SpanRAGRetrieval)
 	secret := "private-provider?token=fixture-secret&prompt=private-input"
 	ctx := &RequestContext{}
-	if err := handleRAGRetrievalError(ctx, span, &config.RAGPluginConfig{Backend: "external_api", OnFailure: "skip"}, "route", errors.New(secret), .1); err != nil {
+	if err := handleRAGRetrievalError(ctx, span, &config.ContextSource{Type: config.ContextSourceRAG, Backend: "external_api", OnFailure: config.RAGOnFailureSkip}, errors.New(secret), .1); err != nil {
 		t.Fatal(err)
 	}
 	span.End()
@@ -293,8 +293,8 @@ func TestRoutingTraceLocalResponseErrorKeepsProviderStatus(t *testing.T) {
 	}{{"guard block before EOS", 403, false}, {"guard block at EOS", 403, true}, {"decode error", 502, true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			recorder := routingTraceRecorder(t)
-			server := newJailbreakScoreServer(t, 0.95, 0.05)
-			router, ctx := newResponseStageRouter(t, server, "", "block")
+			server := newJailbreakDecider(0.95)
+			router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
 			ctx.SourceFormat, ctx.TargetFormat = llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1
 			ctx.StartTime = time.Now()
 			ctx.VSRSelectedModel = "provider-model"

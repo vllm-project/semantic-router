@@ -3,7 +3,7 @@ is_mtpe: false
 title: 配置契约
 description: 发现、校验并扩展 canonical vLLM Semantic Router 配置，而无需重复 schema。
 translation:
-  source_commit: "12c2aa4feb5c5d40d90104d8b09cade1facf0bf5"
+  source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
   source_file: "docs/installation/configuration-contract.md"
   outdated: false
 ---
@@ -58,7 +58,13 @@ vllm-sr config schema \
 
 `--endpoint` 适用于每个渐进选项。Router 端点是 `GET /api/v1/config/schema`：省略 `view` 返回紧凑索引；使用 `view=section&path=...` 获取紧凑字段目录，添加 `expanded=true` 获取该章节的自包含 schema，使用 `view=surface&kind=...&name=...` 获取一个已注册的路由表面，使用 `view=full` 获取完整 JSON Schema。
 
-控制面板在 `GET /api/router/config/schema` 代理已部署的 Router 契约。如果该 Router 端点不可用，它会回退到控制面板构建中嵌入的 schema，并用 `X-Vllm-Sr-Schema-Source: bundled` 标记响应。**Operate → Platform & Access → Schema Reference** 页面显示此来源，并在已部署契约与捆绑契约不同时发出警告。网站的[配置 Schema 参考](../api/configuration-schema)可视化当前文档发行版，而不声称代表某个部署。
+各处看到的 schema 分别来自：
+
+| 视图 | Schema |
+| --- | --- |
+| 控制面板，`GET /api/router/config/schema` | 代理已部署 Router 的契约。如果该 Router 端点不可用，则使用控制面板构建中嵌入的 schema，并标记 `X-Vllm-Sr-Schema-Source: bundled`。 |
+| 控制面板，**Operate → Platform & Access → Schema Reference** | 显示使用的是哪一份，并在已部署契约与捆绑契约不同时发出警告。 |
+| 网站，[配置 Schema 参考](../api/configuration-schema) | 当前文档发行版，不代表任何部署。 |
 
 Agent 不需要控制面板。在 Router 上查询 `GET /api/v1` 获取紧凑端点清单，然后用 `GET /openapi.json?path=...&method=...` 请求一项操作；仅在需要完整 API 文档时使用 `GET /openapi.json`。控制面板的 **Router API Docs** 链接是指向同一运行时文档的面向人工的代理。
 
@@ -79,7 +85,7 @@ JSON Schema 校验尽早捕获结构错误。在应用配置之前，将编写�
 
 ```json
 {
-  "yaml": "version: v0.3\nrouting: {}\nglobal: {}\n"
+  "yaml": "version: v0.5\nrecipes:\n  - name: default\nglobal: {}\n"
 }
 ```
 
@@ -95,6 +101,19 @@ JSON Schema 校验尽早捕获结构错误。在应用配置之前，将编写�
 
 不要添加消费者字段允许列表、信号/algorithm/插件清单副本，或仅属于消费者的语义规则。决定 Router 能否运行的规则应首先放在 Go 中。
 
+### 启动与 Kubernetes 协调 {#startup-and-kubernetes-reconciliation}
+
+Router 在每次加载配置时都会检查静态全局设置，包括 `global.router.config_source` 为 `kubernetes` 时。无效的缓存、记忆、嵌入、分类器后端、learning、工具过滤和准入设置会在创建运行时资源之前让启动失败。
+
+路由图何时校验取决于配置来源：
+
+- **基于文件的配置**在加载时校验完整的路由图。
+- **Kubernetes** 会把路由契约推迟到 `IntelligentPool` 和 `IntelligentRoute` 合并之后。随后协调过程重新检查全局设置，并在激活候选配置之前校验路由引用、配方兼容性和信号规则。无效的候选会在 CRD 上报告 `ValidationFailed`，并保留当前生效的配置。
+
+无论哪种来源，部署定义都是静态的，路由和配方绑定只在完整配置阶段编译。每个配方的信号规则也在这一阶段对照它们解析到的部署（问题类型、span 能力、输入模态）检查。
+
+校验器的注册和阶段选择都在 `src/semantic-router/pkg/config/validator_dispatch.go` 中。新的全局校验器请在那里注册，使启动和协调都会执行它；只有需要 CRD 路由状态的检查才属于延迟的路由组。每条规则的实现放在其配置族的校验器中。
+
 ## Agent 编写循环
 
 自动化或部署 Agent 应当：
@@ -109,9 +128,13 @@ JSON Schema 校验尽早捕获结构错误。在应用配置之前，将编写�
 
 当目标 Router 的 schema 可用时，Agent 绝不应该从示例推断字段，或发送未知键。
 
-## 添加或更改字段
+## 添加或更改字段 {#add-or-change-a-field}
 
-对于稳态字段，更新其 Go 类型、YAML 标签和源注释。仅当存在在结构上强制时才添加 `jsonschema:"required"`；默认值和跨字段要求仍属于语义校验。对于带判别器的路由表面，同时更新匹配的 Go 注册表。注册表覆盖会对照反射的 Go 字段检查，因此如果只在一侧添加信号、投影或 algorithm 载荷，生成会失败。
+要添加或更改稳态字段：
+
+1. 更新其 Go 类型、YAML 标签和源注释。
+2. 仅当字段的存在在结构上是强制的时，才添加 `jsonschema:"required"`；默认值和跨字段要求仍属于语义校验。
+3. 对于带判别器的路由表面，同时更新匹配的 Go 注册表。注册表覆盖会对照反射的 Go 字段检查，因此如果只在一侧添加信号、投影或 algorithm 载荷，生成会失败。
 
 将语义校验保留在 Router 中，将平台校验放在拥有它的部署代码旁边。控制面板展示元数据可以改进生成的控件，但未经整理的新字段或全局章节仍必须可通过通用 schema 渲染器编辑。然后重新生成并运行契约检查：
 
@@ -121,6 +144,8 @@ make config-schema-check
 make check
 ```
 
-仓库恰好跟踪一份完整 schema，位于 `src/semantic-router/pkg/configschema/router-config-v0.3.schema.json`。生成器还会发出一个小型 TypeScript 导入/类型适配器，但没有第二份 JSON 副本。打包会将 canonical 产物暂存到 wheel 和容器镜像中，而不会把生成文件写回工作树。当 canonical 产物或适配器过期时，CI 会失败。
+- **只有一份 schema。**仓库恰好跟踪一份完整 schema，位于 `src/semantic-router/pkg/configschema/router-config-v0.5.schema.json`。生成器还会发出一个小型 TypeScript 导入和类型适配器，但没有第二份 JSON 副本。
+- **打包**会将 canonical 产物暂存到 wheel 和容器镜像中，而不会把生成文件写回工作树。
+- **CI** 会在 canonical 产物或适配器过期时失败。
 
 `setup.mode` 是仅用于引导的控制面板控制平面元数据，因此 Router schema 不会发布它。控制面板在激活时移除它；活动 Router 文档和对 `/api/v1/config/validate` 的调用不得包含它。

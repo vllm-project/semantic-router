@@ -1,5 +1,5 @@
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -19,64 +19,62 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    modelCards:
-      - name: general-expert
-    signals:
-      conversation:
-        - name: multi_turn_user
-          description: At least two user messages - the conversation has history.
-          feature:
-            type: count
-            source:
-              type: message
-              role: user
-          predicate:
-            gte: 2
-        - name: has_developer_message
-          description: Request includes a developer (system-like) message.
-          feature:
-            type: exists
-            source:
-              type: message
-              role: developer
-    decisions:
-      - name: multi_turn_user_routing
-        description: Route requests whose conversation signal matches multi_turn_user.
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: conversation
-              name: multi_turn_user
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: has_developer_message_routing
-        description: Route requests whose conversation signal matches has_developer_message.
-        priority: 90
-        rules:
-          operator: AND
-          conditions:
-            - type: conversation
-              name: has_developer_message
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: default-route
-        description: Fallback route for requests matching no conversation rule.
-        priority: 10
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
+  recipes:
+    - name: default
+      signals:
+        conversation:
+          - name: multi_turn_user
+            description: At least two user messages - the conversation has history.
+            feature:
+              type: count
+              source:
+                type: message
+                role: user
+            predicate:
+              gte: 2
+          - name: has_developer_message
+            description: Request includes a developer (system-like) message.
+            feature:
+              type: exists
+              source:
+                type: message
+                role: developer
+      decisions:
+        - name: multi_turn_user_routing
+          description: Route requests whose conversation signal matches multi_turn_user.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: multi_turn_user
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: has_developer_message_routing
+          description: Route requests whose conversation signal matches has_developer_message.
+          priority: 90
+          rules:
+            operator: AND
+            conditions:
+              - type: conversation
+                name: has_developer_message
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: default-route
+          description: Fallback route for requests matching no conversation rule.
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
   global:
     router:
       strategy: priority
-    model_catalog:
-      kbs: []
+    model_catalog: {}
     services:
       response_api:
         enabled: true
@@ -87,8 +85,8 @@ config:
 resources:
   # 2Gi OOMKills the router on a CI runner: it restarts, never becomes ready,
   # and the helm wait burns its full 60m timeout. Mirrors the same limits
-  # category-remote-backend/local-classifier-backend/structure-routing
-  # settled on for the same reason.
+  # structure-routing and long-context-routing settled on for the same
+  # reason.
   limits:
     memory: 6Gi
     cpu: "2"

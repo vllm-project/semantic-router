@@ -51,16 +51,15 @@ func TestValidateModelPricingContracts(t *testing.T) {
 
 func TestParseYAMLBytesRejectsInvalidProviderPricing(t *testing.T) {
 	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: model-a
       pricing:
         currency: USD
         prompt_per_1m: -0.01
-routing:
-  modelCards:
-    - name: model-a
+recipes:
+  - name: default
 `))
 	if err == nil || !strings.Contains(err.Error(), "providers.models[model-a].pricing.prompt_per_1m") {
 		t.Fatalf("error = %v, want provider pricing path", err)

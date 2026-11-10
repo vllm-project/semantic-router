@@ -63,21 +63,19 @@ func (r *OpenAIRouter) looperExecutionErrorResponse(
 	finalizeLooperQuorumOutcome(reqCtx, evidence.fusionQuorum, decision, false)
 
 	logging.ComponentErrorEvent("extproc", "looper_execution_failed", failureFields)
-	return r.recordLooperFailure(
-		reqCtx,
-		originalModel,
-		decision,
-		500,
-		"Looper execution failed: "+err.Error(),
-		"looper_execution_failed",
-		evidenceArgs...,
-	)
+	status, message, reason := 500, "Looper execution failed: "+err.Error(), "looper_execution_failed"
+	// A hop or check refused for want of the request's delegated credential
+	// answers the run 401, with the typed error the refusal records.
+	if r.delegatedCredentialRefusal(reqCtx) != nil {
+		status, message, reason = 401, delegatedCredentialMessage, delegatedCredentialCode
+	}
+	return r.recordLooperFailure(reqCtx, originalModel, decision, status, message, reason, evidenceArgs...)
 }
 
 func looperFailureEvidenceFromError(err error) (looperFailureEvidence, bool) {
-	if evidence, ok := looper.ConfidenceEvidenceFromError(err); ok {
+	if evidence, ok := looper.EscalateEvidenceFromError(err); ok {
 		return looperFailureEvidence{
-			algorithm:      config.DecisionAlgorithmConfidence,
+			algorithm:      config.DecisionAlgorithmEscalate,
 			modelsUsed:     append([]string(nil), evidence.ModelsUsed...),
 			iterations:     evidence.Iterations,
 			usage:          evidence.Usage,
@@ -136,7 +134,7 @@ func (evidence looperFailureEvidence) addLogFields(fields map[string]interface{}
 	fields["prompt_tokens"] = evidence.usage.PromptTokens
 	fields["completion_tokens"] = evidence.usage.CompletionTokens
 	fields["total_tokens"] = evidence.usage.TotalTokens
-	if evidence.algorithm == config.DecisionAlgorithmConfidence {
+	if evidence.algorithm == config.DecisionAlgorithmEscalate {
 		fields["models_used"] = evidence.modelsUsed
 		fields["iterations"] = evidence.iterations
 	}
@@ -172,13 +170,12 @@ func (r *OpenAIRouter) recordLooperFailure(
 		r.attachRouterReplayResponse(ctx, immediate.Body, false)
 	}
 	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, reason)
-	addRouterReplayHeaderToImmediateResponse(response, ctx.RouterReplayID)
 	return response
 }
 
 func applyLooperFailureEvidence(ctx *RequestContext, evidence looperFailureEvidence) {
 	switch evidence.algorithm {
-	case config.DecisionAlgorithmConfidence:
+	case config.DecisionAlgorithmEscalate:
 		ctx.VSRLooperDiagnostics = looperReplayDiagnostics(evidence.executionTrace)
 		if evidence.iterations <= 0 {
 			return

@@ -63,19 +63,18 @@ chart version and review its values rather than copying development defaults.
 
 ## Configure response cache
 
-Use the canonical `response_cache` key. `semantic_cache` is a deprecated input
-alias retained only for migration compatibility.
+Use the `response_cache` key. A configuration that still writes
+`semantic_cache` fails to load; `vllm-sr config migrate` renames it. The store
+holds the backend, and a [`response_cache` plugin](../tutorials/plugin/response-cache)
+turns caching on and sets the recall's `min_similarity`.
 
 ```yaml
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: milvus
-      similarity_threshold: 0.86
       max_entries: 50000
       ttl_seconds: 7200
-      embedding_model: mmbert
       milvus:
         connection:
           host: milvus.milvus.svc.cluster.local
@@ -104,28 +103,32 @@ global:
           auto_create_collection: true
 ```
 
-Set `dimension` to the output dimension of `embedding_model`. A mismatch causes
+Set `dimension` to the size of the vectors the cache embeds: 768 with Vela
+Embedding, which `embeddings.default` names, or the store's
+`embedding.dimension` when it names another deployment. A mismatch causes
 inserts or searches to fail.
 
 Enable the route plugin on decisions that may read or populate the cache:
 
 ```yaml
-routing:
-  decisions:
-    - name: general-chat
-      description: General requests that may use response cache.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: local/general
-      plugins:
-        - type: response_cache
-          configuration:
-            enabled: true
-            semantic:
-              similarity_threshold: 0.86
+recipes:
+  - name: default
+    decisions:
+      - name: general-chat
+        description: General requests that may use response cache.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local/general
+        plugins:
+          - type: response_cache
+            configuration:
+              enabled: true
+              semantic:
+                match:
+                  recall: {top_k: 3, min_similarity: 0.86}
 ```
 
 Run configuration validation before rollout:
