@@ -18,9 +18,9 @@ SIGNAL context ai_pc_exceeds_local_window {
   max_tokens: "1M"
 }
 
-SIGNAL conversation ai_pc_has_images {
+SIGNAL input_modality ai_pc_has_images {
   description: "Request contains at least one image content part."
-  feature: { source: { type: "image_content" }, type: "exists" }
+  modality: "image"
 }
 
 # =============================================================================
@@ -32,7 +32,6 @@ MODEL cloud/external-chat {
   description: "External text model, used only when the request explicitly allows it."
   capabilities: ["chat", "code", "reasoning", "long-context", "text"]
   tags: ["deployment:openrouter", "role:external"]
-  modality: "text"
 }
 
 MODEL local/ai-pc {
@@ -40,7 +39,6 @@ MODEL local/ai-pc {
   description: "Small text model served on the AI PC's CPU through a local Ollama server."
   capabilities: ["chat", "text"]
   tags: ["deployment:self_hosted", "role:local"]
-  modality: "text"
 }
 
 # =============================================================================
@@ -55,7 +53,7 @@ PLUGIN fast_response fast_response {}
 
 ROUTE unsupported_image_input (description = "Decline image input: this profile has no qualified local vision path.") {
   PRIORITY 300
-  WHEN conversation("ai_pc_has_images")
+  WHEN input_modality("ai_pc_has_images")
   PLUGIN fast_response {
     message: "Image input is not supported by the AMD AI PC profile. Send text only, or use a recipe with a vision backend."
   }
