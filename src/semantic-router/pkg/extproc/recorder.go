@@ -324,10 +324,7 @@ func replayRequestToolTrace(ctx *RequestContext) *routerreplay.ToolTrace {
 // pre-mask request. Replay snapshots the neutral request before dispatch, so
 // omitting the body is the only option that cannot store it raw (D3, #3566).
 func replaySuppressesBody(ctx *RequestContext) bool {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
-		return false
-	}
-	cfg := ctx.VSRSelectedDecision.GetMaskingConfig()
+	cfg := requestMasking(ctx)
 	return cfg != nil && cfg.Enabled
 }
 

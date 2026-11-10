@@ -256,7 +256,7 @@ entrypoints:
 默认值位于 `global`，由配方或决策覆盖：
 
 - `global.router.strategy` 和 `global.router.fallback` 是共享默认值。每个配方根据它们解析自己的 `strategy` 和 `fallback`，配方之间互不继承。决策的 fallback 覆盖其配方的 fallback。`fallback: {enabled: false}` 这样的部分覆盖保留其余默认值。运行时的内置 strategy 默认值为 `priority`。
-- `global.plugins` 是每个请求的默认插件。配方的 `plugins` 覆盖它们，决策的 `plugins` 再覆盖配方的。插件按类型逐字段分层：映射逐键合并，其他值（列表、标量）替换下层的值。没有匹配决策的请求运行其配方分层后的默认插件；请求具体模型时运行 `global.plugins`。
+- `global.plugins` 是每个请求的默认插件。配方的 `plugins` 覆盖它们，决策的 `plugins` 再覆盖配方的。插件按类型逐字段分层：映射逐键合并，其他值（列表、标量）替换下层的值。没有匹配决策的请求运行其配方分层后的默认插件；请求具体模型时运行 `global.plugins`，但跳过需要配方的部分：响应缓存、context 插件的检索、`response_guard` 和 masking。
 - `global.model_catalog.bindings` 指定每个信号族询问的部署。配方的 `model_bindings` 覆盖它们，规则自己的 `deployment` 覆盖两者。
 
 路由读取的模型事实，例如 `capabilities`、`modalities`、`context_window_size`、`max_output_tokens` 和 `loras`，放在模型的 `providers.models[]` 条目上。

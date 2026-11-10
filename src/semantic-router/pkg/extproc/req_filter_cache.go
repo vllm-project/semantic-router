@@ -179,18 +179,17 @@ func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentit
 	}
 	decision := ""
 	epoch := ""
-	var guard *config.ResponseGuardPluginConfig
 	if ctx.VSRSelectedDecision != nil {
 		decision = ctx.VSRSelectedDecision.Name
-		guard = ctx.VSRSelectedDecision.GetResponseGuardConfig()
 	}
+	guard := requestResponseGuard(ctx)
 	if plugin := requestResponseCache(ctx); plugin != nil && plugin.Revision != nil {
 		if value, err := cache.FingerprintValue(plugin.Revision); err == nil {
 			epoch = value
 		}
 	}
 	// An entry is served only under the response_guard that passed it:
-	// adding or changing the decision's guard starts a new partition.
+	// adding or changing the request's guard starts a new partition.
 	if guard != nil {
 		if value, err := cache.FingerprintValue(guard); err == nil {
 			epoch = cache.CombineFingerprints(epoch, value)

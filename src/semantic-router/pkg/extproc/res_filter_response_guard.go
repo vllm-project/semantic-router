@@ -47,15 +47,15 @@ type responseGuardRuleRun struct {
 	matchedRules []string
 }
 
-// runResponseGuard reads the selected decision's response_guard rules over
-// answer, in order, until one blocks, and returns nil when the decision has no
-// guard. Without the recipe's classifier no response-stage rule can be read,
-// so every rule is unknown.
+// runResponseGuard reads the response_guard rules of the plugins the request
+// runs over answer, in order, until one blocks, and returns nil when it runs
+// no guard. Without the recipe's classifier no rule can be read, so every
+// rule is unknown.
 func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string) *responseGuardRun {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+	if ctx == nil {
 		return nil
 	}
-	guard := ctx.VSRSelectedDecision.GetResponseGuardConfig()
+	guard := requestResponseGuard(ctx)
 	if guard == nil {
 		return nil
 	}

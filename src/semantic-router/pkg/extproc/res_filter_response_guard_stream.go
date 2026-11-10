@@ -42,13 +42,12 @@ type responseGuardHold struct {
 }
 
 // holdStreamForResponseGuard asks the gateway to buffer a streamed answer
-// whose decision's response_guard can refuse or rewrite it, so that no byte
-// reaches the client before the guard has read the whole answer. A gateway
-// that streams the body anyway still sends the client nothing early: the
-// Router holds every part itself.
+// whose response_guard can refuse or rewrite it, so that no byte reaches the
+// client before the guard has read the whole answer. A gateway that streams
+// the body anyway still sends the client nothing early: the Router holds every
+// part itself.
 func holdStreamForResponseGuard(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
-	if ctx == nil || !ctx.IsStreamingResponse || ctx.VSRSelectedDecision == nil ||
-		!ctx.VSRSelectedDecision.GetResponseGuardConfig().Enforces() {
+	if ctx == nil || !ctx.IsStreamingResponse || !requestResponseGuard(ctx).Enforces() {
 		return
 	}
 	ctx.ResponseGuardHold = &responseGuardHold{}

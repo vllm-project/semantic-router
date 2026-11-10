@@ -348,7 +348,9 @@ Defaults live in `global`, and a recipe or a decision overrides them:
   Plugins layer by type, field by field: mappings merge key by key, and any
   other value (a list, a scalar) replaces the one below it. A request that
   matches no decision runs its recipe's layered defaults; a request for a
-  concrete model runs `global.plugins`.
+  concrete model runs `global.plugins` but skips what needs a recipe: the
+  response cache, the context plugin's retrieval, `response_guard` and
+  masking.
 - `global.model_catalog.bindings` name the deployment each signal family asks.
   A recipe's `model_bindings` override them, and a rule's own `deployment`
   overrides both.

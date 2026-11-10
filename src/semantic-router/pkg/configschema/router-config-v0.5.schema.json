@@ -2611,6 +2611,9 @@
     },
     "FastResponsePluginConfig": {
       "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
         "message": {
           "type": "string"
         }
@@ -5492,6 +5495,9 @@
     },
     "ResponseGuardPluginConfig": {
       "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
         "rules": {
           "items": {
             "$ref": "#/$defs/ResponseGuardRule"

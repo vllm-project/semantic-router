@@ -185,3 +185,45 @@ func TestDecisionReliabilityErrorsNameTheDecision(t *testing.T) {
 		t.Fatalf("error = %v, want one naming the decision's field", err)
 	}
 }
+
+// A request that matches no decision runs the recipe's plugins layered over
+// global.plugins, and a request for a concrete model runs global.plugins, so
+// a header the Router owns fails the load at the layer that writes it, even
+// when every decision overrides the list that holds it.
+func TestHeaderMutationDefaultsCannotWriteTheHeadersTheRouterOwns(t *testing.T) {
+	doc := strings.Replace(decisionReliabilityDoc, "\n        reliability:\n", `
+        plugins:
+          - type: header_mutation
+            configuration:
+              add: [{name: x-team, value: search}]
+              delete: [x-legacy]
+        reliability:
+`, 1)
+	doc = strings.Replace(doc, "recipes:\n  - name: default\n", `recipes:
+  - name: default
+    plugins:
+      - type: header_mutation
+        configuration:
+          delete: [x-vsr-selected-model]
+`, 1) + `global:
+  plugins:
+    - type: header_mutation
+      configuration:
+        add: [{name: Authorization, value: Bearer forged}]
+`
+	_, err := ParseYAMLBytes([]byte(doc))
+	if err == nil {
+		t.Fatal("the default header_mutation plugins wrote headers the Router owns, and the configuration loaded")
+	}
+	for _, want := range []string{
+		"global.plugins[header_mutation].configuration.add[Authorization]: reserved_header: Authorization is owned by the Router or Envoy",
+		"recipes[default].plugins[header_mutation].configuration.delete[0]: reserved_header: x-vsr-selected-model is owned by the Router or Envoy",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the load error does not say\n%s\ngot\n%v", want, err)
+		}
+	}
+	if strings.Contains(err.Error(), "decisions[slow_route]") {
+		t.Errorf("a header the decision does not write was refused at the decision: %v", err)
+	}
+}

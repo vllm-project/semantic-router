@@ -335,7 +335,7 @@ func (r *OpenAIRouter) shadowExtraHeaders(
 	if dispatch != nil {
 		primaryAuthHeader = shadowProfileAuthHeader(dispatch.profile)
 	}
-	setHeaders, _ := r.buildHeaderMutations(ctx.VSRSelectedDecision)
+	setHeaders, _ := r.buildHeaderMutations(ctx)
 	for _, option := range setHeaders {
 		header := option.GetHeader()
 		if header == nil || strings.HasPrefix(header.GetKey(), ":") {
