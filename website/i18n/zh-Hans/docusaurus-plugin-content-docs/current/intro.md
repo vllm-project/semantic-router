@@ -27,7 +27,7 @@ import ThemedImage from '@theme/ThemedImage';
 
 为 agent harness 提供稳定的模型 API。vLLM Semantic Router 在 OpenAI 或 Anthropic 兼容端点背后，通过显式策略选择或组合模型。模型与策略可以演进，无需重写 harness 集成。
 
-应用也可以直接调用 [System One](model-runtime/quickstart) 获取类型化判断。Router 与
+应用也可以直接调用 [System One](./model-runtime/get-started/quickstart) 获取类型化判断。Router 与
 Engine 模式共享 Frontend 和模型运行时，配方增加可选的路由层。模块边界与副本池见
 [组件架构](overview/component-architecture)。
 

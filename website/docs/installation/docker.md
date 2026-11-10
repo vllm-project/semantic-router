@@ -12,7 +12,7 @@ single-host deployments that do not need Kubernetes scheduling or failover.
 The CLI manages the Router, the Dashboard, and the supporting services required
 by the selected configuration, and with `--gateway extproc` an Envoy container
 in front of the Router (see [Gateway Modes](gateway-modes)). The Router starts
-the [model runtime](../model-runtime/overview.md) for its own classifiers and
+the [model runtime](../model-runtime/get-started/overview.md) for its own classifiers and
 embedding models. Model servers remain separate: a healthy Router stack does
 not mean that its provider endpoints are installed, running, or able to
 generate.

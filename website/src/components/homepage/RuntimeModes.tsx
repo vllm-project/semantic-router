@@ -94,7 +94,7 @@ export default function RuntimeModes(): React.JSX.Element {
                 </Translate>
               </p>
               <footer className={styles.modeFooter}>
-                <Link to="/docs/model-runtime/quickstart">
+                <Link to="/docs/model-runtime/get-started/quickstart">
                   <Translate id="homepage.runtimeModes.engine.cta">Run the Engine</Translate>
                   <FiArrowRight aria-hidden="true" />
                 </Link>

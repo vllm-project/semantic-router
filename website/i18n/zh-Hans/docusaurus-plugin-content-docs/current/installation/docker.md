@@ -12,7 +12,7 @@ translation:
 
 Docker 是从 Semantic Router 配置到运行中栈的最短路径。它适合评估、开发、CI、边缘主机，以及不需要 Kubernetes 调度或故障转移的单主机部署。
 
-CLI 会管理 Router、控制面板，以及所选配置所需的支持服务；使用 `--gateway extproc` 时还会在 Router 前面放一个 Envoy 容器（见[网关模式](gateway-modes)）。Router 会为自己的分类器和嵌入模型启动[模型运行时](../model-runtime/overview.md)。模型服务器保持独立：健康的 Router 栈并不意味着其 provider 端点已安装、正在运行或能够生成。
+CLI 会管理 Router、控制面板，以及所选配置所需的支持服务；使用 `--gateway extproc` 时还会在 Router 前面放一个 Envoy 容器（见[网关模式](gateway-modes)）。Router 会为自己的分类器和嵌入模型启动[模型运行时](../model-runtime/get-started/overview.md)。模型服务器保持独立：健康的 Router 栈并不意味着其 provider 端点已安装、正在运行或能够生成。
 
 ## 启动栈
 

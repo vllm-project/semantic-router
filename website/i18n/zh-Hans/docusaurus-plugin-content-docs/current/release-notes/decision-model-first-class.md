@@ -39,7 +39,7 @@ Router 早已用同一个模型家族，即 System One 决策模型，回答大�
 - **`vllm-sr config migrate` 需要一个 Router**（二进制或镜像），`--offline` 已移除。采用 config v0.3 之前布局的配置，一次运行即可迁移到 v0.5。
 - **Looper 的名称和端点：** `global.integrations.looper.*.model_names` 在加载时会被拒绝；migrate 会把这些名称写成一个入口，指向它写出的配方：默认配方中只保留运行该算法的决策。`global.integrations.looper.endpoint` 会被拒绝，migrate 会删除它：Router 在进程内发起 Looper 的模型调用。Dashboard 去掉了 External Models 卡片，它的 Looper 卡片只编辑超时和请求头；operator 拒绝 `external_models`。
 - **模型的输出事实是 `capabilities` 和 `modalities`。** 模型的 `modality` 关键词（`ar`、`diffusion`、`omni`）、基于 `DIFFUSION` 或 `BOTH` 的图片路由、`image_gen` 插件以及音频嵌入规则都已移除；migrate 能改写的会改写，会删除没有决策能执行的路由，其余的会指出来。
-- **System One 批量形式只使用 `states`。** 批量请求体在 `states` 下携带命名的标准请求，没有顶层 `state`、`questions`、`images` 或 `videos`；混用两种形式的请求体，或 `states` 为空的请求体，会以 `invalid_request` 被拒绝。批量响应没有顶层 `answers`，其 `usage` 统计所有条目。见 [API](../system-one/api)。
+- **System One 批量形式只使用 `states`。** 批量请求体在 `states` 下携带命名的标准请求，没有顶层 `state`、`questions`、`images` 或 `videos`；混用两种形式的请求体，或 `states` 为空的请求体，会以 `invalid_request` 被拒绝。批量响应没有顶层 `answers`，其 `usage` 统计所有条目。见 [API](../system-one/use/api)。
 - **模型运行时契约 4.0.0。** 本版本的 Router 拒绝任何其他契约的模型运行时；Router 和它的运行时来自同一个版本。
 - **每个请求阶段一次 System One 调用，远程部署也是如此。** Router 不再把一个阶段发往远程 System One API 的问题拆成每次最多八段文本的多次调用。你自己运行的 System One API 必须接受条目数与该阶段所问文本数相同的批量请求，每个评审最多 `judge.max_candidates` 条。
 - **Kubernetes operator 的 `SemanticRouter` 资源采用新结构。** `spec.config.routing` 会被拒绝；它的字段改为 `spec.config.recipes`（每个配方的信号、投影、决策、模型绑定和插件），以及 `spec.config.entrypoints`、`spec.config.plugins` 和 `spec.config.models`（`providers.models[]` 的事实）。

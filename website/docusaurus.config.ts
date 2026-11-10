@@ -80,7 +80,7 @@ const movedDocs: { from: string[], to: string }[] = [
   },
   {
     from: ['tutorials/global/vela-models'],
-    to: 'system-one/deployments',
+    to: 'system-one/deploy/deployments',
   },
   // Removed algorithms: the migration guide lists each rewrite.
   {
@@ -131,11 +131,11 @@ const movedDocs: { from: string[], to: string }[] = [
       'installation/runtime/in-process',
       'installation/runtime/models-and-bindings',
     ],
-    to: 'model-runtime/deploy',
+    to: 'model-runtime/deploy/connect-the-router',
   },
   {
     from: ['installation/runtime/openvino'],
-    to: 'model-runtime/migrate',
+    to: 'model-runtime/deploy/migrate',
   },
   {
     from: [
@@ -182,11 +182,11 @@ const movedDocs: { from: string[], to: string }[] = [
   },
   {
     from: ['installation/runtime/lifecycle-diagnostics'],
-    to: 'model-runtime/troubleshooting',
+    to: 'model-runtime/deploy/troubleshooting',
   },
   {
     from: ['model-runtime/profiles'],
-    to: 'model-runtime/engine-args',
+    to: 'model-runtime/deploy/engine-args',
   },
   {
     from: [
@@ -225,6 +225,79 @@ const movedDocs: { from: string[], to: string }[] = [
   {
     from: ['troubleshooting/vsr-headers'],
     to: 'api/headers',
+  },
+  // System One, Model Runtime and the global settings regrouped into folders.
+  // The two section overviews keep their paths with a slug.
+  {
+    from: ['tutorials/global/overview'],
+    to: 'installation/global-settings',
+  },
+  {
+    from: ['system-one/concepts'],
+    to: 'system-one/get-started/concepts',
+  },
+  {
+    from: ['system-one/api'],
+    to: 'system-one/use/api',
+  },
+  {
+    from: ['system-one/router'],
+    to: 'system-one/use/router',
+  },
+  {
+    from: ['system-one/custom-questions'],
+    to: 'system-one/use/custom-questions',
+  },
+  {
+    from: ['system-one/deployments'],
+    to: 'system-one/deploy/deployments',
+  },
+  {
+    from: ['system-one/performance'],
+    to: 'system-one/deploy/performance',
+  },
+  {
+    from: ['system-one/reference'],
+    to: 'system-one/reference/presets',
+  },
+  {
+    from: ['model-runtime/quickstart'],
+    to: 'model-runtime/get-started/quickstart',
+  },
+  {
+    from: ['model-runtime/choose-a-model'],
+    to: 'model-runtime/get-started/choose-a-model',
+  },
+  {
+    from: [
+      'model-runtime/deploy',
+      'tutorials/global/model-runtime',
+    ],
+    to: 'model-runtime/deploy/connect-the-router',
+  },
+  {
+    from: ['model-runtime/engine-args'],
+    to: 'model-runtime/deploy/engine-args',
+  },
+  {
+    from: ['installation/runtime/external'],
+    to: 'model-runtime/deploy/remote-services',
+  },
+  {
+    from: ['model-runtime/migrate'],
+    to: 'model-runtime/deploy/migrate',
+  },
+  {
+    from: ['model-runtime/troubleshooting'],
+    to: 'model-runtime/deploy/troubleshooting',
+  },
+  {
+    from: ['model-runtime/plugins'],
+    to: 'model-runtime/extend/plugins',
+  },
+  {
+    from: ['model-runtime/reference'],
+    to: 'model-runtime/reference/http-api',
   },
 ]
 

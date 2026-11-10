@@ -13,7 +13,7 @@ Signals come in three layers:
   in plain language.
 - **Application signals** are eleven ready-made questions, each compiled
   into one `systemone` question of the Router's own
-  ([presets](../../system-one/concepts#presets)).
+  ([presets](../../system-one/get-started/concepts#presets)).
 - **Heuristic signals** are deterministic code: keywords, language, request
   shape, identity and metadata.
 
@@ -233,5 +233,5 @@ such as `hallucination`, to `x-vsr-warnings`. See
 
 Signals can read request text, conversation history, images, caller metadata
 or trusted identity depending on the type. Model-judged signals send what they
-read to the deployment that answers them; [what leaves the host](../../system-one/deployments#what-leaves-the-host)
+read to the deployment that answers them; [what leaves the host](../../system-one/deploy/deployments#what-leaves-the-host)
 lists the parts each one sends.

@@ -66,7 +66,7 @@ Chat Completions、Responses 和 Messages 使用协议 codec；System One 有独
 | 公共 System One API | `/v1/systemone`，别名 `/v1/decisions`；通过 `/v1/systemone/models` 发现模型 | 两种启动模式均可用；需要 `listeners[].systemone.models` 显式发布，配置了 API key 时还需相应凭据。 |
 | Worker API | 已加载模型支持的 classify、embeddings、rerank、decisions 和 bundle API | 独立运行的 `vllm-srun` 端点或受管 worker 的私有 socket；前端不会自动发布这些接口。 |
 
-Dashboard session 不能替代公共 listener 凭据。原生模型授权与 Chat 的 `models` allowlist 相互独立。完整请求见 [System One 快速开始](../model-runtime/quickstart.md)。
+Dashboard session 不能替代公共 listener 凭据。原生模型授权与 Chat 的 `models` allowlist 相互独立。完整请求见 [System One 快速开始](../model-runtime/get-started/quickstart.md)。
 
 ## 用副本扩展部署 {#scale-a-deployment-through-replicas}
 
@@ -85,7 +85,7 @@ Worker 内部由 model family 定义输入和类型化输出，批次规划器�
 vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
 ```
 
-DP 复制模型，不通过张量并行或流水线并行拆分权重。增加副本前，应针对实际输入长度测量吞吐和尾延迟，尤其是多个 worker 共用一块 GPU 时。参见[前端与运行时部署](../model-runtime/deploy)和[引擎参数](../model-runtime/engine-args)。
+DP 复制模型，不通过张量并行或流水线并行拆分权重。增加副本前，应针对实际输入长度测量吞吐和尾延迟，尤其是多个 worker 共用一块 GPU 时。参见[前端与运行时部署](../model-runtime/deploy/connect-the-router)和[引擎参数](../model-runtime/deploy/engine-args)。
 
 ## 在判断模型之间路由 System One {#route-system-one-across-decision-models}
 
@@ -127,5 +127,5 @@ vLLM-SR Engine 服务，或兼容的外部 System One API。
 
 - [系统概览](semantic-router-overview)：配置与部署背景。
 - [快速开始](../installation/installation.md)：发送经过路由的 Chat 请求。
-- [模型运行时快速开始](../model-runtime/quickstart.md)：直接提出类型化问题。
-- [前端与运行时部署](../model-runtime/deploy)：绑定、副本放置和就绪状态。
+- [模型运行时快速开始](../model-runtime/get-started/quickstart.md)：直接提出类型化问题。
+- [前端与运行时部署](../model-runtime/deploy/connect-the-router)：绑定、副本放置和就绪状态。

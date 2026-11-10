@@ -1,0 +1,225 @@
+# Editorial text for the generated "Supported models" pages
+# (website/docs/model-runtime/supported-models/). Every fact on those pages
+# comes from the built-in catalog; this file only says what each model is for
+# and which records to link. tools/docs/generate_model_pages.py fails when a
+# catalog model has no entry here, or an entry names a model or record that
+# does not exist. Regenerate with: make docs-model-pages
+
+families:
+  decision3:
+    dir: decision-3
+    label: Decision 3.0
+  decision2:
+    dir: decision-2
+    label: Decision 2.0
+  decision1:
+    dir: decision-1
+    label: Decision 1.0
+  vela3:
+    dir: vela-3
+    label: Vela 3.0
+  vela3_d3:
+    dir: vela-3
+    label: Vela 3.0
+  vela2:
+    dir: vela-2
+    label: Vela 2.0
+
+models:
+  vllm-sr/d3-edge:
+    page: d3-edge
+    summary: >-
+      The smallest Decision 3.0 model, a pruned d3-lite. It answers your own
+      questions about text, images and video on a small GPU.
+    records: [decision3-parity.md, decision3-batching.md, d3-edge-cuda-validation.md]
+  vllm-sr/d3-lite:
+    page: d3-lite
+    summary: >-
+      A small Decision 3.0 model for questions about text, images and video,
+      and the base that vela3-lite's adapters were trained on.
+    records: [decision3-parity.md]
+  vllm-sr/d3-nano:
+    page: d3-nano
+    summary: >-
+      A 2B Decision 3.0 model for your own questions about text, images and
+      video.
+    records: [decision3-parity.md]
+  vllm-sr/d3-mini:
+    page: d3-mini
+    summary: >-
+      A 4B Decision 3.0 model for your own questions about text, images and
+      video, and the base of vela3-mini.
+    records: [decision3-parity.md, npu-bf16-ascend950dt.md]
+  vllm-sr/d3-flash:
+    page: d3-flash
+    summary: >-
+      A 9B Decision 3.0 model for your own questions about text, images and
+      video, and the base of vela3-flash.
+    records: [decision3-parity.md]
+  vllm-sr/d3:
+    page: d3
+    summary: >-
+      The 27B Decision 3.0 model, the family's largest, for your own questions
+      about text, images and video. Its quantized packages hold it in a third
+      to three fifths of the memory.
+    records: [decision3-parity.md, decision3-quantized.md, decision3-device-memory.md]
+    quantized_packages:
+      - vllm-sr/d3-FP8
+      - vllm-sr/d3-W4A16-AWQ
+      - vllm-sr/d3-W4A16-GPTQ
+      - vllm-sr/d3-NVFP4
+      - vllm-sr/d3-NVFP4-AWQ
+  vllm-sr/d3-turbo:
+    page: d3-turbo
+    summary: >-
+      A 27B Decision 3.0 model that reads a request's input once and answers
+      every question from that reading, so asking many questions about one
+      input costs little more than asking one. It also locates things in
+      images and videos.
+    api_question_types: [box, track]
+    records: [state-once.md]
+  vllm-sr/d3-ultra:
+    page: d3-ultra
+    summary: >-
+      A 27B Decision 3.0 model that reads a text request's list of questions in
+      front of its state, so every question sees what else is asked. It is also
+      offered as a hosted System One API.
+    api_question_types: [box, track]
+    records: [d3-ultra.md, state-once.md]
+
+  vllm-sr/Decision-2.0-Kai-0.6B:
+    page: kai-0-6b
+    summary: >-
+      The smallest Decision 2.0 model: fast, simple routing questions, and the
+      default choice to start with. Two questions take about 0.2 s on 16 CPU
+      cores.
+    records: [rocm-mi325x-parity.md, rocm-mi325x-batching.md, cuda-decision2-performance.md]
+  vllm-sr/Decision-2.0-Eos-0.8B:
+    page: eos-0-8b
+    summary: >-
+      A 0.8B Decision 2.0 model for slightly harder questions than Kai-0.6B, at
+      a similar cost.
+    records: [rocm-mi325x-parity.md, rocm-mi325x-batching.md, cuda-decision2-performance.md]
+  vllm-sr/Decision-2.0-Sol-2B:
+    page: sol-2b
+    summary: >-
+      A 2B Decision 2.0 model for questions that need more judgment. Serve it
+      on a GPU, or on a CPU for low traffic.
+    records: [rocm-mi325x-parity.md, cuda-decision2-performance.md]
+  vllm-sr/Decision-2.0-Nox-4B:
+    page: nox-4b
+    summary: >-
+      A 4B Decision 2.0 model for nuanced questions and questions with many
+      options, on a GPU.
+    records: [rocm-mi325x-parity.md, cuda-decision2-performance.md]
+  vllm-sr/Decision-2.0-Lux-9B:
+    page: lux-9b
+    summary: >-
+      A 9B Decision 2.0 model, the most accurate at moderate cost, on a GPU
+      with 24 GB or more.
+    records: [rocm-mi325x-parity.md, cuda-decision2-performance.md]
+  vllm-sr/Decision-2.0-Vega-27B:
+    page: vega-27b
+    summary: >-
+      The 27B Decision 2.0 model, the most accurate of the family, on one GPU
+      with 64 GB or more.
+    records: [rocm-mi325x-parity.md, rocm-mi325x-batching.md]
+
+  vllm-sr/Decision-1.0-Kai-0.6B:
+    page: kai-0-6b
+    summary: >-
+      One of the three 0.6B Decision 1.0 encoders (Kai, Lex and Route), on the
+      Vela encoder backbone. It runs well on a CPU.
+    records: [decision1-parity.md, decision1-performance.md]
+  vllm-sr/Decision-1.0-Lex-0.6B:
+    page: lex-0-6b
+    summary: >-
+      One of the three 0.6B Decision 1.0 encoders (Kai, Lex and Route), on the
+      Vela encoder backbone. It runs well on a CPU.
+    records: [decision1-parity.md, decision1-performance.md]
+  vllm-sr/Decision-1.0-Route-0.6B:
+    page: route-0-6b
+    summary: >-
+      One of the three 0.6B Decision 1.0 encoders (Kai, Lex and Route), on the
+      Vela encoder backbone. It runs well on a CPU.
+    records: [decision1-parity.md, decision1-performance.md]
+  vllm-sr/Decision-1.0-Eos-0.8B:
+    page: eos-0-8b
+    summary: >-
+      The smallest Decision 1.0 decoder, on the Qwen3.5 backbone.
+    records: [decision1-parity.md, cuda-decision1-performance.md]
+  vllm-sr/Decision-1.0-Sol-2B:
+    page: sol-2b
+    summary: >-
+      A 2B Decision 1.0 decoder on the Qwen3.5 backbone.
+    records: [decision1-parity.md, cuda-decision1-performance.md]
+  vllm-sr/Decision-1.0-Nox-4B:
+    page: nox-4b
+    summary: >-
+      A 4B Decision 1.0 decoder on the Qwen3.5 backbone, for a GPU.
+    records: [decision1-parity.md, cuda-decision1-performance.md]
+  vllm-sr/Decision-1.0-Lux-9B:
+    page: lux-9b
+    summary: >-
+      The 9B Decision 1.0 decoder on the Qwen3.5 backbone, the family's
+      largest, for a GPU.
+    records: [decision1-parity.md, cuda-decision1-performance.md]
+
+  vllm-sr/vela3-fast:
+    page: vela3-fast
+    summary: >-
+      The default decision model. A CPU-friendly encoder with trained adapters
+      for every built-in routing question, calibrated thresholds, and spans for
+      PII and hallucination checks.
+    records: [vela3-parity.md, vela3-router-signals.md]
+  vllm-sr/vela3-lite:
+    page: vela3-lite
+    summary: >-
+      Vela 3.0 on d3-lite: trained adapters for the built-in questions, spans,
+      and image input, with lower latency on a small GPU.
+    records: [vela3-d3-parity.md]
+  vllm-sr/vela3-mini:
+    page: vela3-mini
+    summary: >-
+      Vela 3.0 on d3-mini: more accuracy than vela3-lite, with the built-in
+      questions still on trained adapters and spans.
+    records: [vela3-d3-parity.md]
+  vllm-sr/vela3-flash:
+    page: vela3-flash
+    summary: >-
+      Vela 3.0 on d3-flash: a 9B decision model with trained adapters for the
+      built-in questions and spans.
+    records: [vela3-d3-parity.md]
+  vllm-sr/vela3-turbo:
+    page: vela3-turbo
+    summary: >-
+      Vela 3.0 on d3-turbo, the largest Vela: it answers each request on
+      d3-turbo's state-once path, then asks the router questions again with
+      their adapters on.
+    records: [vela3-d3-parity.md, state-once.md]
+
+  vllm-sr/Vela-2.0-0.3B:
+    page: vela-2-0-3b
+    summary: >-
+      The previous default decision model, a ModernBERT encoder for a CPU. It
+      answers set and span questions as well, with calibrated thresholds for
+      the built-in questions.
+    records: [vela2-router-signals.md, vela2-parity.md, vela2-performance.md, router-latency-cpu.md]
+  vllm-sr/Vela-2.0-0.8B:
+    page: vela-2-0-8b
+    summary: >-
+      The smallest Vela 2.0 decoder. On a GPU it is ahead of the Vela 1.0
+      specialists on most built-in signals; on a CPU a request takes seconds.
+    records: [vela2-decision-model-sizes.md, vela2-parity.md, cuda-vela2-performance.md]
+  vllm-sr/Vela-2.0-4B:
+    page: vela-2-4b
+    summary: >-
+      A 4B Vela 2.0 decoder, ahead of the Vela 1.0 specialists on every
+      built-in signal but fact check, on a GPU.
+    records: [vela2-decision-model-sizes.md, vela2-parity.md, cuda-vela2-performance.md]
+  vllm-sr/Vela-2.0-9B:
+    page: vela-2-9b
+    summary: >-
+      The 9B Vela 2.0 decoder, ahead of the Vela 1.0 specialists on every
+      built-in signal, on a GPU.
+    records: [vela2-decision-model-sizes.md, vela2-parity.md, cuda-vela2-performance.md]

@@ -76,7 +76,7 @@ The models the Router asks, the decision model that answers signals and the
 embedding model that recall uses, are deployments under
 `global.model_catalog.deployments`. The decision model answers every
 question-style signal by default, in the
-[model runtime](model-runtime/overview.md). A binding
+[model runtime](../model-runtime/get-started/overview.md). A binding
 (`global.model_catalog.bindings.<signal>`, or a recipe's
 `recipes[].model_bindings.<signal>`) or a rule's own `deployment` names another
 deployment, such as a larger local model or a remote System One API.
@@ -495,7 +495,7 @@ reported, and how to list and roll back versions.
   is the exhaustive canonical example.
 - [`config/fragments/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments)
   contains reusable signal, decision, algorithm, and plugin fragments.
-- [Providers and routing tutorials](../tutorials/global/overview) describe
+- [Providers and routing tutorials](./global-settings) describe
   shared runtime configuration.
 - [Unified Config Contract v0.3](../proposals/unified-config-contract-v0-3)
   records the design the v0.5 structure builds on.

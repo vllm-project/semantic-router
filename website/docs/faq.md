@@ -49,7 +49,7 @@ you can also publish an explicit `api: systemone` entrypoint and grant its
 `vllm-sr/auto` name on the listener to run a native escalation. The Chat default
 entrypoint does not implicitly enable native routing. See the
 [System One escalate guide](tutorials/algorithm/looper/escalate#on-system-one) and
-[Quickstart](model-runtime/quickstart) for configuration and requests.
+[Quickstart](./model-runtime/get-started/quickstart) for configuration and requests.
 
 ## How does it work with an agent harness?
 

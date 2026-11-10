@@ -107,7 +107,7 @@ lists every removed form, its load error and its rewrite.
   `questions`, `images` or `videos`; a body that mixes the two forms, or an
   empty `states`, is refused with `invalid_request`. A batch's response has
   no top-level `answers`, and its `usage` counts every entry. See
-  [the API](../system-one/api).
+  [the API](../system-one/use/api).
 - **Model runtime contract 4.0.0.** A Router of this release refuses a model
   runtime of any other contract; a Router and its runtime come from one
   release.

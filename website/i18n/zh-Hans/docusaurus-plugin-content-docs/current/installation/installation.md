@@ -23,11 +23,11 @@ import {
 
 # 快速开始
 
-安装 vLLM Semantic Router，接入一个模型，发送第一条路由请求。若只需要直接调用判断模型，可从 [System One 快速开始](../model-runtime/quickstart)进入，无需准备 Chat 后端。两种用法共用[组件架构](../overview/component-architecture)中的前端与模型运行时。
+安装 vLLM Semantic Router，接入一个模型，发送第一条路由请求。若只需要直接调用判断模型，可从 [System One 快速开始](../model-runtime/get-started/quickstart)进入，无需准备 Chat 后端。两种用法共用[组件架构](../overview/component-architecture)中的前端与模型运行时。
 
 `vllm-sr serve` 在 Docker 中运行一个本地栈：Router 自己在 8899 端口提供 OpenAI
 兼容 API（standalone 模式，默认），控制面板在 8700 端口，还有运行 Router 自身分类器和
-嵌入模型的[模型运行时](../model-runtime/overview.md)。回答用户的模型在别处运行，例如
+嵌入模型的[模型运行时](../model-runtime/get-started/overview.md)。回答用户的模型在别处运行，例如
 Ollama、vLLM 服务或托管 API，你在控制面板中接入它们。
 
 :::note 发布渠道
@@ -153,6 +153,6 @@ Envoy 容器。[网关模式](gateway-modes)说明了什么时候需要它。
 - [选择部署方式](deployment-options)
 - [配置模型](model-configuration)
 - [配置路由](configuration)
-- [使用内置模型运行时](../model-runtime/overview.md)
+- [使用内置模型运行时](../model-runtime/get-started/overview.md)
 - [使用 Router API](../api/router)
 - [排查安装问题](../troubleshooting/common-errors)

@@ -256,7 +256,7 @@ curl -sS http://localhost:8801/v1/systemone \
 | 字段 | 含义 |
 | --- | --- |
 | `top_probability` | 原生答案分布中的最大概率；对于 `noul`，为 `max(p, 1-p)` |
-| `confidence` | 原生模型报告的置信度（如果有）：System One 为 Choice 和 Score 发布的统计量（见 [Decisions](https://vllm-sr.ai/docs/model-runtime/reference#decisions)）；自运行时约定 3.2.0 起其取值与早期版本不同，请重新检查阈值 |
+| `confidence` | 原生模型报告的置信度（如果有）：System One 为 Choice 和 Score 发布的统计量（见 [Decisions](https://vllm-sr.ai/docs/model-runtime/reference/http-api#decisions)）；自运行时约定 3.2.0 起其取值与早期版本不同，请重新检查阈值 |
 | `probability_margin` | 对于 `noul`，为 `2 × abs(p - 0.5)`；无论是有把握的真还是有把握的假，差值都很大 |
 
 规则用 `gt`、`gte`、`lt` 或 `lte` 约束其字段，取值在 `[0, 1]` 内。规则可以指定 `question_type`、具名的 `question` 或两者，并可选地指定具名的 `state`。所有必需的答案都需要规则覆盖。阶段本地的 `accept` 规则会增加一个条件；它不能放宽算法的通用质量规则。

@@ -47,7 +47,7 @@ System One is a separate typed API, available in either startup mode when
 recipe through an `api: systemone` entrypoint and matching listener grant.
 These typed requests do not use the Chat protocol-translation matrix or the
 Chat model allowlist. See the
-[System One quickstart](../model-runtime/quickstart.md).
+[System One quickstart](../model-runtime/get-started/quickstart.md).
 
 ## Backend model protocols
 

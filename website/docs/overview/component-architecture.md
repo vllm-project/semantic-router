@@ -85,7 +85,7 @@ Chat recipes; see the [escalate guide](../tutorials/algorithm/looper/escalate.md
 
 Dashboard sessions do not replace public listener credentials. Native model
 grants are separate from the listener's Chat `models` allowlist. See the
-[System One quickstart](../model-runtime/quickstart.md) for a complete request.
+[System One quickstart](../model-runtime/get-started/quickstart.md) for a complete request.
 
 ## Scale a deployment through replicas
 
@@ -121,8 +121,8 @@ vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
 DP replicates the model; it does not shard weights through tensor or pipeline
 parallelism. Measure throughput and tail latency for your input lengths before
 adding replicas, especially when several workers share one GPU. See
-[Frontend and runtime deployments](../model-runtime/deploy.md) and
-[Engine arguments](../model-runtime/engine-args.md).
+[Frontend and runtime deployments](../model-runtime/deploy/connect-the-router.md) and
+[Engine arguments](../model-runtime/deploy/engine-args.md).
 
 ## Route System One across decision models
 
@@ -169,5 +169,5 @@ and Engine mode continues to serve concrete models without recipe execution.
 
 - [System Overview](semantic-router-overview): configuration and deployment context.
 - [Quickstart](../installation/installation.md): send a routed Chat request.
-- [Model runtime quickstart](../model-runtime/quickstart.md): ask typed questions directly.
-- [Frontend and runtime deployments](../model-runtime/deploy.md): bindings, placement, and readiness.
+- [Model runtime quickstart](../model-runtime/get-started/quickstart.md): ask typed questions directly.
+- [Frontend and runtime deployments](../model-runtime/deploy/connect-the-router.md): bindings, placement, and readiness.

@@ -324,7 +324,7 @@ An uncalibrated rule can inspect these observations:
 | Field | Meaning |
 | --- | --- |
 | `top_probability` | Largest probability in the native answer distribution; for `noul`, `max(p, 1-p)` |
-| `confidence` | The confidence reported by the native model, when present: System One's published statistic for Choice and Score (see [Decisions](https://vllm-sr.ai/docs/model-runtime/reference#decisions)); since runtime contract 3.2.0 its values differ from earlier releases, so recheck thresholds |
+| `confidence` | The confidence reported by the native model, when present: System One's published statistic for Choice and Score (see [Decisions](https://vllm-sr.ai/docs/model-runtime/reference/http-api#decisions)); since runtime contract 3.2.0 its values differ from earlier releases, so recheck thresholds |
 | `probability_margin` | For `noul`, `2 × abs(p - 0.5)`; both confident true and confident false answers have a large margin |
 
 A rule bounds its field with `gt`, `gte`, `lt`, or `lte`, in `[0, 1]`. A rule can target a `question_type`, a named `question`, or both, and optionally a named `state`. All required answers need rule coverage. A stage-local `accept` rule adds a condition; it cannot weaken the algorithm's common quality rule.

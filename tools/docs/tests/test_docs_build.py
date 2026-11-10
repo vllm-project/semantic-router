@@ -143,7 +143,7 @@ assert args == ['install'], args
         self.assertEqual(calls[2][1], ["install"])
         self.assertEqual(calls[3][1], ["run", "build"])
         checks = [call for call in calls[4:] if call[0] == "python"]
-        self.assertEqual(len(checks), 4)
+        self.assertEqual(len(checks), 5)
         self.assertTrue(
             all(
                 call[2] == str(self.root / "website/.venv/bin/python")
@@ -197,10 +197,14 @@ assert args == ['install'], args
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         checks = [call for call in self.calls() if call[0] == "python"]
-        self.assertEqual(len(checks), 7)
+        self.assertEqual(len(checks), 9)
         self.assertIn(
             ["tools/catalog/generate_model_catalog.py", "--check"],
-            [call[1] for call in checks[4:]],
+            [call[1] for call in checks[5:]],
+        )
+        self.assertIn(
+            ["tools/docs/generate_model_pages.py", "--check"],
+            [call[1] for call in checks[5:]],
         )
         self.assertTrue(
             all(

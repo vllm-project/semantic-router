@@ -404,7 +404,7 @@ question resolves to sees the parts of the request the question reads:
 - **Remote models receive what they judge.** A `systemone` deployment receives
   the state parts its questions read: the request, the earlier turns, the
   tool results, the model's answer, a candidate, and the images of image
-  questions. [What leaves the host](../system-one/deployments#what-leaves-the-host)
+  questions. [What leaves the host](../system-one/deploy/deployments#what-leaves-the-host)
   lists them per signal. A remote embedding provider receives the text it
   embeds.
 - **Guards can fail open or closed.** A `jailbreak` or `pii` rule whose model

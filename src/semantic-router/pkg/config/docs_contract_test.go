@@ -429,7 +429,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "docs", "tutorials", "global", "overview.md"),
+		path: repoRel("website", "docs", "installation", "global-settings.md"),
 		needles: []string{
 			"`global:`",
 			"`global.services`",
@@ -462,7 +462,9 @@ var latestTutorialSidebarRequired = []string{
 	"label: 'Heuristic'",
 	"label: 'Application'",
 	"label: 'System One'",
-	"'system-one/overview'",
+	"dirName: 'system-one'",
+	"label: 'Model Runtime'",
+	"dirName: 'model-runtime'",
 	"label: 'Decisions'",
 	"label: 'Algorithms'",
 	"label: 'Selectors'",
@@ -481,7 +483,7 @@ var latestTutorialSidebarRequired = []string{
 	"'tutorials/global/models-entrypoints-serving'",
 	"'tutorials/global/entrypoints'",
 	"'tutorials/global/recipes'",
-	"'tutorials/global/overview'",
+	"'installation/global-settings'",
 }
 
 var latestTutorialSidebarForbidden = []string{

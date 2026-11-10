@@ -20,13 +20,13 @@ import {
 
 Install vLLM Semantic Router, connect one model, and send your first routed
 request. To serve typed decision questions without a Chat backend, follow the
-[System One quickstart](../model-runtime/quickstart.md) instead. Both paths use
+[System One quickstart](../model-runtime/get-started/quickstart.md) instead. Both paths use
 the same [frontend and model runtime](../overview/component-architecture).
 
 `vllm-sr serve` runs a local stack in Docker: the Router, which serves an
 OpenAI-compatible API on port 8899 itself (standalone mode, the default), the
 Dashboard on port 8700, and the
-[model runtime](../model-runtime/overview.md) that runs the Router's own
+[model runtime](../model-runtime/get-started/overview.md) that runs the Router's own
 classifiers and embedding models. The models that answer your users run
 elsewhere, such as Ollama, a vLLM server or a hosted API, and you connect them
 in the Dashboard.
@@ -205,6 +205,6 @@ Deleting those paths removes the install, but leaves in place:
 - [Choose a deployment](deployment-options)
 - [Configure models](model-configuration)
 - [Configure routing](configuration)
-- [Use the built-in model runtime](../model-runtime/overview.md)
+- [Use the built-in model runtime](../model-runtime/get-started/overview.md)
 - [Use the Router API](../api/router)
 - [Troubleshoot installation](../troubleshooting/common-errors)

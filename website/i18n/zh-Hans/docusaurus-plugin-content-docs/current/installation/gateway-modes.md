@@ -166,7 +166,7 @@ GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/
 - **在 CPU 上运行轻松：** 默认决策模型 vela3-fast（加载后约 7 GB）、307M 的 Vela embedding 模型、Vela Omni Nano，以及
   Decision 2.0 的 Kai-0.6B 和 Eos-0.8B 决策模型。
 - **更大的模型：** 在 CPU 上每个参数约需 4 字节，因此 2B 的决策模型约需 8 GB。请把 Docker 虚拟机的内存（Docker
-  Desktop：Settings、Resources）调到高于配置中各模型所需，或选用更小的模型。参见[选择模型](../model-runtime/choose-a-model)。
+  Desktop：Settings、Resources）调到高于配置中各模型所需，或选用更小的模型。参见[选择模型](../model-runtime/get-started/choose-a-model)。
 
 ## `vllm-sr serve` 的选项
 

@@ -18,6 +18,7 @@ const commands = [
   [python, 'tools/catalog/generate_model_catalog.py', '--check'],
   [python, 'tools/docs/generate_cli_reference.py', '--check'],
   [python, 'tools/docs/generate_header_reference.py', '--check'],
+  [python, 'tools/docs/generate_model_pages.py', '--check'],
   [python, 'tools/agent/scripts/sync_public_skill.py', '--check'],
   [process.execPath, 'website/scripts/generate-configuration-catalog.mjs', '--check'],
   [process.execPath, 'website/scripts/generate-contributor-rank.mjs', '--check-source'],

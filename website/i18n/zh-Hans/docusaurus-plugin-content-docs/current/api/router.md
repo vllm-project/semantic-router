@@ -34,7 +34,7 @@ Router 数据面在配置的监听器上接收模型请求。默认的 standalon
 Engine 模式关闭配方路由，并提供原生 System One 接口。在
 `listeners[].systemone.models` 中发布原生模型 ID；Chat 的 `models` 名单不会授权
 原生访问。两类接口都使用 listener 的 API keys。完整请求见
-[模型运行时快速开始](../model-runtime/quickstart.md)。
+[模型运行时快速开始](../model-runtime/get-started/quickstart.md)。
 
 其他 `/v1/*` 路径默认拒绝。特别是 `/v1/files`、`/v1/vector_stores` 和路由回放路径在公网推理监听器上不可用。Router 自有的文件和向量存储操作使用管理监听器上的 `/api/v1/storage/files` 和 `/api/v1/storage/vector-stores`。其他 `/openai/*` 操作，例如 embeddings 和读取已存储的 response，返回 `404`。
 
@@ -55,11 +55,11 @@ Router 在模型读取请求的 `options` 之前，先按此 API 检查它们。
 （`true` 或 `false`）；`null` 表示不设置任何选项。其他选项或类型不符的值返回
 `400` 和 `invalid_request`，消息中会指出该项。`options.profile` 已在
 [#5071](https://github.com/vllm-project/semantic-router/pull/5071) 中移除：请求按其
-deployment 的[引擎参数](../model-runtime/engine-args.md)运行，`meta` 报告 `dtype` 和
+deployment 的[引擎参数](../model-runtime/deploy/engine-args.md)运行，`meta` 报告 `dtype` 和
 `numerics`，不再报告 `profile`。
 
 Router 调用的模型运行时 HTTP API 属于单个发布版本，不作此类承诺。Router 只接受恰好提供其契约版本的运行时；见
-[挂到你自己跑的 runtime](../model-runtime/deploy.md#attach-to-a-runtime-you-run)。
+[挂到你自己跑的 runtime](../model-runtime/deploy/connect-the-router.md#attach-to-a-runtime-you-run)。
 
 ## 发送路由请求 {#send-a-routed-request}
 

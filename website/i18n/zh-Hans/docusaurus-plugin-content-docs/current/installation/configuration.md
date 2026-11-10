@@ -53,7 +53,7 @@ Provider 定价放在每个具体模型旁边，位于 `providers.models[].prici
 
 Router 范围的调试表面默认关闭。`global.services.observability.profiling` 提供 Go `pprof` 端点，并且仅在显式启用时提供；然后它绑定 `127.0.0.1:6060`，因此除非显式更改 `bind`，否则 profile 永远不会到达可路由接口。该开关在启动时读取一次，因此更改它需要重启 Router。参见 [API 与可观测性](../tutorials/global/api-and-observability)。
 
-Router 询问的模型（回答信号的决策模型和召回所用的嵌入模型）是 `global.model_catalog.deployments` 下的部署。默认由决策模型在[模型运行时](model-runtime/overview.md)中回答每个问题类信号。绑定（`global.model_catalog.bindings.<signal>`，或配方的 `recipes[].model_bindings.<signal>`）或规则自身的 `deployment` 可以指定其他部署，例如更大的本地模型或远程 System One API。[为信号选择模型](choose-a-model-for-a-signal.md)说明这条规则，[模型目录参考](model-catalog.md)列出部署的全部字段。早期的 `variant`、`use_modernbert` 和 `use_mmbert_32k` 选择器已移除；`vllm-sr config migrate` 会删除它们。
+Router 询问的模型（回答信号的决策模型和召回所用的嵌入模型）是 `global.model_catalog.deployments` 下的部署。默认由决策模型在[模型运行时](../model-runtime/get-started/overview.md)中回答每个问题类信号。绑定（`global.model_catalog.bindings.<signal>`，或配方的 `recipes[].model_bindings.<signal>`）或规则自身的 `deployment` 可以指定其他部署，例如更大的本地模型或远程 System One API。[为信号选择模型](choose-a-model-for-a-signal.md)说明这条规则，[模型目录参考](model-catalog.md)列出部署的全部字段。早期的 `variant`、`use_modernbert` 和 `use_mmbert_32k` 选择器已移除；`vllm-sr config migrate` 会删除它们。
 
 `pii` 规则读取当前用户轮次；`input.history: true` 加上更早的用户轮次，`input.tool_results: true` 加上请求的文本工具结果。Router 使用中立的协议表示，因此同一条规则适用于受支持的 chat、responses 和 messages 线格式。规则需要能回答 span 问题的部署，否则配置加载失败并报告 `span_required`；默认决策模型 vela3-fast 返回 span。规则的模型没有给出答案时，由它的 `on_unknown` 决定：`no_match`（默认）或 `match`。模型无法读取的文本计为个人数据。
 
@@ -321,7 +321,7 @@ canonical 文档可以通过多个界面编写或应用：
 
 - [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml) 是详尽的 canonical 示例。
 - [`config/fragments/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments) 包含可复用的信号、决策、算法和插件片段。
-- [Providers 与路由教程](../tutorials/global/overview)描述共享运行时配置。
+- [Providers 与路由教程](./global-settings)描述共享运行时配置。
 - [统一配置契约 v0.3](../proposals/unified-config-contract-v0-3) 记录 v0.5 结构所基于的设计。
 - [配置契约](configuration-contract) 是当前 Router 构建的实时发现和校验契约。
 

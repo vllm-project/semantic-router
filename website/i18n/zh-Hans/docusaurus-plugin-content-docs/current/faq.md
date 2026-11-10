@@ -49,7 +49,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
 `api: systemone` 入口，并在 listener 中授权其 `vllm-sr/auto` 名称，运行原生 escalate。
 默认 Chat 入口不会隐式开启原生路由。配置和请求示例见
 [System One escalate 指南](tutorials/algorithm/looper/escalate#on-system-one)和
-[快速开始](model-runtime/quickstart)。
+[快速开始](./model-runtime/get-started/quickstart)。
 
 ## 如何与 Agent Harness 配合？ {#how-does-it-work-with-an-agent-harness}
 

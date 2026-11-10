@@ -134,7 +134,7 @@ Without `--platform cpu`, automatic platform detection can select CUDA on a
 GPU host.
 
 The Router's own models (classifiers, embeddings, decision models) run in the
-[model runtime](model-runtime/overview.md). To run them on CUDA, use
+[model runtime](../model-runtime/get-started/overview.md). To run them on CUDA, use
 `--platform cuda`: the CUDA image ships the runtime with the CUDA build of
 PyTorch, and deployments with `device: auto` or `device: cuda:0` use the GPU.
 CUDA is validated. Records cover documented H200, A100, and Tesla T4

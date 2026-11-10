@@ -33,7 +33,7 @@ queries. See [Router management API](./apiserver).
 Engine mode serves the native System One paths with recipe routing disabled.
 Publish native model IDs in `listeners[].systemone.models`; the Chat `models`
 allowlist does not grant native access. Both APIs use the listener's API keys.
-See the [model runtime quickstart](../model-runtime/quickstart.md) for a request.
+See the [model runtime quickstart](../model-runtime/get-started/quickstart.md) for a request.
 
 The System One paths read bodies compressed with one layer of gzip or zstd
 (`415` with `unsupported_media_type` for any other coding) and
@@ -44,7 +44,7 @@ request, with each part's image as `data_base64`, to the model. On
 `question_failed`, the question's `question_error`, fixed `reason` and ID,
 while `/v1/decisions` answers each question in place. A model the listener does
 not publish returns `403` `model_not_allowed` with the models it does publish.
-See [System One compatibility](../model-runtime/reference.md#system-one-compatibility)
+See [System One compatibility](../model-runtime/reference/http-api.md#system-one-compatibility)
 for assets, Box, track and long context.
 
 ### Route a System One request
@@ -169,13 +169,13 @@ that is longer, up to the listener's `systemone.max_deadline_ms` (600000, 10
 minutes, by default); a `long_context` request without `deadline_ms` waits
 that whole limit. `options.profile` was removed in
 [#5071](https://github.com/vllm-project/semantic-router/pull/5071): a request
-runs with its deployment's [engine arguments](../model-runtime/engine-args.md),
+runs with its deployment's [engine arguments](../model-runtime/deploy/engine-args.md),
 and `meta` reports `dtype` and `numerics` instead of `profile`.
 
 The model runtime's HTTP API, which the Router calls, belongs to one release
 and makes no such promise. A Router accepts only a runtime that serves exactly
 its contract version; see
-[Attach to a runtime you run](../model-runtime/deploy.md#attach-to-a-runtime-you-run).
+[Attach to a runtime you run](../model-runtime/deploy/connect-the-router.md#attach-to-a-runtime-you-run).
 
 ## Send a routed request
 

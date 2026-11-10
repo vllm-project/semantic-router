@@ -131,7 +131,7 @@ curl -sS http://localhost:8899/v1/chat/completions \
 ## 调试
 
 - 先用 `vllm-sr logs <service>` 看组件日志，再依赖容器名。
-- 通过模型运行时状态与日志检查 worker 就绪状态和失败原因，参见[运行时排障](../model-runtime/troubleshooting.md)。
+- 通过模型运行时状态与日志检查 worker 就绪状态和失败原因，参见[运行时排障](../model-runtime/deploy/troubleshooting.md)。
 - Router 诊断设 `SR_LOG_LEVEL=debug`。
 - 在运行时调试配置前，先跑 `vllm-sr config validate --config <file>`。
 - 启动和网络失败见[常见错误](/docs/troubleshooting/common-errors)和[容器连通性](/docs/troubleshooting/container-connectivity)。

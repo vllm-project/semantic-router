@@ -15,7 +15,7 @@ translation:
 信号分为三层：
 
 - **`systemone` 原语**用你以自然语言编写的问题询问决策模型。
-- **应用信号**是十一个现成的问题，每个都编译成 Router 自有的一个 `systemone` 问题（[预设](../../system-one/concepts#presets)）。
+- **应用信号**是十一个现成的问题，每个都编译成 Router 自有的一个 `systemone` 问题（[预设](../../system-one/get-started/concepts#presets)）。
 - **启发式信号**是确定性的代码：关键词、语言、请求结构、身份和元数据。
 
 当你需要在决策运行之前把多个信号组合成得分、分区或路由区间时，使用[投影](../projection/overview)。
@@ -185,4 +185,4 @@ global:
 - 需要分区、加权得分聚合或命名路由区间时，阅读[投影](../projection/overview)。
 - 从 [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml) 开始了解完整的公开契约。
 
-根据类型不同，信号可以读取请求文本、对话历史、图片、调用方元数据或可信身份。由模型判断的信号会把读取的内容发给回答它们的部署；[哪些数据会离开本机](../../system-one/deployments#what-leaves-the-host)列出了每个信号发送的部分。
+根据类型不同，信号可以读取请求文本、对话历史、图片、调用方元数据或可信身份。由模型判断的信号会把读取的内容发给回答它们的部署；[哪些数据会离开本机](../../system-one/deploy/deployments#what-leaves-the-host)列出了每个信号发送的部分。

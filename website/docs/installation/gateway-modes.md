@@ -224,7 +224,7 @@ message. GPU support through the host is tracked in
 - **Larger models:** a model needs about 4 bytes per parameter on the CPU, so a
   2B decision model needs about 8 GB. Raise the memory of Docker's VM (Docker
   Desktop: Settings, Resources) above what the config's models need, or pick a
-  smaller model. See [Choose a model](../model-runtime/choose-a-model).
+  smaller model. See [Choose a model](../model-runtime/get-started/choose-a-model).
 
 ## Options of `vllm-sr serve`
 

@@ -13,9 +13,9 @@ Choose two things independently:
 Chat provider models run behind reachable endpoints on the same host, in a
 cluster, or at a hosted API. vLLM-SR does not provision those generation
 backends. Its own decision, classifier, and embedding models use
-managed or attached [model-runtime deployments](../model-runtime/deploy.md).
+managed or attached [model-runtime deployments](../model-runtime/deploy/connect-the-router.md).
 For decision serving without Chat backends, start in
-[Engine mode](../model-runtime/quickstart.md).
+[Engine mode](../model-runtime/get-started/quickstart.md).
 
 ## Choose the Router topology
 

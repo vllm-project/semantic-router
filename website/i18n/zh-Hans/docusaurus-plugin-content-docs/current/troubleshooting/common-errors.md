@@ -335,13 +335,13 @@ providers:
 
 ## 决策模型或嵌入模型无法加载
 
-每个模型都运行在[模型运行时](../model-runtime/overview.md)中。模型无法加载时，依赖它的功能返回未知结果，运行时会记录原因。查看 Router 的 `vsr_model_runtime_ready{deployment="..."}` 指标和 Router 日志，或直接询问你自己运行的运行时：
+每个模型都运行在[模型运行时](../model-runtime/get-started/overview.md)中。模型无法加载时，依赖它的功能返回未知结果，运行时会记录原因。查看 Router 的 `vsr_model_runtime_ready{deployment="..."}` 指标和 Router 日志，或直接询问你自己运行的运行时：
 
 ```bash
 curl -s localhost:8100/v1/models
 ```
 
-每个模型的 `status` 和 `reason` 说明失败原因：下载损坏、缺少 `revision`、私有仓库没有令牌、设备不存在，或模型超出设备容量。[故障排查与 FAQ](../model-runtime/troubleshooting.md) 列出了每种原因及修复方法。
+每个模型的 `status` 和 `reason` 说明失败原因：下载损坏、缺少 `revision`、私有仓库没有令牌、设备不存在，或模型超出设备容量。[故障排查与 FAQ](../model-runtime/deploy/troubleshooting.md) 列出了每种原因及修复方法。
 
 ## 容器镜像没有匹配的平台
 
