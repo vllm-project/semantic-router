@@ -81,8 +81,10 @@ answer however many rules read it.
 
 The warning codes a rule adds are `hallucination` (`unverified_factual` when
 the answer could not be checked), `response_jailbreak`, and `response_guard`
-for any other rule. A blocked answer is replaced with a message that names what
-was found, never that a check failed.
+for any other rule, one for each response-stage signal among the conditions
+that matched, or among all of them when the rule could not be decided. A
+blocked answer is replaced with a message that names what was found, never
+that a check failed.
 
 The grounding context is the documents the [context plugin](./context.md) retrieved and
 the request's own tool results.
@@ -115,7 +117,9 @@ receives one of:
   `details`;
 - the refusal a buffered answer's 403 carries, as the protocol's stream
   error: a Chat `error` chunk, a Responses `response.failed` event or a
-  Messages `error` event.
+  Messages `error` event. When a deployment the guard asks takes the
+  delegated credential and the request carries none, a buffered answer is
+  refused with `401`, and the stream error carries that refusal instead.
 
 Behind Envoy the Router asks for the response body buffered for these
 requests only; standalone, it buffers the body itself. The cost is time to

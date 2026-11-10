@@ -17,7 +17,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
@@ -292,6 +294,37 @@ func TestBufferedAnswerIsBlockedOrPassedInEveryProtocol(t *testing.T) {
 	}
 }
 
+// The guard's decision model refused its call for want of the request's
+// delegated credential, so a buffered answer is answered 401. A held stream
+// receives that refusal in its protocol's streaming form, and none of the
+// answer.
+func TestHeldStreamRefusesAnAnswerWithoutTheDelegatedCredential(t *testing.T) {
+	for _, format := range guardProtocols {
+		t.Run(string(format), func(t *testing.T) {
+			router, ctx := newResponseStageRouter(t, newDelegatedDecider(), "", config.ResponseGuardBlock)
+			streamingClient(ctx, format)
+			ctx.SemanticRequest.Stream, ctx.ExpectStreamingResponse = false, false
+			body := []byte(strings.ReplaceAll(string(extProcResponseFixture(format)), "hello", benignAnswer))
+
+			answerHeaders(t, router, ctx, "application/json")
+			buffered, replies := answerBody(t, router, ctx, [][]byte{body})
+
+			if replies[0].GetImmediateResponse().GetStatus().GetCode() != 401 || !strings.Contains(buffered, `"authentication_error"`) ||
+				strings.Contains(buffered, benignAnswer) {
+				t.Fatalf("buffered reply = %v, want the protocol's 401 authentication error and none of the answer", replies[0])
+			}
+
+			router, ctx = newResponseStageRouter(t, newDelegatedDecider(), "", config.ResponseGuardBlock)
+			streamingClient(ctx, format)
+
+			answerHeaders(t, router, ctx, "text/event-stream")
+			client, _ := answerBody(t, router, ctx, whole(streamOf(format, benignAnswer)))
+
+			assertRefusedStream(t, format, client, delegatedCredentialMessage, benignAnswer)
+		})
+	}
+}
+
 // A gateway that ignores the Router's BUFFERED mode streams the body anyway;
 // the Router holds every part itself, so the client still receives nothing
 // before the guard has read the whole answer.
@@ -439,6 +472,57 @@ func TestNonEnforcingGuardKeepsTrueStreaming(t *testing.T) {
 		}
 	}
 	t.Fatalf("outcomes = %+v, want the primary digest of the streamed answer", outcomes)
+}
+
+// A guard that neither blocks nor writes notes cannot take back an answer the
+// client already received. When its decision model refused the call for want
+// of the request's delegated credential, the answer nothing checked is not
+// kept: no response cache entry, no Responses object, no memory, and the
+// memory receipt says why.
+func TestLiveStreamAnswerTheGuardCouldNotReadIsNotKept(t *testing.T) {
+	router, ctx := newResponseStageRouter(t, newDelegatedDecider(), config.ResponseGuardNone, config.ResponseGuardAnnotate)
+	recorder := startResponseStageReplay(t, router, ctx)
+	responseCache := &mockStreamingCache{}
+	router.Cache = responseCache
+	router.Config.SemanticCache.InUse = true
+	ctx.CacheExactFingerprint = "live-stream-request"
+	router.Config.Memory.InUse, router.Config.Memory.AutoStore = true, true
+	router.MemoryExtractor = memory.NewMemoryChunkStore(&noopMemoryStore{})
+	ctx.VSRSelectedDecision.Plugins = append(ctx.VSRSelectedDecision.Plugins, memoryTestPlugin(), config.DecisionPlugin{
+		Type:          config.DecisionPluginResponseCache,
+		Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "mode": config.ResponseCacheModeExact, "scope": "global"}),
+	})
+	responses := NewMockResponseStore()
+	router.ResponseAPIFilter = NewResponseAPIFilter(responses)
+	streamingClient(ctx, llmprotocol.OpenAIResponsesV1)
+	store := true
+	ctx.SemanticRequest.Store = &store
+	state, err := router.ResponseAPIFilter.PrepareObjectState(t.Context(), *ctx.SemanticRequest, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx.ResponseObjectState = state
+
+	if mode := answerHeaders(t, router, ctx, "text/event-stream").GetModeOverride().GetResponseBodyMode(); mode != http_ext.ProcessingMode_STREAMED {
+		t.Fatalf("response body mode = %v, want STREAMED", mode)
+	}
+	client, _ := answerBody(t, router, ctx, streamOf(llmprotocol.OpenAIResponsesV1, benignAnswer))
+
+	if !strings.Contains(client, benignAnswer) || !principal.Refused(ctx.TraceContext) {
+		t.Fatalf("client = %s, refused = %v, want the streamed answer of a refused guard call", client, principal.Refused(ctx.TraceContext))
+	}
+	if responseCache.exactAdded || responseCache.addEntryCalled {
+		t.Error("the response cache kept an answer the guard could not read")
+	}
+	if len(responses.responses) != 0 {
+		t.Errorf("the Responses store kept %d objects of an answer the guard could not read", len(responses.responses))
+	}
+	if err := recorder.DrainOutcomes(); err != nil {
+		t.Fatal(err)
+	}
+	if receipt := outcomeFor(t, replayOutcomes(t, recorder, ctx.RouterReplayID), "router", "memory_persistence"); receipt.Verdict != "policy_blocked" || receipt.Reason != delegatedCredentialCode {
+		t.Errorf("memory receipt = %s %s, want policy_blocked %s", receipt.Verdict, receipt.Reason, delegatedCredentialCode)
+	}
 }
 
 // The gateway sends a buffered body as one ExtProc message; one larger than

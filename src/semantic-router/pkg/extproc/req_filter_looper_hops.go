@@ -87,6 +87,11 @@ func (r *OpenAIRouter) executeLooperGraph(
 		Caller: hops,
 		Hop:    routing.Hop{Decision: decision.Name, Recipe: string(req.RecipeName)},
 	})
+	if err == nil && principal.Refused(reqCtx.TraceContext) {
+		// A hop or check refused for want of the credential fails the run,
+		// whatever the other models answered.
+		err = principal.ErrCredentialMissing
+	}
 	if err != nil {
 		logLooperCallBudgetExhaustion(err, outcome, decision, reqCtx)
 		return nil, r.looperExecutionErrorResponse(looperStepError(err), originalModel, decision, reqCtx)
