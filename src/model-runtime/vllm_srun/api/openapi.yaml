@@ -47,7 +47,10 @@ paths:
           description: |
             One answer per question, in request order (in a batch, per entry); a failed question carries its own
             error. A request in which no question is valid, of a standard request or of any entry of a batch, is
-            answered 400 invalid_request, with each question's reason in the message.
+            answered 400 invalid_request, with each question's reason in the message. A batch entry whose images,
+            videos, assets or tokens are refused fails each of its questions with `invalid_input` (reason
+            `input_malformed`) and the refusal's message, and the other entries are answered; a batch every entry
+            of which is refused is answered with the first refusal.
           headers:
             Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:

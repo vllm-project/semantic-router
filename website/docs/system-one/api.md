@@ -124,6 +124,10 @@ different states:
 - The response is `{"model", "states", "usage"}`: each entry's answers under
   the same name, as that entry's own request would get them, and a `usage`
   that sums every entry. It has no top-level `answers`.
+- An entry whose own request would be refused for its images, videos, assets
+  or tokens instead fails each of its questions with `invalid_input`, and the
+  other entries are answered. Only a batch whose every entry is refused is
+  refused, with the first entry's error.
 
 ## Questions
 

@@ -257,18 +257,20 @@ func (d *systemOneDeployment) declaredCard() ModelCard {
 // API fails a call with a failed question as a whole and names the question
 // and, in a batch, its entry; send then asks the rest once more without it,
 // within the same deadline, and leaves only that question unknown (about that
-// entry, else about every state). When the retry fails the same question
-// about another entry, send asks once more without it about every state.
-// Any other failure leaves every question of the task unknown.
+// entry, else about every state). An entry whose input the API refused
+// (invalid_input) is left out as a whole. When the retry fails the same
+// question about another entry, send asks once more without it about every
+// state. Any other failure leaves every question of the task unknown.
 func (d *systemOneDeployment) send(ctx context.Context, task *bundleTask) {
 	plan := sentAs(task)
 	status, data, err := d.post(ctx, *task.task.Decisions)
-	var failure *questionFailure
+	var failures []questionFailure
 	for err == nil {
 		failed, ok := failedQuestion(status, data)
-		if failure != nil {
+		if len(failures) > 0 {
 			// At most one more retry, and only for the same question.
-			ok = ok && failure.state != "" && failed.question == failure.question
+			last := failures[len(failures)-1]
+			ok = ok && last.state != "" && failed.question == last.question
 			failed.state = ""
 		}
 		if !ok || ctx.Err() != nil {
@@ -282,7 +284,7 @@ func (d *systemOneDeployment) send(ctx context.Context, task *bundleTask) {
 		logging.ComponentDebugEvent("model_runtime", "systemone_question_retried", map[string]interface{}{
 			"deployment": d.name, "question": failed.question, "state": failed.state, "question_error": failed.code,
 		})
-		failure, plan = &failed, retry
+		failures, plan = append(failures, failed), retry
 		status, data, err = d.post(ctx, plan.body)
 	}
 	var responses []Response
@@ -292,14 +294,16 @@ func (d *systemOneDeployment) send(ctx context.Context, task *bundleTask) {
 			d.reportFailure(status, ErrorReason(err), nil)
 		}
 	}
-	if err == nil && failure != nil {
-		failure.answer(task, responses)
+	if err == nil {
+		for _, failure := range failures {
+			failure.answer(task, responses)
+		}
 	}
 	if err == nil && task.decision.cache != nil {
 		for _, call := range task.calls {
 			cacheTotal.WithLabelValues(call.decision.deployment, "miss").Inc()
 		}
-		if failure == nil && completeAll(responses) {
+		if len(failures) == 0 && completeAll(responses) {
 			if len(responses) == 1 {
 				task.decision.cache.put(task.decision.key, responses[0])
 			} else {

@@ -1279,9 +1279,9 @@ class Runtime:
             elif states is None:
                 joined.append(outcomes[start])
             else:
-                joined.append(
-                    join_states(outcomes[start : start + len(states)], states)
-                )
+                end = start + len(states)
+                entries = [body for _, body, _ in parts[start:end]]
+                joined.append(join_states(outcomes[start:end], states, entries))
         return joined
 
     async def _serve_parts(

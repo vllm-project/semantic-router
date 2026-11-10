@@ -210,14 +210,17 @@ The Router merges the calls of each stage:
   them makes several calls. A deployment shared by all of them still loads
   one model.
 
-A local runtime answers a failed question in place. A remote System One API
-fails the whole call and names the question and, in a batch, its entry
-(`state`); the Router then asks once more, within the same deadline, only the
-states that still have other questions, in the same two forms, so only the
-failed question's rule about that entry is unknown. If that retry fails the
-same question about another entry, the Router asks a last time without it
-about every entry, and the question is unknown about every state that asked
-it, as when an API names no entry.
+A local runtime answers a failed question in place, and an entry whose input
+it refuses, such as an image over its limit, fails only that entry's
+questions, with `invalid_input`. A remote System One API fails the whole call
+and names the question and, in a batch, its entry (`state`); the Router then
+asks once more, within the same deadline, only the states that still have
+other questions, in the same two forms, so only the failed question's rule
+about that entry is unknown. When the question's error is `invalid_input`,
+the API refused that entry's input, and the retry leaves out the whole entry.
+If that retry fails the same question about another entry, the Router asks a
+last time without it about every entry, and the question is unknown about
+every state that asked it, as when an API names no entry.
 
 A per-candidate judge sends at most `judge.max_candidates` entries. Answers to
 the same questions about the same state are reused: from a local runtime's

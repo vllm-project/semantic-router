@@ -107,6 +107,7 @@ curl -s localhost:8100/v1/systemone -H 'content-type: application/json' -d '{
 - 批量请求的 `model`、`options` 和 `assets` 适用于每一项。
 - 两种形式互斥。批量请求体没有顶层 `state`、`questions`、`images` 或 `videos`；混用两种形式的请求体，或 `states` 为空的批量请求，会以 400 `invalid_request` 被拒绝。
 - 响应为 `{"model", "states", "usage"}`：每一项的答案以相同名称给出，与该项单独请求时得到的答案相同；`usage` 是所有项的总和。响应没有顶层 `answers`。
+- 如果某一项单独请求时会因其图像、视频、资源或 token 数被拒绝，该项的每个问题都改为以 `invalid_input` 失败，其他项照常回答。只有每一项都被拒绝的批量请求才会被整体拒绝，返回第一项的错误。
 
 ## 问题 {#questions}
 

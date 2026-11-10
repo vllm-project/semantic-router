@@ -206,6 +206,33 @@ func TestPublicSystemOneAnswersAFailedQuestionAsTheWholeRequest(t *testing.T) {
 	}
 }
 
+// A System One backend fails a request with a failed question as a whole; the
+// public API answers with the same question_failed on either path, in its own
+// words.
+func TestPublicSystemOnePassesABackendsFailedQuestionThrough(t *testing.T) {
+	sink := &forwarded{}
+	handler := wireHandler(t, sink)
+	batch := []byte(`{"model":"vllm-sr/test","states":{"s1":{"state":"s","questions":{"q":{"type":"box","instructions":"the mug"}}},"s2":{"state":"t","questions":{"r":{"type":"noul","instructions":"?"}}}}}`)
+	for _, tc := range []struct {
+		status       int
+		code, reason string
+	}{
+		{422, "invalid_question", "box_unsupported"},
+		{400, "max_length_exceeded", "question_tokens"},
+	} {
+		sink.status, sink.response = tc.status, `{"error":{"code":"question_failed","type":"systemone_error","message":"question \"q\" of /private/models/test cannot be answered","reason":"`+tc.reason+`","question":"q","state":"s1","question_error":"`+tc.code+`"}}`
+		for _, path := range []string{"/v1/systemone", "/v1/decisions"} {
+			status, answer := send(handler, path, batch, nil)
+			if status != tc.status || answer["code"] != "question_failed" || answer["question_error"] != tc.code || answer["reason"] != tc.reason || answer["question"] != "q" || answer["state"] != "s1" {
+				t.Fatalf("a backend's %s on %s => %d %v", tc.code, path, status, answer)
+			}
+			if strings.Contains(answer["message"], "/private/") {
+				t.Fatalf("the backend's message reached the client: %q", answer["message"])
+			}
+		}
+	}
+}
+
 func TestPublicSystemOneNamesTheModelsItServes(t *testing.T) {
 	handler := wireHandler(t, &forwarded{})
 	status, answer := send(handler, "/v1/systemone", []byte(`{"model":"unserved-model","state":"s","questions":{}}`), nil)
