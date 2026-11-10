@@ -815,8 +815,13 @@ func TestApply_EchoedPlaceholderInLaterTurnUnchanged(t *testing.T) {
 		return spans, nil
 	}
 
-	if _, err := Apply(request, NewAllocator(defaultCfg()), scan); err != nil {
+	result, err := Apply(request, NewAllocator(defaultCfg()), scan)
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	// only the real name counts as masked, not the echo left as it was
+	if result.MaskedCount != 1 {
+		t.Fatalf("MaskedCount: got %d, want 1", result.MaskedCount)
 	}
 	if got, want := request.Messages[0].Content[0].ToolResult.Content[0].Text, "customer: [PERSON_0]"; got != want {
 		t.Fatalf("tool result: got %q, want %q", got, want)

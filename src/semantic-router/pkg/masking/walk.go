@@ -109,10 +109,9 @@ func maskTextBlock(block *llmprotocol.Content, a *Allocator, scan ScanFunc, out 
 	if err != nil {
 		return fmt.Errorf("masking: scan failed: %w", err)
 	}
-	// Filtering and merging here (in addition to inside MaskText) only
-	// counts what will actually be masked; MaskText re-derives the same set
-	// to perform the splice, so no placeholder is allocated twice.
-	merged := MergeSpans(a.filter(spans))
+	// The same set MaskText splices, so the counts hold only what is masked;
+	// MaskText re-derives it, so no placeholder is allocated twice.
+	merged := a.maskable(block.Text, spans)
 	if len(merged) == 0 {
 		return nil
 	}
@@ -334,7 +333,7 @@ func maskStringValue(text string, a *Allocator, scan ScanFunc, out *Result) (str
 	if err != nil {
 		return "", false, fmt.Errorf("masking: scan failed: %w", err)
 	}
-	merged := MergeSpans(a.filter(spans))
+	merged := a.maskable(text, spans)
 	if len(merged) == 0 {
 		return text, false, nil
 	}

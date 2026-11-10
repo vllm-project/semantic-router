@@ -53,9 +53,11 @@ func NewAllocator(cfg *config.MaskingPluginConfig) *Allocator {
 // [TYPE_n] shape and every configured template with {index} as digits. A
 // template with no letter besides {index}, such as "{index}" or "#{index}",
 // is left out: its pattern would also match digits inside a real phone
-// number or address.
+// number or address. It also matches the [vsr:<tag>] marks the vSR Claude
+// Code plugin leaves where it hid a value from a tool's output, which reach
+// the Router when the plugin and the gateway run together.
 func placeholderPattern(cfg *config.MaskingPluginConfig) *regexp.Regexp {
-	alternatives := []string{`\[[A-Z][A-Z0-9_]*_\d+\]`}
+	alternatives := []string{`\[[A-Z][A-Z0-9_]*_\d+\]`, `\[vsr:[a-z]+\]`}
 	if cfg != nil {
 		entityTypes := make([]string, 0, len(cfg.Placeholders))
 		for entityType := range cfg.Placeholders {
@@ -71,6 +73,12 @@ func placeholderPattern(cfg *config.MaskingPluginConfig) *regexp.Regexp {
 		}
 	}
 	return regexp.MustCompile(strings.Join(alternatives, "|"))
+}
+
+// maskable is the set of spans MaskText splices into placeholders: the
+// configured entity types, without spans inside a placeholder, merged.
+func (a *Allocator) maskable(text string, spans []Span) []Span {
+	return MergeSpans(a.dropPlaceholderSpans(text, a.filter(spans)))
 }
 
 // dropPlaceholderSpans drops spans that lie inside a placeholder already in
@@ -211,7 +219,7 @@ func MaskText(text string, spans []Span, citations []llmprotocol.Citation, a *Al
 			return "", nil, fmt.Errorf("masking: span [%d,%d) outside text of %d bytes", span.Start, span.End, len(text))
 		}
 	}
-	merged := MergeSpans(a.dropPlaceholderSpans(text, a.filter(spans)))
+	merged := a.maskable(text, spans)
 	if len(merged) == 0 {
 		return text, citations, nil
 	}
