@@ -6,10 +6,12 @@ import (
 )
 
 var (
-	replicaReadyGauge    = promauto.NewGaugeVec(prometheus.GaugeOpts{Name: "vsr_model_runtime_replica_ready", Help: "Physical worker health readiness; pool compatibility is reported by deployment inventory."}, []string{"deployment", "replica"})
-	replicaInflightGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{Name: "vsr_model_runtime_replica_inflight", Help: "Locally admitted fused exchanges awaiting complete responses."}, []string{"deployment", "replica"})
-	replicaWorkGauge     = promauto.NewGaugeVec(prometheus.GaugeOpts{Name: "vsr_model_runtime_replica_admitted_bytes", Help: "Bytes in locally admitted outstanding requests; not runtime queue telemetry."}, []string{"deployment", "replica"})
-	replicaRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{Name: "vsr_model_runtime_replica_requests_total", Help: "Completed dispatched exchanges by replica and transport outcome."}, []string{"deployment", "replica", "outcome"})
+	replicaReadyGauge        = promauto.NewGaugeVec(prometheus.GaugeOpts{Name: "vsr_model_runtime_replica_ready", Help: "Physical worker health readiness; pool compatibility is reported by deployment inventory."}, []string{"deployment", "replica"})
+	replicaInflightGauge     = promauto.NewGaugeVec(prometheus.GaugeOpts{Name: "vsr_model_runtime_replica_inflight", Help: "Locally admitted fused exchanges awaiting complete responses."}, []string{"deployment", "replica"})
+	replicaWorkGauge         = promauto.NewGaugeVec(prometheus.GaugeOpts{Name: "vsr_model_runtime_replica_admitted_bytes", Help: "Bytes in locally admitted outstanding requests; not runtime queue telemetry."}, []string{"deployment", "replica"})
+	replicaRequestsTotal     = promauto.NewCounterVec(prometheus.CounterOpts{Name: "vsr_model_runtime_replica_requests_total", Help: "Completed dispatched exchanges by replica and transport outcome."}, []string{"deployment", "replica", "outcome"})
+	replicaEjectionsTotal    = promauto.NewCounterVec(prometheus.CounterOpts{Name: "vsr_model_runtime_replica_ejections_total", Help: "Replicas taken out of dispatch after consecutive exchanges ran out of their deadline."}, []string{"deployment", "replica"})
+	replicaReadmissionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{Name: "vsr_model_runtime_replica_readmissions_total", Help: "Ejected replicas returned to dispatch, by reason: cooldown (its cool-down ended) or answered (an exchange succeeded)."}, []string{"deployment", "replica", "reason"})
 
 	requestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
@@ -76,6 +78,13 @@ var (
 			Help: "Decisions calls request stages sent per deployment, by round: first is a stage's call to the deployment; later counts every further one, whose questions did not travel with the others.",
 		},
 		[]string{"deployment", "round"},
+	)
+	systemOneRetries = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vsr_model_runtime_systemone_retries_total",
+			Help: "System One calls asked again without the one question that failed the first call as a whole.",
+		},
+		[]string{"deployment"},
 	)
 	unknownAnswers = promauto.NewCounterVec(
 		prometheus.CounterOpts{

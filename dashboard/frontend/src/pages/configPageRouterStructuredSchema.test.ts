@@ -19,6 +19,10 @@ import {
 function expectGeneratedChildrenRendered(generated: FieldSchema, rendered: RouterStructuredSchema) {
   if (generated.type === 'object') {
     for (const child of generated.fields ?? []) {
+      if (rendered.omit?.includes(child.key)) {
+        expect(rendered.fields?.[child.key], `omitted field ${child.key}`).toBeUndefined()
+        continue
+      }
       const renderedChild = rendered.fields?.[child.key]
       expect(renderedChild, `missing generated field ${child.key}`).toBeDefined()
       expectGeneratedChildrenRendered(child, renderedChild!)
@@ -34,32 +38,28 @@ function expectGeneratedChildrenRendered(generated: FieldSchema, rendered: Route
 }
 
 describe('router defaults structured schemas', () => {
-  it('edits global Replay capture defaults without losing explicit false or zero values', () => {
-    const replay = {
-      enabled: true,
-      store_backend: 'memory',
-      capture_request_body: false,
-      capture_response_body: true,
-      capture_personal_data: false,
-      max_body_bytes: 0,
-      max_tool_trace_steps: 0,
-    }
+  it('offers no Replay, memory or response cache switch, which v0.5 reads from global.plugins', () => {
+    const replay = { store_backend: 'memory', ttl_seconds: 3600, async_writes: false }
     const cards = buildRouterSectionCards({
       config: null,
       routerConfig: { router_replay: replay },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     })
+    const fields = (key: string) =>
+      cards.find((item) => item.key === key)!.editFields.map((field) => field.name)
+    for (const [key, removed] of [
+      ['router_replay', 'enabled'],
+      ['router_replay', 'capture_request_body'],
+      ['router_replay', 'capture_response_body'],
+      ['router_replay', 'capture_personal_data'],
+      ['router_replay', 'capture_tool_results'],
+      ['memory', 'enabled'],
+      ['response_cache', 'enabled'],
+      ['response_cache', 'similarity_threshold'],
+    ]) {
+      expect(fields(key), `${key}.${removed}`).not.toContain(removed)
+    }
     const card = cards.find((item) => item.key === 'router_replay')!
-    expect(card.editFields.map((field) => field.name)).toEqual(
-      expect.arrayContaining([
-        'capture_request_body',
-        'capture_response_body',
-        'capture_personal_data',
-      ]),
-    )
     expect(card.save(card.editData)).toMatchObject({
       services: { router_replay: replay },
     })
@@ -92,9 +92,6 @@ describe('router defaults structured schemas', () => {
       config: null,
       routerConfig: { router_core: { strategy: 'priority' } },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     })
     const routerCore = cards.find((card) => card.key === 'router_core')
     const patch = routerCore?.save(routerCore.editData) as {
@@ -102,33 +99,6 @@ describe('router defaults structured schemas', () => {
     }
 
     expect(patch.router).not.toHaveProperty('auto_model_names')
-  })
-
-  it('saves external models that omit the optional provider', () => {
-    const external = [
-      {
-        name: 'external-safety',
-        llm_provider: '',
-        model_role: 'classification',
-        llm_endpoint: { address: 'safety-service', port: 8080, protocol: 'http' },
-      },
-      { name: 'external-hazard', model_role: 'classification' },
-      { name: 'external-classifier', llm_provider: 'openai', model_role: 'classification' },
-    ]
-    const cards = buildRouterSectionCards({
-      config: null,
-      routerConfig: { external_models: external },
-      routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
-    })
-    const externalModels = cards.find((card) => card.key === 'external_models')
-    const patch = externalModels?.save(externalModels.editData) as {
-      model_catalog?: { external?: unknown }
-    }
-
-    expect(patch.model_catalog?.external).toEqual(external)
   })
 
   it('round-trips nested provider and rule object arrays', () => {
@@ -164,59 +134,12 @@ describe('router defaults structured schemas', () => {
     ])
   })
 
-  it('round-trips typed tool filtering and classifier modules with unknown keys', () => {
-    const tools = normalizeRouterStructuredFields('tools', {
-      advanced_filtering: {
-        enabled: true,
-        retrieval_strategy: 'hybrid_history',
-        allow_tools: [' docs.search '],
-        hybrid_history: {
-          history_horizon: 8,
-          future_history_weight: 0.25,
-        },
-        future_retriever: 'preserved',
-      },
-    })
-    expect(tools.advanced_filtering).toEqual(
-      expect.objectContaining({
-        allow_tools: ['docs.search'],
-        future_retriever: 'preserved',
-        hybrid_history: {
-          history_horizon: 8,
-          future_history_weight: 0.25,
-        },
-      }),
-    )
-
-    const classifier = normalizeRouterStructuredFields('classifier', {
-      preference: {
-        use_contrastive: true,
-        prototype_scoring: {
-          enabled: true,
-          max_prototypes: 8,
-          future_bank_mode: 'adaptive',
-        },
-      },
-    })
-    expect(classifier.preference).toEqual(
-      expect.objectContaining({
-        prototype_scoring: {
-          enabled: true,
-          max_prototypes: 8,
-          future_bank_mode: 'adaptive',
-        },
-      }),
-    )
-  })
-
   it('rejects duplicate list values and invalid typed numbers', () => {
-    const aliases = ROUTER_STRUCTURED_FIELDS.prompt_compression?.skip_signals.schema
+    const formats = ROUTER_STRUCTURED_FIELDS.vector_store?.supported_formats.schema
     const streamedBody = ROUTER_STRUCTURED_FIELDS.router_core?.streamed_body.schema
-    expect(aliases).toBeDefined()
+    expect(formats).toBeDefined()
     expect(streamedBody).toBeDefined()
-    expect(() => normalizeRouterStructuredValue(aliases!, ['jailbreak', 'jailbreak'])).toThrow(
-      /unique/i,
-    )
+    expect(() => normalizeRouterStructuredValue(formats!, ['.md', '.md'])).toThrow(/unique/i)
     expect(() =>
       normalizeRouterStructuredValue(streamedBody!, { enabled: true, max_bytes: 0 }),
     ).toThrow(/at least 1/i)
@@ -225,30 +148,14 @@ describe('router defaults structured schemas', () => {
   it('builds custom controls for every migrated field and preserves model-selection extensions', () => {
     const selection = {
       enabled: true,
-      method: 'hybrid',
       momentum: { enabled: true, attack: 0.7 },
-      ml: {
-        models_path: 'models/selection',
-        knn: { k: 5 },
-        tuning: { switch_margin: 0.05 },
-      },
     }
     const cards = buildRouterSectionCards({
       config: null,
       routerConfig: {
         model_selection: selection,
-        classifier: {
-          preference: {
-            use_contrastive: true,
-            prototype_scoring: { enabled: true, future_bank_mode: 'adaptive' },
-          },
-          future_classifier_module: { enabled: true },
-        },
       },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     })
 
     const routerCore = cards.find((card) => card.key === 'router_core')
@@ -256,11 +163,7 @@ describe('router defaults structured schemas', () => {
       'boolean',
     )
     const selectionCard = cards.find((card) => card.key === 'model_selection')
-    expect(
-      selectionCard?.editFields
-        .filter((field) => ['knn', 'router_dc', 'hybrid'].includes(field.name))
-        .every((field) => field.type === 'custom'),
-    ).toBe(true)
+    expect(selectionCard?.editFields.map((field) => field.name)).toEqual(['enabled'])
 
     const remainingJsonFields = cards.flatMap((card) =>
       card.editFields
@@ -271,45 +174,19 @@ describe('router defaults structured schemas', () => {
 
     const patch = selectionCard?.save({
       ...selectionCard.editData,
-      knn: { k: 9 },
+      enabled: false,
     }) as { router?: { model_selection?: Record<string, unknown> } }
-    const saved = patch.router?.model_selection
-    expect(saved?.momentum).toEqual({ enabled: true, attack: 0.7 })
-    expect(saved?.ml).toEqual(
-      expect.objectContaining({
-        models_path: 'models/selection',
-        knn: { k: 9 },
-        tuning: { switch_margin: 0.05 },
-      }),
-    )
-
-    const classifierCard = cards.find((card) => card.key === 'classifier')
-    const classifierPatch = classifierCard?.save(classifierCard.editData) as {
-      model_catalog?: { modules?: { classifier?: Record<string, unknown> } }
-    }
-    expect(classifierPatch.model_catalog?.modules?.classifier).toEqual(
-      expect.objectContaining({
-        future_classifier_module: { enabled: true },
-        preference: expect.objectContaining({
-          prototype_scoring: expect.objectContaining({ future_bank_mode: 'adaptive' }),
-        }),
-      }),
-    )
+    expect(patch.router?.model_selection).toEqual({
+      enabled: false,
+      momentum: { enabled: true, attack: 0.7 },
+    })
 
     const embeddingCards = buildRouterSectionCards({
       config: null,
       routerConfig: {
-        embedding_models: {
-          semantic: {
-            mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
-            embedding_config: { backend: 'model_runtime', model_type: 'mmbert' },
-          },
-        },
+        embedding_models: { default: { deployment: 'vela-embedding' } },
       },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     })
     const embeddingCard = embeddingCards.find((card) => card.key === 'embedding_models')
     expect(embeddingCard?.editFields.find((field) => field.name === 'provider_type')).toEqual(
@@ -331,24 +208,23 @@ describe('router defaults structured schemas', () => {
         api_key_env: 'OPENAI_API_KEY',
         dimensions: 1536,
       },
-      embedding_config: { target_dimension: 1536 },
     }) as {
       model_catalog?: {
-        embeddings?: { semantic?: Record<string, unknown> }
+        deployments?: Record<string, Record<string, unknown>>
+        embeddings?: { default?: { deployment: string } }
       }
     }
-    expect(embeddingPatch.model_catalog?.embeddings?.semantic).toEqual(
+    expect(embeddingPatch.model_catalog?.deployments?.['remote-embed']).toEqual(
       expect.objectContaining({
-        embedding_config: expect.objectContaining({
-          backend: 'openai_compatible',
-          model_type: 'remote',
-        }),
-        endpoint: expect.objectContaining({
-          base_url: 'https://embedding.example.com/v1',
-          model: 'text-embedding-3-small',
-        }),
+        provider: 'openai_embeddings',
+        endpoint: 'https://embedding.example.com/v1',
+        model: 'text-embedding-3-small',
+        auth: { api_key_env: 'OPENAI_API_KEY' },
+        capabilities: { dimensions: 1536 },
       }),
     )
+    expect(embeddingPatch.model_catalog?.embeddings?.default).toEqual({ deployment: 'remote-embed' })
+    expect(embeddingPatch.model_catalog?.embeddings).not.toHaveProperty('semantic')
   })
 
   it('surfaces canonical global capabilities while leaving KBs to the raw config', () => {
@@ -357,24 +233,19 @@ describe('router defaults structured schemas', () => {
       routerConfig: {
         management_api: { bind_address: '127.0.0.1', port: 8080 },
         startup_status: { store_backend: 'redis' },
-        complexity: { backend: { base_url: 'http://classifier' } },
         admission: { default: { max_concurrency: 8 } },
       },
       routerDefaults: null,
-      toolsData: [],
-      toolsLoading: false,
-      toolsError: null,
     })
 
     expect(cards.map((card) => card.key)).toEqual(
-      expect.arrayContaining(['management_api', 'startup_status', 'complexity', 'admission']),
+      expect.arrayContaining(['management_api', 'startup_status', 'admission']),
     )
+    // The decision model answers complexity rules; no module card configures it.
+    expect(cards.map((card) => card.key)).not.toContain('complexity')
     expect(
       cards.find((card) => card.key === 'management_api')?.editFields.map((field) => field.name),
     ).toEqual(expect.arrayContaining(['bind_address', 'port', 'remote_exposure', 'auth']))
-    expect(
-      cards.find((card) => card.key === 'complexity')?.editFields.map((field) => field.name),
-    ).toEqual(expect.arrayContaining(['prototype_scoring', 'backend']))
 
     const admission = cards.find((card) => card.key === 'admission')
     expect(admission?.save({ value: { default: { max_concurrency: 16 } } })).toEqual({
@@ -383,8 +254,12 @@ describe('router defaults structured schemas', () => {
 
     const renderedPaths = new Set(cards.map((card) => card.path.join('.')))
     expect(renderedPaths).not.toContain('model_catalog.kbs')
+    expect(renderedPaths).not.toContain('model_catalog.bindings')
+    expect(
+      cards.find((card) => card.key === 'system_models')?.editFields.map((field) => field.name),
+    ).toContain('binding:domain')
     for (const section of ROUTER_CONFIG_EXTENSION.global_sections) {
-      if (section.path.join('.') === 'model_catalog.kbs') continue
+      if (['model_catalog.kbs', 'model_catalog.bindings'].includes(section.path.join('.'))) continue
       expect(renderedPaths).toContain(section.path.join('.'))
     }
   })

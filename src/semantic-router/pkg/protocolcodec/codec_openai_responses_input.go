@@ -22,7 +22,7 @@ func decodeResponsesInput(raw json.RawMessage, request *llmprotocol.Request, pol
 		return err
 	}
 	for index, itemBody := range itemBodies {
-		item, err := decodeResponsesItemWire(itemBody, policy, false)
+		item, err := decodeResponsesItemWire(withoutCodexItemMetadata(itemBody), policy, false)
 		if err != nil {
 			return err
 		}
@@ -34,7 +34,7 @@ func decodeResponsesInput(raw json.RawMessage, request *llmprotocol.Request, pol
 }
 
 var responsesItemUnionFields = []string{
-	"arguments", "call_id", "caller", "content", "encrypted_content", "id", "input", "name", "namespace",
+	"arguments", "async", "call_id", "caller", "content", "encrypted_content", "id", "input", "name", "namespace",
 	"output", "phase", "result", "role", "status", "summary", "type",
 }
 
@@ -136,11 +136,11 @@ func responsesItemAllowedFields(itemType string) []string {
 	case "message":
 		return []string{"content", "id", "phase", "role", "status", "type"}
 	case "function_call":
-		return []string{"arguments", "call_id", "caller", "id", "name", "namespace", "status", "type"}
+		return []string{"arguments", "async", "call_id", "caller", "id", "name", "namespace", "status", "type"}
 	case "function_call_output":
 		return []string{"call_id", "caller", "id", "name", "namespace", "output", "status", "type"}
 	case "custom_tool_call":
-		return []string{"call_id", "caller", "id", "input", "name", "namespace", "status", "type"}
+		return []string{"async", "call_id", "caller", "id", "input", "name", "namespace", "status", "type"}
 	case "custom_tool_call_output":
 		return []string{"call_id", "caller", "id", "output", "status", "type"}
 	case "reasoning":
@@ -185,6 +185,7 @@ func decodeResponsesInputItem(
 
 func validateResponsesInputItemMetadata(item responsesItemWire) error {
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
+		"input.async":             item.Async,
 		"input.caller":            item.Caller,
 		"input.encrypted_content": item.EncryptedContent,
 		"input.phase":             item.Phase,
@@ -749,4 +750,30 @@ func unsupportedResponsesToolChoice(typeName string) bool {
 	default:
 		return false
 	}
+}
+
+// codexItemMetadataField is the bookkeeping Codex CLI attaches to each input
+// message since 0.163 (content_item_kinds, turn_id, create_time). Like the
+// request's client_metadata it is client metadata, not model input, so it is
+// removed before the strict item decode and reported by
+// decodeResponsesDroppedFields.
+const codexItemMetadataField = "internal_chat_message_metadata_passthrough"
+
+func withoutCodexItemMetadata(body json.RawMessage) json.RawMessage {
+	if !bytes.Contains(body, []byte(codexItemMetadataField)) {
+		return body
+	}
+	var object map[string]json.RawMessage
+	if json.Unmarshal(body, &object) != nil {
+		return body
+	}
+	if _, found := object[codexItemMetadataField]; !found {
+		return body
+	}
+	delete(object, codexItemMetadataField)
+	trimmed, err := json.Marshal(object)
+	if err != nil {
+		return body
+	}
+	return trimmed
 }

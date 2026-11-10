@@ -1,15 +1,20 @@
 import type { EditFormData, FieldConfig } from '../components/EditModal'
 import { routerStructuredField } from './configPageRouterStructuredFields'
 import { normalizeRouterStructuredFields } from './configPageRouterStructuredSchema'
+import { bindingDeployment } from './modelBindings'
 
 const REMOTE_BACKEND = 'openai_compatible'
-const DEFAULT_LOCAL_BACKEND = 'model_runtime'
-const DEFAULT_LOCAL_MODEL_TYPE = 'qwen3'
+// A remote embedding model is an openai_embeddings deployment that
+// embeddings.default names.
+const REMOTE_PROVIDER = 'openai_embeddings'
+const DEFAULT_REMOTE_DEPLOYMENT = 'remote-embed'
+// The pre-declared deployment that serves when embeddings.default is unset.
+const DEFAULT_DEPLOYMENT = 'vela-embedding'
+// The card's data carries the catalog's deployments under this key, so it can
+// show and edit the deployment embeddings.default names.
+const DEPLOYMENTS_KEY = '__deployments'
 const LOCAL_PROVIDER_TYPE = 'local'
 const REMOTE_PROVIDER_TYPE = 'remote'
-
-type EmbeddingBackend = 'model_runtime' | 'openai_compatible'
-type EmbeddingProviderType = 'local' | 'remote'
 
 interface EmbeddingSummaryItem {
   label: string
@@ -31,34 +36,102 @@ function trimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-function resolveBackend(embeddingConfig?: Record<string, unknown>): EmbeddingBackend {
-  const backend = trimmedString(embeddingConfig?.backend).toLocaleLowerCase()
-  if (backend === DEFAULT_LOCAL_BACKEND || backend === REMOTE_BACKEND) {
-    return backend
-  }
-  if (trimmedString(embeddingConfig?.model_type).toLocaleLowerCase() === 'remote') {
-    return REMOTE_BACKEND
-  }
-  return DEFAULT_LOCAL_BACKEND
+/** The embeddings block with the catalog's deployments, which the card reads. */
+export function embeddingModelsView(
+  embeddings: unknown,
+  deployments: unknown,
+): Record<string, unknown> | undefined {
+  const block = asRecord(embeddings)
+  const declared = asRecord(deployments)
+  if (!block || !declared) return block
+  return { ...(block ?? {}), [DEPLOYMENTS_KEY]: declared }
 }
 
-function resolveProviderType(embeddingConfig?: Record<string, unknown>): EmbeddingProviderType {
-  return resolveBackend(embeddingConfig) === REMOTE_BACKEND
-    ? REMOTE_PROVIDER_TYPE
-    : LOCAL_PROVIDER_TYPE
+// embeddings.default names its deployment as {deployment: <name>}, the way
+// system.decision_model does.
+function defaultDeploymentName(embeddings: Record<string, unknown>): string {
+  return bindingDeployment(embeddings.default) ?? ''
 }
 
-function providerTypeFromForm(data: EditFormData): EmbeddingProviderType {
-  const providerType = trimmedString(data.provider_type).toLocaleLowerCase()
-  if (providerType === REMOTE_PROVIDER_TYPE) return REMOTE_PROVIDER_TYPE
-  if (providerType === LOCAL_PROVIDER_TYPE) return LOCAL_PROVIDER_TYPE
-  return trimmedString(data.backend).toLocaleLowerCase() === REMOTE_BACKEND
-    ? REMOTE_PROVIDER_TYPE
-    : LOCAL_PROVIDER_TYPE
+function defaultDeployment(embeddings: Record<string, unknown>): {
+  name: string
+  deployment?: Record<string, unknown>
+} {
+  const name = defaultDeploymentName(embeddings) || DEFAULT_DEPLOYMENT
+  return { name, deployment: asRecord(asRecord(embeddings[DEPLOYMENTS_KEY])?.[name]) }
+}
+
+function defaultBinding(name: string): Record<string, unknown> | null {
+  return name ? { deployment: name } : null
+}
+
+function remoteDeployment(
+  embeddings: Record<string, unknown>,
+): { name: string; deployment: Record<string, unknown> } | undefined {
+  const { name, deployment } = defaultDeployment(embeddings)
+  if (!deployment || trimmedString(deployment.provider) !== REMOTE_PROVIDER) {
+    return undefined
+  }
+  return { name, deployment }
+}
+
+function positiveNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+// The remote endpoint form of the deployment embeddings.default names.
+function remoteEndpoint(embeddings: Record<string, unknown>): Record<string, unknown> | undefined {
+  const remote = remoteDeployment(embeddings)
+  if (!remote) return undefined
+  const { deployment } = remote
+  const timeoutMs = positiveNumber(deployment.timeout_ms)
+  const form: Record<string, unknown> = {
+    base_url: deployment.endpoint,
+    model: deployment.model,
+    api_key_env: asRecord(deployment.auth)?.api_key_env,
+    timeout_seconds: timeoutMs === undefined ? undefined : timeoutMs / 1000,
+    max_retries: deployment.max_retries,
+    max_response_bytes: asRecord(deployment.limits)?.max_response_bytes,
+    dimensions: asRecord(deployment.capabilities)?.dimensions,
+  }
+  return Object.fromEntries(Object.entries(form).filter(([, value]) => value !== undefined))
+}
+
+// The auth patch of the card, which edits only api_key_env. A cleared key
+// removes the key's auth, its header with it, unless the saved auth has a
+// credential the card does not show (credential: delegated or api_key_file),
+// which the merge then keeps.
+function remoteAuth(apiKeyEnv: string, saved: unknown): Record<string, unknown> | null {
+  if (apiKeyEnv) return { api_key_env: apiKeyEnv }
+  const auth = asRecord(saved)
+  return auth?.credential || auth?.api_key_file ? { api_key_env: null } : null
+}
+
+function remoteEmbeddingDeployment(
+  endpoint: Record<string, unknown>,
+  saved: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const timeout = positiveNumber(endpoint.timeout_seconds)
+  const retries = positiveNumber(endpoint.max_retries)
+  const maxResponseBytes = positiveNumber(endpoint.max_response_bytes)
+  const dimensions = positiveNumber(endpoint.dimensions)
+  // A null removes the field from a deployment saved before.
+  return {
+    provider: REMOTE_PROVIDER,
+    endpoint: trimmedString(endpoint.base_url).replace(/\/+$/, ''),
+    model: trimmedString(endpoint.model),
+    auth: remoteAuth(trimmedString(endpoint.api_key_env), saved?.auth),
+    timeout_ms: timeout === undefined ? null : Math.round(timeout * 1000),
+    max_retries: retries ?? null,
+    limits: maxResponseBytes === undefined ? null : { max_response_bytes: maxResponseBytes },
+    capabilities: dimensions === undefined ? null : { dimensions },
+  }
 }
 
 function isRemoteForm(data: object): boolean {
-  return providerTypeFromForm(data as EditFormData) === REMOTE_PROVIDER_TYPE
+  return (
+    trimmedString((data as EditFormData).provider_type).toLocaleLowerCase() === REMOTE_PROVIDER_TYPE
+  )
 }
 
 function compactValue(value: unknown, fallback = 'Not set'): string {
@@ -68,65 +141,33 @@ function compactValue(value: unknown, fallback = 'Not set'): string {
   return `${text.slice(0, 18)}...${text.slice(-18)}`
 }
 
-function inferLocalModelType(semantic: Record<string, unknown>): string {
-  if (trimmedString(semantic.mmbert_model_path)) return 'mmbert'
-  if (trimmedString(semantic.qwen3_model_path)) return 'qwen3'
-  if (trimmedString(semantic.multimodal_model_path)) return 'multimodal'
-  return DEFAULT_LOCAL_MODEL_TYPE
-}
-
-function localModelPath(semantic: Record<string, unknown>, modelType: string): unknown {
-  const pathByType: Record<string, unknown> = {
-    qwen3: semantic.qwen3_model_path,
-    mmbert: semantic.mmbert_model_path,
-    multimodal: semantic.multimodal_model_path,
-  }
-  return pathByType[modelType] ?? semantic.mmbert_model_path ?? semantic.qwen3_model_path
-}
-
 export function embeddingModelsSummary(data: unknown): EmbeddingSummaryItem[] {
-  const catalog = asRecord(data)
-  const semantic = asRecord(catalog?.semantic) ?? {}
-  const embeddingConfig = asRecord(semantic.embedding_config) ?? {}
-  const endpoint = asRecord(semantic.endpoint) ?? {}
-  const backend = resolveBackend(embeddingConfig)
-
-  if (backend === REMOTE_BACKEND) {
+  const catalog = asRecord(data) ?? {}
+  const endpoint = remoteEndpoint(catalog)
+  if (endpoint) {
     return [
       { label: 'Provider', value: 'Remote / OpenAI compatible' },
       { label: 'Model', value: compactValue(endpoint.model) },
-      {
-        label: 'Dimension',
-        value: compactValue(endpoint.dimensions ?? embeddingConfig.target_dimension),
-      },
+      { label: 'Dimension', value: compactValue(endpoint.dimensions) },
     ]
   }
-
-  const modelType = trimmedString(embeddingConfig.model_type) || inferLocalModelType(semantic)
+  const { name, deployment } = defaultDeployment(catalog)
+  const builtIn = name === DEFAULT_DEPLOYMENT ? 'Vela 1.0 Embedding' : 'Not set'
   return [
-    { label: 'Provider', value: `Local / ${backend}` },
-    { label: 'Model', value: compactValue(localModelPath(semantic, modelType), modelType) },
-    { label: 'Runtime', value: semantic.use_cpu ? 'CPU' : 'GPU' },
+    { label: 'Provider', value: `Local / ${trimmedString(deployment?.provider) || 'model_runtime'}` },
+    { label: 'Deployment', value: compactValue(name) },
+    { label: 'Model', value: compactValue(deployment?.artifact, builtIn) },
   ]
 }
 
 export function embeddingModelsBadges(data: unknown): EmbeddingBadge[] {
-  const semantic = asRecord(asRecord(data)?.semantic) ?? {}
-  const embeddingConfig = asRecord(semantic.embedding_config) ?? {}
-  const backend = resolveBackend(embeddingConfig)
-  const badges: EmbeddingBadge[] = [
+  const remote = remoteDeployment(asRecord(data) ?? {}) !== undefined
+  return [
     {
-      label: backend === REMOTE_BACKEND ? 'Remote provider' : 'Local inference',
-      tone: backend === REMOTE_BACKEND ? 'info' : 'active',
+      label: remote ? 'Remote provider' : 'Local inference',
+      tone: remote ? 'info' : 'active',
     },
   ]
-  if (embeddingConfig.preload_embeddings !== undefined) {
-    badges.push({
-      label: embeddingConfig.preload_embeddings ? 'Preload embeddings' : 'Lazy embeddings',
-      tone: embeddingConfig.preload_embeddings ? 'active' : 'info',
-    })
-  }
-  return badges
 }
 
 export function embeddingModelsFields(): FieldConfig[] {
@@ -142,7 +183,7 @@ export function embeddingModelsFields(): FieldConfig[] {
       options: [LOCAL_PROVIDER_TYPE, REMOTE_PROVIDER_TYPE],
       required: true,
       description:
-        'Choose whether embeddings run in the built-in model runtime or through a remote API. Remote mode currently applies to text embedding consumers only.',
+        'Choose whether embeddings.default names a model runtime deployment or a remote API. Remote mode saves an openai_embeddings deployment and names it in embeddings.default; it applies to text embedding consumers only.',
     },
     {
       name: 'remote_backend',
@@ -155,150 +196,64 @@ export function embeddingModelsFields(): FieldConfig[] {
       shouldHide: hideForLocal,
     },
     {
-      name: 'model_type',
-      label: 'Local Model Type',
+      name: 'default',
+      label: 'Default Deployment',
       type: 'text',
-      placeholder: 'mmbert',
+      placeholder: DEFAULT_DEPLOYMENT,
       description:
-        'Embedding model family used by local consumers: mmbert, qwen3 or multimodal.',
+        'Deployment in global.model_catalog.deployments that embeds for match.recall; decisions never use it, and it starts only when a store recalls with it. Unset, vela-embedding serves.',
       shouldHide: hideForRemote,
     },
-    {
-      name: 'qwen3_model_path',
-      label: 'Qwen3 Model Path',
-      type: 'text',
-      placeholder: 'models/mom-embedding-pro',
-      shouldHide: hideForRemote,
-    },
-    {
-      name: 'mmbert_model_path',
-      label: 'mmBERT Model Path',
-      type: 'text',
-      placeholder: 'models/Vela-1.0-Encoder-307M-Embedding',
-      shouldHide: hideForRemote,
-    },
-    {
-      name: 'multimodal_model_path',
-      label: 'Multimodal Model Path',
-      type: 'text',
-      placeholder: 'models/vela-1.0-omni-nano',
-      shouldHide: hideForRemote,
-    },
-    { name: 'use_cpu', label: 'Use CPU', type: 'boolean', shouldHide: hideForRemote },
     { ...endpointField, shouldHide: hideForLocal },
-    routerStructuredField('embedding_models', 'embedding_config'),
   ]
 }
 
 export function embeddingModelsEditData(data: unknown): EditFormData {
   const catalog = asRecord(data) ?? {}
-  const semantic = asRecord(catalog.semantic) ?? {}
-  const embeddingConfig = asRecord(semantic.embedding_config) ?? {}
-  const backend = resolveBackend(embeddingConfig)
-  const providerType = resolveProviderType(embeddingConfig)
-  const configuredModelType = trimmedString(embeddingConfig.model_type)
-  const localModelType =
-    configuredModelType && configuredModelType !== 'remote'
-      ? configuredModelType
-      : inferLocalModelType(semantic)
-  const optimization = { ...embeddingConfig }
-  delete optimization.backend
-  delete optimization.model_type
-
+  const remote = remoteDeployment(catalog)
   return {
-    ...semantic,
-    provider_type: providerType,
-    remote_backend: providerType === REMOTE_PROVIDER_TYPE ? backend : REMOTE_BACKEND,
-    model_type: localModelType,
-    embedding_config: optimization,
-    endpoint: semantic.endpoint,
+    provider_type: remote ? REMOTE_PROVIDER_TYPE : LOCAL_PROVIDER_TYPE,
+    remote_backend: REMOTE_BACKEND,
+    default: remote ? '' : defaultDeploymentName(catalog),
+    endpoint: remoteEndpoint(catalog),
+    __deployment_name: remote?.name,
     __catalog: catalog,
-    __embedding_config: embeddingConfig,
   }
 }
 
-function validateRemoteEndpoint(
-  endpoint: Record<string, unknown> | undefined,
-  optimization: Record<string, unknown>,
-): void {
+function validateRemoteEndpoint(endpoint: Record<string, unknown> | undefined): void {
   if (!endpoint) throw new Error('Remote Endpoint is required for the selected provider.')
   if (!trimmedString(endpoint.base_url)) throw new Error('Remote Endpoint.Base URL is required.')
   if (!trimmedString(endpoint.model)) throw new Error('Remote Endpoint.Model is required.')
-
-  const dimensions = endpoint.dimensions
-  const targetDimension = optimization.target_dimension
-  if (
-    typeof dimensions === 'number' &&
-    typeof targetDimension === 'number' &&
-    targetDimension > 0 &&
-    dimensions !== targetDimension
-  ) {
-    throw new Error(
-      'Remote Endpoint.Dimensions must match Embedding Optimization.Target Dimension.',
-    )
-  }
 }
 
-function normalizedRemoteEndpoint(endpoint: Record<string, unknown>): Record<string, unknown> {
-  return {
-    ...endpoint,
-    base_url: trimmedString(endpoint.base_url),
-    model: trimmedString(endpoint.model),
-    ...(endpoint.api_key_env === undefined
-      ? {}
-      : { api_key_env: trimmedString(endpoint.api_key_env) }),
-  }
-}
+/**
+ * The global.model_catalog patch the card saves: the embeddings block and, in
+ * remote mode, the openai_embeddings deployment embeddings.default names. A
+ * null removes a key.
+ */
+export function embeddingModelsPatch(rawData: EditFormData): Record<string, unknown> {
+  const remote = isRemoteForm(rawData)
+  const normalized = normalizeRouterStructuredFields(
+    'embedding_models',
+    remote ? rawData : { ...rawData, endpoint: undefined },
+  )
+  const catalog = { ...(asRecord(normalized.__catalog) ?? {}) }
+  const deployments = asRecord(catalog[DEPLOYMENTS_KEY])
+  delete catalog[DEPLOYMENTS_KEY]
 
-export function embeddingModelsCatalogValue(rawData: EditFormData): Record<string, unknown> {
-  const providerType = providerTypeFromForm(rawData)
-  const remote = providerType === REMOTE_PROVIDER_TYPE
-  const backend = remote
-    ? trimmedString(rawData.remote_backend) || REMOTE_BACKEND
-    : DEFAULT_LOCAL_BACKEND
-  const dataForNormalization = remote ? rawData : { ...rawData, endpoint: undefined }
-  const normalized = normalizeRouterStructuredFields('embedding_models', dataForNormalization)
-  const rawModelType = normalized.model_type
-  const rawOptimization = normalized.embedding_config
-  const rawEndpoint = normalized.endpoint
-  const catalogValue = normalized.__catalog
-  const existingEmbeddingConfigValue = normalized.__embedding_config
-  const semanticFields = { ...normalized }
-  delete semanticFields.backend
-  delete semanticFields.provider_type
-  delete semanticFields.remote_backend
-  delete semanticFields.model_type
-  delete semanticFields.embedding_config
-  delete semanticFields.endpoint
-  delete semanticFields.__catalog
-  delete semanticFields.__embedding_config
-  const catalog = asRecord(catalogValue) ?? {}
-  const existingSemantic = asRecord(catalog.semantic) ?? {}
-  const existingEmbeddingConfig = asRecord(existingEmbeddingConfigValue) ?? {}
-  const existingBackend = trimmedString(existingEmbeddingConfig.backend).toLocaleLowerCase()
-  if (existingBackend && existingBackend !== DEFAULT_LOCAL_BACKEND && existingBackend !== REMOTE_BACKEND) {
-    throw new Error(
-      `Embedding backend ${existingBackend} is retired; run vllm-sr config migrate to move this config to the model runtime.`,
-    )
+  if (remote) {
+    const endpoint = asRecord(normalized.endpoint)
+    validateRemoteEndpoint(endpoint)
+    const name = trimmedString(normalized.__deployment_name) || DEFAULT_REMOTE_DEPLOYMENT
+    return {
+      deployments: {
+        [name]: remoteEmbeddingDeployment(endpoint ?? {}, asRecord(deployments?.[name])),
+      },
+      embeddings: { ...catalog, default: defaultBinding(name) },
+    }
   }
-  const optimization = {
-    ...existingEmbeddingConfig,
-    ...(asRecord(rawOptimization) ?? {}),
-    backend,
-    model_type: remote
-      ? 'remote'
-      : trimmedString(rawModelType) || inferLocalModelType(semanticFields),
-  }
-  const endpoint = remote ? asRecord(rawEndpoint) : asRecord(rawData.endpoint)
-  if (remote) validateRemoteEndpoint(endpoint, optimization)
-
   return {
-    ...catalog,
-    semantic: {
-      ...existingSemantic,
-      ...semanticFields,
-      embedding_config: optimization,
-      ...(endpoint ? { endpoint: remote ? normalizedRemoteEndpoint(endpoint) : endpoint } : {}),
-    },
+    embeddings: { ...catalog, default: defaultBinding(trimmedString(normalized.default)) },
   }
 }

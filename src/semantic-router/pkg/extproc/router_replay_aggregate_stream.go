@@ -13,6 +13,7 @@ type replayAggregateAccumulator struct {
 	payload                                               routerReplayAggregateResponse
 	models, decisions, signals                            map[string]int
 	currencies                                            map[string]*routerreplay.CurrencyCostSummary
+	providerCache                                         *replayProviderCacheTotals
 	decisionTokens, modelTokens                           map[string]*routerReplayAggregateTokenEntry
 	availableRecipes, availableDecisions, availableModels map[string]struct{}
 }
@@ -22,6 +23,7 @@ func newReplayAggregateAccumulator() *replayAggregateAccumulator {
 		payload: routerReplayAggregateResponse{Object: "router_replay.aggregate"},
 		models:  make(map[string]int), decisions: make(map[string]int), signals: make(map[string]int),
 		currencies:     make(map[string]*routerreplay.CurrencyCostSummary),
+		providerCache:  newReplayProviderCacheTotals(),
 		decisionTokens: make(map[string]*routerReplayAggregateTokenEntry), modelTokens: make(map[string]*routerReplayAggregateTokenEntry),
 		availableRecipes: make(map[string]struct{}), availableDecisions: make(map[string]struct{}), availableModels: make(map[string]struct{}),
 	}
@@ -81,6 +83,7 @@ func (a *replayAggregateAccumulator) add(record routerreplay.RoutingRecord) {
 		group.BaselineSpend += currency.BaselineSpend
 		group.CostRecordCount += currency.CostRecordCount
 	}
+	a.providerCache.add(record)
 	for _, value := range part.ModelSelection {
 		a.models[value.Name] += value.Value
 	}
@@ -116,6 +119,7 @@ func (a *replayAggregateAccumulator) result() routerReplayAggregateResponse {
 		a.payload.Summary.BaselineSpend = group.BaselineSpend
 		a.payload.Summary.ActualSpend = group.ActualSpend
 	}
+	a.payload.ProviderCache = a.providerCache.summary()
 	a.payload.ModelSelection = sortRouterReplayAggregateValues(a.models, 10)
 	a.payload.DecisionDistribution = sortRouterReplayAggregateValues(a.decisions, 0)
 	a.payload.SignalDistribution = sortRouterReplayAggregateValues(a.signals, 0)

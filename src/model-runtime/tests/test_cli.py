@@ -27,6 +27,8 @@ def test_serve_arguments_map_to_the_config():
             "--dtype",
             "bfloat16",
             "--no-enable-shared-context",
+            "--max-model-len",
+            "32000",
             "--accept-licence",
             "cc-by-4.0",
         ]
@@ -46,6 +48,7 @@ def test_serve_arguments_map_to_the_config():
         batch_window_ms=0.5,
         dtype="bfloat16",
         enable_shared_context=False,
+        max_model_len=32000,
     )
     assert config.engine_args == expected
     assert model.engine_args(config.engine_args) == expected
@@ -60,6 +63,7 @@ def test_engine_arguments_default_to_merging_requests():
         batch_window_ms=2.0,
         dtype="auto",
         enable_shared_context=None,
+        max_model_len=None,
     )
     assert config.media_workers is None
     assert (
@@ -104,6 +108,7 @@ def test_removed_flags_name_their_replacements(capsys, argv, message):
             "--max-num-batched-tokens must be at least 8",
         ),
         (["--batch-window-ms", "-1"], "--batch-window-ms must be between 0 and 1000"),
+        (["--max-model-len", "0"], "--max-model-len must be at least 1"),
     ],
 )
 def test_invalid_engine_arguments_are_refused(argv, message):

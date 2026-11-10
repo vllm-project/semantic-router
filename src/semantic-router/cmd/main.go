@@ -34,7 +34,7 @@ const (
 func main() {
 	opts := parseRuntimeOptions()
 	if opts.validateConfig {
-		os.Exit(validateConfigFile(opts.configPath, opts.gateway, os.Stdout))
+		os.Exit(validateConfigFile(opts.configPath, opts.gateway, opts.migrateConfig, os.Stdout))
 	}
 	logo.PrintVLLMLogo()
 	initializeRuntimeLogger()
@@ -78,7 +78,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	startupWriter := newStartupWriter(cfg, opts.configPath, runtimeRegistry)
 	resolvedOpts, err := resolveRuntimeManagementOptions(opts, cfg)
 	if err != nil {
-		failStartup(startupWriter, "Failed to resolve management API: %v", err)
+		return recordStartupError(startupWriter, "resolve management API", err)
 	}
 	opts = resolvedOpts
 
@@ -86,7 +86,7 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	// model downloads and initialization.
 	apiServer, err := startAPIServerIfEnabled(opts, runtimeRegistry)
 	if err != nil {
-		failStartup(startupWriter, "Failed to start management API: %v", err)
+		return recordStartupError(startupWriter, "start management API", err)
 	}
 	var (
 		routerServer     *extproc.Server
@@ -110,6 +110,13 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 		))
 	}()
 
+	// Checked before the downloads, which can take minutes, rather than when
+	// the first writer opens its directory.
+	if !opts.downloadOnly {
+		if err = routerruntime.CheckLocalStorage(cfg); err != nil {
+			return recordStartupError(startupWriter, "check local storage", err)
+		}
+	}
 	if err = ensureModelsDownloaded(ctx, cfg, startupWriter); err != nil {
 		return recordStartupError(startupWriter, "ensure models are downloaded", err)
 	}
@@ -143,9 +150,6 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	}
 
 	embeddingRuntime := routerServer.EmbeddingRuntimeState()
-	if err = warmupRouterRuntime(ctx, routerServer); err != nil {
-		return recordStartupError(startupWriter, "warm up router runtime", err)
-	}
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
 	servingLifecycle, err = runRouterServing(ctx, cfg, opts, routerServer, startupWriter)
 	if err != nil {
@@ -509,7 +513,7 @@ func logStartupSummary(cfg *config.RouterConfig, opts runtimeOptions, embeddingM
 		"config_source":       cfg.ConfigSource,
 		"decisions":           strings.Join(decisionNames, ","),
 		"embedding_ready":     embeddingModelsReady,
-		"sem_cache_enabled":   cfg.Enabled,
+		"sem_cache_enabled":   cfg.SemanticCache.InUse,
 		"model_selection":     cfg.ModelSelection.Enabled,
 		"authz_providers":     len(cfg.Authz.Providers),
 		"ratelimit_providers": len(cfg.RateLimit.Providers),

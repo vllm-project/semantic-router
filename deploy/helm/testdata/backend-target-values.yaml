@@ -1,5 +1,5 @@
 configOverride:
-  version: v0.3
+  version: v0.5
   listeners:
     - name: http
       address: 0.0.0.0
@@ -12,30 +12,30 @@ configOverride:
         provider_model_id: provider/model-id
         backend_refs:
           - name: hosted-primary
-            base_url: https://provider.example/v1
+            endpoint: https://provider.example/v1
             protocol: https
             weight: 75
             provider: openai
-            auth_header: Authorization
-            auth_prefix: Bearer
-            api_key_env: PROVIDER_API_KEY
-            extra_headers:
+            auth:
+              header: Authorization
+              prefix: Bearer
+              api_key_env: PROVIDER_API_KEY
+            headers:
               X-Tenant: production
             api_version: "2026-09-01"
             chat_path: /chat/completions
-  routing:
-    modelCards:
-      - name: local/custom
         description: Helm backend-target compatibility fixture
-    decisions:
-      - name: custom-route
-        priority: 100
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: local/custom
-            use_reasoning: false
+  recipes:
+    - name: default
+      decisions:
+        - name: custom-route
+          priority: 100
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: local/custom
+              use_reasoning: false
   global:
     router:
       skip_processing:

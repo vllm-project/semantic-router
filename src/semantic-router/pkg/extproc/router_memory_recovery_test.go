@@ -50,7 +50,10 @@ func TestMemoryStoreRecoveryPublishesToRouterAndRegistry(t *testing.T) {
 		return recovered, nil
 	}
 	router := &OpenAIRouter{memoryStore: runtime.slot}
-	registry := routerruntime.NewRegistry(&config.RouterConfig{Memory: config.MemoryConfig{Enabled: true}})
+	registry := routerruntime.NewRegistry(&config.RouterConfig{
+		GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()},
+		Memory:        config.MemoryConfig{InUse: true},
+	})
 	registry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
 		MemoryStoreSlot: runtime.slot,
 		MemoryStatus: routerruntime.MemoryStatus{

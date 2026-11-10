@@ -50,6 +50,7 @@ func normalizeMultiFactorObjective(objective *MultiFactorObjective) {
 func (s *MultiFactorSelector) chooseCandidate(
 	signals []signalSet,
 	mins, maxs extrema,
+	affinity *CacheAffinityContext,
 ) (int, CandidateScores, float64, float64, []int, *selectiontrace.MultiFactorObjective) {
 	var bestIndex int
 	var candidateScores []float64
@@ -68,10 +69,30 @@ func (s *MultiFactorSelector) chooseCandidate(
 			scores[i].Evidence = signal.evidence
 		}
 	}
+	if s.config.Objective.Strategy != config.MultiFactorObjectiveLexicographic && affinity != nil {
+		// A weighted objective leans toward the model whose prompt cache the
+		// request continues; lexicographic bands keep their order.
+		applyCacheAffinity(scores, affinity)
+		bestScore, secondBest = topTwoScores(scores)
+	}
 	if winner := scores.Best(HigherIsBetter, s.qualityRelevant()); winner >= 0 {
 		bestIndex = winner
 	}
 	return bestIndex, scores, bestScore, secondBest, survivors, trace
+}
+
+// topTwoScores returns the highest and the second-highest score.
+func topTwoScores(scores CandidateScores) (best, second float64) {
+	best, second = math.Inf(-1), math.Inf(-1)
+	for _, score := range scores {
+		switch {
+		case score.Score > best:
+			best, second = score.Score, best
+		case score.Score > second:
+			second = score.Score
+		}
+	}
+	return best, second
 }
 
 func (s *MultiFactorSelector) chooseWeighted(

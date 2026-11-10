@@ -191,11 +191,6 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
         description: 'Benchmark signal and system-level behavior.',
         items: [{ kind: 'route', label: 'Evaluation', icon: 'evaluation', to: '/evaluation' }],
       },
-      {
-        title: 'Tune',
-        description: 'Prepare and validate the router model stack.',
-        items: [{ kind: 'route', label: 'ML Setup', icon: 'compute', to: '/ml-setup' }],
-      },
     ],
   },
 ]

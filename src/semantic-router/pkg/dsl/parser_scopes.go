@@ -5,13 +5,20 @@ import "fmt"
 func applyRawRouting(prog *Program, raw *rawRoutingDecl) []error {
 	fields := entriesToMap(raw.Fields)
 	for name := range fields {
-		if name != "strategy" && name != "model_bindings" && name != "candidate_requirements" {
+		if name != "strategy" && name != "model_bindings" && name != "candidate_requirements" && name != "plugins" {
 			return []error{fmt.Errorf("%s: unknown ROUTING field %q", posFromLexer(raw.Pos), name)}
 		}
 	}
 	strategy, ok := getStringField(fields, "strategy")
-	if !ok && fields["model_bindings"] == nil && fields["candidate_requirements"] == nil {
-		return []error{fmt.Errorf("%s: ROUTING requires strategy, model_bindings, or candidate_requirements", posFromLexer(raw.Pos))}
+	if !ok && fields["model_bindings"] == nil && fields["candidate_requirements"] == nil && fields["plugins"] == nil {
+		return []error{fmt.Errorf("%s: ROUTING requires strategy, model_bindings, candidate_requirements, or plugins", posFromLexer(raw.Pos))}
+	}
+	if value, exists := fields["plugins"]; exists {
+		plugins, err := parseRecipePlugins(value)
+		if err != nil {
+			return []error{fmt.Errorf("%s: ROUTING plugins: %w", posFromLexer(raw.Pos), err)}
+		}
+		prog.RecipePlugins = plugins
 	}
 	if err := applyRoutingPolicies(prog, fields); err != nil {
 		return []error{fmt.Errorf("%s: ROUTING %w", posFromLexer(raw.Pos), err)}
@@ -35,6 +42,9 @@ func rawToEntrypoint(raw *rawEntrypointDecl) (*EntrypointDecl, []error) {
 	}
 	if recipe, ok := getStringField(fields, "recipe"); ok {
 		decl.Recipe = recipe
+	}
+	if marked, ok := fields["default"].(BoolValue); ok {
+		decl.Default = marked.V
 	}
 	if modelNames, ok := fields["model_names"].(ArrayValue); ok {
 		for _, item := range modelNames.Items {

@@ -14,7 +14,11 @@ from pathlib import Path
 
 import tomllib
 from check_cli_wheel import check_wheel
-from prepare_dev_package import prepare_version, record_source_revision
+from prepare_dev_package import (
+    development_epoch,
+    prepare_version,
+    record_source_revision,
+)
 from runtime_evidence import host_platform
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -58,8 +62,8 @@ def verify_resources(wheel: Path, sdist: Path) -> None:
         )
     )
     generated = {
-        "cli/config_schema/router-config-v0.3.schema.json": ROOT
-        / "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
+        "cli/config_schema/router-config-v0.5.schema.json": ROOT
+        / "src/semantic-router/pkg/configschema/router-config-v0.5.schema.json",
         "cli/config_schema/releases.generated.json": ROOT
         / "src/model-runtime/vllm_srun/registry/releases.generated.json",
     }
@@ -211,12 +215,7 @@ def main() -> None:
     def version():
         project = ROOT / "src/vllm-sr"
         if args.mode in {"main", "nightly"}:
-            epoch = int(
-                subprocess.check_output(
-                    ["git", "show", "-s", "--format=%ct", "HEAD"], text=True
-                )
-            )
-            prepare_version(project, epoch)
+            prepare_version(project, development_epoch())
         if args.mode == "main":
             record_source_revision(project, manifest["source_sha"])
         value = tomllib.loads((project / "pyproject.toml").read_text())["project"][

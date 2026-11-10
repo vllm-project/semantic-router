@@ -1,10 +1,9 @@
-from cli.config_migration import migrate_config_data
 from cli.models import UserConfig
 
 
-def test_inline_reasoning_activation_parameter_survives_migration_and_schema():
+def test_inline_reasoning_activation_parameter_survives_the_schema():
     source = {
-        "version": "v0.3",
+        "version": "v0.5",
         "providers": {
             "models": [
                 {
@@ -18,21 +17,15 @@ def test_inline_reasoning_activation_parameter_survives_migration_and_schema():
                         "disabled": "disabled",
                     },
                     "backend_refs": [
-                        {
-                            "endpoint": "127.0.0.1:8000",
-                            "provider": "vllm",
-                        }
+                        {"endpoint": "127.0.0.1:8000", "provider": "vllm"}
                     ],
                 }
             ]
         },
-        "routing": {},
+        "recipes": [{"name": "default"}],
     }
 
-    migrated = migrate_config_data(source)
-    assert migrate_config_data(migrated) == migrated
-
-    config = UserConfig.model_validate(migrated)
+    config = UserConfig.model_validate(source)
     reasoning = config.providers.models[0].reasoning
     assert reasoning is not None
     assert reasoning.activation_parameter == "enable_thinking"

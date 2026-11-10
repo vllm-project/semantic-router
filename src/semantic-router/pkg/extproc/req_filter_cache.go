@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/match"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -26,22 +27,9 @@ import (
 //   - writes would cache a personalized answer that could leak to other users
 //
 // This avoids orphaned pending cache entries and unnecessary embedding work.
-func decisionWillPersonalize(ctx *RequestContext, cfg *config.RouterConfig) bool {
-	d := ctx.VSRSelectedDecision
-	if d == nil {
-		return false
-	}
-	if ragCfg := d.GetRAGConfig(); ragCfg != nil && ragCfg.Enabled {
-		return true
-	}
-	// Per-decision memory plugin takes priority over global setting.
-	if memCfg := d.GetMemoryConfig(); memCfg != nil {
-		return memCfg.Enabled
-	}
-	if cfg != nil && cfg.Memory.Enabled {
-		return true
-	}
-	return false
+func decisionWillPersonalize(ctx *RequestContext) bool {
+	plugin := config.ContextPluginOf(requestPlugins(nil, ctx))
+	return plugin != nil && len(plugin.Sources) > 0
 }
 
 // handleCaching handles cache lookup and storage with category-specific settings
@@ -53,7 +41,7 @@ func (r *OpenAIRouter) handleCaching(
 	// Skip entire cache path for decisions that will inject user-specific context.
 	// Both reads (would serve stale generic answers) and writes (would leak
 	// personalized data) are wrong when RAG or memory is enabled.
-	if decisionWillPersonalize(ctx, r.Config) {
+	if decisionWillPersonalize(ctx) {
 		logging.Debugf("[Cache] Skipping cache for decision '%s': RAG or memory enabled", categoryName)
 		return nil, false
 	}
@@ -75,7 +63,7 @@ func (r *OpenAIRouter) handleCaching(
 		logging.Errorf("Error extracting query from request: %v", err)
 		return nil, false
 	}
-	applyCacheIdentity(ctx, identity, selectedModels)
+	applyCacheIdentity(r.Config, ctx, identity, selectedModels)
 	cacheEnabled := r.semanticCacheEnabledForRequest(ctx)
 	applyRequestCacheControls(ctx)
 	if !ctx.CacheReadBypass {
@@ -124,16 +112,16 @@ func (r *OpenAIRouter) handleLooperCacheSkip(
 		logging.Errorf("Error extracting query from request: %v", err)
 		return nil, false
 	}
-	applyCacheIdentity(ctx, identity, selectedModels)
+	applyCacheIdentity(r.Config, ctx, identity, selectedModels)
 	return nil, false
 }
 
-func applyCacheIdentity(ctx *RequestContext, identity cache.RequestIdentity, selectedModels []string) {
+func applyCacheIdentity(cfg *config.RouterConfig, ctx *RequestContext, identity cache.RequestIdentity, selectedModels []string) {
 	ctx.RequestModel = identity.Model
 	ctx.RequestQuery = identity.Query
 	ctx.CacheRequestModel = identity.Model
 	ctx.CacheQuery = identity.Query
-	policyFingerprint := responseCachePolicyFingerprint(ctx)
+	policyFingerprint := responseCachePolicyFingerprint(cfg, ctx)
 	ctx.CacheExactFingerprint = cache.CombineFingerprints(
 		identity.ExactFingerprint,
 		policyFingerprint,
@@ -154,18 +142,24 @@ func selectedCacheModel(requestModel string, selectedModels []string) string {
 	return strings.TrimSpace(requestModel)
 }
 
-func responseCachePolicyFingerprint(ctx *RequestContext) string {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+// responseCachePolicyFingerprint is what besides the request decides its
+// answer: the plugins it runs, a decision's or, without one, the layered
+// defaults, and the decision's models and output contract.
+func responseCachePolicyFingerprint(cfg *config.RouterConfig, ctx *RequestContext) string {
+	if ctx == nil {
 		return ""
 	}
-	fingerprint, err := cache.FingerprintValue(map[string]interface{}{
-		"decision":             ctx.VSRSelectedDecision.Name,
-		"model_refs":           ctx.VSRSelectedDecision.ModelRefs,
-		"plugins":              ctx.VSRSelectedDecision.Plugins,
-		"output_contract":      ctx.VSRSelectedDecision.OutputContract,
-		"output_contract_spec": ctx.VSRSelectedDecision.OutputContractSpec,
-		"client_protocol":      string(ctx.SourceFormat),
-	})
+	policy := map[string]interface{}{
+		"plugins":         requestPlugins(cfg, ctx),
+		"client_protocol": string(ctx.SourceFormat),
+	}
+	if decision := ctx.VSRSelectedDecision; decision != nil {
+		policy["decision"] = decision.Name
+		policy["model_refs"] = decision.ModelRefs
+		policy["output_contract"] = decision.OutputContract
+		policy["output_contract_spec"] = decision.OutputContractSpec
+	}
+	fingerprint, err := cache.FingerprintValue(policy)
 	if err != nil {
 		return ""
 	}
@@ -190,14 +184,21 @@ func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentit
 		protocol += ":body"
 	}
 	decision := ""
-	revision := ""
+	epoch := ""
 	if ctx.VSRSelectedDecision != nil {
 		decision = ctx.VSRSelectedDecision.Name
-		if plugin := ctx.VSRSelectedDecision.GetResponseCacheConfig(); plugin != nil &&
-			plugin.Revision != nil {
-			if value, err := cache.FingerprintValue(plugin.Revision); err == nil {
-				revision = value
-			}
+	}
+	guard := requestResponseGuard(ctx)
+	if plugin := requestResponseCache(ctx); plugin != nil && plugin.Revision != nil {
+		if value, err := cache.FingerprintValue(plugin.Revision); err == nil {
+			epoch = value
+		}
+	}
+	// An entry is served only under the response_guard that passed it:
+	// adding or changing the request's guard starts a new partition.
+	if guard != nil {
+		if value, err := cache.FingerprintValue(guard); err == nil {
+			epoch = cache.CombineFingerprints(epoch, value)
 		}
 	}
 	scope := responseCacheScope(ctx)
@@ -213,7 +214,7 @@ func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentit
 			SelectedModel: strings.TrimSpace(ctx.CacheSelectedModel),
 			Protocol:      protocol,
 			Namespace:     cache.UserScopeNamespace(scopeIdentity),
-			Epoch:         revision,
+			Epoch:         epoch,
 		},
 		ExactFingerprint:         ctx.CacheExactFingerprint,
 		CompatibilityFingerprint: ctx.CacheCompatibilityFingerprint,
@@ -221,7 +222,9 @@ func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentit
 	}
 }
 
-// performCacheLookup searches for a cached response matching the request query.
+// performCacheLookup serves the semantic tier: the decision's semantic.match
+// recalls the cached requests most similar to this one and, when it writes a
+// judge, keeps those that ask the same thing. The first kept entry is served.
 // Returns the cached response and true on cache hit, or nil and false on miss/error/skip.
 func (r *OpenAIRouter) performCacheLookup(
 	ctx *RequestContext, categoryName, requestModel string, cacheEnabled bool,
@@ -230,12 +233,17 @@ func (r *OpenAIRouter) performCacheLookup(
 	if cacheQuery == "" || !r.cacheBackendEnabled() || !cacheEnabled {
 		return nil, false
 	}
-
-	threshold := r.Config.GetCacheSimilarityThreshold()
-	if ctx.VSRSelectedDecision != nil {
-		threshold = r.Config.GetCacheSimilarityThresholdForDecisionObject(ctx.VSRSelectedDecision)
+	service := r.responseCacheService()
+	if service == nil {
+		return nil, false
 	}
 
+	block := requestResponseCache(ctx).SemanticMatch()
+	recall := config.MatchResponseCache.Effective(block).Recall
+	threshold := 0.0
+	if recall != nil && recall.MinSimilarity != nil {
+		threshold = *recall.MinSimilarity
+	}
 	logging.Infof("handleCaching: Performing cache lookup - model=%s, query=%s, threshold=%.2f",
 		requestModel, logging.ContentDescriptor(ctx.RequestQuery), threshold)
 
@@ -251,28 +259,29 @@ func (r *OpenAIRouter) performCacheLookup(
 	if lookupContext == nil {
 		lookupContext = context.Background()
 	}
-	service := r.responseCacheService()
-	if service == nil {
-		return nil, false
-	}
-	maxAge := responseCacheMaxAgeDuration(ctx)
-	lookupResult, cacheErr := service.LookupSemantic(lookupContext, cache.SemanticLookup{
-		Identity:  identity,
-		Threshold: threshold,
-		MaxAge:    maxAge,
-	})
+	index := &responseCacheIndex{service: service, identity: identity, maxAge: responseCacheMaxAgeDuration(ctx)}
+	matched, cacheErr := r.matcher().Match(lookupContext, config.MatchResponseCache, block, match.Input{Request: cacheQuery, Index: index})
+	lookupResult := index.served(matched, cacheErr)
+	service.RecordSemantic(identity, lookupResult, cacheErr, startTime)
 	cachedResponse := lookupResult.ResponseBody
 	found := lookupResult.Found
 	lookupDuration := time.Since(startTime)
 	lookupTime := lookupDuration.Milliseconds()
 
-	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
+	logging.Infof("response cache semantic match: found=%v, recalled=%d, error=%v, lookupTime=%dms", found, len(index.recalled), cacheErr, lookupTime)
 
 	tracing.SetSpanAttributes(span,
 		attribute.Bool(tracing.AttrCacheHit, found),
 		attribute.Int64(tracing.AttrCacheLookupTimeMs, lookupTime),
 		attribute.String(tracing.AttrDecisionName, categoryName),
-		attribute.Float64("cache.threshold", float64(threshold)))
+		attribute.Float64("cache.threshold", threshold),
+		attribute.Int("cache.recalled", len(index.recalled)))
+	if judge, judged := judgeStage(matched); judged {
+		tracing.SetSpanAttributes(span,
+			attribute.String("cache.judge.preset", judge.Method),
+			attribute.String("cache.judge.outcome", judge.Outcome),
+			attribute.Int("cache.judge.kept", judge.Kept))
+	}
 
 	if cacheErr != nil {
 		logging.Errorf("Error searching cache: %v", cacheErr)
@@ -306,10 +315,7 @@ func (r *OpenAIRouter) performCacheLookup(
 			"threshold":      threshold,
 			"negation_guard": string(lookupResult.NegationGuard),
 		})
-		// Intermediate cache detail (category, matched keywords, similarity) is
-		// demoted to the x-vsr-debug surface (#2205).
-		cacheCategory, cacheKeywords, cacheSimilarity := cacheDetailForSurface(ctx, categoryName)
-		response := r.createCacheHitResponse(ctx, cachedResponse, cacheCategory, ctx.VSRSelectedDecisionName, cacheKeywords, cacheSimilarity)
+		response := r.createCacheHitResponse(ctx, cachedResponse)
 		r.updateRouterReplayStatus(ctx, 200, ctx.ExpectStreamingResponse)
 		return response, true
 	} else {
@@ -327,10 +333,6 @@ func (r *OpenAIRouter) performCacheLookup(
 func (r *OpenAIRouter) createCacheHitResponse(
 	ctx *RequestContext,
 	cachedResponse []byte,
-	category string,
-	decisionName string,
-	matchedKeywords []string,
-	similarity float32,
 ) *ext_proc.ProcessingResponse {
 	semanticResponse, err := r.decodeCachedClientResponse(cachedResponse, ctx)
 	if err != nil {
@@ -371,17 +373,9 @@ func (r *OpenAIRouter) createCacheHitResponse(
 			return r.createErrorResponse(502, "The cached response is invalid")
 		}
 	}
-	response := http.CreateCacheHitResponseWithBody(
-		responseBody,
-		contentType,
-		category,
-		decisionName,
-		matchedKeywords,
-		similarity,
-	)
+	response := http.CreateCacheHitResponseWithBody(responseBody, contentType)
 	ctx.ImmediateResponseEncoded = true
 	ctx.SemanticResponse = semanticResponse
-	appendRecipeHeaderToImmediateResponse(response, ctx)
 	r.attachRouterReplayResponse(ctx, responseBody, true)
 	return response
 }
@@ -442,6 +436,9 @@ func applyRequestIdentityWithoutCache(ctx *RequestContext) {
 	}
 	ctx.RequestModel = ctx.SemanticRequest.Model
 	ctx.RequestQuery = cache.SemanticRequestQuery(*ctx.SemanticRequest)
+	if ctx.RoutingInput.Changed() {
+		ctx.RequestQuery = ctx.UserContent
+	}
 	ctx.CacheRequestModel = ctx.RequestModel
 	ctx.CacheQuery = ctx.RequestQuery
 }
@@ -449,6 +446,11 @@ func applyRequestIdentityWithoutCache(ctx *RequestContext) {
 func cacheIdentityForContext(ctx *RequestContext) (cache.RequestIdentity, error) {
 	if ctx == nil || ctx.SemanticRequest == nil {
 		return cache.RequestIdentity{}, fmt.Errorf("neutral request is unavailable")
+	}
+	if routing := ctx.RoutingInput; routing.Changed() {
+		return cache.BuildRoutedRequestIdentity(*ctx.SemanticRequest, cache.RoutedQuery{
+			Text: ctx.UserContent, MessageIndex: routing.MessageIndex, Retained: routing.Stripped,
+		})
 	}
 	return cache.BuildSemanticRequestIdentity(*ctx.SemanticRequest)
 }
@@ -472,15 +474,4 @@ func cacheQueryForContext(ctx *RequestContext) string {
 		return ctx.CacheQuery
 	}
 	return ctx.RequestQuery
-}
-
-// cacheDetailForSurface returns the intermediate cache-hit detail (category,
-// matched keywords, similarity) when the request opted into x-vsr-debug, and
-// empty values otherwise. CreateCacheHitResponse omits the empties, demoting
-// the detail off the lean default surface (#2205).
-func cacheDetailForSurface(ctx *RequestContext, categoryName string) (string, []string, float32) {
-	if !debugHeadersRequested(ctx) {
-		return "", nil, 0
-	}
-	return categoryName, ctx.VSRMatchedKeywords, ctx.VSRCacheSimilarity
 }

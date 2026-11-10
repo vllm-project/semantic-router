@@ -189,18 +189,7 @@ func defaultInitialMemoryStatus(cfg *config.RouterConfig) MemoryStatus {
 }
 
 func isMemoryConfigEnabled(cfg *config.RouterConfig) bool {
-	if cfg == nil {
-		return false
-	}
-	if cfg.Memory.Enabled {
-		return true
-	}
-	for _, decision := range cfg.AllRoutingDecisions() {
-		if memoryConfig := decision.GetMemoryConfig(); memoryConfig != nil && memoryConfig.Enabled {
-			return true
-		}
-	}
-	return false
+	return cfg.UsesMemory()
 }
 
 func (r *Registry) CurrentConfig() *config.RouterConfig {

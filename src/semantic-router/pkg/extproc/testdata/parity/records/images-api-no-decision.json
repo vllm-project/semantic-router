@@ -1,0 +1,165 @@
+{
+  "case": "images-api-no-decision",
+  "phases": [
+    {
+      "phase": "request_headers",
+      "header": [
+        {
+          "name": ":method",
+          "value": "POST"
+        },
+        {
+          "name": ":path",
+          "value": "/v1/images/generations"
+        },
+        {
+          "name": ":authority",
+          "value": "localhost:8899"
+        },
+        {
+          "name": ":scheme",
+          "value": "http"
+        },
+        {
+          "name": "content-type",
+          "value": "application/json"
+        },
+        {
+          "name": "content-length",
+          "value": "48"
+        },
+        {
+          "name": "x-forwarded-proto",
+          "value": "http"
+        },
+        {
+          "name": "x-request-id",
+          "value": "parity-images-api-no-decision"
+        }
+      ],
+      "effect": {
+        "header": {
+          "set": [
+            {
+              "name": "accept-encoding",
+              "value": ""
+            }
+          ],
+          "remove": [
+            "x-authz-team-id",
+            "x-authz-tenant-id",
+            "x-authz-user-groups",
+            "x-authz-user-id",
+            "x-user-anthropic-key",
+            "x-user-azure-openai-key",
+            "x-user-bedrock-key",
+            "x-user-cloudflare-workers-ai-key",
+            "x-user-gemini-key",
+            "x-user-minimax-key",
+            "x-user-openai-key",
+            "x-user-vertex-ai-key",
+            "x-vsr-bench-expected-config-hash",
+            "x-vsr-bench-max-inference-calls",
+            "x-vsr-cache-control",
+            "x-vsr-compression-control",
+            "x-vsr-config-hash",
+            "x-vsr-config-version",
+            "x-vsr-cost",
+            "x-vsr-cost-currency",
+            "x-vsr-debug",
+            "x-vsr-delegated-credential",
+            "x-vsr-internal-auth",
+            "x-vsr-kv-cache-id",
+            "x-vsr-kv-mapper-id",
+            "x-vsr-kv-source-pod",
+            "x-vsr-memory",
+            "x-vsr-outcome-principal",
+            "x-vsr-outcome-source",
+            "x-vsr-protection-release",
+            "x-vsr-replay-id",
+            "x-vsr-response-path",
+            "x-vsr-route-model",
+            "x-vsr-schema-version",
+            "x-vsr-selected-decision",
+            "x-vsr-selected-model",
+            "x-vsr-selected-recipe",
+            "x-vsr-session-id",
+            "x-vsr-skip-processing",
+            "x-vsr-systemone-backend",
+            "x-vsr-trace",
+            "x-vsr-upstream-host",
+            "x-vsr-warnings"
+          ]
+        }
+      }
+    },
+    {
+      "phase": "request_body",
+      "end_of_stream": true,
+      "body": "{\"model\":\"vllm-sr/auto\",\"prompt\":\"Hello there.\"}",
+      "effect": {
+        "immediate": {
+          "status": 400,
+          "header": {
+            "set": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              },
+              {
+                "name": "x-vsr-schema-version",
+                "value": "3"
+              },
+              {
+                "name": "x-vsr-response-path",
+                "value": "error"
+              },
+              {
+                "name": "x-vsr-config-version",
+                "value": "1"
+              },
+              {
+                "name": "x-vsr-selected-recipe",
+                "value": "default"
+              }
+            ]
+          },
+          "body": "{\"error\":{\"code\":\"image_route_required\",\"message\":\"the Images API needs a route that answers with a generated image\",\"type\":\"invalid_request_error\"}}"
+        }
+      }
+    }
+  ],
+  "response": {
+    "status": 400,
+    "header": [
+      {
+        "name": "content-type",
+        "value": "application/json"
+      },
+      {
+        "name": "x-vsr-schema-version",
+        "value": "3"
+      },
+      {
+        "name": "x-vsr-response-path",
+        "value": "error"
+      },
+      {
+        "name": "x-vsr-config-version",
+        "value": "1"
+      },
+      {
+        "name": "x-vsr-selected-recipe",
+        "value": "default"
+      },
+      {
+        "name": "content-length",
+        "value": "149"
+      }
+    ],
+    "body": "{\"error\":{\"code\":\"image_route_required\",\"message\":\"the Images API needs a route that answers with a generated image\",\"type\":\"invalid_request_error\"}}"
+  },
+  "evidence": {
+    "recipe": "default"
+  }
+}

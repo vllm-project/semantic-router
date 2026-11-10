@@ -33,46 +33,50 @@ func (r *OpenAIRouter) InspectPluginBinding(binding pluginruntime.Binding, plugi
 	switch policy := payload.(type) {
 	case *config.ResponseCachePluginConfig:
 		add("response_cache", r.ResponseCache != nil)
-	case *config.ContextCompressionPluginConfig:
-		add("context_compression", r.ContextCompression != nil)
-		if policy.Recovery != nil && policy.Recovery.Enabled {
-			add("context_recovery", r.CompressionRecovery != nil)
-		}
-	case *config.MemoryPluginConfig:
-		add("memory_store", r.getMemoryStore() != nil)
+	case *config.ContextPluginConfig:
+		r.contextPluginDependencies(policy, add, unknown)
 	case *config.RouterReplayPluginConfig:
 		add("replay_store", r.ReplayRecorder != nil || r.ReplayRecorders[config.RoutingDecisionKey(binding.Recipe, binding.Decision)] != nil)
-	case *config.HallucinationPluginConfig:
-		add("hallucination_detector", classifier != nil && classifier.IsHallucinationDetectorReady())
-	case *config.ResponseJailbreakPluginConfig:
-		add("response_jailbreak_classifier", classifier != nil && classifier.IsJailbreakEnabled())
+		if policy.Shadow != nil {
+			add("shadow_dispatcher", r.ShadowDispatcher != nil)
+		}
+	case *config.ResponseGuardPluginConfig:
+		// The recipe's classifier asks the response-stage rules of the
+		// decision model or their deployments.
+		add("response_signals", classifier != nil)
 	case *config.ToolsPluginConfig:
-		if policy.SelectionEnabled() {
-			add("tool_retriever", r.ToolsDatabase != nil && r.ToolsDatabase.IsEnabled())
-		}
-	case *config.ToolSelectionPluginConfig:
-		if policy.Mode == config.ToolSelectionModeFilter {
-			add("tool_embeddings", r.toolEmbedder != nil)
-		} else if policy.ToolsDBPath != "" {
-			r.toolSelectionDBMu.Lock()
-			database := r.toolSelectionDBByPath[policy.ToolsDBPath]
-			r.toolSelectionDBMu.Unlock()
-			if database == nil {
-				unknown("tool_retriever")
-			} else {
-				add("tool_retriever", database.IsEnabled())
+		if spec := policy.Select; spec != nil {
+			_, ready := routerMatchAnswerer{r}.Card(r.Config.MatchJudgeDeployment(*spec.EffectiveMatch().Judge))
+			add("decision_model", ready)
+			if spec.Mode == config.ToolsSelectModeAdd {
+				add("tool_catalog", r.toolCatalogs[spec.ToolsDBPath] != nil)
 			}
-		} else {
-			add("tool_retriever", r.ToolsDatabase != nil && r.ToolsDatabase.IsEnabled())
 		}
-	case *config.RAGPluginConfig:
-		if policy.Backend == "vectorstore" {
+	}
+	return result, nil
+}
+
+// contextPluginDependencies are what a context plugin's sources, judges and
+// compression run on.
+func (r *OpenAIRouter) contextPluginDependencies(plugin *config.ContextPluginConfig, add func(string, bool), unknown func(string)) {
+	for _, judge := range plugin.MatchJudges() {
+		_, ready := routerMatchAnswerer{r}.Card(r.Config.MatchJudgeDeployment(judge))
+		add("decision_model", ready)
+	}
+	if rag := plugin.Source(config.ContextSourceRAG); rag != nil {
+		if rag.Backend == "vectorstore" {
 			add("vector_store", r.RuntimeRegistry != nil && r.RuntimeRegistry.VectorStoreRuntime() != nil)
 		} else {
 			unknown("rag_backend")
 		}
-	case *config.ShadowDispatchPluginConfig:
-		add("shadow_dispatcher", r.ShadowDispatcher != nil)
 	}
-	return result, nil
+	if plugin.Source(config.ContextSourceMemory) != nil {
+		add("memory_store", r.getMemoryStore() != nil)
+	}
+	if compress := plugin.Compress; compress.CompressesRequest() {
+		add("context_compression", r.ContextCompression != nil)
+		if compress.Recovery != nil && compress.Recovery.Enabled {
+			add("context_recovery", r.CompressionRecovery != nil)
+		}
+	}
 }

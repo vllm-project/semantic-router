@@ -23,7 +23,7 @@ func TestCanonicalRoutingPreviewBudget(t *testing.T) {
 		{name: "negative capacity", fields: "max_concurrency: -1", invalid: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			yaml := fmt.Sprintf("version: v0.3\nglobal:\n  services:\n    api:\n      routing_preview:\n        %s\n", test.fields)
+			yaml := fmt.Sprintf("version: v0.5\nglobal:\n  services:\n    api:\n      routing_preview:\n        %s\n", test.fields)
 			cfg, err := ParseYAMLBytes([]byte(yaml))
 			if test.invalid {
 				if err == nil || !strings.Contains(err.Error(), "routing_preview") {

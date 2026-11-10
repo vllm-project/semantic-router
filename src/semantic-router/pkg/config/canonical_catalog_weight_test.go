@@ -7,7 +7,7 @@ import (
 
 func TestCanonicalCatalogMaterializesBackendRefWeights(t *testing.T) {
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: weighted-model
@@ -21,7 +21,8 @@ providers:
           endpoint: 127.0.0.1:8001
           provider: vllm
           weight: 80
-routing: {}
+recipes:
+  - name: default
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes() error = %v", err)
@@ -41,7 +42,7 @@ routing: {}
 
 func TestCanonicalCatalogRejectsNegativeBackendRefWeight(t *testing.T) {
 	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: weighted-model
@@ -50,7 +51,8 @@ providers:
         - endpoint: 127.0.0.1:8000
           provider: vllm
           weight: -1
-routing: {}
+recipes:
+  - name: default
 `))
 	if err == nil || !strings.Contains(err.Error(), "weight cannot be negative") {
 		t.Fatalf("ParseYAMLBytes() error = %v, want negative weight rejection", err)

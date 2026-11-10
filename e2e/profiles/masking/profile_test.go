@@ -3,40 +3,28 @@ package masking
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
 )
 
-// The config loader rejects retired model-catalog fields outright, so one left
-// in this profile aborts Router startup with runtime_config_load_failed and no
-// masking case ever runs.
-func TestProfileCarriesNoRetiredClassifierFields(t *testing.T) {
+// The pii rule asks provider-mocker's System One fixture and nothing else, so
+// every span the masking cases see is attributable to its markers.
+func TestProfileAsksThePIIRuleOfTheSystemOneFixture(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Base(valuesFile))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if field := "use_mmbert_32k"; strings.Contains(string(raw), field) {
-		t.Fatalf("%s is retired: the model runtime reads the architecture from the package", field)
-	}
-
 	var values map[string]any
 	if err := yaml.Unmarshal(raw, &values); err != nil {
 		t.Fatal(err)
 	}
-	classifier := profileSection(t, values, "config", "global", "model_catalog", "modules", "classifier")
-	pii := profileSection(t, classifier, "pii")
-	// The remote backend is what makes a detection attributable to the stub, so
-	// no local selector may creep back in.
-	for _, selector := range []string{"model_ref", "model_id"} {
-		if value, set := pii[selector]; set && value != "" {
-			t.Fatalf("pii.%s must stay empty so spans come only from the remote backend, got %v", selector, value)
-		}
-	}
-	backend := profileSection(t, pii, "backend")
-	if backend["contract"] != "token_spans.v1" {
-		t.Fatalf("the PII backend must stay a token_spans.v1 binding: %#v", backend)
+	catalog := profileSection(t, values, "config", "global", "model_catalog")
+	name, _ := profileSection(t, catalog, "bindings")["pii"].(string)
+	deployment := profileSection(t, catalog, "deployments", name)
+	if deployment["provider"] != "systemone" || deployment["model"] != "e2e/fake-systemone" ||
+		deployment["endpoint"] != "http://provider-mocker.default.svc.cluster.local:8000/v1/systemone" {
+		t.Fatalf("the PII binding must name provider-mocker's System One fixture: %#v", deployment)
 	}
 }
 

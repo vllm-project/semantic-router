@@ -1,27 +1,40 @@
 import { describe, expect, it } from 'vitest'
 
 import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
+import { getCuratedPluginFieldSchema } from './dslPluginSchemas'
 
 describe('capability plugin field schemas', () => {
-  it('exposes the complete context compression contract', () => {
-    const fields = resolveCapabilityPluginFieldSchema('context_compression')
+  it('exposes the complete context contract', () => {
+    const fields = resolveCapabilityPluginFieldSchema('context')
     expect(fields?.map((field) => field.key)).toEqual([
       'enabled',
-      'mode',
+      'sources',
+      'compress',
       'budget',
+      'injection',
+    ])
+    const sources = fields?.find((field) => field.key === 'sources')
+    expect(sources?.type).toBe('object[]')
+    expect(sources?.fields?.map((field) => field.key)).toContain('match')
+    const compress = fields?.find((field) => field.key === 'compress')
+    expect(compress?.fields?.map((field) => field.key)).toEqual([
+      'mode',
       'targets',
-      'scoring',
+      'match',
       'recovery',
       'request_controls',
       'failure_mode',
+      'signals',
     ])
-    expect(fields?.find((field) => field.key === 'targets')?.type).toBe('object')
+    expect(resolveCapabilityPluginFieldSchema('context_compression')).toBeNull()
   })
 
-  it('exposes the shadow dispatch bounds', () => {
-    const fields = resolveCapabilityPluginFieldSchema('shadow_dispatch')
-    expect(fields?.map((field) => field.key)).toEqual([
-      'enabled',
+  it('exposes the shadow bounds under router_replay', () => {
+    const shadow = getCuratedPluginFieldSchema('router_replay').find(
+      (field) => field.key === 'shadow',
+    )
+    expect(resolveCapabilityPluginFieldSchema('shadow_dispatch')).toBeNull()
+    expect(shadow?.fields?.map((field) => field.key)).toEqual([
       'model',
       'sample_rate',
       'max_concurrency',
@@ -42,12 +55,14 @@ describe('capability plugin field schemas', () => {
       'enabled',
       'mode',
       'scope',
-      'semantic',
       'ttl_seconds',
+      'semantic',
       'request_controls',
       'personalized',
       'revision',
     ])
+    const semantic = fields?.find((field) => field.key === 'semantic')
+    expect(semantic?.fields?.map((field) => field.key)).toEqual(['match'])
   })
 
   it('exposes the prompt cache marker contract', () => {

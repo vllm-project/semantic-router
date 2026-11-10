@@ -8,6 +8,7 @@ sets its own.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
@@ -56,7 +57,10 @@ class EngineArgs:
     only). ``dtype`` is the precision the backbone computes in; ``auto`` is
     the one the model was published in. ``enable_shared_context`` runs the
     shared state of a multi-question request once; None leaves it to the
-    model's family.
+    model's family. ``max_model_len`` is the most input tokens one question of
+    a Decision model may have: it lowers the package's limit, never raises it,
+    and a longer question fails with ``max_length_exceeded`` before any
+    forward; None keeps the package's limit.
     """
 
     max_num_seqs: int | None = None
@@ -64,6 +68,7 @@ class EngineArgs:
     batch_window_ms: float = DEFAULT_BATCH_WINDOW_MS
     dtype: str = "auto"
     enable_shared_context: bool | None = None
+    max_model_len: int | None = None
 
     def __post_init__(self) -> None:
         if self.max_num_seqs is not None:
@@ -96,6 +101,13 @@ class EngineArgs:
             self.enable_shared_context, bool
         ):
             raise ValueError("enable_shared_context must be a boolean")
+        if self.max_model_len is not None:
+            if isinstance(self.max_model_len, bool) or not isinstance(
+                self.max_model_len, int
+            ):
+                raise ValueError("max_model_len must be an integer")
+            if self.max_model_len < 1:
+                raise ValueError("max_model_len must be at least 1")
 
     def describe(self, shared_context: bool) -> dict[str, Any]:
         """The arguments as ``/v1/models`` reports them, with shared context resolved."""
@@ -105,6 +117,7 @@ class EngineArgs:
             "batch_window_ms": float(self.batch_window_ms),
             "dtype": self.dtype,
             "enable_shared_context": shared_context,
+            "max_model_len": self.max_model_len,
         }
 
 
@@ -142,6 +155,7 @@ class ModelConfig:
     batch_window_ms: float | None = None
     dtype: str | None = None
     enable_shared_context: bool | None = None
+    max_model_len: int | None = None
 
     def engine_args(self, defaults: EngineArgs) -> EngineArgs:
         """This model's engine arguments: its own where it sets them, else ``defaults``."""
@@ -161,6 +175,11 @@ class ServeConfig:
     images and videos for the process's models, off the threads that plan
     requests next to the device worker; 0 decodes in the planning threads, None
     picks a count from the CPUs the process may use (``media.auto_workers``).
+    A model whose forward has run longer than ``forward_timeout_seconds`` is
+    stalled: the process is neither live nor ready until the forward returns
+    (0 turns the watchdog off). A stopping server waits up to
+    ``shutdown_grace_seconds`` for requests and forwards in flight, then exits
+    even if a forward is still running.
     """
 
     models: tuple[ModelConfig, ...] = ()
@@ -185,6 +204,8 @@ class ServeConfig:
     autotune_cache: str | None = None
     exit_on_device_error: bool = True
     media_workers: int | None = None
+    forward_timeout_seconds: float = 300.0
+    shutdown_grace_seconds: float = 8.0
 
     def __post_init__(self) -> None:
         if self.media_workers is not None and (
@@ -193,6 +214,15 @@ class ServeConfig:
             or self.media_workers < 0
         ):
             raise ValueError("media_workers must be a non-negative integer")
+        for name in ("forward_timeout_seconds", "shutdown_grace_seconds"):
+            value = getattr(self, name)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value < 0
+            ):
+                raise ValueError(f"{name} must be a non-negative number of seconds")
 
     def served_models(self) -> tuple[ModelConfig, ...]:
         """The models this process serves, in load order."""

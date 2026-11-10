@@ -34,20 +34,10 @@ func createValkeyMemoryStoreWithContext(ctx context.Context, cfg *config.RouterC
 		port = 6379
 	}
 
-	embeddingModel := memory.EmbeddingModelType(detectMemoryEmbeddingModel(cfg))
-
-	embeddingConfig := &memory.EmbeddingConfig{
-		Model:     embeddingModel,
-		Dimension: vc.Dimension,
+	embeddingConfig, err := memoryEmbeddingConfig(cfg, sets)
+	if err != nil {
+		return nil, err
 	}
-	if len(sets) > 0 && sets[0] != nil {
-		provider, err := sets[0].Get(string(embeddingConfig.Model), 0, 0)
-		if err != nil {
-			return nil, err
-		}
-		embeddingConfig.Provider = provider
-	}
-
 	dimension, err := memory.StorageDimension(vc.Dimension, *embeddingConfig)
 	if err != nil {
 		return nil, err
@@ -57,7 +47,7 @@ func createValkeyMemoryStoreWithContext(ctx context.Context, cfg *config.RouterC
 	vc.Dimension = dimension
 	embeddingConfig.Dimension = dimension
 
-	logging.Infof("Memory: connecting to Valkey at %s:%d, embedding=%s", host, port, embeddingConfig.Model)
+	logging.Infof("Memory: connecting to Valkey at %s:%d, embedding=%s", host, port, embeddingConfig.Deployment)
 
 	clientConfig, err := buildValkeyClientConfig(vc, host, port, remainingContextTimeout(ctx))
 	if err != nil {
@@ -83,7 +73,7 @@ func createValkeyMemoryStoreWithContext(ctx context.Context, cfg *config.RouterC
 	}
 
 	logging.Infof("Memory store initialized: backend=valkey, address=%s:%d, embedding=%s",
-		host, port, embeddingConfig.Model)
+		host, port, embeddingConfig.Deployment)
 
 	return store, nil
 }
