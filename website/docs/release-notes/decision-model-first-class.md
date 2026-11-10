@@ -18,8 +18,10 @@ embedding-similarity trick. v0.5 makes the decision model first-class:
   per-family optimizations. Models differ in the question types they answer:
   Decision 1.0, 2.0 and 3.0 return no spans, and vela3-fast answers no score
   question. The configuration fails to load when a question resolves to a
-  deployment that cannot answer its type (`span_required`,
-  `question_type_unsupported`).
+  deployment that cannot answer its type: a rule with `span_required` or
+  `question_type_unsupported`, and a judge, the `systemone` selector or an
+  escalate check with a message naming the deployment and the types it
+  answers.
 - **Similarity has one `match` block**, with an optional embedding or BM25
   `recall` stage and an optional System One `judge` stage. Every judge has a
   hard cap on its candidates, and overflow is truncated, never an error.
@@ -142,7 +144,11 @@ lists every removed form, its load error and its rewrite.
   or as personal data.
 - **Thresholds were re-fitted** where the old value belonged to another
   model. A rule without a `predicate` takes the answering model's calibrated
-  threshold, or 0.5 with an `uncalibrated_preset` warning.
+  threshold, or 0.5 with an `uncalibrated_preset` warning, when it is a
+  domain, user feedback, modality or PII rule or reads its preset's positive
+  option (`FACT_CHECK_NEEDED`, `unsafe`, `refusal`, `jailbreak`). Any other
+  rule without one matches on the model's own selection, and a hallucination
+  rule on the model's own span thresholds.
 - **A `response_guard` that can refuse or rewrite an answer holds a streamed
   one.** The Router buffers the stream of a decision whose guard blocks or
   writes notes until the guard has read the whole answer, then sends its

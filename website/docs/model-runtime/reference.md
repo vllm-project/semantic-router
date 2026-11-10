@@ -254,10 +254,11 @@ The router reads a long request through Vela 2.0 in two ways. A routing
 question (domain, fact check, feedback, modality, `systemone` questions
 without `coverage: full`, and the `systemone` selector) truncates. A safety question (jailbreak, safety,
 PII and hallucination) reads it whole, up to the model's scan budget or the
-deployment's `input.max_tokens` with `overflow: window`. Content past it, or
-a safety scan that misses the signals' deadline
-(`global.model_catalog.signal_timeout_ms`), was not read: a jailbreak or PII
-rule matches it as `unscanned`.
+deployment's `input.max_tokens` with `overflow: window`. Content past it was
+not read: a jailbreak or PII rule matches it as `unscanned`. A safety scan
+that misses the signals' deadline (`global.model_catalog.signal_timeout_ms`)
+gives no answer: a jailbreak or PII rule then does not match unless it sets
+`on_unknown: match`.
 
 Token budgets describe input coverage, not response time. Complete long-input
 embeddings and scans can exceed the signal deadline on a CPU with few cores.
@@ -663,7 +664,7 @@ In summary:
 | `device` | deployment | See [Run it with the router](./deploy.md#describe-a-deployment). |
 | `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context`, `max_model_len` | deployment | The deployment's [engine arguments](./engine-args.md); an unset one keeps the runtime's default. `max_model_len` applies to a managed worker without replicas. |
 | `input.max_tokens`, `input.overflow` | deployment | Input limit of task models. A deployment that answers questions takes only `overflow: window` with `max_tokens`: the scan budget its questions read a long part whole to (see [Long inputs](#long-inputs)). That includes the default decision model, a deployment published for direct System One inference, and the deployment of a local System One alias, whether or not a listener publishes the alias. A routed System One entrypoint is not one deployment. A bound deployment that is none of these keeps a task-model limit. |
-| `signal_timeout_ms` | `global.model_catalog` | Deadline of a request's model-runtime signals. By default the request's deadline less a tenth of the time left (at least a second), or 45 s for a served request, which has none the router sees. A signal still running resolves through its policy: a routing signal through `on_error`, a safety signal as unscanned. |
+| `signal_timeout_ms` | `global.model_catalog` | Deadline of a request's model-runtime signals. By default the request's deadline less a tenth of the time left (at least a second), or 45 s for a served request, which has none the router sees. A signal still running resolves through its policy: a routing signal through `on_error`, a jailbreak or PII rule as no answer, which matches only with `on_unknown: match`. |
 | `on_unscanned` | `recipes[].signals.systemone[]` | With `coverage: full`, what an answer that could not read the whole input means: `match`, `no_match` or `unknown` (default). `jailbreak` and `pii` rules count content the model did not read in full as a match. |
 | `replicas` | deployment | Placements of independent workers for one logical model. Each has `device` or `endpoint`/`model`; omit for one worker. Do not combine with deployment-level placement. |
 | `enabled` | `global.router` | Default `true`. Disable routing signals while retaining the frontend, native API and decision model. |

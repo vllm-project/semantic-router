@@ -33,7 +33,7 @@ decisions and numeric thresholds become hard to audit.
 
 Use projections when:
 
-- only one member of a domain or embedding group should remain active
+- only one member of a domain group should remain active
 - several signals should contribute to one continuous score
 - several decisions should share the same named threshold bands
 
@@ -44,7 +44,7 @@ when multiple matches should remain independently visible.
 
 | Type | Goal | Decision-visible? | Guide |
 |---|---|---|---|
-| `partitions` | Keep one winner from competing domain or embedding signals | No; decisions still reference the winning raw signal | [Partitions](./partitions) |
+| `partitions` | Keep one winner from competing domain signals | No; decisions still reference the winning raw signal | [Partitions](./partitions) |
 | `scores` | Combine signal values with `weighted_sum` | No; scores feed mappings or other scores | [Scores](./scores) |
 | `mappings` | Convert a score into named threshold outputs | Yes, through `type: projection` | [Mappings](./mappings) |
 | trace | Explain partition, score, and mapping results in Router Replay | Operational only | [Projection Traces](./traces) |
@@ -63,13 +63,11 @@ Current methods are:
 recipes:
   - name: default
     signals:
-      embeddings:
+      domains:
         - name: technical-support
-          threshold: 0.75
-          candidates: [installation help, troubleshooting]
+          labels: [computer science]
         - name: account-management
-          threshold: 0.72
-          candidates: [billing issue, subscription change]
+          labels: [business]
       context:
         - name: long-context
           min_tokens: 4K
@@ -84,7 +82,7 @@ recipes:
         - name: request-difficulty
           method: weighted_sum
           inputs:
-            - type: embedding
+            - type: domain
               name: technical-support
               value_source: confidence
               weight: 0.5

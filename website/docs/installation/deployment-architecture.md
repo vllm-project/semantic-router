@@ -44,7 +44,7 @@ Two boundary rules follow from this table:
 ## One canonical configuration, one source of truth per Router
 
 The canonical document is versioned independently of any deployment API:
-its current version is `v0.3`, its source of truth is the Go configuration
+its current version is `v0.5`, its source of truth is the Go configuration
 types, and a generated JSON Schema is the only copy consumers read.
 
 Each Router instance has exactly one authoritative configuration source:
@@ -137,7 +137,7 @@ being lost.
   checks (webhook and CEL rules where defined) and the Router's semantic
   validators reject invalid content there.
 - **Configuration versioning is separate.** The canonical document
-  version (`v0.3`) evolves on its own cadence; its compatibility,
+  version (`v0.5`) evolves on its own cadence; its compatibility,
   migration, and retired-field rules are defined in the
   [Configuration Contract](configuration-contract#add-or-change-a-field).
   A CRD version and a configuration version never substitute for each

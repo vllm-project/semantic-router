@@ -48,7 +48,7 @@ vllm-sr serve --config config.yaml
 
 ```yaml
 configOverride:
-  version: v0.3
+  version: v0.5
   listeners:
     - name: http-8899
       address: 0.0.0.0
@@ -66,21 +66,20 @@ configOverride:
             protocol: http
             provider: vllm
             weight: 100
-  routing:
-    strategy: priority
-    modelCards:
-      - name: local/general
         capabilities: [chat]
-    decisions:
-      - name: default-route
-        description: Route requests to the configured model.
-        priority: 1
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: local/general
-            use_reasoning: false
+  recipes:
+    - name: default
+      strategy: priority
+      decisions:
+        - name: default-route
+          description: Route requests to the configured model.
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: local/general
+              use_reasoning: false
   global:
     services:
       response_api:
@@ -131,8 +130,9 @@ spec:
           name: model-server
           port: 8000
   config:
-    routing:
-      strategy: priority
+    recipes:
+      - name: default
+        strategy: priority
 ```
 
 不要将任意 `providers` 或 `global` 键直接复制到 `spec.config` 下；它们不是 CRD 字段。参见 [Kubernetes Operator](k8s/operator) 和 [SemanticRouter CRD 参考](../api/semantic-router-crd)。

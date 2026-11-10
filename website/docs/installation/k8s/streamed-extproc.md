@@ -246,8 +246,7 @@ recipes:
     signals:
       jailbreak:
         - name: streamed_jailbreak
-          method: classifier
-          threshold: 0.6
+          predicate: {gte: 0.6}
           description: Detect prompt-injection attempts before forwarding.
     decisions:
       - name: streamed_jailbreak_block

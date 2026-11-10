@@ -207,7 +207,7 @@ Router 在接受响应之前会校验每个必需的答案。缺失的答案、�
 
 #### 试用路由 {#try-the-route}
 
-把模型、监听器、入口和配方片段合并到一个 `version: v0.3` 的配置文件中，连接 Vega Engine 端点，然后启动 Router：
+把模型、监听器、入口和配方片段合并到一个 `version: v0.5` 的配置文件中，连接 Vega Engine 端点，然后启动 Router：
 
 ```bash
 vllm-sr serve --config config.yaml

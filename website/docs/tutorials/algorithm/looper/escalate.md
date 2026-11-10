@@ -256,7 +256,7 @@ configure the full serving path appropriately for longer requests.
 #### Try the route
 
 Combine the model, listener, entrypoint and recipe snippets in a configuration
-file with `version: v0.3`, connect the Vega Engine endpoint, and start the Router:
+file with `version: v0.5`, connect the Vega Engine endpoint, and start the Router:
 
 ```bash
 vllm-sr serve --config config.yaml

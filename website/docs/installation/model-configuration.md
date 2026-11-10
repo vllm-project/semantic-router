@@ -95,7 +95,7 @@ Open **Build → Routing → Models → Add Model**. You can then:
    `catalog`, inline reasoning fields, `provider_model_id`, `api_format`, and
    backend references.
 
-The Dashboard edits the same v0.3 document as YAML. Use one authoring owner for
+The Dashboard edits the same v0.5 document as YAML. Use one authoring owner for
 a deployment and review the exported YAML before serving it. See
 [Configuration workflows](configuration-workflows).
 

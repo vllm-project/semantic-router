@@ -75,7 +75,7 @@ Model Card 能力元数据接受 `image_input` 和 `image_generation` 等协议�
 3. 使用 **Advanced settings** 设置名称前缀、内置推理家族、路由元数据、定价和交付设置。
 4. 从 Provider 选择器使用 **Manual setup**，以完全控制 `catalog`、内联推理字段、`provider_model_id`、`api_format` 和后端引用。
 
-控制面板编辑的是与 YAML 相同的 v0.3 文档。为部署使用一个编写所有者，并在 serve 之前复核导出的 YAML。参见[配置工作流](configuration-workflows)。
+控制面板编辑的是与 YAML 相同的 v0.5 文档。为部署使用一个编写所有者，并在 serve 之前复核导出的 YAML。参见[配置工作流](configuration-workflows)。
 
 ## 校验结果
 
