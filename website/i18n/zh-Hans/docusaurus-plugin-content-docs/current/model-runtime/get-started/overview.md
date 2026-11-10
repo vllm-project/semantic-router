@@ -6,7 +6,7 @@ slug: /model-runtime/overview
 description: Router 询问的决策模型和嵌入模型运行在内置模型运行时中。从这里开始。
 is_mtpe: false
 translation:
-  source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
+  source_commit: "0811a3cb7de0e30e3dc2282233f573d554691bf1"
   source_file: "docs/model-runtime/get-started/overview.md"
   outdated: false
 ---
@@ -16,7 +16,7 @@ translation:
 **内置模型运行时**为 Router 在处理每个请求时所咨询的模型提供服务：回答每个 System One 问题的[决策模型](../../system-one/get-started/overview.md)，以及召回功能使用的嵌入模型。你不需要单独安装它：它随 Router 镜像一起发布，由 Router 为你启动和监管。
 
 ```bash title="Serve a decision model and ask it directly"
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
+vllm-sr serve vllm-sr/vela3-fast --engine --platform cpu
 curl -s localhost:8899/v1/systemone/models
 ```
 

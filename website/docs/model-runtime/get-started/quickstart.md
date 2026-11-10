@@ -13,8 +13,8 @@ In about ten minutes you install the `vllm-sr` CLI, serve a decision model,
 ask it a question, and then let the Router use the same model for routing.
 
 **You need** Linux, macOS or WSL2 with Docker or Podman, Python 3.10 or newer,
-and a few gigabytes of free disk for the Router image and the model download.
-No GPU is needed.
+12 GiB of memory, and about 9 GB of free disk for the Router image and the
+model download. No GPU is needed.
 
 :::note
 Engine mode (`vllm-sr serve ARTIFACT --engine`) is newer than the 0.4.0
@@ -39,14 +39,14 @@ answers are the ones the models were released with
 
 ## 2. Serve a model
 
-Start Decision 2.0 Kai-0.6B, a small decision model that runs on a CPU. A
-decision model answers questions you write in plain language.
+Start Vela 3.0 vela3-fast, the Router's default decision model, which runs on
+a CPU in FP32. A decision model answers questions you write in plain language.
 
 <Tabs groupId="platform">
 <TabItem value="cpu" label="CPU" default>
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
+vllm-sr serve vllm-sr/vela3-fast --engine --platform cpu
 ```
 
 On macOS the runtime runs on the CPU, because containers there get no GPU.
@@ -55,21 +55,29 @@ On macOS the runtime runs on the CPU, because containers there get no GPU.
 <TabItem value="rocm" label="AMD GPU">
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform rocm --device-ids 0
+vllm-sr serve vllm-sr/vela3-fast --engine --platform rocm --device-ids 0
 ```
 
 The `vllm-sr-rocm` image is a 6.5 GB download on first use. `--device-ids N`
 selects a host GPU at startup; `rocm:N` picks one in canonical YAML.
 
+vela3-fast's reference answers are recorded for CPUs only, so on a GPU its
+self-check reports
+[`unverified`](../deploy/troubleshooting.md#a-ready-models-self-check-says-unverified).
+
 </TabItem>
 <TabItem value="cuda" label="NVIDIA GPU">
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cuda --device-ids 0
+vllm-sr serve vllm-sr/vela3-fast --engine --platform cuda --device-ids 0
 ```
 
 `--platform cuda` selects the `vllm-sr-cuda` image and passes the GPUs
 through.
+
+vela3-fast's reference answers are recorded for CPUs only, so on a GPU its
+self-check reports
+[`unverified`](../deploy/troubleshooting.md#a-ready-models-self-check-says-unverified).
 
 </TabItem>
 </Tabs>
@@ -127,7 +135,7 @@ called **noul**).
 
 ```bash
 curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
-  "model": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "model": "vllm-sr/vela3-fast",
   "state": "Write a Python function that merges two sorted lists.",
   "questions": {
     "kind": {"type": "choice", "instructions": "What kind of work is this?",
@@ -142,17 +150,16 @@ option. The answer for `reasoning` is the probability that the answer is yes:
 
 ```json title="Response"
 {
-  "model": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "model": "vllm-sr/vela3-fast",
   "answers": {
-    "kind": {"type": "choice", "choice": "code", "probabilities": {"code": 0.504, "math": 0.133, "chat": 0.362}, "confidence": 0.256},
-    "reasoning": {"type": "noul", "noul": 0.519}
+    "kind": {"type": "choice", "choice": "code", "probabilities": {"code": 0.98, "math": 0.005, "chat": 0.015}, "confidence": 0.97},
+    "reasoning": {"type": "noul", "noul": 0.457}
   },
-  "usage": {"input_tokens": 168, "output_tokens": 0}
+  "usage": {"input_tokens": 68, "output_tokens": 0}
 }
 ```
 
-On 16 CPU cores this request takes about 0.2 seconds in the recorded worker
-benchmark.
+On 16 cores of an AMD EPYC 9575F this request takes about 0.1 seconds.
 
 - Add `"options": {"return_meta": true}` to also get `meta`: the revision,
   precision (`dtype`) and device that answered, whether batching can move its
@@ -183,7 +190,7 @@ listeners:
     address: 0.0.0.0
     port: 8899
     systemone:
-      models: [vllm-sr/Decision-2.0-Kai-0.6B]
+      models: [vllm-sr/vela3-fast]
 providers:
   defaults:
     model: answer-model
@@ -229,7 +236,7 @@ global:
     deployments:
       primary:
         provider: model_runtime
-        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        artifact: vllm-sr/vela3-fast
         device: cpu
 ```
 
