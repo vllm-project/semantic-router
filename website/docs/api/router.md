@@ -328,7 +328,8 @@ Anthropic Messages request that reaches an image decision gets `400`
 `unsupported_capability`, since neither API can return an image. One Responses
 API call generates one image, so `n` above 1 needs a decision with a model on
 the Images API; a decision whose models are all on the Responses API answers it
-with `400` `unsupported_capability` before any model is called.
+with `400` `unsupported_capability` before any model is called, unless its
+[`request_params`](../tutorials/plugin/request-params) `max_n` caps `n` to 1.
 
 ### Azure OpenAI clients
 

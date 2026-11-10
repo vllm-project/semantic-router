@@ -63,9 +63,16 @@ func (r *OpenAIRouter) applyImagesEntryDecision(ctx *RequestContext, decision *c
 	}
 	severalImages := llmprotocol.Capabilities(llmprotocol.CapabilityImageGeneration, llmprotocol.CapabilityMultipleCandidates)
 	generatesSeveral := func(ref config.ModelRef) bool { return r.modelCanServeCapabilities(ref.Model, severalImages) }
-	if n := request.CandidateCount; n != nil && *n > 1 && len(decision.ModelRefs) > 0 && !slices.ContainsFunc(decision.ModelRefs, generatesSeveral) {
-		return refuseDecisionOutput(ctx, decision, llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
-			"n above 1 needs a model on the Images API; a Responses API model generates one image per call")
+	if request.CandidateCount != nil && *request.CandidateCount > 1 && len(decision.ModelRefs) > 0 && !slices.ContainsFunc(decision.ModelRefs, generatesSeveral) {
+		// The decision's request_params can cap or drop n before any model sees it.
+		effective, err := selection.EffectiveCandidateRequest(request, decision)
+		if err != nil {
+			return err
+		}
+		if n := effective.CandidateCount; n != nil && *n > 1 {
+			return refuseDecisionOutput(ctx, decision, llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
+				"n above 1 needs a model on the Images API; a Responses API model generates one image per call")
+		}
 	}
 	if request.ToolChoice.Name == "" && (request.ToolChoice.Mode == "" || request.ToolChoice.Mode == llmprotocol.ToolChoiceAuto) {
 		request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceImageGeneration}

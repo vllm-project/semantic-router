@@ -211,10 +211,10 @@ func TestAnImagesAPIRequestGetsTheImageDecisionsImage(t *testing.T) {
 	}
 }
 
-// One Responses call generates one image: an Images API request for more is
-// refused before any model is called, unless the decision has a model on the
-// Images API, which receives n.
-func TestAnImagesAPIRequestForSeveralImagesNeedsAnImagesModel(t *testing.T) {
+// severalImagesTestRequest is an Images API request for two images that
+// reached an image decision whose only model, omni, is on the Responses API.
+func severalImagesTestRequest(t *testing.T) (*OpenAIRouter, *config.Decision, string, *llmprotocol.Request, *RequestContext) {
+	t.Helper()
 	router, decision, painter := outputContractTestRouter(t, config.OutputKindImage)
 	omni := router.Config.ModelConfig[painter]
 	omni.APIFormat = config.APIFormatResponses
@@ -224,6 +224,14 @@ func TestAnImagesAPIRequestForSeveralImagesNeedsAnImagesModel(t *testing.T) {
 	request.CandidateCount = llmprotocol.Int64(2)
 	ctx := routingTestContext(llmprotocol.OpenAIImagesV1, request)
 	ctx.VSRSelectedDecision = decision
+	return router, decision, painter, request, ctx
+}
+
+// One Responses call generates one image: an Images API request for more is
+// refused before any model is called, unless the decision has a model on the
+// Images API, which receives n.
+func TestAnImagesAPIRequestForSeveralImagesNeedsAnImagesModel(t *testing.T) {
+	router, decision, painter, request, ctx := severalImagesTestRequest(t)
 
 	err := router.applyDecisionOutput(ctx)
 	var protocolErr *llmprotocol.ProtocolError
@@ -241,6 +249,28 @@ func TestAnImagesAPIRequestForSeveralImagesNeedsAnImagesModel(t *testing.T) {
 	}
 	if body, err := router.encodeDispatchRequest(ctx); err != nil || !bytes.Contains(body, []byte(`"n":2`)) {
 		t.Fatalf("images request = %s, %v; want n", body, err)
+	}
+}
+
+// A decision whose request_params cap n to 1 serves a request for several
+// images on its Responses model, as the cap applies before any model is called.
+func TestAnImagesAPIRequestCappedToOneImageReachesAResponsesModel(t *testing.T) {
+	router, decision, _, request, ctx := severalImagesTestRequest(t)
+	payload, err := config.NewStructuredPayload(config.RequestParamsPluginConfig{MaxN: extprocIntPtr(1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision.Plugins = []config.DecisionPlugin{{Type: "request_params", Configuration: payload}}
+
+	if err = router.applyDecisionOutput(ctx); err != nil {
+		t.Fatalf("n=2 capped to 1 for a Responses model: %v", err)
+	}
+	dispatch, err := selectCapabilityTestDispatch(router, request, decision, ctx)
+	if err != nil || dispatch.logicalModel != "omni" {
+		t.Fatalf("selected %+v, %v; want omni", dispatch, err)
+	}
+	if body, err := router.encodeDispatchRequest(ctx); err != nil || !bytes.Contains(body, []byte(`"type":"image_generation"`)) {
+		t.Fatalf("Responses request = %s, %v; want the image_generation operation", body, err)
 	}
 }
 

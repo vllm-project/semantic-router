@@ -168,7 +168,8 @@ API 不支持流式输出。未到达图像决策的请求（没有匹配任何�
 `400` `unsupported_capability`，因为这两种 API 都无法返回图像。一次 Responses API
 调用只生成一张图像，因此 `n` 大于 1 时，决策中需要有一个在 Images API 上应答的模型；
 如果决策的模型全部在 Responses API 上，请求会在调用任何模型之前收到 `400`
-`unsupported_capability`。
+`unsupported_capability`，除非该决策的
+[`request_params`](../tutorials/plugin/request-params) `max_n` 将 `n` 限制为 1。
 
 ### Azure OpenAI 客户端 {#azure-openai-clients}
 
