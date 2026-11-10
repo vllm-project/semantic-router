@@ -1,5 +1,7 @@
 package llmprotocol
 
+import "slices"
+
 type UnknownFieldPolicy string
 
 const (
@@ -42,6 +44,15 @@ const LossyFieldStore = "store"
 // lossy translation keeps failing closed.
 func OptInLossyFields() []string {
 	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldReasoningSignature, LossyFieldStore}
+}
+
+// OptInHint is what a refusal of field adds when an operator may accept that
+// loss: the setting that lists it. It is empty for every other field.
+func OptInHint(field string) string {
+	if !slices.Contains(OptInLossyFields(), field) {
+		return ""
+	}
+	return "; an operator can accept this loss by listing " + field + " in global.router.allow_lossy_translation"
 }
 
 type MissingIDPolicy string
