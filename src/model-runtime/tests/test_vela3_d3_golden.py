@@ -19,7 +19,7 @@ from .conftest import start_runtime
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 
-CHOICES = {
+CHOICE_CRITERIA = {
     qid: set(q["criteria"])
     for qid, q in GOLDEN_QUESTIONS.items()
     if q["type"] == "choice"
@@ -39,7 +39,7 @@ def test_every_size_has_a_rocm_reference_for_the_golden_request() -> None:
         assert answers, model.repo_id
         assert set(answers) == set(GOLDEN_QUESTIONS), model.repo_id
         assert all(well_formed(a) for a in answers.values()), model.repo_id
-        for qid, criteria in CHOICES.items():
+        for qid, criteria in CHOICE_CRITERIA.items():
             assert set(answers[qid]["probabilities"]) == criteria, (model.repo_id, qid)
 
 
