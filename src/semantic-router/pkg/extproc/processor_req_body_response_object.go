@@ -52,10 +52,14 @@ func (r *OpenAIRouter) prependStoredResponseHistory(
 	if err != nil {
 		return false, fmt.Errorf("materialize retained Responses history: %w", err)
 	}
-	if len(history) == 0 {
+	if history == nil || len(history.Instructions) == 0 && len(history.Messages) == 0 {
 		return false, nil
 	}
-	request.Messages = append(history, request.Messages...)
+	// The developer and system items of the stored input decode as
+	// instructions, as they do at ingress, and follow this request's own. The
+	// earlier request's top-level instructions are not carried over.
+	request.Instructions = append(request.Instructions, history.Instructions...)
+	request.Messages = append(history.Messages, request.Messages...)
 	return true, nil
 }
 
@@ -75,7 +79,7 @@ func clearResponseObjectControls(request *llmprotocol.Request) bool {
 func materializeStoredResponseHistory(
 	engine *protocolcodec.Engine,
 	storedResponses []*responseapi.StoredResponse,
-) ([]llmprotocol.Message, error) {
+) (*llmprotocol.Request, error) {
 	if engine == nil {
 		return nil, fmt.Errorf("protocol engine is unavailable")
 	}
@@ -97,7 +101,7 @@ func materializeStoredResponseHistory(
 	if err != nil {
 		return nil, err
 	}
-	return request.Messages, nil
+	return &request, nil
 }
 
 func storedResponseItems(storedResponses []*responseapi.StoredResponse) ([]json.RawMessage, error) {

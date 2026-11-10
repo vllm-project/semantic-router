@@ -320,7 +320,10 @@ request without `store` and reports a `dropped` diagnostic for `store` in
 - **Stored state.** A Responses client can still use `previous_response_id`
   with a Chat Completions or Messages backend. The Router retrieves and
   materializes the retained history, removes Router-owned object controls,
-  then encodes the stateless request in the selected backend format.
+  then encodes the stateless request in the selected backend format. The
+  developer and system items of the stored input come back as instructions,
+  after the current request's own; the earlier request's top-level
+  `instructions` are not carried over.
 - **Custom tools.** Responses custom tools use `type: custom` with a flattened
   `format` object. Their `custom_tool_call` and `custom_tool_call_output`
   items keep free-form input, tool results and call IDs through Chat or
