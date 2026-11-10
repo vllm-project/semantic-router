@@ -58,7 +58,7 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 			"request_id": ctx.RequestID,
 			"error":      recoveryErr.Error(),
 		})
-		if contextRecoveryFailClosed(ctx) {
+		if contextRecoveryFailClosed(r.Config, ctx) {
 			return r.createErrorResponse(502, "Context recovery followup failed")
 		}
 		responseBody = r.redactContextRecoveryToolCalls(responseBody, ctx)
@@ -69,13 +69,13 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 	return r.handleNonStreamingResponseBody(responseBody, ctx, completionLatency)
 }
 
-func contextRecoveryFailClosed(ctx *RequestContext) bool {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+func contextRecoveryFailClosed(cfg *config.RouterConfig, ctx *RequestContext) bool {
+	if ctx == nil {
 		return false
 	}
-	plugin := ctx.VSRSelectedDecision.GetContextCompressionConfig()
+	plugin := contextCompression(requestPlugins(cfg, ctx))
 	return plugin != nil &&
-		plugin.EffectiveFailureMode() == config.ContextCompressionFailureClosed
+		plugin.Compress.EffectiveFailureMode() == config.ContextCompressionFailureClosed
 }
 
 func buildResponseBodyContinueResponse(

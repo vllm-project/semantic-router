@@ -66,7 +66,7 @@ func (h *releaseHarness) stage(req releaseRequest) (string, *RequestContext, err
 		AllScores: map[string]float64{req.proposal: 1},
 	}})
 	both := []config.ModelRef{{Model: "cheap"}, {Model: "frontier"}}
-	selCtx := h.router.buildSelectionContext(both, ctx.VSRSelectedDecision.Name, "", nil, "", nil, ctx)
+	selCtx := h.router.buildSelectionContext(both, ctx.VSRSelectedDecision.Name, "", "", nil, ctx)
 	selected, _, err := h.router.selectModelFromCandidates(selCtx, nil, ctx)
 	if selected == nil {
 		return "", ctx, err

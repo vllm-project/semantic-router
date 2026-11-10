@@ -16,7 +16,7 @@ func validateGlobalRouterLearningConfig(cfg *RouterConfig) error {
 	if err := validateRouterLearningAdaptationConfig(cfg.RouterLearning.Adaptation); err != nil {
 		return err
 	}
-	if err := validateRouterLearningProtectionConfig(cfg.RouterLearning.Protection); err != nil {
+	if err := validateRouterLearningProtectionConfig(cfg.RouterLearning.Protection, cfg.Headers.SessionIDHeaderNames()); err != nil {
 		return err
 	}
 	return validateRouterLearningStateStoreConfig(cfg.RouterLearning.StateStore)
@@ -89,7 +89,7 @@ func validateRouterLearningAdaptationConfig(cfg RouterLearningAdaptationConfig) 
 	return nil
 }
 
-func validateRouterLearningProtectionConfig(cfg RouterLearningProtectionConfig) error {
+func validateRouterLearningProtectionConfig(cfg RouterLearningProtectionConfig, sessionHeaders []string) error {
 	if err := validateProtectionScope(
 		"global.router.learning.protection.scope",
 		cfg.Scope,
@@ -106,7 +106,7 @@ func validateRouterLearningProtectionConfig(cfg RouterLearningProtectionConfig) 
 	if cfg.Identity.Headers.Agent != nil && strings.TrimSpace(*cfg.Identity.Headers.Agent) == "" {
 		return fmt.Errorf("global.router.learning.protection.identity.headers.agent cannot be empty")
 	}
-	if err := validateProtectionRelease(cfg); err != nil {
+	if err := validateProtectionRelease(cfg, sessionHeaders); err != nil {
 		return err
 	}
 
@@ -316,36 +316,6 @@ func validateDecisionAdaptationMode(decisionName string, field string, mode stri
 	}
 }
 
-func isSessionAwareSelectionConfigConfigured(cfg SessionAwareSelectionConfig) bool {
-	return cfg.BaseMethod != "" || anyTrue(
-		cfg.IdleTimeoutSeconds != nil,
-		cfg.MinTurnsBeforeSwitch != nil,
-		cfg.SwitchMargin != nil,
-		cfg.StayBias != nil,
-		cfg.ToolLoopHardLock != nil,
-		cfg.ContextPortabilityHardLock != nil,
-		cfg.DecisionDriftReset != nil,
-		cfg.ToolLoopStayBias != nil,
-		cfg.PrefixCacheWeight != nil,
-		cfg.HandoffPenaltyWeight != nil,
-		cfg.DefaultHandoffPenalty != nil,
-		cfg.QualityGapMultiplier != nil,
-		cfg.MaxCacheCostMultiplier != nil,
-		cfg.SwitchHistoryWeight != nil,
-		cfg.RemainingTurnPriorWeight != nil,
-		cfg.RemainingTurnPriorHorizon != nil,
-		cfg.MinRemainingTurnPriorSamples != nil,
-	)
-}
-
-func isModelSwitchGateConfigured(cfg ModelSwitchGateConfig) bool {
-	return cfg.Enabled ||
-		cfg.Mode != "" ||
-		cfg.MinSwitchAdvantage != 0 ||
-		cfg.DefaultHandoffPenalty != 0 ||
-		cfg.CacheWarmthWeight != 0
-}
-
 func isLookupTableConfigConfigured(cfg LookupTableConfig) bool {
 	return cfg.Enabled ||
 		cfg.StoragePath != "" ||
@@ -357,27 +327,10 @@ func isLookupTableConfigConfigured(cfg LookupTableConfig) bool {
 		len(cfg.RemainingTurnPriors) > 0
 }
 
-func isEloSelectionConfigConfigured(cfg EloSelectionConfig) bool {
-	return cfg.InitialRating != 0 ||
-		cfg.KFactor != 0 ||
-		cfg.CategoryWeighted ||
-		cfg.DecayFactor != 0 ||
-		cfg.MinComparisons != 0 ||
-		cfg.CostScalingFactor != 0 ||
-		cfg.StoragePath != "" ||
-		cfg.AutoSaveInterval != ""
-}
-
-func anyTrue(values ...bool) bool {
-	for _, value := range values {
-		if value {
-			return true
-		}
-	}
-	return false
-}
-
-func validateProtectionRelease(cfg RouterLearningProtectionConfig) error {
+// validateProtectionRelease checks the release header against the headers
+// protection reads identity from; sessionHeaders carry the session id when
+// identity.headers.session names none.
+func validateProtectionRelease(cfg RouterLearningProtectionConfig, sessionHeaders []string) error {
 	const field = "global.router.learning.protection.release"
 	release := cfg.Release
 	if release.Header != nil {
@@ -394,8 +347,14 @@ func validateProtectionRelease(cfg RouterLearningProtectionConfig) error {
 		return fmt.Errorf("%s.header %q is reserved; use an x- header the router can remove before the backend", field, header)
 	}
 	for _, identity := range []string{"session", "conversation", "agent"} {
-		if strings.EqualFold(header, cfg.HeaderName(identity)) {
-			return fmt.Errorf("%s.header %q must differ from identity header %s", field, header, identity)
+		names := []string{cfg.HeaderName(identity)}
+		if identity == "session" && names[0] == "" {
+			names = sessionHeaders
+		}
+		for _, name := range names {
+			if strings.EqualFold(header, name) {
+				return fmt.Errorf("%s.header %q must differ from identity header %s", field, header, identity)
+			}
 		}
 	}
 	if release.MinUserTurnsBetween != nil && *release.MinUserTurnsBetween < 0 {
@@ -407,13 +366,13 @@ func validateProtectionRelease(cfg RouterLearningProtectionConfig) error {
 // protectionReleaseHeaderReserved rejects names whose removal before the backend
 // would break a standard, credential, gateway or router control header.
 func protectionReleaseHeaderReserved(header string) bool {
-	if !strings.HasPrefix(header, "x-") || IsShadowCredentialHeader(header) || header == "x-request-id" {
+	if !strings.HasPrefix(header, headers.ExtensionPrefix) || IsShadowCredentialHeader(header) || header == headers.RequestID {
 		return true
 	}
-	for _, prefix := range []string{"x-envoy-", "x-authz-", "x-forwarded-"} {
+	for _, prefix := range []string{headers.EnvoyPrefix, headers.AuthzPrefix, headers.ForwardedPrefix} {
 		if strings.HasPrefix(header, prefix) {
 			return true
 		}
 	}
-	return strings.HasPrefix(header, "x-vsr-") && header != headers.VSRProtectionRelease
+	return strings.HasPrefix(header, headers.VSRPrefix) && header != headers.VSRProtectionRelease
 }

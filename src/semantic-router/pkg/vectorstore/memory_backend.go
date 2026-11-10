@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"sync"
 )
@@ -35,6 +36,10 @@ type memoryCollection struct {
 	chunks     map[string]EmbeddedChunk // chunk ID -> chunk
 	bm25Index  *BM25Index               // rebuilt on chunk mutations
 	ngramIndex *NgramIndex              // rebuilt on chunk mutations
+	// inserted orders the chunks by when they were first inserted, for a
+	// listing newest first.
+	inserted map[string]uint64
+	next     uint64
 }
 
 const defaultNgramSize = 3
@@ -74,6 +79,7 @@ func (m *MemoryBackend) CreateCollection(_ context.Context, vectorStoreID string
 	m.collections[vectorStoreID] = &memoryCollection{
 		dimension: dimension,
 		chunks:    make(map[string]EmbeddedChunk),
+		inserted:  make(map[string]uint64),
 	}
 	return nil
 }
@@ -130,6 +136,10 @@ func (m *MemoryBackend) InsertChunks(_ context.Context, vectorStoreID string, ch
 	}
 
 	for _, chunk := range chunks {
+		if _, exists := col.chunks[chunk.ID]; !exists {
+			col.next++
+			col.inserted[chunk.ID] = col.next
+		}
 		col.chunks[chunk.ID] = chunk
 	}
 
@@ -151,6 +161,7 @@ func (m *MemoryBackend) DeleteByFileID(_ context.Context, vectorStoreID string, 
 	for id, chunk := range col.chunks {
 		if chunk.FileID == fileID {
 			delete(col.chunks, id)
+			delete(col.inserted, id)
 			deleted = true
 		}
 	}
@@ -175,12 +186,7 @@ func (m *MemoryBackend) Search(
 	}
 
 	// Extract optional file_id filter.
-	var filterFileID string
-	if filter != nil {
-		if fid, ok := filter["file_id"].(string); ok {
-			filterFileID = fid
-		}
-	}
+	fileIDs := filterFileIDs(filter)
 
 	type scored struct {
 		result SearchResult
@@ -189,7 +195,7 @@ func (m *MemoryBackend) Search(
 
 	var candidates []scored
 	for _, chunk := range col.chunks {
-		if filterFileID != "" && chunk.FileID != filterFileID {
+		if len(fileIDs) > 0 && !slices.Contains(fileIDs, chunk.FileID) {
 			continue
 		}
 
@@ -246,17 +252,12 @@ func (m *MemoryBackend) HybridSearch(
 	}
 	config.applyDefaults()
 
-	var filterFileID string
-	if filter != nil {
-		if fid, ok := filter["file_id"].(string); ok {
-			filterFileID = fid
-		}
-	}
+	fileIDs := filterFileIDs(filter)
 
 	// Build the set of candidate chunk IDs (respecting file_id filter).
 	candidates := make(map[string]EmbeddedChunk)
 	for id, chunk := range col.chunks {
-		if filterFileID != "" && chunk.FileID != filterFileID {
+		if len(fileIDs) > 0 && !slices.Contains(fileIDs, chunk.FileID) {
 			continue
 		}
 		candidates[id] = chunk
@@ -275,7 +276,7 @@ func (m *MemoryBackend) HybridSearch(
 	var bm25Scores map[string]float64
 	if col.bm25Index != nil {
 		allBM25 := col.bm25Index.Score(query, config.BM25K1, config.BM25B)
-		if filterFileID != "" {
+		if len(fileIDs) > 0 {
 			bm25Scores = make(map[string]float64)
 			for id, s := range allBM25 {
 				if _, ok := candidates[id]; ok {
@@ -295,7 +296,7 @@ func (m *MemoryBackend) HybridSearch(
 	}
 	if ngramIdx != nil {
 		allNgram := ngramIdx.Score(query)
-		if filterFileID != "" {
+		if len(fileIDs) > 0 {
 			ngramScores = make(map[string]float64)
 			for id, s := range allNgram {
 				if _, ok := candidates[id]; ok {
@@ -343,6 +344,79 @@ func (m *MemoryBackend) HybridSearch(
 	}
 
 	return results, nil
+}
+
+// LexicalSearch scores the collection's chunks against the query by BM25
+// alone, without a query embedding: the most similar first, at most topK
+// (0 for all), each scoring at least threshold, and none without a query
+// term. Implements LexicalSearcher.
+func (m *MemoryBackend) LexicalSearch(
+	_ context.Context, vectorStoreID, query string,
+	topK int, threshold float32, filter map[string]interface{},
+) ([]SearchResult, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	col, exists := m.collections[vectorStoreID]
+	if !exists {
+		return nil, fmt.Errorf("collection not found: %s", vectorStoreID)
+	}
+	if col.bm25Index == nil {
+		return nil, nil
+	}
+	fileIDs := filterFileIDs(filter)
+	scores := col.bm25Index.Score(query, DefaultBM25K1, DefaultBM25B)
+	ids := make([]string, 0, len(scores))
+	for id, score := range scores {
+		if (len(fileIDs) == 0 || slices.Contains(fileIDs, col.chunks[id].FileID)) && score >= float64(threshold) {
+			ids = append(ids, id)
+		}
+	}
+	// Ties go to the most recently inserted chunk.
+	sort.Slice(ids, func(i, j int) bool {
+		if scores[ids[i]] != scores[ids[j]] {
+			return scores[ids[i]] > scores[ids[j]]
+		}
+		return col.inserted[ids[i]] > col.inserted[ids[j]]
+	})
+	if topK > 0 && len(ids) > topK {
+		ids = ids[:topK]
+	}
+	results := make([]SearchResult, len(ids))
+	for index, id := range ids {
+		chunk, score := col.chunks[id], scores[id]
+		results[index] = SearchResult{FileID: chunk.FileID, Filename: chunk.Filename, Content: chunk.Content, Score: score, ChunkIndex: chunk.ChunkIndex, BM25Score: &score}
+	}
+	return results, nil
+}
+
+// ListChunks lists the collection's chunks, the most recently inserted first,
+// at most limit of them, and how many it holds. Implements ChunkLister.
+func (m *MemoryBackend) ListChunks(
+	_ context.Context, vectorStoreID string, limit int, filter map[string]interface{},
+) ([]SearchResult, int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	col, exists := m.collections[vectorStoreID]
+	if !exists {
+		return nil, 0, fmt.Errorf("collection not found: %s", vectorStoreID)
+	}
+	fileIDs := filterFileIDs(filter)
+	ids := make([]string, 0, len(col.chunks))
+	for id, chunk := range col.chunks {
+		if len(fileIDs) == 0 || slices.Contains(fileIDs, chunk.FileID) {
+			ids = append(ids, id)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool { return col.inserted[ids[i]] > col.inserted[ids[j]] })
+	held := len(ids)
+	results := make([]SearchResult, 0, min(limit, held))
+	for _, id := range ids[:min(limit, held)] {
+		chunk := col.chunks[id]
+		results = append(results, SearchResult{FileID: chunk.FileID, Filename: chunk.Filename, Content: chunk.Content, ChunkIndex: chunk.ChunkIndex})
+	}
+	return results, held, nil
 }
 
 // Close is a no-op for the in-memory backend.

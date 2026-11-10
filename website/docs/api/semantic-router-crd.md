@@ -40,7 +40,7 @@ and the generated CRD in
 | `service` | Service type and API, gRPC, and metrics ports. |
 | `resources` | Container CPU, memory, and other resource requests/limits. |
 | `persistence` | Model-storage PVC settings or an existing claim. |
-| `config` | Operator configuration adapters and canonical `routing` object. |
+| `config` | Operator configuration adapters and canonical `recipes`, `entrypoints`, `plugins` and `models`. |
 | `toolsDb` | Function-tool records materialized for Router tool selection. |
 | `vllmEndpoints` | Model services discovered as canonical providers and model cards. |
 | `autoscaling` | HPA enablement and CPU/memory targets. |
@@ -79,15 +79,15 @@ resolved model becomes the default unless configuration overrides it.
 
 ## `config`
 
-The Operator always renders a canonical v0.3 Router document. Its configuration
+The Operator always renders a canonical v0.5 Router document. Its configuration
 surface has two parts:
 
-- `config.routing` passes through the canonical routing object, including model
-  cards, signals, projections, decisions, algorithms, and route plugins;
-- typed adapter fields such as `response_cache`, `tools`, `prompt_guard`,
-  `classifier`, `complexity_rules`, `reasoning_effort`, `api`,
-  `observability`, and `streamed_body` are translated into their canonical
-  provider or `global` locations.
+- `config.recipes`, `config.entrypoints`, `config.plugins` and `config.models`
+  pass through canonical recipes, entrypoints, `global.plugins` and the facts of
+  provider models; `config.routing` is removed and refused;
+- typed adapter fields such as `response_cache`, `complexity_rules`,
+  `reasoning_effort`, `api`, `observability`, and `streamed_body` are
+  translated into their canonical provider or `global` locations.
 
 Do not assume an arbitrary local `config.yaml` key is valid directly under
 `spec.config`. Use the CRD schema and

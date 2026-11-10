@@ -41,8 +41,6 @@ export function projectionScoreToFields(
     inputs: (score.inputs ?? []).map((input) => ({
       type: input.signalType,
       ...(input.signalName ? { name: input.signalName } : {}),
-      ...(input.kb ? { kb: input.kb } : {}),
-      ...(input.metric ? { metric: input.metric } : {}),
       weight: input.weight,
       ...(input.valueSource ? { value_source: input.valueSource } : {}),
       ...(typeof input.match === "number" ? { match: input.match } : {}),

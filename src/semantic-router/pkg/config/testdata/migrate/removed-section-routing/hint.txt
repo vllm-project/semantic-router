@@ -1,0 +1,1 @@
+routing: removed_section: the top-level routing block is removed; run `vllm-sr config migrate` (recipes: [{name: default, ...}], with an entrypoint marked default: true)

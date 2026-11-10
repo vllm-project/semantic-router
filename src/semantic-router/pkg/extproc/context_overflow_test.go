@@ -31,11 +31,8 @@ func overflowFixture(t *testing.T, text string) (*OpenAIRouter, *RequestContext)
 	params.ContextWindowSize = 32768
 	params.MaxOutputTokens = 8192
 	r.Config.ModelConfig[model] = params
-	payload, err := config.NewStructuredPayload(map[string]any{"enabled": true, "targets": map[string]any{"current_user": map[string]any{"mode": "truncate"}, "history": map[string]any{"mode": "extractive", "min_tokens": 2000, "target_tokens": 1000}, "tool_outputs": map[string]any{"mode": "preserve"}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	d := &config.Decision{Name: "bounded", ModelRefs: []config.ModelRef{{Model: model}}, Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmStatic}, Plugins: []config.DecisionPlugin{{Type: "context_compression", Configuration: payload}}}
+	payload := compressPayload(map[string]any{"targets": map[string]any{"current_user": map[string]any{"mode": "truncate"}, "history": map[string]any{"mode": "extractive", "min_tokens": 2000, "target_tokens": 1000}, "tool_outputs": map[string]any{"mode": "preserve"}}})
+	d := &config.Decision{Name: "bounded", ModelRefs: []config.ModelRef{{Model: model}}, Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmStatic}, Plugins: []config.DecisionPlugin{{Type: config.DecisionPluginContext, Configuration: payload}}}
 	request := testNeutralRequest("vllm-sr/auto", text)
 	request.Sampling.MaxOutputTokens = llmprotocol.Int64(8192)
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)

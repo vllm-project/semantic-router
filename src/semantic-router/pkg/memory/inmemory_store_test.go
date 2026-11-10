@@ -17,8 +17,8 @@ import (
 // with explicit fixture vectors; model quality is exercised by live Vela integration.
 func newTestInMemoryStore() *InMemoryStore {
 	return NewInMemoryStoreWithConfig(EmbeddingConfig{
-		Provider: memoryTestEmbeddingProvider(),
-		Model:    EmbeddingModelQwen3,
+		Provider:   memoryTestEmbeddingProvider(),
+		Deployment: "qwen3-embedding",
 	})
 }
 

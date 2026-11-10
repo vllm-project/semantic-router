@@ -1,16 +1,18 @@
 openapi: 3.0.3
 info:
   title: vLLM Semantic Router Model Runtime
-  version: 3.2.0
+  version: 4.0.0
   description: |
     Contract of the vllm-sr model runtime. A runtime process serves one or
     more models; every request may name its `model` (required when a process
     serves several). `POST /v1/systemone` accepts System One requests,
     including `assets` (as base64 or as multipart/form-data parts) and
     compressed bodies, and answers them with System One fields. It also
-    accepts vLLM Semantic Router extensions: `images`, `videos`, `states`, Set
-    and Span questions, `choices` / `levels` / `labels`, Box `at` and `track`
-    questions on videos, and `options`. `POST /v1/decisions` takes the same
+    accepts vLLM Semantic Router extensions: `images`, `videos`, batches of
+    named requests (`states`), Set and Span questions, `choices` / `levels` /
+    `labels`, Box `at` and `track` questions on videos, and `options`. A
+    request is a standard request (`state` and `questions`) or a batch
+    (`states` alone), never both. `POST /v1/decisions` takes the same
     requests and answers a failed question in its answer, where
     `POST /v1/systemone` answers the request as a whole, as System One does.
     The model runtime reference documents both. `POST /v1/classify`,
@@ -43,9 +45,12 @@ paths:
       responses:
         '200':
           description: |
-            One answer per question, in request order; a failed question carries its own error. A request in which
-            no question, of its own or of its `states`, is valid is answered 400 invalid_request, with each
-            question's reason in the message.
+            One answer per question, in request order (in a batch, per entry); a failed question carries its own
+            error. A request in which no question is valid, of a standard request or of any entry of a batch, is
+            answered 400 invalid_request, with each question's reason in the message. A batch entry whose images,
+            videos, assets or tokens are refused fails each of its questions with `invalid_input` (reason
+            `input_malformed`) and the refusal's message, and the other entries are answered; a batch every entry
+            of which is refused is answered with the first refusal.
           headers:
             Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
@@ -65,12 +70,14 @@ paths:
       operationId: createSystemOne
       summary: System One requests; a failed question fails the request
       description: |
-        The requests of /v1/decisions. A request any of whose questions (of its own state or of a `states`
-        entry) cannot be answered is answered as a whole with that question's error instead of a 200: the
+        The requests of /v1/decisions: a standard request (`state` and `questions`) or a batch of named
+        standard requests (`states`), whose answers come back under the same names. A request any of whose
+        questions (of a standard request or of an entry of a batch) cannot be answered is answered as a whole
+        with that question's error instead of a 200: the
         first failed question in request order gives the status (`invalid_question` 422;
         `max_length_exceeded`, `scan_budget_exceeded` and `invalid_input` 400; `invalid_model_output` 500;
         `unavailable` 503; `deadline_exceeded` 504) and the body is `question_failed` with that question's
-        `question_error`, `reason` and `question` ID, and the
+        `question_error`, `reason` and `question` ID (in a batch, with its entry's name as `state`), and the
         message lists every failed question. System One answers carry no per-question error, and the official
         SDKs validate each answer by its type. Bodies, compression and headers are read as /v1/decisions reads
         them.
@@ -85,7 +92,7 @@ paths:
               $ref: '#/components/schemas/DecisionMultipart'
       responses:
         '200':
-          description: One answer per question, in request order; every question answered.
+          description: One answer per question, in request order (in a batch, per entry); every question answered.
           headers:
             Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
@@ -224,7 +231,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Health'
         '503':
-          description: Not ready.
+          description: Not ready. A model whose forward has run longer than `--forward-timeout-seconds` is `degraded` until it returns.
           content:
             application/json:
               schema:
@@ -232,10 +239,16 @@ paths:
   /health/live:
     get:
       operationId: getLiveness
-      summary: Liveness; 200 while the process serves HTTP
+      summary: Liveness; 200 while the process serves HTTP and no forward has run longer than `--forward-timeout-seconds`
       responses:
         '200':
           description: Alive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Liveness'
+        '503':
+          description: Stalled; a forward has run longer than `--forward-timeout-seconds` and has not returned. Restart the process.
           content:
             application/json:
               schema:
@@ -280,19 +293,27 @@ components:
     DecisionRequest:
       type: object
       additionalProperties: false
-      required: [state, questions]
+      description: |
+        A standard request or a batch; the two forms are mutually exclusive. A standard request is one context
+        and its questions: `state` and `questions` (both required), and the `images` and `videos` every
+        question sees. A batch is `states` alone: named standard requests, each answered under its name. A
+        batch has no top-level `state`, `questions`, `images` or `videos`; a body with `states` and any of them
+        is answered 400 invalid_request. `model`, `options` and `assets` belong to the request, and in a batch
+        to every entry.
       properties:
         model:
           type: string
           description: Served model ID. Optional while a runtime serves one model.
         state:
+          x-go-type-skip-optional-pointer: true
           description: |
-            The context the questions are about; text, an object or an array of JSON values. Models with typed
-            parts read an object's `request` / `user` / `prompt` as the user part, `answer` / `response` as the
-            answer part and every other field as context.
+            A standard request's context, which its questions are about; text, an object or an array of JSON
+            values. Models with typed parts read an object's `request` / `user` / `prompt` as the user part,
+            `answer` / `response` as the answer part and every other field as context.
         questions:
           type: object
-          description: Named questions; answers keep this order.
+          x-go-type-skip-optional-pointer: true
+          description: A standard request's named questions; answers keep this order.
           minProperties: 1
           additionalProperties:
             $ref: '#/components/schemas/Question'
@@ -304,10 +325,12 @@ components:
           $ref: '#/components/schemas/DecisionAssets'
         states:
           type: object
+          minProperties: 1
           description: |
-            Further states, each with its own questions, answered in the same call: a client asks every question it
-            has for one model in one request. Each entry is read exactly as a request with its state, its questions
-            and this request's model and options would be, and its answers come back under the same name in the
+            A batch: named standard requests answered in one call, so a client asks every question it has for one
+            model at once. Questions about one context go in one entry, and each other context in an entry of its
+            own. Each entry is read exactly as a standard request with its state, questions, images and videos and
+            the batch's model, options and assets would be, and its answers come back under the same name in the
             response's `states`. Question IDs are unique within an entry.
           additionalProperties:
             $ref: '#/components/schemas/DecisionState'
@@ -317,9 +340,10 @@ components:
       type: object
       additionalProperties: false
       required: [state, questions]
+      description: One entry of a batch, a standard request without the batch's shared fields.
       properties:
         state:
-          description: The context this entry's questions are about, as a request's `state`.
+          description: The context this entry's questions are about, as a standard request's `state`.
         questions:
           type: object
           description: Named questions about this state; answers keep this order.
@@ -353,7 +377,7 @@ components:
         reference is 1 to 1,024 bytes and not blank, all of them together at most 65,536 bytes, and every one
         must be used (reason `asset_unreferenced`). A reference is replaced wherever it occurs in a string of
         the state, of a question's `instructions` or of its options (criteria values, `choices` and `labels`
-        descriptions, `levels`), in the request and in every `states` entry: a string equal to a reference is
+        descriptions, `levels`), in a standard request or in every entry of a batch: a string equal to a reference is
         that image, a longer one is split at each occurrence (left to right, the longest reference first at
         one position), and object keys are never replaced. Each occurrence is one use, read where it sits and
         counted again, toward the token limits and `usage.input_tokens`; the bytes of all uses together are at
@@ -481,8 +505,9 @@ components:
           description: |
             Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
             than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
-            `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
-            both kinds share their model inputs unless one has to be read in windows.
+            `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only (a Vela 3.0
+            evidence span question: its route's 32,768-token window). Questions of both kinds share their model inputs
+            unless one has to be read in windows.
         head:
           type: string
           enum: [router, broad]
@@ -546,13 +571,20 @@ components:
             takes it.
     DecisionResponse:
       type: object
-      required: [model, answers, usage]
+      required: [model, usage]
+      description: |
+        The answers to a standard request (`answers`, and `spans`, `sets`, `thresholds` and `span_heads` for the
+        questions that have them) or to a batch (`states`: each entry's answers under its name). A batch's
+        `usage` counts every entry, and its `meta` (with `return_meta`) is the one every entry carries.
       properties:
         model:
           type: string
         answers:
           type: object
-          description: One answer per question; a Set question adds a Noul answer per label under `<id>.<label>`.
+          x-go-type-skip-optional-pointer: true
+          description: |
+            A standard request's answers, one per question; a Set question adds a Noul answer per label under
+            `<id>.<label>`.
           additionalProperties:
             $ref: '#/components/schemas/Answer'
         spans:
@@ -582,9 +614,7 @@ components:
           $ref: '#/components/schemas/Usage'
         states:
           type: object
-          description: |
-            The answers about each entry of the request's `states`, as that entry's own request would get them. The
-            response's own fields answer the request's `state`, and its `usage` counts that state alone.
+          description: A batch's answers by entry name, each as that entry's own standard request would get them.
           additionalProperties:
             $ref: '#/components/schemas/DecisionStateResponse'
         meta:
@@ -592,7 +622,7 @@ components:
     DecisionStateResponse:
       type: object
       required: [model, answers, usage]
-      description: The answers about one entry of a request's `states`, with the fields of a response of its own.
+      description: The answers to one entry of a batch, with the fields of a standard request's response.
       properties:
         model:
           type: string
@@ -1368,6 +1398,9 @@ components:
           description: |
             The question whose failure answers the request: on POST /v1/systemone, and on a request none of whose
             questions is valid.
+        state:
+          type: string
+          description: In a batch, the name of the entry `question` belongs to.
         question_error:
           $ref: '#/components/schemas/ItemError'
           description: The failed question's code (`question_failed`).
@@ -1648,7 +1681,8 @@ components:
           type: integer
           description: |
             The same models: the most tokens of a part a question with `overflow: truncate` reads, one input on a
-            CPU (one forward) and the scan budget on a GPU.
+            CPU (one forward) and the scan budget on a GPU. A Vela 3.0 evidence span question reads its route's
+            32,768-token window instead.
         min_options:
           type: integer
         max_options:
@@ -1808,4 +1842,8 @@ components:
           description: The version of this contract the runtime serves (`info.version`); a client refuses another major version.
         status:
           type: string
-          enum: [alive]
+          enum: [alive, stalled]
+        reason:
+          type: string
+          nullable: true
+          description: Why the process is stalled, per model; absent while alive.

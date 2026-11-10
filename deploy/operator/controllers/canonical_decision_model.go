@@ -30,18 +30,3 @@ func applyOperatorDecisionModel(canonical *routerconfig.CanonicalConfig, spec vl
 	catalog.System.DecisionModel = selected
 	return nil
 }
-
-// operatorModelModules are the Router's default modules without their
-// thresholds. The Router reads a threshold the ConfigMap writes as set, which
-// would hold a module to the default model's calibration whatever deployment
-// answers it, so the operator writes only the thresholds the resource sets.
-func operatorModelModules() routerconfig.CanonicalModelModules {
-	modules := routerconfig.DefaultCanonicalGlobal().ModelCatalog.Modules
-	modules.PromptGuard.Threshold = 0
-	modules.Classifier.Domain.Threshold = 0
-	modules.Classifier.PII.Threshold = 0
-	modules.HallucinationMitigation.FactCheck.Threshold = 0
-	modules.HallucinationMitigation.Detector.Threshold = 0
-	modules.FeedbackDetector.Threshold = 0
-	return modules
-}

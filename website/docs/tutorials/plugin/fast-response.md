@@ -22,7 +22,7 @@ Some routes should degrade gracefully instead of waiting for the full model path
 
 ## Configuration
 
-Add the plugin under `routing.decisions[].plugins`:
+Add the plugin under `recipes[].decisions[].plugins`:
 
 ```yaml
 plugins:
@@ -34,5 +34,7 @@ plugins:
 No model is called and no response content is generated. Keep the message free
 of request data and do not use this plugin as an authentication or rate-limit
 control. The plugin does not measure overload; the decision must match the
-traffic that should receive the fallback. See a complete example:
+traffic that should receive the fallback. `enabled: false` turns off a
+`fast_response` the decision inherits from `global.plugins` or its recipe's
+plugins. See a complete example:
 [`config/fragments/plugin/fast-response/busy.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/fast-response/busy.yaml).

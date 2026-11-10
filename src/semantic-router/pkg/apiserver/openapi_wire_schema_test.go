@@ -67,7 +67,7 @@ func TestOpenAPIWireRepresentationMatchesNullableScoreEncoding(t *testing.T) {
 func TestOpenAPIReplayHTTPMatchesScoreWireSchema(t *testing.T) {
 	body, err := json.Marshal(routerreplay.ListResponse{Data: []routerreplay.RoutingRecord{
 		{ID: "unavailable"},
-		{ID: "available-zero", ConfidenceScoreAvailable: true, JailbreakScoreAvailable: true, ResponseJailbreakScoreAvailable: true},
+		{ID: "available-zero", ConfidenceScoreAvailable: true, JailbreakScoreAvailable: true},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +87,7 @@ func TestOpenAPIReplayHTTPMatchesScoreWireSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	schema := api.generateOpenAPISpec().Paths[apiObservabilityReplaysPath].Get.Responses["200"].Content["application/json"].Schema.Properties["data"].Items
-	for _, name := range []string{"confidence_score", "jailbreak_confidence", "response_jailbreak_confidence"} {
+	for _, name := range []string{"confidence_score", "jailbreak_confidence"} {
 		field := schema.Properties[name]
 		if field.Type != "number" || !field.Nullable || actual.Data[1][name] != float64(0) {
 			t.Fatalf("available-zero %s: schema=%+v actual=%v", name, field, actual.Data[1])

@@ -30,7 +30,7 @@ func (f contextCapacityFinding) gainsNoCapacity() bool { return f.unreachableMod
 // cannotServe reports whether the band matches requests none of its models fit.
 func (f contextCapacityFinding) cannotServe() bool { return f.minTokens > 0 }
 
-// validateContextCapacity cross-checks routing.signals.context bands against
+// validateContextCapacity cross-checks a recipe's signals.context bands against
 // the context windows declared in model_config. The two are otherwise
 // validated independently, so a band can route large requests to a model no
 // larger than the one they came from, or to one that cannot hold what the
@@ -90,13 +90,13 @@ func logContextCapacityFindings(findings []contextCapacityFinding) {
 	for _, finding := range findings {
 		if finding.gainsNoCapacity() {
 			logging.Warnf(
-				"routing.signals.context[%q]: decisions gated on this band declare a maximum context window of %d, but model %q declares %d and no decision the band can reach uses it; escalation on context size gains no capacity",
+				"signals.context[%q]: decisions gated on this band declare a maximum context window of %d, but model %q declares %d and no decision the band can reach uses it; escalation on context size gains no capacity",
 				finding.band, finding.reachableWindow, finding.unreachableModel, finding.unreachableWindow,
 			)
 		}
 		if finding.cannotServe() {
 			logging.Warnf(
-				"routing.signals.context[%q]: min_tokens is %d but no model the band can reach declares more than %d; the decisions it gates can never serve what it matches",
+				"signals.context[%q]: min_tokens is %d but no model the band can reach declares more than %d; the decisions it gates can never serve what it matches",
 				finding.band, finding.minTokens, finding.reachableWindow,
 			)
 		}

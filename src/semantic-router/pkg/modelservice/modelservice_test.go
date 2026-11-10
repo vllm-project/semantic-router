@@ -228,8 +228,8 @@ func runtimeConfig(deployments map[string]config.ModelDeployment) *config.Router
 		if name == "unused" {
 			continue
 		}
-		cfg.DecisionRules = append(cfg.DecisionRules, config.DecisionSignalRule{
-			Name: "hard_" + name, Deployment: name, Question: config.DecisionQuestion{Type: "noul", Instructions: "Hard?"},
+		cfg.SystemOneRules = append(cfg.SystemOneRules, config.SystemOneRule{
+			Name: "hard_" + name, Deployment: name, Question: config.SystemOneQuestion{Type: "noul", Instructions: "Hard?"},
 		})
 	}
 	return cfg
@@ -445,11 +445,11 @@ func TestCardFailsFastWhenTheRuntimeCommandCannotRun(t *testing.T) {
 func TestCardAcceptsOnlyARuntimeOfItsOwnContractVersion(t *testing.T) {
 	for version, served := range map[string]string{
 		RuntimeAPIVersion: "",
-		"3.0.1":           "serves contract 3.0.1",
+		"3.2.0":           "serves contract 3.2.0",
 		"3.0.0":           "serves contract 3.0.0",
-		"3":               "serves contract 3",
+		"4":               "serves contract 4",
 		"2.4.0":           "serves contract 2.4.0",
-		"4.0.0":           "serves contract 4.0.0",
+		"5.0.0":           "serves contract 5.0.0",
 		"":                "reports no contract version",
 	} {
 		runtime := fakeModels([]modelEntry{{Name: "decider", Model: "vllm-sr/Decision-2.0-Kai-0.6B"}})

@@ -360,22 +360,6 @@ stop-hallucination-services:
 	@-lsof -ti:8801 | xargs kill -9 2>/dev/null || true
 	@echo "All services stopped"
 
-# Hallucination Detection Demo with Tool Calling
-demo-hallucination: ## Run interactive hallucination detection demo (CLI)
-demo-hallucination: build-router provider-mocker-install
-	@echo "Starting Hallucination Detection Demo (CLI)..."
-	@PROVIDER_MOCKER_PYTHON="$(PROVIDER_MOCKER_PYTHON)" ./e2e/testing/hallucination-demo/run_demo.sh
-
-demo-hallucination-web: ## Run hallucination demo with browser-based UI (recommended)
-demo-hallucination-web: build-router provider-mocker-install
-	@echo "Starting Hallucination Detection Demo (Web UI)..."
-	@PROVIDER_MOCKER_PYTHON="$(PROVIDER_MOCKER_PYTHON)" ./e2e/testing/hallucination-demo/run_demo.sh --web
-
-demo-hallucination-auto: ## Run hallucination demo with predefined questions (non-interactive)
-demo-hallucination-auto: build-router provider-mocker-install
-	@echo "Starting Hallucination Detection Demo (auto mode)..."
-	@PROVIDER_MOCKER_PYTHON="$(PROVIDER_MOCKER_PYTHON)" ./e2e/testing/hallucination-demo/run_demo.sh --demo
-
 # ============== Image Generation Tests ==============
 
 # Test image generation with vLLM-Omni
@@ -387,21 +371,22 @@ test-image-gen:
 # ============== Modality Routing Tests ==============
 
 # Run router with modality routing config
-run-router-modality: ## Run router with modality routing config (AR + Diffusion + Both)
+run-router-modality: ## Run router with modality routing config (text + image generation)
 run-router-modality: build-router
 	@echo "Running router with modality routing config..."
 	@./bin/router -config=e2e/config/config.modality-routing.yaml --enable-system-prompt-api=true
 
-# Test modality routing — sends prompts for AR, DIFFUSION, and BOTH through Envoy
-# Requires: router running with modality-routing config, Envoy proxy, AR vLLM (port 8000), Diffusion vLLM (port 8001)
-test-modality-routing: ## Test modality routing (AR / DIFFUSION / BOTH) through Envoy
+# Test modality routing — sends text prompts and image prompts through Envoy. An
+# image decision answers with a generated image, which the Responses API returns.
+# Requires: router running with modality-routing config, Envoy proxy, text vLLM (port 8000), vLLM-Omni image model (port 8001)
+test-modality-routing: ## Test modality routing (text / image) through Envoy
 test-modality-routing:
 	@echo "=============================================="
 	@echo " Modality Routing Tests (via Envoy on :8801)"
 	@echo "=============================================="
 	@echo ""
-	@# --- TEST 1: AR (pure text) ---
-	@echo "--- TEST 1: AR (pure text) ---"
+	@# --- TEST 1: text ---
+	@echo "--- TEST 1: text ---"
 	@echo "Prompt: What is the capital of France?"
 	@curl -sS -D /tmp/mr_h.txt http://localhost:8801/v1/chat/completions \
 		-H "Content-Type: application/json" \
@@ -409,8 +394,8 @@ test-modality-routing:
 		| jq -r '.choices[0].message.content'
 	@echo "Headers:" && grep -i "x-vsr" /tmp/mr_h.txt 2>/dev/null || true
 	@echo ""
-	@# --- TEST 2: AR (code question) ---
-	@echo "--- TEST 2: AR (code question) ---"
+	@# --- TEST 2: text (code question) ---
+	@echo "--- TEST 2: text (code question) ---"
 	@echo "Prompt: Write a Python function to reverse a linked list"
 	@curl -sS -D /tmp/mr_h.txt http://localhost:8801/v1/chat/completions \
 		-H "Content-Type: application/json" \
@@ -418,50 +403,24 @@ test-modality-routing:
 		| jq -r '.choices[0].message.content'
 	@echo "Headers:" && grep -i "x-vsr" /tmp/mr_h.txt 2>/dev/null || true
 	@echo ""
-	@# --- TEST 3: DIFFUSION (image generation) ---
-	@echo "--- TEST 3: DIFFUSION (image generation) ---"
+	@# --- TEST 3: image generation ---
+	@echo "--- TEST 3: image generation ---"
 	@echo "Prompt: Generate an image of a sunset over mountains"
-	@curl -sS -D /tmp/mr_h.txt http://localhost:8801/v1/chat/completions \
+	@curl -sS -D /tmp/mr_h.txt http://localhost:8801/v1/responses \
 		-H "Content-Type: application/json" \
-		-d '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Generate an image of a sunset over mountains"}],"max_tokens":100}' \
-		| jq -r '.choices[0].message.content[] | select(.type=="image_url") | .image_url.url' \
-		| sed 's|^data:image/png;base64,||' | base64 -d > /tmp/mr_img3.png && chafa --size=60x20 /tmp/mr_img3.png
+		-d '{"model":"vllm-sr/auto","input":"Generate an image of a sunset over mountains"}' \
+		| jq -r '.output[] | select(.type=="image_generation_call") | .result' \
+		| base64 -d > /tmp/mr_img3.png && chafa --size=60x20 /tmp/mr_img3.png
 	@echo "Headers:" && grep -i "x-vsr" /tmp/mr_h.txt 2>/dev/null || true
 	@echo ""
-	@# --- TEST 4: DIFFUSION (draw/paint) ---
-	@echo "--- TEST 4: DIFFUSION (draw/paint) ---"
+	@# --- TEST 4: image generation (draw/paint) ---
+	@echo "--- TEST 4: image generation (draw/paint) ---"
 	@echo "Prompt: Draw a cute cat wearing a top hat"
-	@curl -sS -D /tmp/mr_h.txt http://localhost:8801/v1/chat/completions \
+	@curl -sS -D /tmp/mr_h.txt http://localhost:8801/v1/responses \
 		-H "Content-Type: application/json" \
-		-d '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Draw a cute cat wearing a top hat"}],"max_tokens":100}' \
-		| jq -r '.choices[0].message.content[] | select(.type=="image_url") | .image_url.url' \
-		| sed 's|^data:image/png;base64,||' | base64 -d > /tmp/mr_img4.png && chafa --size=60x20 /tmp/mr_img4.png
-	@echo "Headers:" && grep -i "x-vsr" /tmp/mr_h.txt 2>/dev/null || true
-	@echo ""
-	@# --- TEST 5: BOTH (text + image) ---
-	@echo "--- TEST 5: BOTH (text + image) ---"
-	@echo "Prompt: Explain how photosynthesis works and generate an image of the process"
-	@curl -sS -D /tmp/mr_h.txt http://localhost:8801/v1/chat/completions \
-		-H "Content-Type: application/json" \
-		-d '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Explain how photosynthesis works and generate an image of the process"}],"max_tokens":500}' \
-		-o /tmp/mr_both5.json
-	@echo "[Text Response]"
-	@jq -r '.choices[0].message.content[] | select(.type=="text") | .text' /tmp/mr_both5.json
-	@jq -r '.choices[0].message.content[] | select(.type=="image_url") | .image_url.url' /tmp/mr_both5.json \
-		| sed 's|^data:image/png;base64,||' | base64 -d > /tmp/mr_img5.png && echo "[Image]" && chafa --size=60x20 /tmp/mr_img5.png
-	@echo "Headers:" && grep -i "x-vsr" /tmp/mr_h.txt 2>/dev/null || true
-	@echo ""
-	@# --- TEST 6: BOTH (describe + illustrate) ---
-	@echo "--- TEST 6: BOTH (describe + illustrate) ---"
-	@echo "Prompt: Describe the water cycle and illustrate it with a diagram"
-	@curl -sS -D /tmp/mr_h.txt http://localhost:8801/v1/chat/completions \
-		-H "Content-Type: application/json" \
-		-d '{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Describe the water cycle and illustrate it with a diagram"}],"max_tokens":500}' \
-		-o /tmp/mr_both6.json
-	@echo "[Text Response]"
-	@jq -r '.choices[0].message.content[] | select(.type=="text") | .text' /tmp/mr_both6.json
-	@jq -r '.choices[0].message.content[] | select(.type=="image_url") | .image_url.url' /tmp/mr_both6.json \
-		| sed 's|^data:image/png;base64,||' | base64 -d > /tmp/mr_img6.png && echo "[Image]" && chafa --size=60x20 /tmp/mr_img6.png
+		-d '{"model":"vllm-sr/auto","input":"Draw a cute cat wearing a top hat"}' \
+		| jq -r '.output[] | select(.type=="image_generation_call") | .result' \
+		| base64 -d > /tmp/mr_img4.png && chafa --size=60x20 /tmp/mr_img4.png
 	@echo "Headers:" && grep -i "x-vsr" /tmp/mr_h.txt 2>/dev/null || true
 	@echo ""
 	@echo "=============================================="

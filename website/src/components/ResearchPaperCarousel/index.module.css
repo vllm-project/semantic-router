@@ -1,280 +1,179 @@
 .section {
   position: relative;
-  overflow: hidden;
-  padding: 5rem 0;
-  border-bottom: 0;
-  background: var(--site-bg);
+  padding: var(--site-section-pad-top, var(--site-section-pad)) 0 var(--site-section-pad);
 }
 
-.section::before {
-  content: none;
-}
-
-.header,
-.carouselShell,
-.footer {
-  position: relative;
-  z-index: 1;
-}
-
-.header {
-  composes: site-section-intro from global;
-  position: relative;
-  z-index: 1;
-}
-
-.title {
-  composes: site-section-intro__title from global;
-  color: var(--site-text);
-}
-
-.subtitle {
-  composes: site-section-intro__lede from global;
+.wrap {
+  width: min(100% - 2 * var(--gut), 1440px);
+  margin-inline: auto;
 }
 
 .carouselShell {
   position: relative;
-  border: 1px solid var(--site-border);
-  border-radius: 1.45rem;
-  background: var(--site-surface-alt);
-  box-shadow: none;
-  overflow: hidden;
 }
 
-.carouselShell::before,
-.carouselShell::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  z-index: 2;
-  width: clamp(1.25rem, 4vw, 3.5rem);
-  pointer-events: none;
-}
-
-.carouselShell::before {
-  left: 0;
-  background: linear-gradient(90deg, var(--site-surface-alt), transparent);
-}
-
-.carouselShell::after {
-  right: 0;
-  background: linear-gradient(270deg, var(--site-surface-alt), transparent);
-}
-
+/* A row of paper cards that scrolls sideways, snapping to each card. */
 .carouselContainer {
-  position: relative;
-  overflow: hidden;
-  padding: 1.4rem 1rem;
-  mask-image: none;
-  -webkit-mask-image: none;
-}
-
-.carouselContainerStatic {
+  margin-inline: calc(var(--gut) * -1);
+  padding: 6px var(--gut) 18px;
   overflow-x: auto;
-  padding: 1.4rem 1rem 1.55rem;
-  scroll-padding-inline: 1rem;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: var(--gut);
   scroll-snap-type: x proximity;
-  mask-image: none;
-  -webkit-mask-image: none;
+  scrollbar-color: var(--hair-2) transparent;
+  scrollbar-width: thin;
 }
 
 .carouselTrack {
   display: flex;
-  gap: 1rem;
-  align-items: stretch;
-  will-change: transform;
+  gap: clamp(14px, 1.6vw, 20px);
+  width: max-content;
 }
 
 .paperCard {
-  flex: 0 0 25rem;
-  min-width: 25rem;
-  display: grid;
-  align-content: space-between;
-  gap: 1rem;
-  min-height: 19rem;
-  padding: 1.2rem;
-  border: 1px solid var(--site-border);
-  background:
-    radial-gradient(circle at top right, var(--site-accent-soft), transparent 38%),
-    linear-gradient(180deg, var(--site-surface-soft), transparent 52%),
-    var(--site-surface);
-  box-shadow: var(--site-shadow-soft);
-  transition:
-    border-color 180ms ease,
-    transform 180ms ease,
-    background 180ms ease,
-    box-shadow 180ms ease;
+  display: flex;
+  flex: 0 0 clamp(18rem, 24vw, 22rem);
+  flex-direction: column;
+  gap: 16px;
+  min-height: 21rem;
+  padding: 24px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
   scroll-snap-align: start;
 }
 
-.paperCard:hover {
-  transform: translateY(-2px);
-  border-color: var(--site-hover-border);
-  background:
-    radial-gradient(circle at top right, rgba(48, 162, 255, 0.2), transparent 40%),
-    linear-gradient(180deg, var(--site-surface-soft), transparent 58%),
-    var(--site-surface-alt);
-  box-shadow: var(--site-hover-glow);
-}
-
-.paperCard:hover .paperTitle {
-  color: var(--site-hover-text);
-}
-
 .spotlightCard {
-  background:
-    radial-gradient(circle at top right, rgba(48, 162, 255, 0.2), transparent 36%),
-    linear-gradient(180deg, var(--site-surface-soft), transparent 56%),
-    var(--site-surface-raised);
+  box-shadow: inset 0 0 0 1.5px rgba(217, 68, 31, 0.45), var(--shadow);
 }
 
-.cardTop,
-.cardFooter {
+.cardTop {
   display: flex;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
-  gap: 0.8rem;
+  gap: 8px;
 }
 
 .cardMeta,
 .categoryBadge {
-  display: inline-flex;
-  width: fit-content;
-  padding: 0.2rem 0.5rem;
-  border: 1px solid var(--site-border);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
+  font: 600 11.5px/1.4 var(--mono);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .cardMeta {
-  color: var(--site-muted-bright);
-  background: var(--site-surface-soft);
+  color: var(--muted);
 }
 
 .categoryBadge {
-  color: var(--site-cta-text);
-  background: var(--site-cta-bg);
-  border-color: var(--site-cta-border);
+  color: var(--ember-text);
 }
 
 .cardCopy {
   display: grid;
-  gap: 0.7rem;
+  flex: 1;
+  align-content: start;
+  gap: 8px;
 }
 
 .paperTitle {
-  composes: site-card-line--2 from global;
-  margin: 0;
-  color: var(--site-text);
-  font-size: clamp(1.1rem, 1.9vw, 1.35rem);
-  line-height: 1.3;
-}
-
-.paperAuthors,
-.paperVenue,
-.paperAbstract,
-.footer p {
-  margin: 0;
-  color: var(--site-muted-bright);
-  line-height: 1.65;
-}
-
-.paperAuthors,
-.paperVenue {
-  font-size: 0.9rem;
-}
-
-.paperVenue {
-  color: var(--site-muted);
-}
-
-.paperAbstract {
   display: -webkit-box;
+  margin: 0;
   overflow: hidden;
+  color: var(--ink);
+  font: 600 22px/1.15 var(--serif);
+  letter-spacing: -0.005em;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 3;
 }
 
-.paperLink {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2.45rem;
-  padding: 0.6rem 0.95rem;
-  border: 1px solid var(--site-border);
-  border-radius: 999px;
-  background: var(--site-surface-soft);
-  color: var(--site-text);
-  font-size: 0.74rem;
-  text-decoration: none;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  box-shadow: inset 0 1px 0 var(--site-border);
-  transition:
-    background 180ms ease,
-    color 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease;
+.cardCopy .paperAuthors,
+.cardCopy .paperVenue {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
-.paperLink:hover {
-  background: var(--site-cta-bg);
-  color: var(--site-cta-text);
-  border-color: var(--site-cta-border);
-  box-shadow: var(--site-cta-shadow);
-  text-decoration: none;
+.cardCopy .paperVenue {
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+.cardCopy .paperAbstract {
+  display: -webkit-box;
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.cardFooter {
+  padding-top: 14px;
+  border-top: 1px solid var(--hair);
 }
 
 .footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: 1rem;
+  justify-content: center;
+  gap: 12px 24px;
+  margin-top: clamp(24px, 3vw, 36px);
 }
 
 .footer p {
-  max-width: 42rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
 }
 
-@media (max-width: 768px) {
-  .section {
-    padding: 3.5rem 0;
-  }
-
-  .paperCard {
-    flex-basis: min(21rem, calc(100vw - 4rem));
-    min-width: min(21rem, calc(100vw - 4rem));
-    min-height: 17rem;
-    padding: 1rem;
-  }
-
-  .footer {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+.all {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px 9px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: box-shadow 0.2s;
 }
 
-@media (max-width: 480px) {
-  .carouselShell::before,
-  .carouselShell::after {
-    width: 1rem;
-  }
+.all span {
+  color: var(--ember-text);
+  transition: transform 0.35s var(--ease);
+}
 
-  .carouselContainer {
-    padding: 1rem 0.75rem;
-    mask-image: none;
-    -webkit-mask-image: none;
-  }
+.all:hover,
+.all:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--hair-2), var(--shadow);
+  color: var(--ink);
+  text-decoration: none;
+}
 
-  .carouselContainerStatic {
-    padding-inline: 0.75rem;
-  }
+.all:hover span {
+  transform: translateX(3px);
+}
 
+:global(html[lang='zh-Hans']) .paperTitle {
+  font-size: 19px;
+  letter-spacing: 0;
+  line-height: 1.4;
+}
+
+@media (max-width: 600px) {
   .paperCard {
-    flex-basis: min(18rem, calc(100vw - 3rem));
-    min-width: min(18rem, calc(100vw - 3rem));
+    flex-basis: min(18rem, 82vw);
+    padding: 20px;
+    border-radius: 22px;
   }
 }
