@@ -227,12 +227,11 @@ domains:
     documentation_check: true
     paths:
       - .claude-plugin/**
-      - integrations/OWNER
-      - integrations/coding-agents/AGENTS.md
-      - integrations/coding-agents/claude-code/**
+      - src/agent-harness/AGENTS.md
+      - src/agent-harness/claude-code/**
     checks:
-      - python3 -m unittest discover -s integrations/coding-agents/claude-code/skills/setup/scripts
-      - python3 -m unittest discover -s integrations/coding-agents/claude-code/skills/calibrate/scripts
+      - python3 -m unittest discover -s src/agent-harness/claude-code/skills/setup/scripts
+      - python3 -m unittest discover -s src/agent-harness/claude-code/skills/calibrate/scripts
     verifications: []
 
   vela-omni-artifacts:
