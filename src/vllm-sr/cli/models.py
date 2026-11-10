@@ -2415,6 +2415,19 @@ class UserConfig(BaseModel):
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
 
+    @field_validator("listeners")
+    @classmethod
+    def unique_listener_names(cls, listeners):
+        names = set()
+        for listener in listeners:
+            if listener.name in names:
+                raise ValueError(
+                    f"listener '{listener.name}' is defined twice; "
+                    "give each listener its own name"
+                )
+            names.add(listener.name)
+        return listeners
+
     @field_validator("global_")
     @classmethod
     def validate_routing_mode(cls, value):

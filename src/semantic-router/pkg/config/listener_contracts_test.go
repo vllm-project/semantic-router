@@ -45,6 +45,16 @@ func TestListenerTLSParsesFromTheCanonicalDocument(t *testing.T) {
 	}
 }
 
+// Listeners are keyed by name: a reload compares them by name, and a second
+// listener of the same name would read as a changed one on every reload.
+func TestListenerNamesAreUnique(t *testing.T) {
+	twice := strings.Replace(canonicalTLSDocument, "providers:\n",
+		"  - name: https\n    address: 0.0.0.0\n    port: 8444\nproviders:\n", 1)
+	if _, err := ParseYAMLBytes([]byte(twice)); err == nil || !strings.Contains(err.Error(), "listener 'https' is defined twice") {
+		t.Fatalf("two listeners named https must not load, got %v", err)
+	}
+}
+
 const canonicalTLSDocument = `version: v0.5
 listeners:
   - name: https

@@ -945,3 +945,16 @@ def test_systemone_listener_scope_is_explicit_and_nonempty():
     )
     assert listener.models == ["chat-only"]
     assert listener.systemone.models == ["decision-public"]
+
+
+def test_listener_names_are_unique():
+    listeners = [
+        Listener(name="http", address="0.0.0.0", port=8000),
+        Listener(name="http", address="0.0.0.0", port=8001),
+    ]
+    with pytest.raises(
+        PydanticValidationError, match="listener 'http' is defined twice"
+    ):
+        UserConfig(version="v0.5", listeners=listeners)
+    listeners[1].name = "http-8001"
+    assert len(UserConfig(version="v0.5", listeners=listeners).listeners) == 2

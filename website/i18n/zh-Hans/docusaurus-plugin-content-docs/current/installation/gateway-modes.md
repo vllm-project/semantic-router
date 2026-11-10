@@ -68,7 +68,7 @@ vllm-sr serve --target kubernetes --config config.yaml
 - **探针：** 进程运行时 `GET /health` 就会应答；路由核心可以接收流量后 `GET /ready` 才应答。Prometheus 指标仍在
   Router 的指标端口（9190）。
 - **重新加载：** Router 原地重新加载配置。修改 listener 的地址、端口、超时或 `tls` 路径，或者新增、删除 listener，
-  都会以 `restart_required` 被拒绝，直到 Router 重启；API key 和模型白名单可原地重新加载。
+  都会以 `restart_required` 被拒绝，直到 Router 重启；API key、模型白名单和身份信任可原地重新加载。
 
 ### 模型白名单 {#model-allow-list}
 

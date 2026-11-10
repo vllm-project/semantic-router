@@ -34,7 +34,7 @@ Router 只重建变更涉及的部分：
 
 - 只修改 provider 的后端或 listener 时，已加载的分类器和 embedding 模型保持不变。
 - 在 standalone 模式下，修改 recipes 或 signals 时上游连接池保持不变；修改某个 provider 时，它未变化的后端的连接池也保持不变。
-- 在 standalone 模式下，Router 在启动时绑定 listeners。增删 listener，或修改 listener 的 `address`、`port`、`timeout` 或 `tls`，会以 `restart_required` 被拒绝；重启 Router 才能生效。listener 的 `api_keys` 无需重启即可修改。
+- 在 standalone 模式下，Router 在启动时绑定 listeners。增删 listener，或修改 listener 的 `address`、`port`、`timeout` 或 `tls`，会以 `restart_required` 被拒绝；重启 Router 才能生效。listener 的 `api_keys`、`models` 和 `identity` 无需重启即可修改。
 
 ## 修改本地栈的配置
 
