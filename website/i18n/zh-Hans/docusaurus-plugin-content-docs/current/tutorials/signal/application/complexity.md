@@ -10,7 +10,7 @@ translation:
 
 ## 概述 {#overview}
 
-`complexity` 评估一个请求要回答好有多难：easy、medium 或 hard。它提出 `complexity` [预设](../../../system-one/reference#preset-catalog)问题：“How difficult is this request to answer well?”，选项为 `easy`（简单的检索、改写或格式调整）、`medium`（若干步推理，或适量的代码或分析）和 `hard`（高级的多步推理或专业知识）。
+`complexity` 评估一个请求要回答好有多难：easy、medium 或 hard。它提出 `complexity` [预设](../../../system-one/reference/presets#preset-catalog)问题：“How difficult is this request to answer well?”，选项为 `easy`（简单的检索、改写或格式调整）、`medium`（若干步推理，或适量的代码或分析）和 `hard`（高级的多步推理或专业知识）。
 
 ## 主要优势 {#key-advantages}
 
@@ -69,6 +69,6 @@ recipes:
 
 ### 回答问题的模型 {#the-model-that-answers}
 
-除非 `complexity` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有复杂度规则；见[选择部署](../../../system-one/deployments)。目前还没有模型有这个问题的训练形式，所以所有模型都零样本回答：在它约束高成本路由之前，请在你自己的流量上检查它。它读取当前用户轮次，并截断到模型的输入长度。
+除非 `complexity` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有复杂度规则；见[选择部署](../../../system-one/deploy/deployments)。目前还没有模型有这个问题的训练形式，所以所有模型都零样本回答：在它约束高成本路由之前，请在你自己的流量上检查它。它读取当前用户轮次，并截断到模型的输入长度。
 
 为早期版本编写的配置用阈值把请求与示例库比较（`hard`、`easy`、`threshold`、`composer` 等），并把等级写成 `difficulty:hard`。`vllm-sr config migrate` 会改写两者：规则保留名称，条件用 `label` 指定等级。完整示例见 [`config/fragments/signal/complexity/escalation.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/complexity/escalation.yaml)。

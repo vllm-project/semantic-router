@@ -4,7 +4,7 @@
 
 `domains` routes on the request's subject area, one of 14 that the decision model chooses.
 Each rule names the subject areas it matches. It asks the `domain`
-[preset](../../../system-one/reference#preset-catalog): "Which subject area
+[preset](../../../system-one/reference/presets#preset-catalog): "Which subject area
 is this request about?", over `biology`, `business`, `chemistry`,
 `computer science`, `economics`, `engineering`, `health`, `history`, `law`,
 `math`, `other`, `philosophy`, `physics` and `psychology`.
@@ -79,7 +79,7 @@ the requests the model files under `other`.
 
 The decision model answers every domain rule, unless the `domain` binding or
 the rule's `deployment` names another; see
-[Choose a deployment](../../../system-one/deployments). vela3-fast, the Vela
+[Choose a deployment](../../../system-one/deploy/deployments). vela3-fast, the Vela
 3.0 d3 sizes and Vela 2.0 have trained forms of the question; every other
 System One model answers it zero-shot. The question reads the current user
 turn, truncated to the model's input.
