@@ -374,8 +374,9 @@ func noteMCPRAGDropped(m *Migration, path string, settings *yaml.Node) {
 func migrateMemoryPlugin(m *Migration, at FormMatch) error {
 	old := mappingValue(at.Node, "configuration")
 	if !yamlTrue(mappingValue(old, "enabled")) {
-		if pluginOfType(at.Parent, DecisionPluginContext) != nil {
+		if existing := pluginOfType(at.Parent, DecisionPluginContext); existing != nil {
 			removeItem(at.Parent, at.Node)
+			keepGlobalMemoryOff(m, at, mappingAt(existing, "configuration"))
 			return nil
 		}
 		m.Set(at.Node, "type", Scalar(DecisionPluginContext))
@@ -422,6 +423,9 @@ func migrateCompressionPlugin(m *Migration, at FormMatch) error {
 	}
 	if mappingValue(configuration, "compress") != nil {
 		return fmt.Errorf("the decision's context plugin already compresses; keep one")
+	}
+	if !yamlTrue(mappingValue(configuration, "enabled")) {
+		keepGlobalMemoryOff(m, at, configuration)
 	}
 	m.Set(configuration, "enabled", boolNode(true))
 	m.Set(configuration, "compress", compress)
@@ -472,13 +476,36 @@ func contextConfiguration(m *Migration, at FormMatch) (*yaml.Node, error) {
 		return configuration, nil
 	}
 	configuration := mappingNode("enabled", boolNode(true))
-	if yamlTrue(mappingValue(mappingAt(at.Root, "global", "stores", "memory"), "enabled")) && pluginOfType(at.Parent, "memory") == nil {
+	if globalMemory(at.Root) && pluginOfType(at.Parent, "memory") == nil {
 		m.Set(configuration, "sources", &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Content: []*yaml.Node{mappingNode("type", Scalar(ContextSourceMemory))}})
 		m.Changed(at.Path, "the global memory now reaches this decision through its context plugin's memory source")
 	}
 	m.Set(at.Node, "type", Scalar(DecisionPluginContext))
 	m.Set(at.Node, "configuration", configuration)
 	return configuration, nil
+}
+
+// globalMemory reports whether a decision's context plugin that lists no
+// sources retrieves the global memory: the memory store's switch is on, which
+// migrate makes a memory source of global.plugins' context plugin, or that
+// plugin lists one.
+func globalMemory(root *yaml.Node) bool {
+	global := mappingAt(root, "global")
+	context := pluginOfType(mappingValue(global, "plugins"), DecisionPluginContext)
+	return yamlTrue(mappingValue(mappingAt(global, "stores", "memory"), "enabled")) ||
+		pluginOfType(mappingValue(mappingAt(context, "configuration"), "sources"), ContextSourceMemory) != nil
+}
+
+// keepGlobalMemoryOff writes sources: [] in the configuration of a decision's
+// context plugin that lists none, for a decision that did not retrieve the
+// global memory: written sources replace the inherited ones.
+func keepGlobalMemoryOff(m *Migration, at FormMatch, configuration *yaml.Node) {
+	if configuration == nil || mappingValue(configuration, "sources") != nil || !globalMemory(at.Root) {
+		return
+	}
+	m.Set(configuration, "sources", sequenceOf())
+	orderKeys(configuration, contextKeyOrder)
+	m.Changed(at.Path, "the decision did not retrieve the global memory, so its context plugin writes sources: []; one that lists no sources inherits the memory source of global.plugins")
 }
 
 // sourceNode is a source of a type with an old plugin's fields but those
