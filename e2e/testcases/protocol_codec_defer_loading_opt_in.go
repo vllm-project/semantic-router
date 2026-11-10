@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/google/uuid"
 	"k8s.io/client-go/kubernetes"
@@ -13,8 +12,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
-
-const deferLoadingLossWarning = "dropped;tools are sent in full instead of loading on demand and tool references reach the backend as the tool name;tools.defer_loading"
 
 func init() {
 	pkgtestcases.Register("protocol-codec-defer-loading-opt-in", pkgtestcases.TestCase{
@@ -73,8 +70,8 @@ func testProtocolCodecDeferLoadingOptIn(ctx context.Context, client *kubernetes.
 			return fmt.Errorf("opted-in tool search turn was not dispatched (stream=%t): status=%d body=%s",
 				stream, result.StatusCode, truncateString(string(result.Body), 500))
 		}
-		if warnings := result.Headers.Get("x-vsr-protocol-warnings"); !strings.Contains(warnings, deferLoadingLossWarning) {
-			return fmt.Errorf("x-vsr-protocol-warnings = %q, want %q (stream=%t)", warnings, deferLoadingLossWarning, stream)
+		if warnings := result.Headers.Get(warningsHeader); !hasProtocolFieldDiagnostic(warnings, "dropped", "tools.defer_loading") {
+			return fmt.Errorf("%s = %q, want a dropped tools.defer_loading diagnostic (stream=%t)", warningsHeader, warnings, stream)
 		}
 		raw, err := lastProviderSimulatorRequest(ctx, provider, sessionID)
 		if err != nil {
