@@ -155,7 +155,8 @@ with what it read. The redact card names the host, and `/vsr` marks a token sent
 as unencrypted. A remote runtime's token is kept in Claude Code's secure storage
 (`/plugin configure vsr@vllm-sr`), never in `settings.json`.
 
-Redact hides names, emails, phone numbers, card numbers, IP addresses, addresses, ID numbers and
+Redact hides names, emails, phone numbers, card numbers, IP addresses (only text shaped like an IPv4 or
+IPv6 address, so a pinned version such as `2.32.3` stays), addresses, ID numbers and
 secrets (API keys, tokens, private keys, passwords in config files and connection URLs). It waits
 `redactWait` (3 s by default) for the decision model, and shield then waits `shieldWait` (2 s by
 default) on a `Read` or a fetched page; when redact ran out of time the model is still busy, so shield
