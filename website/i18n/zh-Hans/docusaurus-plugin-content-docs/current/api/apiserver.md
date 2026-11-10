@@ -221,6 +221,8 @@ Router 管理的存储和记忆：
 
 所需服务不可用时，这些路由返回 `503`。文件上传使用 multipart 表单数据，并接受文档（`.txt`、`.md`、`.json`、`.csv`、`.html`）供向量存储摄入；上传图像（`.png`、`.jpg`、`.jpeg`、`.gif`、`.webp`）并设置 `purpose=vision`，即可通过 `file_id` 从 Response API 的 `input_image` 部分引用。限制和字段见实时 schema。它们仅存在于管理监听器。`/v1/files` 和 `/v1/vector_stores` 不是推理监听器别名，也不会由 Router API 注册。
 
+删除文件时，会先将其从所有已附加的向量存储中分离，使其分块不再出现在搜索结果中。如果分离失败，删除返回 `500`，文件及其附加关系保留，可以重试删除。
+
 ## 发现并检查插件 {#discover-and-inspect-plugins}
 
 `GET /api/v1/plugins` 直接投影规范插件注册表，返回每种插件的 schema、绑定与操作链接。
