@@ -214,8 +214,10 @@ A local runtime answers a failed question in place. A remote System One API
 fails the whole call and names the question and, in a batch, its entry
 (`state`); the Router then asks once more, within the same deadline, only the
 states that still have other questions, in the same two forms, so only the
-failed question's rule about that entry is unknown. An API that names no
-entry leaves the question unknown about every state that asked it.
+failed question's rule about that entry is unknown. If that retry fails the
+same question about another entry, the Router asks a last time without it
+about every entry, and the question is unknown about every state that asked
+it, as when an API names no entry.
 
 A per-candidate judge sends at most `judge.max_candidates` entries. Answers to
 the same questions about the same state are reused: from a local runtime's

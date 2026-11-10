@@ -257,23 +257,33 @@ func (d *systemOneDeployment) declaredCard() ModelCard {
 // API fails a call with a failed question as a whole and names the question
 // and, in a batch, its entry; send then asks the rest once more without it,
 // within the same deadline, and leaves only that question unknown (about that
-// entry, else about every state). Any other failure leaves every question of
-// the task unknown.
+// entry, else about every state). When the retry fails the same question
+// about another entry, send asks once more without it about every state.
+// Any other failure leaves every question of the task unknown.
 func (d *systemOneDeployment) send(ctx context.Context, task *bundleTask) {
 	plan := sentAs(task)
 	status, data, err := d.post(ctx, *task.task.Decisions)
 	var failure *questionFailure
-	if err == nil {
-		if failed, ok := failedQuestion(status, data); ok && ctx.Err() == nil {
-			if retry, ok := plan.without(failed); ok {
-				systemOneRetries.WithLabelValues(d.name).Inc()
-				logging.ComponentDebugEvent("model_runtime", "systemone_question_retried", map[string]interface{}{
-					"deployment": d.name, "question": failed.question, "state": failed.state, "question_error": failed.code,
-				})
-				failure, plan = &failed, retry
-				status, data, err = d.post(ctx, plan.body)
-			}
+	for err == nil {
+		failed, ok := failedQuestion(status, data)
+		if failure != nil {
+			// At most one more retry, and only for the same question.
+			ok = ok && failure.state != "" && failed.question == failure.question
+			failed.state = ""
 		}
+		if !ok || ctx.Err() != nil {
+			break
+		}
+		retry, ok := plan.without(failed)
+		if !ok {
+			break
+		}
+		systemOneRetries.WithLabelValues(d.name).Inc()
+		logging.ComponentDebugEvent("model_runtime", "systemone_question_retried", map[string]interface{}{
+			"deployment": d.name, "question": failed.question, "state": failed.state, "question_error": failed.code,
+		})
+		failure, plan = &failed, retry
+		status, data, err = d.post(ctx, plan.body)
 	}
 	var responses []Response
 	if err == nil {

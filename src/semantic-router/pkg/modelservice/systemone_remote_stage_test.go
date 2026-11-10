@@ -22,14 +22,14 @@ import (
 // "a", of a standard request or of each entry of a batch, and refuses a body
 // that mixes the two forms. It fails a call that asks failing as a whole on
 // that question, or every call with status. With failingIn, failing fails
-// only about that text, and a batch's failure names its entry, as the model
+// only about those texts, and a batch's failure names its entry, as the model
 // runtime names it.
 type fakeSystemOneAPI struct {
 	mu        sync.Mutex
 	calls     []systemOneCall
 	batches   []bool
 	failing   string
-	failingIn string
+	failingIn []string
 	status    int
 	listing   string
 	hold      chan struct{}
@@ -91,12 +91,12 @@ func (f *fakeSystemOneAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for text, ids := range call {
-		if !slices.Contains(ids, f.failing) || f.failingIn != "" && text != f.failingIn {
+		if !slices.Contains(ids, f.failing) || f.failingIn != nil && !slices.Contains(f.failingIn, text) {
 			continue
 		}
 		entry := ""
 		for name, state := range body.States {
-			if f.failingIn != "" && state.State == text {
+			if f.failingIn != nil && state.State == text {
 				entry = `,"state":"` + name + `"`
 			}
 		}
@@ -322,7 +322,7 @@ func TestAQuestionFailedAboutOneEntryIsAnsweredAboutTheOthers(t *testing.T) {
 		"with another question": {[]string{"domain", "jailbreak"}, systemOneCall{texts[0]: {"domain"}, texts[1]: {"domain", "jailbreak"}}, []bool{true, true}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			api := &fakeSystemOneAPI{failing: "jailbreak", failingIn: texts[0]}
+			api := &fakeSystemOneAPI{failing: "jailbreak", failingIn: texts[:1]}
 			remote := fakeRemote(t, "hosted-entry-failure", api, config.ModelDeployment{})
 			questions := make([]Question, 0, len(tc.questions))
 			for _, id := range tc.questions {
@@ -355,6 +355,40 @@ func TestAQuestionFailedAboutOneEntryIsAnsweredAboutTheOthers(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A question the API fails about two entries of a batch, one per call, is
+// unknown about both, and the other questions keep their answers: the second
+// retry asks without it about every entry.
+func TestAQuestionFailedAboutTwoEntriesLeavesTheOtherQuestionsAnswered(t *testing.T) {
+	texts := []string{"a long earlier turn", "another long turn"}
+	api := &fakeSystemOneAPI{failing: "jailbreak", failingIn: texts}
+	remote := fakeRemote(t, "hosted-entries-failure", api, config.ModelDeployment{})
+	questions := []Question{choiceQuestion("domain"), choiceQuestion("jailbreak")}
+	responses := make([]Response, len(texts))
+	askers := make([]asker, len(texts))
+	for index, text := range texts {
+		askers[index] = asker{deployments: []string{"hosted-entries-failure"}, ask: func(ctx context.Context) error {
+			var err error
+			responses[index], err = remote.Decide(ctx, "hosted-entries-failure", Request{State: text, Questions: questions})
+			return err
+		}}
+	}
+	if _, errs := runStage(DefaultBundleWindow, askers...); errors.Join(errs...) != nil {
+		t.Fatal(errors.Join(errs...))
+	}
+	calls := api.answered()
+	if want := (systemOneCall{texts[0]: {"domain"}, texts[1]: {"domain"}}); len(calls) != 3 || !equalCall(calls[2], want) {
+		t.Fatalf("calls %v, want the stage's call, a retry without jailbreak about one entry and one about %v", calls, want)
+	}
+	for index, response := range responses {
+		if answer := response.Answers["domain"]; answer.Choice != "a" || answer.Error != "" {
+			t.Fatalf("domain about %q: %+v, want answered", texts[index], answer)
+		}
+		if answer := response.Answers["jailbreak"]; answer.Error != "invalid_question" {
+			t.Fatalf("jailbreak about %q: %+v, want unknown", texts[index], answer)
+		}
 	}
 }
 
