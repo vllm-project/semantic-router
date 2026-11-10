@@ -409,6 +409,26 @@ func TestHandleContextRecoveryFollowupRedactsResidualRetrieve(t *testing.T) {
 	}
 }
 
+func contextRecoveryRedactionContext() *RequestContext {
+	return &RequestContext{
+		SourceFormat:                   llmprotocol.OpenAIChatV1,
+		ContextCompressionRecoveryKeys: []string{"secret-key"},
+		VSRSelectedDecision: &config.Decision{
+			Name: "recoverable",
+			Plugins: []config.DecisionPlugin{{
+				Type: config.DecisionPluginContextCompression,
+				Configuration: config.MustStructuredPayload(map[string]interface{}{
+					"enabled": true,
+					"recovery": map[string]interface{}{
+						"enabled": true,
+						"store":   "redis",
+					},
+				}),
+			}},
+		},
+	}
+}
+
 func TestRedactContextRecoveryToolCallsDoesNotExposeKey(t *testing.T) {
 	body := []byte(`{
 		"id":"initial","object":"chat.completion","created":1,"model":"model",
@@ -428,7 +448,7 @@ func TestRedactContextRecoveryToolCallsDoesNotExposeKey(t *testing.T) {
 	for _, name := range []string{"vsr_context_retrieve", `vsr_context_\u0072etrieve`} {
 		t.Run(name, func(t *testing.T) {
 			encoded := []byte(strings.ReplaceAll(string(body), "vsr_context_retrieve", name))
-			redacted := (&OpenAIRouter{}).redactContextRecoveryToolCalls(encoded, &RequestContext{SourceFormat: llmprotocol.OpenAIChatV1})
+			redacted := (&OpenAIRouter{}).redactContextRecoveryToolCalls(encoded, contextRecoveryRedactionContext())
 			if strings.Contains(string(redacted), "secret-key") || strings.Contains(string(redacted), name) {
 				t.Fatalf("redacted response leaked recovery data: %s", redacted)
 			}
@@ -445,6 +465,108 @@ func TestRedactContextRecoveryToolCallsPreservesOrdinaryResponse(t *testing.T) {
 		got := (&OpenAIRouter{}).redactContextRecoveryToolCalls(body, &RequestContext{SourceFormat: llmprotocol.OpenAIChatV1})
 		if string(got) != string(body) {
 			t.Fatalf("ordinary response changed: %s", got)
+		}
+	}
+}
+
+func TestRedactContextRecoveryToolCallsSkipsWhenRetrieveNotExposed(t *testing.T) {
+	body := []byte(`{"id":"answer","model":"model","choices":[{"index":0,"message":{"role":"assistant","content":"price \u003c 10"},"finish_reason":"stop"}]}`)
+	cases := []*RequestContext{
+		{SourceFormat: llmprotocol.OpenAIChatV1},
+		{
+			SourceFormat: llmprotocol.OpenAIChatV1,
+			VSRSelectedDecision: &config.Decision{
+				Name: "compressed",
+				Plugins: []config.DecisionPlugin{{
+					Type: config.DecisionPluginContextCompression,
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+					}),
+				}},
+			},
+		},
+		{
+			SourceFormat:                   llmprotocol.OpenAIChatV1,
+			ContextCompressionRecoveryKeys: []string{"secret-key"},
+			VSRSelectedDecision: &config.Decision{
+				Name: "recovery-disabled",
+				Plugins: []config.DecisionPlugin{{
+					Type: config.DecisionPluginContextCompression,
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+						"recovery": map[string]interface{}{
+							"enabled": false,
+						},
+					}),
+				}},
+			},
+		},
+	}
+	for index, ctx := range cases {
+		got := (&OpenAIRouter{}).redactContextRecoveryToolCalls(body, ctx)
+		if string(got) != string(body) {
+			t.Fatalf("case %d decoded a response that never offered retrieval: %s", index, got)
+		}
+	}
+}
+
+func TestRedactContextRecoveryToolCallsRedactsAlternativeChoices(t *testing.T) {
+	body := []byte(`{
+		"id":"initial","object":"chat.completion","created":1,"model":"model",
+		"choices":[
+			{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"primary answer"}},
+			{"index":1,"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[{
+				"id":"retrieve-alt",
+				"type":"function",
+				"function":{"name":"vsr_context_retrieve","arguments":"{\"key\":\"secret-key\"}"}
+			}]}},
+			{"index":2,"finish_reason":"tool_calls","message":{"role":"assistant","content":"also calling","tool_calls":[
+				{"id":"client-1","type":"function","function":{"name":"get_weather","arguments":"{\"city\":\"sf\"}"}},
+				{"id":"retrieve-mixed","type":"function","function":{"name":"vsr_context_\u0072etrieve","arguments":"{\"key\":\"secret-key\"}"}}
+			]}}
+		]
+	}`)
+	redacted := (&OpenAIRouter{}).redactContextRecoveryToolCalls(body, contextRecoveryRedactionContext())
+	if strings.Contains(string(redacted), "vsr_context_retrieve") ||
+		strings.Contains(string(redacted), "secret-key") ||
+		strings.Contains(string(redacted), `\u0072`) {
+		t.Fatalf("alternative retrieve leaked: %s", redacted)
+	}
+	var decoded struct {
+		Choices []struct {
+			Index        int    `json:"index"`
+			FinishReason string `json:"finish_reason"`
+			Message      struct {
+				Content   string `json:"content"`
+				ToolCalls []struct {
+					Function struct {
+						Name string `json:"name"`
+					} `json:"function"`
+				} `json:"tool_calls"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(redacted, &decoded); err != nil {
+		t.Fatalf("redacted response: %v %s", err, redacted)
+	}
+	if len(decoded.Choices) != 3 {
+		t.Fatalf("choices = %#v", decoded.Choices)
+	}
+	if decoded.Choices[0].Message.Content != "primary answer" {
+		t.Fatalf("primary choice = %#v", decoded.Choices[0])
+	}
+	if decoded.Choices[1].Message.Content != "Additional compressed context could not be retrieved." ||
+		len(decoded.Choices[1].Message.ToolCalls) != 0 {
+		t.Fatalf("retrieve-only alternative = %#v", decoded.Choices[1])
+	}
+	if len(decoded.Choices[2].Message.ToolCalls) != 1 ||
+		decoded.Choices[2].Message.ToolCalls[0].Function.Name != "get_weather" ||
+		decoded.Choices[2].Message.Content != "also calling" {
+		t.Fatalf("mixed alternative = %#v", decoded.Choices[2])
+	}
+	for _, choice := range decoded.Choices {
+		if choice.FinishReason != "tool_calls" {
+			t.Fatalf("finish_reason = %#v", decoded.Choices)
 		}
 	}
 }

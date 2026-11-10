@@ -357,9 +357,20 @@ func mergeContextRecoveryTokenCount(left, right llmprotocol.TokenCount) (llmprot
 	return llmprotocol.TokenCount{Value: &value, Provenance: provenance}, nil
 }
 
+// contextRecoveryRetrieveExposed reports whether this request was offered
+// vsr_context_retrieve. Redaction is limited to that case so unrelated
+// responses are not decoded.
+func contextRecoveryRetrieveExposed(ctx *RequestContext) bool {
+	if ctx == nil || ctx.VSRSelectedDecision == nil || len(ctx.ContextCompressionRecoveryKeys) == 0 {
+		return false
+	}
+	plugin := ctx.VSRSelectedDecision.GetContextCompressionConfig()
+	return plugin != nil && plugin.Recovery != nil && plugin.Recovery.Enabled
+}
+
 //nolint:cyclop // Redaction walks every neutral output and nested tool result fail-closed.
 func (r *OpenAIRouter) redactContextRecoveryToolCalls(responseBody []byte, ctx *RequestContext) []byte {
-	if ctx == nil {
+	if !contextRecoveryRetrieveExposed(ctx) {
 		return responseBody
 	}
 	// JSON may escape characters in a tool name. Only skip decoding when
@@ -380,30 +391,7 @@ func (r *OpenAIRouter) redactContextRecoveryToolCalls(responseBody []byte, ctx *
 	if err != nil {
 		return responseBody
 	}
-	changed := false
-	keptClientToolCalls := false
-	for itemIndex := range decoded.Response.Output {
-		item := &decoded.Response.Output[itemIndex]
-		kept := item.Content[:0]
-		for _, content := range item.Content {
-			if content.Kind == llmprotocol.ContentToolCall && content.ToolCall != nil &&
-				content.ToolCall.Name == contextcompression.RetrieveToolName {
-				changed = true
-				continue
-			}
-			if content.Kind == llmprotocol.ContentToolCall {
-				keptClientToolCalls = true
-			}
-			kept = append(kept, content)
-		}
-		item.Content = kept
-		if len(item.Content) == 0 {
-			item.Content = []llmprotocol.Content{{
-				Kind: llmprotocol.ContentText,
-				Text: "Additional compressed context could not be retrieved.",
-			}}
-		}
-	}
+	changed, keptClientToolCalls := redactContextRecoverySequences(&decoded.Response)
 	if !changed {
 		return responseBody
 	}
@@ -418,4 +406,40 @@ func (r *OpenAIRouter) redactContextRecoveryToolCalls(responseBody []byte, ctx *
 		return responseBody
 	}
 	return encoded.Body
+}
+
+// redactContextRecoverySequences strips vsr_context_retrieve from the primary
+// output and every additional choice. Chat stores choices after the first in
+// Alternatives, and one stop reason is encoded onto every choice.
+func redactContextRecoverySequences(response *llmprotocol.Response) (bool, bool) {
+	changed := false
+	keptClientToolCalls := false
+	sequences := append([][]llmprotocol.OutputItem{response.Output}, response.Alternatives...)
+	for sequenceIndex := range sequences {
+		for itemIndex := range sequences[sequenceIndex] {
+			item := &sequences[sequenceIndex][itemIndex]
+			kept := item.Content[:0]
+			stripped := false
+			for _, content := range item.Content {
+				if content.Kind == llmprotocol.ContentToolCall && content.ToolCall != nil &&
+					content.ToolCall.Name == contextcompression.RetrieveToolName {
+					changed = true
+					stripped = true
+					continue
+				}
+				if content.Kind == llmprotocol.ContentToolCall {
+					keptClientToolCalls = true
+				}
+				kept = append(kept, content)
+			}
+			item.Content = kept
+			if stripped && len(item.Content) == 0 {
+				item.Content = []llmprotocol.Content{{
+					Kind: llmprotocol.ContentText,
+					Text: "Additional compressed context could not be retrieved.",
+				}}
+			}
+		}
+	}
+	return changed, keptClientToolCalls
 }
