@@ -141,6 +141,9 @@ An open ecosystem spanning research, infrastructure, and enterprise adoption.
 
 <div align="center">
   <a href="https://vllm-sr.ai/#ecosystem">
-    <img src="website/static/img/ecosystem/ecosystem.webp" alt="vLLM Semantic Router's growing ecosystem: AMD, Hugging Face, Microsoft, Intel, NVIDIA, Red Hat, IBM, Liquid, DaoCloud, Delta, MBZUAI, McGill, KR Labs, University of Chicago, UC Berkeley, UMass Boston, University of Illinois Chicago, National Taiwan University, New York University, UBS, AI21, Bayer, Dell, and Nutanix." width="100%"/>
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="website/static/img/ecosystem/ecosystem-dark-theme.png">
+      <img src="website/static/img/ecosystem/ecosystem-light-theme.png" alt="vLLM Semantic Router's growing ecosystem: AMD, Hugging Face, Microsoft, Intel, NVIDIA, Red Hat, IBM, Liquid, DaoCloud, Delta, MBZUAI, McGill, KR Labs, University of Chicago, UC Berkeley, UMass Boston, University of Illinois Chicago, National Taiwan University, New York University, UBS, AI21, Bayer, Dell, and Nutanix." width="100%"/>
+    </picture>
   </a>
 </div>

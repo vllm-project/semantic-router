@@ -27,6 +27,31 @@ The `vllm-sr-wordmark-dark` and `vllm-sr-wordmark-light` PNG/SVG pairs each cont
 the same artwork, including the original yellow and blue V. Both are
 2160 × 690 pixels.
 
-`atmosphere.webp` is the generated background plate. `ecosystem.webp` is a static
-export of the homepage ecosystem section for the repository README. Keep its
-logo order and copy synchronized with `EcosystemSection.tsx`.
+`atmosphere.webp` is the generated background plate.
+
+## README logo wall
+
+The repository README shows `ecosystem-light-theme.png` on GitHub's light theme
+and `ecosystem-dark-theme.png` on its dark theme, through a `<picture>` element.
+Both are transparent PNGs, 2000 pixels wide, rendered from these SVGs by
+`website/scripts/build-ecosystem-composite.mjs`. Like `EcosystemSection.tsx`, the
+light-theme wall uses each `*-light.svg` variant where one exists and the
+dark-theme wall uses the plain SVGs. The script lays the organizations out in the
+homepage's order, in rows of five (the fourth row has four), and sizes each logo
+to the same optical weight: the same box area, adjusted for ink coverage, within
+height, width and upscaling limits.
+
+When the organizations change, update the script's `rows` and the README's alt
+text to match `EcosystemSection.tsx`, then render both PNGs from the repository
+root:
+
+```sh
+docker run --rm --init --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/repo -w /repo \
+  mcr.microsoft.com/playwright:v1.57.0-noble sh -c '
+    npm install --prefix /tmp/deps --no-save --no-audit --no-fund playwright@1.57.0 sharp@0.34.5 >/dev/null &&
+    NODE_PATH=/tmp/deps/node_modules node website/scripts/build-ecosystem-composite.mjs'
+```
+
+The captions load Inter from Google Fonts, so the container needs network access.
+`--preview DIR` also writes each wall flattened on its GitHub background
+(`#ffffff` or `#0d1117`) for review.
