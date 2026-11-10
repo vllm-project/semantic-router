@@ -87,7 +87,7 @@ recipes:
 | 字段 | 用途 |
 | --- | --- |
 | `output_contract` | 决策范围的提示词文本：应同时作用于静态 Flow、动态 Flow、Fusion 和 ReMoM 的基准或应用格式要求，而不是硬编码进算法的任务特定提示词。 |
-| `output_contract_spec` | 由 Router 执行的类型化归一化和后处理，例如 choice 提取、终端动作 JSON 归一化或引用解引用。 |
+| `output_contract_spec` | 由 Router 执行的类型化归一化和后处理，例如 choice 提取或终端动作 JSON 归一化。只有 Fusion、ReMoM 和 Flow 决策接受它；Flow 拒绝 `reference_selection`，因为其最终阶段列出的 worker 输出没有编号。 |
 
 提取默认精确匹配 `content`。仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
 

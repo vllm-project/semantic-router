@@ -49,6 +49,8 @@ func appendFusionStageMessage(req *openai.ChatCompletionNewParams, content strin
 	if err != nil {
 		return req
 	}
+	// Decoding drops a json_schema payload from response_format (#3024).
+	appended.ResponseFormat = req.ResponseFormat
 	return &appended
 }
 

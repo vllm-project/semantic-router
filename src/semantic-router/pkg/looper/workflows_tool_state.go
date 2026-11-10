@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/shared"
+	"github.com/tidwall/gjson"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -76,6 +78,31 @@ type workflowPendingToolState struct {
 	ToolCallIDs                 []string                           `json:"tool_call_ids,omitempty"`
 	ToolTrajectory              []workflowAgentToolTurn            `json:"tool_trajectory,omitempty"`
 	Streaming                   bool                               `json:"streaming"`
+}
+
+// UnmarshalJSON decodes a stored state. The SDK decodes every response_format
+// as its text variant and drops a json_schema payload (#3024), so each stored
+// request takes its schema back from the stored JSON.
+func (s *workflowPendingToolState) UnmarshalJSON(data []byte) error {
+	type storedState workflowPendingToolState
+	if err := json.Unmarshal(data, (*storedState)(s)); err != nil {
+		return err
+	}
+	for _, stored := range []struct {
+		key string
+		req *openai.ChatCompletionNewParams
+	}{{"original_request", s.OriginalRequest}, {"step_request", s.StepRequest}, {"agent_request", s.AgentRequest}} {
+		format := gjson.GetBytes(data, stored.key+".response_format")
+		if stored.req == nil || format.Get("type").String() != "json_schema" {
+			continue
+		}
+		var schema shared.ResponseFormatJSONSchemaParam
+		if err := json.Unmarshal([]byte(format.Raw), &schema); err != nil {
+			return err
+		}
+		stored.req.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{OfJSONSchema: &schema}
+	}
+	return nil
 }
 
 func workflowToolPhase(state *workflowPendingToolState) string {
@@ -500,6 +527,8 @@ func appendWorkflowRawMessages(req *openai.ChatCompletionNewParams, rawMessages 
 	if err := json.Unmarshal(data, &appended); err != nil {
 		return nil, fmt.Errorf("parse request with workflow tool messages: %w", err)
 	}
+	// Decoding drops a json_schema payload from response_format (#3024).
+	appended.ResponseFormat = req.ResponseFormat
 	return &appended, nil
 }
 
