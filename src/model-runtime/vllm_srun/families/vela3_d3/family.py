@@ -44,9 +44,10 @@ GOLDEN_STATE = {
     "user": "Hi, I'm Tom Baker (tom.baker@example.com). Is paracetamol safe to take with ibuprofen?",
     "answer": "Yes. Adults can take both, with paracetamol up to 4 grams in 24 hours.",
 }
-# Router IDs and labels every size ships, asked in the packages' trained wording:
-# ``attack`` takes the decision adapter, ``domain`` its task adapter, and ``pii``
-# is a router label set.
+# Each question takes a different path in every size: ``topic`` the base with
+# adapters off, ``attack`` the decision adapter, ``domain`` its task adapter and
+# ``contact`` the ``pii`` router label set. Router questions keep the packages'
+# trained wording; changing any question invalidates the recorded references.
 GOLDEN_QUESTIONS = {
     "topic": {
         "type": "choice",

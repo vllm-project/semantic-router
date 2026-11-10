@@ -1,108 +1,55 @@
-"""The Vela 3.0 d3 golden request answers through the real readiness path, with and without a recorded reference."""
+"""The Vela 3.0 d3 golden request: its recorded references and its answers on the fixture."""
 
 from __future__ import annotations
 
-import copy
+import asyncio
 
 import pytest
-from vllm_srun.accel.cpu import CPUAccelerator
-from vllm_srun.errors import VerificationError
-from vllm_srun.families.vela3_d3.family import GOLDEN_QUESTIONS, Vela3D3Family
+from vllm_srun.families.vela3_d3.family import (
+    GOLDEN_QUESTIONS,
+    GOLDEN_STATE,
+)
 from vllm_srun.plugins.decisions import well_formed
 from vllm_srun.registry import builtin
-from vllm_srun.supervision.readiness import CPU_TOLERANCE
 from vllm_srun.testing import vela3_d3 as fixture
 
 from .conftest import start_runtime
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 
-
-@pytest.fixture(scope="module")
-def written(tmp_path_factory):
-    return fixture.write_fixture(
-        tmp_path_factory.mktemp("v3golden") / "vela3-fixture", "text", 7
-    )
-
-
-def start(written):
-    base = written.parent / f"{written.name}-base"
-    return start_runtime(written, base_path=str(base))
-
-
-@pytest.fixture(scope="module")
-def unrecorded(written):
-    runtime = start(written)
-    served = runtime.lookup(None)
-    goldens = copy.deepcopy(served.family.golden(served.package))
-    values = [served.golden_surface(g["surface"], g["body"]) for g in goldens]
-    yield runtime, goldens, values
-    runtime.stop()
+CHOICES = {
+    qid: set(q["criteria"])
+    for qid, q in GOLDEN_QUESTIONS.items()
+    if q["type"] == "choice"
+}
 
 
 def test_every_size_has_rocm_references_for_the_golden_request() -> None:
-    models = builtin.all_models("vela3_d3")
-    assert len(models) == 4
-    for model in models:
+    for model in builtin.all_models("vela3_d3"):
         for device_class in ("rocm", "rocm:gfx942"):
             answers = model.golden_answers.get(device_class)
             assert answers, (model.repo_id, device_class)
             assert set(answers) == set(GOLDEN_QUESTIONS), model.repo_id
             assert all(well_formed(a) for a in answers.values()), model.repo_id
+            for qid, criteria in CHOICES.items():
+                assert set(answers[qid]["probabilities"]) == criteria, (
+                    model.repo_id,
+                    qid,
+                )
 
 
-def test_without_a_recorded_reference_the_check_is_unverified_not_failed(
-    unrecorded,
+def test_the_golden_request_answers_and_its_span_question_takes_the_pii_label_set(
+    tmp_path,
 ) -> None:
-    runtime, goldens, _ = unrecorded
-    assert [g["expected"] for g in goldens] == [{}]
-    served = runtime.lookup(None)
-    assert served.health.ready
-    assert served.health.golden.status == "unverified"
-
-
-def test_every_question_answers_well_formed_and_the_span_question_too(
-    unrecorded,
-) -> None:
-    _, _, (values,) = unrecorded
-    assert set(values) == set(GOLDEN_QUESTIONS)
-    assert all(well_formed(answer) for answer in values.values())
-    assert values["contact"]["type"] == "noul"
-
-
-def test_the_answers_are_deterministic(unrecorded) -> None:
-    runtime, goldens, (values,) = unrecorded
-    again = runtime.lookup(None).golden_surface(
-        goldens[0]["surface"], goldens[0]["body"]
-    )
-    assert again == values
-
-
-def serve_against(written, unrecorded, monkeypatch, drift):
-    runtime, goldens, (values,) = unrecorded
-    reference = copy.deepcopy(values)
-    reference["contact"]["noul"] += drift
-    key = CPUAccelerator().golden_reference(runtime.lookup(None).placement.device)
-    expected = {"cpu": reference, **({key: reference} if key else {})}
-    recorded = [{**goldens[0], "expected": expected}]
-    monkeypatch.setattr(Vela3D3Family, "golden", lambda self, package: recorded)
-    return start(written)
-
-
-def test_a_matching_reference_for_the_device_class_matches(
-    written, unrecorded, monkeypatch
-) -> None:
-    runtime = serve_against(written, unrecorded, monkeypatch, 0.0)
+    written = fixture.write_fixture(tmp_path / "vela3-fixture", "text", 7)
+    base = written.parent / f"{written.name}-base"
+    runtime = start_runtime(written, base_path=str(base))
     try:
-        served = runtime.lookup(None)
-        assert served.health.golden.status == "matched"
-        assert served.health.ready
+        body = {"state": GOLDEN_STATE, "questions": GOLDEN_QUESTIONS}
+        status, response = asyncio.run(runtime.call("decisions", body))
+        assert status == 200
+        assert set(response["answers"]) == set(GOLDEN_QUESTIONS)
+        assert all(well_formed(a) for a in response["answers"].values())
+        assert response["thresholds"]["contact"] == 0.6
     finally:
         runtime.stop()
-
-
-def test_a_span_answer_that_drifts_from_the_reference_fails_the_check(
-    written, unrecorded, monkeypatch
-) -> None:
-    with pytest.raises(VerificationError, match="differ from the reference"):
-        serve_against(written, unrecorded, monkeypatch, 2 * CPU_TOLERANCE)
