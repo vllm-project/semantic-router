@@ -32,7 +32,29 @@ config:
               gte: 0.5
             # A deployment that gives no answer counts as PII found.
             on_unknown: match
+          # Reads what the agent's tools brought back and nothing else: the
+          # user turn is left out, and the rule is not asked before a tool
+          # result.
+          - name: pii_tool_output
+            description: Personal data in tool output, never in the user turn
+            predicate:
+              gte: 0.5
+            input:
+              tool_results: true
+              turn: false
       decisions:
+        - name: block_tool_output_pii
+          description: Personal data the agent's tools brought back
+          priority: 1200
+          rules:
+            operator: OR
+            conditions:
+              - type: pii
+                name: pii_tool_output
+          plugins:
+            - type: fast_response
+              configuration:
+                message: A tool result contains personal information.
         - name: block_detected_pii_remote
           description: Detected PII, or an input the deployment could not read in full
           priority: 1100

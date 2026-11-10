@@ -86,8 +86,8 @@ field. The earlier `variant`, `use_modernbert` and `use_mmbert_32k` selectors
 are gone; `vllm-sr config migrate` removes them.
 
 A `pii` rule reads the current user turn. `input.history: true` adds the
-earlier user turns, and `input.tool_results: true` the request's textual tool
-results; the router uses the neutral protocol representation, so the same rule
+earlier user turns, `input.tool_results: true` the request's textual tool
+results, and `input.turn: false` leaves the current turn out; the router uses the neutral protocol representation, so the same rule
 applies to the supported chat, responses, and messages wire formats. The rule
 needs a deployment that answers span questions, or the configuration fails to
 load with `span_required`; the default decision model, vela3-fast, returns

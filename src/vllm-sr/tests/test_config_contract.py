@@ -27,6 +27,16 @@ def test_pii_input_survives_cli_round_trip_and_rejects_unknown_fields():
         PIIRule(name="invalid", input={"source": "tool_result"})
 
 
+def test_pii_input_can_leave_the_user_turn_out_only_with_something_else_to_read():
+    rule = PIIRule(
+        name="tool-output", input={"tool_results": True, "turn": False}
+    )
+
+    assert rule.model_dump(exclude_none=True)["input"]["turn"] is False
+    with pytest.raises(ValueError, match="input.history or input.tool_results"):
+        PIIRule(name="nothing", input={"turn": False})
+
+
 def test_unknown_policy_literal_matches_allowed_values():
     assert get_args(UnknownPolicy) == UNKNOWN_POLICY_VALUES
     assert UNKNOWN_POLICY_VALUES == ("no_match", "match", "fail_request")

@@ -4505,6 +4505,9 @@
         },
         "tool_results": {
           "type": "boolean"
+        },
+        "turn": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -6225,6 +6228,9 @@
           "type": "boolean"
         },
         "tool_results": {
+          "type": "boolean"
+        },
+        "turn": {
           "type": "boolean"
         },
         "image": {

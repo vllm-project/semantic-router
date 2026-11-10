@@ -145,8 +145,8 @@ runtime dependency; they do not define routing behavior by themselves.
   an Entrypoint assigns Models. Request-time context filtering cannot silently
   reduce the eligible pool below that contract.
 - A PII rule reads the current user turn. `input.history: true` adds the
-  earlier user turns, and `input.tool_results: true` the request's textual
-  tool results.
+  earlier user turns, `input.tool_results: true` the request's textual
+  tool results, and `input.turn: false` leaves the current turn out.
 - The decision model answers the application signals (domain, PII, jailbreak,
   complexity and the others) as System One questions. A rule's `deployment`, a
   recipe's `model_bindings` or `global.model_catalog.bindings` names another

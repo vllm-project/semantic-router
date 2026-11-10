@@ -174,6 +174,9 @@ func validateSystemOneInput(rule SystemOneRule) error {
 	if rule.EffectiveStage() == SystemOneStageRequest && (input.Answer || input.Context) {
 		return fmt.Errorf("input.answer and input.context read the model's answer and its grounding context, which a request-stage rule does not have; set stage: response, or read the request's tool results with input.tool_results")
 	}
+	if err := validateTurnlessInput(rule); err != nil {
+		return err
+	}
 	switch rule.Coverage {
 	case "", SystemOneCoverageTruncate, SystemOneCoverageFull:
 	default:
@@ -187,6 +190,26 @@ func validateSystemOneInput(rule SystemOneRule) error {
 		}
 	default:
 		return fmt.Errorf("on_unscanned must be %s, %s or %s", SystemOneUnscannedMatch, SystemOneUnscannedNoMatch, SystemOneUnscannedUnknown)
+	}
+	return nil
+}
+
+// validateTurnlessInput checks a rule that leaves the current user turn out:
+// it reads the request's earlier user turns or tool results, and nothing that
+// belongs to the turn or to the answer.
+func validateTurnlessInput(rule SystemOneRule) error {
+	input := rule.Input
+	if input.ReadsTurn() {
+		return nil
+	}
+	if rule.EffectiveStage() != SystemOneStageRequest {
+		return fmt.Errorf("input.turn: false applies to a request-stage rule")
+	}
+	if !input.History && !input.ToolResults {
+		return fmt.Errorf("input.turn: false leaves the current user turn out, so the rule reads input.history or input.tool_results")
+	}
+	if input.PreviousTurns > 0 || input.Image || input.Audio || input.Video {
+		return fmt.Errorf("input.turn: false reads only the earlier user turns and the tool results; drop input.previous_turns and the media inputs")
 	}
 	return nil
 }
