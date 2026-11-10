@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 models = importlib.import_module("cli.models")
 UserConfig = models.UserConfig
 Rules = models.Rules
+parse_user_config = importlib.import_module("cli.parser").parse_user_config
 
 
 def _decision(**overrides):
@@ -316,8 +317,6 @@ def test_custom_evaluation_requires_versioned_namespace():
 
 def test_unquoted_measured_at_date_loads_as_the_router_reads_it(tmp_path):
     """YAML reads an unquoted 2026-09-09 as a date; the Router keeps the text."""
-    from cli.parser import parse_user_config
-
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         """version: v0.5

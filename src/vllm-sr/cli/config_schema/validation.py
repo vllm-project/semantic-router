@@ -20,9 +20,12 @@ def _const(validator, const, instance, schema):
     # The Router expands an environment reference to text before it decodes a
     # field, so a reference can stand for a text constant such as the "auto"
     # of a number-or-auto field. A number or boolean field takes no text.
-    if isinstance(const, str) and isinstance(instance, str):
-        if references_environment(instance):
-            return
+    if (
+        isinstance(const, str)
+        and isinstance(instance, str)
+        and references_environment(instance)
+    ):
+        return
     yield from _CONST(validator, const, instance, schema)
 
 
