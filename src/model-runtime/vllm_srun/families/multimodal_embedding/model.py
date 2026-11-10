@@ -8,12 +8,14 @@ runs the published model's towers on the native engine and its readouts here;
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, wait
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 import torch
 
+from ...errors import INVALID_INPUT
 from ...heads import embedding
 from ...plugins.base import (
     EncoderBatch,
@@ -61,18 +63,54 @@ class OmniModel(LoadedModel[embedding.EmbedItem, list[float] | None]):
     def plan_surface(
         self, surface: str, request: SurfaceRequest
     ) -> SurfacePlan[embedding.EmbedItem]:
+        return self._plan_surface(surface, request)
+
+    def plan_cached_surface(
+        self,
+        surface: str,
+        request: SurfaceRequest,
+        lookup: Callable[[str], tuple[bool, Any]],
+    ) -> SurfacePlan[embedding.EmbedItem]:
+        return self._plan_surface(surface, request, lookup)
+
+    def _plan_surface(
+        self,
+        surface: str,
+        request: SurfaceRequest,
+        lookup: Callable[[str], tuple[bool, Any]] | None = None,
+    ) -> SurfacePlan[embedding.EmbedItem]:
         if surface != "embeddings":
             raise UnsupportedSurfaceError(surface, self.info.id)
         assert self.info.embedding is not None
         parsed = embedding.parse_request(
             request, self.info.embedding, self.info.limits["max_input_tokens"]
         )
-        items = [self._item(entry, parsed) for entry in parsed.inputs]
+        lookups: dict[str, tuple[bool, Any]] = {}
+
+        def cached(key: str) -> tuple[bool, Any]:
+            if key not in lookups:
+                assert lookup is not None
+                lookups[key] = lookup(key)
+            return lookups[key]
+
+        items = [
+            self._item(entry, parsed, cached if lookup is not None else None)
+            for entry in parsed.inputs
+        ]
         rep = embedding.representation(self.info.model_sha256, 0, self.dimension, True)
-        return embedding.plan(request, parsed, items, rep)
+        plan = embedding.plan(request, parsed, items, rep)
+        plan.cache_lookups = {
+            position: lookups[item.cache_key]
+            for position, item in enumerate(plan.items)
+            if item.cache_key in lookups and lookups[item.cache_key][0]
+        }
+        return plan
 
     def _item(
-        self, entry: embedding.EmbeddingInput, parsed: embedding.EmbeddingRequest
+        self,
+        entry: embedding.EmbeddingInput,
+        parsed: embedding.EmbeddingRequest,
+        lookup: Callable[[str], tuple[bool, Any]] | None = None,
     ) -> tuple[embedding.EmbedItem, dict[str, Any] | None] | str:
         if entry.error is not None:
             return entry.error
@@ -98,6 +136,16 @@ class OmniModel(LoadedModel[embedding.EmbedItem, list[float] | None]):
                 embedding.EmbedItem(entry.index, "image", [], key, inputs, cost),
                 None,
             )
+        if lookup is not None:
+            if not self.audio.supports_media_type(entry.media_type):
+                return INVALID_INPUT
+            if lookup(key)[0]:
+                return (
+                    embedding.EmbedItem(
+                        entry.index, "audio", [], key, cost=self.media_cost["audio"]
+                    ),
+                    None,
+                )
         features = self.audio.features(entry.data, entry.media_type)
         if isinstance(features, str):
             return features
