@@ -91,6 +91,8 @@ a frontend attaches to, or for direct runtime development:
 | `--max-bundle-tasks` | `64` | Most tasks in one `/v1/bundle` request. |
 | `--load-attempts` | `5` | Loads of a model before it stays `failed`; a damaged package or a failed self-check is not retried. |
 | `--load-retry-seconds` | `5` | Wait before the first reload of a model that failed to load, doubling up to 300 s. |
+| `--forward-timeout-seconds` | `300` | A forward running longer makes its model `degraded` and `GET /health/live` answer 503 until it returns, so a liveness probe restarts a hung worker. `0` turns this watchdog off. |
+| `--shutdown-grace-seconds` | `8` | On SIGTERM, how long the server waits for requests and forwards in flight. It then exits even while a forward runs, with status 4, and logs the forwards it abandoned. |
 | `--result-cache-entries` | `16384` | Recent results each model keeps by content; `0` turns the cache off. |
 | `--cache-dir` | `HF_HUB_CACHE` | Hugging Face cache directory. |
 | `--offline` | off | Use only files already in the cache. |
