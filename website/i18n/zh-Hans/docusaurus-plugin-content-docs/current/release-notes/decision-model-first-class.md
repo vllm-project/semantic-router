@@ -13,7 +13,7 @@ translation:
 Router 早已用同一个模型家族，即 System One 决策模型，回答大多数路由问题。但它的配置描述的仍是一套更早的系统：每个信号都有自己的小型专用模型，或依赖嵌入相似度技巧。v0.5 让决策模型成为一等模型：
 
 - **信号分为三层：** 用于你自己编写问题的 `systemone` 原语；十一个应用信号，每个都编译成一个 `systemone` 问题；以及七个确定性的启发式信号。
-- **处处零样本。** 每个 System One 模型都能零样本回答它支持的每个问题；训练过的适配器和校准阈值是按家族进行的优化。各模型能回答的问题类型不同：Decision 1.0、2.0 和 3.0 不返回 span，vela3-fast 不回答 score 问题。问题解析到不能回答其类型的部署时，配置加载失败（`span_required`、`question_type_unsupported`）。
+- **处处零样本。** 每个 System One 模型都能零样本回答它支持的每个问题；训练过的适配器和校准阈值是按家族进行的优化。各模型能回答的问题类型不同：Decision 1.0、2.0 和 3.0 不返回 span，vela3-fast 不回答 score 问题。问题解析到不能回答其类型的部署时，配置加载失败：规则报 `span_required` 或 `question_type_unsupported`，评审、`systemone` 选择器或 escalate 检查报一条指出该部署及其能回答的类型的消息。
 - **相似度只有一个 `match` 块**，包含可选的嵌入或 BM25 `recall` 阶段，以及可选的 System One `judge` 阶段。每个评审对候选数都有硬上限，溢出只会截断，绝不会报错。
 - **嵌入只用于召回，并按需启动。** 没有任何决策路径使用嵌入。
 - **调用 System One 只有一种方式：** 标准请求，或一组命名标准请求组成的批量请求。
@@ -49,7 +49,7 @@ Router 早已用同一个模型家族，即 System One 决策模型，回答大�
 ## 预期的行为变化 {#behavior-to-expect}
 
 - **模型没有给出答案的 `jailbreak` 和 `pii` 规则不匹配。** 默认的 `on_unknown` 与以前一样是 `no_match`：决策模型宕机时，防护会放行流量。`on_unknown: match` 是失败关闭的显式选择，migrate 会为早期版本的 `on_error: block` 写入它。模型没能读到的文本仍按攻击或个人数据计入。
-- **原来属于其他模型的阈值已重新拟合。** 没有 `predicate` 的规则使用回答模型的校准阈值，否则使用 0.5 并给出 `uncalibrated_preset` 警告。
+- **原来属于其他模型的阈值已重新拟合。** 没有 `predicate` 的 domain、用户反馈、modality 或 PII 规则，以及读取其预设正向选项（`FACT_CHECK_NEEDED`、`unsafe`、`refusal`、`jailbreak`）的规则，使用回答模型的校准阈值，否则使用 0.5 并给出 `uncalibrated_preset` 警告。其他没有 `predicate` 的规则以模型自己的选择为准，hallucination 规则以模型自己的 span 阈值为准。
 - **能拒绝或改写回答的 `response_guard` 会扣住流式回答。** 对于守卫会拦截或写入说明的决策，Router 会缓冲它的流，直到守卫读完整个回答，再发送原有事件，或以该协议的流错误形式发送拒绝消息。首 token 时间只在这些决策上增加，被扣住的回答上限为 64 MiB。只做标注或只记录的守卫保持真正的流式传输。
 - **需要 span 的规则必须解析到支持 span 的部署**，否则配置以 `span_required` 失败。默认决策模型 vela3-fast 能返回 span。
 - **RAG 相关性和工具选择由决策模型评判**，语义缓存命中由它的 `same_request` 问题确认。响应缓存的语义匹配默认使用嵌入召回（`top_k: 3`，`min_similarity: 0.8`），再由 `same_request` 确认（`min_score: 0.8`）；`mode: exact` 不变。

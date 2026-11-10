@@ -265,10 +265,10 @@ type ConversationSource struct {
 }
 
 type NumericPredicate struct {
-	GT  *float64 `yaml:"gt,omitempty"`
-	GTE *float64 `yaml:"gte,omitempty"`
-	LT  *float64 `yaml:"lt,omitempty"`
-	LTE *float64 `yaml:"lte,omitempty"`
+	GT  *float64 `yaml:"gt,omitempty" json:"gt,omitempty"`
+	GTE *float64 `yaml:"gte,omitempty" json:"gte,omitempty"`
+	LT  *float64 `yaml:"lt,omitempty" json:"lt,omitempty"`
+	LTE *float64 `yaml:"lte,omitempty" json:"lte,omitempty"`
 }
 
 type Subject struct {

@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 )
@@ -39,6 +40,7 @@ type semanticStreamItem struct {
 	reasoning        string
 	reasoningSig     string
 	toolCall         *llmprotocol.ToolCall
+	image            *llmprotocol.GeneratedImage
 	completed        bool
 	reasoningDetails map[int]llmprotocol.ReasoningDetail
 }
@@ -338,6 +340,10 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				call := *event.ToolCall
 				item.toolCall = &call
 			}
+			if event.Content != nil && event.Content.GeneratedImage != nil {
+				image := *event.Content.GeneratedImage
+				item.image = &image
+			}
 		case llmprotocol.EventResponseCompleted:
 			state.terminal = true
 			state.stopSeq = event.MatchedStopSequence
@@ -397,6 +403,10 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 		if item.toolCall != nil {
 			call := *item.toolCall
 			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentToolCall, ToolCall: &call})
+		}
+		if item.image != nil {
+			image := *item.image
+			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentGeneratedImage, GeneratedImage: &image})
 		}
 		if len(contents) == 0 {
 			return nil, fmt.Errorf("semantic stream output item is empty")
@@ -470,7 +480,9 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 // commitStreamedAnswer keeps an answer the client received as it streamed:
 // the selected decision's response_guard, which neither blocks nor writes
 // notes, reads it and records what it found, and the answer reaches the
-// cache, memory, the Responses object and Router Replay.
+// cache, memory, the Responses object and Router Replay. An answer the guard
+// could not read for want of the request's delegated credential reaches
+// Router Replay only.
 func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticResponse *llmprotocol.Response) {
 	recordPrimaryOutputDigest(ctx, semanticResponse)
 	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
@@ -488,10 +500,21 @@ func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticRespons
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_encode_failed", true)
 		return
 	}
-	r.updateResponseCache(ctx, encoded)
 	r.updateKVAddressRegistry(ctx)
-	r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
-	r.persistResponseObject(ctx)
+	if principal.Refused(ctx.TraceContext) {
+		// The client already has the answer, so it is not refused, but
+		// nothing keeps an answer nothing checked.
+		logging.ComponentWarnEvent("extproc", "streamed_answer_not_kept", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"reason":     delegatedCredentialCode,
+		})
+		metrics.RecordCacheWriteSkipped(delegatedCredentialCode)
+		r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", delegatedCredentialCode, false)
+	} else {
+		r.updateResponseCache(ctx, encoded)
+		r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
+		r.persistResponseObject(ctx)
+	}
 	r.attachRouterReplayResponse(ctx, encoded, true)
 }
 

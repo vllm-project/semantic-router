@@ -49,7 +49,7 @@ curl -s localhost:8899/v1/systemone/models
 
 - **只加载你用到的。** 内置功能会自动解析其默认模型（[为信号选择模型](../../installation/choose-a-model-for-a-signal.md)）。Router 只为有内容解析到的部署以及显式发布的原生模型启动托管 worker。未使用的部署不加载任何权重。
 - **启动时等待所需的模型。** 附加模型的就绪遵循[就绪规则](../deploy/readiness-and-monitoring.md#when-a-model-is-not-ready)。
-- **慢模型绝不会卡住请求。** 信号截止时间限定请求的等待时长；未完成的信号遵循其配置的错误或未扫描策略。
+- **慢模型绝不会卡住请求。** 信号截止时间限定请求的等待时长；未完成的信号没有答案，按其 `on_error` 或 `on_unknown` 策略处理。
 
 ## 你可以依赖什么 {#what-you-can-rely-on}
 

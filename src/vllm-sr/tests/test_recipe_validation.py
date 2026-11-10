@@ -88,6 +88,69 @@ def test_recipe_model_references_are_validated():
     assert any("unknown model 'missing-model'" in error.message for error in errors)
 
 
+@pytest.mark.parametrize(
+    ("ref", "message"),
+    [
+        ({"model": "ghost"}, "Decision 'support' references unknown model 'ghost'"),
+        (
+            {"model": "general", "lora_name": "undeclared"},
+            "Decision 'support' references unknown LoRA 'undeclared' for model 'general'",
+        ),
+        ({"model": "general", "lora_name": "declared"}, None),
+        ({"model": "declared"}, None),
+    ],
+)
+def test_candidate_iteration_models_are_checked_as_the_router_checks_them(ref, message):
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.5",
+            "providers": {
+                "defaults": {"model": "general"},
+                "models": [
+                    {
+                        "name": "general",
+                        "backend_refs": [
+                            {"endpoint": "127.0.0.1:8000", "provider": "vllm"}
+                        ],
+                        "loras": [{"name": "declared"}],
+                    }
+                ],
+            },
+            "recipes": [
+                {
+                    "name": "default",
+                    "decisions": [
+                        {
+                            "name": "support",
+                            "priority": 1,
+                            "rules": {"operator": "AND", "conditions": []},
+                            "modelRefs": [{"model": "general"}],
+                            "candidateIterations": [
+                                {
+                                    "variable": "candidate",
+                                    "source": "models",
+                                    "models": [ref],
+                                    "outputs": [
+                                        {"type": "model", "value": "candidate"}
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    errors = [
+        (error.field, error.message)
+        for error in validate_user_config(config, log_summary=False)
+    ]
+
+    field = "recipes.default.decisions.support.candidateIterations[0].models"
+    assert errors == ([(field, message)] if message else [])
+
+
 def test_catalog_model_cannot_override_reasoning_binding():
     config = recipe_config()
     config.providers.models[0].catalog = "vllm-sr/mom-v1-lite"

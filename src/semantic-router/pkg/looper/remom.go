@@ -264,6 +264,9 @@ type IntermediateResp struct {
 	// bytes-per-token ratio as CompactedContent; it is not part of the
 	// published intermediate-response payload.
 	Usage TokenUsage `json:"-"`
+	// FinishReason is the backend finish_reason, served with the response
+	// when it is the final one.
+	FinishReason string `json:"-"`
 }
 
 // Default synthesis templates
@@ -551,6 +554,7 @@ func (l *ReMoMLooper) buildReMoMRoundResponse(
 			CompactedContent: l.compactResponse(cfg, synthesisText, bytesPerToken),
 			TokenCount:       estimateTokens(synthesisText, bytesPerToken),
 			Usage:            resp.Usage,
+			FinishReason:     backendFinishReason(resp),
 		})
 	}
 	return roundResp

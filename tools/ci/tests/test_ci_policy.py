@@ -137,19 +137,27 @@ class CIExecutionPolicyTests(unittest.TestCase):
         self.assertFalse(plan["deferred_verifications"])
         self.assertTrue(set(full_cpu_ids()) <= set(plan["expected_verification_ids"]))
 
-    def test_main_push_neither_publishes_nor_runs_manual_contracts(self):
-        plan = make_plan([MODEL_PATH], source_sha=SHA, profile="main")
-        self.assertTrue(
-            all(record["execution"] == "automatic" for record in plan["verifications"])
-        )
-        self.assertFalse(plan["publish_images"])
-        self.assertFalse(plan["publish_helm"])
-        self.assertFalse(plan["publish_python"])
+    def test_main_push_publishes_without_running_manual_contracts(self):
+        for publish in (False, True):
+            with self.subTest(publish=publish):
+                plan = make_plan(
+                    [MODEL_PATH], source_sha=SHA, profile="main", publish=publish
+                )
+                self.assertTrue(
+                    all(
+                        record["execution"] == "automatic"
+                        for record in plan["verifications"]
+                    )
+                )
+                self.assertFalse(plan["full_cpu"])
+                self.assertEqual(bool(plan["publish_images"]), publish)
+                self.assertEqual(plan["publish_python"], publish)
+                self.assertFalse(plan["publish_helm"])
 
-    def test_publication_requires_main_and_complete_qualification(self):
+    def test_publication_requires_main_and_a_dispatch_qualifies_fully(self):
         with self.assertRaisesRegex(ValueError, "main profile"):
             make_plan([], source_sha=SHA, publish=True)
-        plan = make_plan([], source_sha=SHA, profile="main", publish=True)
+        plan = make_plan([], source_sha=SHA, profile="main", full=True, publish=True)
         self.assertTrue(plan["full_cpu"])
         self.assertTrue(set(full_cpu_ids()) <= set(plan["expected_verification_ids"]))
         self.assertTrue(plan["publish_images"])

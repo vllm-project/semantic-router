@@ -122,6 +122,8 @@ Router 调用的每个上游都使用同一种形状的 `auth` 块：提供方�
 | 委托 | `credential: delegated` | 发起请求的用户的凭据 |
 | 无 | 两者都不设 | 不带凭据 |
 
+无论哪种模式，调用都不带其他凭据：客户端自己的 `Authorization`、`api-key`、`x-api-key`、`x-goog-api-key`、`api-subscription-key` 或 `Ocp-Apim-Subscription-Key` 标头不会到达上游。位于外部网关之后、未声明后端的模型（`listeners: []`）会为该网关保留这些标头。
+
 委托约定默认关闭。启用后，适用以下规则。
 
 #### 凭据从哪里来 {#where-the-credential-comes-from}
@@ -146,7 +148,7 @@ Router 调用的每个上游都使用同一种形状的 `auth` 块：提供方�
 
 主体是调用的属性：
 
-- **为客户端请求发起的调用**携带该请求的凭据：主分发、回退尝试、Looper 跳转、System One 决策模型调用、`escalate` 评审、`api_format: systemone` 目标、响应检查和召回 embedding。请求没有携带凭据时，Router 在调用之前返回 `401`。
+- **为客户端请求发起的调用**携带该请求的凭据：主分发、回退尝试、Looper 跳转、System One 决策模型调用、`escalate` 评审、`api_format: systemone` 目标、响应检查和召回 embedding。请求没有携带凭据时，Router 在调用之前返回 `401`，到达这类调用的回退链或 Looper 运行以该 `401` 结束，而不是返回另一个模型的回答。保持真正流式传输的守卫在客户端收到回答之后才发起检查，因此被拒绝的检查不会拒绝该回答，但响应缓存、记忆和存储的 Responses 对象都不会保留它。
 - **Router 代表自己发起的调用**从不携带它，委托上游会拒绝这些调用：探测、模型列表读取、`router_replay.shadow` 副本、自动输出的 render、存储构建和管理诊断。
 
 #### 配置会拒绝的情况 {#what-configuration-rejects}

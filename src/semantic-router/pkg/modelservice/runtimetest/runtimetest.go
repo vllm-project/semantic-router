@@ -434,7 +434,8 @@ func (r *Runtime) model(id *string, surface string) (Model, int, *api.ErrorBody)
 // decide answers a decisions request: a standard request, or a batch whose
 // entries it answers as standard requests of their own with the batch's
 // model and options. Like the runtime, it refuses a batch with a top-level
-// state, questions, images or videos.
+// state, questions, images or videos, and an entry refused for its input
+// fails each of its questions with invalid_input unless every entry is.
 func (r *Runtime) decide(body api.DecisionRequest) (int, api.DecisionResponse, *api.ErrorBody) {
 	r.mu.Lock()
 	r.decisions = append(r.decisions, body)
@@ -447,16 +448,28 @@ func (r *Runtime) decide(body api.DecisionRequest) (int, api.DecisionResponse, *
 	}
 	states := make(map[string]api.DecisionStateResponse, len(*body.States))
 	response := api.DecisionResponse{States: &states}
+	refused := 0
 	for name, entry := range *body.States {
-		status, answered, errBody := r.decideState(api.DecisionRequest{Model: body.Model, Options: body.Options, State: entry.State, Questions: entry.Questions})
-		if status != http.StatusOK {
+		status, answered, errBody := r.decideState(api.DecisionRequest{Model: body.Model, Options: body.Options, State: entry.State, Images: entry.Images, Questions: entry.Questions})
+		if status == http.StatusBadRequest && errBody.Reason != nil {
+			if refused++; refused == len(*body.States) {
+				return status, api.DecisionResponse{}, errBody
+			}
+			model, _, _ := r.model(body.Model, "decisions")
+			answered = api.DecisionResponse{Model: model.ID, Answers: make(map[string]api.Answer, len(entry.Questions))}
+			for id, question := range entry.Questions {
+				answered.Answers[id] = api.Answer{Type: question.Type, Error: itemError("invalid_input")}
+			}
+		} else if status != http.StatusOK {
 			return status, api.DecisionResponse{}, errBody
 		}
 		states[name] = api.DecisionStateResponse{
 			Model: answered.Model, Answers: answered.Answers, Sets: answered.Sets, Spans: answered.Spans,
 			Thresholds: answered.Thresholds, SpanHeads: answered.SpanHeads, Usage: answered.Usage, Meta: answered.Meta,
 		}
-		response.Model, response.Meta = answered.Model, answered.Meta
+		if errBody == nil {
+			response.Model, response.Meta = answered.Model, answered.Meta
+		}
 		response.Usage.InputTokens += answered.Usage.InputTokens
 		response.Usage.OutputTokens += answered.Usage.OutputTokens
 	}
@@ -467,6 +480,10 @@ func (r *Runtime) decideState(body api.DecisionRequest) (int, api.DecisionRespon
 	model, status, errBody := r.model(body.Model, "decisions")
 	if status != http.StatusOK {
 		return status, api.DecisionResponse{}, errBody
+	}
+	if body.Images != nil && slices.ContainsFunc(*body.Images, func(image string) bool { return !strings.HasPrefix(image, "data:image/") }) {
+		reason := api.ImageFormat
+		return http.StatusBadRequest, api.DecisionResponse{}, &api.ErrorBody{Code: "invalid_request", Message: "images must be image data URLs", Reason: &reason}
 	}
 	revision := strings.Repeat("a", 40)
 	if model.Labelled != nil {

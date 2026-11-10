@@ -37,7 +37,7 @@ func (r *OpenAIRouter) selectionCapabilityRequest(ctx *RequestContext) (*llmprot
 	}
 	request := *ctx.SemanticRequest
 	request.Stream = ctx.ExpectStreamingResponse
-	if policy := resolveDecisionToolsConfig(ctx).ActivePolicy(); policy.EffectiveMode() == config.ToolsPolicyModeNone {
+	if policy := resolveDecisionToolsConfig(r.Config, ctx).ActivePolicy(); policy.EffectiveMode() == config.ToolsPolicyModeNone {
 		if policy.StripToolHistory {
 			request.Messages = cloneMessagesForToolStrip(request.Messages)
 		}
