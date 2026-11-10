@@ -166,6 +166,26 @@ func TestMigrateKeepsTheModelNamesAReleaseServed(t *testing.T) {
 	}
 }
 
+// An auto model name another entrypoint serves already stays that
+// entrypoint's, even when it is the only one written.
+func TestMigrateKeepsAServedAutoModelNameOnItsEntrypoint(t *testing.T) {
+	before := append(readGolden(t, "testdata/migrate/invalid-value-version-served-model-names/before.yaml"),
+		[]byte("global:\n  router:\n    auto_model_names: [MoM]\n")...)
+	migrated, _, err := MigrateConfig(before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ParseYAMLBytesWithoutEnvExpansion(migrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entrypoint := range cfg.EffectiveEntrypoints(ChatAPI) {
+		if slices.Contains(entrypoint.ModelNames, "MoM") && entrypoint.Recipe != "private" {
+			t.Errorf("MoM reaches %s, want private", entrypoint.Recipe)
+		}
+	}
+}
+
 // The recipe migrate writes for Looper model names copies the default recipe
 // as migrated, so a note that asks something of the default recipe, or of a
 // decision the copy keeps, asks it of the copy too.

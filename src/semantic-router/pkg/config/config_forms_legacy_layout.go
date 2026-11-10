@@ -1096,7 +1096,9 @@ func migrateAutoModelNames(m *Migration, at FormMatch) error {
 		}
 		written := stringItems(mappingValue(entrypoint, "model_names"))
 		if slices.Equal(written, []string{DefaultEntrypointModel}) {
-			m.Set(entrypoint, "model_names", stringSequence(slices.DeleteFunc(names, func(name string) bool { return served[name] && name != DefaultEntrypointModel })...))
+			if kept := slices.DeleteFunc(names, func(name string) bool { return served[name] && name != DefaultEntrypointModel }); len(kept) > 0 {
+				m.Set(entrypoint, "model_names", stringSequence(kept...))
+			}
 			return nil
 		}
 		names = slices.DeleteFunc(names, func(name string) bool { return served[name] })
