@@ -494,11 +494,26 @@ func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticRespons
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_encode_failed", true)
 		return
 	}
-	r.updateResponseCache(ctx, encoded)
+	// A cache hit streams the entry back, so an answer the stream encoder
+	// cannot write, such as a generated image, would fail every hit.
+	if r.cacheBackendEnabled() && r.semanticCacheEnabledForRequest(ctx) && !r.streamsFromCache(ctx, *semanticResponse) {
+		metrics.RecordCacheWriteSkipped("stream_content_unsupported")
+	} else {
+		r.updateResponseCache(ctx, encoded)
+	}
 	r.updateKVAddressRegistry(ctx)
 	r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
 	r.persistResponseObject(ctx)
 	r.attachRouterReplayResponse(ctx, encoded, true)
+}
+
+// streamsFromCache reports whether a cache hit can stream response back.
+func (r *OpenAIRouter) streamsFromCache(ctx *RequestContext, response llmprotocol.Response) bool {
+	engine, err := r.protocolEngine()
+	if err == nil {
+		_, _, err = encodeCachedSemanticStream(engine, ctx, response, nil)
+	}
+	return err == nil
 }
 
 func (r *OpenAIRouter) reportSemanticStreamingUsage(

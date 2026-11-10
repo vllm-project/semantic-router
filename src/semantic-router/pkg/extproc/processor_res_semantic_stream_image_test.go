@@ -6,8 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 const streamedImage = "ZmluYWwtaW1hZ2U="
@@ -70,6 +73,46 @@ func TestStreamedGeneratedImageIsRebuilt(t *testing.T) {
 	}
 	if len(store.responses) != 1 {
 		t.Fatalf("stored Responses objects = %d, want the streamed image's", len(store.responses))
+	}
+}
+
+// A streamed generated image is not cached: a cache hit streams the entry
+// back, and the stream cannot carry an image, so every hit would fail.
+func TestStreamedGeneratedImageIsNotCached(t *testing.T) {
+	responseCache, router, decision := cacheRouterForDecision(config.Decision{
+		Name:      "image-cache-decision",
+		ModelRefs: []config.ModelRef{{Model: "model-a"}},
+		Plugins: []config.DecisionPlugin{{
+			Type: config.DecisionPluginResponseCache,
+			Configuration: config.MustStructuredPayload(map[string]interface{}{
+				"enabled": true,
+				"mode":    config.ResponseCacheModeExactThenSemantic,
+			}),
+		}},
+	})
+	ctx := withSelectedDecision(&RequestContext{
+		RequestID:             "req-image-cache",
+		CacheExactFingerprint: "fingerprint",
+		CacheSemanticSafe:     true,
+		CacheQuery:            "draw a cat",
+		TraceContext:          t.Context(),
+	}, decision)
+	streamingClient(ctx, llmprotocol.OpenAIResponsesV1)
+	skipped := metrics.CacheWriteSkipped.WithLabelValues("stream_content_unsupported")
+	before := testutil.ToFloat64(skipped)
+	parts := imageGenerationStream(t)
+	for i, part := range parts {
+		router.handleSemanticStreamingResponseBody(part, i == len(parts)-1, ctx)
+	}
+
+	if ctx.StreamingAborted || ctx.SemanticResponse == nil {
+		t.Fatalf("aborted = %v, response = %+v; want the image stream rebuilt", ctx.StreamingAborted, ctx.SemanticResponse)
+	}
+	if responseCache.addEntryCalled || responseCache.exactAdded {
+		t.Fatalf("semantic entry = %v, exact entry = %v; want no cache entry for the image", responseCache.addEntryCalled, responseCache.exactAdded)
+	}
+	if got := testutil.ToFloat64(skipped); got != before+1 {
+		t.Fatalf("cache writes skipped as stream_content_unsupported = %v, want %v", got, before+1)
 	}
 }
 
