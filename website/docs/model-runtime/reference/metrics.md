@@ -17,10 +17,12 @@ Frontend (port 9190), available in both modes:
 
 | Metric | Labels | Meaning |
 | --- | --- | --- |
-| `vsr_model_runtime_replica_ready` | `deployment`, `replica` | Physical worker readiness. Inventory additionally checks compatibility and dispatch backoff. |
+| `vsr_model_runtime_replica_ready` | `deployment`, `replica` | Physical worker readiness. Inventory additionally checks compatibility, dispatch backoff and ejection. |
 | `vsr_model_runtime_replica_inflight` | `deployment`, `replica` | Locally admitted exchanges awaiting complete responses. |
 | `vsr_model_runtime_replica_admitted_bytes` | `deployment`, `replica` | Bytes in those outstanding requests; not the worker's internal queue or token count. |
-| `vsr_model_runtime_replica_requests_total` | `deployment`, `replica`, `outcome` | Completed dispatches: `ok`, `failed`, `rejected`, `canceled`, or `timeout`. Cancellation and caller deadlines release admission without marking the worker healthy or unhealthy. |
+| `vsr_model_runtime_replica_requests_total` | `deployment`, `replica`, `outcome` | Completed dispatches: `ok`, `failed`, `rejected`, `canceled`, or `timeout`. A cancellation releases admission without marking the worker healthy or unhealthy; `timeout`s in a row eject it (`outlier_detection`). |
+| `vsr_model_runtime_replica_ejections_total` | `deployment`, `replica` | Replicas taken out of dispatch after consecutive exchanges ran out of their deadline. |
+| `vsr_model_runtime_replica_readmissions_total` | `deployment`, `replica`, `reason` | Ejected replicas returned to dispatch: `cooldown` when the cool-down ended, `answered` when an exchange succeeded. |
 | `vsr_model_runtime_ready` | `deployment` | 1 while the deployment answers. |
 | `vsr_model_runtime_requests_total` | `deployment`, `outcome` | Calls by outcome: `ok`, `timeout`, `unavailable`, `overloaded`, `rejected`, `failed`. |
 | `vsr_model_runtime_request_duration_seconds` | `deployment`, `surface` | Latency of calls that reached the runtime. |
