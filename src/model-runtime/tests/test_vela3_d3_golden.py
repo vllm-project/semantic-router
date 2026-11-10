@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 import pytest
 from vllm_srun.families.vela3_d3.family import (
@@ -11,6 +12,7 @@ from vllm_srun.families.vela3_d3.family import (
 )
 from vllm_srun.plugins.decisions import well_formed
 from vllm_srun.registry import builtin
+from vllm_srun.registry.tables.common import REGISTRY_DIR
 from vllm_srun.testing import vela3_d3 as fixture
 
 from .conftest import start_runtime
@@ -22,6 +24,13 @@ CHOICES = {
     for qid, q in GOLDEN_QUESTIONS.items()
     if q["type"] == "choice"
 }
+
+
+def test_recorded_references_are_for_the_pinned_revisions() -> None:
+    path = REGISTRY_DIR / "golden_answers_vela3_d3.json"
+    recorded = json.loads(path.read_text(encoding="utf-8"))
+    for model in builtin.all_models("vela3_d3"):
+        assert recorded[model.repo_id]["revision"] == model.revision, model.repo_id
 
 
 def test_every_size_has_rocm_references_for_the_golden_request() -> None:
