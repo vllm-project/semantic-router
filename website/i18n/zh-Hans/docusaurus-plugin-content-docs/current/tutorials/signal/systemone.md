@@ -25,7 +25,7 @@ translation:
 
 ## 何时使用 {#when-to-use}
 
-当你需要对请求做出某种判断，而现有的[应用信号](./overview#application-signals)都不涵盖时使用它。长度、关键词、输入媒体、身份等结构性事实，优先使用启发式信号。[编写自定义问题](../../system-one/custom-questions)从一个想法一路讲到调优好的规则。
+当你需要对请求做出某种判断，而现有的[应用信号](./overview#application-signals)都不涵盖时使用它。长度、关键词、输入媒体、身份等结构性事实，优先使用启发式信号。[编写自定义问题](../../system-one/use/custom-questions)从一个想法一路讲到调优好的规则。
 
 ## 配置 {#configuration}
 
@@ -82,7 +82,7 @@ global:
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
 ```
 
-没有 `deployment` 的规则询问决策模型 `global.model_catalog.system.decision_model`（除非另行选择，否则为 vela3-fast）；[选择部署](../../system-one/deployments)介绍了本地、挂接和远程模型。部署必须能回答规则的问题类型，否则配置加载时会被拒绝。vela3-fast 回答 `choice`、`noul` 和 `span` 问题，并把 `set` 问题拆成每个标签一个 `noul` 来回答，但不回答 `score` 问题，所以 `difficulty` 询问的是一个 Decision 2.0 部署。
+没有 `deployment` 的规则询问决策模型 `global.model_catalog.system.decision_model`（除非另行选择，否则为 vela3-fast）；[选择部署](../../system-one/deploy/deployments)介绍了本地、挂接和远程模型。部署必须能回答规则的问题类型，否则配置加载时会被拒绝。vela3-fast 回答 `choice`、`noul` 和 `span` 问题，并把 `set` 问题拆成每个标签一个 `noul` 来回答，但不回答 `score` 问题，所以 `difficulty` 询问的是一个 Decision 2.0 部署。
 
 为早期版本编写的配置把这个信号命名为 `decision`（`recipes[].signals.decision` 和 `type: decision` 条件）。它们仍能加载，但会给出 `renamed_signal_type` 警告，`vllm-sr config migrate` 会把它们改写为 `systemone`。
 

@@ -3,9 +3,9 @@
 ## Overview
 
 `pii` locates personal data in the request, with the exact characters of every span.
-It asks the `pii` [preset](../../../system-one/reference#preset-catalog), a
+It asks the `pii` [preset](../../../system-one/reference/presets#preset-catalog), a
 span question over the 11
-[personal data labels](../../../system-one/reference#personal-data-labels),
+[personal data labels](../../../system-one/reference/presets#personal-data-labels),
 and reads its whole input. A rule matches when the model finds a span of a
 label it counts; the [`masking`](../../plugin/masking) plugin replaces the
 same spans with placeholders.
@@ -121,7 +121,7 @@ recipes:
 
 The decision model answers every PII rule, unless the `pii` binding or the
 rule's `deployment` names another; see
-[Choose a deployment](../../../system-one/deployments). The question needs
+[Choose a deployment](../../../system-one/deploy/deployments). The question needs
 spans: a rule that resolves to a deployment without span answers, such as a
 d3 model, fails to load with `span_required`, unless that deployment declares
 the `pii` preset in its `capabilities`. vela3-fast (the default), the

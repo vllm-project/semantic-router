@@ -29,7 +29,7 @@ translation:
 
 ## 配置 {#configuration}
 
-未指定 `deployment` 时，使用 `global.model_catalog.system.decision_model` 指向的 Router 判断模型，默认为 Vela 3.0 vela3-fast，也可以[选择其他规模](/model-runtime/choose-a-model.md#choose-a-size)。该模型已经负责请求的内置信号和未指定部署的 `systemone` 问题，因此选模无需再加载第二份模型：
+未指定 `deployment` 时，使用 `global.model_catalog.system.decision_model` 指向的 Router 判断模型，默认为 Vela 3.0 vela3-fast，也可以[选择其他规模](/model-runtime/get-started/choose-a-model.md#choose-a-size)。该模型已经负责请求的内置信号和未指定部署的 `systemone` 问题，因此选模无需再加载第二份模型：
 
 ```yaml
 global:
@@ -131,8 +131,8 @@ recipes:
             timeout_ms: 1000
 ```
 
-命名部署必须使用 `provider: model_runtime`，或在使用[远程 System One API](../../../system-one/deployments#remote-system-one-apis) 时使用 `provider: systemone`；未设置自身 `timeout_ms` 的选择器使用部署的值。decision 需要 2–255 个不同的 `modelRefs`，`candidates` 只能描述这些模型；没有在其中提供描述的模型会使用自身配置的描述。
+命名部署必须使用 `provider: model_runtime`，或在使用[远程 System One API](../../../system-one/deploy/deployments#remote-system-one-apis) 时使用 `provider: systemone`；未设置自身 `timeout_ms` 的选择器使用部署的值。decision 需要 2–255 个不同的 `modelRefs`，`candidates` 只能描述这些模型；没有在其中提供描述的模型会使用自身配置的描述。
 
 模型未就绪、响应超时、过载或返回无效答案时，Router 会记录选模回退，并使用第一个 `modelRef`。选中的模型会在 `x-vsr-selected-model` 响应头中返回。Routing Preview 会向 System One 模型提出同样的问题并展示它选择的模型，但不会调用后端。
 
-关于选择模型及其运行位置，请参阅[选择部署](../../../system-one/deployments)。
+关于选择模型及其运行位置，请参阅[选择部署](../../../system-one/deploy/deployments)。

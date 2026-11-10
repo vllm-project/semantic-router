@@ -216,10 +216,10 @@ class DomainRegistryTests(unittest.TestCase):
     def test_docs_whose_snippets_the_cli_suite_checks_select_it(self) -> None:
         translated = "website/i18n/zh-Hans/docusaurus-plugin-content-docs/current"
         for path in (
-            "website/docs/model-runtime/reference.md",
+            "website/docs/model-runtime/reference/http-api.md",
             "website/docs/model-runtime/guides/embeddings.md",
             "website/docs/tutorials/signal/systemone.md",
-            f"{translated}/model-runtime/deploy.md",
+            f"{translated}/model-runtime/deploy/connect-the-router.md",
             f"{translated}/model-runtime/guides/embeddings.md",
             f"{translated}/tutorials/algorithm/selection/systemone.md",
         ):
@@ -233,7 +233,7 @@ class DomainRegistryTests(unittest.TestCase):
                 self.assertNotIn("vllm-sr-cli", result.domains)
         self.assertNotIn(
             "cli-unit",
-            classify([f"{translated}/tutorials/global/overview.md"]).selected_jobs,
+            classify([f"{translated}/installation/global-settings.md"]).selected_jobs,
         )
 
     def test_model_resolution_selects_the_published_model_contract(self) -> None:

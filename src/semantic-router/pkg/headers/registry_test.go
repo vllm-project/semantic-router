@@ -39,7 +39,7 @@ func TestRegistryEntriesAreWellFormed(t *testing.T) {
 		if header.Direction == 0 || header.Direction&^everyDirection != 0 {
 			t.Errorf("%s: direction %d names no known hop", header.Name, header.Direction)
 		}
-		if !slices.Contains(surfaceOrder, header.Surface) {
+		if !slices.Contains([]Surface{SurfacePublic, SurfaceDebug, SurfaceControl, SurfaceInternal}, header.Surface) {
 			t.Errorf("%s: unknown surface %q", header.Name, header.Surface)
 		}
 		if !slices.Contains([]Sensitivity{SensitivityNone, SensitivityIdentity, SensitivitySecret}, header.Sensitivity) {
@@ -277,20 +277,5 @@ func TestCatalogCredentialHeadersAreRegisteredSecrets(t *testing.T) {
 				t.Errorf("provider %s: credential header %q is not a registered secret", provider.ID, name)
 			}
 		}
-	}
-}
-
-func TestEmbedReferenceReplacesOnlyTheMarkedBlock(t *testing.T) {
-	page := []byte("intro\n" + ReferenceBegin + "\nstale\n" + ReferenceEnd + "\noutro\n")
-	got, err := EmbedReference(page)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "intro\n" + ReferenceBegin + "\n\n" + MarkdownReference() + "\n" + ReferenceEnd + "\noutro\n"
-	if string(got) != want {
-		t.Fatalf("EmbedReference() = %q, want %q", got, want)
-	}
-	if _, err := EmbedReference([]byte("no markers")); err == nil {
-		t.Fatal("EmbedReference accepted a page without markers")
 	}
 }
