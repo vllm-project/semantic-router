@@ -32,10 +32,16 @@ const LossyFieldUnreadableFile = "content.file"
 // on its thinking, which Chat Completions and Responses clients cannot carry.
 const LossyFieldReasoningSignature = "reasoning.signature"
 
+// LossyFieldStore names a request's store: true, which asks the provider to
+// keep the completion. Accepting the loss sends the request without it to a
+// backend whose wire format keeps no completions, which ProjectUnstoredRequest
+// writes.
+const LossyFieldStore = "store"
+
 // OptInLossyFields lists the losses an operator may accept while every other
 // lossy translation keeps failing closed.
 func OptInLossyFields() []string {
-	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldReasoningSignature}
+	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldReasoningSignature, LossyFieldStore}
 }
 
 type MissingIDPolicy string

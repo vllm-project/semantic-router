@@ -114,6 +114,13 @@ Router 在编码后端请求之前检查所需语义。所选后端格式无法�
 发送后失败，因为签名随推理增量才到达编码器。同格式流量不受影响，包括 Messages
 客户端读取 Anthropic 后端的情况。
 
+Chat Completions 客户端可以用 `store: true` 要求提供方保存补全，而 Messages 后端
+不保存补全。`store: false` 不要求这类后端做任何额外的事，因此请求去掉该字段后照常
+发送；`store: true` 会以 `unsupported_capability`（`request_storage`）失败，因为后端
+无法保存补全。在 `global.router.allow_lossy_translation` 中列出 `store` 后，Router 会
+去掉 `store` 发送这类请求，并在 `x-vsr-warnings` 中为 `store` 报告 `dropped` 诊断。
+Chat Completions 和 Responses 后端仍按客户端发送的原样收到 `store`。
+
 Responses 客户端仍可以与 Chat Completions 或 Messages 后端一起使用 `previous_response_id`。Router 检索并物化保留的历史，移除 Router 拥有的对象控制，然后按所选后端格式编码无状态请求。
 
 Responses custom tools 使用 `type: custom` 和扁平的 `format` 对象。它们的

@@ -228,7 +228,9 @@ func requestStateCapabilities(request Request) Capability {
 	if len(request.Metadata) > 0 {
 		required |= CapabilityRequestMetadata
 	}
-	if request.Store != nil {
+	// store: false asks for nothing a backend that keeps no completions does
+	// not already do.
+	if request.Store != nil && *request.Store {
 		required |= CapabilityRequestStorage
 	}
 	if request.AutoStore != nil {

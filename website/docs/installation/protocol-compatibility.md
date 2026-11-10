@@ -300,6 +300,21 @@ these responses through: the Router drops the signature, keeps the reasoning
 text and reports the loss as `approximated`. The signature can't come back on
 later turns, so use this only with backends that don't need it, such as vLLM.
 
+### Stored completions
+
+A Chat Completions client asks the provider to keep the completion with
+`store: true`. A Messages backend keeps no completions:
+
+- **`store: false`** asks for nothing such a backend doesn't already do, so
+  the request reaches it without the member.
+- **`store: true`** fails with `unsupported_capability` (`request_storage`),
+  because the backend can't keep the completion.
+
+Listing `store` in `global.router.allow_lossy_translation` sends such a
+request without `store` and reports a `dropped` diagnostic for `store` in
+`x-vsr-warnings`. Chat Completions and Responses backends still receive
+`store` as the client sent it.
+
 ### Responses state, custom tools and verbosity
 
 - **Stored state.** A Responses client can still use `previous_response_id`
@@ -384,8 +399,9 @@ tools or error translation.
   `x-vsr-warnings` and in `llm_translation_lossy_total`. The list
   also accepts `messages[].role` for system messages inside the conversation
   and `content.file` for files a model cannot read, both described above,
-  `reasoning.signature` (see the signed thinking note above), and every other
-  lossy translation still fails closed.
+  `reasoning.signature` (see the signed thinking note above), `store` (see
+  stored completions above), and every other lossy translation still fails
+  closed.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.
