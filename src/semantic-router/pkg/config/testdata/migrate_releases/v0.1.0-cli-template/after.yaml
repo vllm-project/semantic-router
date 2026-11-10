@@ -246,3 +246,6 @@ recipes:
                   recall:
                     top_k: 3
                     min_similarity: 0.85
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default
