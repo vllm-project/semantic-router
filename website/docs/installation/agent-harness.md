@@ -132,6 +132,14 @@ whether it called the tool. With the vSR plugin installed it warns while the
 plugin's router app is on, and when the listener also serves System One it
 prints the setting that points vSR at it. `--dry-run` prints the plan and writes
 nothing.
+
+`--status-line` also sets Claude Code's status line to show which models
+answered this session, the last first, such as `vllm-sr ⇢ qwen36 (4) ·
+qwen38-27b (2)`. Claude Code asks for `vllm-sr/auto`, so its own model display
+names only the entrypoint. The line reads the session's transcript, where each
+reply keeps the model that wrote it, so it needs no Router access. The script
+sits beside the settings as `vllm-sr-status-line.py`, and `--undo` puts back
+the status line you had before.
 `--undo` puts back what each key, or the Codex profile, held before the first
 run, leaves alone what changed since, and keeps everything else in the files.
 
@@ -225,6 +233,11 @@ echo '{"runtime": "remote", "runtimeModel": "vela3-fast",
   "runtimeUrl": "http://localhost:8899/v1/decisions"}' \
   | claude plugin configure vsr@vllm-sr --values-stdin
 ```
+
+A Router rule about what the agent reads, such as a prompt injection in a file
+or a web page, should read the tool results and leave the user turn out
+(`input: {tool_results: true, request: false}`). Claude Code's user turn carries
+its own instructions and reminders, and a rule that reads it also judges those.
 
 Turn the plugin's router app off (`/vsr router off`) so the plugin and the
 Router do not both choose a subagent's model. Its escalate app still asks Claude

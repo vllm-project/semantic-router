@@ -355,3 +355,55 @@ def test_vsr_is_pointed_at_the_listeners_system_one(monkeypatch, capsys):
     inputs["runtimeUrl"] = "http://localhost:8899/v1/decisions"
     connect_command._check_vsr({}, "http://localhost:8899", doc)
     assert "System One" not in capsys.readouterr().out
+
+
+def test_status_line_names_the_models_that_answered(tmp_path):
+    script = tmp_path / "status.py"
+    script.write_text(hc.STATUS_LINE_SOURCE)
+    transcript = tmp_path / "session.jsonl"
+    lines = [
+        {"type": "user", "message": {"role": "user", "content": "hi"}},
+        {"type": "assistant", "message": {"id": "m1", "model": "qwen36"}},
+        {"type": "assistant", "message": {"id": "m2", "model": "qwen38-27b"}},
+        # one reply is written as one line per content block
+        {"type": "assistant", "message": {"id": "m2", "model": "qwen38-27b"}},
+        {"type": "assistant", "message": {"id": "m3", "model": "qwen38-27b"}},
+    ]
+    transcript.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
+
+    def run(session):
+        return subprocess.run(
+            [sys.executable, str(script)],
+            input=json.dumps(session),
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+
+    assert (
+        run({"transcript_path": str(transcript)})
+        == "vllm-sr ⇢ qwen38-27b (2) · qwen36 (1)"
+    )
+    assert run({"transcript_path": str(tmp_path / "missing.jsonl")}) == "vllm-sr"
+
+
+def test_cli_status_line_is_written_and_taken_back(tmp_path, gateway, monkeypatch):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    own = {"type": "command", "command": "my-status"}
+    (tmp_path / "settings.json").write_text(json.dumps({"statusLine": own}))
+    result = CliRunner().invoke(
+        main, ["connect", "claude-code", "--base-url", url, "--status-line", "--yes"]
+    )
+    assert result.exit_code == 0, result.output
+    settings = json.loads((tmp_path / "settings.json").read_text())
+    script = tmp_path / hc.STATUS_LINE_SCRIPT
+    assert settings["statusLine"]["command"] == f'python3 "{script}"'
+    assert script.read_text() == hc.STATUS_LINE_SOURCE
+
+    result = CliRunner().invoke(main, ["connect", "claude-code", "--undo"])
+    assert result.exit_code == 0, result.output
+    assert json.loads((tmp_path / "settings.json").read_text()) == {"statusLine": own}
+    assert not script.exists()

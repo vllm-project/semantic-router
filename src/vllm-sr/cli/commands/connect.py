@@ -78,7 +78,14 @@ def connect() -> None:
     show_default=True,
     help="user: ~/.claude/settings.json ($CLAUDE_CONFIG_DIR). project: .claude/settings.local.json here.",
 )
-def claude_code(router_config, base_url, model, api_key_env, dry_run, undo, yes, scope):
+@click.option(
+    "--status-line",
+    is_flag=True,
+    help="Also show in Claude Code's status line which models answered, the last first.",
+)
+def claude_code(
+    router_config, base_url, model, api_key_env, dry_run, undo, yes, scope, status_line
+):
     """Route Claude Code's model calls through the gateway."""
     env = dict(os.environ)
     path = hc.claude_settings_path(scope, Path.cwd(), env)
@@ -87,9 +94,14 @@ def claude_code(router_config, base_url, model, api_key_env, dry_run, undo, yes,
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
-    change = hc.Change(path, "json-env", hc.claude_env(gateway, model, token))
+    values = hc.claude_env(gateway, model, token)
+    changes = []
+    if status_line:
+        script, values["statusLine"] = hc.status_line(path)
+        changes.append(script)
+    changes.append(hc.Change(path, "json-env", values))
     label = f"<${api_key_env}>" if from_env else token
-    if not _run("claude-code", [change], path.parent, label, doc, dry_run, yes):
+    if not _run("claude-code", changes, path.parent, label, doc, dry_run, yes):
         return
     if scope == "project":
         for kept in hc.keep_out_of_git([path, path.parent / hc.MANIFEST], Path.cwd()):

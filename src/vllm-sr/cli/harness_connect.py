@@ -20,14 +20,18 @@ MANIFEST = ".vllm-sr-connect.json"
 MAX_OUTPUT_TOKENS = "32000"
 TOKEN_KEY = "ANTHROPIC_AUTH_TOKEN"
 NO_KEY = "vllm-sr-no-key"
+# Claude Code settings the command may own outside "env"
+TOP_LEVEL_KEYS = ("statusLine",)
+STATUS_LINE_SCRIPT = "vllm-sr-status-line.py"
 
 
 @dataclass
 class Change:
     """One file and what the command sets in it.
 
-    kind is json-env (keys of the "env" object of a JSON settings file) or file
-    (the whole file, held as the one value under "file").
+    kind is json-env (keys of the "env" object of a JSON settings file, and
+    TOP_LEVEL_KEYS at its top level) or file (the whole file, held as the one
+    value under "file").
     """
 
     path: Path
@@ -47,18 +51,26 @@ class Change:
     def raw(self, text: str) -> dict[str, Any]:
         """What each owned key holds in text, None when absent."""
         if self.kind == "json-env":
-            return {key: _json_env(text).get(key) for key in self.values}
+            settings = _settings(text)
+            env = settings.get("env") or {}
+            return {
+                key: (settings if key in TOP_LEVEL_KEYS else env).get(key)
+                for key in self.values
+            }
         return {"file": text or None}
 
     def shown(self, text: str, key_label: str) -> str:
         """The part of text the command owns, for display, with no key in it."""
         if self.kind == "file":
             return text
-        env = {k: v for k, v in self.raw(text).items() if v is not None}
-        if env.get(TOKEN_KEY):
-            written = env[TOKEN_KEY] == self.values[TOKEN_KEY]
-            env[TOKEN_KEY] = key_label if written else "<hidden>"
-        return json.dumps({"env": env}, indent=2) + "\n" if env else ""
+        held = {k: v for k, v in self.raw(text).items() if v is not None}
+        if held.get(TOKEN_KEY):
+            written = held[TOKEN_KEY] == self.values[TOKEN_KEY]
+            held[TOKEN_KEY] = key_label if written else "<hidden>"
+        shown = {k: held.pop(k) for k in TOP_LEVEL_KEYS if k in held}
+        if held:
+            shown["env"] = held
+        return json.dumps(shown, indent=2) + "\n" if shown else ""
 
 
 # --- Claude Code -----------------------------------------------------------------
@@ -93,19 +105,17 @@ def _settings(text: str) -> dict:
     return settings
 
 
-def _json_env(text: str) -> dict:
-    return _settings(text).get("env") or {}
-
-
 def set_json_env(text: str, values: dict[str, Any]) -> str:
-    """Set (or, for None, remove) env keys; every other key stays as it was."""
+    """Set (or, for None, remove) env keys and TOP_LEVEL_KEYS; every other key
+    stays as it was."""
     settings = _settings(text)
     env = dict(settings.get("env") or {})
     for key, value in values.items():
+        target = settings if key in TOP_LEVEL_KEYS else env
         if value is None:
-            env.pop(key, None)
+            target.pop(key, None)
         else:
-            env[key] = value
+            target[key] = value
     if env:
         settings["env"] = env
     else:
@@ -132,6 +142,51 @@ def keep_out_of_git(paths: list[Path], cwd: Path) -> list[Path]:
             for path in tracked:
                 handle.write(f"/{path.resolve().relative_to(top)}\n")
     return tracked
+
+
+STATUS_LINE_SOURCE = """\
+#!/usr/bin/env python3
+# Claude Code status line written by vllm-sr connect: the model that answered
+# the last reply of this session through the gateway, and the others it used.
+
+import json
+import sys
+
+
+def main() -> str:
+    session = json.load(sys.stdin)
+    replies = {}
+    with open(session.get("transcript_path") or "", encoding="utf-8") as transcript:
+        for line in transcript:
+            if '"assistant"' not in line:
+                continue
+            try:
+                message = json.loads(line).get("message") or {}
+            except ValueError:
+                continue
+            model = message.get("model")
+            if model and model != "<synthetic>":
+                replies[message.get("id") or len(replies)] = model
+    if not replies:
+        return "vllm-sr: no reply yet"
+    models = list(replies.values())
+    counts = {model: models.count(model) for model in dict.fromkeys(reversed(models))}
+    return "vllm-sr ⇢ " + " · ".join(f"{model} ({n})" for model, n in counts.items())
+
+
+try:
+    print(main())
+except (OSError, ValueError):
+    print("vllm-sr")
+"""
+
+
+def status_line(settings_path: Path) -> tuple[Change, dict[str, str]]:
+    """The script Claude Code's status line runs, written beside its settings, and
+    the statusLine setting that runs it."""
+    script = settings_path.parent / STATUS_LINE_SCRIPT
+    command = {"type": "command", "command": f'python3 "{script}"'}
+    return Change(script, "file", {"file": STATUS_LINE_SOURCE}), command
 
 
 # --- Codex CLI ---------------------------------------------------------------------

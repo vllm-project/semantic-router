@@ -1000,6 +1000,7 @@ Route Claude Code's model calls through the gateway.
 | `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
 | `--yes` | Write without asking. Default: false. |
 | `--scope CHOICE` | user: ~/.claude/settings.json ($CLAUDE_CONFIG_DIR). project: .claude/settings.local.json here.  [default: user] Choices: user, project. |
+| `--status-line` | Also show in Claude Code's status line which models answered, the last first. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr connect codex` {#vllm-sr-connect-codex}
