@@ -6,7 +6,7 @@ import (
 )
 
 const identityLoadHead = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -42,31 +42,29 @@ func loadIdentityDoc(t *testing.T, trust bool, sections string) *RouterConfig {
 func TestStandaloneLoadRefusesIdentityPolicyUntilAListenerTrustsIt(t *testing.T) {
 	for name, sections := range map[string]string{
 		"authz signal": `
-routing:
-  modelCards:
-    - name: model-a
-  signals:
-    role_bindings:
-      - name: admin
-        role: admin
-        subjects:
-          - kind: Group
-            name: platform-admins
-  decisions:
-    - name: admins
-      priority: 10
-      rules:
-        operator: AND
-        conditions:
-          - type: authz
-            name: admin
-      modelRefs:
-        - model: model-a
+recipes:
+  - name: default
+    signals:
+      role_bindings:
+        - name: admin
+          role: admin
+          subjects:
+            - kind: Group
+              name: platform-admins
+    decisions:
+      - name: admins
+        priority: 10
+        rules:
+          operator: AND
+          conditions:
+            - type: authz
+              name: admin
+        modelRefs:
+          - model: model-a
 `,
 		"per-user rate limit": `
-routing:
-  modelCards:
-    - name: model-a
+recipes:
+  - name: default
 global:
   services:
     ratelimit:
@@ -80,9 +78,8 @@ global:
               unit: minute
 `,
 		"authz providers": `
-routing:
-  modelCards:
-    - name: model-a
+recipes:
+  - name: default
 global:
   services:
     authz:
@@ -107,13 +104,17 @@ global:
 
 func TestStandaloneLoadWarnsWhenMemoryHasNoIdentity(t *testing.T) {
 	sections := `
-routing:
-  modelCards:
-    - name: model-a
+recipes:
+  - name: default
 global:
   stores:
-    memory:
-      enabled: true
+    memory: {}
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        sources:
+          - type: memory
 `
 	untrusted := loadIdentityDoc(t, false, sections)
 	if err := ValidateGatewayCapabilities(untrusted, GatewayStandalone); err != nil {

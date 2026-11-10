@@ -215,7 +215,8 @@ func TestWorkflowsParallelStepReturnsAfterQuorum(t *testing.T) {
 		OriginalRequest: workflowTestRequest(),
 		ModelRefs:       []config.ModelRef{{Model: "worker-a"}, {Model: "worker-b"}},
 		Algorithm: &config.AlgorithmConfig{
-			Type: "workflows",
+			Type:    "workflows",
+			OnError: config.WorkflowOnErrorSkip,
 			Workflows: &config.WorkflowsAlgorithmConfig{
 				Mode: config.WorkflowModeDynamic,
 				Planner: config.WorkflowPlannerConfig{
@@ -226,7 +227,6 @@ func TestWorkflowsParallelStepReturnsAfterQuorum(t *testing.T) {
 				MaxParallel:            2,
 				RoundTimeoutSeconds:    1,
 				MinSuccessfulResponses: 1,
-				OnError:                config.WorkflowOnErrorSkip,
 			},
 		},
 		DecisionName: "flow-quorum-test",
@@ -270,7 +270,8 @@ func TestWorkflowsFinalTimeoutFallsBackToWorkerResponse(t *testing.T) {
 		OutputContractSpec: singleChoiceOutputContractSpecForTest(),
 		ModelRefs:          []config.ModelRef{{Model: "worker-a"}, {Model: "gpt-final"}},
 		Algorithm: &config.AlgorithmConfig{
-			Type: "workflows",
+			Type:    "workflows",
+			OnError: config.WorkflowOnErrorSkip,
 			Workflows: &config.WorkflowsAlgorithmConfig{
 				Mode: config.WorkflowModeDynamic,
 				Planner: config.WorkflowPlannerConfig{
@@ -279,7 +280,6 @@ func TestWorkflowsFinalTimeoutFallsBackToWorkerResponse(t *testing.T) {
 				MaxSteps:            2,
 				MaxParallel:         1,
 				RoundTimeoutSeconds: 1,
-				OnError:             config.WorkflowOnErrorSkip,
 			},
 		},
 		DecisionName: "flow-final-timeout-test",
@@ -329,7 +329,8 @@ func TestWorkflowsFinalTimeoutUsesSingleChoiceMajorityFallback(t *testing.T) {
 			{Model: "gpt-final"},
 		},
 		Algorithm: &config.AlgorithmConfig{
-			Type: "workflows",
+			Type:    "workflows",
+			OnError: config.WorkflowOnErrorSkip,
 			Workflows: &config.WorkflowsAlgorithmConfig{
 				Mode: config.WorkflowModeDynamic,
 				Planner: config.WorkflowPlannerConfig{
@@ -339,7 +340,6 @@ func TestWorkflowsFinalTimeoutUsesSingleChoiceMajorityFallback(t *testing.T) {
 				MaxParallel:            3,
 				RoundTimeoutSeconds:    1,
 				MinSuccessfulResponses: 3,
-				OnError:                config.WorkflowOnErrorSkip,
 			},
 		},
 		DecisionName: "flow-final-timeout-majority-test",
@@ -453,7 +453,8 @@ func TestWorkflowsDynamicFallsBackWhenPlannerJSONInvalidAndOnErrorSkip(t *testin
 			{Model: "worker-b"},
 		},
 		Algorithm: &config.AlgorithmConfig{
-			Type: "workflows",
+			Type:    "workflows",
+			OnError: config.WorkflowOnErrorSkip,
 			Workflows: &config.WorkflowsAlgorithmConfig{
 				Mode: config.WorkflowModeDynamic,
 				Planner: config.WorkflowPlannerConfig{
@@ -461,7 +462,6 @@ func TestWorkflowsDynamicFallsBackWhenPlannerJSONInvalidAndOnErrorSkip(t *testin
 				},
 				MaxSteps:    3,
 				MaxParallel: 2,
-				OnError:     config.WorkflowOnErrorSkip,
 			},
 		},
 		DecisionName: "flow-test",

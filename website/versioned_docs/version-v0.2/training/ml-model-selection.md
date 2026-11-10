@@ -717,5 +717,5 @@ Ensure you're using the same embedding model for training and inference (Qwen3 p
 
 ## Next Steps
 
-- [Training Overview](/docs/training/training-overview) - General training documentation
-- [Model Performance Evaluation](/docs/training/model-performance-eval) - Detailed performance metrics
+- [Training Overview](/docs/v0.4/training/training-overview) - General training documentation
+- [Model Performance Evaluation](/docs/v0.4/training/model-performance-eval) - Detailed performance metrics

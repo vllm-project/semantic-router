@@ -22,7 +22,7 @@ func validateModelScore(categoryName string, modelScore ModelScore) error {
 	score := modelScore.Score
 	if math.IsNaN(score) || math.IsInf(score, 0) {
 		return fmt.Errorf(
-			"routing.signals.domains[%q].model_scores[%q].score must be finite, got %v",
+			"signals.domains[%q].model_scores[%q].score must be finite, got %v",
 			categoryName,
 			modelScore.Model,
 			score,
@@ -30,7 +30,7 @@ func validateModelScore(categoryName string, modelScore ModelScore) error {
 	}
 	if score < 0 || score > 1 {
 		return fmt.Errorf(
-			"routing.signals.domains[%q].model_scores[%q].score must be between 0.0 and 1.0, got %v",
+			"signals.domains[%q].model_scores[%q].score must be between 0.0 and 1.0, got %v",
 			categoryName,
 			modelScore.Model,
 			score,

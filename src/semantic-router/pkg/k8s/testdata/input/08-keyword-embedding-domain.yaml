@@ -40,15 +40,11 @@ spec:
         operator: "OR"
         keywords: ["urgent", "emergency", "critical"]
         caseSensitive: false
-
-    embeddings:
       - name: "technical_help"
-        threshold: 0.75
-        candidates:
-          - "I need technical assistance with this problem"
-          - "Can you help me debug this issue?"
-          - "Something is broken and needs fixing"
-        aggregationMethod: "max"
+        operator: "OR"
+        keywords: ["I need technical assistance with this problem", "Can you help me debug this issue?", "Something is broken and needs fixing"]
+        caseSensitive: false
+
 
     domains:
       - name: "computer science"
@@ -67,7 +63,7 @@ spec:
         conditions:
           - type: "keyword"
             name: "urgent"
-          - type: "embedding"
+          - type: "keyword"
             name: "technical_help"
           - type: "domain"
             name: "computer science"
@@ -82,7 +78,7 @@ spec:
       signals:
         operator: "AND"
         conditions:
-          - type: "embedding"
+          - type: "keyword"
             name: "technical_help"
           - type: "domain"
             name: "engineering"

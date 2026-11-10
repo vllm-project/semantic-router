@@ -1,0 +1,27 @@
+# A decision that answered text_image requests with a text model and an image
+# model has no output contract: one model must write both. No decision of this
+# release executes it, so migrate drops it, and its requests go to the others.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+      modality: ar
+    - name: painter
+      api_format: images
+      backend_refs: [{name: images, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
+      modality: diffusion
+recipes:
+  - name: default
+    signals:
+      modality:
+        - {name: BOTH, labels: [text_image]}
+    decisions:
+      - name: text-and-image
+        priority: 190
+        rules: {type: modality, name: BOTH}
+        modelRefs: [{model: general}, {model: painter}]
+      - name: everything
+        rules: {}
+        modelRefs: [{model: general}]

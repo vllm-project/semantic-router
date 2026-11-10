@@ -17,6 +17,8 @@ from urllib.parse import quote, urlencode, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 API_PAGE_SIZE = 100
+COMMENT_MARKER = "<!-- netlify-preview -->"
+COMMENT_AUTHOR = "github-actions[bot]"
 
 
 class PreviewError(RuntimeError):
@@ -296,6 +298,38 @@ def deploy_static(client, site: str, directory: Path, number: int, sha: str) -> 
     return url
 
 
+def preview_comment(client, repo: str, number: int, sha: str, url: str) -> None:
+    """Keep one workflow-owned PR comment that links the newest preview."""
+    body = (
+        f"{COMMENT_MARKER}\n"
+        f"**Netlify preview** for `{sha[:12]}`: {url}\n\n"
+        "Comment `/netlify` again after new commits to refresh it."
+    )
+    page = 1
+    while True:
+        comments = client.request(
+            f"repos/{repo}/issues/{number}/comments?per_page={API_PAGE_SIZE}&page={page}"
+        )
+        for comment in comments:
+            if comment.get("user", {}).get("login") == COMMENT_AUTHOR and (
+                comment.get("body") or ""
+            ).startswith(COMMENT_MARKER):
+                client.request(
+                    f"repos/{repo}/issues/comments/{comment['id']}",
+                    method="PATCH",
+                    payload={"body": body},
+                )
+                return
+        if len(comments) < API_PAGE_SIZE:
+            break
+        page += 1
+    client.request(
+        f"repos/{repo}/issues/{number}/comments",
+        method="POST",
+        payload={"body": body},
+    )
+
+
 def publish(client, directory: Path, netlify=None) -> None:
     repo, sha = os.environ["GITHUB_REPOSITORY"], os.environ["SHA"]
     number = int(os.environ["PR_NUMBER"])
@@ -315,6 +349,10 @@ def publish(client, directory: Path, netlify=None) -> None:
         url = deploy_static(
             netlify or NetlifyClient(token), site, directory, number, sha
         )
+        try:
+            preview_comment(client, repo, number, sha, url)
+        except PreviewError:
+            print("::warning::Could not comment the preview link; the status has it.")
         status(client, repo, number, sha, "success", "Netlify preview ready", url)
         summary(
             f"Netlify preview for PR #{number} (`{sha[:12]}`): [Open preview]({url})"

@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // Fixed lookup metadata avoids sleeps, embeddings, and external services.
@@ -21,9 +22,9 @@ func (b *discoveryFreshnessBackend) FindExact(context.Context, string, string) (
 	return b.result, nil
 }
 
-func (b *discoveryFreshnessBackend) LookupSimilarWithThreshold(context.Context, string, string, float32) (cache.LookupResult, error) {
+func (b *discoveryFreshnessBackend) LookupSimilar(_ context.Context, _ string, query string, _ cache.SimilarityBounds) (cache.SimilarEntries, error) {
 	b.semanticCalls++
-	return b.result, nil
+	return similarEntries(b.result, query), nil
 }
 
 func TestDiscoveryCacheRequestFreshness(t *testing.T) {
@@ -59,7 +60,7 @@ func TestDiscoveryCacheRequestFreshness(t *testing.T) {
 				router := &OpenAIRouter{
 					Cache: backend,
 					Config: &config.RouterConfig{
-						SemanticCache:      config.SemanticCache{Enabled: true},
+						SemanticCache:      config.SemanticCache{InUse: true},
 						IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{decision}},
 					},
 					ResponseCache: cache.NewResponseCacheService(
@@ -69,8 +70,8 @@ func TestDiscoveryCacheRequestFreshness(t *testing.T) {
 				}
 				ctx := &RequestContext{
 					Headers: map[string]string{
-						"x-authz-user-id":         "cache-test-user",
-						defaultCacheControlHeader: tc.directive,
+						"x-authz-user-id":       "cache-test-user",
+						headers.VSRCacheControl: tc.directive,
 					},
 					RequestID:           "freshness-probe",
 					SemanticRequest:     testNeutralRequest("gpt-4o", "hello"),

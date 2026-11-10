@@ -12,11 +12,6 @@ from jsonschema import Draft202012Validator, validators
 from . import schema_document
 
 _ENV_REFERENCE = re.compile(r"^\$\{[^{}]+\}$")
-_PLUGIN_ALIASES = {
-    "semantic-cache": "response_cache",
-    "semantic_cache": "response_cache",
-    "response-cache": "response_cache",
-}
 
 
 def _environment_reference(value: Any) -> bool:
@@ -61,33 +56,10 @@ def _normalise_scalar(value: Any) -> Any:
     return value
 
 
-def _routing_profiles(document: dict[str, Any]):
-    routing = document.get("routing")
-    if isinstance(routing, dict):
-        yield routing
-    for recipe in document.get("recipes") or []:
-        if isinstance(recipe, dict) and isinstance(recipe.get("routing"), dict):
-            yield recipe["routing"]
-
-
-def _normalise_migration_aliases(document: dict[str, Any]) -> None:
-    for routing in _routing_profiles(document):
-        for decision in routing.get("decisions") or []:
-            if not isinstance(decision, dict):
-                continue
-            for plugin in decision.get("plugins") or []:
-                if not isinstance(plugin, dict):
-                    continue
-                plugin_type = plugin.get("type")
-                if plugin_type in _PLUGIN_ALIASES:
-                    plugin["type"] = _PLUGIN_ALIASES[plugin_type]
-
-
 def validate_config_structure(data: dict[str, Any]) -> list[str]:
     """Return stable JSON-Schema errors without applying Router semantics."""
 
     document = _normalise_scalar(copy.deepcopy(data))
-    _normalise_migration_aliases(document)
     validator = ConfigSchemaValidator(schema_document())
     errors = sorted(
         validator.iter_errors(document),

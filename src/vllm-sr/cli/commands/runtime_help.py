@@ -37,21 +37,16 @@ docker     - Local Docker deployment (default)
 kubernetes - Kubernetes deployment via Helm (k8s is the old name, for this
              release only)
 
-MODEL SELECTION ALGORITHMS:
+ALGORITHM OVERRIDES (--algorithm):
 
 \b
 static     - Use first configured model (default, no learning)
-router_dc  - Query-model matching via embedding similarity
-automix    - Cost-quality optimization using POMDP
-hybrid     - Combine multiple methods with configurable weights
-workflows  - Router Flow static/dynamic micro-agent orchestration
-latency_aware - TPOT/TTFT percentile-aware selection
-knn        - KNN selector using shared ML model-selection settings
-kmeans     - KMeans selector using shared ML model-selection settings
-svm        - SVM selector using shared ML model-selection settings
-mlp        - MLP selector using shared ML model-selection settings
-multi_factor - Quality, latency, cost, and load scoring
 random     - Uniform pick among eligible candidates (no configuration)
+multi_factor - Quality, latency, cost, and load scoring
+workflows  - Router Flow static/dynamic micro-agent orchestration
+
+The systemone selector and the escalate, fusion, remom and ratings
+executors need authored settings; configure them in config.yaml.
 
 Cross-request learning lives under global.router.learning.adaptation and
 global.router.learning.protection instead of --algorithm.
@@ -70,7 +65,7 @@ Examples:
   # Deploy a user-owned config to Kubernetes
   vllm-sr serve --target kubernetes --config my-models.yaml --namespace my-ns
   # Runtime policy and image overrides
-  vllm-sr serve --algorithm latency_aware
+  vllm-sr serve --algorithm multi_factor
   vllm-sr serve --image-pull-policy always
   vllm-sr serve --readonly
   vllm-sr serve --minimal

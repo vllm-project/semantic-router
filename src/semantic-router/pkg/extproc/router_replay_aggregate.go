@@ -174,9 +174,6 @@ func buildRouterReplaySignalDistribution(
 		if n := len(record.Signals.Keyword); n > 0 {
 			counts["keyword"] += n
 		}
-		if n := len(record.Signals.Embedding); n > 0 {
-			counts["embedding"] += n
-		}
 		if n := len(record.Signals.Domain); n > 0 {
 			counts["domain"] += n
 		}
@@ -186,11 +183,8 @@ func buildRouterReplaySignalDistribution(
 		if n := len(record.Signals.UserFeedback); n > 0 {
 			counts["user_feedback"] += n
 		}
-		if n := len(record.Signals.Reask); n > 0 {
-			counts["reask"] += n
-		}
-		if n := len(record.Signals.Preference); n > 0 {
-			counts["preference"] += n
+		if n := len(record.Signals.TurnRelation); n > 0 {
+			counts["turn_relation"] += n
 		}
 		if n := len(record.Signals.Language); n > 0 {
 			counts["language"] += n
