@@ -8,13 +8,16 @@ description: What vLLM Semantic Router is, how it differs from llm-d and AI gate
 
 ## Is it an AI gateway, or something else?
 
-It combines a frontend, an optional Decision Engine, and a model runtime. The
-frontend accepts requests; the Decision Engine selects models or bounded
-multi-model workflows from signals and policy. The default standalone gateway
-forwards requests itself. Use `--gateway extproc` to integrate with Envoy.
+It combines three parts:
 
-The model runtime serves the Router's own judgments, embeddings, and other model
-tasks. Chat backends run independently. TLS termination and cluster-wide Pod
+- **A frontend** accepts requests. Its default standalone gateway forwards them
+  itself; use `--gateway extproc` to integrate with Envoy.
+- **An optional Decision Engine** selects models, or bounded multi-model
+  workflows, from signals and policy.
+- **A model runtime** serves the Router's own judgments, embeddings and other
+  model tasks.
+
+Chat backends run independently. TLS termination and cluster-wide Pod
 scheduling remain deployment responsibilities.
 
 See [Component Architecture](overview/component-architecture) for the architecture and
@@ -34,20 +37,20 @@ vllm-sr serve vllm-sr/vela3-fast --config config.yaml
 vllm-sr serve vllm-sr/d3-edge -e
 ```
 
-`serve` defaults to Router; a positional model does not change the mode.
-`--engine` also has the short form `-e`. Mode is chosen at startup. The Dashboard
-manages model deployments and tasks in either mode.
+`serve` defaults to Router, and a positional model doesn't change the mode;
+`--engine` also has the short form `-e`. Mode is chosen at startup, and the
+Dashboard manages model deployments and tasks in either mode.
 
 ## Can Router also expose System One?
 
 Yes. Publish the native model through the listener's `systemone.models`
-grant and call `/v1/systemone`. `/v1/decisions` is an alias. Native model discovery
+grant, and call `/v1/systemone` (alias `/v1/decisions`). Native model discovery
 uses `/v1/systemone/models`; Chat model discovery uses `/v1/models`.
 
 Use a concrete model ID for direct inference in either mode. In Router mode,
 you can also publish an explicit `api: systemone` entrypoint and grant its
-`vllm-sr/auto` name on the listener to run a native escalation. The Chat default
-entrypoint does not implicitly enable native routing. See the
+`vllm-sr/auto` name on the listener to run a native escalation; the Chat
+default entrypoint doesn't enable native routing implicitly. See the
 [System One escalate guide](tutorials/algorithm/looper/escalate#on-system-one) and
 [Quickstart](./model-runtime/get-started/quickstart) for configuration and requests.
 

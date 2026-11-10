@@ -454,10 +454,11 @@ rejects, without treating unknown usage as a measured zero.
 Codex sends each step of its history as separate items: reasoning, the
 assistant message and every call. Toward Chat and Messages backends, the
 Router joins adjacent items in that order into one assistant turn, as those
-formats represent a step. Sent one message per item, a backend such as vLLM
-would render each item as its own turn, and the model, seeing turns that end
-in text with no call, could end its own turn the same way, which ends the
-Codex run.
+formats represent a step.
+
+Sent one message per item, a backend such as vLLM would render each item as its
+own turn. The model, seeing turns that end in text with no call, could then end
+its own turn the same way, which ends the Codex run.
 
 - **Reasoning summaries.** The Router forwards `reasoning.summary` to a
   Responses backend. A Chat Completions or Messages backend can't request a

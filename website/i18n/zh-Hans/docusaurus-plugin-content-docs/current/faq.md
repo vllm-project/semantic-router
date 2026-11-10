@@ -13,12 +13,13 @@ translation:
 
 ## 它是 AI 网关，还是其他系统？ {#is-it-an-ai-gateway-or-something-else}
 
-它由 Frontend、可选的 Decision Engine 和模型运行时组成。Frontend 接收请求，
-Decision Engine 根据信号与策略选择模型或有界多模型工作流。默认的 standalone
-网关自行转发请求；使用 `--gateway extproc` 可接入 Envoy。
+它由三部分组成：
 
-模型运行时执行 Router 的判断、embedding 等模型任务，Chat 后端独立运行。
-TLS 终止与集群级 Pod 调度仍由部署环境负责。
+- **Frontend** 接收请求。默认的 standalone 网关自行转发请求；使用 `--gateway extproc` 可接入 Envoy。
+- **可选的 Decision Engine** 根据信号与策略选择模型或有界多模型工作流。
+- **模型运行时**执行 Router 的判断、embedding 等模型任务。
+
+Chat 后端独立运行。TLS 终止与集群级 Pod 调度仍由部署环境负责。
 
 架构见[组件架构](overview/component-architecture)，多模型执行见
 [Mixture of Models](overview/mom-model-family)。
