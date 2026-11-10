@@ -40,14 +40,18 @@ reading it. See the
 [Router API](../api/router) for the complete method and path inventory,
 Responses object operations, and request examples.
 
-System One is a separate typed API, available in either startup mode when
-`listeners[].systemone.models` publishes a concrete model. It uses
-`POST /v1/systemone` (alias `/v1/decisions`) and
-`GET /v1/systemone/models`. Router mode can also publish an explicit native
-recipe through an `api: systemone` entrypoint and matching listener grant.
-These typed requests do not use the Chat protocol-translation matrix or the
-Chat model allowlist. See the
-[System One quickstart](../model-runtime/get-started/quickstart.md).
+System One is a separate typed API:
+
+- **Endpoints:** `POST /v1/systemone` (alias `/v1/decisions`) and
+  `GET /v1/systemone/models`.
+- **Availability.** It's available in either startup mode when
+  `listeners[].systemone.models` publishes a concrete model. Router mode can
+  also publish an explicit native recipe through an `api: systemone`
+  entrypoint and a matching listener grant.
+- **Not translated.** These typed requests don't use the Chat
+  protocol-translation matrix or the Chat model allowlist.
+
+See the [System One quickstart](../model-runtime/get-started/quickstart.md).
 
 ## Backend model protocols
 
@@ -74,14 +78,17 @@ exactly once; the protocol's default `/v1` base path is used only when the URL
 has no path. `chat_path` applies only to Chat Completions.
 
 With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
-verifies both the server
-certificate chain and its DNS hostname. An HTTPS replica pool must keep one
-hostname because the supported Envoy runtime shares its TLS context within a
-cluster; use separate model aliases for different HTTPS hosts. IP-literal HTTPS
-targets are rejected instead of silently weakening hostname verification. A
-custom Envoy image used with `vllm-sr serve` must provide the system CA bundle at
-`/etc/ssl/certs/ca-certificates.crt`; startup validation fails rather than
-silently disabling verification when that trust store is unavailable.
+verifies both the server certificate chain and its DNS hostname:
+
+- **One hostname per pool.** The supported Envoy runtime shares its TLS
+  context within a cluster, so an HTTPS replica pool must keep one hostname.
+  Use separate model aliases for different HTTPS hosts.
+- **No IP literals.** IP-literal HTTPS targets are rejected, instead of
+  silently weakening hostname verification.
+- **A CA bundle.** A custom Envoy image used with `vllm-sr serve` must provide
+  the system CA bundle at `/etc/ssl/certs/ca-certificates.crt`. Startup
+  validation fails when that trust store is missing, rather than silently
+  disabling verification.
 
 ### Response fields the Router does not model
 
@@ -136,9 +143,9 @@ providers:
 This applies to the first attempt and to native fallback, and to buffered,
 streamed, and gzip-compressed replies.
 
-Earlier releases had a backend-ref setting named `compat_gateway`, also spelled
-`openai_compat_gateway`, that enabled this behavior for one backend. It was
-removed. A configuration that still sets it:
+The backend-ref setting `compat_gateway`, also spelled
+`openai_compat_gateway`, no longer exists. A configuration that still sets
+it:
 
 ```yaml
 providers:
@@ -209,79 +216,104 @@ an OpenAI-compatible server can accept the Chat request shape while rejecting
 images or tools for a particular model. Qualify the actual endpoint and model
 revision before adding them to a routing pool.
 
+### Images and empty text
+
 Responses requires a detail level on every input image. An image that arrives
 without one, as every Messages image and tool-result image does, reaches a
 Responses backend with `detail: auto`, the Responses default.
 
-When translating Chat history to an Anthropic Messages backend, empty text
-blocks are omitted. An assistant's `content: ""` beside `tool_calls` therefore
-behaves like `content: null`. Empty tool results keep their call IDs and use
-`content: []`; an empty system prompt is omitted. Non-empty text, including
-whitespace, is preserved. A conversation message containing only empty text
-is rejected, as is an empty text block carrying a cache directive, because
-removing either would discard a conversation turn or cache boundary.
+When Chat history is translated to an Anthropic Messages backend, empty text
+blocks are omitted:
 
-For an Anthropic Messages client using a Chat Completions or Responses backend,
-`thinking.type: adaptive` uses the backend model's default reasoning behavior;
-`output_config.effort` is retained. `thinking.display: omitted` removes reasoning
-from the translated response, including streaming output. `summarized` and
-`updates` (which Claude Code sends) reach only Messages backends and are rejected
-for these backends. Explicit `thinking.type: disabled` requires a configured
-reasoning family and an effective backend reasoning-off control. Unsupported
-controls fail with a typed
-request error. A `context_management` edit of `clear_thinking_20251015` with
-`keep: all` has no effect and is omitted for these backends; edits that would
-change history are rejected. Anthropic `cache_control` boundaries are omitted
-when the selected backend uses Responses, which cannot represent them. The
-prompt and tool result still dispatch, and `x-vsr-warnings` reports a
-`dropped` diagnostic for `cache_control`. A `system` message inside `messages`,
-such as the environment section and the file change notices Claude Code
-inserts during a session, reaches these backends as a system message in the
-same place. Many open-model chat templates accept a system message only first:
-Qwen3.5 and later reject the request, and gpt-oss drops the text. For backends
-served with such a template, add `messages[].role` to
-`global.router.allow_lossy_translation`, described under
-[Validation and failure behavior](#validation-and-failure-behavior). The text
-then joins the user turn right before it, or becomes a user turn of its own
-after a tool result, and `x-vsr-warnings` reports an `approximated`
-diagnostic for `messages[].role`. Messages backends receive the message in
-place either way.
+| Chat input | Sent to Messages as |
+| --- | --- |
+| An assistant's `content: ""` beside `tool_calls` | `content: null` |
+| An empty tool result | Its call ID, with `content: []` |
+| An empty system prompt | Nothing; it's omitted |
+| Non-empty text, including whitespace | The same text |
+| A message with only empty text, or an empty text block that carries a cache directive | Nothing; the request is rejected, because removing it would discard a turn or a cache boundary |
 
-A model whose declared capabilities leave out `file_input` cannot receive a
-file, so a request that holds one fails with `unsupported_capability`. A coding
-agent that reads a PDF returns it as a document in a tool result, and every
-later call of the session resends it. Listing `content.file` in
-`global.router.allow_lossy_translation` sends each file to such a model as a
-short note saying it was not sent, so the agent can read the file another
-way, and `x-vsr-warnings` reports a `dropped` diagnostic for
-`content.file`. A model that declares `file_input`, or declares no
-capabilities, still receives the file.
+### Anthropic Messages clients on other backends
 
-Reasoning content translated out of an Anthropic backend fails when the backend
-attaches a reasoning signature, which its thinking responses carry by default.
-A Chat Completions or Responses client then receives a typed
-`unsupported_capability` failure on buffered requests; on streaming requests the
-failure arrives mid-stream, after the response headers and any earlier deltas,
-because the signature reaches the encoder only with the reasoning delta.
-Same-format traffic, including Messages clients reading an Anthropic backend, is
-unaffected. Listing `reasoning.signature` in
-`global.router.allow_lossy_translation` lets these responses through: the Router
-drops the signature, keeps the reasoning text, and reports the loss as
-`approximated`. The signature cannot come back on later turns, so use it with
-backends that do not need it, such as vLLM.
+For an Anthropic Messages client using a Chat Completions or Responses
+backend:
 
-A Responses client can still use `previous_response_id` with a Chat
-Completions or Messages backend. The Router retrieves and materializes the
-retained history, removes Router-owned object controls, and then encodes the
-stateless request in the selected backend format.
+| Messages control | What happens |
+| --- | --- |
+| `thinking.type: adaptive` | The backend model's default reasoning behavior applies; `output_config.effort` is kept. |
+| `thinking.display: omitted` | Reasoning is removed from the translated response, including streaming output. |
+| `thinking.display: summarized` or `updates` (Claude Code sends these) | Rejected: they reach only Messages backends. |
+| `thinking.type: disabled` | Needs a configured reasoning family and an effective backend reasoning-off control. |
+| A `context_management` edit `clear_thinking_20251015` with `keep: all` | Omitted, since it has no effect. Edits that would change history are rejected. |
+| `cache_control` boundaries, toward a Responses backend | Omitted, since Responses can't represent them. The prompt and tool result still dispatch, and `x-vsr-warnings` reports a `dropped` diagnostic for `cache_control`. |
 
-Responses custom tools use `type: custom` with a flattened `format` object.
-Their `custom_tool_call` and `custom_tool_call_output` items retain free-form
-input, tool results, and call IDs through Chat or Responses backends, including
-buffered and streaming responses. A Messages backend rejects them with
-`unsupported_capability`. Responses `text.verbosity` maps to the Chat
-`verbosity` field. Messages has no equivalent, so the Router drops this output
-detail hint and reports `text.verbosity` in `x-vsr-warnings`.
+Other unsupported controls fail with a typed request error.
+
+A `system` message inside `messages`, such as the environment section and the
+file-change notices Claude Code inserts during a session, reaches these
+backends as a system message in the same place. Many open-model chat
+templates accept a system message only first: Qwen3.5 and later reject the
+request, and gpt-oss drops the text.
+
+For backends served with such a template, add `messages[].role` to
+`global.router.allow_lossy_translation` (see
+[Validation and failure behavior](#validation-and-failure-behavior)):
+
+- The text joins the user turn right before it, or becomes a user turn of its
+  own after a tool result.
+- `x-vsr-warnings` reports an `approximated` diagnostic for
+  `messages[].role`.
+- Messages backends receive the message in place either way.
+
+### Files a model can't read
+
+A model whose declared capabilities leave out `file_input` can't receive a
+file, so a request that holds one fails with `unsupported_capability`. That
+matters for coding agents: an agent that reads a PDF returns it as a document
+in a tool result, and every later call of the session resends it.
+
+Listing `content.file` in `global.router.allow_lossy_translation` changes
+that:
+
+- **Each file becomes a note.** Such a model receives a short note saying the
+  file wasn't sent, so the agent can read it another way.
+- **Reported.** `x-vsr-warnings` reports a `dropped` diagnostic for
+  `content.file`.
+- **Capable models are unaffected.** A model that declares `file_input`, or
+  declares no capabilities, still receives the file.
+
+### Signed reasoning from Anthropic backends
+
+Reasoning content translated out of an Anthropic backend fails when the
+backend attaches a reasoning signature, which its thinking responses carry by
+default. Same-format traffic, including Messages clients reading an Anthropic
+backend, is unaffected. A Chat Completions or Responses client receives a
+typed `unsupported_capability` failure:
+
+- **Buffered requests** get the failure as the response.
+- **Streaming requests** get it mid-stream, after the response headers and any
+  earlier deltas, because the signature reaches the encoder only with the
+  reasoning delta.
+
+Listing `reasoning.signature` in `global.router.allow_lossy_translation` lets
+these responses through: the Router drops the signature, keeps the reasoning
+text and reports the loss as `approximated`. The signature can't come back on
+later turns, so use this only with backends that don't need it, such as vLLM.
+
+### Responses state, custom tools and verbosity
+
+- **Stored state.** A Responses client can still use `previous_response_id`
+  with a Chat Completions or Messages backend. The Router retrieves and
+  materializes the retained history, removes Router-owned object controls,
+  then encodes the stateless request in the selected backend format.
+- **Custom tools.** Responses custom tools use `type: custom` with a flattened
+  `format` object. Their `custom_tool_call` and `custom_tool_call_output`
+  items keep free-form input, tool results and call IDs through Chat or
+  Responses backends, buffered and streaming. A Messages backend rejects them
+  with `unsupported_capability`.
+- **Verbosity.** Responses `text.verbosity` maps to the Chat `verbosity`
+  field. Messages has no equivalent, so the Router drops this hint and reports
+  `text.verbosity` in `x-vsr-warnings`.
 
 ## Configure a backend format
 
@@ -304,19 +336,24 @@ providers:
           weight: 100
 ```
 
-`api_format` chooses only the backend codec. It does not imply Anthropic,
-OpenAI, or any other runtime Provider. Router-owned listeners require a
-physical model to declare `backend_refs[].provider`; metadata-only
-`listeners: []` configurations leave transport and credentials to the external
-gateway. The local `vllm-sr serve` workflow owns backend transport through its
-standalone frontend or generated Envoy configuration, so it does not accept a
-backendless physical model; use the external-gateway deployment profile for
-that topology.
+`api_format` chooses only the backend codec; it doesn't imply Anthropic,
+OpenAI or any other runtime provider. Who supplies transport and credentials
+depends on the deployment:
 
-Test the backend directly with its native path and a minimal request first.
-Then send the same semantic request through the Router using the client API that
-your agent harness or other API client needs. A successful health check does not validate request
-schema, streaming, tools, or error translation.
+| Deployment | Transport and credentials |
+| --- | --- |
+| Router-owned listeners | Each physical model must declare `backend_refs[].provider`. |
+| Metadata-only, `listeners: []` | Left to the external gateway. |
+| Local `vllm-sr serve` | Owned by its standalone frontend or generated Envoy configuration, so a backendless physical model isn't accepted. Use the external-gateway deployment profile for that topology. |
+
+To check a new backend:
+
+1. Test the backend directly, with its native path and a minimal request.
+2. Send the same request through the Router, using the client API your agent
+   harness or other client needs.
+
+A successful health check doesn't validate the request schema, streaming,
+tools or error translation.
 
 ## Validation and failure behavior
 
@@ -362,20 +399,23 @@ schema, streaming, tools, or error translation.
   `choices[].stop_reason`, as vLLM does, Anthropic Messages clients receive a
   `stop_sequence` stop reason with that sequence. Chat and Responses clients
   are unaffected.
-- When an OpenAI-compatible Chat provider reports an error inside a successful
-  stream with an integer HTTP status as its `code`, as vLLM does, streamed
-  clients receive the provider's message. Responses and Anthropic Messages
-  clients get the Router's error frame, with the status as a string `code` for
-  Responses and the mapped error type for Messages. Chat clients get the stream
-  as the Router passes it up to the error event, then the Router's error frame
-  with a string `code` and no `[DONE]`, however the stream is split into body
-  chunks, as long as each frame is within the Router's SSE frame limit.
-- A Chat or Responses request that omits its output limit reaches `openai` and
-  `responses` backends without one, so the backend's remaining context bounds
-  the output. Anthropic Messages requires a limit, so a route to an `anthropic`
-  backend sends `max_tokens: 4096` and reports `max_tokens` as `generated`.
-  Thinking counts toward that limit. A positive integer in the decision's
-  `request_params.default_max_tokens` replaces the 4096 for these requests.
+- When an OpenAI-compatible Chat provider reports an error inside a
+  successful stream, with an integer HTTP status as its `code` as vLLM does,
+  streamed clients receive the provider's message:
+  - **Responses and Anthropic Messages clients** get the Router's error frame,
+    with the status as a string `code` for Responses and the mapped error type
+    for Messages.
+  - **Chat clients** get the stream as the Router passes it, up to the error
+    event, then the Router's error frame with a string `code` and no
+    `[DONE]`. That holds however the stream is split into body chunks, as long
+    as each frame is within the Router's SSE frame limit.
+- A Chat or Responses request that omits its output limit:
+  - reaches `openai` and `responses` backends without one, so the backend's
+    remaining context bounds the output;
+  - reaches an `anthropic` backend with `max_tokens: 4096`, because Messages
+    requires a limit, and reports `max_tokens` as `generated`. Thinking counts
+    toward that limit, and a positive integer in the decision's
+    `request_params.default_max_tokens` replaces the 4096.
 - `x-vsr-warnings` and the `client_protocol` and `upstream_protocol` members of
   `x-vsr-trace` expose translation details when applicable. See
   [VSR routing headers](../api/headers).
@@ -412,19 +452,20 @@ counts are preserved. This avoids emitting `null`, which Codex CLI 0.163.0
 rejects, without treating unknown usage as a measured zero.
 
 Codex sends each step of its history as separate items: reasoning, the
-assistant message and every call. Toward Chat and Messages backends the Router
-joins adjacent items in that order into one assistant turn, as those formats
-represent a step. Sent one message per item, a backend such as vLLM renders
-each item as its own turn, and the model, seeing turns that end in text with
-no call, can end its own turn the same way, which ends the Codex run.
+assistant message and every call. Toward Chat and Messages backends, the
+Router joins adjacent items in that order into one assistant turn, as those
+formats represent a step. Sent one message per item, a backend such as vLLM
+would render each item as its own turn, and the model, seeing turns that end
+in text with no call, could end its own turn the same way, which ends the
+Codex run.
 
-Codex can also request reasoning summaries. The Router forwards
-`reasoning.summary` to a Responses backend. A Chat Completions or Messages
-backend cannot request a summary, so the Router accepts the turn and reports
-the dropped setting in `x-vsr-warnings`. Multi-agent namespace tools
-and hosted web search remain unsupported; disable those in the Codex
-`config.toml` that points at the Router. These settings were checked with
-Codex CLI 0.156.1:
+- **Reasoning summaries.** The Router forwards `reasoning.summary` to a
+  Responses backend. A Chat Completions or Messages backend can't request a
+  summary, so the Router accepts the turn and reports the dropped setting in
+  `x-vsr-warnings`.
+- **Unsupported:** multi-agent namespace tools and hosted web search. Disable
+  them in the Codex `config.toml` that points at the Router; these settings
+  were checked with Codex CLI 0.156.1:
 
 ```toml
 web_search = "disabled"
@@ -433,15 +474,17 @@ web_search = "disabled"
 multi_agent = false
 ```
 
-Point Codex at the Router through a model provider of your own rather than
-`openai_base_url`. The built-in `openai` provider opens a Responses WebSocket
-first, which the Router does not serve. Codex CLI 0.163.0 retries it for about
-six seconds at the start of every run before it sends the first turn over HTTP,
-and tries it again before later turns. A provider
-defined in `config.toml` uses HTTP from the start, since `supports_websockets`
-defaults to `false`. Set `model` to a Router entrypoint as well, such as
-`vllm-sr/auto`, since a name that matches no entrypoint is sent to a backend
-model of that name:
+Point Codex at the Router through a model provider of your own, not
+`openai_base_url`:
+
+- **Why.** The built-in `openai` provider opens a Responses WebSocket first,
+  which the Router doesn't serve. Codex CLI 0.163.0 retries it for about six
+  seconds at the start of every run before it sends the first turn over HTTP,
+  and tries again before later turns. A provider defined in `config.toml` uses
+  HTTP from the start, since `supports_websockets` defaults to `false`.
+- **The model.** Set `model` to a Router entrypoint as well, such as
+  `vllm-sr/auto`; a name that matches no entrypoint is sent to a backend model
+  of that name.
 
 ```toml
 model = "vllm-sr/auto"
