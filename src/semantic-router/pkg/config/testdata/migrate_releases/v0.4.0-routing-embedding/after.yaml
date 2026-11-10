@@ -335,3 +335,6 @@ global:
       eviction_policy: fifo
     memory: {}
     vector_store: {}
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

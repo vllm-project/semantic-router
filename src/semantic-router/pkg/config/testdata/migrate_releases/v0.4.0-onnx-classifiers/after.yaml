@@ -179,7 +179,6 @@ global:
         input:
           max_tokens: 32768
           overflow: reject
-  router: {}
   services:
     response_api:
       enabled: true
@@ -196,3 +195,6 @@ global:
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

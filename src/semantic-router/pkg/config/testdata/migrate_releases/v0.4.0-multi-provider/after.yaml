@@ -118,3 +118,6 @@ global:
     memory: {}
     vector_store: {}
   integrations: {}
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

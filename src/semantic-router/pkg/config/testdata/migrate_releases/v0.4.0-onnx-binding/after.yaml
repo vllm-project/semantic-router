@@ -29,7 +29,6 @@ global:
         input:
           max_tokens: 32768
           overflow: reject
-  router: {}
   services:
     response_api:
       enabled: true
@@ -56,3 +55,6 @@ global:
             recall:
               top_k: 1
               min_similarity: 0.85
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default
