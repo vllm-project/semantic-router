@@ -195,13 +195,14 @@ func (q *QdrantBackend) Search(
 	colName := q.collectionName(vectorStoreID)
 
 	var qdrantFilter *qdrant.Filter
-	if fid, ok := filter["file_id"].(string); ok && fid != "" {
-		if !safeIdentifierPattern.MatchString(fid) {
-			return nil, fmt.Errorf("invalid file_id filter: contains disallowed characters")
-		}
+	fileIDs, err := safeFilterFileIDs(filter)
+	if err != nil {
+		return nil, err
+	}
+	if len(fileIDs) > 0 {
 		qdrantFilter = &qdrant.Filter{
 			Must: []*qdrant.Condition{
-				qdrant.NewMatchKeyword("file_id", fid),
+				qdrant.NewMatchKeywords("file_id", fileIDs...),
 			},
 		}
 	}

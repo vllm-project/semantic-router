@@ -14,7 +14,7 @@ Vela 系列模型加载时会与在 Ascend 910B1 上采集的 NPU 参考答案�
 以下路径在 Ascend 910B1 与 950DT 主机上实测（torch_npu 2.10.0.post4、CANN 8.5 / 9.1）。
 
 大模型推理在昇腾上由 vLLM 经 HTTP endpoint 承担；`npu` 加速器覆盖的是模型运行时
-内部的路由器自有模型（307M 信号编码器与 decision 模型）。
+内部的路由器自有模型（从 307M 编码器到 decision 模型）。
 
 ## 前提条件
 
@@ -47,7 +47,7 @@ readiness 会执行模型的 golden 自检：两次参考前向，各自与发�
 
 在昇腾主机上 `device: auto` 仍会选择 CPU：尚未转正的加速器只在显式指定时使用。
 完整配置里，用 `device: npu:0` 把 deployment 放到 NPU 上——放置规则与 GPU 相同
-（见[放置和扩展副本](../model-runtime/deploy.md#place-and-scale-replicas)），
+（见[放置和扩展副本](../model-runtime/deploy/placement-and-scaling#place-and-scale-replicas)），
 前提是运行时旁装好了 torch_npu。
 
 ### 精度：bf16 作为 opt-in
@@ -111,7 +111,7 @@ PyTorch 匹配。
 
 `vllm-sr serve` 编排会自建不带这些挂载的运行时容器，因此全栈编排的本地栈
 模型仍跑在 CPU 上。在准备好的容器里运行运行时，再把 Router 的 deployment
-指向它（[外部运行时](runtime/external.md)），或者整栈留在宿主机上。
+指向它（[外部运行时](../model-runtime/deploy/remote-services.md)），或者整栈留在宿主机上。
 
 ## 排障
 

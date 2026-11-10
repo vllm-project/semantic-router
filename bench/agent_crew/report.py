@@ -188,7 +188,7 @@ def routing_table(runs: dict[str, list[dict[str, Any]]]) -> list[str]:
         )
     lines.append("")
     lines.append(
-        "From x-vsr-routing-latency-ms on each response. /metrics mean is per run. "
+        "From x-vsr-trace routing_latency_ms per response. /metrics mean is per run. "
         "Routing share is total routing time over total wall time for the arm."
     )
     return lines

@@ -26,13 +26,14 @@ var routeQuestion = Question{ID: "route", Type: "choice", Instructions: "Which t
 // systemOneConfig parses one systemone deployment, remote-d3, from YAML.
 func systemOneConfig(t *testing.T, deployment string) *config.RouterConfig {
 	t.Helper()
-	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
 providers:
   defaults: {model: general}
   models:
     - name: general
       backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
-routing: {}
+recipes:
+  - name: default
 global:
   model_catalog:
     deployments:
@@ -76,7 +77,7 @@ func TestSystemOneDeploymentSpeaksToAGatewayWithItsOwnCredentialHeader(t *testin
 	t.Setenv("GATEWAY_TEST_KEY", "fake-subscription-key")
 	remote := newSystemOne(t, systemOneConfig(t, `        endpoint: `+server.URL+`/Unified/v1/systemone
         model: vLLM-SR-d3-27B
-        question_types: [choice, noul]
+        capabilities: {question_types: [choice, noul]}
         auth: {header: Ocp-Apim-Subscription-Key, prefix: "", api_key_env: GATEWAY_TEST_KEY}
 `))
 
@@ -224,5 +225,30 @@ func TestSystemOneDeploymentFailuresStayUnknownWithoutTheKey(t *testing.T) {
 	server.Close()
 	if err := ask(2 * time.Second); !errors.Is(err, ErrFailed) {
 		t.Fatalf("an unreachable API: %v", err)
+	}
+}
+
+// limits.max_response_bytes bounds a deployment's answers, above the default
+// SystemOneResponseLimit too.
+func TestSystemOneDeploymentReadsAnswersUpToItsResponseLimit(t *testing.T) {
+	large := routeAnswer + strings.Repeat(" ", SystemOneResponseLimit)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(large))
+	}))
+	defer server.Close()
+	for limits, want := range map[string]error{"": ErrFailed, "        limits: {max_response_bytes: 8388608}\n": nil} {
+		remote := newSystemOne(t, systemOneConfig(t, `        endpoint: `+server.URL+`/v1/systemone
+        model: vllm-sr/d3-ultra
+`+limits))
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		response, err := remote.Decide(ctx, "remote-d3", Request{State: "x", Questions: []Question{routeQuestion}})
+		cancel()
+		if !errors.Is(err, want) || want == nil && response.Answers["route"].Choice != "engineering" {
+			t.Fatalf("limits %q: %+v %v, want %v", limits, response.Answers, err, want)
+		}
 	}
 }

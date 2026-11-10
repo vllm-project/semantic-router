@@ -140,18 +140,19 @@ Reasoning is enabled per decision reference, after the evaluated model has been
 merged into the existing configuration:
 
 ```yaml
-routing:
-  decisions:
-    - name: math-reasoning
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: math
-      modelRefs:
-        - model: qwen3-14b
-          use_reasoning: true
-          reasoning_effort: high
+recipes:
+  - name: default
+    decisions:
+      - name: math-reasoning
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: math
+        modelRefs:
+          - model: qwen3-14b
+            use_reasoning: true
+            reasoning_effort: high
 ```
 
 Supported generated family mappings are `qwen3`, `deepseek`, and `gpt-oss`.

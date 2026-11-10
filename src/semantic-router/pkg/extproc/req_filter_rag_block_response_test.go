@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -35,16 +34,19 @@ func ragBlockDecision(endpoint string) config.Decision {
 		Name:     "rag-block-route",
 		Priority: 1,
 		Plugins: []config.DecisionPlugin{{
-			Type: "rag",
-			Configuration: config.MustStructuredPayload(config.RAGPluginConfig{
-				Enabled:   true,
-				Backend:   "external_api",
-				OnFailure: "block",
-				BackendConfig: config.MustStructuredPayload(&config.ExternalAPIRAGConfig{
-					Endpoint:        endpoint,
-					RequestFormat:   "custom",
-					RequestTemplate: `{"query":"{{.Query}}"}`,
-				}),
+			Type: config.DecisionPluginContext,
+			Configuration: config.MustStructuredPayload(config.ContextPluginConfig{
+				Enabled: true,
+				Sources: []config.ContextSource{{
+					Type:      config.ContextSourceRAG,
+					Backend:   "external_api",
+					OnFailure: config.RAGOnFailureBlock,
+					BackendConfig: config.MustStructuredPayload(&config.ExternalAPIRAGConfig{
+						Endpoint:        endpoint,
+						RequestFormat:   "custom",
+						RequestTemplate: `{"query":"{{.Query}}"}`,
+					}),
+				}},
 			}),
 		}},
 	}
@@ -52,8 +54,8 @@ func ragBlockDecision(endpoint string) config.Decision {
 
 func ragBlockEmbeddings() *embedding.Set {
 	return embedding.NewSet(
-		map[string]embedding.Provider{config.RAGQueryEmbeddingModel: &plainRAGEmbedder{}},
-		config.RAGQueryEmbeddingModel,
+		map[string]embedding.Provider{config.EmbeddingDefaultDeployment: &plainRAGEmbedder{}},
+		config.EmbeddingDefaultDeployment,
 	)
 }
 
@@ -64,7 +66,7 @@ func requireGenericRAGBlockResponse(t *testing.T, body string) {
 	require.NotContains(t, body, "API returned status")
 }
 
-func TestRAGBlockModePreRoutingResponseOmitsRetrievalErrorChain(t *testing.T) {
+func TestRAGBlockModeResponseOmitsRetrievalErrorChain(t *testing.T) {
 	server := ragBlockFailingBackend(t)
 
 	router, chatModel := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
@@ -73,7 +75,7 @@ func TestRAGBlockModePreRoutingResponseOmitsRetrievalErrorChain(t *testing.T) {
 	decision.ModelRefs = []config.ModelRef{{Model: chatModel}}
 	router.Config.Decisions = []config.Decision{decision}
 
-	classifier, err := classification.NewClassifier(router.Config, nil, nil, nil)
+	classifier, err := classification.NewClassifier(router.Config)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = classifier.Close() })
 	router.Classifier = classifier
@@ -82,30 +84,12 @@ func TestRAGBlockModePreRoutingResponseOmitsRetrievalErrorChain(t *testing.T) {
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 	ctx.RequestModel = config.DefaultEntrypointModel
 
-	_, response := router.runRequestPreRoutingStages(config.DefaultEntrypointModel, request, extractSemanticRequestSignals(request), ctx)
-	require.NotNil(t, response)
-	immediate := response.GetImmediateResponse()
-	require.NotNil(t, immediate)
-	require.EqualValues(t, 503, immediate.GetStatus().GetCode())
-	requireGenericRAGBlockResponse(t, string(immediate.GetBody()))
-}
-
-func TestRAGBlockModeLooperResponseOmitsRetrievalErrorChain(t *testing.T) {
-	server := ragBlockFailingBackend(t)
-
-	decision := ragBlockDecision(server.URL)
-	router := &OpenAIRouter{
-		Config:     &config.RouterConfig{},
-		Embeddings: ragBlockEmbeddings(),
-	}
-	ctx := &RequestContext{
-		Headers:             map[string]string{},
-		TraceContext:        context.Background(),
-		UserContent:         "how long does a refund take",
-		VSRSelectedDecision: &decision,
-	}
-
-	response := router.runLooperInternalPlugins(ctx, decision.Name)
+	snapshot := extractSemanticRequestSignals(request)
+	_, response := router.runRequestPreRoutingStages(config.DefaultEntrypointModel, request, snapshot, ctx)
+	require.Nil(t, response)
+	ctx.UserContent = snapshot.UserContent
+	_, response, err = router.prepareRequestForModelRouting(request, snapshot.UserContent, ctx)
+	require.NoError(t, err)
 	require.NotNil(t, response)
 	immediate := response.GetImmediateResponse()
 	require.NotNil(t, immediate)

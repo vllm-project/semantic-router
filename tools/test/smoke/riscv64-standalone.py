@@ -82,6 +82,7 @@ def configuration(backend, listener):
         models.append(
             {
                 "name": name,
+                "capabilities": ["chat"],
                 "provider_model_id": name,
                 "api_format": "openai",
                 "backend_refs": [
@@ -95,7 +96,7 @@ def configuration(backend, listener):
             }
         )
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [
             {
                 "name": "public-smoke",
@@ -105,50 +106,45 @@ def configuration(backend, listener):
             }
         ],
         "providers": {"defaults": {"model": "general-model"}, "models": models},
-        "routing": {
-            "modelCards": [
-                {"name": name, "modality": "ar"}
-                for name in ("general-model", "code-model")
-            ],
-            "signals": {
-                "keywords": [
+        "recipes": [
+            {
+                "name": "default",
+                "signals": {
+                    "keywords": [
+                        {
+                            "name": "code",
+                            "operator": "OR",
+                            "keywords": ["write code"],
+                            "case_sensitive": False,
+                        }
+                    ]
+                },
+                "decisions": [
                     {
-                        "name": "code",
-                        "operator": "OR",
-                        "keywords": ["write code"],
-                        "case_sensitive": False,
-                    }
-                ]
-            },
-            "decisions": [
-                {
-                    "name": "code-route",
-                    "priority": 100,
-                    "rules": {
-                        "operator": "AND",
-                        "conditions": [{"type": "keyword", "name": "code"}],
+                        "name": "code-route",
+                        "priority": 100,
+                        "rules": {
+                            "operator": "AND",
+                            "conditions": [{"type": "keyword", "name": "code"}],
+                        },
+                        "modelRefs": [{"model": "code-model"}],
                     },
-                    "modelRefs": [{"model": "code-model"}],
-                },
-                {
-                    "name": "general-route",
-                    "priority": 1,
-                    "rules": {"operator": "AND", "conditions": []},
-                    "modelRefs": [{"model": "general-model"}],
-                },
-            ],
-        },
+                    {
+                        "name": "general-route",
+                        "priority": 1,
+                        "rules": {"operator": "AND", "conditions": []},
+                        "modelRefs": [{"model": "general-model"}],
+                    },
+                ],
+            }
+        ],
         "entrypoints": [{"model_names": ["vllm-sr/auto"], "recipe": "default"}],
         "global": {
             "router": {"model_selection": {"enabled": False}},
             "services": {
                 "response_api": {"enabled": False},
-                "router_replay": {"enabled": False},
                 "observability": {"tracing": {"enabled": False}},
             },
-            "stores": {"response_cache": {"enabled": False}},
-            "integrations": {"tools": {"enabled": False}},
-            "model_catalog": {"kbs": []},
         },
     }
 

@@ -43,11 +43,10 @@ describe('default decision deployment', () => {
 
   it('preserves existing resources and task overrides when changing the default', () => {
     const config = {
-      version: 'v0.3',
+      version: 'v0.5',
       global: {
         model_catalog: {
-          // A deprecated system line is kept as written; the default selection never writes one.
-          system: { decision_model: { deployment: 'judge' }, hazard: 'models/custom-hazard' },
+          system: { decision_model: { deployment: 'judge' } },
           deployments: { judge: { artifact: 'vllm-sr/Vela-2.0-4B', device: 'cuda:1' } },
           bindings: { jailbreak: 'judge' },
         },
@@ -61,7 +60,6 @@ describe('default decision deployment', () => {
     expect(chosen.global.model_catalog.bindings).toEqual({ jailbreak: 'judge' })
     expect(chosen.global.model_catalog.system).toEqual({
       decision_model: { deployment: 'vela-2-0-0-8b' },
-      hazard: 'models/custom-hazard',
     })
     expect(config.global.model_catalog.system.decision_model).toEqual({ deployment: 'judge' })
   })

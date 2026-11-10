@@ -6,9 +6,6 @@ import "net/http"
 
 type ClassificationMetricsResponse struct {
 	UnifiedClassifier        bool           `json:"unified_classifier"`
-	FactCheckClassifier      bool           `json:"fact_check_classifier"`
-	HallucinationDetector    bool           `json:"hallucination_detector"`
-	FeedbackDetector         bool           `json:"feedback_detector"`
 	DecisionCount            int            `json:"decision_count"`
 	ProjectionPartitionCount int            `json:"projection_partition_count"`
 	ProjectionScoreCount     int            `json:"projection_score_count"`
@@ -21,12 +18,9 @@ func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWri
 	cfg, service, release := s.acquireClassificationRuntime()
 	defer release()
 	response := ClassificationMetricsResponse{
-		UnifiedClassifier:     service.HasUnifiedClassifier(),
-		FactCheckClassifier:   service.HasFactCheckClassifier(),
-		HallucinationDetector: service.HasHallucinationDetector(),
-		FeedbackDetector:      service.HasFeedbackDetector(),
-		RouterConfigAPI:       true,
-		SignalCounts:          map[string]int{},
+		UnifiedClassifier: service.HasUnifiedClassifier(),
+		RouterConfigAPI:   true,
+		SignalCounts:      map[string]int{},
 	}
 	if cfg == nil {
 		s.writeJSONResponse(w, http.StatusOK, response)
@@ -40,16 +34,17 @@ func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWri
 	response.SignalCounts = map[string]int{
 		"domains":               len(cfg.Categories),
 		"keywords":              len(cfg.KeywordRules),
-		"embeddings":            len(cfg.EmbeddingRules),
 		"fact_check":            len(cfg.FactCheckRules),
 		"user_feedback":         len(cfg.UserFeedbackRules),
-		"reask":                 len(cfg.ReaskRules),
-		"preferences":           len(cfg.PreferenceRules),
+		"turn_relation":         len(cfg.TurnRelationRules),
 		"language":              len(cfg.LanguageRules),
 		"context":               len(cfg.ContextRules),
 		"complexity":            len(cfg.ComplexityRules),
+		"modality":              len(cfg.ModalityRules),
 		"jailbreak":             len(cfg.JailbreakRules),
+		"safety":                len(cfg.SafetyRules),
 		"hallucination":         len(cfg.HallucinationRules),
+		"refusal":               len(cfg.RefusalRules),
 		"pii":                   len(cfg.PIIRules),
 		"projection_partitions": len(cfg.Projections.Partitions),
 		"projection_scores":     len(cfg.Projections.Scores),

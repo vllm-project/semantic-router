@@ -69,8 +69,11 @@ jobs:
         if: inputs.channel == 'dev'
         id: dev
         run: |
+          # The version follows main's first-parent history, which needs every commit.
+          if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
+            git fetch --quiet --unshallow origin
+          fi
           python tools/ci/prepare_dev_package.py \
-            --source-date-epoch "$(git show -s --format=%ct HEAD)" \
             --source-revision "$(git rev-parse HEAD)" \
             --github-output "$GITHUB_OUTPUT"
 
@@ -226,7 +229,8 @@ jobs:
       && (inputs.prebuilt-dist || needs.build.result == 'success')
       && github.repository == 'vllm-project/semantic-router'
       && ((inputs.channel == 'dev' && inputs.prebuilt-dist
-          && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+          && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+          && github.ref == 'refs/heads/main')
         || (inputs.channel == 'stable' && github.event_name == 'push'
           && startsWith(github.ref, 'refs/tags/v')))
     needs: build

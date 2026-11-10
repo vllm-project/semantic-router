@@ -132,18 +132,10 @@ func TestRandomSelector_MethodAndTier(t *testing.T) {
 	if deps := selector.ExternalDependencies(); len(deps) != 0 {
 		t.Errorf("ExternalDependencies() = %v, want empty", deps)
 	}
-	if err := selector.UpdateFeedback(context.Background(), &Feedback{}); err != nil {
-		t.Errorf("UpdateFeedback() = %v, want nil", err)
-	}
 }
 
 func TestRandomSelector_FactoryAndRegistry(t *testing.T) {
-	created := NewFactory(&ModelSelectionConfig{Method: "random"}).Create()
-	if _, ok := created.(*RandomSelector); !ok {
-		t.Fatalf("Create() returned %T, want *RandomSelector", created)
-	}
-
-	registered, ok := NewFactory(DefaultModelSelectionConfig()).CreateAll().Get(MethodRandom)
+	registered, ok := NewFactory().CreateAll().Get(MethodRandom)
 	if !ok {
 		t.Fatal("CreateAll() did not register MethodRandom")
 	}

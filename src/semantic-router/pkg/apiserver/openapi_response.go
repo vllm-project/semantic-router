@@ -47,10 +47,6 @@ func errorResponses(statuses ...int) apiRouteOption {
 	})
 }
 
-func errorResponse(status int, description string) apiRouteOption {
-	return routeOptionFunc(func(route *apiRoute) { setRouteResponse(route, status, openAPIErrorResponse(description)) })
-}
-
 func responseHeaders(status int, headers map[string]OpenAPIHeader) apiRouteOption {
 	return routeOptionFunc(func(route *apiRoute) {
 		response := route.Responses[strconv.Itoa(status)]

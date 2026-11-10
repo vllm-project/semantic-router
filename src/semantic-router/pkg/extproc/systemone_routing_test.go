@@ -49,7 +49,7 @@ func TestSystemOneAutoUsesRecipeSignalsAndNativeBackends(t *testing.T) {
 		fmt.Fprintf(w, `{"model":%q,"answers":{"task":{"type":"choice","choice":"chat","probabilities":{"chat":%g,"code":%g},"confidence":0.5}},"usage":{"input_tokens":10,"output_tokens":0},"meta":{"dtype":"float32"}}`, request.Model, probability, 1-probability)
 	}))
 	defer backend.Close()
-	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.5
 listeners:
   - name: native
     port: 8801
@@ -59,43 +59,45 @@ providers:
     - name: fast
       api_format: systemone
       provider_model_id: fast-native
-      backend_refs: [{provider: systemone-compatible, base_url: %s/v1}]
+      backend_refs: [{provider: systemone-compatible, endpoint: %s/v1}]
     - name: strong
       api_format: systemone
       provider_model_id: strong-native
-      backend_refs: [{provider: systemone-compatible, base_url: %s/v1}]
-routing: {}
+      backend_refs: [{provider: systemone-compatible, endpoint: %s/v1}]
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - {api: systemone, model_names: [vllm-sr/auto], recipe: native}
 recipes:
+  - name: default
   - name: native
-    routing:
-      signals:
-        keywords:
-          - {name: greeting, operator: OR, keywords: [hello]}
-      decisions:
-        - name: greeting
-          rules: {type: keyword, name: greeting}
-          modelRefs: [{model: fast}, {model: strong}]
-          algorithm:
-            type: cascade
-            budget: {deadline: 2s, max_calls: 2}
+    signals:
+      keywords:
+        - {name: greeting, operator: OR, keywords: [hello]}
+    decisions:
+      - name: greeting
+        rules: {type: keyword, name: greeting}
+        modelRefs: [{model: fast}, {model: strong}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 2s, max_calls: 2}
+          escalate:
             quality:
               type: uncalibrated
-              acceptance:
-                rules: [{question_type: choice, field: top_probability, predicate: {gte: 0}}]
+              accept:
+                native: [{question_type: choice, field: top_probability, gte: 0}]
             stages:
               - name: fast
-                kind: native
                 model: fast
                 accept:
-                  rules: [{question_type: choice, field: top_probability, predicate: {gte: 0.9}}]
-              - {name: strong, kind: native, model: strong}
+                  native: [{question_type: choice, field: top_probability, gte: 0.9}]
+              - {name: strong, model: strong}
 `, backend.URL, backend.URL)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +158,7 @@ recipes:
 func TestSystemOneBudgetIncludesRemoteSignalAndTransportRetries(t *testing.T) {
 	var signalCalls, fastAttempts, strongAttempts atomic.Int64
 	signalMetricBefore := testutil.ToFloat64(metrics.SystemOneSignalCalls)
-	stageMetricBefore := testutil.ToFloat64(metrics.SystemOneStageCalls.WithLabelValues("cascade", "fast", "fast"))
+	stageMetricBefore := testutil.ToFloat64(metrics.SystemOneStageCalls.WithLabelValues("escalate", "fast", "fast"))
 	decisionServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet && r.URL.Path == "/v1/systemone/models" {
 			http.NotFound(w, r)
@@ -176,7 +178,7 @@ func TestSystemOneBudgetIncludesRemoteSignalAndTransportRetries(t *testing.T) {
 		}
 		signalCalls.Add(1)
 		_ = json.NewEncoder(w).Encode(map[string]any{"answers": map[string]any{
-			"task_kind": map[string]any{"type": "choice", "choice": "simple", "probabilities": map[string]float64{"simple": 1, "hard": 0}},
+			"systemone:task_kind": map[string]any{"type": "choice", "choice": "simple", "probabilities": map[string]float64{"simple": 1, "hard": 0}},
 		}})
 	}))
 	defer decisionServer.Close()
@@ -208,7 +210,7 @@ func TestSystemOneBudgetIncludesRemoteSignalAndTransportRetries(t *testing.T) {
 		})
 	}))
 	defer backendServer.Close()
-	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.5
 listeners:
   - name: native
     port: 8801
@@ -219,53 +221,55 @@ providers:
       api_format: systemone
       provider_model_id: fast-native
       reliability: {retry_count: 1, retry_on: 5xx, retriable_status_codes: [500]}
-      backend_refs: [{provider: systemone-compatible, base_url: %s/v1}]
+      backend_refs: [{provider: systemone-compatible, endpoint: %s/v1}]
     - name: strong
       api_format: systemone
       provider_model_id: strong-native
-      backend_refs: [{provider: systemone-compatible, base_url: %s/v1}]
+      backend_refs: [{provider: systemone-compatible, endpoint: %s/v1}]
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - {api: systemone, model_names: [vllm-sr/auto], recipe: native}
 global:
   model_catalog:
     deployments:
       remote-kai: {provider: systemone, endpoint: %s/v1/systemone, model: vllm-sr/decision}
-routing: {}
 recipes:
+  - name: default
   - name: native
-    routing:
-      signals:
-        decision:
-          - name: task_kind
-            deployment: remote-kai
-            timeout_ms: 1000
-            question:
-              type: choice
-              instructions: Is the task simple?
-              choices: [{key: simple}, {key: hard}]
-      decisions:
-        - name: simple
-          rules: {type: decision, name: task_kind, label: simple}
-          modelRefs: [{model: fast}, {model: strong}]
-          algorithm:
-            type: cascade
-            budget: {deadline: 2s, max_calls: 3}
+    signals:
+      systemone:
+        - name: task_kind
+          deployment: remote-kai
+          timeout_ms: 1000
+          question:
+            type: choice
+            instructions: Is the task simple?
+            choices: [{key: simple}, {key: hard}]
+    decisions:
+      - name: simple
+        rules: {type: systemone, name: task_kind, label: simple}
+        modelRefs: [{model: fast}, {model: strong}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 2s, max_calls: 3}
+          escalate:
             quality:
               type: uncalibrated
-              acceptance:
-                rules: [{question_type: choice, field: top_probability, predicate: {gte: 0.9}}]
+              accept:
+                native: [{question_type: choice, field: top_probability, gte: 0.9}]
             stages:
               - name: fast
-                kind: native
                 model: fast
                 accept:
-                  rules: [{question_type: choice, field: top_probability, predicate: {gte: 0.9}}]
-              - {name: strong, kind: native, model: strong}
+                  native: [{question_type: choice, field: top_probability, gte: 0.9}]
+              - {name: strong, model: strong}
 `, backendServer.URL, backendServer.URL, decisionServer.URL)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,7 +314,7 @@ recipes:
 	if got := testutil.ToFloat64(metrics.SystemOneSignalCalls) - signalMetricBefore; got != 1 {
 		t.Fatalf("signal telemetry=%v, want 1 physical exchange", got)
 	}
-	if got := testutil.ToFloat64(metrics.SystemOneStageCalls.WithLabelValues("cascade", "fast", "fast")) - stageMetricBefore; got != 2 {
+	if got := testutil.ToFloat64(metrics.SystemOneStageCalls.WithLabelValues("escalate", "fast", "fast")) - stageMetricBefore; got != 2 {
 		t.Fatalf("stage telemetry=%v, want 2 physical exchanges including retry", got)
 	}
 	t.Logf("HTTP %d: model_calls=%d signal_calls=%d fast_attempts=%d strong_attempts=%d",
@@ -327,11 +331,11 @@ func TestSystemOneBudgetDeadlineIncludesRemoteSignal(t *testing.T) {
 		signalCalls.Add(1)
 		time.Sleep(250 * time.Millisecond)
 		_ = json.NewEncoder(w).Encode(map[string]any{"answers": map[string]any{
-			"task_kind": map[string]any{"type": "choice", "choice": "simple", "probabilities": map[string]float64{"simple": 1, "hard": 0}},
+			"systemone:task_kind": map[string]any{"type": "choice", "choice": "simple", "probabilities": map[string]float64{"simple": 1, "hard": 0}},
 		}})
 	}))
 	defer decisionServer.Close()
-	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.5
 listeners:
   - name: native
     port: 8801
@@ -341,43 +345,46 @@ providers:
     - name: fast
       api_format: systemone
       provider_model_id: fast-native
-      backend_refs: [{provider: systemone-compatible, base_url: http://unused.invalid/v1}]
+      backend_refs: [{provider: systemone-compatible, endpoint: 'http://unused.invalid/v1'}]
 global:
   model_catalog:
     deployments:
       remote-kai: {provider: systemone, endpoint: %s/v1/systemone, model: vllm-sr/decision}
-routing: {}
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - {api: systemone, model_names: [vllm-sr/auto], recipe: native}
 recipes:
+  - name: default
   - name: native
-    routing:
-      signals:
-        decision:
-          - name: task_kind
-            deployment: remote-kai
-            timeout_ms: 1000
-            question:
-              type: choice
-              instructions: Is the task simple?
-              choices: [{key: simple}, {key: hard}]
-      decisions:
-        - name: simple
-          rules: {type: decision, name: task_kind, label: simple}
-          modelRefs: [{model: fast}]
-          algorithm:
-            type: cascade
-            budget: {deadline: 100ms, max_calls: 2}
+    signals:
+      systemone:
+        - name: task_kind
+          deployment: remote-kai
+          timeout_ms: 1000
+          question:
+            type: choice
+            instructions: Is the task simple?
+            choices: [{key: simple}, {key: hard}]
+    decisions:
+      - name: simple
+        rules: {type: systemone, name: task_kind, label: simple}
+        modelRefs: [{model: fast}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 100ms, max_calls: 2}
+          escalate:
             quality:
               type: uncalibrated
-              acceptance:
-                rules: [{question_type: noul, field: top_probability, predicate: {gte: 0}}]
-            stages: [{name: answer, kind: native, model: fast}]
+              accept:
+                native: [{question_type: noul, field: top_probability, gte: 0}]
+            stages: [{name: answer, model: fast}]
 `, decisionServer.URL)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -297,12 +297,16 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
   display: initial;
 }
 
-/* Footer. */
+/* Footer: Duo's ink on every page, in both colour modes. */
 .footer {
-  border-top: 1px solid var(--site-border);
+  --site-border: var(--ink-hair);
+  --site-muted: var(--on-ink-3);
+  --site-muted-bright: var(--on-ink-2);
+  --site-accent-strong: var(--ember-hi);
+  border-top: 0;
   padding: var(--space-10) 0 var(--space-6);
-  background: var(--site-bg-alt);
-  color: var(--site-muted-bright);
+  background: var(--night);
+  color: var(--on-ink-2);
 }
 
 .footer .container {
@@ -338,7 +342,7 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
 }
 
 .footer__link-item:hover {
-  color: var(--site-accent-strong);
+  color: var(--on-ink);
 }
 
 .footer__bottom {

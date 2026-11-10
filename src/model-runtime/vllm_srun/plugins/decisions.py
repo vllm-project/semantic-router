@@ -21,6 +21,7 @@ from typing import Any, ClassVar, Generic
 
 from .. import assets as assetlib
 from ..errors import (
+    INVALID_INPUT,
     INVALID_QUESTION,
     QUESTION_FAILED,
     MediaError,
@@ -44,8 +45,9 @@ from .base import (
 
 SURFACE = "decisions"
 SUM_TOLERANCE = 1e-6
+# The fields of a standard request's own: in a batch, every entry of ``states`` has them instead.
 STATE_FIELDS = frozenset({"state", "questions", "images", "videos"})
-# Fields a decisions request shares with every entry of its ``states``.
+# Fields a batch shares with every entry of its ``states``.
 SHARED_FIELDS = ("model", "options", "assets")
 # Whether the request being planned asked for long context (``options.long_context``): a family that caps
 # questions at a validated length below its maximum reads it in ``plan`` / ``plan_images``.
@@ -123,22 +125,33 @@ def refuse_unanswerable(plan: RequestPlan[Any]) -> None:
 
 
 def split_states(body: Any) -> tuple[list[dict[str, Any]], list[str]] | None:
-    """A request with further ``states`` as one request per state, its own first, and the states' names.
+    """A batch (a request with ``states``) as one standard request per entry, and the entries' names.
 
-    Every request has the original's model and options; None for a request
-    without ``states``. ``ValueError`` when ``states`` is malformed.
+    Every entry holds ``state`` and ``questions`` (and may hold ``images`` and
+    ``videos``) and gets the batch's model, options and assets; None for a
+    standard request. The two forms are exclusive, so a batch has no
+    top-level state, questions, images or videos. ``ValueError`` when a
+    batch has one, or ``states`` is malformed.
     """
     if not isinstance(body, dict) or "states" not in body:
         return None
+    unknown = set(body) - STATE_FIELDS - {"states", *SHARED_FIELDS}
+    if unknown:
+        raise ValueError(f"unknown request fields: {sorted(unknown)}")
+    mixed = sorted(STATE_FIELDS & set(body))
+    if mixed:
+        raise ValueError(
+            "a request is a standard request (state and questions) or a batch (states), not both;"
+            f" this batch also has top-level {', '.join(mixed)}"
+        )
     states = body["states"]
-    if not isinstance(states, dict):
-        raise ValueError("states must be an object of named states")
+    if not isinstance(states, dict) or not states:
+        raise ValueError("states must be a nonempty object of named requests")
     shared = {key: body[key] for key in SHARED_FIELDS if key in body}
-    bodies = [{key: value for key, value in body.items() if key != "states"}]
-    names = []
+    bodies, names = [], []
     for name, entry in states.items():
         if not isinstance(name, str) or not name.strip():
-            raise ValueError("every state in states needs a non-blank name")
+            raise ValueError("every entry of states needs a non-blank name")
         if (
             not isinstance(entry, dict)
             or not {"state", "questions"} <= set(entry) <= STATE_FIELDS
@@ -152,39 +165,76 @@ def split_states(body: Any) -> tuple[list[dict[str, Any]], list[str]] | None:
 
 
 def join_states(
-    outcomes: list[tuple[int, dict[str, Any]]], names: list[str]
+    outcomes: list[tuple[int, dict[str, Any]]],
+    names: list[str],
+    bodies: list[dict[str, Any]],
 ) -> tuple[int, dict[str, Any]]:
-    """The response of a request with further ``states`` from the responses of its states, its own first.
+    """A batch's response from its entries' responses: each under its name, and the usage of them all.
 
-    The first failure answers the request. A request none of whose questions
-    is valid is refused, as ``refuse_unanswerable`` refuses one about one state.
+    An entry refused for its input (a rejected image, video or asset, or its
+    tokens: the refusals with a reason) fails each question of its request in
+    ``bodies`` with ``invalid_input`` and the refusal's message, and the other
+    entries are answered. Any other failure, or a refusal of every entry,
+    answers the batch. A batch none of whose questions is valid is refused, as
+    ``refuse_unanswerable`` refuses a standard request. With ``return_meta``
+    the batch has the model's ``meta``, which every entry shares: the entries
+    run in one job group.
     """
-    for status, body in outcomes:
-        if status != HTTPStatus.OK:
+    alone = [
+        status == HTTPStatus.BAD_REQUEST and "reason" in body["error"]
+        for status, body in outcomes
+    ]
+    for (status, body), refused in zip(outcomes, alone, strict=True):
+        if status != HTTPStatus.OK and (not refused or all(alone)):
             return status, body
+    first = next(body for status, body in outcomes if status == HTTPStatus.OK)
+    entries = {}
+    for name, (status, body), sent in zip(names, outcomes, bodies, strict=True):
+        if status == HTTPStatus.OK:
+            entries[name] = body
+            continue
+        failure = QuestionError(INVALID_INPUT, body["error"]["message"])
+        entries[name] = {
+            "model": first["model"],
+            "answers": {
+                question_id: question_error(
+                    question.get("type") if isinstance(question, dict) else None,
+                    failure,
+                )
+                for question_id, question in sent["questions"].items()
+            },
+            "usage": {"input_tokens": 0, "output_tokens": 0},
+        }
     answers = [
-        (question_id, answer)
-        for _, body in outcomes
+        (name, question_id, answer)
+        for name, body in entries.items()
         for question_id, answer in body.get("answers", {}).items()
     ]
     if answers and all(
-        answer.get("error") == INVALID_QUESTION for _, answer in answers
+        answer.get("error") == INVALID_QUESTION for _, _, answer in answers
     ):
         reasons = "; ".join(
-            f"{question_id}: {answer.get('message', INVALID_QUESTION)}"
-            for question_id, answer in answers
+            f"states.{name}.questions.{question_id}: {answer.get('message', INVALID_QUESTION)}"
+            for name, question_id, answer in answers
         )
         error = RuntimeServiceError(
             "invalid_request",
             f"no question is valid ({reasons})",
-            answers[0][1].get("reason"),
-            question=answers[0][0],
+            answers[0][2].get("reason"),
+            question=answers[0][1],
+            state=answers[0][0],
         )
         return error.status, error.body()
-    response = dict(outcomes[0][1])
-    response["states"] = {
-        name: body for name, (_, body) in zip(names, outcomes[1:], strict=True)
+    response: dict[str, Any] = {
+        "model": first["model"],
+        "states": entries,
+        "usage": {
+            key: sum(body["usage"][key] for body in entries.values())
+            for key in ("input_tokens", "output_tokens")
+        },
     }
+    if "meta" in first:
+        response["meta"] = first["meta"]
     return HTTPStatus.OK, response
 
 
@@ -192,10 +242,11 @@ def as_systemone(status: int, body: dict[str, Any]) -> tuple[int, dict[str, Any]
     """A decisions outcome as ``POST /v1/systemone`` answers it: a failed question fails the whole request.
 
     System One answers carry no per-question error, and the official SDKs
-    validate each answer by its type, so the first failed question (of the
-    request's own state, then of each ``states`` entry) answers the request
-    with its code, fixed reason and ID; the message lists every failure. A
-    request none of whose questions is valid is that question's error too.
+    validate each answer by its type, so the first failed question (of a
+    standard request, or of a batch's entries in order) answers the request
+    with its code, fixed reason and ID, and in a batch its entry's name; the
+    message lists every failure. A request none of whose questions is valid is
+    that question's error too.
     """
     if status == HTTPStatus.OK:
         failures = [
@@ -217,13 +268,14 @@ def as_systemone(status: int, body: dict[str, Any]) -> tuple[int, dict[str, Any]
             + (f": {answer['message']}" if answer.get("message") else "")
             for question_id, answer, name in failures
         )
-        question_id, answer, _ = failures[0]
+        question_id, answer, name = failures[0]
         error = RuntimeServiceError(
             QUESTION_FAILED,
             f"{len(failures)} question(s) cannot be answered: {listed}",
             answer.get("reason"),
             question=question_id,
             question_error=answer["error"],
+            state=name,
         )
         return error.status, error.body()
     refused = body.get("error") if isinstance(body, dict) else None
@@ -238,6 +290,7 @@ def as_systemone(status: int, body: dict[str, Any]) -> tuple[int, dict[str, Any]
             refused.get("reason"),
             question=refused["question"],
             question_error=INVALID_QUESTION,
+            state=refused.get("state"),
         )
         return error.status, error.body()
     return status, body

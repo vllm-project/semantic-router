@@ -134,13 +134,14 @@
   font-weight: var(--site-font-weight-medium);
 }
 
-/* Current page as filled pill with accent text. No accent bar or rule. */
+/* Current page as Duo's docs mark it: ink text on a faint tint, with a 2 px ember bar on the left. */
 .site-root--docs .theme-doc-sidebar-menu .menu__link--active[aria-current='page'],
 .site-root--docs .theme-doc-sidebar-menu .menu__link--active[aria-current='page']:hover {
-  background: var(--site-accent-soft);
-  box-shadow: none;
-  color: var(--site-accent-strong);
-  font-weight: var(--site-font-weight-medium);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--site-hover-chrome-bg);
+  box-shadow: inset 2px 0 0 var(--ember);
+  color: var(--site-text-strong);
+  font-weight: var(--site-font-weight-semibold);
 }
 
 .site-root--docs .theme-doc-sidebar-menu .menu__caret {
@@ -381,7 +382,7 @@
 }
 
 .theme-doc-markdown a:not(.hash-link):hover {
-  color: var(--site-brand-blue);
+  color: var(--site-accent-strong);
   text-decoration-color: currentcolor;
 }
 
@@ -432,7 +433,7 @@
   padding: 0.12em 0.3em;
   border: 1px solid var(--site-border);
   border-radius: var(--radius-sm);
-  background: var(--site-code-bg);
+  background: var(--site-code-inline-bg);
   color: var(--site-text);
   font-size: 0.84em;
 }
@@ -444,7 +445,7 @@
 
 .theme-doc-markdown pre,
 .theme-doc-markdown .theme-code-block {
-  border-color: var(--site-border);
+  border-color: var(--ink-hair);
   border-radius: var(--radius-md);
   box-shadow: none;
 }
@@ -499,7 +500,7 @@
 .theme-doc-markdown .theme-admonition {
   margin: 1.05rem 0;
   border: 1px solid var(--site-admonition-border);
-  border-left: 3px solid var(--ifm-alert-border-color);
+  border-left: 3px solid var(--admonition-tint);
   border-radius: var(--radius-md);
   background: var(--site-admonition-bg);
   box-shadow: none;
@@ -608,7 +609,7 @@ html[data-theme='dark'] .theme-doc-toc-desktop::before {
 .theme-doc-toc-desktop .table-of-contents__link--active {
   margin-left: -1px;
   border-left: 2px solid var(--site-accent);
-  color: var(--site-accent-strong);
+  color: var(--site-text-strong);
   font-weight: var(--site-font-weight-medium);
 }
 

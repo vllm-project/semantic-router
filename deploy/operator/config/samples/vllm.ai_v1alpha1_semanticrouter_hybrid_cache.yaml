@@ -55,11 +55,6 @@ spec:
 
   # Semantic router configuration
   config:
-    embedding_models:
-      mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-      use_cpu: true
-
-    # Semantic cache with Hybrid backend (HNSW + Milvus)
     response_cache:
       enabled: true
       backend_type: hybrid
@@ -67,7 +62,6 @@ spec:
       ttl_seconds: 3600
       max_entries: 5000
       eviction_policy: lru
-      embedding_model: mmbert
 
       # HNSW configuration for hybrid backend
       hnsw:
@@ -96,7 +90,7 @@ spec:
           description: "Hybrid cache backend storage"
           vector_field:
             name: embedding
-            dimension: 384  # For BERT embeddings
+            dimension: 768  # vela-embedding, embeddings.default, answers with at most 768
             metric_type: IP
           index:
             type: HNSW
@@ -115,12 +109,6 @@ spec:
           auto_create_collection: true
 
     # Disable features that require additional models for this example
-    # Enable these features in production with proper model configuration
-    prompt_guard:
-      enabled: false
-
-    tools:
-      enabled: false
 
 ---
 # Secret for Milvus password (create separately)

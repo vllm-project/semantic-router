@@ -92,7 +92,7 @@ func (r *OpenAIRouter) SelectModelForEval(
 		return evalSelectionUnavailable(err.Error())
 	}
 	algorithmType := evalAlgorithmType(decision)
-	if strict && config.IsLooperAlgorithmType(algorithmType) {
+	if strict && config.IsExecutorAlgorithmType(algorithmType) {
 		return services.EvalModelSelection{Status: services.EvalSelectionExecutionRequired, Method: algorithmType, Reason: "each generated algorithm stage must satisfy its actual capabilities and output budget"}
 	}
 	if selectionResult, resolved := r.evalSelectionBeforeDryRun(decision, algorithmType); resolved {
@@ -156,7 +156,7 @@ func (r *OpenAIRouter) evalSelectionBeforeDryRun(
 			Reason:        "configured final-output model for the multi-model algorithm",
 		}, true
 	}
-	if config.IsLooperAlgorithmType(algorithmType) {
+	if config.IsExecutorAlgorithmType(algorithmType) {
 		return services.EvalModelSelection{
 			Status: services.EvalSelectionExecutionRequired,
 			Method: algorithmType,
@@ -183,21 +183,15 @@ func (r *OpenAIRouter) selectEvalCandidate(
 			return evalSelectionUnavailable(prepareErr.Error())
 		}
 	}
-	costWeight, qualityWeight := r.getSelectionWeights(decision.Algorithm)
-	tpot, ttft := r.getLatencyAwarePercentiles(decision.Algorithm)
 	selectionContext := &selection.SelectionContext{
-		Query:                      input.Query,
-		DecisionName:               decision.Name,
-		RecipeName:                 input.Recipe,
-		CategoryName:               input.Category,
-		CandidateModels:            decision.ModelRefs,
-		CandidateIterations:        decision.CandidateIterations,
-		InputTokens:                input.ContextTokenCount,
-		CostWeight:                 costWeight,
-		QualityWeight:              qualityWeight,
-		LatencyAwareTPOTPercentile: tpot,
-		LatencyAwareTTFTPercentile: ttft,
-		CandidateDemands:           requestContext.AutomaticCandidateDemands,
+		Query:               input.Query,
+		DecisionName:        decision.Name,
+		RecipeName:          input.Recipe,
+		CategoryName:        input.Category,
+		CandidateModels:     decision.ModelRefs,
+		CandidateIterations: decision.CandidateIterations,
+		InputTokens:         input.ContextTokenCount,
+		CandidateDemands:    requestContext.AutomaticCandidateDemands,
 	}
 	if requestContext.learningPreview != nil {
 		selectionContext.SessionID = requestContext.SessionID
@@ -277,7 +271,7 @@ func configuredLooperFinalModel(decision *config.Decision) (string, bool) {
 // model, which keeps no state between requests.
 func evalSupportsDryRunSelection(method selection.SelectionMethod) bool {
 	switch method {
-	case selection.MethodStatic, selection.MethodMultiFactor, selection.MethodLatencyAware, selection.MethodDecision:
+	case selection.MethodStatic, selection.MethodMultiFactor, selection.MethodSystemOne:
 		return true
 	default:
 		return false

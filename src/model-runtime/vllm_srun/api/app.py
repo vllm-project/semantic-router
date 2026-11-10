@@ -26,7 +26,7 @@ from . import wire
 OPENAPI_PATH = Path(__file__).with_name("openapi.yaml")
 _SURROGATE_ESCAPE = re.compile(rb"\\u[dD][89a-fA-F]")
 # The contract version (``info.version`` in openapi.yaml), reported to clients.
-API_VERSION = "3.2.0"
+API_VERSION = "4.0.0"
 # Recorded for a request whose client disconnected before its answer (nginx's code).
 CLIENT_CLOSED = 499
 
@@ -189,6 +189,16 @@ def create_app(runtime: Runtime) -> Starlette:
         return JSON(body, status_code=200 if runtime.health.ready else 503)
 
     async def live(request: Request) -> Response:
+        stalls = runtime.stalls()
+        if stalls:
+            return JSON(
+                {
+                    "api_version": API_VERSION,
+                    "status": "stalled",
+                    "reason": "; ".join(stalls),
+                },
+                status_code=503,
+            )
         return JSON({"api_version": API_VERSION, "status": "alive"})
 
     async def metrics(request: Request) -> Response:
@@ -199,6 +209,8 @@ def create_app(runtime: Runtime) -> Starlette:
                 if served.scheduler
             )
         )
+        runtime.metrics.ready.set(1 if runtime.health.ready else 0)
+        runtime.metrics.live.set(0 if runtime.stalls() else 1)
         return Response(
             runtime.metrics.render(), media_type="text/plain; version=0.0.4"
         )
