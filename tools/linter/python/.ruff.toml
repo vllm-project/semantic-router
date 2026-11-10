@@ -48,7 +48,7 @@ ignore = [
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
 # vSR's thresholds and probe scores are the calibrated values themselves; they read
 # best inline next to the question they gate.
-"src/claude-code/**/*.py" = ["PLR2004"]
+"integrations/coding-agents/claude-code/**/*.py" = ["PLR2004"]
 # The model runtime keeps the PyTorch `F` convention and imports heavy optional
 # modules (uvicorn, safetensors, huggingface_hub, tokenizers) where they are used,
 # so the API, registry and CLI stay importable without them.
