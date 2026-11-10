@@ -2705,7 +2705,7 @@ global:
             model: decision-kai
       # Engine arguments tune batching, precision, shared context and a
       # Decision model's input limit; each one left out keeps the runtime's
-      # default (website/docs/model-runtime/engine-args.md).
+      # default (website/docs/model-runtime/deploy/engine-args.md).
       decision-kai-tuned:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
