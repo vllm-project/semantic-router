@@ -3,6 +3,7 @@ package extproc
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
@@ -27,7 +28,7 @@ func (r *OpenAIRouter) applyDecisionOutput(ctx *RequestContext) error {
 	}
 	decision, request := ctx.VSRSelectedDecision, ctx.SemanticRequest
 	if ctx.SourceFormat == llmprotocol.OpenAIImagesV1 {
-		return applyImagesEntryDecision(ctx, decision, request)
+		return r.applyImagesEntryDecision(ctx, decision, request)
 	}
 	if !decision.Output.GeneratesImages() {
 		return nil
@@ -52,11 +53,19 @@ func (r *OpenAIRouter) applyDecisionOutput(ctx *RequestContext) error {
 
 // applyImagesEntryDecision admits an Images API request only to a decision
 // that generates images. The image is the only answer the Images API returns,
-// so the request forces the image_generation operation on any model.
-func applyImagesEntryDecision(ctx *RequestContext, decision *config.Decision, request *llmprotocol.Request) error {
+// so the request forces the image_generation operation on any model. One
+// Responses call generates one image, so n above 1 needs one of the decision's
+// models on a wire that takes n, which only the Images API does.
+func (r *OpenAIRouter) applyImagesEntryDecision(ctx *RequestContext, decision *config.Decision, request *llmprotocol.Request) error {
 	if !decision.Output.GeneratesImages() {
 		failure := routingFailureImageRouteRequired
 		return refuseDecisionOutput(ctx, decision, failure.category, failure.code, failure.message)
+	}
+	severalImages := llmprotocol.Capabilities(llmprotocol.CapabilityImageGeneration, llmprotocol.CapabilityMultipleCandidates)
+	generatesSeveral := func(ref config.ModelRef) bool { return r.modelCanServeCapabilities(ref.Model, severalImages) }
+	if n := request.CandidateCount; n != nil && *n > 1 && len(decision.ModelRefs) > 0 && !slices.ContainsFunc(decision.ModelRefs, generatesSeveral) {
+		return refuseDecisionOutput(ctx, decision, llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
+			"n above 1 needs a model on the Images API; a Responses API model generates one image per call")
 	}
 	if request.ToolChoice.Name == "" && (request.ToolChoice.Mode == "" || request.ToolChoice.Mode == llmprotocol.ToolChoiceAuto) {
 		request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceImageGeneration}

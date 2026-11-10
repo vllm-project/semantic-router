@@ -165,7 +165,10 @@ Images API（`api_format: images`）上应答，还是在 Responses API 上通�
 API 不支持流式输出。未到达图像决策的请求（没有匹配任何决策、匹配到以文本应答的决策，
 或直接指定模型而非 `vllm-sr/auto` 这样的入口）会在调用任何模型之前收到 `400`
 `image_route_required`。到达图像决策的 Chat Completions 或 Anthropic Messages 请求会收到
-`400` `unsupported_capability`，因为这两种 API 都无法返回图像。
+`400` `unsupported_capability`，因为这两种 API 都无法返回图像。一次 Responses API
+调用只生成一张图像，因此 `n` 大于 1 时，决策中需要有一个在 Images API 上应答的模型；
+如果决策的模型全部在 Responses API 上，请求会在调用任何模型之前收到 `400`
+`unsupported_capability`。
 
 ### Azure OpenAI 客户端 {#azure-openai-clients}
 
