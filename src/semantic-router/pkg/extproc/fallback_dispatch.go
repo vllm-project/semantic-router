@@ -511,7 +511,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		candidateSucceeded = true
 		if isStreaming {
 			r.updateRouterReplayStatus(ctx, http.StatusOK, true)
-			return r.streamedFallbackRefusal(ctx), evalResult, nil
+			return r.streamedFallbackRefusal(ctx, policyPlan.refusal), evalResult, nil
 		}
 		r.updateRouterReplayStatus(ctx, blockedStatus, false)
 		return policyPlan.blocked, evalResult, nil
