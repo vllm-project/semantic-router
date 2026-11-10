@@ -18,74 +18,67 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// Sample config for testing - uses raw config fallback since full parsing requires more dependencies
+// A v0.5 configuration the Router parses; the handler reads its decisions and
+// its routing-preview timeout.
 const testConfig = `
-backend_models:
-  default_model: "gpt-4"
-  model_config:
-    gpt-4:
-      reasoning_family: "openai"
-
-prompt_guard:
-  enabled: true
-  model_id: "models/jailbreak-classifier"
-
-classifier:
-  pii_model:
-    model_id: "models/pii-detector"
-
-semantic_cache:
-  enabled: true
-  backend_type: "memory"
-  similarity_threshold: 0.85
-
-intelligent_routing:
-  signals:
-    keyword_rules:
-      - name: "thinking"
-        operator: "OR"
-        keywords: ["think", "reason", "analyze", "step by step"]
-      - name: "coding"
-        operator: "OR"
-        keywords: ["code", "program", "function", "debug"]
-    categories:
-      - name: "math"
-        description: "Mathematical calculations and equations"
-      - name: "general"
-        description: "General knowledge questions"
-    embedding_rules:
-      - name: "creative_writing"
-        threshold: 0.8
-        candidates: ["write a story", "create a poem"]
-  decisions:
-    - name: "reasoning_decision"
-      description: "Handle reasoning tasks"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions:
-          - type: "keyword"
-            name: "thinking"
-      modelRefs:
-        - model: "gpt-4"
-          use_reasoning: true
-    - name: "coding_decision"
-      description: "Handle coding tasks"
-      priority: 90
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "keyword"
-            name: "coding"
-          - type: "domain"
-            name: "code"
-      modelRefs:
-        - model: "gpt-4"
-    - name: "default_decision"
-      description: "Default fallback"
-      priority: 10
-      modelRefs:
-        - model: "gpt-4"
+version: v0.5
+providers:
+  defaults:
+    model: gpt-4
+  models:
+    - name: gpt-4
+      backend_refs:
+        - name: primary
+          endpoint: 127.0.0.1:8000
+          protocol: http
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: thinking
+          operator: OR
+          keywords: ["think", "reason", "analyze", "step by step"]
+        - name: coding
+          operator: OR
+          keywords: ["code", "program", "function", "debug"]
+      domains:
+        - name: code
+          description: Programming and software questions
+          labels: ["computer science"]
+        - name: math
+          description: Mathematical calculations and equations
+          labels: ["math"]
+    decisions:
+      - name: reasoning_decision
+        description: Handle reasoning tasks
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: thinking
+        modelRefs:
+          - model: gpt-4
+      - name: coding_decision
+        description: Handle coding tasks
+        priority: 90
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: coding
+            - type: domain
+              name: code
+        modelRefs:
+          - model: gpt-4
+      - name: default_decision
+        description: Default fallback
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: gpt-4
 `
 
 func setupTestConfig(t *testing.T) string {
@@ -99,6 +92,9 @@ func setupTestConfig(t *testing.T) string {
 	configPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(testConfig), 0o644); err != nil {
 		t.Fatalf("Failed to write test config: %v", err)
+	}
+	if _, err := routerconfig.Parse(configPath); err != nil {
+		t.Fatalf("Test config does not parse: %v", err)
 	}
 
 	return configPath
@@ -238,7 +234,7 @@ func TestCallRouterAPIUsesServerCredential(t *testing.T) {
 
 func TestTopologyPreviewUsesCanonicalTimeout(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	require.NoError(t, os.WriteFile(configPath, []byte("version: v0.3\nglobal:\n  services:\n    api:\n      routing_preview:\n        request_timeout_seconds: 600\n"), 0o600))
+	require.NoError(t, os.WriteFile(configPath, []byte("version: v0.5\nglobal:\n  services:\n    api:\n      routing_preview:\n        request_timeout_seconds: 600\n"), 0o600))
 	require.Equal(t, 605*time.Second, topologyPreviewTimeout(configPath))
 }
 
@@ -375,13 +371,16 @@ func TestTopologyTestQueryHandler_ProjectionAndExtendedSignals(t *testing.T) {
 		DecisionResult: &RouterEvalDecisionResult{
 			DecisionName: "reasoning_decision",
 			MatchedSignals: &RouterMatchedSignals{
-				Modality:   []string{"AR"},
-				Authz:      []string{"premium_tier"},
-				Jailbreak:  []string{"jailbreak:block"},
-				PII:        []string{"pii:email"},
-				KB:         []string{"privacy_policy"},
-				Event:      []string{"critical_payment_event"},
-				Projection: []string{"balance_reasoning"},
+				Modality:      []string{"AR"},
+				Authz:         []string{"premium_tier"},
+				Jailbreak:     []string{"jailbreak:block"},
+				PII:           []string{"pii:email"},
+				TurnRelation:  []string{"follow_up"},
+				Safety:        []string{"unsafe_request"},
+				Metadata:      []string{"gold_tenant"},
+				InputModality: []string{"image_input"},
+				SystemOne:     []string{"task"},
+				Projection:    []string{"balance_reasoning"},
 			},
 		},
 	})
@@ -409,16 +408,19 @@ func TestTopologyTestQueryHandler_ProjectionAndExtendedSignals(t *testing.T) {
 	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "authz", Name: "premium_tier", ConfidenceAvailable: &confidenceUnavailable, Reason: "Authorization signal matched"})
 	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "jailbreak", Name: "jailbreak:block", ConfidenceAvailable: &confidenceUnavailable, Reason: "Jailbreak signal matched"})
 	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "pii", Name: "pii:email", ConfidenceAvailable: &confidenceUnavailable, Reason: "PII signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "kb", Name: "privacy_policy", ConfidenceAvailable: &confidenceUnavailable, Reason: "Knowledge base signal matched"})
-	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "event", Name: "critical_payment_event", ConfidenceAvailable: &confidenceUnavailable, Reason: "Event signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "turn_relation", Name: "follow_up", ConfidenceAvailable: &confidenceUnavailable, Reason: "Turn relation matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "safety", Name: "unsafe_request", ConfidenceAvailable: &confidenceUnavailable, Reason: "Safety signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "metadata", Name: "gold_tenant", ConfidenceAvailable: &confidenceUnavailable, Reason: "Metadata signal matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "input_modality", Name: "image_input", ConfidenceAvailable: &confidenceUnavailable, Reason: "Input modality matched"})
+	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "systemone", Name: "task", ConfidenceAvailable: &confidenceUnavailable, Reason: "System One question matched"})
+	assert.Contains(t, result.HighlightedPath, "signal-group-safety")
+	assert.Contains(t, result.HighlightedPath, "signal-safety-unsafe_request")
 	assert.Contains(t, result.MatchedSignals, MatchedSignal{Type: "projection", Name: "balance_reasoning", ConfidenceAvailable: &confidenceUnavailable, Reason: "Projection mapping matched"})
-	assert.Contains(t, result.HighlightedPath, "signal-group-kb")
-	assert.Contains(t, result.HighlightedPath, "signal-kb-privacy_policy")
 	assert.Contains(t, result.HighlightedPath, "signal-group-projection")
 	assert.Contains(t, result.HighlightedPath, "signal-projection-balance_reasoning")
 }
 
-func TestTopologyTestQueryHandler_StructureSignalIncludesComputedValue(t *testing.T) {
+func TestTopologyTestQueryHandler_KeywordCountIncludesComputedValue(t *testing.T) {
 	configPath := setupTestConfig(t)
 	defer func() { _ = os.RemoveAll(filepath.Dir(configPath)) }()
 
@@ -428,11 +430,10 @@ func TestTopologyTestQueryHandler_StructureSignalIncludesComputedValue(t *testin
 		DecisionResult: &RouterEvalDecisionResult{
 			DecisionName: "reasoning_decision",
 			MatchedSignals: &RouterMatchedSignals{
-				Structure: []string{"many_questions"},
+				Keywords: []string{"many_questions"},
 			},
 		},
-		SignalConfidences: map[string]float64{"structure:many_questions": 1.0},
-		SignalValues:      map[string]float64{"structure:many_questions": 4},
+		SignalValues: map[string]float64{"keyword:many_questions": 4},
 	})
 
 	handler := TopologyTestQueryHandler(configPath, routerAPIURL)
@@ -453,13 +454,13 @@ func TestTopologyTestQueryHandler_StructureSignalIncludesComputedValue(t *testin
 	var result TestQueryResult
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &result))
 	require.Len(t, result.MatchedSignals, 1)
-	require.Equal(t, "structure", result.MatchedSignals[0].Type)
+	require.Equal(t, "keyword", result.MatchedSignals[0].Type)
 	require.Equal(t, "many_questions", result.MatchedSignals[0].Name)
 	require.NotNil(t, result.MatchedSignals[0].Value)
 	assert.Equal(t, 4.0, *result.MatchedSignals[0].Value)
-	assert.Equal(t, 1.0, result.MatchedSignals[0].Confidence)
-	assert.Contains(t, result.HighlightedPath, "signal-group-structure")
-	assert.Contains(t, result.HighlightedPath, "signal-structure-many_questions")
+	assert.False(t, *result.MatchedSignals[0].ConfidenceAvailable)
+	assert.Contains(t, result.HighlightedPath, "signal-group-keyword")
+	assert.Contains(t, result.HighlightedPath, "signal-keyword-many_questions")
 }
 
 func TestTopologyTestQueryHandler_MissingRouterAPI(t *testing.T) {

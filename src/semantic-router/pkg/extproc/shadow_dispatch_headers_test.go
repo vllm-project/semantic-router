@@ -268,3 +268,17 @@ func TestShadowHeaderIsSensitive(t *testing.T) {
 		t.Error("an empty profile auth header must not match")
 	}
 }
+
+// A request that matches no decision carries its default header_mutation to
+// the primary, so its shadow gets the headers forward_headers names too.
+func TestShadowForwardsTheDefaultHeaderMutationsOfAnUnmatchedRequest(t *testing.T) {
+	ctx := &RequestContext{RequestID: "shadow-defaults"}
+	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName, Profile: config.RoutingProfile{DefaultPlugins: []config.DecisionPlugin{{
+		Type:          config.DecisionPluginHeaderMutation,
+		Configuration: config.MustStructuredPayload(map[string]interface{}{"add": []map[string]string{{"name": "x-tenant", "value": "acme"}}}),
+	}}}})
+	extra := (&OpenAIRouter{}).shadowExtraHeaders(ctx, nil, &config.RouterReplayShadowConfig{ForwardHeaders: []string{"x-tenant"}})
+	if extra["x-tenant"] != "acme" {
+		t.Fatalf("shadow headers = %v, want the default x-tenant forwarded", extra)
+	}
+}

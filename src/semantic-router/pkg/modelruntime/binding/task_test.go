@@ -21,7 +21,7 @@ type selectionResult struct {
 
 func TestStructuredTaskRegistrationBindingAndRecipeIsolation(t *testing.T) {
 	registry := NewRegistry()
-	task, err := Register(registry, "internal.selection.v1", func(input selectionRequest) error {
+	task, err := RegisterTask(registry, "internal.selection.v1", "internal.selection.v1", func(input selectionRequest) error {
 		if len(input.Messages) == 0 || len(input.Candidates) == 0 {
 			return fmt.Errorf("messages and candidates required")
 		}

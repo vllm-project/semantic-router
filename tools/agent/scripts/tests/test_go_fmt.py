@@ -36,7 +36,7 @@ class GoFmtTests(unittest.TestCase):
         run = self.run_with_mocked_lint(
             [
                 "tools/dev/dsl/main.go",
-                "tools/calibration/image-routing/main.go",
+                "tools/calibration/shadow-dataset/main.go",
                 "bench/grounded_fusion/fusioneval/main.go",
             ]
         )
@@ -48,7 +48,7 @@ class GoFmtTests(unittest.TestCase):
             command[-3:],
             [
                 "../../bench/grounded_fusion/fusioneval/main.go",
-                "../../tools/calibration/image-routing/main.go",
+                "../../tools/calibration/shadow-dataset/main.go",
                 "../../tools/dev/dsl/main.go",
             ],
         )

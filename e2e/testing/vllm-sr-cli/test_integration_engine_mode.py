@@ -37,7 +37,8 @@ from cli.runtime_stack import MAX_PORT_OFFSET
 from runtime_http import HTTP_OK, call, page_requests, write_fixture
 
 QUICKSTART = (
-    Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
+    Path(__file__).resolve().parents[3]
+    / "website/docs/model-runtime/get-started/quickstart.md"
 )
 API_KEY = "engine-e2e-key"
 MANAGEMENT_KEY = "engine-e2e-management-key"
@@ -129,7 +130,7 @@ def png_data_url(width, height, seed):
 
 def engine_config():
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [
             {
                 "name": "main",
@@ -154,16 +155,19 @@ def engine_config():
                 }
             ]
         },
-        "routing": {
-            "decisions": [
-                {
-                    "name": "saved",
-                    "priority": 1,
-                    "rules": {"operator": "AND", "conditions": []},
-                    "modelRefs": [{"model": "answer"}],
-                }
-            ]
-        },
+        "recipes": [
+            {
+                "name": "default",
+                "decisions": [
+                    {
+                        "name": "saved",
+                        "priority": 1,
+                        "rules": {"operator": "AND", "conditions": []},
+                        "modelRefs": [{"model": "answer"}],
+                    }
+                ],
+            }
+        ],
         "global": {
             "router": {"enabled": False},
             "model_catalog": {

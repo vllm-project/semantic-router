@@ -7,21 +7,22 @@ description: The stable deployment contract for Semantic Router — component re
 
 Every supported way of running Semantic Router assembles the same pieces:
 one Router serving one canonical configuration, optionally behind a gateway,
-in front of model backends the Router does not own. This page is the stable
-contract those pieces follow. Installation guides show how to run each
-stack; [Deployment Support](support-matrix) states which stacks the project
-maintains and what evidence backs each claim; this page defines the
-responsibilities, ownership, and versioning rules that keep the stacks
-from drifting into incompatible variants. How the serving path itself
-composes — frontend, decision engine, and model runtime — is covered in
-[Component Architecture](../overview/component-architecture).
+in front of model backends the Router doesn't own. This page is the stable
+contract those pieces follow: the responsibilities, ownership and versioning
+rules that keep the stacks from drifting into incompatible variants.
+
+- **How to run each stack:** the installation guides.
+- **Which stacks the project maintains,** and the evidence behind each claim:
+  [Deployment Support](support-matrix).
+- **How the serving path composes** (frontend, decision engine and model
+  runtime): [Component Architecture](../overview/component-architecture).
 
 ## Components and responsibilities
 
 | Component | Owns | Does not own |
 | --- | --- | --- |
 | Router | Routing decisions, the canonical configuration document, configuration validation and activation, its inference and management listeners | Model serving, backend lifecycle, gateway traffic policy |
-| Model runtime | Serving the Router's own decision, classifier, embedding, and reranking models, as managed or attached deployments | Chat/generation backends — those remain external providers reached through canonical backend references |
+| Model runtime | Serving the Router's own decision, classifier, and embedding models, as managed or attached deployments | Chat/generation backends — those remain external providers reached through canonical backend references |
 | CLI (`vllm-sr`) | The local Docker stack, local configuration files, host-side preflight | Cluster resources; it is not a Kubernetes installer |
 | Dashboard | Editing and submitting canonical configuration through the Router/CLI management surfaces | The configuration schema — it renders the generated contract and never maintains a copy |
 | Helm chart (Router) | The Router workload, Service, ConfigMap-seeded configuration, the `IntelligentPool`/`IntelligentRoute` CRDs, optional Dashboard and observability resources | Gateways, storage classes, and model servers, which stay external |
@@ -44,7 +45,7 @@ Two boundary rules follow from this table:
 ## One canonical configuration, one source of truth per Router
 
 The canonical document is versioned independently of any deployment API:
-its current version is `v0.3`, its source of truth is the Go configuration
+its current version is `v0.5`, its source of truth is the Go configuration
 types, and a generated JSON Schema is the only copy consumers read.
 
 Each Router instance has exactly one authoritative configuration source:
@@ -110,15 +111,20 @@ not interchangeable, and each has exactly one consumer.
 | Status | `conditions`, `observedGeneration`, replica and ready-replica counts, `phase`, and the effective `gatewayMode` | A `Ready` condition per resource: `Ready=True` acknowledges activation on the reconciling replica; an invalid candidate reports `ValidationFailed`, a failed activation `ActivationFailed`, and the previously active configuration keeps serving in both cases |
 | Admission | Validating webhook plus CEL validation on the CRD | Structural schema validation on the CRDs; complete-config semantic validation happens in the reconciler before activation |
 
-Ownership rule: the Operator owns the deployment lifecycle of the Router;
-the Router owns the routing configuration it activates. A Router deployed
-by the Operator takes its configuration from `SemanticRouter`; a Router
-deployed by the chart in Kubernetes mode takes its routing configuration
-from the pool/route pair. Neither family is a translation of the other,
-and neither may silently drop fields the other produces — a target form
-with no handling path is documented as unsupported in
-[Backend Target Compatibility](backend-target-compatibility) instead of
-being lost.
+:::info Ownership rule
+The Operator owns the deployment lifecycle of the Router; the Router owns the
+routing configuration it activates.
+:::
+
+- **A Router the Operator deploys** takes its configuration from
+  `SemanticRouter`.
+- **A Router the chart deploys in Kubernetes mode** takes its routing
+  configuration from the pool/route pair.
+- **Neither family translates the other,** and neither may silently drop
+  fields the other produces. A target form with no handling path is
+  documented as unsupported in
+  [Backend Target Compatibility](backend-target-compatibility) instead of
+  being lost.
 
 ## API versioning, compatibility, and deprecation
 
@@ -137,7 +143,7 @@ being lost.
   checks (webhook and CEL rules where defined) and the Router's semantic
   validators reject invalid content there.
 - **Configuration versioning is separate.** The canonical document
-  version (`v0.3`) evolves on its own cadence; its compatibility,
+  version (`v0.5`) evolves on its own cadence; its compatibility,
   migration, and retired-field rules are defined in the
   [Configuration Contract](configuration-contract#add-or-change-a-field).
   A CRD version and a configuration version never substitute for each
@@ -189,12 +195,14 @@ contract as the maintained stacks.
 
 ## Classification and review
 
-Every deployment asset carries exactly one classification — maintained
-reference stack, supported integration, experimental example, or
-deprecated — recorded in [Deployment Support](support-matrix), and
-repository validation (`tools/ci/check_deployment_support_matrix.py`)
-fails when a deployment surface is unclassified. A change that adds a
-deployment asset, a component responsibility, a CRD, or a configuration
-source must update this page and the matrix in the same change; a change
-that alters any rule on this page requires workgroup review, because
-other stacks are entitled to rely on it.
+Every deployment asset carries exactly one classification, recorded in
+[Deployment Support](support-matrix): maintained reference stack, supported
+integration, experimental example or deprecated. Repository validation
+(`tools/ci/check_deployment_support_matrix.py`) fails when a deployment
+surface is unclassified.
+
+- **Adding** a deployment asset, a component responsibility, a CRD or a
+  configuration source must update this page and the matrix in the same
+  change.
+- **Changing a rule** on this page requires workgroup review, because other
+  stacks are entitled to rely on it.

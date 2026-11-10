@@ -37,17 +37,18 @@ const statusProbeDecision = "e2e-status-probe"
 // routing.decisions holds only this probe while it is deployed, and the
 // modelRef resolves against the fixture's base-model so the merged document
 // validates. The journey restores the original document before finishing.
-const statusProbeFragment = `routing:
-  decisions:
-    - name: e2e-status-probe
-      description: Temporary decision the status journey deploys and reverts
-      priority: 2
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: base-model
-          use_reasoning: false
+const statusProbeFragment = `recipes:
+  - name: default
+    decisions:
+      - name: e2e-status-probe
+        description: Temporary decision the status journey deploys and reverts
+        priority: 2
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
 `
 
 // The projection refresh runs in its own goroutine after a deploy or a

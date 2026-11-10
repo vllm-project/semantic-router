@@ -142,13 +142,21 @@ workflow.
 
 ## Configure the Router
 
-Add the Valkey memory backend to your `config.yaml`:
+Add the Valkey memory backend to your `config.yaml`. A `context` plugin with a
+`memory` source reads and writes it: in `global.plugins` for every request, as
+here, or in a decision's plugins (see
+[Per-Decision Memory Source](#per-decision-memory-source)).
 
 ```yaml
 global:
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        sources:
+          - type: memory
   stores:
     memory:
-      enabled: true
       backend: valkey
       auto_store: true
       valkey:
@@ -158,11 +166,10 @@ global:
         timeout: 10
         collection_prefix: "mem:"
         index_name: mem_idx
-        dimension: 256               # mmbert: 64, 128, 256, 512 or 768
+        dimension: 256               # Vela Embedding: 64, 128, 256, 512 or 768
         metric_type: COSINE           # COSINE, L2, or IP
         index_m: 16
         index_ef_construction: 256
-      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.40
       hybrid_search: true
@@ -191,7 +198,7 @@ check updated facts before relying on the example in production.
 | `timeout` | `10` | Connection timeout in seconds |
 | `collection_prefix` | `mem:` | Key prefix for HASH documents |
 | `index_name` | `mem_idx` | FT.CREATE index name |
-| `dimension` | derived | Embedding vector dimension; when omitted, `mmbert` uses 256 and the other embedding models their full width |
+| `dimension` | derived | Embedding vector dimension; when omitted, Vela Embedding uses 256, another deployment the store's `embedding.dimension` or its full width |
 | `metric_type` | `COSINE` | Distance metric: `COSINE`, `L2`, or `IP` |
 | `index_m` | `16` | HNSW M parameter (links per node) |
 | `index_ef_construction` | `256` | HNSW build-time search width |
@@ -206,7 +213,6 @@ keep the password in an environment-backed secret:
 global:
   stores:
     memory:
-      enabled: true
       backend: valkey
       valkey:
         host: valkey.example.internal
@@ -232,24 +238,28 @@ You can layer a Redis/Valkey hot cache in front of the Valkey memory store for f
 
 Every store, update, or delete invalidates that user's cached retrievals. For the next 10 seconds that user's retrievals go to the memory store and are not cached, so a deleted memory cannot be written back into the cache by a slower or slightly stale read.
 
-## Per-Decision Memory Plugin
+## Per-Decision Memory Source
 
-Routes can override global memory settings using the `memory` plugin:
+Routes can override global memory settings with a memory source of the
+`context` plugin:
 
 ```yaml
-routing:
-  decisions:
-    - name: personalized_route
-      plugins:
-        - type: memory
-          configuration:
-            enabled: true
-            retrieval_limit: 10
-            similarity_threshold: 0.60
-            auto_store: true
+recipes:
+  - name: default
+    decisions:
+      - name: personalized_route
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: memory
+                  match:
+                    recall: {method: embedding, top_k: 10, min_similarity: 0.60}
+                  store: {auto: true}
 ```
 
-See the [Memory plugin tutorial](/docs/tutorials/plugin/memory) for details.
+See the [memory source tutorial](../tutorials/plugin/context.md#memory-sources) for details.
 
 ## Performance Tuning
 

@@ -13,7 +13,7 @@ import (
 )
 
 func memoryPersistenceConfig(persistence config.MemoryPersistenceConfig) *config.RouterConfig {
-	return &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, Persistence: persistence}}
+	return &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, Persistence: persistence}}
 }
 
 func memoryPersistenceExtractor() *memory.MemoryExtractor {
@@ -74,7 +74,7 @@ func TestBuildRouterWiresMemoryPersistenceRunner(t *testing.T) {
 
 func TestCreateMemoryConsolidationRunnerRequiresOptIn(t *testing.T) {
 	store := &noopMemoryStore{}
-	enabled := &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true}}
+	enabled := &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true}}
 	assert.Nil(t, createMemoryConsolidationRunner(nil, store))
 	assert.Nil(t, createMemoryConsolidationRunner(enabled, nil))
 	assert.Nil(t, createMemoryConsolidationRunner(enabled, store))

@@ -150,8 +150,8 @@ func (h *RecipeHandler) Packages(w http.ResponseWriter, r *http.Request) {
 		writeRecipeJSON(w, http.StatusNotFound, map[string]string{"error": "not_found", "message": "Recipe package route was not found."})
 		return
 	}
-	if r.Method != http.MethodGet {
-		writePackageMethodNotAllowed(w, http.MethodGet)
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		writePackageMethodNotAllowed(w, "GET, HEAD")
 		return
 	}
 	if h.packages == nil {

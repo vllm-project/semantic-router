@@ -220,7 +220,7 @@ Use Responses for Astra tool calls. A minimal routed configuration needs no
 handwritten Model Card or reasoning family:
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: astra
@@ -229,19 +229,19 @@ providers:
       backend_refs:
         - name: primary
           provider: openai
-          api_key_env: OPENAI_API_KEY
-
-routing:
-  decisions:
-    - name: astra_default
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: astra
-          use_reasoning: true
-          reasoning_effort: high
+          auth: {api_key_env: OPENAI_API_KEY}
+recipes:
+  - name: default
+    decisions:
+      - name: astra_default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: astra
+            use_reasoning: true
+            reasoning_effort: high
 ```
 
 For a plain Chat Completions workload without tools, omit
@@ -275,7 +275,7 @@ A built-in card is selected with one optional `catalog` reference. The model
 catalog Provider ID:
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: production
@@ -286,15 +286,17 @@ providers:
       backend_refs:
         - name: primary
           provider: provider-id
-          api_key_env: PROVIDER_API_KEY
+          auth: {api_key_env: PROVIDER_API_KEY}
 ```
 
-Built-in cards do not require `routing.modelCards`. An intentional override
+Built-in cards do not require `providers.models`. An intentional override
 uses the canonical catalog identity as its card name:
 
 ```yaml
-routing:
-  modelCards:
+recipes:
+  - name: default
+providers:
+  models:
     - name: organization/model
       tags: [production, approved]
 ```
@@ -343,7 +345,8 @@ providers:
         - name: lab
           provider: vllm
           endpoint: model-gateway.example:8000/v1
-
+      context_window_size: 131072
+      capabilities: [chat, tools, reasoning]
 evaluation:
   records:
     - model: private-reasoner
@@ -352,12 +355,8 @@ evaluation:
       reasoning_effort: high
       metrics:
         pass_rate: 0.82
-
-routing:
-  modelCards:
-    - name: private-reasoner
-      context_window_size: 131072
-      capabilities: [chat, tools, reasoning]
+recipes:
+  - name: default
 ```
 
 User-authored records intentionally have a small surface: `model`, `benchmark`,

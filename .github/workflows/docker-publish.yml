@@ -17,7 +17,7 @@ on:
         default: ""
         type: string
       publish_latest:
-        description: Also publish the mutable latest tag.
+        description: Also publish the mutable latest tag. Release only; main moves latest after its complete image set.
         required: false
         default: false
         type: boolean
@@ -30,8 +30,11 @@ jobs:
     name: Publish Image (${{ matrix.image }})
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    # A group keeps one waiting job and cancels the others. Main tags each
+    # commit, so its pushes publish in their own groups and none is dropped;
+    # the input-addressed fixture still publishes one run at a time.
     concurrency:
-      group: publish-image-${{ matrix.image }}
+      group: publish-image-${{ matrix.image }}-${{ inputs.mode == 'main' && matrix.image != 'provider-mocker' && github.sha || inputs.mode }}
       cancel-in-progress: false
     permissions:
       contents: read

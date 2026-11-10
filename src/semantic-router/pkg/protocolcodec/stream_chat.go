@@ -21,6 +21,7 @@ type chatStreamDecoder struct {
 	nativeReasonReported bool
 	reportedOmissions    map[string]bool
 	stopSequence         string
+	reasoningDetails     *chatReasoningDetailState
 }
 
 type chatContentKey struct {
@@ -73,6 +74,9 @@ type chatChunkWire struct {
 	RemoteHost        *string                   `json:"remote_host,omitempty"`
 	RemotePort        *int64                    `json:"remote_port,omitempty"`
 	XGroq             json.RawMessage           `json:"x_groq,omitempty"`
+	// Cerebras reports serving timing metadata on every response. It is
+	// provider timing metadata, not output content.
+	TimeInfo json.RawMessage `json:"time_info,omitempty"`
 	// Ollama reports generation timings in an object beside the final usage.
 	Timings map[string]json.RawMessage `json:"timings,omitempty"`
 	// Aggregator gateways may report the handling agent alongside a chunk.
@@ -81,6 +85,11 @@ type chatChunkWire struct {
 	// Mistral reports a stream transport marker alongside chunks.
 	// It is transport metadata, not response content.
 	P *string `json:"p,omitempty"`
+	// Perplexity Sonar chunks carry model source citations and search
+	// results at the top level. Neither has a neutral slot, so both are
+	// dropped with a diagnostic instead of failing the strict decode.
+	Citations     json.RawMessage `json:"citations,omitempty"`
+	SearchResults json.RawMessage `json:"search_results,omitempty"`
 }
 
 func (wire chatChunkWire) hasLegacyKVTransferMetadata() bool {
@@ -111,15 +120,16 @@ type chatChunkChoiceWire struct {
 }
 
 type chatChunkDeltaWire struct {
-	Role               string                  `json:"role,omitempty"`
-	Content            *string                 `json:"content,omitempty"`
-	Reasoning          *string                 `json:"reasoning_content,omitempty"`
-	AlternateReasoning *string                 `json:"reasoning,omitempty"`
-	Refusal            *string                 `json:"refusal,omitempty"`
-	Audio              *chatAudioOutputWire    `json:"audio,omitempty"`
-	LegacyFunctionCall *chatLegacyCallWire     `json:"function_call,omitempty"`
-	ToolCalls          []chatChunkToolCallWire `json:"tool_calls,omitempty"`
-	Annotations        []chatAnnotationWire    `json:"annotations,omitempty"`
+	Role               string                    `json:"role,omitempty"`
+	Content            *string                   `json:"content,omitempty"`
+	Reasoning          *string                   `json:"reasoning_content,omitempty"`
+	AlternateReasoning *string                   `json:"reasoning,omitempty"`
+	ReasoningDetails   []chatReasoningDetailWire `json:"reasoning_details,omitempty"`
+	Refusal            *string                   `json:"refusal,omitempty"`
+	Audio              *chatAudioOutputWire      `json:"audio,omitempty"`
+	LegacyFunctionCall *chatLegacyCallWire       `json:"function_call,omitempty"`
+	ToolCalls          []chatChunkToolCallWire   `json:"tool_calls,omitempty"`
+	Annotations        []chatAnnotationWire      `json:"annotations,omitempty"`
 }
 
 type chatChunkToolCallWire struct {
@@ -171,20 +181,29 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	if err != nil || !parsed.HasData {
 		return nil, nil, err
 	}
-	if decoder.terminal {
-		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted data after its terminal sentinel")
-	}
 	if bytes.Equal(bytes.TrimSpace(parsed.Data), []byte("[DONE]")) {
+		// A repeated sentinel is not data after the terminal: gateways that
+		// re-split frames can send it twice. The stream is already complete,
+		// so treat it as a no-op like the Anthropic decoder does.
+		if decoder.terminal {
+			return nil, nil, nil
+		}
 		events, doneErr := decoder.nextAfterHeld(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted, StopReason: decoder.stop, MatchedStopSequence: decoder.stopSequence, Usage: &decoder.usage})
 		return events, nil, doneErr
 	}
+	if decoder.terminal {
+		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted data after its terminal sentinel")
+	}
 	var chunk chatChunkWire
-	_, vendorExtensions, err := decodeProviderWireVendorAware(parsed.Data, &chunk, decoder.policy)
+	_, unknownFields, err := decodeChatProviderWire(parsed.Data, &chunk, decoder.policy)
 	if err != nil {
 		return nil, nil, err
 	}
+	if reservedErr := rejectRouterExtensionFields(unknownFields); reservedErr != nil {
+		return nil, nil, reservedErr
+	}
 	var diagnostics llmprotocol.Diagnostics
-	appendVendorExtensionDiagnostics(&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1, vendorExtensions)
+	decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIChatV1, unknownFields)
 	if err := validateChatStreamChunk(chunk); err != nil {
 		return nil, diagnostics, err
 	}
@@ -382,6 +401,13 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 			"provider generation timings are not model output",
 		)
 	}
+	if len(chunk.TimeInfo) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.TimeInfo), []byte("null")) {
+		decoder.appendStreamOmission(
+			&diagnostics,
+			"stream.time_info",
+			"provider serving timing metadata has no protocol-neutral representation; a same-format replay forwards it unchanged",
+		)
+	}
 	if len(chunk.Agent) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Agent), []byte("null")) {
 		decoder.appendStreamOmission(
 			&diagnostics,
@@ -401,6 +427,20 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 			&diagnostics,
 			"stream.moderation",
 			"moderation metadata has no protocol-neutral representation",
+		)
+	}
+	if jsonFieldPresent(chunk.Citations) {
+		decoder.appendStreamOmission(
+			&diagnostics,
+			"stream.citations",
+			"provider source citations have no protocol-neutral representation",
+		)
+	}
+	if jsonFieldPresent(chunk.SearchResults) {
+		decoder.appendStreamOmission(
+			&diagnostics,
+			"stream.search_results",
+			"provider search results have no protocol-neutral representation",
 		)
 	}
 	if chunk.Usage != nil {
@@ -568,7 +608,7 @@ func (decoder *chatStreamDecoder) decodeChoiceTextEvents(choice chatChunkChoiceW
 
 func chatChoiceNeedsItem(choice chatChunkChoiceWire) bool {
 	return chatDeltaHasText(choice) || len(choice.Delta.Annotations) > 0 ||
-		chatDeltaReasoning(choice) != nil || choice.Delta.Refusal != nil
+		chatDeltaReasoning(choice) != nil || len(choice.Delta.ReasoningDetails) > 0 || choice.Delta.Refusal != nil
 }
 
 func chatDeltaReasoning(choice chatChunkChoiceWire) *string {
@@ -618,10 +658,17 @@ func (decoder *chatStreamDecoder) decodeContentDelta(choice chatChunkChoiceWire)
 	return []llmprotocol.Event{event}, err
 }
 
+// OpenRouter sends the plain reasoning text beside the typed blocks in each
+// delta. Both are kept, as in a buffered reply: clients render the text, and
+// the provider needs the blocks back.
 func (decoder *chatStreamDecoder) decodeReasoningDelta(choice chatChunkChoiceWire) ([]llmprotocol.Event, error) {
+	events, err := decoder.decodeReasoningDetails(choice)
+	if err != nil {
+		return nil, err
+	}
 	reasoning := chatDeltaReasoning(choice)
 	if reasoning == nil {
-		return nil, nil
+		return events, nil
 	}
 	decoder.lastWasReasoning = true
 	content := llmprotocol.Content{
@@ -632,7 +679,7 @@ func (decoder *chatStreamDecoder) decodeReasoningDelta(choice chatChunkChoiceWir
 		ContentIndex: decoder.chatContentIndex(choice.Index, llmprotocol.ContentReasoning),
 		Delta:        *reasoning, Content: &content,
 	})
-	return []llmprotocol.Event{event}, err
+	return append(events, event), err
 }
 
 func (decoder *chatStreamDecoder) decodeRefusalDelta(choice chatChunkChoiceWire) ([]llmprotocol.Event, error) {
@@ -874,6 +921,10 @@ func (encoder *chatStreamEncoder) applyChatReasoningDelta(
 	event llmprotocol.Event,
 	choice *chatChunkChoiceWire,
 ) (llmprotocol.Diagnostics, bool, error) {
+	if event.Content != nil && event.Content.ReasoningDetail != nil {
+		choice.Delta.ReasoningDetails = []chatReasoningDetailWire{encodeChatReasoningDetail(*event.Content.ReasoningDetail)}
+		return nil, true, nil
+	}
 	diagnostics, err := encoder.reasoningDiagnostics(event)
 	if err != nil {
 		return diagnostics, false, err

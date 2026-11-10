@@ -86,7 +86,7 @@ func memoryUpdateEmbeddingConfig(t *testing.T, testCase memoryUpdateEmbeddingCas
 		return testCase.providerEmbedding, nil
 	})
 	require.NoError(t, err)
-	return EmbeddingConfig{Provider: provider, Model: EmbeddingModelQwen3}, &calls
+	return EmbeddingConfig{Provider: provider, Deployment: "qwen3-embedding"}, &calls
 }
 
 func memoryUpdateSequenceEmbeddingConfig(t *testing.T) (EmbeddingConfig, *[]string, []float32, []float32) {
@@ -106,7 +106,7 @@ func memoryUpdateSequenceEmbeddingConfig(t *testing.T) (EmbeddingConfig, *[]stri
 		}
 	})
 	require.NoError(t, err)
-	return EmbeddingConfig{Provider: provider, Model: EmbeddingModelQwen3}, &calls, vectorA, vectorB
+	return EmbeddingConfig{Provider: provider, Deployment: "qwen3-embedding"}, &calls, vectorA, vectorB
 }
 
 func TestMilvusStore_UpdateEmbedding(t *testing.T) {

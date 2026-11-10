@@ -23,7 +23,7 @@ type InMemoryStore struct {
 
 // NewInMemoryStore creates a new in-memory memory store with default embedding config.
 func NewInMemoryStore() *InMemoryStore {
-	return NewInMemoryStoreWithConfig(EmbeddingConfig{Model: EmbeddingModelMMBERT})
+	return NewInMemoryStoreWithConfig(defaultEmbeddingConfig())
 }
 
 // NewInMemoryStoreWithConfig creates a new in-memory memory store with custom embedding config.
@@ -223,7 +223,7 @@ func cloneMemory(mem *Memory) *Memory {
 	return &cloned
 }
 
-// Get retrieves a memory by ID.
+// Get retrieves an independent copy of a memory by ID.
 func (s *InMemoryStore) Get(ctx context.Context, id string) (*Memory, error) {
 	if !s.enabled {
 		return nil, fmt.Errorf("store not enabled")
@@ -237,7 +237,7 @@ func (s *InMemoryStore) Get(ctx context.Context, id string) (*Memory, error) {
 		return nil, fmt.Errorf("memory not found: %s", id)
 	}
 
-	return mem, nil
+	return cloneMemory(mem), nil
 }
 
 // Update modifies an existing memory.

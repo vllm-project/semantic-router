@@ -9,11 +9,6 @@ import (
 // request. Listener authorization still runs in the active frontend generation.
 const ForwardPath = "/api/v1/diagnostics/models/systemone/forward"
 
-// BackendRequestHeader prevents a remote native model action from entering
-// another routing or forwarding chain. It only restricts the receiving request;
-// it never grants authorization or trusts a caller's identity.
-const BackendRequestHeader = "X-VSR-SystemOne-Backend"
-
 // ForwardRequest carries only the original native operation and client
 // credentials. It never selects a deployment, runtime endpoint or saved config.
 type ForwardRequest struct { //nolint:gosec // G117: credentials are forwarded for listener authentication, never logged or persisted.

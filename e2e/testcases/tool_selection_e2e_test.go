@@ -7,15 +7,15 @@ import (
 
 func TestToolSelectionRequestsUseOwnedEntrypoints(t *testing.T) {
 	cases := toolSelectionContractCases(json.RawMessage(`{"type":"object","properties":{}}`))
-	if len(cases) != 10 {
-		t.Fatalf("tool contract inventory = %d, want 10", len(cases))
+	if len(cases) != 4 {
+		t.Fatalf("tool contract inventory = %d, want 4", len(cases))
 	}
 	var featureCases, precedenceCases int
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
 			req := buildToolSelectionChatRequest(tc)
 			model := "e2e-plugins"
-			if tc.Name == "pii_decision_runs_before_tool_selection" {
+			if tc.Name == "pii_decision_runs_before_tools" {
 				model = "e2e-pii-precedence"
 				precedenceCases++
 			} else {
@@ -29,7 +29,7 @@ func TestToolSelectionRequestsUseOwnedEntrypoints(t *testing.T) {
 			}
 		})
 	}
-	if featureCases != 9 || precedenceCases != 1 {
-		t.Fatalf("feature/precedence inventory = %d/%d, want 9/1", featureCases, precedenceCases)
+	if featureCases != 3 || precedenceCases != 1 {
+		t.Fatalf("feature/precedence inventory = %d/%d, want 3/1", featureCases, precedenceCases)
 	}
 }

@@ -74,7 +74,7 @@ func TestWithoutARouterEverySavedConfigHotReloads(t *testing.T) {
 
 func TestRecordRestartRecordsThePendingActivation(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	message, err := recordRestart(configPath, envoyRestartDetail)
@@ -100,7 +100,7 @@ func TestRecordRestartRecordsThePendingActivation(t *testing.T) {
 
 func TestASavedConfigThatNeedsARestartIsRecordedOnce(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	original := propagateConfig
@@ -120,7 +120,7 @@ func TestASavedConfigThatNeedsARestartIsRecordedOnce(t *testing.T) {
 
 func TestAFailedSaveRestoresWithoutRecordingARestart(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n# rejected\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n# rejected\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	original := propagateConfig
@@ -134,7 +134,7 @@ func TestAFailedSaveRestoresWithoutRecordingARestart(t *testing.T) {
 		return &restartNeededError{detail: envoyRestartDetail}
 	}
 
-	_, err := applyWrittenConfig(configPath, filepath.Dir(configPath), []byte("version: v0.3\n"), true)
+	_, err := applyWrittenConfig(configPath, filepath.Dir(configPath), []byte("version: v0.5\n"), true)
 	if err == nil || !strings.Contains(formatRuntimeApplyError("Failed to apply config to runtime", err), "Previous config restored.") {
 		t.Fatalf("applyWrittenConfig error = %v, want the rejection with the previous config restored", err)
 	}
@@ -145,7 +145,7 @@ func TestAFailedSaveRestoresWithoutRecordingARestart(t *testing.T) {
 
 func TestRestartRequiredResponseIsAccepted(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	writeRestartRequiredResponse(recorder, "20261007-1", "Restart required: run `vllm-sr serve` to apply.")
+	writeRestartRequiredResponse(recorder, "20261007-1", "Restart required: run `vllm-sr serve` to apply.", nil)
 	var body map[string]string
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)

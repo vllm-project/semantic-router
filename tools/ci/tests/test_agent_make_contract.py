@@ -195,7 +195,7 @@ class HarnessMakeContractTests(unittest.TestCase):
             "src/model-runtime/vllm_srun/registry/tables/omni.py",
             "src/model-runtime/vllm_srun/registry/releases.generated.json",
             "src/model-runtime/vllm_srun/families/vela2/request.py",
-            "src/semantic-router/pkg/modelservice/decision_catalog.generated.json",
+            "src/semantic-router/pkg/config/decision_catalog.generated.json",
             "src/model-runtime/vllm_srun/registry/tables/common.py",
             "src/model-runtime/vllm_srun/systemone.py",
             "src/model-runtime/vllm_srun/families/decision1/family.py",

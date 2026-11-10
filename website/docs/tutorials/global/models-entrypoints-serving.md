@@ -64,7 +64,8 @@ for the supported combinations.
 Open **Build → Mixture-of-Models → Recipes**. A Recipe describes the routing
 logic without embedding provider URLs or credentials. Review its decisions and
 probes, or create a custom Recipe from the Signals, Projections, and Decisions
-you already maintain.
+you already maintain. **Built-in recipes** lists the maintained Recipes
+installed with vLLM-SR; choose **Create model** on one to publish it.
 
 ### 3. Publish a Mixture-of-Model
 

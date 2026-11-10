@@ -75,15 +75,19 @@ func newSnapshotAPIServer(t *testing.T, reject error) (*ClassificationAPIServer,
 }
 
 // watchAndApply plays the file watcher: once the persisted document changes,
-// it hands that document to the lifecycle. Apply writes a history backup, so
-// the test waits for that goroutine before TempDir removes the directory.
-func watchAndApply(t *testing.T, manager *configsnapshot.Manager, path string) {
+// it hands that document to the lifecycle. The API returns once the runtime
+// serves the document, before the lifecycle has made it active and recorded
+// it in the history, so a test that reads the lifecycle after a request
+// first calls the returned function, which waits for the watcher. The test's
+// cleanup waits for the watcher before removing its directory.
+func watchAndApply(t *testing.T, manager *configsnapshot.Manager, path string) (applied func()) {
 	t.Helper()
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	done := make(chan struct{})
+	stop, done := make(chan struct{}), make(chan struct{})
+	t.Cleanup(func() { close(stop); <-done })
 	go func() {
 		defer close(done)
 		deadline := time.Now().Add(5 * time.Second)
@@ -100,10 +104,14 @@ func watchAndApply(t *testing.T, manager *configsnapshot.Manager, path string) {
 				})
 				return
 			}
-			time.Sleep(time.Millisecond)
+			select {
+			case <-stop:
+				return
+			case <-time.After(time.Millisecond):
+			}
 		}
 	}()
-	t.Cleanup(func() { <-done })
+	return func() { <-done }
 }
 
 func putConfig(t *testing.T, server *ClassificationAPIServer, path string) (*httptest.ResponseRecorder, RouterConfigUpdateResponse) {
