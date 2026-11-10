@@ -76,8 +76,8 @@ global:
 		}) {
 			t.Errorf("use_cpu %s: no note names the replacement and the re-embedding: %+v", tc.useCPU, notes)
 		}
-		if _, err := ParseYAMLBytesWithoutEnvExpansion(migrated); err != nil {
-			t.Errorf("use_cpu %s: the migrated file does not load: %v", tc.useCPU, err)
+		if _, loadErr := ParseYAMLBytesWithoutEnvExpansion(migrated); loadErr != nil {
+			t.Errorf("use_cpu %s: the migrated file does not load: %v", tc.useCPU, loadErr)
 		}
 		again, more, err := MigrateConfig(migrated)
 		if err != nil || len(more) > 0 || !bytes.Equal(again, migrated) {
