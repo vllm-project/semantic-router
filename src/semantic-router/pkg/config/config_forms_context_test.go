@@ -32,15 +32,15 @@ var contextFormsInherited = []struct {
 	name, global, recipe string
 	listed, enabled      bool
 }{
-	{"off", `{stores: {memory: {enabled: false, backend: milvus, milvus: {address: "127.0.0.1:19530"}}}}`, "[]", false, false},
-	{"store switch", `{stores: {memory: {enabled: true, backend: milvus, milvus: {address: "127.0.0.1:19530"}}}}`, "[]", true, true},
+	{"off", `{stores: {memory: {enabled: false, backend: milvus, milvus: {address: "127.0.0.1:19530"}}, vector_store: {enabled: true, backend_type: memory}}}`, "[]", false, false},
+	{"store switch", `{stores: {memory: {enabled: true, backend: milvus, milvus: {address: "127.0.0.1:19530"}}, vector_store: {enabled: true, backend_type: memory}}}`, "[]", true, true},
 	{"global.plugins", contextFormsGlobalMemory, "[]", true, true},
-	{"recipe", `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}}}`, `[{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]`, true, true},
-	{"global.plugins disabled", `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}}, plugins: [{type: context, configuration: {enabled: false, sources: [{type: memory}]}}]}`, "[]", true, false},
+	{"recipe", `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}, vector_store: {enabled: true, backend_type: memory}}}`, `[{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]`, true, true},
+	{"global.plugins disabled", `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}, vector_store: {enabled: true, backend_type: memory}}, plugins: [{type: context, configuration: {enabled: false, sources: [{type: memory}]}}]}`, "[]", true, false},
 	{"recipe disabled", contextFormsGlobalMemory, `[{type: context, configuration: {enabled: false}}]`, true, false},
 }
 
-const contextFormsGlobalMemory = `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}}, plugins: [{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]}`
+const contextFormsGlobalMemory = `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}, vector_store: {enabled: true, backend_type: memory}}, plugins: [{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]}`
 
 // The old plugins of a decision that turn memory on or off, or bring other
 // context, and context plugins that list no sources and compress, set the
@@ -108,7 +108,7 @@ func TestMigrateKeepsWhetherADecisionRetrievesMemory(t *testing.T) {
 // still does not retrieve the memory it would inherit.
 func TestMigrateKeepsMemoryOffWhenItDropsTheOnlyMCPSource(t *testing.T) {
 	mcp := `{type: context, configuration: {enabled: true, sources: [{type: rag, backend: mcp, backend_config: {server_name: docs-server, tool_name: retrieve_docs}}], compress: {mode: auto}}}`
-	global := `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}}, plugins: [{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]}`
+	global := `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}, vector_store: {enabled: true, backend_type: memory}}, plugins: [{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]}`
 	doc := strings.NewReplacer("PLUGINS", mcp, "GLOBAL", global, "RECIPE", "[]").Replace(contextFormsDoc)
 	migrated, _, err := MigrateConfig([]byte(doc))
 	if err != nil {
