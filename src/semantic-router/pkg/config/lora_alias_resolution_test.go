@@ -4,7 +4,7 @@ import "testing"
 
 func TestParseYAMLBytesAllowsLoRADefaultModelAlias(t *testing.T) {
 	canonicalYAML := []byte(`
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -17,27 +17,26 @@ providers:
         - endpoint: 127.0.0.1:8000
           provider: vllm
           api_key: alias-secret
-routing:
-  modelCards:
-    - name: base-model
       loras:
         - name: general-expert
           description: Default LoRA adapter
-  signals:
-    domains:
-      - name: other
-        description: fallback
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: other
+          description: fallback
+    decisions:
+      - name: default_route
+        priority: 1
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
 `)
 
 	cfg, err := ParseYAMLBytes(canonicalYAML)
@@ -78,7 +77,7 @@ routing:
 
 func TestGetEndpointsForModelFallsBackWhenAliasModelCardHasNoProviderMetadata(t *testing.T) {
 	canonicalYAML := []byte(`
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -88,28 +87,27 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: base-model
       loras:
         - name: general-expert
           description: Default LoRA adapter
     - name: general-expert
-  signals:
-    domains:
-      - name: other
-        description: fallback
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: other
+          description: fallback
+    decisions:
+      - name: default_route
+        priority: 1
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: other
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
 `)
 
 	cfg, err := ParseYAMLBytes(canonicalYAML)

@@ -11,10 +11,18 @@ func (c *Compiler) compileModels() {
 	}
 
 	for _, model := range c.prog.Models {
+		if _, ok := model.Fields["modality"]; ok {
+			c.addError(model.Pos, "MODEL %s: modality was removed; declare what the model reads and writes in capabilities and modalities { input, output }", model.Name)
+			continue
+		}
 		params := c.config.ModelConfig[model.Name]
 		applyRoutingModelTextFields(&params, model.Fields)
 		applyRoutingModelNumericFields(&params, model.Fields)
 		applyRoutingModelArrayFields(&params, model.Fields)
+		if modalities, ok := model.Fields["modalities"].(ObjectValue); ok {
+			params.Modalities.Input, _ = getStringArrayField(modalities.Fields, "input")
+			params.Modalities.Output, _ = getStringArrayField(modalities.Fields, "output")
+		}
 		c.config.ModelConfig[model.Name] = params
 	}
 }
@@ -25,9 +33,6 @@ func applyRoutingModelTextFields(params *config.ModelParams, fields map[string]V
 	}
 	if v, ok := getStringField(fields, "description"); ok {
 		params.Description = v
-	}
-	if v, ok := getStringField(fields, "modality"); ok {
-		params.Modality = v
 	}
 }
 

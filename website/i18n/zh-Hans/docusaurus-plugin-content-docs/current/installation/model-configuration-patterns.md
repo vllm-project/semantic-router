@@ -21,8 +21,8 @@ translation:
 | 使用不带 Router 生成推理控制的私有模型 | 省略 | 省略 | 与 `name` 不同时设置 | 设置 Provider 和端点。 |
 | 使用已知内置家族的私有模型 | 省略 | `family: <built-in-id>` | 可选 | 设置兼容的 Provider 和端点。 |
 | 使用具有独特推理控制的私有模型 | 省略 | 完整内联定义 | 可选 | 设置兼容的 Provider 和端点。 |
-| 为私有模型添加路由元数据 | 省略 | 可选 | 可选 | 在别名下添加 `routing.modelCards`。 |
-| 为目录模型添加本地元数据 | Canonical Model Card ID | 省略；继承 | 取决于 Provider | 在目录 ID 下添加 `routing.modelCards`。 |
+| 为私有模型添加路由元数据 | 省略 | 可选 | 可选 | 在别名下添加 `providers.models`。 |
+| 为目录模型添加本地元数据 | Canonical Model Card ID | 省略；继承 | 取决于 Provider | 在目录 ID 下添加 `providers.models`。 |
 | 对相同副本做负载均衡 | 任一 | 由模型身份决定 | 一个有效 ID | 将同构目标放入同一个 `backend_refs` 列表。 |
 | 跨不同 Provider 或协议路由 | 每个契约配置一个 Model | 按 Model 决定 | 按 Provider 决定 | 在同一决策中使用单独别名。 |
 

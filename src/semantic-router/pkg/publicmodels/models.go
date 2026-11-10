@@ -77,7 +77,7 @@ func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
 		if cfg != nil {
 			description = cfg.EntrypointRecipeDescription(entrypoint.Recipe)
 		}
-		metadata := selectableVirtualRoute(entrypoint.Recipe, entrypoint.Recipe == config.DefaultRecipeName)
+		metadata := selectableVirtualRoute(entrypoint.Recipe, cfg.IsDefaultRecipe(entrypoint.Recipe))
 		metadata.API, metadata.Source = entrypoint.API, entrypoint.Source
 		b.appendAll(entrypoint.ModelNames, routerOwner, description, metadata)
 	}

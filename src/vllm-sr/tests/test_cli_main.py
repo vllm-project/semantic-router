@@ -128,11 +128,16 @@ def test_serve_materializes_active_config_under_custom_host_state_root(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default", "priority": 0}]},
+                "recipes": [
+                    {
+                        "name": "default",
+                        "decisions": [{"name": "default", "priority": 0}],
+                    }
+                ],
             },
             sort_keys=False,
         ),
@@ -196,7 +201,8 @@ def test_serve_replace_active_config_reaches_runtime_materializer(
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\nrouting:\n  decisions: []\n", encoding="utf-8"
+        "version: v0.5\nrecipes:\n  - name: default\n    decisions: []\n",
+        encoding="utf-8",
     )
     bootstrap = BootstrapResult(
         config_path=config_path,
@@ -248,11 +254,16 @@ def test_k8s_serve_keeps_non_persistent_effective_config_flow(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default", "priority": 0}]},
+                "recipes": [
+                    {
+                        "name": "default",
+                        "decisions": [{"name": "default", "priority": 0}],
+                    }
+                ],
             },
             sort_keys=False,
         ),
@@ -300,7 +311,7 @@ def test_k8s_serve_keeps_non_persistent_effective_config_flow(
     effective = Path(captured["config_file"])
     assert effective == config_path
     assert (
-        captured["config_document"]["routing"]["decisions"][0]["algorithm"]["type"]
+        captured["config_document"]["recipes"][0]["decisions"][0]["algorithm"]["type"]
         == "multi_factor"
     )
     assert "VLLM_SR_SOURCE_CONFIG_PATH" not in captured["env_vars"]
@@ -311,7 +322,8 @@ def test_k8s_serve_keeps_non_persistent_effective_config_flow(
 def test_k8s_serve_rejects_replace_active_config(tmp_path: Path, caplog):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\nrouting:\n  decisions: []\n", encoding="utf-8"
+        "version: v0.5\nrecipes:\n  - name: default\n    decisions: []\n",
+        encoding="utf-8",
     )
 
     result = CliRunner().invoke(
@@ -341,7 +353,7 @@ def test_serve_help_describes_docker_only_runtime():
     assert "Podman" not in result.output
     assert "--topology" not in result.output
     assert "--log-level" in result.output
-    assert "latency_aware" in result.output
+    assert "multi_factor" in result.output
     assert "random" in result.output
     assert "session_aware" not in result.output
     assert "--sim-image" not in result.output
@@ -357,7 +369,7 @@ def test_source_config_keeps_legacy_env_passthrough_and_explicit_package_allowli
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
@@ -462,7 +474,7 @@ def test_active_package_is_validated_before_source_materialization(
 ):
     initial = yaml.safe_dump(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         },
         sort_keys=False,
@@ -497,7 +509,7 @@ def test_active_package_is_validated_before_source_materialization(
         encoding="utf-8",
     )
     source.write_text(
-        "version: v0.3\nlisteners:\n  - name: changed\n    port: 9999\n",
+        "version: v0.5\nlisteners:\n  - name: changed\n    port: 9999\n",
         encoding="utf-8",
     )
     bootstrap = BootstrapResult(
@@ -549,11 +561,16 @@ def test_serve_passes_host_runtime_controls_to_backend_env(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default", "priority": 0}]},
+                "recipes": [
+                    {
+                        "name": "default",
+                        "decisions": [{"name": "default", "priority": 0}],
+                    }
+                ],
             },
             sort_keys=False,
         )
@@ -602,11 +619,16 @@ def test_serve_keeps_observability_enabled_in_setup_mode(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default", "priority": 0}]},
+                "recipes": [
+                    {
+                        "name": "default",
+                        "decisions": [{"name": "default", "priority": 0}],
+                    }
+                ],
                 "setup": {"mode": True},
             },
             sort_keys=False,
@@ -653,7 +675,7 @@ def test_serve_restart_uses_completed_runtime_instead_of_readonly_setup_source(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
@@ -668,9 +690,11 @@ def test_serve_restart_uses_completed_runtime_instead_of_readonly_setup_source(
     )
     completed = yaml.safe_dump(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-            "routing": {"decisions": [{"name": "default", "priority": 0}]},
+            "recipes": [
+                {"name": "default", "decisions": [{"name": "default", "priority": 0}]}
+            ],
         },
         sort_keys=False,
     )
@@ -726,11 +750,16 @@ def test_serve_recovers_pending_config_before_choosing_setup_mode(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default", "priority": 0}]},
+                "recipes": [
+                    {
+                        "name": "default",
+                        "decisions": [{"name": "default", "priority": 0}],
+                    }
+                ],
             },
             sort_keys=False,
         ),
@@ -751,13 +780,9 @@ def test_serve_recovers_pending_config_before_choosing_setup_mode(
         Path(kwargs["runtime_config_path"]).write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.5",
                     "listeners": [
-                        {
-                            "name": "http-8899",
-                            "address": "0.0.0.0",
-                            "port": 8899,
-                        }
+                        {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                     ],
                     "setup": {"mode": True},
                 },
@@ -800,13 +825,16 @@ def test_inject_algorithm_into_config_updates_all_decisions(tmp_path: Path):
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
-                "routing": {
-                    "decisions": [
-                        {"name": "fast"},
-                        {"name": "slow", "algorithm": {"type": "static"}},
-                    ]
-                },
+                "version": "v0.5",
+                "recipes": [
+                    {
+                        "name": "default",
+                        "decisions": [
+                            {"name": "fast"},
+                            {"name": "slow", "algorithm": {"type": "static"}},
+                        ],
+                    }
+                ],
             },
             sort_keys=False,
         )
@@ -821,7 +849,8 @@ def test_inject_algorithm_into_config_updates_all_decisions(tmp_path: Path):
 
     assert rewritten_path != config_path
     assert [
-        decision["algorithm"]["type"] for decision in rewritten["routing"]["decisions"]
+        decision["algorithm"]["type"]
+        for decision in rewritten["recipes"][0]["decisions"]
     ] == ["multi_factor", "multi_factor"]
 
 
@@ -830,28 +859,31 @@ def test_inject_algorithm_replaces_stale_type_specific_blocks(tmp_path: Path):
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
-                "routing": {
-                    "decisions": [
-                        {
-                            "name": "fast",
-                            "algorithm": {
-                                "type": "hybrid",
-                                "hybrid": {"cost_weight": 0.4},
+                "version": "v0.5",
+                "recipes": [
+                    {
+                        "name": "default",
+                        "decisions": [
+                            {
+                                "name": "fast",
+                                "algorithm": {
+                                    "type": "hybrid",
+                                    "hybrid": {"cost_weight": 0.4},
+                                },
                             },
-                        },
-                        {
-                            "name": "slow",
-                            "algorithm": {
-                                "type": "rl_driven",
-                                "rl_driven": {"storage_path": "/tmp/rl.json"},
-                                "gmtrouter": {"storage_path": "/tmp/gmt.json"},
-                                "bandit": {"strategy": "thompson"},
-                                "personalization": {"per_user": True},
+                            {
+                                "name": "slow",
+                                "algorithm": {
+                                    "type": "rl_driven",
+                                    "rl_driven": {"storage_path": "/tmp/rl.json"},
+                                    "gmtrouter": {"storage_path": "/tmp/gmt.json"},
+                                    "bandit": {"strategy": "thompson"},
+                                    "personalization": {"per_user": True},
+                                },
                             },
-                        },
-                    ]
-                },
+                        ],
+                    }
+                ],
             },
             sort_keys=False,
         )
@@ -865,7 +897,7 @@ def test_inject_algorithm_replaces_stale_type_specific_blocks(tmp_path: Path):
         rewritten = yaml.safe_load(handle)
 
     algorithms = [
-        decision["algorithm"] for decision in rewritten["routing"]["decisions"]
+        decision["algorithm"] for decision in rewritten["recipes"][0]["decisions"]
     ]
     assert algorithms == [
         {"type": "multi_factor", "multi_factor": {}},
@@ -887,42 +919,44 @@ def test_algorithm_mutation_consumes_generated_router_payload_inventory():
     }
 
 
-def test_inject_latency_aware_algorithm_keeps_matching_config_block(tmp_path: Path):
+def test_inject_selector_drops_executor_settings(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {
-                    "decisions": [
-                        {
-                            "name": "latency",
-                            "algorithm": {
-                                "type": "hybrid",
-                                "hybrid": {"experience_weight": 0.6},
-                            },
-                        },
-                    ]
-                },
+                "recipes": [
+                    {
+                        "name": "default",
+                        "decisions": [
+                            {
+                                "name": "panel",
+                                "algorithm": {
+                                    "type": "fusion",
+                                    "on_error": "fail",
+                                    "budget": {"deadline": "30s", "max_calls": 3},
+                                    "fusion": {"model": "judge"},
+                                },
+                            }
+                        ],
+                    }
+                ],
             },
             sort_keys=False,
         )
     )
 
     rewritten_path = runtime_commands.inject_algorithm_into_config(
-        config_path, "latency_aware"
+        config_path, "random"
     )
 
     with rewritten_path.open() as handle:
         rewritten = yaml.safe_load(handle)
 
-    assert rewritten["routing"]["decisions"][0]["algorithm"] == {
-        "type": "latency_aware",
-        "latency_aware": {"tpot_percentile": 90, "ttft_percentile": 95},
-    }
+    assert rewritten["recipes"][0]["decisions"][0]["algorithm"] == {"type": "random"}
 
 
 def test_inject_workflows_algorithm_keeps_matching_config_block(tmp_path: Path):
@@ -930,19 +964,22 @@ def test_inject_workflows_algorithm_keeps_matching_config_block(tmp_path: Path):
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
-                "routing": {
-                    "decisions": [
-                        {
-                            "name": "flow",
-                            "modelRefs": [{"model": "worker-a"}],
-                            "algorithm": {
-                                "type": "hybrid",
-                                "hybrid": {"experience_weight": 0.6},
-                            },
-                        },
-                    ]
-                },
+                "version": "v0.5",
+                "recipes": [
+                    {
+                        "name": "default",
+                        "decisions": [
+                            {
+                                "name": "flow",
+                                "modelRefs": [{"model": "worker-a"}],
+                                "algorithm": {
+                                    "type": "hybrid",
+                                    "hybrid": {"experience_weight": 0.6},
+                                },
+                            }
+                        ],
+                    }
+                ],
             },
             sort_keys=False,
         )
@@ -955,7 +992,7 @@ def test_inject_workflows_algorithm_keeps_matching_config_block(tmp_path: Path):
     with rewritten_path.open() as handle:
         rewritten = yaml.safe_load(handle)
 
-    assert rewritten["routing"]["decisions"][0]["algorithm"] == {
+    assert rewritten["recipes"][0]["decisions"][0]["algorithm"] == {
         "type": "workflows",
         "workflows": {
             "template": "micro_agent",

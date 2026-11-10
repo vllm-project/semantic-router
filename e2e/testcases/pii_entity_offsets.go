@@ -47,7 +47,9 @@ func testPIIEntityOffsets(
 	url := session.URL("/api/v1/diagnostics/classify/pii")
 
 	// Multi-byte text: byte offsets would run past the end of the string.
-	nonASCII := "こんにちは、私は John Smith です。電話は 415-555-0134"
+	// The profile's System One fixture labels the first copy of each marked
+	// word, so the entity sits after the multi-byte text.
+	nonASCII := "こんにちは、私は John Smith です。電話は 415-555-0134 __PII_SPAN__ PERSON John"
 	entities, err := classifyPIIWithPositions(ctx, httpClient, url, nonASCII)
 	if err != nil {
 		return err
@@ -60,7 +62,7 @@ func testPIIEntityOffsets(
 	}
 
 	// An entity at the start of the text has to report start_position 0.
-	atZero := "John Smith called yesterday."
+	atZero := "John Smith called yesterday. __PII_SPAN__ PERSON John"
 	entities, err = classifyPIIWithPositions(ctx, httpClient, url, atZero)
 	if err != nil {
 		return err

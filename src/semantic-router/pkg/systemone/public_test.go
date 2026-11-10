@@ -6,17 +6,19 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
 func TestPublicSystemOneNativeContractAndSeparateGrant(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"private-key": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test", ServedName: "private-served"}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private-key": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test", Model: "private-served"}}
 	listener := &config.Listener{APIKeys: []string{"test-key"}, Models: []string{"chat-only"}, SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
 	calls := 0
 	handler := Handler(cfg, listener, func(_ context.Context, deployment string, body json.RawMessage) (int, []byte, error) {
@@ -130,6 +132,27 @@ func TestPublicDiscoveryAndListenerSelectionFailClosed(t *testing.T) {
 	Handler(cfg, nil, nil)(response, request)
 	if response.Code != 404 {
 		t.Fatal("unpublished listener exposed SystemOne")
+	}
+}
+
+// The listing gives the question types of each model it lists, where a
+// systemone deployment that names this API reads them (GET <endpoint>/models).
+func TestPublicDiscoveryListsTheQuestionTypesARemoteDeploymentReads(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/vela3-fast"}}
+	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/vela3-fast"}}}
+	server := httptest.NewServer(Handler(cfg, listener, nil))
+	defer server.Close()
+	client := &config.RouterConfig{}
+	client.ModelDeployments = map[string]config.ModelDeployment{"engine": {Provider: config.SystemOneProvider, Endpoint: server.URL + "/v1/systemone", Model: "vllm-sr/vela3-fast"}}
+	remote, err := modelservice.NewRemoteSystemOne(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remote.Close()
+	card, err := remote.PrepareCard(context.Background(), "engine")
+	if err != nil || !slices.Equal(card.QuestionTypes, []string{"choice", "noul", "span"}) {
+		t.Fatalf("card %+v, %v; want the listed vela3-fast types", card, err)
 	}
 }
 

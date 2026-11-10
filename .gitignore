@@ -39,6 +39,7 @@ bench/router_flow/scorecards/
 
 # Dependency directories
 vendor/
+deploy/helm/semantic-router/charts/*.tgz
 
 # Environment variables
 .env

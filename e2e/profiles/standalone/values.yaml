@@ -5,7 +5,7 @@ decisionModel:
 # The chart's default gateway mode (standalone): clients reach the Router's own
 # listener through its Service; no gateway runs in the cluster.
 configOverride:
-  version: v0.3
+  version: v0.5
   listeners:
     - name: http-8899
       address: 0.0.0.0
@@ -31,52 +31,49 @@ configOverride:
           - name: provider-mocker
             endpoint: provider-mocker.default.svc.cluster.local:8000
             provider: vllm
-  routing:
-    modelCards:
-      - name: primary-model
-      - name: unreachable-model
-      - name: fallback-model
-    signals:
-      keywords:
-        - name: failover_marker
-          operator: OR
-          keywords:
-            - standalonefailover
-    decisions:
-      - name: standalone_failover
-        description: The first candidate's backend refuses connections; the second serves.
-        priority: 200
-        rules:
-          operator: AND
-          conditions:
-            - type: keyword
-              name: failover_marker
-        algorithm:
-          type: static
-        modelRefs:
-          - model: unreachable-model
-            use_reasoning: false
-          - model: fallback-model
-            use_reasoning: false
-      - name: standalone_default
-        description: Every other request.
-        priority: 100
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: primary-model
-            use_reasoning: false
   entrypoints:
+    - model_names: [vllm-sr/auto]
+      recipe: default
+      default: true
     - model_names: [e2e-no-route]
       recipe: no-route
   recipes:
+    - name: default
+      signals:
+        keywords:
+          - name: failover_marker
+            operator: OR
+            keywords:
+              - standalonefailover
+      decisions:
+        - name: standalone_failover
+          description: The first candidate's backend refuses connections; the second serves.
+          priority: 200
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: failover_marker
+          algorithm:
+            type: static
+          modelRefs:
+            - model: unreachable-model
+              use_reasoning: false
+            - model: fallback-model
+              use_reasoning: false
+        - name: standalone_default
+          description: Every other request.
+          priority: 100
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: primary-model
+              use_reasoning: false
     - name: no-route
-      routing:
-        decisions: []
+      decisions: []
   global:
     model_catalog:
-      kbs: []
       deployments:
         primary:
           provider: model_runtime

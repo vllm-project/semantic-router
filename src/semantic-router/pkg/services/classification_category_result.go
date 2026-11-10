@@ -4,8 +4,10 @@ import (
 	"context"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
 func resolveIntentCategory(
@@ -34,7 +36,7 @@ func resolveIntentCategory(
 			ConfidenceAvailable: confidenceAvailability(result.ConfidenceAvailable),
 		}
 	}
-	category, confidence, _, err := classifier.ClassifyCategoryWithEntropyContext(ctx, text)
+	answer, err := classifier.AskPreset(ctx, config.SignalTypeDomain, presets.Domain, text)
 	if err != nil {
 		logging.Warnf(
 			"Classification fallback failed: %v, using default 'other' category",
@@ -42,5 +44,5 @@ func resolveIntentCategory(
 		)
 		return Classification{Category: "other", ConfidenceAvailable: confidenceAvailability(false)}
 	}
-	return Classification{Category: category, Confidence: confidence, ConfidenceAvailable: confidenceAvailability(true)}
+	return Classification{Category: answer.Choice, Confidence: answer.Probabilities[answer.Choice], ConfidenceAvailable: confidenceAvailability(true)}
 }

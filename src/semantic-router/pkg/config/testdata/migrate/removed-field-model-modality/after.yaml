@@ -1,0 +1,24 @@
+# A model's modality keyword is written as the facts it stood for: a
+# diffusion model generates images from text, an ar model answers in text,
+# which every model does by default, and an omni model reads images.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+    - name: vision
+      backend_refs: [{name: vision, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
+      capabilities: [chat, vision]
+      modalities: {input: [text, image], output: [text]}
+    - name: painter
+      api_format: images
+      backend_refs: [{name: images, endpoint: "127.0.0.1:8002", protocol: http, weight: 1}]
+      capabilities: [image_generation]
+      modalities: {input: [text], output: [image]}
+recipes:
+  - name: default
+    decisions:
+      - name: everything
+        rules: {}
+        modelRefs: [{model: general}]

@@ -11,7 +11,7 @@ translation:
 
 ## 概览
 
-`routing.projections.mappings` 将投影分数转成决策可以消费的命名路由档位。
+`recipes[].projections.mappings` 将投影分数转成决策可以消费的命名路由档位。
 
 ## 解决什么问题？
 
@@ -48,40 +48,40 @@ translation:
 ## 配置
 
 ```yaml
-routing:
-  projections:
-    mappings:
-      - name: difficulty_band
-        source: difficulty_score
-        method: threshold_bands
-        calibration:
-          method: sigmoid_distance
-          slope: 10.0
-        outputs:
-          - name: balance_simple
-            lt: 0.18
-          - name: balance_medium
-            gte: 0.18
-            lt: 0.48
-          - name: balance_complex
-            gte: 0.48
-            lt: 0.82
-          - name: balance_reasoning
-            gte: 0.82
-
-  decisions:
-    - name: reasoning_deep
-      description: Use the reasoning model for the highest difficulty band.
-      priority: 250
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: math
-          - type: projection
-            name: balance_reasoning
-      modelRefs:
-        - model: google/gemini-3.1-pro
+recipes:
+  - name: default
+    projections:
+      mappings:
+        - name: difficulty_band
+          source: difficulty_score
+          method: threshold_bands
+          calibration:
+            method: sigmoid_distance
+            slope: 10.0
+          outputs:
+            - name: balance_simple
+              lt: 0.18
+            - name: balance_medium
+              gte: 0.18
+              lt: 0.48
+            - name: balance_complex
+              gte: 0.48
+              lt: 0.82
+            - name: balance_reasoning
+              gte: 0.82
+    decisions:
+      - name: reasoning_deep
+        description: Use the reasoning model for the highest difficulty band.
+        priority: 250
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: math
+            - type: projection
+              name: balance_reasoning
+        modelRefs:
+          - model: google/gemini-3.1-pro
 ```
 
 ## DSL {#dsl}

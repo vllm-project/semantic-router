@@ -165,10 +165,10 @@ func TestProcessRequestBodyBenchmarkBindingKeepsSharedResponseImmutable(t *testi
 		header     string
 		fullDuplex bool
 	}{
-		{name: "benchmark", header: headers.SRBenchExpectedConfigHash},
-		{name: "mixed case", header: strings.ToUpper(headers.SRBenchExpectedConfigHash)},
+		{name: "benchmark", header: headers.VSRBenchExpectedConfigHash},
+		{name: "mixed case", header: strings.ToUpper(headers.VSRBenchExpectedConfigHash)},
 		{name: "unbound"},
-		{name: "full duplex", header: headers.SRBenchExpectedConfigHash, fullDuplex: true},
+		{name: "full duplex", header: headers.VSRBenchExpectedConfigHash, fullDuplex: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
@@ -211,10 +211,7 @@ func TestProcessRequestBodyBenchmarkBindingKeepsSharedResponseImmutable(t *testi
 					assert.NotSame(t, stream.Responses[i-1], response)
 				}
 				require.NotNil(t, mutation)
-				assert.Equal(t, []string{
-					headers.SRBenchExpectedConfigHash, headers.SRBenchMaxInferenceCalls,
-					headers.VSRConfigHash, headers.VSRModelUsage, headers.VSRInferenceCallCount,
-				}, mutation.GetRemoveHeaders())
+				assert.Empty(t, mutation.GetRemoveHeaders())
 				assert.Len(t, mutation.GetSetHeaders(), 2)
 			}
 		})
