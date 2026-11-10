@@ -30,7 +30,7 @@ about our product?" from the question text alone.
 Use it for a judgment about the request that no
 [application signal](./overview#application-signals) already makes. Prefer a
 heuristic signal for structural facts: length, keywords, input media,
-identity. [Write custom questions](../../system-one/custom-questions) walks
+identity. [Write custom questions](../../system-one/use/custom-questions) walks
 from an idea to a tuned rule.
 
 ## Configuration
@@ -90,7 +90,7 @@ global:
 
 A rule without `deployment` asks the decision model,
 `global.model_catalog.system.decision_model` (vela3-fast unless you choose
-another); [Choose a deployment](../../system-one/deployments) covers local,
+another); [Choose a deployment](../../system-one/deploy/deployments) covers local,
 attached and remote models. The deployment must answer the rule's question
 type, or the configuration is refused when it loads. vela3-fast answers
 `choice`, `noul` and `span` questions, and `set` questions as one `noul` per

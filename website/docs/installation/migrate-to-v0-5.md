@@ -181,15 +181,15 @@ recipes:
 | `jailbreak` `threshold`, `direction`, `include_history` | `predicate`, `stage`, `input.history` |
 | `jailbreak` `method`, `jailbreak_patterns`, `benign_patterns` | Removed: the decision model reads the request. For a deterministic hard block, write the patterns as a [`keywords`](../tutorials/signal/heuristic/keyword) rule that a blocking decision reads |
 | `jailbreak` and `pii` rules under `on_error: block` | `on_unknown: match` on the rules |
-| `safety` `threshold`, `labels`, `unsafe_labels`, `model` | `predicate`; `labels` name [harm categories](../system-one/reference#harm-categories); `deployment` |
-| `safety` `hazard` | The [harm categories](../system-one/reference#harm-categories) its `categories` name, in the rule's `labels`, with `hazard.threshold` as the `predicate`; the unsafe `threshold` has no counterpart, and a rule whose categories name none keeps the unsafe verdict (migrate notes both) |
+| `safety` `threshold`, `labels`, `unsafe_labels`, `model` | `predicate`; `labels` name [harm categories](../system-one/reference/presets#harm-categories); `deployment` |
+| `safety` `hazard` | The [harm categories](../system-one/reference/presets#harm-categories) its `categories` name, in the rule's `labels`, with `hazard.threshold` as the `predicate`; the unsafe `threshold` has no counterpart, and a rule whose categories name none keeps the unsafe verdict (migrate notes both) |
 | `pii` `threshold`, `pii_types_allowed`, `include_history`, `source: tool_result` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results`; `source: tool_result` read the tool results alone, so it becomes `input: {tool_results: true, turn: false}` and drops `include_history` |
 | `fact_check` rule named `no_fact_check_needed` without labels | `labels: [NO_FACT_CHECK_NEEDED]` with a predicate |
 | `user_feedbacks` and `modality` rules whose name chose the option | The option in `labels` |
 | `reasks`, `topic_continuity` | `turn_relation` with `labels` |
 | `complexity` example banks and thresholds; `name: difficulty:hard` conditions | `complexity`; `{name: difficulty, label: hard}` |
 | `modality` names `AR`, `DIFFUSION`, `BOTH`; the keyword fallback | `labels` `text`, `image`, `text_image`; the fallback becomes a `keywords` rule (review) |
-| `classifiers`, `preferences`, text `embeddings` rules | [`systemone` questions](../system-one/custom-questions#questions-that-replace-removed-signals) |
+| `classifiers`, `preferences`, text `embeddings` rules | [`systemone` questions](../system-one/use/custom-questions#questions-that-replace-removed-signals) |
 | Image `embeddings` rules with text anchors | `systemone` questions with `input.image` |
 | `kb` rules, `kb` conditions and `kb_metric` score inputs | Dropped: a `kb` rule never matches, so migrate drops a decision that needs it, its term of an `OR`, and a score input on it; each rule's note names the `systemone` `set` question over its labels that replaces it |
 | Image-anchor and audio `embeddings` rules | No rewrite: write a `systemone` question (the error says which) |
@@ -439,7 +439,7 @@ providers:
 | A deployment's `question_types` | `capabilities.question_types` |
 | `served_name` on a deployment or a replica | `model` |
 | A `provider: classify` or `http` deployment | Dropped: no signal asks a classifier service |
-| `provider: candle`, `ort` or `openvino` | `provider: model_runtime`, on its device, with its artifact's Hub repository; see [Migrate to the model runtime](../model-runtime/migrate) for `precision`, `profile` and the other engine fields |
+| `provider: candle`, `ort` or `openvino` | `provider: model_runtime`, on its device, with its artifact's Hub repository; see [Migrate to the model runtime](../model-runtime/deploy/migrate) for `precision`, `profile` and the other engine fields |
 | `global.model_catalog.external[]` | Removed; the `memory_rewrite` model becomes an `openai_chat` deployment that `global.stores.memory.query_rewrite` names, and its access key an environment variable |
 | A backend's `base_url`, `api_key_env`, `auth_header`, `auth_prefix`, `extra_headers` | `endpoint` (a full URL), `auth: {header, prefix, api_key_env}`, `headers` |
 | `global.router.auto_model_names`, `auto_model_name` | An entrypoint of the default recipe with the names the earlier release served: `auto_model_names`, or else `vllm-sr/auto`, `auto` and the `auto_model_name`; beside the file's own entrypoint of the default recipe, whose names stay its own |
@@ -543,7 +543,7 @@ reads them. Update gateways and clients:
 | `x-vsr-selected-modality` | The trace's `modality` member |
 | `x-session-id`, `x-claude-code-session-id` | `x-vsr-session-id`; `global.router.headers.session_id_headers` keeps the others accepted |
 
-The [VSR routing headers](../troubleshooting/vsr-headers) page lists the
+The [VSR routing headers](../api/headers) page lists the
 public set and every trace member.
 
 ## 4. Validate and start
@@ -572,7 +572,7 @@ vllm-sr serve --config config.migrated.yaml
   never an error.
 - **System One batch calls use the `states` form only**, and a Router needs
   a model runtime of contract 4.0.0; see
-  [the batch request](../system-one/api#the-batch-request).
+  [the batch request](../system-one/use/api#the-batch-request).
 - **Image decisions declare an `output` contract**, and every model they name
   declares the capabilities it needs. `POST /v1/images/generations` reaches
   only such a decision; anything else there gets `image_route_required`.

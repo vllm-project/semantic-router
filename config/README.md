@@ -58,7 +58,7 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-[Choose a deployment](../website/docs/system-one/deployments.md) explains the
+[Choose a deployment](../website/docs/system-one/deploy/deployments.md) explains the
 built-in decision model, the other sizes and remote System One APIs, and what
 the Router checks at load.
 

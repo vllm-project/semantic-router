@@ -1,5 +1,6 @@
 ---
 title: 图像和音频
+sidebar_position: 2
 description: 在模型运行时上运行 Vela Omni 嵌入模型，它能嵌入文本、图像和音频。
 is_mtpe: false
 translation:
