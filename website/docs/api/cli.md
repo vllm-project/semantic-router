@@ -107,7 +107,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 ## `vllm-sr` {#vllm-sr}
 
 ```text
-Usage: vllm-sr [OPTIONS] COMMAND [ARGS]...
+Usage: vllm-sr [OPTIONS] [COMMAND] [ARGS]...
 ```
 
 vLLM Semantic Router CLI - Signal-driven routing across LLM providers, with a built-in model runtime.
@@ -650,7 +650,7 @@ Replace the local registry from a JSON list of credential references.
 ## `vllm-sr completion` {#vllm-sr-completion}
 
 ```text
-Usage: vllm-sr completion [OPTIONS] COMMAND [ARGS]...
+Usage: vllm-sr completion [OPTIONS] [COMMAND] [ARGS]...
 ```
 
 Generate or install shell completion for vllm-sr.
@@ -670,7 +670,7 @@ Examples:
 ### `vllm-sr completion install` {#vllm-sr-completion-install}
 
 ```text
-Usage: vllm-sr completion install [OPTIONS] [[bash|zsh|fish]]
+Usage: vllm-sr completion install [OPTIONS] [bash|zsh|fish]
 ```
 
 Install shell completions into your shell configuration.
@@ -695,7 +695,7 @@ Examples:
 ### `vllm-sr completion show` {#vllm-sr-completion-show}
 
 ```text
-Usage: vllm-sr completion show [OPTIONS] [[bash|zsh|fish]]
+Usage: vllm-sr completion show [OPTIONS] [bash|zsh|fish]
 ```
 
 Print the completion script for a shell.
@@ -719,7 +719,7 @@ Examples:
 ## `vllm-sr config` {#vllm-sr-config}
 
 ```text
-Usage: vllm-sr config [OPTIONS] COMMAND [ARGS]...
+Usage: vllm-sr config [OPTIONS] [COMMAND] [ARGS]...
 ```
 
 Print generated configuration or run config subcommands.
@@ -1599,7 +1599,7 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 ## `vllm-sr status` {#vllm-sr-status}
 
 ```text
-Usage: vllm-sr status [OPTIONS] [[envoy|router|dashboard|all]]
+Usage: vllm-sr status [OPTIONS] [envoy|router|dashboard|all]
 ```
 
 Show status of vLLM Semantic Router services.
