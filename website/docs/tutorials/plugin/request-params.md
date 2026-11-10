@@ -44,6 +44,15 @@ PLUGIN request_params {
 }
 ```
 
+`max_tokens_limit` bounds the whole output, thinking included. When it lowers
+`max_tokens` to or below an Anthropic `thinking.budget_tokens`, the budget drops
+to one token below the cap. Anthropic needs a budget of at least 1024, so an
+Anthropic route capped at 1024 or less still refuses a thinking budget.
+
+`blocked_params` cannot include `stream`. The Router streams the answer exactly
+when the client asks for a stream, so a configuration that lists it fails at
+load.
+
 This plugin enforces a bounded set of OpenAI Chat Completions fields. It is not
 a general JSON-schema firewall and does not authorize a caller. The Router
 already refuses a request field the client's wire format does not declare, so

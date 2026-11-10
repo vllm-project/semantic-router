@@ -874,6 +874,17 @@ class RequestParamsPluginConfig(BaseModel):
     max_tokens_limit: Optional[int] = Field(default=None, ge=1)
     max_n: Optional[int] = Field(default=None, ge=1)
 
+    @field_validator("blocked_params")
+    @classmethod
+    def keep_stream(cls, names: Optional[List[str]]) -> Optional[List[str]]:
+        # Mirrors the Router's ValidateRequestParamsPluginConfig.
+        if any(name.strip() == "stream" for name in names or []):
+            raise ValueError(
+                "blocked_params cannot include stream: the Router streams "
+                "the answer when the client asks for a stream"
+            )
+        return names
+
 
 ResponseGuardAction = Literal["block", "annotate", "none"]
 
