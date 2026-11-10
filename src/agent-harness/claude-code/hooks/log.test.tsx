@@ -470,3 +470,23 @@ test('an answer from the classifier, a minute after it went offline, clears the 
 
   expect((await rowTree($, bandRow())).texts[0]).toBe(' vSR   › 1 allowed')
 })
+
+test('a log write that never finishes does not hold back the lines after it', async ($, on) => {
+  const reply: Reply = { review: 0.2, files: {} }
+  let writes = 0
+  const clock = engine(((...args: unknown[]) => (args[0] === 'fs.write' ? undefined : (on as (...all: unknown[]) => unknown)(...args))) as typeof on, reply)
+  on('fs.write', (_, e) => {
+    writes += 1
+    if (writes === 1) return new Promise(() => {})
+    reply.files![e.path] = e.text
+    return { value: undefined }
+  })
+
+  await check($, 'ls')
+  await clock.advance(0)
+  await check($, 'pwd')
+  await clock.advance(10_000)
+  await clock.advance(0)
+
+  expect(logLines(reply).map(line => line.subject)).toEqual(['ls', 'pwd'])
+})

@@ -186,6 +186,23 @@ export function engine(on: On, reply: Reply) {
   return clock
 }
 
+// The kit's engine with a clock whose next read fails once `failNext` is called: a hook of vSR's then throws, as one
+// that breaks or outruns its budget does, and its `.catch` answers.
+export function engineFailingClock(on: On, reply: Reply) {
+  let isFailing = false
+  const failing = ((...args: unknown[]) => {
+    if (args[0] !== 'clock.now') return (on as (...all: unknown[]) => unknown)(...args)
+    const read = args[args.length - 1] as (...all: unknown[]) => unknown
+    return (on as (...all: unknown[]) => unknown)('clock.now', (...all: unknown[]) => {
+      if (!isFailing) return read(...all)
+      isFailing = false
+      throw new Error('the clock could not be read')
+    })
+  }) as On
+  const clock = engine(failing, reply)
+  return { clock, failNext: () => (isFailing = true) }
+}
+
 export const SPAWN = {
   tool_use_id: 'call-1',
   prompt: 'Rename a variable in one file.',
