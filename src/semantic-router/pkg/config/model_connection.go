@@ -316,8 +316,8 @@ func (g *DeploymentGeneration) validate() error {
 // validateRemote checks an openai_chat or openai_embeddings deployment: a
 // connection block and nothing the model runtime owns.
 func (d ModelDeployment) validateRemote() error {
-	if d.Artifact != "" || d.Revision != "" || d.Device != "" || d.HasEngineArgs() || len(d.Replicas) != 0 || d.PublicName != "" {
-		return fmt.Errorf("a %s deployment takes a connection block (endpoint, model, auth, headers, timeout_ms, max_retries, tls, limits); artifact, revision, device, engine arguments, replicas and public_name belong to model_runtime", d.Provider)
+	if d.Artifact != "" || d.Revision != "" || d.Device != "" || d.HasEngineArgs() || len(d.Replicas) != 0 || d.OutlierDetection != nil || d.PublicName != "" {
+		return fmt.Errorf("a %s deployment takes a connection block (endpoint, model, auth, headers, timeout_ms, max_retries, tls, limits); artifact, revision, device, engine arguments, replicas, outlier_detection and public_name belong to model_runtime", d.Provider)
 	}
 	if d.Input.MaxTokens != 0 || (d.Input.Overflow != "" && d.Input.Overflow != "reject") {
 		return fmt.Errorf("a %s deployment takes no input budget: the remote model reads its own input", d.Provider)

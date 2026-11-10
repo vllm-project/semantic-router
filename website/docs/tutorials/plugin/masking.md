@@ -70,7 +70,7 @@ with the plugin's threshold and names it.
 
 If the rule's detector is unavailable, or scanning fails for any reason, **the request is refused with a 503** rather than dispatched unmasked. This is unconditional: there is no `fail_open` configuration option, unlike `context_compression`'s `failure_mode`. A privacy control that can be configured to fail open is a footgun that gets flipped on during an incident and never flipped back. Operators who need availability over privacy should not enable this plugin.
 
-A truncated classifier response — the provider only scanned part of the text — is treated the same way: the unscanned remainder cannot be vouched for, so the request is refused rather than partially masked.
+A truncated answer, where the deployment scanned only part of the text, is treated the same way: the unscanned remainder cannot be vouched for, so the request is refused rather than partially masked.
 
 ## Router Replay does not capture request content on a masking route
 

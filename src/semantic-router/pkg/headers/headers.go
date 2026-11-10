@@ -1,5 +1,7 @@
 package headers
 
+import "slices"
+
 // Package headers provides constants for all custom HTTP headers used in the semantic router.
 // All custom headers follow the "x-" prefix convention for non-standard HTTP headers.
 
@@ -134,6 +136,26 @@ const (
 	WarningProtocol          = "protocol"
 	WarningTruncated         = "truncated"
 )
+
+// WarningCode records one code of x-vsr-warnings.
+type WarningCode struct {
+	Code string `json:"code"`
+	// Doc says what the code reports, in one sentence.
+	Doc string `json:"doc"`
+}
+
+// WarningCodes lists the codes of x-vsr-warnings: the response_guard codes,
+// then the protocol and truncation members.
+func WarningCodes() []WarningCode { return slices.Clone(warningCodes) }
+
+var warningCodes = []WarningCode{
+	{WarningHallucination, "A `response_guard` rule over a `hallucination` signal flagged the answer."},
+	{WarningUnverifiedFactual, "The answer was factual, but a `hallucination` rule had no context to check it against."},
+	{WarningJailbreak, "A `response_guard` rule over a response-stage `jailbreak` signal flagged the answer."},
+	{WarningGuard, "A `response_guard` rule over any other signal flagged the answer."},
+	{WarningProtocol, "Protocol translation changed or dropped part of the request, with its `action`, `reason` and `field`."},
+	{WarningTruncated, "Protocol warnings left out to keep the header within 4 KB, with their `count`."},
+}
 
 // VSRTrace is the one debug header: an RFC 8941 dictionary of the routing
 // details (TraceMembers) for a caller global.router.headers.debug allows.

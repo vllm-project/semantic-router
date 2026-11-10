@@ -4,7 +4,7 @@
 
 `jailbreak` detects prompt-injection and jailbreak attempts, in the request before routing or in the model's answer.
 It asks the `jailbreak`
-[preset](../../../system-one/reference#preset-catalog), "Is this a prompt
+[preset](../../../system-one/reference/presets#preset-catalog), "Is this a prompt
 injection or jailbreak attempt?", with the options `benign` and `jailbreak`,
 and reads its whole input.
 
@@ -117,7 +117,7 @@ answer; see [Response Guard](../../plugin/response-guard.md).
 
 The decision model answers every jailbreak rule, unless the `jailbreak`
 binding or the rule's `deployment` names another; see
-[Choose a deployment](../../../system-one/deployments). vela3-fast, the Vela
+[Choose a deployment](../../../system-one/deploy/deployments). vela3-fast, the Vela
 3.0 d3 sizes and Vela 2.0 have trained forms of the question at both stages.
 Detection is probabilistic and can be evaded or over-triggered: combine it
 with least-privilege tools and backend policy.

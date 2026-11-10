@@ -2297,6 +2297,24 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "DeploymentOutlierDetection": {
+      "properties": {
+        "consecutive_timeouts": {
+          "type": "integer"
+        },
+        "base_ejection_ms": {
+          "type": "integer"
+        },
+        "max_ejection_ms": {
+          "type": "integer"
+        },
+        "max_ejection_percent": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "DeploymentTLS": {
       "properties": {
         "ca_file": {
@@ -3995,6 +4013,9 @@
             "$ref": "#/$defs/ModelReplica"
           },
           "type": "array"
+        },
+        "outlier_detection": {
+          "$ref": "#/$defs/DeploymentOutlierDetection"
         },
         "public_name": {
           "type": "string"

@@ -228,7 +228,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Health'
         '503':
-          description: Not ready.
+          description: Not ready. A model whose forward has run longer than `--forward-timeout-seconds` is `degraded` until it returns.
           content:
             application/json:
               schema:
@@ -236,10 +236,16 @@ paths:
   /health/live:
     get:
       operationId: getLiveness
-      summary: Liveness; 200 while the process serves HTTP
+      summary: Liveness; 200 while the process serves HTTP and no forward has run longer than `--forward-timeout-seconds`
       responses:
         '200':
           description: Alive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Liveness'
+        '503':
+          description: Stalled; a forward has run longer than `--forward-timeout-seconds` and has not returned. Restart the process.
           content:
             application/json:
               schema:
@@ -1830,4 +1836,8 @@ components:
           description: The version of this contract the runtime serves (`info.version`); a client refuses another major version.
         status:
           type: string
-          enum: [alive]
+          enum: [alive, stalled]
+        reason:
+          type: string
+          nullable: true
+          description: Why the process is stalled, per model; absent while alive.
