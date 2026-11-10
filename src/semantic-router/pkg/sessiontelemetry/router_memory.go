@@ -239,6 +239,8 @@ func RecordSessionUsage(p SessionUsageParams) {
 	}
 	s := globalRouterSessionMemory
 	defer persistRouterSessionState(p.SessionID)
+	var charge int64
+	defer func() { settleShared(p.SessionID, p.Reservation, charge) }()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -261,6 +263,7 @@ func RecordSessionUsage(p SessionUsageParams) {
 		CacheWrite1hTokens: p.CacheWrite1hTokens,
 		CompletionTokens:   p.CompletionTokens,
 	})
+	charge = int64(usage.PromptTokens + usage.CompletionTokens)
 	st.cumulativePrompt += int64(usage.PromptTokens)
 	st.cumulativeCached += int64(usage.CachedInputTokens)
 	st.cumulativeCacheWrite += int64(usage.CacheWriteTokens)
