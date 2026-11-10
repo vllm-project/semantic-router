@@ -155,10 +155,12 @@ with what it read. The redact card names the host, and `/vsr` marks a token sent
 as unencrypted. A remote runtime's token is kept in Claude Code's secure storage
 (`/plugin configure vsr@vllm-sr`), never in `settings.json`.
 
-A hosted System One API, such as `https://app.vllm-sr.ai/v1/decisions`, serves several decision
-models and answers only a question that names one: set `runtimeModel` to one it lists at
-`/v1/models`, and its API key as the token. It has no `/health`, so vSR checks that it is up
-through `/v1/models` instead.
+A System One API serves several decision models and answers only a question that names one: the
+Router's own listener, which serves it beside the routed model calls when `listeners[].systemone`
+publishes a model, or a hosted one such as `https://app.vllm-sr.ai/v1/decisions`. Point
+`runtimeUrl` at its `/v1/decisions`, set `runtimeModel` to one it lists at `/v1/systemone/models`,
+and set the listener's API key as the token when it takes one. A hosted API has no `/health`, so vSR
+checks that it is up through its model list instead.
 
 Redact hides names, emails, phone numbers, card numbers, IP addresses, addresses, ID numbers and
 secrets (API keys, tokens, private keys, passwords in config files and connection URLs). It waits

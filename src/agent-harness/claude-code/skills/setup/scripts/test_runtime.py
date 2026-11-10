@@ -144,8 +144,14 @@ class HealthDevice(unittest.TestCase):
         }
 
         def urlopen(request, timeout):
-            body = json.dumps(replies[request.full_url.split("8790", 1)[1]]).encode()
-            return contextlib.nullcontext(io.BytesIO(body))
+            path = request.full_url.split("8790", 1)[1]
+            if path not in replies:
+                raise urllib.error.HTTPError(
+                    request.full_url, 404, "Not Found", {}, None
+                )
+            return contextlib.nullcontext(
+                io.BytesIO(json.dumps(replies[path]).encode())
+            )
 
         with mock.patch.object(runtime.OPENER, "open", urlopen):
             return runtime.health("http://127.0.0.1:8790/v1/decisions")
@@ -164,7 +170,7 @@ class HealthDevice(unittest.TestCase):
 
 
 class HostedRuntimeTest(unittest.TestCase):
-    """A hosted System One API: no /health, a /v1/models listing, and questions that name a model."""
+    """A System One API: a model list, and questions that name a model."""
 
     def test_a_404_health_with_listed_models_is_ready(self):
         def urlopen(request, timeout):
@@ -187,6 +193,26 @@ class HostedRuntimeTest(unittest.TestCase):
 
         with mock.patch.object(runtime.OPENER, "open", urlopen):
             self.assertFalse(runtime.health("https://sr.example/v1/decisions")["ready"])
+
+    def test_a_router_listener_lists_its_system_one_models(self):
+        replies = {
+            "/health": {"status": "ok"},
+            "/v1/systemone/models": {
+                "data": [{"id": "vela3-fast", "api": "systemone"}]
+            },
+            "/v1/models": {"data": [{"id": "vllm-sr/auto"}]},
+        }
+
+        def urlopen(request, timeout):
+            path = request.full_url.split("8899", 1)[1]
+            return contextlib.nullcontext(
+                io.BytesIO(json.dumps(replies[path]).encode())
+            )
+
+        with mock.patch.object(runtime.OPENER, "open", urlopen):
+            out = runtime.health("http://127.0.0.1:8899/v1/decisions")
+        self.assertTrue(out["ready"])
+        self.assertEqual(out["modelIds"], ["vela3-fast"])
 
     def test_a_question_names_the_model_only_when_one_is_set(self):
         sent = []

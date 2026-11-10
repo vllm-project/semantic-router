@@ -79,10 +79,11 @@ def base_of(url: str) -> str:
 
 
 def health(url: str, token: str | None = None, timeout: float = 3.0) -> dict:
-    """GET /health and /v1/models; never raises."""
+    """GET /health and the model list; never raises."""
     base = base_of(url)
     out: dict = {"url": url}
-    for name, path in (("health", "/health"), ("models", "/v1/models")):
+
+    def get(name: str, path: str) -> None:
         started = time.perf_counter()
         try:
             request = urllib.request.Request(base + path, headers=_headers(token))
@@ -93,11 +94,19 @@ def health(url: str, token: str | None = None, timeout: float = 3.0) -> dict:
         except (OSError, ValueError) as error:
             out[name] = {"error": str(getattr(error, "reason", error))}
         out[f"{name}Ms"] = round((time.perf_counter() - started) * 1000)
+
+    get("health", "/health")
+    # A System One API, a Router listener's or a hosted one, lists its models at
+    # /v1/systemone/models; vllm-srun lists its one model at /v1/models.
+    get("models", "/v1/systemone/models")
+    if not (isinstance(out["models"], dict) and out["models"].get("data")):
+        get("models", "/v1/models")
     status = out["health"].get("status") if isinstance(out["health"], dict) else None
     models = out["models"].get("data") if isinstance(out["models"], dict) else None
-    # A hosted System One API has no /health; the models it lists show it is up.
+    # A Router listener's /health says only that it serves, and a hosted System One
+    # API has none; the models they list show they are up.
     out["ready"] = status == "ready" or (
-        out["health"] == {"error": "HTTP 404"} and bool(models)
+        (status == "ok" or out["health"] == {"error": "HTTP 404"}) and bool(models)
     )
     out["model"] = models[0].get("id") if models else out["health"].get("model")
     out["modelIds"] = [m.get("id") for m in models or [] if isinstance(m, dict)]

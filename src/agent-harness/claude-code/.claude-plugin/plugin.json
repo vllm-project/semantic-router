@@ -45,7 +45,7 @@
     "runtimeModel": {
       "type": "string",
       "title": "Runtime model",
-      "description": "Sent as the request's model when set, for a runtime that serves several models, such as a hosted System One API (GET /v1/models lists them). Empty sends none.",
+      "description": "Sent as the request's model when set, for a runtime that serves several models, such as a System One API (GET /v1/systemone/models lists them). Empty sends none.",
       "default": ""
     },
     "router": {
