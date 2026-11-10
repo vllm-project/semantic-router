@@ -150,15 +150,17 @@ recipes:
 | `signals.decision`、`algorithm.type: decision` | `systemone`（加载时给出警告） |
 | `domains[].mmlu_categories` | `domains[].labels` |
 | 自行声明领域的 domain 条件 | 为条件指定的每个领域各写一条 `domains` 规则 |
-| `jailbreak` 的 `threshold`、`direction`、`include_history` | `predicate`、`stage`、`input.history` |
+| 没有 `labels` 或 `mmlu_categories`、名称是其他大小写形式领域的 `domains` 规则（如 `Math`） | 改为小写的领域名，规则以及引用它的每个条件、分数输入和分区一并修改 |
+| 没有 `labels` 或 `mmlu_categories`、名称又不是领域的 `domains` 规则 | 删除：分类器只报告领域，这条规则从未匹配过；需要它的决策、它在 `OR` 中的那一项和读取它的分数输入也一并删除（migrate 会逐一说明）。投影分区引用的规则保留并写成 `labels: [other]`，因为分区的默认成员曾匹配它。加载时会提示近似领域的名称（如 `maths`）只要仍有条件读取它，就保留该错误 |
+| `jailbreak` 的 `threshold`、`direction`、`include_history` | `predicate`、`stage`、`input.history`；`method: contrastive` 的阈值界定的是相似度之差而不是概率，migrate 会提示重新拟合 |
 | `jailbreak` 的 `method`、`jailbreak_patterns`、`benign_patterns` | 已移除：决策模型直接读取请求。需要确定性的硬拦截时，把这些模式写成一条 [`keywords`](../tutorials/signal/heuristic/keyword) 规则，并由一个拦截决策读取它 |
 | `on_error: block` 下的 `jailbreak` 和 `pii` 规则 | 规则上的 `on_unknown: match` |
 | `safety` 的 `threshold`、`labels`、`unsafe_labels`、`model` | `predicate`；`labels` 指定[危害类别](../system-one/reference/presets#harm-categories)；`deployment` |
 | `safety` 的 `hazard` | 它的 `categories` 对应的[危害类别](../system-one/reference/presets#harm-categories)写进规则的 `labels`，`hazard.threshold` 成为 `predicate`；不安全判定的 `threshold` 没有对应项，类别都对应不上的规则保留不安全判定（migrate 会说明这两点） |
 | `pii` 的 `threshold`、`pii_types_allowed`、`include_history`、`source: tool_result` | `predicate`、`ignore_labels`、`input.history`、`input.tool_results` |
 | 名为 `no_fact_check_needed` 且没有 labels 的 `fact_check` 规则 | `labels: [NO_FACT_CHECK_NEEDED]` 加一个 predicate |
-| 以名称决定选项的 `user_feedbacks` 和 `modality` 规则 | 把选项写进 `labels` |
-| `reasks`、`topic_continuity` | 带 `labels` 的 `turn_relation` |
+| 没有 `labels`、以名称决定选项的 `user_feedbacks` 和 `modality` 规则 | 把选项写进 `labels`；若有条件以 `label` 指定该规则的某个选项，或有分数输入写成 `<rule>:<label>`，该规则是按 v0.5 写的，保持原样 |
+| `reasks`、`topic_continuity` | 带 `labels` 的 `turn_relation`；`lookback_turns` 大于 1 的 reask 规则要求的连续重问没有对应项，`input.previous_turns` 最多为 32，migrate 会说明这两点 |
 | `complexity` 的示例库和阈值；`name: difficulty:hard` 条件 | `complexity`；`{name: difficulty, label: hard}` |
 | `modality` 名称 `AR`、`DIFFUSION`、`BOTH`；关键词回退 | `labels` `text`、`image`、`text_image`；回退变为一条 `keywords` 规则（需检查） |
 | `classifiers`、`preferences`、文本 `embeddings` 规则 | [`systemone` 问题](../system-one/use/custom-questions#questions-that-replace-removed-signals) |
@@ -223,8 +225,8 @@ recipes:
 
 | 之前 | 之后 |
 | --- | --- |
-| `prompt`、`router_dc` | `systemone`，用同样的说明或候选描述询问决策模型 |
-| `knn`、`kmeans`、`svm`、`mlp` | `systemone`，只有一个候选的决策为 `static`；不再使用训练出的模型 |
+| `prompt`、`router_dc` | `systemone`，用同样的说明或候选描述询问决策模型；无可选候选时与 `knn` 一样为 `static` |
+| `knn`、`kmeans`、`svm`、`mlp` | `systemone`，每个模型只保留第一个 `modelRefs` 项（migrate 会说明丢弃的 LoRA 适配器）；所有候选都是同一个模型（例如只有一个候选，或同一模型的多个 LoRA 适配器）时为 `static`；不再使用训练出的模型 |
 | `automix`、`hybrid`、`latency_aware` | `multi_factor`，由 migrate 写出权重 |
 | `confidence`（Looper） | 带 `escalate.accept.confidence` 的 `escalate` |
 | `cascade`（System One） | 带 `escalate.stages` 的 `escalate` |

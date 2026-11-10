@@ -77,7 +77,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -201,7 +201,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -297,7 +297,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -342,7 +342,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
@@ -517,7 +517,7 @@ signals:
       operator: "OR"
       keywords: ["test"]
   domains:
-    - name: "test"
+    - name: "other"
       description: "Test domain"
 decisions:
   - name: "test_decision"
