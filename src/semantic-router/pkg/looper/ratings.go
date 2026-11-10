@@ -208,7 +208,7 @@ func ratingsCompletionBody(responses []*ModelResponse, modelsUsed []string, id s
 				"role":    "assistant",
 				"content": resp.Content,
 			},
-			"finish_reason": "stop",
+			"finish_reason": backendFinishReason(resp),
 		}
 	}
 

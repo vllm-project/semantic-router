@@ -73,7 +73,7 @@ func formatWorkflowJSONResponse(
 					"role":    "assistant",
 					"content": finalResp.Content,
 				},
-				"finish_reason": workflowFinalFinishReason(finalResp),
+				"finish_reason": backendFinishReason(finalResp),
 			},
 		},
 		"usage": usage.Map(),
@@ -94,7 +94,9 @@ func formatWorkflowJSONResponse(
 	}, cfg, trace)
 }
 
-func workflowFinalFinishReason(resp *ModelResponse) string {
+// backendFinishReason is the finish_reason the backend gave the response an
+// executor serves, so a cut or filtered answer is not published as complete.
+func backendFinishReason(resp *ModelResponse) string {
 	if resp.Parsed != nil && len(resp.Parsed.Choices) > 0 && resp.Parsed.Choices[0].FinishReason != "" {
 		return resp.Parsed.Choices[0].FinishReason
 	}
@@ -215,7 +217,7 @@ func buildWorkflowStreamingSSE(
 	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, map[string]interface{}{
 		"index":         0,
 		"delta":         map[string]interface{}{},
-		"finish_reason": workflowFinalFinishReason(finalResp),
+		"finish_reason": backendFinishReason(finalResp),
 	}, nil))
 	return appendSSEDone(body)
 }

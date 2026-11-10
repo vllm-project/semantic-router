@@ -206,6 +206,15 @@ type AggregatedResponse struct {
 	HasToolCalls    bool
 }
 
+// finishReason is the backend finish_reason of the last response, whose
+// answer the aggregate ends with.
+func (agg *AggregatedResponse) finishReason() string {
+	if len(agg.Responses) == 0 {
+		return "stop"
+	}
+	return backendFinishReason(agg.Responses[len(agg.Responses)-1])
+}
+
 func aggregatedUsageResponses(agg *AggregatedResponse) []*ModelResponse {
 	if agg != nil && agg.UsageResponses != nil {
 		return agg.UsageResponses
@@ -280,7 +289,7 @@ func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []st
 					"role":    "assistant",
 					"content": agg.CombinedContent,
 				},
-				"finish_reason": "stop",
+				"finish_reason": agg.finishReason(),
 			},
 		},
 		"usage": usage.Map(),
@@ -414,7 +423,7 @@ func (l *BaseLooper) formatStreamingResponse(agg *AggregatedResponse, modelsUsed
 		chunks = nil
 	}
 	sseBody := buildSimulatedChatCompletionSSE(
-		id, timestamp, agg.FinalModel, chunks, toolCalls,
+		id, timestamp, agg.FinalModel, chunks, toolCalls, agg.finishReason(),
 	)
 	resp := streamingLooperResponse(sseBody, agg.FinalModel, modelsUsed, iterations, "simple")
 	resp.Usage = usage

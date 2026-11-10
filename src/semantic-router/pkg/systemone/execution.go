@@ -172,7 +172,7 @@ func (e *Executor) accept(request *NativeRequest, stage config.EscalateStage, ca
 	if !complete(candidate.Observations) {
 		return false, nil
 	}
-	if stage.Accept != nil && !acceptNative(candidate.Observations, stage.Accept, false) {
+	if stage.Accept != nil && !acceptNative(candidate.Observations, stage.Accept) {
 		return false, nil
 	}
 	quality := e.algorithm.NativeQuality()
@@ -182,7 +182,7 @@ func (e *Executor) accept(request *NativeRequest, stage config.EscalateStage, ca
 	if quality == nil || quality.Accept == nil {
 		return true, nil
 	}
-	return acceptNative(candidate.Observations, quality.Accept, true), nil
+	return acceptNative(candidate.Observations, quality.Accept), nil
 }
 
 func (e *Executor) invokeStage(ctx context.Context, request *NativeRequest, stage config.EscalateStage, candidates []Candidate, invoke Invoke) (candidate Candidate, invokeErr error) {
