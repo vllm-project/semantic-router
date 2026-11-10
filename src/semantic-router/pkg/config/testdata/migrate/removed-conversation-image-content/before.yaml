@@ -1,0 +1,59 @@
+# A conversation rule on image_content is an input_modality rule on images,
+# in the default recipe and in another recipe, and its conditions follow; the
+# other conversation rules stay.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
+  - {model_names: [vllm-sr/gallery], recipe: gallery}
+recipes:
+  - name: default
+    signals:
+      conversation:
+        - name: has_images
+          description: Request contains at least one image content part.
+          feature:
+            type: exists
+            source:
+              type: image_content
+        - name: has_tools
+          feature:
+            type: exists
+            source:
+              type: tool_definition
+      input_modality:
+        - {name: audio_input, modality: audio}
+    decisions:
+      - name: vision
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - {type: conversation, name: has_images}
+            - operator: NOT
+              conditions:
+                - {type: conversation, name: has_tools}
+        modelRefs: [{model: general}]
+      - name: listen
+        priority: 90
+        rules: {type: input_modality, name: audio_input}
+        modelRefs: [{model: general}]
+  - name: gallery
+    signals:
+      conversation:
+        - name: many_images
+          feature:
+            type: count
+            source: {type: image_content}
+          predicate: {gte: 2}
+    decisions:
+      - name: gallery
+        priority: 100
+        rules: {type: conversation, name: many_images}
+        modelRefs: [{model: general}]

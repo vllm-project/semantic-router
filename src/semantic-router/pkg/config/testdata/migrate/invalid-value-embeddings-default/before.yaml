@@ -1,0 +1,25 @@
+# embeddings.default names its deployment in a mapping, the way
+# system.decision_model does.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: chat
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+global:
+  model_catalog:
+    deployments:
+      remote-embed:
+        provider: openai_embeddings
+        endpoint: https://embed.example.com/v1
+        model: BAAI/bge-m3
+        capabilities: {dimensions: 1024}
+    embeddings:
+      default: remote-embed

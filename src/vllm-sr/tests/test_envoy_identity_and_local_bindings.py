@@ -14,7 +14,7 @@ from cli.validator import validate_user_config
 
 def _write_config(tmp_path, aliases, address="127.0.0.1"):
     document = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "local", "address": address, "port": 8899}],
         "providers": {
             "defaults": {"model": aliases[0]},
@@ -28,7 +28,7 @@ def _write_config(tmp_path, aliases, address="127.0.0.1"):
                 for index, alias in enumerate(aliases)
             ],
         },
-        "routing": {},
+        "recipes": [{"name": "default"}],
     }
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(document))
@@ -46,7 +46,7 @@ def _model_routes(rendered):
         header["string_match"]["exact"]: route["route"]["cluster"]
         for route in _routes(rendered)
         for header in route["match"].get("headers", [])
-        if header["name"] == "x-selected-model"
+        if header["name"] == "x-vsr-route-model"
     }
 
 
@@ -185,6 +185,61 @@ def test_bridge_listener_is_reachable_without_widening_host_publication(
         ]
         == "0.0.0.0"
     )
+
+
+@pytest.mark.parametrize(
+    ("configured", "stripped"),
+    [
+        (None, ["x-vsr-delegated-credential"]),
+        (
+            " X-Gateway-Token ",
+            ["x-vsr-delegated-credential", "x-gateway-token"],
+        ),
+    ],
+)
+def test_delegated_credential_is_stripped_ahead_of_extproc(
+    tmp_path, configured, stripped
+):
+    path = _write_config(tmp_path, ["model-a"])
+    document = yaml.safe_load(path.read_text())
+    document["listeners"][0]["api_keys"] = ["listener-key"]
+    if configured is not None:
+        document["global"] = {
+            "services": {"authz": {"delegated_credential": {"header": configured}}}
+        }
+    path.write_text(yaml.safe_dump(document))
+    config = parse_user_config(str(path))
+    output = tmp_path / "envoy.yaml"
+    generate_envoy_config_from_user_config(config, str(output))
+    rendered = yaml.safe_load(output.read_text())
+    hcm = rendered["static_resources"]["listeners"][0]["filter_chains"][0]["filters"][
+        0
+    ]["typed_config"]
+    filters = hcm["http_filters"]
+    extproc = next(
+        index
+        for index, item in enumerate(filters)
+        if item["name"] == "envoy.filters.http.ext_proc"
+    )
+    # A filter ahead of ext_proc removes every client copy, so the Router never
+    # reads one; the route-level removal runs only at the router filter.
+    strip = filters[extproc - 1]["typed_config"]["inline_code"]
+    for header in stripped:
+        assert f'request_handle:headers():remove("{header}")' in strip
+    removed = hcm["route_config"]["virtual_hosts"][0]["request_headers_to_remove"]
+    assert set(stripped) <= set(removed)
+
+
+def test_delegated_credential_header_must_be_a_plain_name(tmp_path):
+    path = _write_config(tmp_path, ["model-a"])
+    document = yaml.safe_load(path.read_text())
+    document["global"] = {
+        "services": {"authz": {"delegated_credential": {"header": 'x-a")..evil'}}}
+    }
+    path.write_text(yaml.safe_dump(document))
+    config = parse_user_config(str(path))
+    with pytest.raises(ValueError, match="plain header name"):
+        generate_envoy_config_from_user_config(config, str(tmp_path / "envoy.yaml"))
 
 
 IDENTITY_HEADERS = [

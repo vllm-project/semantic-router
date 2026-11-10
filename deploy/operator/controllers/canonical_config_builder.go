@@ -10,9 +10,8 @@ import (
 func (r *SemanticRouterReconciler) buildCanonicalConfig(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) (*routerconfig.CanonicalConfig, error) {
 	defaults := routerconfig.DefaultCanonicalGlobal()
 	catalog := defaults.ModelCatalog
-	catalog.Modules = operatorModelModules()
 	canonical := &routerconfig.CanonicalConfig{
-		Version: "v0.3",
+		Version: routerconfig.CanonicalConfigVersion,
 		Listeners: []routerconfig.Listener{
 			{
 				Name:    DefaultListenerName,
@@ -21,19 +20,18 @@ func (r *SemanticRouterReconciler) buildCanonicalConfig(ctx context.Context, sr 
 				Timeout: "300s",
 			},
 		},
-		Routing: routerconfig.CanonicalRouting{
+		Recipes: []routerconfig.CanonicalRecipe{{
+			Name: string(routerconfig.DefaultRecipeName),
 			Signals: routerconfig.CanonicalSignals{
 				Domains: []routerconfig.Category{
 					{
-						CategoryMetadata: routerconfig.CategoryMetadata{
-							Name:           "general",
-							Description:    "General queries",
-							MMLUCategories: []string{"other"},
-						},
+						Name:        "general",
+						Description: "General queries",
+						Labels:      []string{"other"},
 					},
 				},
 			},
-		},
+		}},
 		Providers: routerconfig.CanonicalProviders{
 			Defaults: routerconfig.CanonicalProviderDefaults{},
 			Models:   []routerconfig.CanonicalProviderModel{},

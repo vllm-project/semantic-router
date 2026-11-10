@@ -149,22 +149,14 @@ func isMatchAllCombination(op string, root bool) bool {
 }
 
 // validateRuleOperatorContracts normalizes and validates every composite
-// rule-tree operator reachable from a routing profile: decision rule trees
-// and complexity-signal composer trees. It runs before every other rule-tree
-// consuming validator so they all observe the canonical form.
+// rule-tree operator of a routing profile's decision rule trees. It runs
+// before every other rule-tree consuming validator so they all observe the
+// canonical form.
 func validateRuleOperatorContracts(cfg *RouterConfig) error {
 	for i := range cfg.Decisions {
 		decision := &cfg.Decisions[i]
 		if err := normalizeRuleOperator(&decision.Rules, "rules", true); err != nil {
 			return fmt.Errorf("decision %q: %w", decision.Name, err)
-		}
-	}
-	for _, rule := range cfg.ComplexityRules {
-		if rule.Composer == nil {
-			continue
-		}
-		if err := normalizeRuleOperator(rule.Composer, "composer", true); err != nil {
-			return fmt.Errorf("complexity rule %q: %w", rule.Name, err)
 		}
 	}
 	return nil

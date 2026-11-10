@@ -83,8 +83,8 @@ func setupValkeyMemoryIntegration(t *testing.T) (*ValkeyStore, *glide.Client) {
 		ValkeyConfig: vc,
 		Enabled:      true,
 		EmbeddingConfig: &EmbeddingConfig{
-			Provider: storageMemoryVectors(),
-			Model:    EmbeddingModelQwen3,
+			Provider:   storageMemoryVectors(),
+			Deployment: "qwen3-embedding",
 		},
 	})
 	if err != nil {

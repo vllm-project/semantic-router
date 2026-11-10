@@ -2,7 +2,6 @@ package modelservice
 
 import (
 	"encoding/json"
-	"fmt"
 	"maps"
 	"net/http"
 	"slices"
@@ -69,104 +68,66 @@ func (f questionFailure) answer(task *bundleTask, responses []Response) {
 }
 
 // remotePlan is how a fused task went in one System One call: the call's
-// body, the task's state it asked as the request's own, and the states it
-// left out because it asked nothing else about them.
+// body and the task's states it asked about.
 type remotePlan struct {
-	body    api.DecisionRequest
-	own     int
-	skipped map[int]bool
+	body  api.DecisionRequest
+	asked []*fusedState
 }
 
 func sentAs(task *bundleTask) remotePlan {
-	return remotePlan{body: *task.task.Decisions}
+	return remotePlan{body: *task.task.Decisions, asked: task.decision.states}
 }
 
-// without is the plan that asks every question of p but id. ok is false when
-// p does not ask id or asks nothing else. When the request's own state was
-// asked only id, the first of its further states takes its place.
-func (p remotePlan) without(task *bundleTask, id string) (remotePlan, bool) {
-	rest := remotePlan{body: p.body, own: p.own, skipped: maps.Clone(p.skipped)}
-	if rest.skipped == nil {
-		rest.skipped = make(map[int]bool)
+// questions is what p asks about one of its states.
+func (p remotePlan) questions(state *fusedState) map[string]api.Question {
+	if p.body.States == nil {
+		return p.body.Questions
 	}
-	var asked bool
-	rest.body.Questions, asked = dropQuestion(p.body.Questions, id)
-	states := make(map[string]api.DecisionState)
-	if p.body.States != nil {
-		for name, state := range *p.body.States {
-			questions, dropped := dropQuestion(state.Questions, id)
-			asked = asked || dropped
-			if len(questions) == 0 {
-				rest.skipped[task.stateIndex(name)] = true
-				continue
-			}
-			state.Questions = questions
-			states[name] = state
+	return (*p.body.States)[state.name].Questions
+}
+
+// without is the plan that asks every question of p but id, about the states
+// it asks anything else about: a standard request about one of them, a
+// batch about several. ok is false when p does not ask id or asks nothing
+// else.
+func (p remotePlan) without(id string) (remotePlan, bool) {
+	rest := make(map[*fusedState]map[string]api.Question, len(p.asked))
+	var asked []*fusedState
+	dropped := false
+	for _, state := range p.asked {
+		questions, found := dropQuestion(p.questions(state), id)
+		dropped = dropped || found
+		if len(questions) > 0 {
+			rest[state] = questions
+			asked = append(asked, state)
 		}
 	}
-	if !asked {
+	if !dropped || len(asked) == 0 {
 		return p, false
 	}
-	if len(rest.body.Questions) == 0 {
-		names := slices.Sorted(maps.Keys(states))
-		if len(names) == 0 {
-			return p, false
-		}
-		rest.skipped[p.own] = true
-		promoted := states[names[0]]
-		rest.body.State, rest.body.Questions = promoted.State, promoted.Questions
-		rest.body.Images, rest.body.Videos = promoted.Images, promoted.Videos
-		rest.own = task.stateIndex(names[0])
-		delete(states, names[0])
-	}
-	rest.body.States = nil
-	if len(states) > 0 {
-		rest.body.States = &states
-	}
-	return rest, true
+	body := decisionsAbout(p.body, asked, func(state *fusedState) map[string]api.Question { return rest[state] })
+	return remotePlan{body: body, asked: asked}, true
 }
 
 // decode reads the answers of a call made with p about each of the task's
 // states; a state p left out has none.
 func (p remotePlan) decode(task *bundleTask, status int, data []byte) ([]Response, error) {
-	body, err := decodeSystemOneBody(status, data)
+	body, err := decodeSystemOneBody(status, data, p.body.States != nil)
+	if err != nil {
+		return nil, err
+	}
+	answered, err := decodeStates(body, p.asked)
 	if err != nil {
 		return nil, err
 	}
 	responses := make([]Response, len(task.decision.states))
 	for index, state := range task.decision.states {
-		switch {
-		case p.skipped[index]:
-			responses[index] = Response{Model: body.Model, Answers: make(map[string]Answer)}
-		case index == p.own:
-			responses[index] = decodeResponse(body, state.request.Questions)
-		default:
-			var entry api.DecisionStateResponse
-			found := false
-			if body.States != nil {
-				entry, found = (*body.States)[state.name]
-			}
-			if !found {
-				return nil, fmt.Errorf("%w: the System One response has no answers about state %q", ErrFailed, state.name)
-			}
-			responses[index] = decodeResponse(api.DecisionResponse{
-				Model: entry.Model, Answers: entry.Answers, Sets: entry.Sets, Spans: entry.Spans,
-				Thresholds: entry.Thresholds, SpanHeads: entry.SpanHeads, Usage: entry.Usage,
-			}, state.request.Questions)
+		responses[index] = Response{Model: body.Model, Answers: make(map[string]Answer)}
+		if at := slices.Index(p.asked, state); at >= 0 {
+			responses[index] = answered[at]
 		}
 	}
 	return responses, nil
-}
-
-// stateIndex is the index of the task's state a request names name; the
-// request's own state is "".
-func (t *bundleTask) stateIndex(name string) int {
-	for index, state := range t.decision.states {
-		if state.name == name {
-			return index
-		}
-	}
-	return -1
 }
 
 func dropQuestion(questions map[string]api.Question, id string) (map[string]api.Question, bool) {

@@ -15,8 +15,7 @@ translation:
 ## 配置最小绑定
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   defaults:
     model: production
@@ -27,8 +26,8 @@ providers:
         - name: openai-primary
           provider: openai
           auth: {api_key_env: OPENAI_API_KEY}
-
-routing: {}
+recipes:
+  - name: default
 ```
 
 `production` 是本地别名。Router 会从 `catalog: openai/gpt-5.6-sol` 解析 canonical card 和 OpenAI 专用映射；不要在 YAML 中重复其推理定义。
@@ -42,7 +41,7 @@ routing: {}
 模型卡根据[固定版本的权重配置](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/resolve/262ae6830934f3512211081b8a3f16425b93a239/config.json)记录 1,048,576 tokens 上下文窗口；MiniMax API 映射单独记录该服务的 1,000,000 tokens 限制。
 
 ```yaml
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: flash
@@ -51,17 +50,18 @@ providers:
         - name: primary
           provider: minimax
           auth: {api_key_env: MINIMAX_API_KEY}
-routing:
-  decisions:
-    - name: flash_default
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: flash
-          use_reasoning: true
-          reasoning_effort: high
+recipes:
+  - name: default
+    decisions:
+      - name: flash_default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: flash
+            use_reasoning: true
+            reasoning_effort: high
 ```
 
 模型采用 adaptive thinking，支持 `low`、`medium`、`high`、`xhigh`、`max` 五档，目录默认档位为 `max`。关闭推理、选择 `reasoning_mode: enabled` 或设置 `reasoning_effort: none` 会被拒绝。Router 向 MiniMax 发送顶层 effort 字段。[官方 API](https://platform.minimax.io/docs/api-reference/text-openai-api) 支持 1,000,000 tokens 上下文，以及包含思考内容在内的最多 524,288 output tokens。API 忽略 `temperature` 和 `top_p` 的采样调节，固定使用 1 和 0.95；不支持 `service_tier`。工具调用对话回传 assistant 历史时，应保留 `reasoning_content` 和 tool-call ID。
@@ -101,8 +101,10 @@ providers:
 你可以添加本地标签、描述、能力或评估，而无需分叉内置 card。覆盖必须使用 canonical `catalog` ID，而不是本地别名：
 
 ```yaml
-routing:
-  modelCards:
+recipes:
+  - name: default
+providers:
+  models:
     - name: openai/gpt-5.6-sol
       tags: [production, approved]
       description: Approved for production reasoning traffic.

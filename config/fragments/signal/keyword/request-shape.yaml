@@ -1,0 +1,54 @@
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: many_questions
+          description: Prompts with many explicit questions.
+          operator: OR
+          method: regex
+          keywords: ['[?？]']
+          case_sensitive: false
+          count:
+            gte: 4
+        - name: at_most_one_question
+          description: Prompts with one or fewer explicit questions.
+          operator: OR
+          method: regex
+          keywords: ['[?？]']
+          case_sensitive: false
+          count:
+            lte: 1
+        - name: numbered_steps
+          description: Prompts that contain numbered list items such as "1. ..."
+          operator: OR
+          method: regex
+          keywords: ['(?m)^\s*\d+\.\s+']
+          case_sensitive: false
+        - name: first_then_flow
+          description: Prompts that express an ordered workflow.
+          operator: OR
+          method: regex
+          keywords: ['(?s)first.*then', '(?s)first.*next.*finally', '(?s)首先.*然后', '(?s)先.*再']
+          case_sensitive: false
+        - name: constraint_dense
+          description: Constraint language is dense, in matches per 1,000 characters.
+          operator: OR
+          keywords: ["under", "at most", "at least", "within", "no more than", "不超过", "至少", "最多"]
+          case_sensitive: false
+          density:
+            gt: 16
+        - name: format_directive_dense
+          description: Output-format directives are dense, in matches per 1,000 characters.
+          operator: OR
+          keywords: ["table", "bullet", "json", "markdown", "表格", "列表"]
+          case_sensitive: false
+          density:
+            gt: 16
+        - name: low_question_density
+          description: Prompts with very few questions for their length.
+          operator: OR
+          method: regex
+          keywords: ['[?？]']
+          case_sensitive: false
+          density:
+            lt: 10

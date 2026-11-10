@@ -103,7 +103,6 @@ func TestServiceUsesToolIntentAndRequestBudget(t *testing.T) {
 					TargetTokens: 120,
 				},
 			},
-			Scoring: Scoring{Method: "bm25"},
 		},
 		TokenCounter: HeuristicTokenCounter{},
 	})
@@ -205,31 +204,41 @@ func TestServiceProtectsTypedRAGByDefault(t *testing.T) {
 	}
 }
 
-func TestServiceProtectsTypedMemoryByDefault(t *testing.T) {
+// Memories the context plugin injects keep their own target policy: the
+// tool result under its call is compressed as memory, not as a tool output.
+func TestServiceCompressesInjectedMemoryByItsOwnPolicy(t *testing.T) {
 	content := strings.Repeat("personal memory evidence ", 300)
 	body := map[string]interface{}{
 		"messages": []interface{}{
 			map[string]interface{}{"role": "system", "content": "system"},
-			map[string]interface{}{"role": "user", "content": content},
+			map[string]interface{}{"role": "user", "content": "earlier question"},
+			map[string]interface{}{"role": "assistant", "tool_calls": []interface{}{map[string]interface{}{
+				"id": "memory_1", "type": "function", "function": map[string]interface{}{"name": "vsr_memory_context", "arguments": "{}"},
+			}}},
+			map[string]interface{}{"role": "tool", "tool_call_id": "memory_1", "content": content},
+			map[string]interface{}{"role": "assistant", "content": "earlier answer"},
 			map[string]interface{}{"role": "user", "content": "live question"},
 		},
 	}
-	ir := ParseRequestIR(body, Provenance{
-		MemoryMessageIndexes: map[int]struct{}{1: {}},
-	})
-	result := NewService().Apply(context.Background(), Request{
-		Request: ir,
-		Policy: Policy{
-			Mode: ModeAlways,
-			Targets: Targets{
-				History: TargetPolicy{Mode: TargetExtractive, MinTokens: 10, TargetTokens: 30},
-				Memory:  TargetPolicy{Mode: TargetPreserve},
+	apply := func(memory TargetMode) ServiceResult {
+		ir := ParseRequestIR(body, Provenance{MemoryToolCallIDs: map[string]struct{}{"memory_1": {}}})
+		return NewService().Apply(context.Background(), Request{
+			Request: ir,
+			Policy: Policy{
+				Mode: ModeAlways,
+				Targets: Targets{
+					ToolOutputs: TargetPolicy{Mode: TargetExtractive, MinTokens: 10, TargetTokens: 30},
+					Memory:      TargetPolicy{Mode: memory, MinTokens: 10, TargetTokens: 30},
+				},
 			},
-		},
-		TokenCounter: HeuristicTokenCounter{},
-	})
-	if result.Applied {
-		t.Fatal("protected memory content was compressed")
+			TokenCounter: HeuristicTokenCounter{},
+		})
+	}
+	if result := apply(TargetPreserve); result.Applied {
+		t.Fatal("preserved memory content was compressed as a tool output")
+	}
+	if result := apply(TargetExtractive); !result.Applied || result.Plan.Targets[0].Kind != TargetMemory {
+		t.Fatalf("memory content compressed as %+v", result.Plan.Targets)
 	}
 }
 

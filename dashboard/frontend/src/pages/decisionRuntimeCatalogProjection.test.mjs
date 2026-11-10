@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url))
 const generator = 'dashboard/frontend/scripts/generate-decision-runtime-catalog.py'
-const backendProjection = 'src/semantic-router/pkg/modelservice/decision_catalog.generated.json'
+const backendProjection = 'src/semantic-router/pkg/config/decision_catalog.generated.json'
 const releaseProjection = 'src/model-runtime/vllm_srun/registry/releases.generated.json'
 const projection = 'dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json'
 const runtime = 'src/model-runtime/vllm_srun/'
@@ -22,6 +22,9 @@ const sources = [
   'registry/tables/vela1.py',
   'registry/tables/omni.py',
   'families/vela2/request.py',
+  'families/vela2/family.py',
+  'families/vela2/package.py',
+  'families/vela3_shared.py',
   'systemone.py',
   'families/decision1/questions.py',
   'families/decision1/family.py',
@@ -71,6 +74,11 @@ describe('Decision catalog generation boundary', () => {
           runtime + 'systemone.py',
           '("choice", "noul", "score")',
           '("choice", "noul", "score", "span")',
+        ],
+        [
+          runtime + 'families/vela3_shared.py',
+          'SPAN_HEADS = ("router",)',
+          'SPAN_HEADS = ("broad",)',
         ],
       ]) {
         const path = join(fixture, file)

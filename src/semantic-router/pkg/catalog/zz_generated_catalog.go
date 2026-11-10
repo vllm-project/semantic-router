@@ -105875,7 +105875,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:38b073a10e11052333a0e3f3cb3db2b0fa95f063de74ea626e18257b5171de11",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -105965,7 +105965,7 @@ const builtInCatalogJSON = `{
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:38b073a10e11052333a0e3f3cb3db2b0fa95f063de74ea626e18257b5171de11",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -106058,7 +106058,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:38b073a10e11052333a0e3f3cb3db2b0fa95f063de74ea626e18257b5171de11",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -106170,7 +106170,7 @@ const builtInCatalogJSON = `{
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:38b073a10e11052333a0e3f3cb3db2b0fa95f063de74ea626e18257b5171de11",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -106240,7 +106240,7 @@ const builtInCatalogJSON = `{
         "private_deployment"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:38b073a10e11052333a0e3f3cb3db2b0fa95f063de74ea626e18257b5171de11",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -106318,6 +106318,27 @@ const builtInCatalogJSON = `{
         }
       ],
       "wire_format": "openai.responses.v1"
+    },
+    {
+      "capabilities": [
+        "image_generation"
+      ],
+      "default_base_path": "/v1",
+      "display_name": "OpenAI Images",
+      "id": "openai/images@1",
+      "operations": [
+        {
+          "id": "create",
+          "method": "POST",
+          "path": "/v1/images/generations"
+        },
+        {
+          "id": "list_models",
+          "method": "GET",
+          "path": "/v1/models"
+        }
+      ],
+      "wire_format": "openai.images.v1"
     },
     {
       "capabilities": [
@@ -108513,14 +108534,17 @@ const builtInCatalogJSON = `{
       },
       "protocols": [
         "openai/chat-completions@1",
-        "openai/responses@1"
+        "openai/responses@1",
+        "openai/images@1"
       ],
       "support_tier": "compatible",
       "supported_operations": [
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
-        "openai/responses@1#list_models"
+        "openai/responses@1#list_models",
+        "openai/images@1#create",
+        "openai/images@1#list_models"
       ]
     },
     {
@@ -108708,7 +108732,8 @@ const builtInCatalogJSON = `{
       },
       "protocols": [
         "openai/chat-completions@1",
-        "openai/responses@1"
+        "openai/responses@1",
+        "openai/images@1"
       ],
       "reasoning_transport": "top_level_effort",
       "support_tier": "native",
@@ -108716,7 +108741,9 @@ const builtInCatalogJSON = `{
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
-        "openai/responses@1#list_models"
+        "openai/responses@1#list_models",
+        "openai/images@1#create",
+        "openai/images@1#list_models"
       ]
     },
     {
@@ -111500,6 +111527,7 @@ const builtInCatalogJSON = `{
       "protocols": [
         "openai/chat-completions@1",
         "openai/responses@1",
+        "openai/images@1",
         "anthropic/messages@1"
       ],
       "support_tier": "runtime",
@@ -111508,6 +111536,8 @@ const builtInCatalogJSON = `{
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
         "openai/responses@1#list_models",
+        "openai/images@1#create",
+        "openai/images@1#list_models",
         "anthropic/messages@1#create",
         "anthropic/messages@1#list_models"
       ]

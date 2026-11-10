@@ -26,7 +26,7 @@ func routerGrounding(path string) (*looper.GroundingBackends, io.Closer, error) 
 	if owner.lease, err = owner.manager.Acquire(cfg); err != nil {
 		return nil, nil, errors.Join(err, owner.Close())
 	}
-	owner.classifiers, err = classification.BuildRecipeClassifiers(cfg, nil, nil, nil,
+	owner.classifiers, err = classification.BuildRecipeClassifiers(cfg,
 		classification.RecipeRuntimeOptions{Runtime: serving.New(owner.lease, nil)})
 	if err == nil {
 		err = owner.classifiers.InitializeRuntime()

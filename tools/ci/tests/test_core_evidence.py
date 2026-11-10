@@ -64,13 +64,13 @@ class RequiredInventoryTests(unittest.TestCase):
         ):
             execute_tool_units(Path(directory), {})
 
-    def test_registry_builds_model_selection_tools_with_the_router_module(
+    def test_registry_builds_repository_tools_with_the_router_module(
         self,
     ) -> None:
         tools = repository_go_tools()
         for name, source in (
-            ("ml-selection-validate", "ml_model_selection/validate.go"),
-            ("selector-parity", "ml_model_selection/selectorparity/main.go"),
+            ("systemone-judge-requests", "judge_requests/main.go"),
+            ("shadow-dataset", "shadow-dataset/main.go"),
         ):
             sources, flags = tools[name]
             self.assertEqual(flags, [])

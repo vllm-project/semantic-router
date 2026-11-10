@@ -1011,10 +1011,10 @@ spec:
                 type: object
               config:
                 description: |-
-                  Configuration overrides merged into the canonical v0.3 config.yaml.
+                  Configuration overrides merged into the canonical v0.5 config.yaml.
                   Router-wide runtime overrides land under config.global.router/services/stores/
-                  integrations/model_catalog, with model-backed modules nested under
-                  config.global.model_catalog.modules. Provider defaults land under
+                  integrations/model_catalog, and the default plugins under
+                  config.global.plugins. Provider defaults land under
                   config.providers.defaults.
                 properties:
                   api:
@@ -1024,14 +1024,8 @@ spec:
                         description: BatchClassificationConfig defines batch classification
                           configuration
                         properties:
-                          concurrency_threshold:
-                            default: 5
-                            type: integer
                           max_batch_size:
                             default: 100
-                            type: integer
-                          max_concurrency:
-                            default: 8
                             type: integer
                           metrics:
                             description: BatchMetricsConfig defines batch classification
@@ -1067,205 +1061,18 @@ spec:
                         type: object
                     type: object
                   classifier:
-                    description: Classifier configuration
-                    properties:
-                      category_model:
-                        description: CategoryModelConfig defines category model configuration
-                        properties:
-                          category_mapping_path:
-                            type: string
-                          model_id:
-                            description: |-
-                              ModelID binds the domain classifier to one model. Deprecated: bind domain
-                              in model_bindings instead.
-                            type: string
-                          threshold:
-                            description: Classification threshold (0.0-1.0). Stored
-                              as string to avoid float precision issues.
-                            pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
-                            type: string
-                          use_cpu:
-                            type: boolean
-                        type: object
-                      pii_model:
-                        description: |-
-                          PIIModelConfig defines PII model configuration.
-
-                          The contract rule sits on the consumer, as on ComplexityModelConfig: the
-                          shared backend block lists every contract any consumer reads, and each
-                          consumer narrows it to what it can parse, so a mismatch is refused at
-                          admission instead of by the router at load.
-                        properties:
-                          backend:
-                            description: |-
-                              Backend names a remote token classifier speaking token_spans.v1. Its
-                              absence keeps local PII inference. The local selectors this replaces are
-                              model_id and use_cpu above. Explicit token windows are only supported by
-                              the local model.
-                            properties:
-                              contract:
-                                description: |-
-                                  Contract is the response shape the signal reads. Complexity reads two -
-                                  score.v1, one regression number interpreted through each rule's
-                                  boundaries, and label_distribution.v1, hard/easy/medium probabilities -
-                                  so the router requires it there rather than guessing per request. PII
-                                  reads token_spans.v1, entity spans with code-point offsets. Prompt guard
-                                  http_chat reads label_decision.v1, a verdict without invented probability.
-                                enum:
-                                - score.v1
-                                - label_distribution.v1
-                                - token_spans.v1
-                                - label_decision.v1
-                                type: string
-                              deadline_ms:
-                                description: DeadlineMs bounds one remote call. Defaults
-                                  to the router's value.
-                                minimum: 1
-                                type: integer
-                              model:
-                                description: Model is the name of an entry in the
-                                  external model catalog.
-                                minLength: 1
-                                type: string
-                              protocol:
-                                description: Protocol is how the remote is called.
-                                enum:
-                                - http_classify
-                                - http_chat
-                                type: string
-                            required:
-                            - model
-                            - protocol
-                            type: object
-                          max_sequence_length:
-                            description: |-
-                              MaxSequenceLength is the total tokenized input budget, including special
-                              tokens. Omission or zero preserves the 512-token legacy limit.
-                            minimum: 0
-                            type: integer
-                          model_id:
-                            description: |-
-                              ModelID binds the PII classifier to one model. Deprecated: bind pii in
-                              model_bindings instead.
-                            type: string
-                          on_error:
-                            description: |-
-                              OnError selects what a PII backend failure, or a provider-declared
-                              truncation, does to the rule that consumed it: allow (default) treats the
-                              content as not matching, block matches it as classification_error.
-                            enum:
-                            - allow
-                            - block
-                            type: string
-                          pii_mapping_path:
-                            type: string
-                          threshold:
-                            description: Detection threshold (0.0-1.0). Stored as
-                              string to avoid float precision issues.
-                            pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
-                            type: string
-                          use_cpu:
-                            type: boolean
-                          window:
-                            description: |-
-                              Window scans original content tokens with explicit overlap. Omission or
-                              null leaves window selection unchanged; no CRD defaults are injected.
-                            nullable: true
-                            properties:
-                              overlap:
-                                description: Overlap counts content tokens shared
-                                  by consecutive windows.
-                                minimum: 0
-                                type: integer
-                              size:
-                                description: Size is the inference window budget,
-                                  including special tokens.
-                                minimum: 1
-                                type: integer
-                            required:
-                            - size
-                            type: object
-                            x-kubernetes-validations:
-                            - message: window.overlap must be smaller than window.size
-                              rule: '!has(self.overlap) || self.overlap < self.size'
-                        type: object
-                        x-kubernetes-validations:
-                        - message: PII reads token_spans.v1 only; omit backend.contract
-                            or set it to token_spans.v1
-                          rule: '!has(self.backend) || !has(self.backend.contract)
-                            || self.backend.contract == ''token_spans.v1'''
-                        - message: max_sequence_length applies to the local model;
-                            omit it with backend
-                          rule: '!has(self.max_sequence_length) || self.max_sequence_length
-                            == 0 || !has(self.backend)'
-                        - message: window applies to the local model; omit it with
-                            backend
-                          rule: '!has(self.window) || !has(self.backend)'
-                        - message: window.size must not exceed max_sequence_length
-                            (512 when omitted or zero)
-                          rule: '!has(self.window) || self.window.size <= (has(self.max_sequence_length)
-                            && self.max_sequence_length > 0 ? self.max_sequence_length
-                            : 512)'
+                    description: |-
+                      Classifier is removed: the decision model answers domain and pii rules,
+                      and a threshold is the rule's predicate. A resource that sets it is
+                      refused.
                     type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   complexity_model:
                     description: |-
-                      ComplexityModel says how the complexity signal produces its score.
-                      Absent, the signal scores locally against each rule's hard/easy
-                      candidates. With a backend, a remote model produces the score and the
-                      candidates are never read. Mirrors
-                      global.model_catalog.modules.complexity in the router config.
-                    properties:
-                      backend:
-                        description: |-
-                          Backend names a remote scoring model. Its absence keeps local prototype
-                          scoring; when set, the signal never reads the rules' hard/easy
-                          candidates. It sits on the module rather than on a rule because routing
-                          signals are replaced wholesale per recipe, so a per-rule backend would
-                          vanish under any recipe that did not repeat it.
-                        properties:
-                          contract:
-                            description: |-
-                              Contract is the response shape the signal reads. Complexity reads two -
-                              score.v1, one regression number interpreted through each rule's
-                              boundaries, and label_distribution.v1, hard/easy/medium probabilities -
-                              so the router requires it there rather than guessing per request. PII
-                              reads token_spans.v1, entity spans with code-point offsets. Prompt guard
-                              http_chat reads label_decision.v1, a verdict without invented probability.
-                            enum:
-                            - score.v1
-                            - label_distribution.v1
-                            - token_spans.v1
-                            - label_decision.v1
-                            type: string
-                          deadline_ms:
-                            description: DeadlineMs bounds one remote call. Defaults
-                              to the router's value.
-                            minimum: 1
-                            type: integer
-                          model:
-                            description: Model is the name of an entry in the external
-                              model catalog.
-                            minLength: 1
-                            type: string
-                          protocol:
-                            description: Protocol is how the remote is called.
-                            enum:
-                            - http_classify
-                            - http_chat
-                            type: string
-                        required:
-                        - model
-                        - protocol
-                        type: object
+                      ComplexityModel is removed: the decision model answers complexity
+                      rules. A resource that sets it is refused.
                     type: object
-                    x-kubernetes-validations:
-                    - message: 'complexity reads two response shapes, so backend.contract
-                        must be stated: score.v1 or label_distribution.v1'
-                      rule: '!has(self.backend) || has(self.backend.contract)'
-                    - message: complexity reads score.v1 or label_distribution.v1;
-                        token_spans.v1 is the PII contract
-                      rule: '!has(self.backend) || !has(self.backend.contract) ||
-                        self.backend.contract in [''score.v1'', ''label_distribution.v1'']'
+                    x-kubernetes-preserve-unknown-fields: true
                   complexity_rules:
                     description: Complexity rules for complexity-aware routing
                     items:
@@ -1558,6 +1365,14 @@ spec:
                         name:
                           description: Name is the unique identifier for this decision
                           type: string
+                        output:
+                          description: |-
+                            Output declares the media this decision's answers carry, such as
+                            {kind: image, action: generate}; without it the decision answers in
+                            text. The router checks it against the referenced models when it loads
+                            the configuration.
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                         plugins:
                           description: Plugins contains policy configurations applied
                             after rule matching
@@ -1658,25 +1473,26 @@ spec:
                                     description: Type specifies the signal or projection
                                       type referenced by this condition.
                                     enum:
-                                    - keyword
-                                    - embedding
+                                    - authz
+                                    - complexity
+                                    - context
+                                    - conversation
                                     - domain
                                     - fact_check
-                                    - user_feedback
-                                    - reask
-                                    - preference
-                                    - language
-                                    - context
-                                    - structure
-                                    - complexity
-                                    - modality
-                                    - authz
+                                    - hallucination
+                                    - input_modality
                                     - jailbreak
+                                    - keyword
+                                    - language
+                                    - metadata
+                                    - modality
                                     - pii
-                                    - kb
-                                    - conversation
-                                    - event
                                     - projection
+                                    - refusal
+                                    - safety
+                                    - systemone
+                                    - turn_relation
+                                    - user_feedback
                                     type: string
                                 required:
                                 - name
@@ -1710,181 +1526,24 @@ spec:
                       type: object
                     type: array
                   embedding_models:
-                    description: Embedding models configuration (qwen3, gemma, mmbert)
-                    properties:
-                      embedding_config:
-                        description: Embedding configuration for embedding-based classification
-                        properties:
-                          backend:
-                            description: |-
-                              Backend selects the embedding provider backend: the built-in model
-                              runtime (the default) or an external OpenAI-compatible endpoint.
-                            enum:
-                            - model_runtime
-                            - openai_compatible
-                            type: string
-                          enable_soft_matching:
-                            default: false
-                            description: EnableSoftMatching allows below-threshold
-                              matches when no rule meets its threshold.
-                            type: boolean
-                          min_score_threshold:
-                            default: "0.5"
-                            description: MinScoreThreshold for matching (0.0-1.0).
-                              Stored as string to avoid float precision issues.
-                            pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
-                            type: string
-                          model_type:
-                            description: |-
-                              ModelType specifies which embedding model to use
-                              Options: "qwen3" (1024-dim, 32K context), "gemma" (768-dim, 8K context), "mmbert" (64-768-dim, multilingual), "remote" (external provider)
-                            enum:
-                            - qwen3
-                            - gemma
-                            - mmbert
-                            - remote
-                            type: string
-                          preload_embeddings:
-                            default: true
-                            description: PreloadEmbeddings enables precomputing candidate
-                              embeddings at startup
-                            type: boolean
-                          target_dimension:
-                            description: |-
-                              TargetDimension is the embedding dimension to use (default: 768)
-                              For mmBERT, supported local dimensions are 64, 128, 256, 512, 768.
-                              External providers may use other positive dimensions such as 1024, 1536, or 3072.
-                            minimum: 1
-                            type: integer
-                          target_layer:
-                            description: |-
-                              TargetLayer controls mmBERT early exit and is used only when ModelType is "mmbert".
-                              Lower layers reduce encoder work but may reduce quality; layer 22 uses the full encoder depth.
-                              Evaluate the latency and quality trade-off on representative deployment data.
-                            enum:
-                            - 3
-                            - 6
-                            - 11
-                            - 22
-                            type: integer
-                        type: object
-                      endpoint:
-                        description: |-
-                          Endpoint configures an external embedding provider endpoint.
-                          The API key should be injected into the semantic router pod environment
-                          and referenced by APIKeyEnv rather than stored directly in the CR.
-                        properties:
-                          api_key_env:
-                            description: APIKeyEnv names the environment variable
-                              containing the provider API key.
-                            type: string
-                          base_url:
-                            description: BaseURL is the base URL for the embedding
-                              endpoint, typically ending in /v1.
-                            type: string
-                          dimensions:
-                            description: Dimensions requests a provider-side output
-                              dimension when supported.
-                            minimum: 1
-                            type: integer
-                          max_response_bytes:
-                            description: MaxResponseBytes caps the size of each embedding
-                              response body.
-                            format: int64
-                            minimum: 0
-                            type: integer
-                          max_retries:
-                            description: MaxRetries is the maximum number of retry
-                              attempts for embedding calls.
-                            minimum: 0
-                            type: integer
-                          model:
-                            description: Model is the embedding model name sent to
-                              the external provider.
-                            type: string
-                          timeout_seconds:
-                            description: TimeoutSeconds is the request timeout for
-                              embedding calls.
-                            minimum: 0
-                            type: integer
-                        type: object
-                      mmbert_model_path:
-                        description: |-
-                          Path to mmBERT 2D Matryoshka embedding model directory
-                          Supports layer early exit (3/6/11/22) and dimension reduction (64-768)
-                        type: string
-                      qwen3_model_path:
-                        description: |-
-                          Path to Qwen3-Embedding-0.6B model directory
-                          Qwen3 provides 32K context and high quality embeddings (1024 dimensions)
-                        type: string
-                      use_cpu:
-                        default: true
-                        description: 'Use CPU for inference (default: true)'
-                        type: boolean
+                    description: |-
+                      EmbeddingModels is removed: an embedding model is a model deployment,
+                      and global.model_catalog.embeddings.default names the one stores embed
+                      with (vela-embedding by default). A resource that sets it is refused.
                     type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  entrypoints:
+                    description: |-
+                      Entrypoints contains canonical entrypoints[]: the public model names of
+                      each recipe. Several recipes need them, with exactly one marked
+                      default: true.
+                    x-kubernetes-preserve-unknown-fields: true
                   external_models:
                     description: |-
-                      ExternalModels declares the remote models that classifier backends
-                      (`classifier.pii.backend.model`, `complexity_model.backend.model`) and
-                      the prompt guard protocol refer to by name. Mirrors
-                      global.model_catalog.external[] in the router config field for field;
-                      the router's own validator decides whether a backend resolves against it.
-                    items:
-                      description: |-
-                        ExternalModelConfig is one entry of global.model_catalog.external[]: a
-                        remote model a classifier backend or the prompt guard can name. Field names
-                        are the router's YAML keys so the generic typed conversion carries them
-                        unchanged.
-                      properties:
-                        llm_endpoint:
-                          description: Endpoint is where the remote model is reached.
-                          properties:
-                            address:
-                              minLength: 1
-                              type: string
-                            port:
-                              maximum: 65535
-                              minimum: 1
-                              type: integer
-                            protocol:
-                              enum:
-                              - http
-                              - https
-                              type: string
-                          required:
-                          - address
-                          - port
-                          type: object
-                        llm_model_name:
-                          description: |-
-                            ModelName is the model identifier the remote service expects, and the
-                            value a token_spans.v1 envelope's model member must equal.
-                          minLength: 1
-                          type: string
-                        llm_timeout_seconds:
-                          description: TimeoutSeconds bounds one call when the backend
-                            block sets no deadline.
-                          minimum: 1
-                          type: integer
-                        model_role:
-                          description: |-
-                            ModelRole is what the model is used for; classifier backends require
-                            "classification", the prompt guard protocol requires "guardrail".
-                          minLength: 1
-                          type: string
-                        name:
-                          description: Name is the catalog name a backend block refers
-                            to in its model field.
-                          minLength: 1
-                          type: string
-                      required:
-                      - llm_endpoint
-                      - llm_model_name
-                      - model_role
-                      - name
-                      type: object
-                    type: array
+                      ExternalModels is removed: a remote model is a model deployment with
+                      provider openai_chat, openai_embeddings or systemone. A resource that
+                      sets it is refused.
+                    x-kubernetes-preserve-unknown-fields: true
                   model_admission:
                     description: |-
                       ModelAdmission contains canonical global.model_catalog.admission budgets.
@@ -1894,25 +1553,32 @@ spec:
                   model_bindings:
                     description: |-
                       ModelBindings contains canonical global.model_catalog.bindings: each key
-                      is a signal type whose rules share one answer (domain, jailbreak, pii,
-                      fact_check, user_feedback, modality, hallucination, preference, reask),
-                      and each value names the model_deployments entry that answers it. A rule
+                      is an application signal type whose rules share one answer (domain,
+                      fact_check, user_feedback, jailbreak, safety, pii, hallucination,
+                      refusal, turn_relation, complexity, modality), and each value names the
+                      model_deployments entry that answers it. A rule
                       that asks its own question names its deployment on the rule. A signal no
-                      binding names follows decision_model; routing.model_bindings binds in
-                      the routing scope and wins over these.
+                      binding names follows decision_model; recipes[].model_bindings binds in
+                      its recipe and wins over these.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   model_deployments:
                     description: |-
                       ModelDeployments contains canonical global.model_catalog.deployments.
                       The router validates provider, device, precision and task compatibility.
-                      A remote deployment (provider systemone, openai_embeddings, classify,
-                      openai_chat or rerank) takes a connection block: endpoint, model, auth,
+                      A remote deployment (provider systemone, openai_embeddings, classify or
+                      openai_chat) takes a connection block: endpoint, model, auth,
                       headers, timeout_ms, max_retries, tls, limits and capabilities. Its key
                       never goes in the resource: auth.api_key_env names a spec.env variable
                       that valueFrom.secretKeyRef fills from a Secret. The operator mounts no
                       Secret into the Pod, so auth.api_key_file is not available.
                     type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  models:
+                    description: |-
+                      Models contains the facts of providers.models[] entries (capabilities,
+                      modalities, description, context_window_size, ...), by name; the
+                      operator writes each entry's transport from vllmEndpoints.
                     x-kubernetes-preserve-unknown-fields: true
                   observability:
                     description: Observability configuration
@@ -1968,136 +1634,32 @@ spec:
                             type: object
                         type: object
                     type: object
+                  plugins:
+                    description: |-
+                      Plugins contains canonical global.plugins: the default plugins of every
+                      decision, which a recipe's and a decision's plugins override.
+                    x-kubernetes-preserve-unknown-fields: true
                   prompt_guard:
-                    description: Prompt guard configuration
-                    properties:
-                      backend:
-                        description: Backend selects a named external classifier and
-                          its typed result contract.
-                        properties:
-                          contract:
-                            description: |-
-                              Contract is the response shape the signal reads. Complexity reads two -
-                              score.v1, one regression number interpreted through each rule's
-                              boundaries, and label_distribution.v1, hard/easy/medium probabilities -
-                              so the router requires it there rather than guessing per request. PII
-                              reads token_spans.v1, entity spans with code-point offsets. Prompt guard
-                              http_chat reads label_decision.v1, a verdict without invented probability.
-                            enum:
-                            - score.v1
-                            - label_distribution.v1
-                            - token_spans.v1
-                            - label_decision.v1
-                            type: string
-                          deadline_ms:
-                            description: DeadlineMs bounds one remote call. Defaults
-                              to the router's value.
-                            minimum: 1
-                            type: integer
-                          model:
-                            description: Model is the name of an entry in the external
-                              model catalog.
-                            minLength: 1
-                            type: string
-                          protocol:
-                            description: Protocol is how the remote is called.
-                            enum:
-                            - http_classify
-                            - http_chat
-                            type: string
-                        required:
-                        - model
-                        - protocol
-                        type: object
-                      enabled:
-                        default: true
-                        type: boolean
-                      jailbreak_mapping_path:
-                        type: string
-                      max_sequence_length:
-                        description: |-
-                          MaxSequenceLength limits the total tokenized input, including special
-                          tokens. Omission or zero retains the 512-token budget. The model loader
-                          validates the requested budget against the loaded model's capacity.
-                        minimum: 0
-                        type: integer
-                      model_id:
-                        description: |-
-                          ModelID binds the guard to one model; empty runs the deployment
-                          model_bindings names for jailbreak, else the decision model. Deprecated:
-                          bind jailbreak in model_bindings instead.
-                        type: string
-                      on_error:
-                        description: |-
-                          OnError selects what a prompt-guard classifier failure does to the rule
-                          that failed to evaluate. "allow" (the default) tolerates the failure and
-                          treats the content as not matching; "block" treats it as a positive
-                          detection, because an inference failure means the content could not be
-                          verified safe. Without this field on the CRD the setting is pruned by the
-                          API server and an operator-managed deployment silently fails open.
-                        enum:
-                        - allow
-                        - block
-                        type: string
-                      positive_labels:
-                        description: |-
-                          PositiveLabels lists the jailbreak_mapping labels that count as unsafe,
-                          for a custom backend whose positive class isn't named "jailbreak"
-                          (e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset.
-                        items:
-                          type: string
-                        type: array
-                      threshold:
-                        description: |-
-                          Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float
-                          precision issues; empty takes the threshold of the deployment that
-                          answers the guard.
-                        pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
-                        type: string
-                      use_cpu:
-                        default: true
-                        type: boolean
-                      window:
-                        description: |-
-                          Window enables explicit scanning of all input tokens. Omission or null
-                          keeps whole-input inference. Only the local model supports it.
-                        nullable: true
-                        properties:
-                          overlap:
-                            description: Overlap counts content tokens shared by consecutive
-                              windows.
-                            minimum: 0
-                            type: integer
-                          size:
-                            description: Size is the inference window budget, including
-                              special tokens.
-                            minimum: 1
-                            type: integer
-                        required:
-                        - size
-                        type: object
-                        x-kubernetes-validations:
-                        - message: window.overlap must be smaller than window.size
-                          rule: '!has(self.overlap) || self.overlap < self.size'
+                    description: |-
+                      PromptGuard is removed: the decision model answers jailbreak rules, and
+                      a threshold is a jailbreak rule's predicate. A resource that sets it is
+                      refused.
                     type: object
-                    x-kubernetes-validations:
-                    - message: max_sequence_length applies to the local model; omit
-                        it with backend
-                      rule: '!has(self.max_sequence_length) || self.max_sequence_length
-                        == 0 || !has(self.backend)'
-                    - message: window applies to the local model; omit it with backend
-                      rule: '!has(self.window) || !has(self.backend)'
-                    - message: window.size must not exceed max_sequence_length (512
-                        when omitted or zero)
-                      rule: '!has(self.window) || self.window.size <= (has(self.max_sequence_length)
-                        && self.max_sequence_length > 0 ? self.max_sequence_length
-                        : 512)'
+                    x-kubernetes-preserve-unknown-fields: true
                   reasoning_effort:
                     description: |-
                       ReasoningEffort is the default reasoning effort for model bindings that do
                       not select a different effort. The selected model family validates the
                       value because built-in and custom families may expose different ladders.
                     type: string
+                  recipes:
+                    description: |-
+                      Recipes contains canonical recipes[]: each recipe's signals,
+                      projections, decisions, model_bindings and plugins. It is preserved as
+                      objects so the operator passes the router-owned contract through
+                      without lagging behind every router schema addition. The fields a
+                      recipe named default sets replace the operator's default recipe's.
+                    x-kubernetes-preserve-unknown-fields: true
                   response_cache:
                     description: Response cache configuration.
                     properties:
@@ -2114,21 +1676,35 @@ spec:
                         - qdrant
                         - hybrid
                         type: string
-                      embedding_model:
-                        default: mmbert
+                      embedding:
                         description: |-
-                          EmbeddingModel specifies which embedding model to use for semantic similarity
-                          Options: "mmbert" (default), "bert", "qwen3", "gemma"
-                        enum:
-                        - bert
-                        - qwen3
-                        - gemma
-                        - mmbert
+                          Embedding names the deployment semantic reuse embeds with, and the
+                          width of its vectors.
+                        properties:
+                          deployment:
+                            description: |-
+                              Deployment is a global.model_catalog deployment; without it the store
+                              embeds with embeddings.default.
+                            type: string
+                          dimension:
+                            description: |-
+                              Dimension is the width of the vectors: the deployment's own, or a
+                              narrower one its model serves.
+                            minimum: 1
+                            type: integer
+                        type: object
+                      embedding_model:
+                        description: |-
+                          EmbeddingModel is removed: embedding.deployment names the deployment
+                          semantic reuse embeds with, embeddings.default without one. A resource
+                          that sets it is refused.
                         type: string
                       enabled:
                         default: true
-                        description: Enabled controls whether semantic caching is
-                          active
+                        description: |-
+                          Enabled, on by default, gives a configuration without decisions a
+                          response_cache plugin in config.plugins that caches every request; off,
+                          it turns the decisions' response_cache plugins off.
                         type: boolean
                       eviction_policy:
                         default: fifo
@@ -2570,8 +2146,9 @@ spec:
                         type: object
                       similarity_threshold:
                         default: "0.8"
-                        description: Similarity threshold for cache hits (0.0-1.0).
-                          Stored as string to avoid float precision issues.
+                        description: |-
+                          SimilarityThreshold (0.0-1.0) is the min_similarity of the response_cache
+                          plugin Enabled adds. Stored as string to avoid float precision issues.
                         pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
                         type: string
                       ttl_seconds:
@@ -2751,10 +2328,9 @@ spec:
                     type: object
                   routing:
                     description: |-
-                      Routing contains canonical v0.3 routing configuration under config.routing.
-                      It is intentionally preserved as an object so the operator can pass through
-                      the router-owned signal, projection, decision, and algorithm contract without
-                      lagging behind every router schema addition.
+                      Routing is removed: the router configuration has no top-level routing
+                      block. Its fields are the recipe named default under config.recipes. A
+                      resource that sets it is refused.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   semantic_cache:
@@ -2773,21 +2349,35 @@ spec:
                         - qdrant
                         - hybrid
                         type: string
-                      embedding_model:
-                        default: mmbert
+                      embedding:
                         description: |-
-                          EmbeddingModel specifies which embedding model to use for semantic similarity
-                          Options: "mmbert" (default), "bert", "qwen3", "gemma"
-                        enum:
-                        - bert
-                        - qwen3
-                        - gemma
-                        - mmbert
+                          Embedding names the deployment semantic reuse embeds with, and the
+                          width of its vectors.
+                        properties:
+                          deployment:
+                            description: |-
+                              Deployment is a global.model_catalog deployment; without it the store
+                              embeds with embeddings.default.
+                            type: string
+                          dimension:
+                            description: |-
+                              Dimension is the width of the vectors: the deployment's own, or a
+                              narrower one its model serves.
+                            minimum: 1
+                            type: integer
+                        type: object
+                      embedding_model:
+                        description: |-
+                          EmbeddingModel is removed: embedding.deployment names the deployment
+                          semantic reuse embeds with, embeddings.default without one. A resource
+                          that sets it is refused.
                         type: string
                       enabled:
                         default: true
-                        description: Enabled controls whether semantic caching is
-                          active
+                        description: |-
+                          Enabled, on by default, gives a configuration without decisions a
+                          response_cache plugin in config.plugins that caches every request; off,
+                          it turns the decisions' response_cache plugins off.
                         type: boolean
                       eviction_policy:
                         default: fifo
@@ -3229,8 +2819,9 @@ spec:
                         type: object
                       similarity_threshold:
                         default: "0.8"
-                        description: Similarity threshold for cache hits (0.0-1.0).
-                          Stored as string to avoid float precision issues.
+                        description: |-
+                          SimilarityThreshold (0.0-1.0) is the min_similarity of the response_cache
+                          plugin Enabled adds. Stored as string to avoid float precision issues.
                         pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
                         type: string
                       ttl_seconds:
@@ -3438,28 +3029,6 @@ spec:
                           rejected and the ExtProc stream ends; the downstream response follows the
                           gateway's ExtProc failure policy. Zero disables the limit.
                         minimum: 0
-                        type: integer
-                    type: object
-                  tools:
-                    description: Tools configuration
-                    properties:
-                      enabled:
-                        default: true
-                        type: boolean
-                      fallback_to_empty:
-                        default: true
-                        type: boolean
-                      similarity_threshold:
-                        default: "0.2"
-                        description: Similarity threshold for tool selection (0.0-1.0).
-                          Stored as string to avoid float precision issues.
-                        pattern: ^0(\.[0-9]+)?$|^1(\.0+)?$
-                        type: string
-                      tools_db_path:
-                        default: config/tools_db.json
-                        type: string
-                      top_k:
-                        default: 3
                         type: integer
                     type: object
                 type: object
@@ -4552,7 +4121,7 @@ spec:
                 description: |-
                   VLLMEndpoints is a Kubernetes-native backend discovery adapter.
                   It generates canonical config.providers.models[].backend_refs
-                  and config.routing.modelCards entries.
+                  and the loras of those entries.
                 items:
                   description: VLLMEndpointSpec defines a vLLM model backend endpoint
                   properties:
@@ -4603,8 +4172,8 @@ spec:
                         the request-facing alias.
                       type: string
                     loras:
-                      description: LoRAs declares the LoRA adapters exposed for this
-                        logical model in routing.modelCards.
+                      description: 'LoRAs declares the LoRA adapters exposed for this
+                        logical model: the loras of its providers.models[] entry.'
                       items:
                         description: LoRAAdapterSpec defines one LoRA adapter exposed
                           by a VLLMEndpoint model.

@@ -15,8 +15,8 @@ The paths below were measured on Ascend 910B1 and 950DT hosts
 (torch_npu 2.10.0.post4, CANN 8.5 / 9.1).
 
 Large-model inference on Ascend belongs to vLLM behind an HTTP endpoint; the
-`npu` accelerator covers the Router's own 307M signal encoders and
-decision models inside the model runtime.
+`npu` accelerator covers the models the Router runs inside the model runtime,
+from the 307M encoders to the decision models.
 
 ## Prerequisites
 

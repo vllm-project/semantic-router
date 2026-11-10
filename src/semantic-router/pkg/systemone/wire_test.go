@@ -188,9 +188,10 @@ func TestPublicSystemOneAnswersAFailedQuestionAsTheWholeRequest(t *testing.T) {
 	if status, _ := send(handler, "/v1/decisions", body, nil); status != 200 {
 		t.Fatalf("/v1/decisions must keep per-question errors, got %d", status)
 	}
-	sink.response = `{"model":"private","answers":{"q":{"type":"noul","noul":0.5}},"states":{"s2":{"model":"private","answers":{"r":{"type":"noul","error":"deadline_exceeded","reason":"deadline"}},"usage":{"input_tokens":1,"output_tokens":0}}},"usage":{"input_tokens":1,"output_tokens":0}}`
-	if status, answer := send(handler, "/v1/systemone", body, nil); status != 504 || answer["question"] != "r" {
-		t.Fatalf("a failed question of a states entry => %d %v", status, answer)
+	batch := []byte(`{"model":"vllm-sr/test","states":{"s1":{"state":"s","questions":{"q":{"type":"noul","instructions":"?"}}},"s2":{"state":"t","questions":{"r":{"type":"noul","instructions":"?"}}}}}`)
+	sink.response = `{"model":"private","states":{"s1":{"model":"private","answers":{"q":{"type":"noul","noul":0.5}},"usage":{"input_tokens":1,"output_tokens":0}},"s2":{"model":"private","answers":{"r":{"type":"noul","error":"deadline_exceeded","reason":"deadline"}},"usage":{"input_tokens":1,"output_tokens":0}}},"usage":{"input_tokens":2,"output_tokens":0}}`
+	if status, answer := send(handler, "/v1/systemone", batch, nil); status != 504 || answer["question"] != "r" {
+		t.Fatalf("a failed question of a batch entry => %d %v", status, answer)
 	}
 	sink.status, sink.response = 400, `{"error":{"code":"invalid_request","message":"no question is valid (box: ...)","reason":"box_unsupported","question":"box"}}`
 	if status, answer := send(handler, "/v1/systemone", body, nil); status != 422 || answer["reason"] != "box_unsupported" || answer["question"] != "box" {

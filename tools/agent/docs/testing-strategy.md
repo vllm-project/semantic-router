@@ -60,9 +60,8 @@ Platform and Kubernetes contracts share workers only when their execution
 target, runtime, device, platform, setup environment, batch policy, image
 dependencies and resource class are compatible. The `integration` policy runs
 at most three contracts within its declared time budget; `exclusive` keeps a
-contract alone. Vela Omni explicitly selects exclusive execution. Batch limits
-and setup allowances live in the catalog, and total job deadlines cannot exceed
-360 minutes. Each Kubernetes profile
+contract alone. Batch limits and setup allowances live in the catalog, and
+total job deadlines cannot exceed 360 minutes. Each Kubernetes profile
 creates and destroys its own cluster. Teardown failure stops the worker, since
 its remaining contracts could otherwise run against contaminated state.
 Heavy model profiles remain isolated. Recipes use three balanced standalone
@@ -214,11 +213,10 @@ traces core assertions, replacement coverage, and remaining weak test oracles.
 | Contract | Local command | Required evidence |
 | --- | --- | --- |
 | Core | `make test-and-build-local` | Router logic, registered Go tools, selector parity, and local core checks. |
-| Go tools | `make go-tools-test` | CLI, classifier operating-point, fusion evaluation, image calibration, and model-selection tests. |
+| Go tools | `make go-tools-test` | CLI, classifier operating-point, fusion evaluation, and model-selection tests. |
 | Dashboard | `make dashboard-check`; `make dashboard-test-wasm`; `make dashboard-test-e2e-evaluation` | Frontend and backend tests, compiled WASM behavior, and browser acceptance. |
 | Model runtime | `make model-runtime-test` | Families, engines, scheduling, the HTTP contract, and golden answers on CPU. |
-| Published models | `make test-models` | Classifier, cache, and Omni real-model tests serving the pinned Vela 1.0 packages through a managed model runtime, and the pinned Vela 2.0 0.3B and 0.8B served on CPU answering the Router's questions in one decisions call per stage, within tolerance of their recorded answers, without a skip. |
-| Image-routing conformance | `make verify-image-routing-calibration` | Prepared Nano identity, every authored scored image, prototype provenance, frozen threshold/validation assertions, and multimodal profile package tests. |
+| Published models | `make test-models` | Cache and Omni real-model tests serving the pinned Vela 1.0 packages through a managed model runtime, and the pinned Vela 2.0 0.3B and 0.8B served on CPU answering the Router's questions in one decisions call per stage, within tolerance of their recorded answers, without a skip. |
 | Local Stack serving contracts | `make vllm-sr-test-integration` | Live `serve`/`stop`, mounts, environment, pull policy, request behavior, and service isolation. |
 | Local Stack memory contracts | `USE_DETERMINISTIC_MEMORY_EMBEDDINGS=0 make memory-test-integration` | Vela embedding, persistent retrieval, injection, user isolation, and persistence failure behavior. |
 | Kubernetes | `make verify PROFILE=envoy-ai-gateway` | Deployment and routed requests through the selected profile. |
@@ -247,8 +245,8 @@ standalone SSE; the streaming profile exercises the maintained Envoy ExtProc pat
 
 E2E framework units run once in the component executor, independently of the
 selected Kind profiles. Their Go inventory and execution report must agree;
-missing or skipped tests fail. The soak client and multimodal profile package
-retain their dedicated `soak-tools` and image-calibration owners.
+missing or skipped tests fail. The soak client retains its dedicated
+`soak-tools` owner.
 
 Core discovers external Go tools from
 [`go-tools.mk`](../../make/go-tools.mk), including sources outside the Router Go
@@ -377,9 +375,9 @@ see [`perf/README.md`](../../../perf/README.md).
    its product layer, automatic/approved policy, logical category, executor,
    inventory, runtime/device, execution target, services and build dependencies.
    Choose a batch policy independently; the default component policy is one
-   contract per job. Kubernetes profiles can declare execution target, runtime,
-   device, setup environment and batch policy in the domain registry. Keep
-   concrete case discovery in its testing framework.
+   contract per job. Kubernetes profiles can declare execution target, setup
+   environment and batch policy in the domain registry. Keep concrete case
+   discovery in its testing framework.
 3. Extend the executor only when the new check has different execution needs.
    Emit actual case outcomes and consumed artifact identities. Add negative
    coverage proving that missing cases or dependencies cannot pass.

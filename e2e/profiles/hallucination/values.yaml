@@ -4,7 +4,7 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -16,51 +16,60 @@ config:
             provider: vllm
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    decisions:
-      # Fact-checkable questions route here and, because the response carries
-      # tool context, trigger the endpoint hallucination detector.
-      - name: fact_check_decision
-        description: Verify factual answers and run endpoint hallucination detection
-        priority: 100
-        rules:
-          operator: OR
-          conditions:
-            - type: fact_check
-              name: needs_fact_check
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
-        plugins:
-          - type: hallucination
-            configuration:
-              enabled: true
-              hallucination_action: header
-              unverified_factual_action: header
-              include_hallucination_details: true
-      - name: default_decision
-        description: Default catch-all decision
-        priority: 1
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
-    signals:
-      fact_check:
-        - name: needs_fact_check
-          description: Query contains factual claims that should be verified against context
-        - name: no_fact_check_needed
-          description: Query is creative, code, or opinion based - no fact verification needed
-      # Checked from the model's answer against the tool context the request
-      # carried. The hallucination plugin above enforces on this observation;
-      # without it the plugin would classify the answer itself.
-      hallucination:
-        - name: ungrounded_claims
-          description: Detect claims in the answer that the tool context does not support.
-    modelCards:
-      - name: openai/gpt-oss-20b
+  recipes:
+    - name: default
+      decisions:
+        # Fact-checkable questions route here and, because the response carries
+        # tool context, trigger the remote hallucination check.
+        - name: fact_check_decision
+          description: Verify factual answers and run endpoint hallucination detection
+          priority: 100
+          rules:
+            operator: OR
+            conditions:
+              - type: fact_check
+                name: needs_fact_check
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: response_guard
+              configuration:
+                rules:
+                  - when:
+                      operator: AND
+                      conditions:
+                        - type: fact_check
+                          name: needs_fact_check
+                        - type: hallucination
+                          name: ungrounded_claims
+                    action: annotate
+                on_unknown: annotate
+        - name: default_decision
+          description: Default catch-all decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+      signals:
+        fact_check:
+          - name: needs_fact_check
+            description: Query contains factual claims that should be verified against context
+            predicate:
+              gte: 0.9997
+          - name: no_fact_check_needed
+            description: Query is creative, code, or opinion based - no fact verification needed
+            labels: [NO_FACT_CHECK_NEEDED]
+            predicate:
+              gt: 0.0003
+        # Checked from the model's answer against the tool context the request
+        # carried. The response_guard above annotates the answer on it.
+        hallucination:
+          - name: ungrounded_claims
+            description: Detect claims in the answer that the tool context does not support.
   global:
     router:
       strategy: priority
@@ -68,8 +77,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: false
@@ -78,47 +85,21 @@ config:
       observability:
         tracing:
           enabled: false
-    stores:
-      response_cache:
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
-      vector_store:
-        embedding_model: mmbert
     integrations: {}
     model_catalog:
-      kbs: []
-      # Pluggable endpoint backend under test: the detector is served by an
-      # OpenAI-compatible endpoint (mock stands in for a vLLM-hosted
-      # KRLabsOrg/lettucedect-v2-qwen-2b) instead of an in-process model.
+      # Remote deployment under test: provider-mocker's System One fixture
+      # (see its README) answers the hallucination rule's span question
+      # instead of an in-process model.
       deployments:
-        hallucination-detector:
-          provider: openai_chat
-          endpoint: http://mock-hallucination-detector.default.svc.cluster.local:8000/v1
-          model: KRLabsOrg/lettucedect-v2-qwen-2b
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
           timeout_ms: 10000
+          capabilities:
+            question_types: [choice, noul, span]
       bindings:
-        hallucination: hallucination-detector
-      modules:
-        prompt_guard:
-          enabled: false
-          jailbreak_mapping_path: ""
-        classifier:
-          domain:
-            enabled: false
-            category_mapping_path: ""
-          pii:
-            enabled: false
-            pii_mapping_path: ""
-        hallucination_mitigation:
-          enabled: true
-          # The decision model (vela3-fast) answers fact_check, which gates
-          # detection.
-          fact_check:
-            threshold: 0.9997
-            use_cpu: true
-          detector:
-            include_explanation: false
+        hallucination: fake-systemone
 # The detector is remote, but the router still loads two local models before it
 # serves: the startup embedding download, gated only on
 # !EmbeddingModels.UsesRemoteEmbeddingBackend() and the model_catalog.embeddings

@@ -46,10 +46,6 @@ const legacyBrandTokens = [
 
 const graphiteSurfaceContracts = [
   {
-    path: '../pages/MLSetupPage.module.css',
-    forbiddenPatterns: [/#(?:3b82f6|2563eb|60a5fa)\b/i, /rgba?\(\s*59\s*,\s*130\s*,\s*246\b/i],
-  },
-  {
     path: '../components/MCPConfigPanel.module.css',
     forbiddenPatterns: [
       /#(?:1e1e2e|181825|313244|cdd6f4|a6adc8|89b4fa|cba6f7|a6e3a1|101311|0f1304)\b/i,

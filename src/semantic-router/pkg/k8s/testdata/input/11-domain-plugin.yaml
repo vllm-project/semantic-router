@@ -54,8 +54,8 @@ spec:
         - type: "system_prompt"
           configuration:
             system_prompt: "You are a legal expert. Provide accurate legal information but remind users to consult a licensed attorney."
-        - type: "semantic-cache"
+        - type: "response_cache"
           configuration:
             enabled: true
-            similarity_threshold: 0.90
+            semantic: {match: {recall: {top_k: 3, min_similarity: 0.90}}}
 

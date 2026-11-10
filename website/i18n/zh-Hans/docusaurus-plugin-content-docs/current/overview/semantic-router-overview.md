@@ -83,7 +83,7 @@ agent harness
 | 层 | 职责 | 示例 |
 | --- | --- | --- |
 | **AI Gateway** | 客户端入口、提供方转换、凭据、限流和流量策略。 | [Agent Router（原 Envoy AI Gateway）](../installation/k8s/ai-gateway)、[LiteLLM](https://docs.litellm.ai/docs/simple_proxy)、[agentgateway](../installation/k8s/agentgateway) |
-| **Semantic Router** | 通过配方与决策，根据请求意图和策略选择逻辑模型或模型池，并写入 `x-selected-model`。 | vLLM Semantic Router |
+| **Semantic Router** | 通过配方与决策，根据请求意图和策略选择逻辑模型或模型池，并写入 `x-vsr-route-model`。 | vLLM Semantic Router |
 | **Inference Router** | 在所选池内选择健康副本或端点。 | [llm-d](../installation/k8s/llm-d)、[vLLM Router](https://github.com/vllm-project/router)、[AIBrix gateway](../installation/k8s/aibrix) |
 
 Agent Router 和 agentgateway 通过 ExtProc 调用 Semantic Router。[Kubernetes 网关](../installation/k8s/gateways)与[推理平台](../installation/k8s/inference-platforms)列出了项目维护的集成。

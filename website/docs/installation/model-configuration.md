@@ -8,7 +8,7 @@ description: Choose a catalog-backed or custom model, bind it to providers, and 
 A configured Model joins a stable Router name to one model identity and one or
 more physical backends. Configure Models under `providers.models`, then refer to
 their `name` from `providers.defaults.model` and
-`routing.decisions[].modelRefs[].model`.
+`recipes[].decisions[].modelRefs[].model`.
 
 ## Understand the model identifiers
 
@@ -43,8 +43,7 @@ shows the supported combinations and invalid mixtures.
 ## Start with one custom model
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   defaults:
     model: local-chat
@@ -56,12 +55,12 @@ providers:
           provider: vllm
           endpoint: host.docker.internal:8000
           protocol: http
-
-routing: {}
+recipes:
+  - name: default
 ```
 
 The Router creates a sparse local Model Card for `local-chat`. Add a matching
-`routing.modelCards` entry only when routing needs metadata such as context
+`providers.models` entry only when routing needs metadata such as context
 window, capabilities, tags, or LoRAs. Add benchmark measurements independently
 under top-level `evaluation.records[]`.
 
@@ -111,11 +110,20 @@ mismatch returns an error rather than restarting the selection or replacing the
 chosen candidate. Declare them on a model card:
 
 ```yaml
-routing:
-  modelCards:
+recipes:
+  - name: default
+providers:
+  models:
     - name: image-backend
+      api_format: images
       capabilities: [image_generation]
+      modalities: {input: [text], output: [image]}
 ```
+
+A model's `modalities` name the media it reads and writes; a model that
+declares none reads and writes text. A decision's
+[output contract](../tutorials/decision/output) checks them, with its
+capabilities, when the configuration loads.
 
 The protocol capability vocabulary is defined by the `llmprotocol` package,
 and a declaration reaches capability-aware dispatch in one of these states:
@@ -225,22 +233,23 @@ for example a long-context route that needs more time than its provider
 model's default:
 
 ```yaml
-routing:
-  decisions:
-    - name: long_context_route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: context
-            name: long_context
-      modelRefs:
-        - model: production
-      reliability:
-        total_timeout: 600s
-        per_try_timeout: 300s
-        retry_count: 1
-        retry_on: reset
+recipes:
+  - name: default
+    decisions:
+      - name: long_context_route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: context
+              name: long_context
+        modelRefs:
+          - model: production
+        reliability:
+          total_timeout: 600s
+          per_try_timeout: 300s
+          retry_count: 1
+          retry_on: reset
 ```
 
 The block takes the provider block's timeout and retry fields, and merges
@@ -300,20 +309,20 @@ global:
         consecutive_failures: 3
         cooldown_period: 30s
         half_open_probes: 1
-
-routing:
-  decisions:
-    - name: escalate
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: small
-        - model: large
-      fallback:
-        max_attempts: 2
-        retryable_status_codes: [429, 503]
+recipes:
+  - name: default
+    decisions:
+      - name: escalate
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: small
+          - model: large
+        fallback:
+          max_attempts: 2
+          retryable_status_codes: [429, 503]
 ```
 
 | Field | Default | Effect |
@@ -331,7 +340,7 @@ layer first:
 1. a request-graph step's `fallback`, for the model calls a request graph
    makes;
 2. the decision's `fallback`;
-3. the recipe's `routing.fallback`;
+3. the recipe's `recipes[].fallback`;
 4. `global.router.fallback`.
 
 A field a layer leaves out keeps the layer below, and `enabled` is only set
