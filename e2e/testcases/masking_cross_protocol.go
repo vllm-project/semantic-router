@@ -54,7 +54,7 @@ func init() {
 		Fn:          testMaskingCrossProtocol,
 	})
 	pkgtestcases.Register("masking-keeps-echoed-placeholder", pkgtestcases.TestCase{
-		Description: "A placeholder the client sends back reaches the backend as it is, even when the classifier reads part of it as personal data",
+		Description: "A placeholder or a vSR mark the client sends back reaches the backend as it is, even when the classifier reads part of it as personal data",
 		Tags:        []string{"masking", "pii", "functional"},
 		Fn:          testMaskingKeepsEchoedPlaceholder,
 	})
@@ -160,13 +160,13 @@ func testMaskingCrossProtocol(
 }
 
 // testMaskingKeepsEchoedPlaceholder sends back a placeholder from an earlier
-// turn, the way an agent repeats one in a file it writes. The stub reports a
-// PERSON span over the first "PERSON_0" in the text, which is the inside of
-// "[PERSON_0]", as a detector that reads the placeholder as a name would. The
-// placeholder must reach the backend as sent, not as "[[PERSON_0]]". The
-// router also masks the other copies of a detected value
-// (coverRepeatedValues), so the marker's bare argument may come back masked,
-// and only the placeholder is asserted.
+// turn, the way an agent repeats one in a file it writes, and a [vsr:name]
+// mark the vSR Claude Code plugin leaves in a tool's output. The stub reports
+// a PERSON span over the inside of each, "PERSON_0" or "vsr:name", as a
+// detector that reads it as a name would. Each must reach the backend as
+// sent, not as "[[PERSON_0]]". The router also masks the other copies of a
+// detected value (coverRepeatedValues), so the marker's bare argument may come
+// back masked, and only the text before it is asserted.
 func testMaskingKeepsEchoedPlaceholder(
 	ctx context.Context,
 	client *kubernetes.Clientset,
@@ -178,24 +178,28 @@ func testMaskingKeepsEchoedPlaceholder(
 	}
 	defer session.Close()
 
-	const reply = "Send the reply that starts with Hi [PERSON_0], "
-	prompt := reply + maskingSpanMarker + " PERSON PERSON_0"
-	echoed, err := runMaskingWireCase(ctx, session, maskingWireCase{
-		name: "chat completions",
-		path: "/v1/chat/completions",
-		body: map[string]interface{}{
-			"model":    maskingEntrypoint,
-			"messages": []map[string]interface{}{{"role": "user", "content": prompt}},
-		},
-	})
-	if err != nil {
-		return err
-	}
-	if !strings.HasPrefix(echoed, reply) || strings.Contains(echoed, "[[") {
-		return fmt.Errorf("the backend did not receive the placeholder as sent: %q", echoed)
+	received := map[string]string{}
+	for _, placeholder := range []string{"PERSON_0", "vsr:name"} {
+		reply := "Send the reply that starts with Hi [" + placeholder + "], "
+		prompt := reply + maskingSpanMarker + " PERSON " + placeholder
+		echoed, err := runMaskingWireCase(ctx, session, maskingWireCase{
+			name: "chat completions " + placeholder,
+			path: "/v1/chat/completions",
+			body: map[string]interface{}{
+				"model":    maskingEntrypoint,
+				"messages": []map[string]interface{}{{"role": "user", "content": prompt}},
+			},
+		})
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(echoed, reply) || strings.Contains(echoed, "[[") {
+			return fmt.Errorf("the backend did not receive [%s] as sent: %q", placeholder, echoed)
+		}
+		received[placeholder] = echoed
 	}
 	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{"received": echoed})
+		opts.SetDetails(map[string]interface{}{"received": received})
 	}
 	return nil
 }
