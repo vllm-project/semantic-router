@@ -9,12 +9,12 @@ import (
 // acceptNative applies only operator-authored, uncalibrated predicates. A raw
 // model statistic is not a probability of correctness. Rules are conjunctive,
 // and a whole-bundle gate must cover every answer without dropping failures.
-func acceptNative(observations []Observation, acceptance *config.NativeAcceptance, whole bool) bool {
-	if acceptance == nil || len(acceptance.Rules) == 0 || len(observations) == 0 {
+func acceptNative(observations []Observation, accept *config.EscalateAccept, whole bool) bool {
+	if accept == nil || len(accept.Native) == 0 || len(observations) == 0 {
 		return false
 	}
 	covered := make([]bool, len(observations))
-	for _, rule := range acceptance.Rules {
+	for _, rule := range accept.Native {
 		matched := false
 		for i, observation := range observations {
 			if !ruleMatches(rule, observation.Question) {
@@ -22,7 +22,7 @@ func acceptNative(observations []Observation, acceptance *config.NativeAcceptanc
 			}
 			matched, covered[i] = true, true
 			value, known := observationStatistic(observation, rule.Field)
-			if !known || !predicateMatches(value, rule.Predicate) {
+			if !known || !predicateMatches(value, rule.NumericPredicate) {
 				return false
 			}
 		}

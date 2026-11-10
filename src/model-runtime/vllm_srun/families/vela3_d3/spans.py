@@ -19,7 +19,7 @@ from typing import Any
 
 from ...errors import SCAN_BUDGET_EXCEEDED, QuestionError
 from ...systemone import listed_options, named_options, require_full_input
-from ..vela3_shared import expand_preset, invalid, text, threshold_of
+from ..vela3_shared import SPAN_HEADS, expand_preset, invalid, text, threshold_of
 from .package import SPAN_TARGET_TOKENS
 from .span_policy import Policy
 from .span_read import SpanItem, SpanReader
@@ -127,7 +127,7 @@ class Spans:
                 f"span questions read their whole target in windows: overflow must be {WINDOWED!r}"
             )
         require_full_input(question)
-        if question.get("head") not in (None, "router"):
+        if question.get("head") not in (None, *SPAN_HEADS):
             raise invalid("this model has no broad span head")
         parts = parts_of(state)
         roles = [role for role, _ in parts]

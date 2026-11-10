@@ -8,6 +8,8 @@ import (
 	"net/http"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
@@ -31,10 +33,6 @@ func ServingInvoker(cfg *config.RouterConfig, listener string, router Router, lo
 		return local(ctx, target, body)
 	}
 }
-
-// errTrustedGatewayUnsupported refuses a backend marked trusted_gateway: it
-// takes only the request's gateway credential, never the endpoint's api_key.
-var errTrustedGatewayUnsupported = errors.New("trusted gateway backend requires the request's gateway credential, which System One dispatch does not carry")
 
 // BackendInvoker binds one generation's provider aliases to its retained local
 // runtimes or upstream set. No unknown alias may fall through to a Chat default.
@@ -61,12 +59,6 @@ func BackendInvoker(cfg *config.RouterConfig, listener string, local Invoke, rem
 		if err != nil {
 			return 0, nil, err
 		}
-		if profile.TrustedGateway {
-			// A trusted gateway accepts only the client request's gateway
-			// credential, which System One dispatch does not carry; fail
-			// before dispatch instead of sending the call without one.
-			return 0, nil, errTrustedGatewayUnsupported
-		}
 		protocol := "vllm-sr/systemone@1"
 		if model.APIFormat != config.APIFormatSystemOne {
 			if model.APIFormat != "openai" && model.APIFormat != "" {
@@ -89,15 +81,28 @@ func BackendInvoker(cfg *config.RouterConfig, listener string, local Invoke, rem
 		}
 		header := http.Header{"Content-Type": {"application/json"}}
 		if model.APIFormat == config.APIFormatSystemOne {
-			header.Set(BackendRequestHeader, "1")
+			header.Set(headers.VSRSystemOneBackend, "1")
 		}
 		endpoint, _ := cfg.GetEndpointByName(endpointName)
-		if endpoint.APIKey != "" {
+		key := endpoint.APIKey
+		if profile.Delegated() {
+			// A call made for a client request presents its delegated
+			// credential; one without it, or a Router-own call, is never sent.
+			credential, delegatedErr := principal.Delegated(ctx)
+			if errors.Is(delegatedErr, principal.ErrCredentialMissing) {
+				return http.StatusUnauthorized, nil, delegatedErr
+			}
+			if delegatedErr != nil {
+				return http.StatusForbidden, nil, delegatedErr
+			}
+			key = credential
+		}
+		if key != "" {
 			name, prefix, authErr := profile.ResolveAuthHeader()
 			if authErr != nil {
 				return 0, nil, authErr
 			}
-			value := endpoint.APIKey
+			value := key
 			if prefix != "" {
 				value = prefix + " " + value
 			}

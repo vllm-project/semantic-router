@@ -24,8 +24,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
-// Shadow dispatch sends a bounded, sampled copy of the approved request to a
-// secondary configured model. It runs strictly after the primary dispatch
+// Shadow dispatch, router_replay's shadow, sends a bounded, sampled copy of the
+// approved request to a secondary configured model and appends its outcome to
+// the primary's replay record. It runs strictly after the primary dispatch
 // response has been built, never blocks the request path beyond a
 // non-blocking slot check, and records a deterministic outcome for replay.
 // This file owns the request-path hook, the bounded lanes, and outcome
@@ -96,7 +97,7 @@ type shadowRequestEncoder func(request llmprotocol.Request, target *shadowTarget
 // shadowJob is everything a shadow call needs, captured synchronously so the
 // worker never reads mutable request state after the primary path moves on.
 type shadowJob struct {
-	cfg             config.ShadowDispatchPluginConfig
+	cfg             config.RouterReplayShadowConfig
 	routerConfig    *config.RouterConfig
 	engine          *protocolcodec.Engine
 	encode          shadowRequestEncoder
@@ -201,21 +202,22 @@ func (d *shadowDispatcher) waitIdle(timeout time.Duration) bool {
 
 // dispatchShadowIfConfigured is the single request-path hook. It runs after
 // finalizeProviderDispatchResponse so the shadow starts from the same approved
-// neutral request the primary was rendered from. Nothing here can fail the
-// request.
+// neutral request the primary was rendered from. The shadow belongs to the
+// decision's router_replay policy, so it runs only while the decision records
+// replays. Nothing here can fail the request.
 func (r *OpenAIRouter) dispatchShadowIfConfigured(ctx *RequestContext, dispatch *providerDispatch) {
 	if r == nil || r.ShadowDispatcher == nil || ctx == nil || dispatch == nil {
 		return
 	}
-	pluginCfg := ctx.ShadowDispatchPluginConfig
-	if pluginCfg == nil || !pluginCfg.Enabled {
+	replay := ctx.RouterReplayPluginConfig
+	if replay == nil || replay.Shadow == nil {
 		return
 	}
 	engine, err := r.protocolEngine()
 	if err != nil {
 		engine = nil
 	}
-	cfg := pluginCfg.WithDefaults()
+	cfg := replay.Shadow.WithDefaults()
 	r.ShadowDispatcher.submit(ctx, dispatch, cfg, shadowSubmitDeps{
 		routerConfig: r.Config,
 		engine:       engine,
@@ -318,7 +320,7 @@ func shadowProfileAuthHeader(profile *config.ProviderProfile) string {
 func (r *OpenAIRouter) shadowExtraHeaders(
 	ctx *RequestContext,
 	dispatch *providerDispatch,
-	cfg *config.ShadowDispatchPluginConfig,
+	cfg *config.RouterReplayShadowConfig,
 ) map[string]string {
 	extra := make(map[string]string)
 	if ctx.TraceContext != nil {
@@ -356,7 +358,7 @@ func (r *OpenAIRouter) shadowExtraHeaders(
 
 // shadowMutationDropReason explains why a decision header mutation stays on
 // the primary path, or returns "" when the shadow copy may carry it.
-func shadowMutationDropReason(name, primaryAuthHeader string, cfg *config.ShadowDispatchPluginConfig) string {
+func shadowMutationDropReason(name, primaryAuthHeader string, cfg *config.RouterReplayShadowConfig) string {
 	if shadowHeaderIsSensitive(name, primaryAuthHeader) {
 		return "credential"
 	}
@@ -369,7 +371,7 @@ func shadowMutationDropReason(name, primaryAuthHeader string, cfg *config.Shadow
 func (d *shadowDispatcher) submit(
 	ctx *RequestContext,
 	dispatch *providerDispatch,
-	cfg config.ShadowDispatchPluginConfig,
+	cfg config.RouterReplayShadowConfig,
 	deps shadowSubmitDeps,
 ) {
 	decision := dispatch.decisionName
@@ -435,7 +437,7 @@ func shadowRequestID(primary string) string {
 	return primary + "-shadow-" + hex.EncodeToString(buf[:])
 }
 
-func (d *shadowDispatcher) laneFor(key string, cfg config.ShadowDispatchPluginConfig) *shadowLane {
+func (d *shadowDispatcher) laneFor(key string, cfg config.RouterReplayShadowConfig) *shadowLane {
 	lane := d.lanes[key]
 	if lane == nil || cap(lane.slots) != cfg.MaxConcurrency || lane.maxQueue != cfg.MaxQueueDepth {
 		lane = &shadowLane{

@@ -264,8 +264,8 @@ def test_systemone_answers_a_failed_question_as_the_whole_request():
     }
     assert as_systemone(200, long)[0] == 400
     states = {
-        "answers": {"q": {"type": "noul", "noul": 0.1}},
         "states": {
+            "a": {"answers": {"q": {"type": "noul", "noul": 0.1}}},
             "s": {
                 "answers": {
                     "r": {
@@ -274,7 +274,7 @@ def test_systemone_answers_a_failed_question_as_the_whole_request():
                         "reason": "deadline",
                     }
                 }
-            }
+            },
         },
     }
     status, error = as_systemone(200, states)
@@ -536,11 +536,10 @@ def test_references_match_whole_values_then_the_longest_left_to_right(png_url):
     image = png_bytes(png_url)
     checked = assetlib.prepare(
         {
-            "state": "x",
-            "questions": {"q": NOUL},
             "assets": {"<a>": asset(image), "<a>b": asset(image), "<c>": asset(image)},
             "states": {
-                "s": {"state": "<a> <a>b<c><c> {<a>}", "questions": {"q": NOUL}}
+                "x": {"state": "x", "questions": {"q": NOUL}},
+                "s": {"state": "<a> <a>b<c><c> {<a>}", "questions": {"q": NOUL}},
             },
         },
         1 << 26,
@@ -703,18 +702,20 @@ def test_assets_need_a_model_that_reads_images(d3_text_package, png_url):
         runtime.stop()
 
 
-def test_states_share_the_requests_assets(d3_runtime, png_url):
+def test_a_batchs_entries_share_its_assets(d3_runtime, png_url):
     image = png_url(64, 48, 9).split(",", 1)[1]
     status, body = call(
         d3_runtime,
         {
-            "state": "plain text",
-            "questions": {"q": NOUL},
             "assets": {"<p>": {"data_base64": image}},
-            "states": {"s": {"state": "<p>", "questions": {"q": NOUL}}},
+            "states": {
+                "plain": {"state": "plain text", "questions": {"q": NOUL}},
+                "s": {"state": "<p>", "questions": {"q": NOUL}},
+            },
         },
     )
     assert status == 200 and "noul" in body["states"]["s"]["answers"]["q"]
+    assert "noul" in body["states"]["plain"]["answers"]["q"]
 
 
 def test_the_card_says_where_images_are_read(d3_runtime):
@@ -859,7 +860,7 @@ def test_long_context_reads_past_the_validated_length(validated_runtime):
 
 def test_models_lists_decision_models_in_the_system_one_shape(client):
     listing = client.get("/v1/models").json()
-    assert listing["api_version"] == "3.2.0"
+    assert listing["api_version"] == "4.0.0"
     assert [model["name"] for model in listing["models"]] == [
         card["id"] for card in listing["data"]
     ]

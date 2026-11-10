@@ -143,18 +143,18 @@ the locked chart dependencies.
 | config.providers.models[0].backend_refs[0].weight | int | `100` |  |
 | config.providers.models[0].name | string | `"replace-with-your-model"` |  |
 | config.providers.models[0].provider_model_id | string | `"replace-with-your-model"` |  |
-| config.routing.decisions[0].description | string | `"Default route for every request while you wire real backends."` |  |
-| config.routing.decisions[0].modelRefs[0].model | string | `"replace-with-your-model"` |  |
-| config.routing.decisions[0].modelRefs[0].use_reasoning | bool | `false` |  |
-| config.routing.decisions[0].name | string | `"default-route"` |  |
-| config.routing.decisions[0].priority | int | `100` |  |
-| config.routing.decisions[0].rules.conditions | list | `[]` |  |
-| config.routing.decisions[0].rules.operator | string | `"AND"` |  |
-| config.routing.modelCards[0].name | string | `"replace-with-your-model"` |  |
-| config.routing.signals.domains[0].description | string | `"Catch-all domain"` |  |
-| config.routing.signals.domains[0].mmlu_categories[0] | string | `"other"` |  |
-| config.routing.signals.domains[0].name | string | `"general"` |  |
-| config.version | string | `"v0.3"` |  |
+| config.recipes[0].decisions[0].description | string | `"Default route for every request while you wire real backends."` |  |
+| config.recipes[0].decisions[0].modelRefs[0].model | string | `"replace-with-your-model"` |  |
+| config.recipes[0].decisions[0].modelRefs[0].use_reasoning | bool | `false` |  |
+| config.recipes[0].decisions[0].name | string | `"default-route"` |  |
+| config.recipes[0].decisions[0].priority | int | `100` |  |
+| config.recipes[0].decisions[0].rules.conditions | list | `[]` |  |
+| config.recipes[0].decisions[0].rules.operator | string | `"AND"` |  |
+| config.recipes[0].name | string | `"default"` |  |
+| config.recipes[0].signals.domains[0].description | string | `"Catch-all domain"` |  |
+| config.recipes[0].signals.domains[0].labels[0] | string | `"other"` |  |
+| config.recipes[0].signals.domains[0].name | string | `"general"` |  |
+| config.version | string | `"v0.5"` |  |
 | dependencies.observability.grafana.adminPassword | string | `"admin"` |  |
 | dependencies.observability.grafana.adminUser | string | `"admin"` |  |
 | dependencies.observability.grafana.enabled | bool | `false` |  |

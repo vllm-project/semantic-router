@@ -35,7 +35,8 @@ function searchableModelValues(model: NormalizedModel): string[] {
     model.provider_model_id,
     model.api_format,
     model.reasoning_family,
-    model.modality,
+    ...(model.modalities?.input ?? []),
+    ...(model.modalities?.output ?? []),
     model.param_size,
     model.description,
     ...(model.tags ?? []),
@@ -273,9 +274,8 @@ function validateModelBackends(value: unknown): void {
 
       const backend = item as Record<string, unknown>
       const endpoint = typeof backend.endpoint === 'string' ? backend.endpoint.trim() : ''
-      const baseUrl = typeof backend.base_url === 'string' ? backend.base_url.trim() : ''
-      if (!endpoint && !baseUrl) {
-        throw new Error(`Provider backend ${index + 1} requires an endpoint or base URL.`)
+      if (!endpoint) {
+        throw new Error(`Provider backend ${index + 1} requires an endpoint.`)
       }
       if (typeof backend.provider !== 'string' || !backend.provider.trim()) {
         throw new Error(`Provider backend ${index + 1} requires a catalog Provider ID.`)
@@ -296,17 +296,13 @@ function validateModelBackends(value: unknown): void {
         throw new Error(`Provider backend ${index + 1} weight must be zero or greater.`)
       }
       if (
-        backend.extra_headers !== undefined &&
-        (!backend.extra_headers ||
-          typeof backend.extra_headers !== 'object' ||
-          Array.isArray(backend.extra_headers) ||
-          Object.values(backend.extra_headers).some(
-            (headerValue) => typeof headerValue !== 'string',
-          ))
+        backend.headers !== undefined &&
+        (!backend.headers ||
+          typeof backend.headers !== 'object' ||
+          Array.isArray(backend.headers) ||
+          Object.values(backend.headers).some((headerValue) => typeof headerValue !== 'string'))
       ) {
-        throw new Error(
-          `Provider backend ${index + 1} extra headers must contain text key/value pairs.`,
-        )
+        throw new Error(`Provider backend ${index + 1} headers must contain text key/value pairs.`)
       }
     })
   }

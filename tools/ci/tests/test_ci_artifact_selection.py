@@ -27,6 +27,8 @@ BATCHES = (
     ("platform_batches", "ci-result-"),
     ("e2e_batches", "ci-result-"),
 )
+# The only platform contract forms the same batch in an affected and a full plan.
+RERUN_BATCHES = tuple(row for row in BATCHES if row[0] != "platform_batches")
 
 
 def artifact_names(plan):
@@ -95,11 +97,9 @@ class CIArtifactSelectionTests(unittest.TestCase):
             builds=gate.load_builds(self.directory, plan["images"]),
         )
 
-    def test_affected_to_full_rerun_ignores_old_component_platform_and_e2e_batches(
-        self,
-    ):
+    def test_affected_to_full_rerun_ignores_old_component_and_e2e_batches(self):
         self.populate_rerun()
-        for field, prefix in BATCHES:
+        for field, prefix in RERUN_BATCHES:
             with self.subTest(family=field):
                 old = {prefix + batch["id"] for batch in self.old_plan[field]}
                 current = {prefix + batch["id"] for batch in self.plan[field]}
@@ -116,7 +116,7 @@ class CIArtifactSelectionTests(unittest.TestCase):
     def test_old_batch_cannot_replace_a_missing_receipt_in_the_current_batch(self):
         old_names = artifact_names(self.old_plan)
         current_names = artifact_names(self.plan)
-        for field, _ in BATCHES:
+        for field, _ in RERUN_BATCHES:
             with self.subTest(family=field):
                 self.populate_rerun()
                 identity = self.old_plan[field][0]["verifications"][0]["id"]

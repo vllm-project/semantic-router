@@ -26,7 +26,6 @@ type builtSnapshot struct {
 
 type modelsProjection struct {
 	ProviderModels []routerconfig.CanonicalProviderModel `json:"provider_models"`
-	ModelCards     []routerconfig.RoutingModel           `json:"model_cards"`
 }
 
 type pluginsProjection struct {
@@ -51,31 +50,29 @@ func BuildSnapshot(input RefreshInput) (*builtSnapshot, error) {
 	}
 
 	canonical := routerconfig.CanonicalConfigFromRouterConfig(cfg)
+	recipe := defaultRecipe(canonical, cfg)
 
-	modelsJSON, err := json.Marshal(modelsProjection{
-		ProviderModels: canonical.Providers.Models,
-		ModelCards:     canonical.Routing.ModelCards,
-	})
+	modelsJSON, err := json.Marshal(modelsProjection{ProviderModels: canonical.Providers.Models})
 	if err != nil {
 		return nil, fmt.Errorf("configprojection: marshal models: %w", err)
 	}
 
-	signalsJSON, err := json.Marshal(canonical.Routing.Signals)
+	signalsJSON, err := json.Marshal(recipe.Signals)
 	if err != nil {
 		return nil, fmt.Errorf("configprojection: marshal signals: %w", err)
 	}
 
-	decisionsJSON, err := json.Marshal(canonical.Routing.Decisions)
+	decisionsJSON, err := json.Marshal(recipe.Decisions)
 	if err != nil {
 		return nil, fmt.Errorf("configprojection: marshal decisions: %w", err)
 	}
 
-	pluginsJSON, err := json.Marshal(buildPluginsProjection(canonical))
+	pluginsJSON, err := json.Marshal(buildPluginsProjection(canonical, recipe))
 	if err != nil {
 		return nil, fmt.Errorf("configprojection: marshal plugins: %w", err)
 	}
 
-	projectionsJSON, err := json.Marshal(canonical.Routing.Projections)
+	projectionsJSON, err := json.Marshal(recipe.Projections)
 	if err != nil {
 		return nil, fmt.Errorf("configprojection: marshal projections: %w", err)
 	}
@@ -107,9 +104,20 @@ func BuildSnapshot(input RefreshInput) (*builtSnapshot, error) {
 	}, nil
 }
 
-func buildPluginsProjection(canonical routerconfig.CanonicalConfig) pluginsProjection {
-	entries := make([]decisionPluginsEntry, 0, len(canonical.Routing.Decisions))
-	for _, decision := range canonical.Routing.Decisions {
+// defaultRecipe is the recipe the projection describes: the default recipe.
+func defaultRecipe(canonical routerconfig.CanonicalConfig, cfg *routerconfig.RouterConfig) routerconfig.CanonicalRecipe {
+	name := string(cfg.DefaultRecipe().Name)
+	for _, recipe := range canonical.Recipes {
+		if recipe.Name == name {
+			return recipe
+		}
+	}
+	return routerconfig.CanonicalRecipe{Name: name}
+}
+
+func buildPluginsProjection(canonical routerconfig.CanonicalConfig, recipe routerconfig.CanonicalRecipe) pluginsProjection {
+	entries := make([]decisionPluginsEntry, 0, len(recipe.Decisions))
+	for _, decision := range recipe.Decisions {
 		if len(decision.Plugins) == 0 {
 			continue
 		}

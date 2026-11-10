@@ -2,7 +2,7 @@
 is_mtpe: false
 title: 模型目录参考
 sidebar_label: 模型目录参考
-description: global.model_catalog.deployments 的每个字段、各 provider 及其能回答的内容、绑定、embedding、重排序、解析顺序、阈值和准入。
+description: global.model_catalog.deployments 的每个字段、各 provider 及其能回答的内容、绑定、embedding、解析顺序、阈值和准入。
 translation:
   source_commit: "3e9e4262e5c4e286ede3fb75cdac83edb985b6aa"
   source_file: "docs/installation/model-catalog.md"
@@ -11,7 +11,7 @@ translation:
 
 # 模型目录参考
 
-`global.model_catalog` 声明 Router 询问的每个模型：回答路由信号的模型、embedding 模型和重排序模型。请求路由的目标，即回答用户的模型，仍在 [`providers.models`](model-configuration.md) 中配置。[为信号选择模型](choose-a-model-for-a-signal.md)说明每个信号由哪个部署回答。
+`global.model_catalog` 声明 Router 询问的每个模型：回答路由信号的模型和 embedding 模型。请求路由的目标，即回答用户的模型，仍在 [`providers.models`](model-configuration.md) 中配置。[为信号选择模型](choose-a-model-for-a-signal.md)说明每个信号由哪个部署回答。
 
 ## 部署 {#deployments}
 
@@ -21,21 +21,19 @@ translation:
 | --- | --- | --- |
 | `model_runtime` | 内置模型运行时：托管（由 Router 启动）或挂接（设置了 `endpoint`） | 其模型卡提供的任何内容 |
 | `systemone` | System One API 的 `POST <endpoint>` 和 `GET <endpoint>/models` | 每个问题类信号和选择器 |
-| `classify` | `POST <endpoint>/classify` | `domain`、`jailbreak`、`pii`、`hallucination`、分类器规则、安全规则及其 hazard 部分、complexity 规则 |
-| `openai_chat` | `POST <endpoint>/chat/completions` | `jailbreak`、`hallucination`、`preference`、分类器规则 |
+| `openai_chat` | `POST <endpoint>/chat/completions` | 记忆查询改写（`global.stores.memory.query_rewrite`） |
 | `openai_embeddings` | `POST <endpoint>/embeddings` | Embedding |
-| `rerank` | `POST <endpoint>/rerank` | RAG 重排序 |
 
 部署被分配了它无法回答的信号时，Router 在加载时拒绝该部署。
 
-有四个部署始终已声明，只有当某处解析到它们时才会启动：
+有两个部署始终已声明，只有当某处解析到它们时才会启动：
 
 | 名称 | 模型 | 默认用于 |
 | --- | --- | --- |
 | `primary` | CPU 上的 `vllm-sr/vela3-fast` | `system.decision_model` |
-| `hazard` | Vela 1.0 Hazard | 安全规则的 hazard 部分 |
 | `vela-embedding` | Vela 1.0 Embedding | `embeddings.default` |
-| `omni-nano` | Vela 1.0 Omni Nano | `embeddings.multimodal` |
+
+嵌入只用于召回：响应缓存、记忆或向量库用 `vela-embedding` 召回时它才启动，决策从不使用它（见[嵌入](../model-runtime/guides/embeddings.md)）。
 
 ## 字段参考 {#field-reference}
 
@@ -51,9 +49,6 @@ global:
         device: cpu                      # cpu | auto | cuda | rocm, or cuda:N / rocm:N
         input: {max_tokens: 32768, overflow: reject}  # reject | truncate | window
         public_name: hazard-public       # its name on the inference API
-        operating_point:                 # pins the head's packaged operating point
-          path: operating_point.json
-          sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5
       replicated-example:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
@@ -61,7 +56,7 @@ global:
         replicas: [{device: cpu}, {endpoint: http://worker-2.example.com:8100, model: kai}]
       # Connection block: an attached model_runtime and every remote provider.
       remote-example:
-        provider: systemone              # or classify, openai_chat, openai_embeddings, rerank
+        provider: systemone              # or openai_chat, openai_embeddings
         endpoint: https://api.example.com/v1/systemone  # full URL; unix:///abs.sock for an attached runtime
         model: vllm-sr/d3-ultra          # the remote model; an attached runtime's served model
         auth: {header: Authorization, prefix: Bearer, api_key_env: EXAMPLE_KEY}  # or api_key_file: /abs/path
@@ -74,7 +69,8 @@ global:
     system:
       decision_model: {deployment: primary}
     bindings: {pii: primary}
-    embeddings: {default: vela-embedding, multimodal: omni-nano}
+    embeddings:
+      default: {deployment: vela-embedding}  # recall embeds with it
 ```
 
 ### 托管 `model_runtime` 字段 {#managed-model_runtime-fields}
@@ -87,7 +83,6 @@ global:
 | `input` | 部署的输入预算：`max_tokens`，以及 `overflow`（`reject`、`truncate` 或 `window`） |
 | `replicas` | 同一逻辑部署的多个 worker：每个是一个 `device`，或在别处启动的 worker 的 `endpoint` 和 `model` |
 | `public_name` | 部署在推理 API 上的名称 |
-| `operating_point` | 该头的模型包所提供工作点的 `path` 和 `sha256`。由此部署回答的分类器规则按工作点的阈值读取相互独立的标签分数 |
 | `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context`、`max_model_len` | 引擎参数；参见[引擎参数](../model-runtime/engine-args.md) |
 
 ### 连接块 {#connection-block}
@@ -96,15 +91,15 @@ global:
 
 | 字段 | 含义 | 限制 |
 | --- | --- | --- |
-| `endpoint` | API 的完整 URL，包括路径前缀。Router 在其后追加操作路径（`/classify`、`/chat/completions`、`/embeddings`、`/rerank`）；systemone 的 endpoint 就是提交问题的 URL。挂接的运行时可以使用 `unix:///abs/path.sock` | `http` 或 `https`；不得包含凭据或片段标识（fragment） |
-| `model` | 远程 API 用来回答的模型；在挂接的运行时上是它提供服务的模型 | `systemone`、`openai_chat`、`openai_embeddings`、`rerank` 必填 |
-| `auth` | `header`（默认 `Authorization`）、`prefix`（默认 `Bearer`；`""` 表示发送不带前缀的密钥），以及 `api_key_env` 和 `api_key_file`（绝对路径，每次调用时读取，因此轮换后的密钥会生效）二者之一 | 密钥从不写在配置中 |
+| `endpoint` | API 的完整 URL，包括路径前缀。Router 在其后追加操作路径（`/chat/completions`、`/embeddings`）；systemone 的 endpoint 就是提交问题的 URL。挂接的运行时可以使用 `unix:///abs/path.sock` | `http` 或 `https`；不得包含凭据或片段标识（fragment） |
+| `model` | 远程 API 用来回答的模型；在挂接的运行时上是它提供服务的模型 | `systemone`、`openai_chat`、`openai_embeddings` 必填 |
+| `auth` | `header`（默认 `Authorization`）、`prefix`（默认 `Bearer`；`""` 表示发送不带前缀的密钥），以及 `api_key_env` 和 `api_key_file`（绝对路径，每次调用时读取，因此轮换后的密钥会生效）二者之一；或 `credential: delegated`：为客户端请求发起的每次调用都携带身份验证器为该用户签发的凭据（[安全加固](security-hardening#delegate-the-users-credential-to-an-upstream)） | 密钥从不写在配置中；`credential: delegated` 不带密钥，且不适用于 `model_runtime` |
 | `headers` | 其他非机密请求头 | 拒绝 `Authorization`、`Proxy-Authorization`、`X-Api-Key`、`Api-Key`、`Ocp-Apim-Subscription-Key`、`Cookie` 以及 `auth` 所用的请求头 |
 | `timeout_ms` | 单次尝试的时限 | systemone ≤ 60000；其他 ≤ 300000 |
 | `max_retries` | 首次尝试之后的传输层重试次数，不超出调用方的截止时间 | 0–10；挂接的运行时不支持 |
 | `tls` | `ca_file`、`server_name`、`cert_file` 和 `key_file`（客户端证书）、`insecure_skip_verify` | 仅限 `https`；文件为绝对路径 |
 | `limits` | `max_request_bytes`、`max_response_bytes` | 挂接的运行时不支持 |
-| `capabilities` | 远程模型的 API 未列出任何内容时，它能回答什么：`question_types` 和 `presets`（systemone），`dimensions`（openai_embeddings） | |
+| `capabilities` | 远程模型的 API 未列出任何内容时，它的模型事实：`question_types`、`presets` 和 `modalities`（systemone）；`dimensions` 和 `modalities`（openai_embeddings：`text`、`image`、`audio`） | 召回所用的 embedding 部署必须嵌入 `text` |
 | `generation` | `openai_chat` 部署生成补全时的 `max_tokens`、`temperature` 和 `reasoning`（`{family, use_reasoning, reasoning_effort}`，`family` 为内置推理系列） | `max_tokens` ≤ 32768；`temperature` 0–2；`reasoning` 需要 `family` 和 `use_reasoning` |
 
 重定向会被拒绝，因此凭据永远不会随重定向发往其他主机。
@@ -116,32 +111,33 @@ global:
   model_catalog:
     deployments:
       local-vela: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu}
-    bindings:            # every recipe
+    bindings: # every recipe
       pii: local-vela
-routing:
-  model_bindings:        # this routing profile; recipes[].routing.model_bindings for one recipe
-    domain: d3-remote
+recipes:
+  - name: default
+    model_bindings: # this routing profile; recipes[].model_bindings for one recipe
+      domain: d3-remote
 ```
 
-绑定键是规则共享同一个回答的信号类型：`domain`、`jailbreak`、`pii`、`fact_check`、`user_feedback`、`modality`、`hallucination`、`preference` 和 `reask`。自己提问的规则在规则上写 `deployment:`：`routing.signals.decision[]`、`classifiers[]`、`safety[]` 和 `safety[].hazard`、`complexity[]`，以及决策的 `algorithm.decision`。所有 complexity 规则由同一个远程分数驱动，因此由 `classify` 部署回答的 complexity 规则都指向同一个部署。
+绑定键是应用信号类型：`domain`、`fact_check`、`user_feedback`、`jailbreak`、`safety`、`pii`、`hallucination`、`refusal`、`turn_relation`、`complexity` 和 `modality`。绑定回答该类型中未指定部署的规则；规则写 `deployment:` 可改用其他部署。`recipes[].signals.systemone[]` 规则和决策的 `algorithm.systemone` 也写 `deployment:`。`jailbreak`、`pii` 和 `hallucination` 绑定同时决定 `response_guard` 和 `masking` 背后的模型，这两个插件读取这些信号的规则。
 
-绑定也可以写成对象，用于选择多头 `model_runtime` 部署的某个头：`pii: {deployment: local-vela, head: pii}`。工作点通过 `operating_point` 固定在部署上。
+绑定只写部署名称（`pii: primary`）。
 
-每个信号的解析顺序：规则的 `deployment`，然后是配方的绑定，然后是全局绑定，问题类信号最后使用 `system.decision_model`。Embedding 通过 `embeddings.default` 解析，用自己模型做 embedding 的路由配置则通过它的 `model_bindings.embedding` 解析；重排序通过 `rag` 插件的 `rerank.deployment` 解析，hazard 部分通过它自己的 `deployment` 解析，未写时使用 `hazard`。
+每个信号的解析顺序：规则的 `deployment`，然后是配方的绑定，然后是全局绑定，问题类信号最后使用 `system.decision_model`。Embedding 不回答任何信号：召回用 `embeddings.default` 做 embedding，库或 RAG 源的 `embedding` 块指定了部署时则用那个部署。
 
 ## 阈值 {#thresholds}
 
-未写出的模块阈值来自回答的模型：内置模型的模型卡上的校准值；`systemone` 模型不发布阈值，使用 0.5（加载时警告 `uncalibrated_threshold`）；其他情况使用 Vela 1.0 的默认值。你写出的 `threshold` 按原值使用。
+规则未写出的 predicate 来自回答的模型：`vela3-fast` 或 Vela 2.0 各尺寸校准的阈值；其他模型（本地或 `systemone`）没有校准值，使用 0.5（加载时警告指明该规则的 `uncalibrated_preset`）。你写出的 `predicate` 按原值使用。
 
 ## 准入 {#admission}
 
-`global.model_catalog.admission` 限制并发调用数。键可以是部署名称，表示该部署的所有使用者共享的闸门；也可以是信号类型（`jailbreak`、`domain`、`pii`、`fact_check`、`hallucination`、`user_feedback`、`safety`、`hazard`），表示该信号自己的闸门。
+`global.model_catalog.admission` 限制并发调用数。键是已声明部署的名称，该闸门由这个部署的所有使用者共享。
 
 ```yaml
 global:
   model_catalog:
     admission:
-      jailbreak: {max_concurrency: 4, max_queue: 64, queue_timeout_ms: 250, on_overflow: shed}
+      local-vela: {max_concurrency: 4, max_queue: 64, queue_timeout_ms: 250, on_overflow: shed}
       d3-remote: {max_concurrency: 16}
 ```
 
@@ -160,69 +156,33 @@ global:
         auth: {api_key_env: EMBEDDING_API_KEY}
         timeout_ms: 5000
         max_retries: 2
-        capabilities: {dimensions: 1024}
+        capabilities: {dimensions: 1024, modalities: [text]}
     embeddings:
-      default: remote-embed        # multimodal: <name> for multimodal embeddings
+      default: {deployment: remote-embed}
 ```
 
 Router 向 `https://embedding.example.com/v1/embeddings` 发送请求：操作路径追加在 endpoint 的路径之后，从不由主机名和端口拼出。
 
-### R2. 挂接的重排序模型，在使用处指定 {#r2-attached-reranker-named-where-it-is-used}
+### R3. 越狱与幻觉规则使用远程决策模型 {#r3-remote-decision-model-for-jailbreak-and-hallucination}
 
-```yaml title="r2-attached-reranker"
+```yaml title="r3-remote-judge"
 global:
   model_catalog:
     deployments:
-      document-ranker:
-        provider: model_runtime          # a model runtime running elsewhere (attached)
-        endpoint: https://ranker.example.com:8100
-        model: vela-reranker
-        auth: {api_key_env: RANKER_KEY}
-        tls: {ca_file: /etc/ssl/internal-ca.pem}
-        timeout_ms: 2000
-routing:
-  decisions:
-    - name: rag
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: vectorstore
-            rerank: {deployment: document-ranker, top_k: 3, layer: 22, dimension: 768}
-```
-
-`layer` 和 `dimension` 选择模型运行时重排序模型的提前退出层。远程重排序 API 是 `rerank` 部署，按自己的深度作答，所以它的 `rerank` 块只写 `deployment` 和 `top_k`。
-
-### R3. 远程分类器作为 jailbreak 防护，chat 模型作为评判 {#r3-remote-classifier-as-the-jailbreak-guard-and-a-chat-model-as-a-judge}
-
-```yaml title="r3-classify-and-chat"
-global:
-  model_catalog:
-    deployments:
-      guard:
-        provider: classify               # POST <endpoint>/classify
-        endpoint: https://guard.example.com
-        auth: {api_key_env: GUARD_KEY}
-        timeout_ms: 5000
-        limits: {max_response_bytes: 1048576}
-      chat-judge:
-        provider: openai_chat            # chat completions used as a classifier or judge
-        endpoint: https://llm.example.com/v1
-        model: gpt-4.1-mini
+      d3-judge:
+        provider: systemone
+        endpoint: https://judge.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
         auth: {api_key_env: JUDGE_KEY}
-        generation: {max_tokens: 256, temperature: 0}
-routing:
-  model_bindings:
-    jailbreak: guard
-  signals:
-    classifiers:
-      - name: tool-risk
-        deployment: chat-judge
-        labels: [SAFE, RISKY]
-        instructions: Choose RISKY only for destructive or irreversible tool operations.
+        timeout_ms: 5000
+recipes:
+  - name: default
+    model_bindings:
+      jailbreak: d3-judge # request- and response-stage rules
+      hallucination: d3-judge
 ```
 
-provider 决定 Router 如何与模型通信；不需要写角色、适配器或契约。
+该作用域中的每条 `jailbreak` 和 `hallucination` 规则都向 `d3-judge` 提问；其他信号仍由 `primary` 回答。绑定只写部署名：信号决定问题，provider 决定 Router 如何提问。幻觉规则提出 span 问题，因此其部署必须能回答 span；列出 `capabilities.question_types` 的 `systemone` 部署必须包含 `span`。
 
 ### R4. 网关后的 System One，使用网关自己的认证请求头 {#r4-system-one-behind-a-gateway-with-its-own-auth-header}
 
@@ -288,4 +248,4 @@ global:
         auth: {api_key_env: VSR_APP_KEY}
 ```
 
-`providers.models` 仍是一个独立的概念：回答用户、由路由在其中做选择的模型。共享的只有连接形式（`endpoint`、`auth`、`headers`）。后端从 `auth.api_key_env` 读取密钥。部署（包括决策模型）永远不是路由目标，也从不出现在 `/v1/models` 中。原生 System One API 只在部署的 `public_name` 下，或通过指向它的原生别名（如 `native-d3`）为它作答。
+`providers.models` 仍是一个独立的概念：回答用户、由路由在其中做选择的模型。共享的只有连接形式（`endpoint`、`auth`、`headers`）。后端从 `auth.api_key_env` 读取密钥，或用 `auth.credential: delegated` 使用发起请求的用户的凭据。部署（包括决策模型）永远不是路由目标，也从不出现在 `/v1/models` 中。原生 System One API 只在部署的 `public_name` 下，或通过指向它的原生别名（如 `native-d3`）为它作答。

@@ -75,15 +75,16 @@ def test_provider_projection_validation_is_structural_and_non_mutating(
     config_path = _write_config(
         tmp_path,
         """
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: frontier
       catalog: openai/gpt-5.4
       backend_refs:
         - provider: openai
-          api_key_env: VALIDATION_ONLY_OPENAI_API_KEY
-routing: {}
+          auth: {api_key_env: VALIDATION_ONLY_OPENAI_API_KEY}
+recipes:
+  - name: default
 """,
     )
     user_config = parse_user_config(str(config_path), log_summary=False)
@@ -97,13 +98,14 @@ def test_validate_command_preserves_backendless_external_gateway_metadata(tmp_pa
     config_path = _write_config(
         tmp_path,
         """
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   models:
     - name: claude-metadata-only
       api_format: anthropic
-routing: {}
+recipes:
+  - name: default
 """,
     )
 
@@ -115,18 +117,19 @@ routing: {}
     assert "Configuration is valid" in result.output
 
 
-def test_validate_command_accepts_routing_only_model_card_default(tmp_path):
+def test_validate_command_accepts_a_facts_only_default_model(tmp_path):
     config_path = _write_config(
         tmp_path,
         """
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: private-model
-routing:
-  modelCards:
+  models:
     - name: private-model
       description: Metadata-only routing model
+recipes:
+  - name: default
 """,
     )
 
@@ -138,21 +141,22 @@ routing:
     assert "Configuration is valid" in result.output
 
 
-def test_validate_command_accepts_pii_rule_without_threshold(tmp_path):
+def test_validate_command_accepts_pii_rule_without_predicate(tmp_path):
     config_path = _write_config(
         tmp_path,
         """
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: private-model
-routing:
-  modelCards:
+  models:
     - name: private-model
-  signals:
-    pii:
-      - name: contact_details
-        pii_types_allowed: [EMAIL_ADDRESS]
+recipes:
+  - name: default
+    signals:
+      pii:
+        - name: contact_details
+          ignore_labels: [EMAIL_ADDRESS]
 """,
     )
 
@@ -161,20 +165,21 @@ routing:
     )
 
     assert result.exit_code == 0, result.output
-    rule = parse_user_config(str(config_path)).routing.signals.pii[0]
-    assert rule.threshold is None
+    rule = parse_user_config(str(config_path)).default_recipe.signals.pii[0]
+    assert rule.predicate is None
 
 
-def test_validate_command_rejects_empty_external_gateway_provider_model(tmp_path):
+def test_validate_command_accepts_name_only_external_gateway_provider_model(tmp_path):
     config_path = _write_config(
         tmp_path,
         """
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   models:
     - name: bare
-routing: {}
+recipes:
+  - name: default
 """,
     )
 
@@ -182,15 +187,14 @@ routing: {}
         main, ["config", "validate", "--config", str(config_path)]
     )
 
-    assert result.exit_code == 1
-    assert "must define backend_refs or model metadata" in result.output
+    assert result.exit_code == 0, result.output
 
 
 def test_validate_command_accepts_backendless_explicit_zero_pricing(tmp_path):
     config_path = _write_config(
         tmp_path,
         """
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   models:
@@ -198,7 +202,8 @@ providers:
       pricing:
         prompt_per_1m: 0
         completion_per_1m: 0
-routing: {}
+recipes:
+  - name: default
 """,
     )
 
@@ -214,13 +219,14 @@ def test_validate_command_rejects_blank_model_identity(tmp_path):
     config_path = _write_config(
         tmp_path,
         """
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   models:
     - name: " "
       api_format: openai
-routing: {}
+recipes:
+  - name: default
 """,
     )
 
@@ -232,16 +238,15 @@ routing: {}
     assert "Provider model name cannot be empty" in result.output
 
 
-def test_validate_command_rejects_blank_routing_card_identity(tmp_path):
+def test_validate_command_rejects_blank_provider_model_identity(tmp_path):
     config_path = _write_config(
         tmp_path,
         """
-version: v0.3
+version: v0.5
 listeners: []
-providers: {}
-routing:
-  modelCards:
-    - name: " "
+providers: {models: [{name: ' '}]}
+recipes:
+  - name: default
 """,
     )
 
@@ -250,33 +255,31 @@ routing:
     )
 
     assert result.exit_code == 1
-    assert "Model card name cannot be empty" in result.output
+    assert "Provider model name cannot be empty" in result.output
 
 
 @pytest.mark.parametrize(
-    ("base_url", "expected_error"),
+    ("url", "expected_error"),
     (
         (
             "ftp://example.com/v1#fragment",
-            "base_url scheme 'ftp' is unsupported",
+            "endpoint scheme 'ftp' is unsupported",
         ),
         (
             "https://example.com/v1#fragment",
-            "base_url userinfo and fragments are not allowed",
+            "endpoint userinfo and fragments are not allowed",
         ),
         (
             "https://example.com/v1?region=west",
-            "base_url query parameters are not supported by Envoy routing",
+            "endpoint query parameters are not supported by Envoy routing",
         ),
     ),
 )
-def test_validate_command_rejects_invalid_backend_url(
-    tmp_path, base_url, expected_error
-):
+def test_validate_command_rejects_invalid_backend_url(tmp_path, url, expected_error):
     config_path = _write_config(
         tmp_path,
         f"""
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   models:
@@ -284,8 +287,9 @@ providers:
       api_format: openai
       backend_refs:
         - provider: vllm
-          base_url: {base_url}
-routing: {{}}
+          endpoint: {url}
+recipes:
+  - name: default
 """,
     )
 
@@ -303,83 +307,83 @@ routing: {{}}
         (
             """
         - provider: vllm
-          base_url: http://a.example/v1
-          api_key_env: KEY_A
+          endpoint: http://a.example/v1
+          auth: {api_key_env: KEY_A}
         - provider: vllm
-          base_url: http://b.example/custom
-          api_key_env: KEY_A
+          endpoint: http://b.example/custom
+          auth: {api_key_env: KEY_A}
 """,
             "base path differ",
         ),
         (
             """
         - provider: vllm
-          base_url: http://a.example/v1
-          api_key_env: KEY_A
+          endpoint: http://a.example/v1
+          auth: {api_key_env: KEY_A}
         - provider: vllm
-          base_url: http://b.example/v1
-          api_key_env: KEY_B
+          endpoint: http://b.example/v1
+          auth: {api_key_env: KEY_B}
 """,
             "credential source differ",
         ),
         (
             """
         - provider: vllm
-          base_url: http://a.example/v1
+          endpoint: http://a.example/v1
         - provider: sglang
-          base_url: http://b.example/v1
+          endpoint: http://b.example/v1
 """,
             "provider differ",
         ),
         (
             """
         - provider: vllm
-          base_url: http://a.example/v1
+          endpoint: http://a.example/v1
         - provider: vllm
-          base_url: https://a.example/v1
+          endpoint: https://a.example/v1
 """,
             "URL scheme",
         ),
         (
             """
         - provider: vllm
-          base_url: http://a.example/v1
-          extra_headers:
+          endpoint: http://a.example/v1
+          headers:
             x-region: east
         - provider: vllm
-          base_url: http://b.example/v1
-          extra_headers:
+          endpoint: http://b.example/v1
+          headers:
             x-region: west
 """,
-            "extra headers differ",
+            "headers differ",
         ),
         (
             """
         - provider: vllm
-          base_url: https://a.example/v1
+          endpoint: https://a.example/v1
         - provider: vllm
-          base_url: https://b.example/v1
+          endpoint: https://b.example/v1
 """,
             "TLS server name differ",
         ),
         (
             """
         - provider: vllm
-          base_url: https://127.0.0.1/v1
+          endpoint: https://127.0.0.1/v1
 """,
             "HTTPS endpoint must use a DNS hostname",
         ),
         (
             """
         - provider: vllm
-          base_url: http://a.example:not-a-port/v1
+          endpoint: http://a.example:not-a-port/v1
 """,
             "has an invalid endpoint port",
         ),
         (
             """
         - provider: vllm
-          base_url: http://a.example:0/v1
+          endpoint: http://a.example:0/v1
 """,
             "expected 1..65535",
         ),
@@ -393,7 +397,7 @@ routing: {{}}
         (
             """
         - provider: vllm
-          base_url: http://a.example:65536/v1
+          endpoint: http://a.example:65536/v1
 """,
             "has an invalid endpoint port",
         ),
@@ -408,20 +412,12 @@ routing: {{}}
             """
         - name: replica
           provider: vllm
-          base_url: http://a.example/v1
+          endpoint: http://a.example/v1
         - name: replica
           provider: vllm
-          base_url: http://b.example/v1
+          endpoint: http://b.example/v1
 """,
             "name 'replica' is duplicated",
-        ),
-        (
-            """
-        - provider: vllm
-          base_url: http://base.example/v1
-          endpoint: endpoint.example:8000/v1
-""",
-            "cannot set both base_url and endpoint",
         ),
     ),
 )
@@ -431,7 +427,7 @@ def test_validate_command_reuses_envoy_backend_group_validation(
     config_path = _write_config(
         tmp_path,
         f"""
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   models:
@@ -439,7 +435,8 @@ providers:
       api_format: openai
       backend_refs:
 {backend_refs}
-routing: {{}}
+recipes:
+  - name: default
 """,
     )
 
@@ -455,12 +452,13 @@ def test_validate_command_rejects_backendless_router_owned_model(tmp_path):
     config_path = _write_config(
         tmp_path,
         """
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: local-model
       api_format: openai
-routing: {}
+recipes:
+  - name: default
 """,
     )
 
@@ -502,7 +500,7 @@ routing: {}
       backend_refs:
         - provider: azure-openai
 """,
-            "requires endpoint or base_url because provider 'azure-openai' has no default",
+            "requires endpoint because provider 'azure-openai' has no default",
         ),
     ),
 )
@@ -512,12 +510,13 @@ def test_validate_command_rejects_provider_projection_errors(
     config_path = _write_config(
         tmp_path,
         f"""
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   models:
 {model_config}
-routing: {{}}
+recipes:
+  - name: default
 """,
     )
 
@@ -551,7 +550,7 @@ routing: {{}}
       api_format: openai
       backend_refs:
         - provider: vllm
-          base_url: http://[::1]:8000/v1
+          endpoint: http://[::1]:8000/v1
 """,
         """
     - name: local-model
@@ -577,13 +576,14 @@ def test_validate_command_accepts_sparse_builtin_and_custom_models(
     config_path = _write_config(
         tmp_path,
         f"""
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: {"frontier" if "catalog:" in model_config else "local-model"}
   models:
 {model_config}
-routing: {{}}
+recipes:
+  - name: default
 """,
     )
 
@@ -596,23 +596,7 @@ routing: {{}}
 
 
 def test_validate_command_accepts_non_ascii_config_under_ascii_locale(tmp_path):
-    config_content = (
-        "version: v0.3\n"
-        "# Description: Router configuration — Decision & Latency Profile “experimental”\n"
-        "# Comment: 模型配置\n"
-        "listeners: []\n"
-        "providers:\n"
-        "  defaults:\n"
-        "    model: local-model\n"
-        "  models:\n"
-        "    - name: local-model\n"
-        "      api_format: openai\n"
-        "      backend_refs:\n"
-        "        - provider: vllm\n"
-        "          base_url: http://127.0.0.1:8000/v1\n"
-        "          api_key_env: TEST_API_KEY\n"
-        "routing: {}\n"
-    )
+    config_content = "version: v0.5\n# Description: Router configuration \u2014 Decision & Latency Profile \u201cexperimental\u201d\n# Comment: \u6a21\u578b\u914d\u7f6e\nlisteners: []\nproviders:\n  defaults:\n    model: local-model\n  models:\n    - name: local-model\n      api_format: openai\n      backend_refs:\n        - provider: vllm\n          endpoint: http://127.0.0.1:8000/v1\n          auth:\n            api_key_env: TEST_API_KEY\nrecipes:\n  - name: default\n"
     config_path = tmp_path / "config.yaml"
     config_path.write_text(config_content, encoding="utf-8")
 
@@ -630,6 +614,8 @@ def test_validate_command_accepts_non_ascii_config_under_ascii_locale(tmp_path):
     env["PYTHONCOERCECLOCALE"] = "0"
     env["PYTHONIOENCODING"] = "utf-8"
 
+    # The CLI reads the file here; --offline keeps the check off whatever
+    # Router image the host happens to have.
     result = subprocess.run(
         [
             sys.executable,
@@ -639,6 +625,7 @@ def test_validate_command_accepts_non_ascii_config_under_ascii_locale(tmp_path):
             "validate",
             "--config",
             str(config_path),
+            "--offline",
         ],
         cwd=tmp_path,
         env=env,

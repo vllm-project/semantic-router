@@ -26,17 +26,17 @@ func TestShouldSkipCacheWrite(t *testing.T) {
 		{name: "no_retention", ctx: &RequestContext{}, wantSkip: false},
 		{
 			name:     "retention_without_drop",
-			ctx:      &RequestContext{EmittedRetention: &config.RetentionDirective{TTLTurns: intPtr(3)}},
+			ctx:      &RequestContext{Retention: &config.DecisionRetention{TTLTurns: intPtr(3)}},
 			wantSkip: false,
 		},
 		{
 			name:     "drop_false",
-			ctx:      &RequestContext{EmittedRetention: &config.RetentionDirective{Drop: boolPtr(false)}},
+			ctx:      &RequestContext{Retention: &config.DecisionRetention{Drop: boolPtr(false)}},
 			wantSkip: false,
 		},
 		{
 			name:       "drop_true",
-			ctx:        &RequestContext{EmittedRetention: &config.RetentionDirective{Drop: boolPtr(true)}},
+			ctx:        &RequestContext{Retention: &config.DecisionRetention{Drop: boolPtr(true)}},
 			wantSkip:   true,
 			wantReason: "retention.drop",
 		},
@@ -51,62 +51,60 @@ func TestShouldSkipCacheWrite(t *testing.T) {
 	}
 }
 
-func TestApplyEmittedRetentionDeepClone(t *testing.T) {
+func TestApplyDecisionRetentionDeepClone(t *testing.T) {
 	src := &config.Decision{
 		Name: "r",
-		Emits: []config.EmitDirective{
-			{Kind: "retention", Retention: &config.RetentionDirective{
-				Drop:                  boolPtr(true),
-				TTLTurns:              intPtr(5),
-				KeepCurrentModel:      boolPtr(true),
-				PreferPrefixRetention: boolPtr(false),
-			}},
+		Retention: &config.DecisionRetention{
+			Drop:                  boolPtr(true),
+			TTLTurns:              intPtr(5),
+			KeepCurrentModel:      boolPtr(true),
+			PreferPrefixRetention: boolPtr(false),
 		},
 	}
 	ctx := &RequestContext{}
-	got := applyEmittedRetention(src, ctx)
-	if got == nil || ctx.EmittedRetention != got {
-		t.Fatalf("expected ctx.EmittedRetention to be set to returned clone")
+	got := applyDecisionRetention(src, ctx)
+	if got == nil || ctx.Retention != got {
+		t.Fatalf("expected ctx.Retention to be set to returned clone")
 	}
-	if ctx.EmittedRetention.Drop == nil || !*ctx.EmittedRetention.Drop {
+	if ctx.Retention.Drop == nil || !*ctx.Retention.Drop {
 		t.Fatalf("drop missing on clone")
 	}
 
 	// Mutate the clone; source must remain untouched (no pointer aliasing).
-	*ctx.EmittedRetention.Drop = false
-	*ctx.EmittedRetention.TTLTurns = 99
-	if !*src.Emits[0].Retention.Drop {
+	*ctx.Retention.Drop = false
+	*ctx.Retention.TTLTurns = 99
+	if !*src.Retention.Drop {
 		t.Fatalf("source Drop polluted by clone mutation")
 	}
-	if *src.Emits[0].Retention.TTLTurns != 5 {
-		t.Fatalf("source TTLTurns polluted by clone mutation, got %d", *src.Emits[0].Retention.TTLTurns)
+	if *src.Retention.TTLTurns != 5 {
+		t.Fatalf("source TTLTurns polluted by clone mutation, got %d", *src.Retention.TTLTurns)
 	}
 }
 
-func TestApplyEmittedRetentionNoMatch(t *testing.T) {
-	src := &config.Decision{Name: "r"} // no emits
+func TestApplyDecisionRetentionNoMatch(t *testing.T) {
+	src := &config.Decision{Name: "r"} // no retention
 	ctx := &RequestContext{}
-	if got := applyEmittedRetention(src, ctx); got != nil {
-		t.Fatalf("expected nil when decision has no emits")
+	if got := applyDecisionRetention(src, ctx); got != nil {
+		t.Fatalf("expected nil when decision has no retention")
 	}
-	if ctx.EmittedRetention != nil {
-		t.Fatalf("expected EmittedRetention to stay nil")
+	if ctx.Retention != nil {
+		t.Fatalf("expected Retention to stay nil")
 	}
 }
 
 func TestApplyEmittedRetentionNilInputs(t *testing.T) {
-	if got := applyEmittedRetention(nil, &RequestContext{}); got != nil {
+	if got := applyDecisionRetention(nil, &RequestContext{}); got != nil {
 		t.Fatalf("nil decision must yield nil")
 	}
-	if got := applyEmittedRetention(&config.Decision{}, nil); got != nil {
+	if got := applyDecisionRetention(&config.Decision{}, nil); got != nil {
 		t.Fatalf("nil ctx must yield nil")
 	}
 }
 
 func TestObserveRetentionDirectiveNoOp(t *testing.T) {
 	// Must not panic on nil ctx / nil retention.
-	observeRetentionDirective(nil)
-	observeRetentionDirective(&RequestContext{})
+	observeDecisionRetention(nil)
+	observeDecisionRetention(&RequestContext{})
 }
 
 func TestObserveRetentionDirectiveRecordsLogAndTraceFields(t *testing.T) {
@@ -122,7 +120,7 @@ func TestObserveRetentionDirectiveRecordsLogAndTraceFields(t *testing.T) {
 		RequestID:               "req-retention-observe",
 		TraceContext:            traceCtx,
 		VSRSelectedDecisionName: "retention-decision",
-		EmittedRetention: &config.RetentionDirective{
+		Retention: &config.DecisionRetention{
 			Drop:                  boolPtr(false),
 			TTLTurns:              intPtr(2),
 			KeepCurrentModel:      boolPtr(true),
@@ -130,7 +128,7 @@ func TestObserveRetentionDirectiveRecordsLogAndTraceFields(t *testing.T) {
 		},
 	}
 
-	observeRetentionDirective(ctx)
+	observeDecisionRetention(ctx)
 	span.End()
 
 	entries := logs.FilterMessage("retention_directive_observed").All()
@@ -168,9 +166,9 @@ func TestObserveRetentionDirectiveOmitsUnsetFields(t *testing.T) {
 	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
 	traceCtx, span := tracerProvider.Tracer("retention-test").Start(context.Background(), "retention")
 
-	observeRetentionDirective(&RequestContext{
-		TraceContext:     traceCtx,
-		EmittedRetention: &config.RetentionDirective{Drop: boolPtr(true)},
+	observeDecisionRetention(&RequestContext{
+		TraceContext: traceCtx,
+		Retention:    &config.DecisionRetention{Drop: boolPtr(true)},
 	})
 	span.End()
 
@@ -201,8 +199,8 @@ func TestObserveRetentionDirectiveOmitsUnsetFields(t *testing.T) {
 func TestUpdateResponseCacheSkipsRetentionDrop(t *testing.T) {
 	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
 	ctx := withSelectedDecision(&RequestContext{
-		RequestID:        "req-retention-drop",
-		EmittedRetention: &config.RetentionDirective{Drop: retBool(true)},
+		RequestID: "req-retention-drop",
+		Retention: &config.DecisionRetention{Drop: retBool(true)},
 	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
@@ -214,11 +212,11 @@ func TestUpdateResponseCacheSkipsRetentionDrop(t *testing.T) {
 func TestUpdateResponseCacheWritesWhenRetentionDropFalse(t *testing.T) {
 	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
 	ctx := withSelectedDecision(&RequestContext{
-		RequestID:        "req-retention-keep",
-		RequestModel:     "test-model",
-		RequestQuery:     "hello",
-		SemanticRequest:  testNeutralRequest("test-model", "hello"),
-		EmittedRetention: &config.RetentionDirective{Drop: retBool(false)},
+		RequestID:       "req-retention-keep",
+		RequestModel:    "test-model",
+		RequestQuery:    "hello",
+		SemanticRequest: testNeutralRequest("test-model", "hello"),
+		Retention:       &config.DecisionRetention{Drop: retBool(false)},
 	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
@@ -238,17 +236,17 @@ func TestRetentionTTLOverrideSeconds(t *testing.T) {
 		{name: "no_retention", ctx: &RequestContext{}, wantSec: 0, wantOK: false},
 		{
 			name:    "ttl_turns_unset",
-			ctx:     &RequestContext{EmittedRetention: &config.RetentionDirective{Drop: retBool(false)}},
+			ctx:     &RequestContext{Retention: &config.DecisionRetention{Drop: retBool(false)}},
 			wantSec: 0, wantOK: false,
 		},
 		{
 			name:    "ttl_turns_zero_is_noop",
-			ctx:     &RequestContext{EmittedRetention: &config.RetentionDirective{TTLTurns: intPtr(0)}},
+			ctx:     &RequestContext{Retention: &config.DecisionRetention{TTLTurns: intPtr(0)}},
 			wantSec: 0, wantOK: false,
 		},
 		{
 			name:    "ttl_turns_positive",
-			ctx:     &RequestContext{EmittedRetention: &config.RetentionDirective{TTLTurns: intPtr(3)}},
+			ctx:     &RequestContext{Retention: &config.DecisionRetention{TTLTurns: intPtr(3)}},
 			wantSec: 3 * retentionDefaultSecondsPerTurn, wantOK: true,
 		},
 	}
@@ -267,7 +265,7 @@ func TestApplyRetentionTTLOverride(t *testing.T) {
 	if got := applyRetentionTTLOverride(base, &RequestContext{}); got != base {
 		t.Fatalf("no retention: got %d, want base %d", got, base)
 	}
-	ctx := &RequestContext{EmittedRetention: &config.RetentionDirective{TTLTurns: intPtr(2)}}
+	ctx := &RequestContext{Retention: &config.DecisionRetention{TTLTurns: intPtr(2)}}
 	if got := applyRetentionTTLOverride(base, ctx); got != 2*retentionDefaultSecondsPerTurn {
 		t.Fatalf("ttl_turns override: got %d, want %d", got, 2*retentionDefaultSecondsPerTurn)
 	}
@@ -276,11 +274,11 @@ func TestApplyRetentionTTLOverride(t *testing.T) {
 func TestUpdateResponseCacheAppliesRetentionTTL(t *testing.T) {
 	mockCache, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
 	ctx := withSelectedDecision(&RequestContext{
-		RequestID:        "req-retention-ttl",
-		RequestModel:     "test-model",
-		RequestQuery:     "hello",
-		SemanticRequest:  testNeutralRequest("test-model", "hello"),
-		EmittedRetention: &config.RetentionDirective{TTLTurns: intPtr(2)},
+		RequestID:       "req-retention-ttl",
+		RequestModel:    "test-model",
+		RequestQuery:    "hello",
+		SemanticRequest: testNeutralRequest("test-model", "hello"),
+		Retention:       &config.DecisionRetention{TTLTurns: intPtr(2)},
 	}, decision)
 
 	router.updateResponseCache(ctx, []byte(`{"choices":[]}`))

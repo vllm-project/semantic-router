@@ -524,11 +524,14 @@ func (r *OpenAIRouter) appendProviderCredential(
 		})
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
-	// No upstream receives the authenticator's gateway credential header; a
-	// trusted gateway receives its value under the provider auth header.
-	state.removeHeaders = append(state.removeHeaders, r.gatewayCredentialHeadersForRemoval()...)
-	if state.profile != nil && state.profile.TrustedGateway {
-		return r.appendTrustedGatewayCredential(state, providerAuth, model, backendName, ctx)
+	// No upstream receives the authenticator's delegated credential header; a
+	// delegated backend receives its value under the provider auth header.
+	state.removeHeaders = append(state.removeHeaders, r.delegatedCredentialHeadersForRemoval()...)
+	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {
+		return refused
+	}
+	if state.profile.Delegated() {
+		return r.appendDelegatedCredential(state, providerAuth, model, backendName, ctx)
 	}
 	if providerAuth.Strategy == "none" {
 		if r.CredentialResolver != nil {
@@ -558,11 +561,11 @@ func (r *OpenAIRouter) appendProviderCredential(
 	return nil
 }
 
-// appendTrustedGatewayCredential presents the request's trusted gateway
-// credential to a trusted gateway, replacing whatever the client sent under
-// the auth header. Static and per-user provider keys are not consulted: a
-// request without the credential fails before dispatch.
-func (r *OpenAIRouter) appendTrustedGatewayCredential(
+// appendDelegatedCredential presents the request's delegated credential to a
+// delegated backend, replacing whatever the client sent under the auth
+// header. Static and per-user provider keys are not consulted: a request
+// without the credential fails before dispatch.
+func (r *OpenAIRouter) appendDelegatedCredential(
 	state *routeHeaderState,
 	providerAuth modelcatalog.ProviderAuth,
 	model string,
@@ -573,26 +576,21 @@ func (r *OpenAIRouter) appendTrustedGatewayCredential(
 		state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 	}
 	if providerAuth.Strategy == "none" || providerAuth.Header == "" {
-		logging.ComponentErrorEvent("extproc", "trusted_gateway_auth_header_missing", map[string]interface{}{
+		logging.ComponentErrorEvent("extproc", "delegated_auth_header_missing", map[string]interface{}{
 			"request_id": ctx.RequestID, "model": model, "backend": backendName,
 		})
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
-	credential, ok := trustedGatewayCredential(ctx)
+	credential, ok := requestDelegatedCredential(ctx)
 	if !ok {
-		logging.ComponentWarnEvent("extproc", "trusted_gateway_credential_missing", map[string]interface{}{
+		logging.ComponentWarnEvent("extproc", "delegated_credential_missing", map[string]interface{}{
 			"request_id": ctx.RequestID, "model": model, "backend": backendName,
 		})
-		// The protocol contract replaces a bare 401 with a generic message;
-		// the typed error keeps the client-visible reason.
-		ctx.ImmediateProtocolError = llmprotocol.NewError(
-			llmprotocol.ErrorAuthentication, trustedGatewayCredentialCode, trustedGatewayCredentialMessage, nil,
-		)
-		return r.createErrorResponse(401, trustedGatewayCredentialMessage)
+		return r.delegatedCredentialMissing(ctx)
 	}
-	// The gateway receives the dedicated credential and no other: a client's
+	// The backend receives the delegated credential and no other: a client's
 	// own Authorization or key header does not travel beside it when the
-	// gateway authenticates on a different header.
+	// backend authenticates on a different header.
 	for _, name := range config.CredentialCarrierHeaders() {
 		if !strings.EqualFold(name, providerAuth.Header) {
 			state.removeHeaders = append(state.removeHeaders, name)
@@ -643,7 +641,7 @@ func appendRoutingHeaders(headersOut *[]*core.HeaderValueOption, model string) {
 		return
 	}
 	*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
-		Key: headers.SelectedModel, RawValue: []byte(model),
+		Key: headers.VSRRouteModel, RawValue: []byte(model),
 	}})
 }
 

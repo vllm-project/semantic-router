@@ -50,7 +50,7 @@ const (
 // ToolSessionStoreConfig configures the shared storage backend for
 // session-scoped sticky tool-set selection (issue #3347,
 // global.stores.tool_sessions). Constructing no store at all — not even the
-// local backend — unless at least one decision's tool_selection.sticky is
+// local backend — unless at least one decision's tools.select.sticky is
 // enabled is a caller responsibility (extproc wiring), not this package's.
 //
 // Numeric fields are pointers, not plain ints: for every one of them, 0 is

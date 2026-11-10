@@ -6,32 +6,33 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
-const envReferenceDeployRouting = `routing:
-  modelCards:
+const envReferenceDeployRouting = `recipes:
+  - name: default
+    signals:
+      domains:
+        - name: business
+          description: Business and management related queries
+    decisions:
+      - name: default-business
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
+providers:
+  models:
     - name: test-model
-  signals:
-    domains:
-      - name: business
-        description: Business and management related queries
-  decisions:
-    - name: default-business
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
 `
 
-const envReferenceProviderConfig = `version: v0.3
+const envReferenceProviderConfig = `version: v0.5
 listeners:
   - name: public
     address: 0.0.0.0
@@ -52,135 +53,94 @@ providers:
           protocol: http
 ` + envReferenceDeployRouting
 
-const envReferenceRAGRouting = `routing:
-  modelCards:
+const envReferenceRAGRouting = `recipes:
+  - name: default
+    signals:
+      domains:
+        - name: business
+          description: Business and management related queries
+    decisions:
+      - name: docs-route
+        priority: 5
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: openai
+                  backend_config:
+                    vector_store_id: vs_docs
+                    api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
+providers:
+  models:
     - name: test-model
-  signals:
-    domains:
-      - name: business
-        description: Business and management related queries
-  decisions:
-    - name: docs-route
-      priority: 5
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: openai
-            backend_config:
-              vector_store_id: vs_docs
-              api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
 `
 
-const envReferenceContextRouting = `routing:
-  modelCards:
+const envReferenceContextRouting = `recipes:
+  - name: default
+    signals:
+      context:
+        - name: long_context
+          min_tokens: ${DEPLOY_TEST_CONTEXT_MIN:-8K}
+          max_tokens: ${DEPLOY_TEST_CONTEXT_MAX}
+    decisions:
+      - name: long-context-route
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: context
+              name: long_context
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
+providers:
+  models:
     - name: test-model
-  signals:
-    context:
-      - name: long_context
-        min_tokens: ${DEPLOY_TEST_CONTEXT_MIN:-8K}
-        max_tokens: ${DEPLOY_TEST_CONTEXT_MAX}
-  decisions:
-    - name: long-context-route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: context
-            name: long_context
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
 `
 
 // The RAG key is valid only as written, the context limit only when unset.
-const envReferenceMixedRouting = `routing:
-  modelCards:
-    - name: test-model
-  signals:
-    context:
-      - name: long_context
-        min_tokens: 8K
-        max_tokens: ${DEPLOY_TEST_CONTEXT_MAX}
-  decisions:
-    - name: long-context-docs
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
+const envReferenceMixedRouting = `recipes:
+  - name: default
+    signals:
+      context:
+        - name: long_context
+          min_tokens: 8K
+          max_tokens: ${DEPLOY_TEST_CONTEXT_MAX}
+    decisions:
+      - name: long-context-docs
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: context
+              name: long_context
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
+        plugins:
           - type: context
-            name: long_context
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: openai
-            backend_config:
-              vector_store_id: vs_docs
-              api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
-`
-
-const envReferenceKBRouting = `routing:
-  modelCards:
-    - name: test-model
-  signals:
-    kb:
-      - name: private-signal
-        kb: private
-        target:
-          kind: label
-          value: private
-  decisions:
-    - name: private-route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: kb
-            name: private-signal
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
-`
-
-func absoluteKBConfig(kbDir string) string {
-	return `version: v0.3
-listeners:
-  - name: public
-    address: 0.0.0.0
-    port: 8801
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: openai
+                  backend_config:
+                    vector_store_id: vs_docs
+                    api_key: ${DEPLOY_TEST_OPENAI_API_KEY}
 providers:
-  defaults:
-    model: test-model
   models:
     - name: test-model
-      provider_model_id: test-model
-      backend_refs:
-        - name: endpoint1
-          provider: vllm
-          endpoint: 127.0.0.1:8000
-          protocol: http
-` + envReferenceKBRouting + `global:
-  model_catalog:
-    kbs:
-      - name: private
-        source:
-          path: ` + kbDir + `
-          manifest: labels.json
-        threshold: 0.5
 `
-}
 
 // The Router resolves these references with its own environment, which the
 // Dashboard does not have, so Deploy must accept them and write them as is.
@@ -194,12 +154,6 @@ func TestDeployHandler_LeavesEnvironmentReferencesToRouter(t *testing.T) {
 	} {
 		t.Setenv(name, "")
 	}
-	kbDir := t.TempDir()
-	manifest := []byte(`{"labels":{"private":{"exemplars":["my account number is"]}}}`)
-	if err := os.WriteFile(filepath.Join(kbDir, "labels.json"), manifest, 0o600); err != nil {
-		t.Fatalf("write labels manifest: %v", err)
-	}
-
 	tests := []struct {
 		name    string
 		config  string
@@ -237,12 +191,6 @@ func TestDeployHandler_LeavesEnvironmentReferencesToRouter(t *testing.T) {
 				"max_tokens: ${DEPLOY_TEST_CONTEXT_MAX}",
 				"base_ejection_time: ${DEPLOY_TEST_EJECTION_TIME}",
 			},
-		},
-		{
-			name:    "absolute knowledge base source",
-			config:  absoluteKBConfig(kbDir),
-			deploy:  envReferenceKBRouting,
-			written: []string{"path: " + kbDir},
 		},
 	}
 	for _, tt := range tests {

@@ -15,9 +15,9 @@ func TestSelectedModelsHaveGatewayBackendRoutes(t *testing.T) {
 	config := profileConfig(t)
 	defaults := profileMap(t, profileMap(t, config, "providers"), "defaults")
 	selected := map[string]bool{defaults["model"].(string): true}
-	routings := []map[string]any{profileMap(t, config, "routing")}
+	var routings []map[string]any
 	for _, raw := range config["recipes"].([]any) {
-		routings = append(routings, profileMap(t, raw.(map[string]any), "routing"))
+		routings = append(routings, raw.(map[string]any))
 	}
 	for _, routing := range routings {
 		for _, raw := range routing["decisions"].([]any) {

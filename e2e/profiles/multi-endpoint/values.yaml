@@ -7,7 +7,7 @@ service:
   type: ClusterIP
   port: 8080
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -21,6 +21,13 @@ config:
             endpoint: vllm-14b-dev.default.svc.cluster.local:8000
             weight: 1
             provider: vllm
+        param_size: 14b
+        description: Qwen2.5 14B — Dev environment (internal)
+        capabilities:
+          - chat
+          - code
+          - reasoning
+          - math
       - name: qwen14b-prod
         external_model_ids:
           vllm: Qwen/Qwen2.5-14B-Instruct
@@ -29,6 +36,13 @@ config:
             endpoint: vllm-14b-prod.default.svc.cluster.local:8000
             weight: 1
             provider: vllm
+        param_size: 14b
+        description: Qwen2.5 14B — Prod environment (user-facing)
+        capabilities:
+          - chat
+          - code
+          - reasoning
+          - math
       - name: qwen14b-slow
         external_model_ids:
           vllm: qwen14b-slow
@@ -51,210 +65,205 @@ config:
         benchmark: vllm-sr/operator-rating@1.0.0
         metrics:
           score: 0.85
-  routing:
-    decisions:
-      - name: block_jailbreak_prod
-        description: Block jailbreak attempts on prod (strict)
-        priority: 1001
-        rules:
-          operator: OR
-          conditions:
-            - type: jailbreak
-              name: jailbreak_prod
-        plugins:
-          - type: fast_response
-            configuration:
-              message: Your request has been declined due to a policy violation.
-      - name: block_jailbreak_dev
-        description: Block jailbreak attempts on dev (relaxed)
-        priority: 1000
-        rules:
-          operator: OR
-          conditions:
-            - type: jailbreak
-              name: jailbreak_dev
-        plugins:
-          - type: fast_response
-            configuration:
-              message: Your request has been declined due to a policy violation.
-      - name: block_pii_prod
-        description: Block PII on prod (strict, deny all)
-        priority: 999
-        rules:
-          operator: OR
-          conditions:
-            - type: pii
-              name: pii_prod
-        plugins:
-          - type: fast_response
-            configuration:
-              message: For your security, please do not share personal information.
-      - name: block_pii_dev
-        description: Block PII on dev (relaxed, allow GPE/ORG/DATE)
-        priority: 998
-        rules:
-          operator: OR
-          conditions:
-            - type: pii
-              name: pii_dev
-        plugins:
-          - type: fast_response
-            configuration:
-              message: For your security, please do not share personal information.
-      # Both reach a backend that answers after six seconds. Only the bounded
-      # route sets a reliability override, which Envoy applies per request.
-      - name: reliability_bounded_route
-        description: Slow backend with a 2s total timeout from the decision
-        priority: 300
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: reliability_bounded_keywords
-        modelRefs:
-          - model: qwen14b-slow
-            use_reasoning: false
-        reliability:
-          total_timeout: 2s
-      - name: reliability_control_route
-        description: Slow backend with the provider model's timeouts
-        priority: 299
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: reliability_control_keywords
-        modelRefs:
-          - model: qwen14b-slow
-            use_reasoning: false
-      - name: code_to_dev
-        description: Route code/tech queries to Dev (internal developer env)
-        priority: 100
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: code_keywords
-        modelRefs:
-          - model: qwen14b-dev
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are a senior software engineer. Provide clear, production-quality code with best practices.
-      - name: general_to_prod
-        description: Route general/user queries to Prod (strict safety)
-        priority: 50
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: general_keywords
-        modelRefs:
-          - model: qwen14b-prod
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are a helpful assistant operating under strict data protection policies. Never store, log, or repeat any personal information shared by the user.
-      - name: default_to_dev
-        description: Route unmatched requests to the configured default model
-        priority: 1
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: qwen14b-dev
-            use_reasoning: false
-    signals:
-      keywords:
-        - name: reliability_bounded_keywords
-          operator: OR
-          keywords:
-            - reliability-probe-bounded
-        - name: reliability_control_keywords
-          operator: OR
-          keywords:
-            - reliability-probe-control
-        - name: code_keywords
-          operator: OR
-          keywords:
-            - code
-            - function
-            - implement
-            - debug
-            - refactor
-            - python
-            - golang
-            - javascript
-            - algorithm
-            - class
-            - API
-            - bug
-            - compile
-        - name: general_keywords
-          operator: OR
-          keywords:
-            - hello
-            - what is
-            - explain
-            - tell me
-            - how does
-            - history
-            - science
-            - who
-            - where
-            - when
-      domains:
-        - name: code
-          description: Programming, debugging, and software engineering tasks
-        - name: general
-          description: General knowledge, conversation, and miscellaneous topics
-        - name: other
-          description: Catch-all for unclassified queries
-      jailbreak:
-        - name: jailbreak_dev
-          threshold: 0.88
-          include_history: false
-          description: Relaxed jailbreak detection for dev environment
-        - name: jailbreak_prod
-          threshold: 0.91
-          include_history: false
-          description: Strict jailbreak detection for prod environment
-      pii:
-        - name: pii_dev
-          threshold: 0.18
-          pii_types_allowed:
-            - GPE
-            - ORGANIZATION
-            - DATE_TIME
-          include_history: false
-          description: Relaxed PII policy for dev (allow GPE/ORG/DATE)
-        - name: pii_prod
-          threshold: 0.18
-          pii_types_allowed: []
-          include_history: false
-          description: Strict PII policy for prod (block all)
-    modelCards:
-      - name: qwen14b-dev
-        param_size: 14b
-        description: Qwen2.5 14B — Dev environment (internal)
-        capabilities:
-          - chat
-          - code
-          - reasoning
-          - math
-      - name: qwen14b-prod
-        param_size: 14b
-        description: Qwen2.5 14B — Prod environment (user-facing)
-        capabilities:
-          - chat
-          - code
-          - reasoning
-          - math
+  recipes:
+    - name: default
+      decisions:
+        - name: block_jailbreak_prod
+          description: Block jailbreak attempts on prod (strict)
+          priority: 1001
+          rules:
+            operator: OR
+            conditions:
+              - type: jailbreak
+                name: jailbreak_prod
+          plugins:
+            - type: fast_response
+              configuration:
+                message: Your request has been declined due to a policy violation.
+        - name: block_jailbreak_dev
+          description: Block jailbreak attempts on dev (relaxed)
+          priority: 1000
+          rules:
+            operator: OR
+            conditions:
+              - type: jailbreak
+                name: jailbreak_dev
+          plugins:
+            - type: fast_response
+              configuration:
+                message: Your request has been declined due to a policy violation.
+        - name: block_pii_prod
+          description: Block PII on prod (strict, deny all)
+          priority: 999
+          rules:
+            operator: OR
+            conditions:
+              - type: pii
+                name: pii_prod
+          plugins:
+            - type: fast_response
+              configuration:
+                message: For your security, please do not share personal information.
+        - name: block_pii_dev
+          description: Block PII on dev (relaxed, allow GPE/ORG/DATE)
+          priority: 998
+          rules:
+            operator: OR
+            conditions:
+              - type: pii
+                name: pii_dev
+          plugins:
+            - type: fast_response
+              configuration:
+                message: For your security, please do not share personal information.
+        # Both reach a backend that answers after six seconds. Only the bounded
+        # route sets a reliability override, which Envoy applies per request.
+        - name: reliability_bounded_route
+          description: Slow backend with a 2s total timeout from the decision
+          priority: 300
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: reliability_bounded_keywords
+          modelRefs:
+            - model: qwen14b-slow
+              use_reasoning: false
+          reliability:
+            total_timeout: 2s
+        - name: reliability_control_route
+          description: Slow backend with the provider model's timeouts
+          priority: 299
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: reliability_control_keywords
+          modelRefs:
+            - model: qwen14b-slow
+              use_reasoning: false
+        - name: code_to_dev
+          description: Route code/tech queries to Dev (internal developer env)
+          priority: 100
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: code_keywords
+          modelRefs:
+            - model: qwen14b-dev
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                system_prompt: You are a senior software engineer. Provide clear, production-quality code with best practices.
+        - name: general_to_prod
+          description: Route general/user queries to Prod (strict safety)
+          priority: 50
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: general_keywords
+          modelRefs:
+            - model: qwen14b-prod
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                system_prompt: You are a helpful assistant operating under strict data protection policies. Never store, log, or repeat any personal information shared by the user.
+        - name: default_to_dev
+          description: Route unmatched requests to the configured default model
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: qwen14b-dev
+              use_reasoning: false
+      signals:
+        keywords:
+          - name: reliability_bounded_keywords
+            operator: OR
+            keywords:
+              - reliability-probe-bounded
+          - name: reliability_control_keywords
+            operator: OR
+            keywords:
+              - reliability-probe-control
+          - name: code_keywords
+            operator: OR
+            keywords:
+              - code
+              - function
+              - implement
+              - debug
+              - refactor
+              - python
+              - golang
+              - javascript
+              - algorithm
+              - class
+              - API
+              - bug
+              - compile
+          - name: general_keywords
+            operator: OR
+            keywords:
+              - hello
+              - what is
+              - explain
+              - tell me
+              - how does
+              - history
+              - science
+              - who
+              - where
+              - when
+        domains:
+          - name: code
+            description: Programming, debugging, and software engineering tasks
+            labels: ["computer science"]
+          - name: general
+            description: General knowledge, conversation, and miscellaneous topics
+            labels: [other]
+          - name: other
+            description: Catch-all for unclassified queries
+        jailbreak:
+          - name: jailbreak_dev
+            description: Relaxed jailbreak detection for dev environment
+            predicate:
+              gte: 0.88
+          - name: jailbreak_prod
+            description: Strict jailbreak detection for prod environment
+            predicate:
+              gte: 0.91
+        pii:
+          - name: pii_dev
+            description: Relaxed PII policy for dev (allow GPE/ORG/DATE)
+            predicate:
+              gte: 0.18
+            ignore_labels: [DATE_TIME]
+          - name: pii_prod
+            description: Strict PII policy for prod (block all)
+            predicate:
+              gte: 0.18
   global:
     model_catalog:
-      kbs: []
+      deployments:
+        # provider-mocker's System One fixture answers the jailbreak and PII
+        # rules, so the shared detection cases are pinned by their markers
+        # (tools/test/services/provider-mocker/README.md).
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
+          timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
+      bindings:
+        jailbreak: fake-systemone
+        pii: fake-systemone
     router:
       clear_route_cache: true
       strategy: priority
@@ -267,8 +276,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: true
@@ -297,14 +304,6 @@ config:
               - 50
               - 100
               - 200
-    stores:
-      response_cache:
-        enabled: false
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
-      vector_store:
-        embedding_model: mmbert
     integrations: {}
 resources:
   limits:

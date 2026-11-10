@@ -4,17 +4,14 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
-	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
-	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
 type coreRouteOptions struct {
@@ -246,55 +243,4 @@ func registerTopologyRoutes(mux routeRegistrar, cfg *config.Config, credentialPr
 	store := selectedRecipeStore(cfg, credentialProvider)
 	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/topology/test-query", auth.PermTopologyRead, "topology.test_query", auth.SensitivitySensitive, auth.ResourceOwnerEvaluation, 2<<20, http.MethodPost), handlers.TopologyTestQueryHandler(cfg.AbsConfigPath, cfg.RouterAPIURL, store))
 	log.Printf("Topology Test Query API endpoint registered: /api/topology/test-query (Router API: %s)", cfg.RouterAPIURL)
-}
-
-func registerMLPipelineRoutes(mux routeRegistrar, cfg *config.Config, wf *workflowstore.Store) {
-	if !cfg.MLPipelineEnabled {
-		log.Printf("ML Pipeline feature disabled")
-		return
-	}
-
-	trainingDir := resolveMLTrainingDir(cfg)
-	mlRunner, err := mlpipeline.NewRunner(mlpipeline.RunnerConfig{
-		DataDir:      cfg.MLPipelineDataDir,
-		TrainingDir:  trainingDir,
-		PythonPath:   cfg.PythonPath,
-		MLServiceURL: cfg.MLServiceURL,
-		Workflow:     wf,
-	})
-	if err != nil {
-		log.Fatalf("ML pipeline runner: %v", err)
-	}
-	if err := wf.RecoverInterruptedMLJobs("interrupted by dashboard restart"); err != nil {
-		log.Printf("ML pipeline: recover running jobs: %v", err)
-	}
-	mlHandler := handlers.NewMLPipelineHandler(mlRunner)
-
-	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/jobs", auth.PermMlPipeline, auth.SensitivitySensitive, auth.ResourceOwnerML, http.MethodGet), mlHandler.ListJobsHandler())
-	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/jobs/", auth.PermMlPipeline, auth.SensitivitySensitive, auth.ResourceOwnerML, http.MethodGet), mlHandler.GetJobHandler())
-	registerRouteFunc(mux, auth.ProtectedStreamingMutationRoute("/api/ml-pipeline/benchmark", auth.PermMlPipeline, "ml.benchmark", auth.SensitivitySensitive, auth.ResourceOwnerML, handlers.MLBenchmarkUploadMaxBytes, http.MethodPost), mlHandler.RunBenchmarkHandler())
-	registerRouteFunc(mux, auth.ProtectedStreamingMutationRoute("/api/ml-pipeline/train", auth.PermMlPipeline, "ml.train", auth.SensitivitySensitive, auth.ResourceOwnerML, handlers.MLTrainUploadMaxBytes, http.MethodPost), mlHandler.RunTrainHandler())
-	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/ml-pipeline/config", auth.PermMlPipeline, "ml.config", auth.SensitivitySensitive, auth.ResourceOwnerML, 4<<20, http.MethodPost), mlHandler.GenerateConfigHandler())
-	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/download/", auth.PermMlPipeline, auth.SensitivitySecret, auth.ResourceOwnerML, http.MethodGet), mlHandler.DownloadOutputHandler())
-	registerRouteFunc(mux, auth.ProtectedRoute("/api/ml-pipeline/stream/", auth.PermMlPipeline, auth.SensitivitySensitive, auth.ResourceOwnerML, http.MethodGet), mlHandler.StreamProgressHandler())
-	log.Printf("ML Pipeline API endpoints registered: /api/ml-pipeline/*")
-
-	if trainingDir != "" {
-		log.Printf("ML Training scripts directory: %s", trainingDir)
-		return
-	}
-	log.Printf("Warning: ML training scripts directory not configured (set ML_TRAINING_DIR)")
-}
-
-func resolveMLTrainingDir(cfg *config.Config) string {
-	if cfg.MLTrainingDir != "" {
-		return cfg.MLTrainingDir
-	}
-
-	projectRoot := filepath.Dir(cfg.ConfigDir)
-	candidate := filepath.Join(projectRoot, "src", "training", "ml_model_selection")
-	if _, err := os.Stat(candidate); err == nil {
-		return candidate
-	}
-	return ""
 }

@@ -23,7 +23,7 @@ func TestConfigSecretsThroughAuthentication(t *testing.T) {
 		t.Run(source, func(t *testing.T) {
 			dir := t.TempDir()
 			configPath := filepath.Join(dir, "config.yaml")
-			fixture := "version: v0.3\nglobal:\n  services:\n    response_api:\n      enabled: true\n      store_backend: redis\n      redis:\n        address: 127.0.0.1:6379\n        password: " + source + "\n"
+			fixture := "version: v0.5\nglobal:\n  services:\n    response_api:\n      enabled: true\n      store_backend: redis\n      redis:\n        address: 127.0.0.1:6379\n        password: " + source + "\n"
 			if err := os.WriteFile(configPath, []byte(fixture), 0o600); err != nil {
 				t.Fatal(err)
 			}

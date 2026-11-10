@@ -20,7 +20,7 @@ func TestReadRoleCannotObtainListenerAPIKeys(t *testing.T) {
 		AuthDBPath: filepath.Join(dir, "auth.db"), JWTSecret: "listener-test-signing-key", JWTExpiryHours: 1,
 		RuntimeConfigWritable: true, RouterAPIURL: "http://127.0.0.1:1",
 	}
-	keyed := "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n    api_keys:\n      - " + listenerKey + "\n"
+	keyed := "version: v0.5\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n    api_keys:\n      - " + listenerKey + "\n"
 	if err := os.WriteFile(cfg.AbsConfigPath, []byte(keyed), 0o600); err != nil {
 		t.Fatal(err)
 	}

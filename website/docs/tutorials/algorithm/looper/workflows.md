@@ -39,7 +39,7 @@ surface as small as `vllm-sr/flow`.
 
 ## Configuration
 
-Map the public name to the recipe shown below. Move the `routing` block into a named recipe to isolate it from default routing.
+Map the public name to the recipe shown below. Declare it as its own recipe, and point the entrypoint at it, to isolate it from the other recipes.
 
 ```yaml
 entrypoints:
@@ -60,28 +60,29 @@ global:
 Configure a dynamic Flow decision:
 
 ```yaml
-routing:
-  decisions:
-    - name: coding_flow
-      description: Coordinate coding work through planned worker steps.
-      priority: 100
-      output_contract: Preserve any explicit output format exactly.
-      modelRefs:
-        - model: openrouter/gemini-pro
-        - model: openrouter/deepseek
-        - model: qwen/qwen3.6-rocm
-      algorithm:
-        type: workflows
-        workflows:
-          mode: dynamic
-          planner:
-            model: qwen-coordinator
-            max_completion_tokens: 2048
-          max_steps: 6
-          max_parallel: 3
-          round_timeout_seconds: 90
-          min_successful_responses: 2
+recipes:
+  - name: default
+    decisions:
+      - name: coding_flow
+        description: Coordinate coding work through planned worker steps.
+        priority: 100
+        output_contract: Preserve any explicit output format exactly.
+        modelRefs:
+          - model: openrouter/gemini-pro
+          - model: openrouter/deepseek
+          - model: qwen/qwen3.6-rocm
+        algorithm:
+          type: workflows
           on_error: skip
+          workflows:
+            mode: dynamic
+            planner:
+              model: qwen-coordinator
+              max_completion_tokens: 2048
+            max_steps: 6
+            max_parallel: 3
+            round_timeout_seconds: 90
+            min_successful_responses: 2
 ```
 
 `output_contract` is decision-scoped prompt text. Use it for benchmark or
@@ -125,31 +126,32 @@ Static mode uses an explicit role plan. Each role model must be in the
 decision's `modelRefs`.
 
 ```yaml
-routing:
-  decisions:
-    - name: static_flow
-      description: Coordinate a fixed sequence of worker roles.
-      priority: 100
-      modelRefs:
-        - model: qwen-worker
-        - model: deepseek-worker
-      algorithm:
-        type: workflows
-        workflows:
-          mode: static
-          roles:
-            - name: thinker
-              models: [qwen-worker]
-            - name: worker
-              models: [deepseek-worker]
-            - name: verifier
-              models: [qwen-worker]
-          final:
-            model: qwen-worker
-          max_steps: 3
-          max_parallel: 1
-          round_timeout_seconds: 90
+recipes:
+  - name: default
+    decisions:
+      - name: static_flow
+        description: Coordinate a fixed sequence of worker roles.
+        priority: 100
+        modelRefs:
+          - model: qwen-worker
+          - model: deepseek-worker
+        algorithm:
+          type: workflows
           on_error: skip
+          workflows:
+            mode: static
+            roles:
+              - name: thinker
+                models: [qwen-worker]
+              - name: worker
+                models: [deepseek-worker]
+              - name: verifier
+                models: [qwen-worker]
+            final:
+              model: qwen-worker
+            max_steps: 3
+            max_parallel: 1
+            round_timeout_seconds: 90
 ```
 
 ## Parameters
@@ -173,7 +175,7 @@ routing:
 | `min_successful_responses` | int | all models | Continue a parallel step once this many workers succeed |
 | `temperature` | float | request default | Temperature for planner, worker, and synthesis calls |
 | `include_intermediate_responses` | bool | `true` | Include Flow plan and worker outputs in the response trace |
-| `on_error` | string | `fail` | `fail` on worker error or `skip` failed workers when at least one worker succeeds |
+| `algorithm.on_error` | string | `fail` | Set beside `type`, not in this block: `fail` on worker error or `skip` failed workers when at least one worker succeeds |
 
 Every static role and every planner-generated step must contain at least
 `min_successful_responses` Models. A plan that cannot satisfy its configured
@@ -257,7 +259,7 @@ serving the valid answer. It does not truncate trace JSON or answer text.
 
 OpenAI Responses and Anthropic Messages responses omit this Chat-specific
 extension. Both an unsupported target protocol and a size-based omission emit a
-`x-vsr-protocol-warnings` response header with action `dropped`, field `flow`,
+`x-vsr-warnings` response header with action `dropped`, field `flow`,
 and reason `router_extension_unsupported_protocol` or
 `router_extension_size_limit`. The warning also accompanies immediate Looper
 responses. Required answer content remains subject to the normal protocol
