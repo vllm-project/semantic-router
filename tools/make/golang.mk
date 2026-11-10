@@ -14,13 +14,15 @@ config-schema-check: ## Check that generated Router config contracts match Go so
 	@$(LOG_TARGET)
 	@cd src/semantic-router && go run ../../tools/codegen/configschema/main.go --repository-root ../.. --check
 
-headers-generate: ## Generate the header reference and Dashboard header constants from the Router's header registry
+headers-generate: ## Generate the header registry export, the Router header reference and the Dashboard header constants
 	@$(LOG_TARGET)
 	@cd src/semantic-router && go run ../../tools/codegen/headers/main.go --repository-root ../..
+	@$(DOCS_PYTHON) tools/docs/generate_header_reference.py
 
-headers-check: ## Check that the header reference and Dashboard header constants match the Router's header registry
+headers-check: ## Check that the header registry export, the Router header reference and the Dashboard header constants match the registry
 	@$(LOG_TARGET)
 	@cd src/semantic-router && go run ../../tools/codegen/headers/main.go --repository-root ../.. --check
+	@$(DOCS_PYTHON) tools/docs/generate_header_reference.py --check
 
 go-lint: ## Run golangci-lint for src/semantic-router
 	@$(LOG_TARGET)

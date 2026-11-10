@@ -84,7 +84,7 @@ Canonical v0.5 没有用户编写的全局家族注册表。旧的 `providers.de
 
 对于 `top_level_reasoning_effort`，`parameter` 必须是 `reasoning_effort`。仅 mode 的家族在决策中不接受 `reasoning_effort`。始终开启的家族不能用 `use_reasoning: false` 选择。
 
-## 在决策中选择推理
+## 在决策中选择推理 {#select-reasoning-in-a-decision}
 
 Model 拥有家族后，配置其决策引用：
 

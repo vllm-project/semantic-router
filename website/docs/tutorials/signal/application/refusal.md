@@ -3,7 +3,7 @@
 ## Overview
 
 `refusal` asks the decision model whether the model's answer declines the request.
-It asks the `refusal` [preset](../../../system-one/reference#preset-catalog),
+It asks the `refusal` [preset](../../../system-one/reference/presets#preset-catalog),
 "Did the assistant refuse?", with the options `compliance` and `refusal`, at
 the response stage. It reads the answer, so a refusal rule exists only once
 the model has answered: a response plugin reads it, never a decision's rules.

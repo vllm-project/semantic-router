@@ -85,7 +85,7 @@ definition.
 | --- | --- |
 | Signals and their thresholds | Provider models and backend endpoints |
 | Projections and dependency graph | Model facts on `providers.models` |
-| Decisions, priorities, and routing strategy | Shared classifier and embedding assets |
+| Decisions, priorities, and routing strategy | The Router's decision and embedding models |
 | Selection and looper policy | API, identity, observability, and transport settings |
 | Route-local plugins | External stores and integration services |
 | Cache, replay, learning, session, and metric namespaces | Model files and service connections |

@@ -20,20 +20,22 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-`config init` writes the packaged minimal canonical template and refuses to
-replace an existing file unless `--force` is explicit. When a Router is already
-running, start from `vllm-sr config get` instead so unrelated active settings
-are preserved. Declare physical models in `providers.models` and reference their
-names in the applicable decision's `modelRefs`. For named recipes, decisions
-live under `recipes[].decisions`; reusable built-in recipes receive
-model assignments when an Entrypoint is published. Optional model metadata
-stays in the shared top-level `providers.models`. Add the metadata required by
-the selected algorithm or capability, such as context limits or LoRA adapters.
+- **Start from a template.** `config init` writes the packaged minimal
+  canonical template, and refuses to replace an existing file unless you pass
+  `--force`.
+- **Or from the running Router.** When a Router is already running, start from
+  `vllm-sr config get`, so unrelated active settings are preserved.
+- **Models and decisions.** Declare physical models in `providers.models`, and
+  reference their names in each decision's `modelRefs` under
+  `recipes[].decisions`. Built-in recipes get their model assignments when an
+  entrypoint is published.
+- **Model facts** stay on the shared `providers.models` entries. Add what the
+  selected algorithm or capability needs, such as context limits or LoRA
+  adapters.
 
-The local runtime derives stack-specific service addresses in runtime-owned
-state without rewriting the source file. Concurrent `serve` and `stop`
-operations for the same runtime and stack are serialized; retry after the
-active lifecycle operation finishes.
+The local runtime keeps stack-specific service addresses in its own state,
+without rewriting the source file. Concurrent `serve` and `stop` operations on
+the same stack run one at a time; retry after the active one finishes.
 
 ## Dashboard
 
@@ -72,7 +74,7 @@ does not merge sample models or decisions into your policy. Author and validate
 the canonical document as `config.yaml`, then place that document under
 `configOverride` in the Helm values file.
 
-```yaml
+```yaml title="values.yaml"
 configOverride:
   version: v0.5
   listeners:
@@ -86,13 +88,13 @@ configOverride:
     models:
       - name: local/general
         provider_model_id: my-served-model
+        capabilities: [chat]
         backend_refs:
           - name: primary
             endpoint: model-server.default.svc.cluster.local:8000
             protocol: http
             provider: vllm
             weight: 100
-        capabilities: [chat]
   recipes:
     - name: default
       strategy: priority
@@ -121,12 +123,15 @@ helm upgrade --install semantic-router \
   -f values.yaml
 ```
 
-Helm values seed the Router ConfigMap at install. If the Dashboard or Router
-API later saves a config edit, an ordinary Helm upgrade preserves that live
-document. To intentionally apply a revised `configOverride`, change
-`configMap.applyValuesRevision` in the values file for that upgrade. Reusing
-the same revision on later upgrades preserves subsequent live edits. A saved
-ConfigMap edit takes effect after the Router deployment rolls out.
+Helm values seed the Router ConfigMap at install:
+
+- **Live edits survive upgrades.** A config edit saved later by the Dashboard
+  or Router API is kept by an ordinary Helm upgrade.
+- **Apply a revised `configOverride` on purpose** by changing
+  `configMap.applyValuesRevision` for that upgrade. Reusing the same revision
+  later keeps subsequent live edits.
+- **Rollout.** A saved ConfigMap edit takes effect after the Router deployment
+  rolls out.
 
 `vllm-sr serve --target kubernetes --config config.yaml` passes the selected document
 as an atomic override, so chart example routes cannot merge into it. The command
@@ -135,11 +140,13 @@ addresses or knowledge-base paths. Run `vllm-sr config validate` first so schema
 reference errors fail before deployment.
 
 On Kubernetes, `--platform rocm` and `--platform cuda` select the ROCm or CUDA
-Router image, unless an image is set explicitly, and request `amd.com/gpu`
-or `nvidia.com/gpu` resources from canonical device ordinals. Replicas sharing
-one device need one GPU; distinct ordinals require that allocation size. The
-pod schedules onto a node whose device plugin offers those GPUs. Node selectors, tolerations, other resources and the device
-plugin itself come from Helm values or the Operator.
+Router image, unless an image is set explicitly. They request `amd.com/gpu` or
+`nvidia.com/gpu` resources from canonical device ordinals: replicas sharing one
+device need one GPU, and distinct ordinals need one each.
+
+The pod schedules onto a node whose device plugin offers those GPUs. Node
+selectors, tolerations, other resources and the device plugin itself come from
+Helm values or the Operator.
 
 The chart runs the Dashboard as its own Deployment and Service, and that
 Deployment is disabled by default. The Router Service carries the gRPC and HTTP
@@ -165,12 +172,15 @@ The Operator renders a canonical config from two Kubernetes-native inputs:
   `spec.config.models` accept canonical recipes, entrypoints, default plugins
   and model facts.
 
-Other `spec.config` fields are typed Operator adapters for response cache,
-classifiers, tools, observability, reasoning families, and related shared
-settings. The Operator translates them into canonical provider and `global`
-sections. `spec.config.model_deployments`, `model_bindings` and
-`decision_model` carry the model catalog; see
-[Model deployments and the decision model](../api/semantic-router-crd#model-deployments-and-the-decision-model).
+- **The model catalog.** `spec.config.model_deployments`, `model_bindings` and
+  `decision_model` carry it; see
+  [Model deployments and the decision model](../api/semantic-router-crd#model-deployments-and-the-decision-model).
+- **Typed adapters.** The other `spec.config` fields, such as the response
+  cache, reasoning effort, API and observability settings, are typed Operator
+  adapters. The Operator translates them into canonical `providers` and
+  `global` sections.
+- **Refused fields.** `spec.config.routing` and the fields of removed features,
+  such as `classifier` and `prompt_guard`, are refused.
 
 ```yaml
 spec:
@@ -194,7 +204,7 @@ they are not CRD fields. See [Kubernetes Operator](k8s/operator) and the
 
 ## Routing DSL
 
-The DSL is a focused authoring surface for model cards, signals, projections,
+The DSL is a focused authoring surface for model facts, signals, projections,
 decisions, algorithms, plugins, entrypoints, and recipes. Providers, listeners,
 credentials, and global services remain YAML-owned.
 

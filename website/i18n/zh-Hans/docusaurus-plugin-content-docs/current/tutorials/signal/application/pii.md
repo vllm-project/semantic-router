@@ -10,7 +10,7 @@ translation:
 
 ## 概述 {#overview}
 
-`pii` 定位请求中的个人数据，并给出每个 span 的确切字符。它提出 `pii` [预设](../../../system-one/reference#preset-catalog)问题，即基于 11 个[个人数据标签](../../../system-one/reference#personal-data-labels)的 span 问题，并读取完整输入。当模型找到规则计入的标签的 span 时，规则匹配；[`masking`](../../plugin/masking) 插件用占位符替换同样的 span。
+`pii` 定位请求中的个人数据，并给出每个 span 的确切字符。它提出 `pii` [预设](../../../system-one/reference/presets#preset-catalog)问题，即基于 11 个[个人数据标签](../../../system-one/reference/presets#personal-data-labels)的 span 问题，并读取完整输入。当模型找到规则计入的标签的 span 时，规则匹配；[`masking`](../../plugin/masking) 插件用占位符替换同样的 span。
 
 ## 主要优势 {#key-advantages}
 
@@ -75,7 +75,7 @@ recipes:
 
 问题读取当前用户轮次；设置 `input.history` 时读取之前的用户轮次，设置 `input.tool_results` 时读取文本工具结果；工具调用和非文本内容不会被读取。它还会读取 `global.router.routing_input` 从路由文本中移除的内容，所以个人数据无法藏在伪造的记忆块里。
 
-它读取完整输入，输入超过一次前向计算的长度时分窗口读取。模型没有读到的文本（超过其输入或扫描预算、被截断，或在信号截止时间前没有读完）按个人数据计入，所以无法检查的文本不能当作干净文本通过。
+它读取完整输入，输入超过一次前向计算的长度时分窗口读取。模型没有读到的文本（超过其输入或扫描预算，或被截断）按个人数据计入，所以无法检查的文本不能当作干净文本通过。在信号截止时间前没有完成的扫描没有答案，只有设置 `on_unknown: match` 时才匹配。
 
 模型可能只找到某个值的一次出现，而漏掉后面的副本。所找到的、长度至少两个字符的值，其其他所有完全相同、整词匹配的副本也会以同一标签报告，因此遮蔽会替换每一个副本。
 
@@ -103,7 +103,7 @@ recipes:
 
 ### 回答问题的模型 {#the-model-that-answers}
 
-除非 `pii` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有 PII 规则；见[选择部署](../../../system-one/deployments)。该问题需要 span：解析到不支持 span 的部署（例如 d3 模型）的规则会以 `span_required` 加载失败。vela3-fast（默认）、Vela 3.0 的 d3 规格和 Vela 2.0 用它们自己的 PII 问题回答，并与该请求针对同一文本的其他问题放在同一次调用中。
+除非 `pii` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有 PII 规则；见[选择部署](../../../system-one/deploy/deployments)。该问题需要 span：解析到不支持 span 的部署（例如 d3 模型）的规则会以 `span_required` 加载失败。vela3-fast（默认）、Vela 3.0 的 d3 规格和 Vela 2.0 用它们自己的 PII 问题回答，并与该请求针对同一文本的其他问题放在同一次调用中。
 
 ```yaml
 global:
