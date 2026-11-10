@@ -953,11 +953,16 @@ components:
         tokens:
           type: integer
           minimum: 2
-          description: Window size including special tokens.
+          description: >-
+            Window size including special tokens. A size that leaves no room
+            for content after the head's special tokens fails the request.
         overlap:
           type: integer
           minimum: 0
-          description: Content tokens shared by neighbouring windows.
+          description: >-
+            Content tokens shared by neighbouring windows. An overlap that is
+            not smaller than the content width (tokens minus special tokens)
+            fails the request.
     ClassifyResponse:
       type: object
       required: [model, head, kind, labels, results, usage]
