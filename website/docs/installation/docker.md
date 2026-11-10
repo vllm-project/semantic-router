@@ -9,17 +9,21 @@ Docker is the shortest path from a Semantic Router configuration to a running
 stack. It is a good fit for evaluation, development, CI, edge hosts, and
 single-host deployments that do not need Kubernetes scheduling or failover.
 
-The CLI manages the Router, the Dashboard, and the supporting services required
-by the selected configuration, and with `--gateway extproc` an Envoy container
-in front of the Router (see [Gateway Modes](gateway-modes)). The Router starts
-the [model runtime](../model-runtime/get-started/overview.md) for its own classifiers and
-embedding models. Model servers remain separate: a healthy Router stack does
-not mean that its provider endpoints are installed, running, or able to
-generate.
+| Component | Who runs it |
+| --- | --- |
+| Router, Dashboard and the services the configuration needs | The CLI |
+| An Envoy container in front of the Router | The CLI, with `--gateway extproc` (see [Gateway Modes](gateway-modes)) |
+| The Router's decision and embedding models | The [model runtime](../model-runtime/get-started/overview.md), which the Router starts |
+| The model servers that answer users | You |
+
+:::note
+A healthy Router stack doesn't mean its provider endpoints are installed,
+running, or able to generate. Test them directly.
+:::
 
 ## Start the stack
 
-Complete the [Quickstart](/docs/installation) to install the CLI and create a
+Complete the [Quickstart](installation.md) to install the CLI and create a
 configuration, or start from an existing canonical YAML file:
 
 ```bash
@@ -27,19 +31,25 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-A stable CLI pulls Router and Dashboard images tagged with its own release
-version, and a development CLI build pulls the images published from its own
-`main` commit, tagged with that commit's SHA. A source checkout uses `:latest`.
+| CLI | Pulls Router and Dashboard images tagged |
+| --- | --- |
+| Stable release | With its own release version |
+| Development build | With the SHA of the `main` commit it was built from |
+| Source checkout | `:latest` |
+
 `--image` and the documented image environment overrides select a different
 build when needed.
 
-With no `--config`, `vllm-sr serve` uses `config.yaml` in the current directory
-or opens first-run setup in the Dashboard. During setup the command keeps
-running: when you activate a config in the Dashboard, it starts the Router from
-that config and waits for it to become ready. If you stop it first, the next
-`vllm-sr serve` starts the Router, and `vllm-sr status` says when setup is
-complete. The Dashboard never gets the container runtime's socket. The default
-local endpoints are:
+With no `--config`, `vllm-sr serve` uses `config.yaml` in the current
+directory, or opens first-run setup in the Dashboard:
+
+- **During setup the command keeps running.** When you activate a config in
+  the Dashboard, it starts the Router from it and waits until it is ready.
+- **If you stop it first,** the next `vllm-sr serve` starts the Router, and
+  `vllm-sr status` says when setup is complete.
+- **The Dashboard never gets the container runtime's socket.**
+
+The default local endpoints are:
 
 | Endpoint | Default | Purpose |
 | --- | --- | --- |
@@ -48,33 +58,36 @@ local endpoints are:
 | Management API | `http://localhost:8080` | Validate config and use evaluation, replay, or vector-store APIs. |
 | Router metrics | `http://localhost:9190/metrics` | Prometheus metrics, including the model runtime's `vsr_model_runtime_*`. |
 
-The Dashboard port binds to `127.0.0.1` by default. First-run admin
-registration remains available from the local host. For a remote machine,
-forward the port with `ssh -L 8700:127.0.0.1:8700 <host>` and open the local
-Dashboard URL. To publish the Dashboard on all host interfaces, set
-`VLLM_SR_DASHBOARD_HOST_BIND=0.0.0.0` and provision both
-`DASHBOARD_ADMIN_EMAIL` and `DASHBOARD_ADMIN_PASSWORD`. An explicit
-`DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true` also permits a wildcard bind when
-first-admin registration on that network is intended. The CLI rejects a
-wildcard bind with neither choice configured.
-
 Ports can change with the active configuration or a stack port offset. Use
 `vllm-sr status` when you are unsure which endpoints are active.
 
-After starting containers, the CLI waits up to 1800 seconds for Router
-readiness, or Dashboard readiness during first-run setup. Set
-`--startup-timeout SECONDS` to a positive integer when model loading or GPU
-compilation needs a different budget:
+The Dashboard binds to `127.0.0.1` by default, and first-run admin
+registration stays available from the local host. For a remote machine,
+forward the port with `ssh -L 8700:127.0.0.1:8700 <host>` and open the local
+Dashboard URL.
+
+:::warning Publishing the Dashboard on all interfaces
+Set `VLLM_SR_DASHBOARD_HOST_BIND=0.0.0.0`, and either provision both
+`DASHBOARD_ADMIN_EMAIL` and `DASHBOARD_ADMIN_PASSWORD`, or set
+`DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true` when first-admin registration on that
+network is intended. The CLI rejects a wildcard bind with neither.
+:::
+
+After starting containers, the CLI waits up to 1800 seconds for the Router to
+be ready, or for the Dashboard during first-run setup. Set
+`--startup-timeout SECONDS` when model loading or GPU compilation needs a
+different budget:
 
 ```bash
 vllm-sr serve --config config.yaml --startup-timeout 7200
 ```
 
-Choose the budget using startup measurements for your models and hardware.
-This option applies to the local Docker target and does not change inference
-request deadlines. On timeout, the CLI exits with an error and leaves the
-containers available for `vllm-sr status` and `vllm-sr logs router`.
-Use `vllm-sr stop` when you want to stop them.
+- **Measure first.** Choose the budget from startup measurements for your
+  models and hardware.
+- **Startup only.** It applies to the local Docker target, and doesn't change
+  inference request deadlines.
+- **On timeout,** the CLI exits with an error and leaves the containers for
+  `vllm-sr status` and `vllm-sr logs router`. Use `vllm-sr stop` to stop them.
 
 ## Connect model backends
 
@@ -118,17 +131,24 @@ reboot. On a server, start it with a policy:
 vllm-sr serve --config config.yaml --restart-policy unless-stopped
 ```
 
-`unless-stopped` and `always` restart a container that exits and start the
-stack again when the Docker daemon starts; `on-failure` restarts only containers
-that fail. `vllm-sr stop` still stops the stack. The policy applies to the
-containers that start creates, so pass it on every `serve`. With Podman, enable
-its restart service as well (`systemctl enable --now podman-restart.service`) so
-that containers with a policy come back after a reboot.
+| Policy | Behavior |
+| --- | --- |
+| `unless-stopped`, `always` | Restart a container that exits, and start the stack again when the Docker daemon starts. |
+| `on-failure` | Restart only containers that fail. |
 
-With `--gateway extproc`, Envoy uses the safe `info` log level by default. To
-troubleshoot temporarily, set `VLLM_SR_ENVOY_LOG_LEVEL=debug` before starting
-the stack, then unset it when finished: debug logging can expose forwarded
-request headers, including provider `Authorization` headers, in logs.
+- `vllm-sr stop` still stops the stack.
+- The policy applies to the containers that `serve` creates, so pass it on
+  every `serve`.
+- With Podman, also enable its restart service
+  (`systemctl enable --now podman-restart.service`) so containers come back
+  after a reboot.
+
+:::warning Envoy debug logs
+With `--gateway extproc`, Envoy logs at the safe `info` level by default. To
+troubleshoot, set `VLLM_SR_ENVOY_LOG_LEVEL=debug` before starting the stack,
+and unset it when finished: debug logs can expose forwarded request headers,
+including provider `Authorization` headers.
+:::
 
 ## Expose the Dashboard through a reverse proxy
 
@@ -141,11 +161,12 @@ export GF_LIVE_ALLOWED_ORIGINS='https://dashboard.example.com'
 vllm-sr serve --config config.yaml
 ```
 
-Separate multiple origins with commas. Use origins in
-`scheme://host[:port]` form without paths, queries, fragments, or trailing
-slashes. Grafana supports wildcard patterns, but exact origins are safer for
-public deployments. `vllm-sr serve` writes the value into the generated
-`.vllm-sr/grafana/grafana.serve.ini`; restart the stack after changing it.
+- Separate multiple origins with commas, in `scheme://host[:port]` form,
+  without paths, queries, fragments or trailing slashes.
+- Grafana supports wildcard patterns, but exact origins are safer for public
+  deployments.
+- `vllm-sr serve` writes the value into the generated
+  `.vllm-sr/grafana/grafana.serve.ini`; restart the stack after changing it.
 
 ## When to move to Kubernetes
 

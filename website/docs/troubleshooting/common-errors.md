@@ -20,6 +20,17 @@ complete canonical configuration and validate the result.
 Use [config/config.yaml](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)
 when you need the exhaustive field context.
 
+| Symptom | Go to |
+| --- | --- |
+| The Router doesn't start, or rejects the file | [Router cannot load the configuration](#router-cannot-load-the-configuration) |
+| A validation error names an entrypoint or recipe | [Entrypoint and recipe validation](#entrypoint-and-recipe-validation) |
+| A request fails with a routing error code | [A request returns a routing error code](#a-request-returns-a-routing-error-code) |
+| The response cache doesn't start, or rarely hits | [Response cache cannot start](#response-cache-cannot-start) |
+| A PII or jailbreak route matches unexpectedly | [A PII route matches unexpectedly](#a-pii-route-matches-unexpectedly) |
+| A backend has no address | [Provider backend has no address](#provider-backend-has-no-address) |
+| The decision or embedding model doesn't load | [A decision or embedding model cannot load](#a-decision-or-embedding-model-cannot-load) |
+| Requests fall back after the domain signal | [Domain confidence is too low](#domain-confidence-is-too-low) |
+
 ## Router cannot load the configuration
 
 ### `Failed to create ExtProc server`
@@ -51,9 +62,10 @@ The process cannot open the path it received. Check:
 Use `vllm-sr status` to identify the active workspace before inspecting
 container mounts.
 
-## Entrypoint / Recipe Validation
+## Entrypoint and recipe validation
 
-`vllm-sr config validate` (or `vllm-sr validate`) includes a repair hint for common multi-recipe wiring errors.
+`vllm-sr config validate` includes a repair hint for common multi-recipe
+wiring errors.
 
 ### Unknown recipe
 
@@ -241,9 +253,13 @@ separately and leave automatic creation disabled.
 ### Cache hits are unexpectedly rare
 
 First confirm that a `response_cache` plugin is enabled for the request, in
-`global.plugins` or the decision's plugins, and inspect
-`x-vsr-response-path` (`cache` on a hit) or replay diagnostics. If embeddings are healthy but near
-duplicates miss, test a lower `min_similarity` on representative traffic:
+`global.plugins` or the decision's plugins. Then inspect `x-vsr-response-path`
+(`cache` on a hit) or the replay diagnostics.
+
+A semantic hit passes two stages: `recall` finds similar cached requests, and
+the `same_request` judge confirms one. If embeddings are healthy but near
+duplicates miss, test a lower `recall.min_similarity`, or a lower
+`judge.min_score`, on representative traffic:
 
 ```yaml
 global:
@@ -253,8 +269,14 @@ global:
         enabled: true
         semantic:
           match:
-            recall: {top_k: 1, min_similarity: 0.75}
+            recall: {method: embedding, top_k: 3, min_similarity: 0.75}
+            judge: {preset: same_request, min_score: 0.8}
 ```
+
+:::warning Write both stages
+A `match` block replaces the default as a whole. A block with `recall` alone
+serves the most similar cached request without asking the judge.
+:::
 
 A decision's own plugin overrides it for that decision:
 
@@ -269,7 +291,8 @@ recipes:
               enabled: true
               semantic:
                 match:
-                  recall: {top_k: 3, min_similarity: 0.70}
+                  recall: {method: embedding, top_k: 3, min_similarity: 0.70}
+                  judge: {preset: same_request, min_score: 0.8}
 ```
 
 Lower thresholds increase false-match risk. Evaluate answer equivalence before
@@ -347,13 +370,14 @@ from the route. Changing the rule changes every decision that reads it.
 
 ## Provider backend has no address
 
-The validation error:
+These validation errors mean a backend reference cannot be resolved:
 
 ```text
-providers.models[<model>].backend_refs requires endpoint or base_url
+providers.models[<model>].backend_refs[<n>] has no endpoint URL
+<path> requires endpoint because provider '<provider>' has no default
 ```
 
-means a backend reference cannot be resolved:
+Give the backend an `endpoint`:
 
 ```yaml
 providers:
@@ -372,11 +396,10 @@ Write a full URL in `endpoint` when the provider requires a complete API root
 such as `https://provider.example/v1`. Use a hostname reachable from the Router
 network; `localhost` refers to the Router container itself.
 
-The version segment in that API root is accepted for every Provider ID.
-Providers whose own operation path already carries the version, such as
-`anthropic` and `minimax`, do not repeat it, so both
-`https://provider.example/v1` and `https://provider.example` resolve to the
-same upstream path.
+The version segment in that API root is accepted for every provider ID.
+Providers whose operation path already carries the version, such as
+`anthropic` and `minimax`, don't repeat it: `https://provider.example/v1` and
+`https://provider.example` resolve to the same upstream path.
 
 See [Container connectivity](./container-connectivity) for end-to-end checks.
 
@@ -416,11 +439,10 @@ long-term immutability workaround.
 
 ## Domain confidence is too low
 
-If requests frequently fall back after domain classification, confirm which
-model answers the `domains` rules before changing their `predicate`: a rule
-without one uses the answering model's calibrated threshold (0.41 on
-vela3-fast), or 0.5 with an `uncalibrated_preset` warning. Then evaluate a
-lower value on labeled traffic:
+If requests often fall back after the domain signal, first confirm which
+model answers the `domains` rules. A rule without a `predicate` uses the
+answering model's calibrated threshold (0.41 on vela3-fast), or 0.5 with an
+`uncalibrated_preset` warning. Then evaluate a lower value on labeled traffic:
 
 ```yaml
 recipes:
