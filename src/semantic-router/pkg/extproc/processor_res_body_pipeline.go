@@ -169,8 +169,9 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 		return &responsePolicyPlan{blocked: refused}
 	}
 	if rule := ctx.ResponseGuard.blocking(); rule != nil {
+		ctx.ResponsePath = headers.ResponsePathBlocked
 		return &responsePolicyPlan{
-			blocked: r.createErrorResponse(403, responseGuardBlockMessage(rule)),
+			blocked: r.createErrorResponseOnPath(403, responseGuardBlockMessage(rule), ctx.ResponsePath),
 			commitFunc: func() {
 				r.recordRouterReplayResponseGuard(ctx)
 				r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "response_blocked", false)

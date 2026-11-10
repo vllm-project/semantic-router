@@ -863,7 +863,6 @@ class RequestParamsPluginConfig(BaseModel):
     ] = None
     max_tokens_limit: Optional[int] = Field(default=None, ge=1)
     max_n: Optional[int] = Field(default=None, ge=1)
-    strip_unknown: Optional[bool] = None
 
 
 ResponseGuardAction = Literal["block", "annotate", "none"]

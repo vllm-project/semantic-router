@@ -281,6 +281,7 @@ recipes:
 | `emits[].retention` | The decision's [`retention`](../tutorials/decision/retention) attribute |
 | `masking` `threshold` | `masking.signal`, naming a `pii` rule whose `predicate` applies |
 | `system_prompt` `mode: append` | `mode: replace`, which is what it did |
+| `request_params` `strip_unknown` | Removed: the Router never read it, and it refuses a request field the client's wire format does not declare |
 
 `global.model_catalog.modules` is removed. Its `prompt_compression` compressed
 the text the routing signals read, which is now the `compress.signals` block of

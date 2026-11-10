@@ -2,12 +2,15 @@ package extproc
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
 func TestAddSystemPromptUsesRouterConfigBeforeGlobal(t *testing.T) {
@@ -115,6 +118,54 @@ func TestAddSystemPromptPreservesRawProviderFieldsAndIntegerPrecision(t *testing
 	assert.JSONEq(t, `{"type":"ephemeral"}`, string(messages[0]["cache_control"]))
 	assert.JSONEq(t, "9007199254740995", string(messages[0]["opaque_message_integer"]))
 	assert.JSONEq(t, `"opaque reasoning"`, string(messages[1]["reasoning_content"]))
+}
+
+// replace takes the place of every instruction the caller sent: each system
+// and developer message and the Responses instructions, whichever backend
+// the request is sent to.
+func TestSystemPromptReplaceDropsEveryCallerInstruction(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		client, target llmprotocol.WireFormat
+		body           string
+	}{
+		{
+			"second system message", llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1,
+			`{"model":"m","messages":[{"role":"system","content":"CLIENT_SYS_A"},{"role":"system","content":"CLIENT_SYS_B"},{"role":"user","content":"hi"}]}`,
+		},
+		{
+			"developer before system", llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1,
+			`{"model":"m","messages":[{"role":"developer","content":"CLIENT_DEV"},{"role":"system","content":"CLIENT_SYS"},{"role":"user","content":"hi"}]}`,
+		},
+		{
+			"responses instructions", llmprotocol.OpenAIResponsesV1, llmprotocol.OpenAIResponsesV1,
+			`{"model":"m","instructions":"CLIENT_INSTR","input":"hi"}`,
+		},
+		{
+			"anthropic backend", llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1,
+			`{"model":"m","max_tokens":16,"messages":[{"role":"system","content":"CLIENT_SYS"},{"role":"developer","content":"CLIENT_INSTR"},{"role":"user","content":"hi"}]}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router, model := routingTestRouterForFormat(tc.target)
+			request, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequestForMutation(tc.client, []byte(tc.body))
+			require.NoError(t, err)
+			ctx := routingTestContext(tc.client, &request)
+			decision := config.Decision{Name: "support", Plugins: []config.DecisionPlugin{{
+				Type:          config.DecisionPluginSystemPrompt,
+				Configuration: config.MustStructuredPayload(config.SystemPromptPluginConfig{SystemPrompt: "ROUTER_PROMPT", Mode: config.SystemPromptModeReplace}),
+			}}}
+			ctx.VSRSelectedDecision = &decision
+
+			_, err = router.prepareProviderDispatch(&request, model, decision.Name, false, ctx)
+			require.NoError(t, err)
+			body, err := router.encodeDispatchRequest(ctx)
+			require.NoError(t, err)
+
+			assert.Equal(t, 1, strings.Count(string(body), "ROUTER_PROMPT"), "%s", body)
+			assert.NotContains(t, string(body), "CLIENT_")
+		})
+	}
 }
 
 func decisionWithSystemPrompt(name string, prompt string) config.Decision {

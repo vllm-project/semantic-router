@@ -1,7 +1,8 @@
 """Plugin forms the Router no longer reads: the response_jailbreak and
 hallucination plugins (a response_guard rule over the signals they checked),
-masking's own threshold (the pii rule masking names), and a system_prompt mode
-other than insert or replace.
+masking's own threshold (the pii rule masking names), a system_prompt mode
+other than insert or replace, and request_params' strip_unknown, which the
+Router never read.
 
 The Router refuses each one with a line that names `vllm-sr config migrate`,
 which rewrites it; the CLI refuses them with the same lines.
@@ -80,4 +81,10 @@ def _plugin_form(plugin: dict[str, Any]) -> tuple[str, str, str] | None:
                 f'system_prompt mode "{mode}" is neither insert nor replace',
                 "mode: replace, which is what it did",
             )
+    if plugin_type == "request_params" and "strip_unknown" in configuration:
+        return (
+            "removed_field",
+            "request_params strip_unknown is removed: the Router never read it",
+            "nothing; the Router refuses a request field its wire format does not declare",
+        )
     return None

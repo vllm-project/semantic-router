@@ -353,11 +353,5 @@ function getRequestParamsPluginFieldSchema(): FieldSchema[] {
       placeholder: '1',
       description: 'Maximum allowed value for n (number of completions)',
     },
-    {
-      key: 'strip_unknown',
-      label: 'Strip Unknown',
-      type: 'boolean',
-      description: 'Remove fields not in the OpenAI spec',
-    },
   ]
 }

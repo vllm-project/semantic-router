@@ -2514,6 +2514,11 @@ func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
 	if !strings.Contains(bodyStr, "Response blocked: jailbreak content detected in LLM output") {
 		t.Errorf("expected jailbreak block message in body, got: %s", bodyStr)
 	}
+	if path := immediateHeaderValue(&ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_ImmediateResponse{ImmediateResponse: imm},
+	}, headers.VSRResponsePath); path != headers.ResponsePathBlocked {
+		t.Errorf("%s = %q, want %q", headers.VSRResponsePath, path, headers.ResponsePathBlocked)
+	}
 	if responseCache.exactAdded || responseCache.addEntryCalled {
 		t.Fatal("a fallback answer the guard blocked was written to the response cache")
 	}
@@ -2536,10 +2541,12 @@ func TestFallbackAnswerTheGuardPassesIsCached(t *testing.T) {
 func TestFallbackResponsePolicyRefusesAStreamingClientInStreamForm(t *testing.T) {
 	imm, ctx, responseCache := guardedFallbackAnswer(t, true, 0.95)
 	body := string(imm.GetBody())
-	if imm.GetStatus().GetCode() != typev3.StatusCode_OK || immediateHeaderValue(&ext_proc.ProcessingResponse{
-		Response: &ext_proc.ProcessingResponse_ImmediateResponse{ImmediateResponse: imm},
-	}, "content-type") != "text/event-stream" {
+	reply := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_ImmediateResponse{ImmediateResponse: imm}}
+	if imm.GetStatus().GetCode() != typev3.StatusCode_OK || immediateHeaderValue(reply, "content-type") != "text/event-stream" {
 		t.Fatalf("reply = %d %s, want the refusal as a 200 event stream", imm.GetStatus().GetCode(), body)
+	}
+	if path := immediateHeaderValue(reply, headers.VSRResponsePath); path != headers.ResponsePathBlocked {
+		t.Fatalf("%s = %q, want %q", headers.VSRResponsePath, path, headers.ResponsePathBlocked)
 	}
 	if !strings.HasPrefix(body, `data: {"error":`) || !strings.Contains(body, "jailbreak content detected in LLM output") ||
 		strings.Contains(body, unsafeAnswer) {

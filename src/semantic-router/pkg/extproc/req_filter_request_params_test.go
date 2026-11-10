@@ -25,7 +25,6 @@ func TestApplySemanticRequestParamsBlocksAndCapsNeutralFields(t *testing.T) {
 		"blocked_params":   []string{"frequency_penalty", "prompt_cache_key", "custom_evil_field"},
 		"max_tokens_limit": 500,
 		"max_n":            1,
-		"strip_unknown":    true,
 	})
 	if err != nil {
 		t.Fatal(err)

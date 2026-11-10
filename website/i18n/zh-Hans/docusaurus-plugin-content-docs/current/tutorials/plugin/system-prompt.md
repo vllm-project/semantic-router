@@ -41,7 +41,7 @@ plugins:
       system_prompt: You are a domain expert. Answer precisely and state tradeoffs.
 ```
 
-`mode: replace`（默认）替换调用方的系统提示词；`mode: insert` 把该提示词放在它之前。其他任何模式都会在加载时失败，`vllm-sr config migrate` 会把它写成 `replace`，这正是它原来的行为。
+`mode: insert`（默认）把该提示词放在调用方的系统提示词之前。`mode: replace` 丢弃调用方发送的所有 system 和 developer 指令（包括 Responses 的 `instructions` 字段），并以该提示词取而代之。其他任何模式都会在加载时失败，`vllm-sr config migrate` 会把它写成 `replace`，这正是它原来的行为。
 
 插入的文本会发送给选定的模型，并可能改变缓存标识和模型行为。不得在其中放入 secret 或不受信任的调用方文本。完整示例见：
 [`config/fragments/plugin/system-prompt/expert.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/system-prompt/expert.yaml)。

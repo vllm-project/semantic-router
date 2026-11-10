@@ -98,12 +98,11 @@ type RequestParamsPluginConfig struct {
 	MaxTokensLimit *int `json:"max_tokens_limit,omitempty" yaml:"max_tokens_limit,omitempty"`
 	// MaxN is the maximum allowed value for n (number of completions).
 	MaxN *int `json:"max_n,omitempty" yaml:"max_n,omitempty"`
-	// StripUnknown if true, removes fields not in the OpenAI spec.
-	StripUnknown bool `json:"strip_unknown,omitempty" yaml:"strip_unknown,omitempty"`
 }
 
 // How system_prompt applies its prompt: insert puts it before the first
-// system block's content, replace takes that block's place.
+// system block's content, replace takes the place of every system and
+// developer block.
 const (
 	SystemPromptModeInsert  = "insert"
 	SystemPromptModeReplace = "replace"

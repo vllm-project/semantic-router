@@ -5231,9 +5231,6 @@
         },
         "max_n": {
           "type": "integer"
-        },
-        "strip_unknown": {
-          "type": "boolean"
         }
       },
       "additionalProperties": false,

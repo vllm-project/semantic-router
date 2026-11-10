@@ -97,9 +97,6 @@ func pluginFieldsRequestParams(p *config.DecisionPlugin) map[string]Value {
 	if cfg.MaxN != nil {
 		fields["max_n"] = IntValue{V: *cfg.MaxN}
 	}
-	if cfg.StripUnknown {
-		fields["strip_unknown"] = BoolValue{V: true}
-	}
 	return fields
 }
 

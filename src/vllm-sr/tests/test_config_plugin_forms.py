@@ -23,6 +23,7 @@ CASES = (
     "removed-plugin-hallucination",
     "removed-field-masking-threshold",
     "invalid-value-system-prompt-mode",
+    "removed-field-request-params-strip-unknown",
 )
 
 

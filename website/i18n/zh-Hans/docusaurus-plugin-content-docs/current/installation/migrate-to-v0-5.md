@@ -253,6 +253,7 @@ recipes:
 | `emits[].retention` | 决策的 [`retention`](../tutorials/decision/retention) 属性 |
 | `masking` 的 `threshold` | `masking.signal`，指定一条 `pii` 规则，使用它的 `predicate` |
 | `system_prompt` 的 `mode: append` | `mode: replace`，这正是它原来的行为 |
+| `request_params` 的 `strip_unknown` | 已移除：路由器从未读取它，并且会拒绝客户端线路格式未声明的请求字段 |
 
 `global.model_catalog.modules` 已移除。它的 `prompt_compression` 压缩路由信号读取的文本，现在是 `global.plugins` 中 `context` 插件的 `compress.signals` 块；配方自己的 `context` 插件可以覆盖它，决策的插件不能包含它：
 

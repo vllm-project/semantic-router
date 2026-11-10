@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -28,8 +29,9 @@ var RemovedPluginTypes = map[string]string{
 // own thresholds before plugins acted on named signals: response_jailbreak
 // and hallucination (a response_guard rule over the signals they checked),
 // masking's threshold (the pii rule masking names), and a system_prompt mode
-// other than insert or replace. response_jailbreak comes first, so a
-// decision's hallucination rule joins the guard its jailbreak rule started.
+// other than insert or replace; and request_params' strip_unknown, which the
+// Router never read. response_jailbreak comes first, so a decision's
+// hallucination rule joins the guard its jailbreak rule started.
 var pluginForms = []ConfigForm{
 	{
 		Code:    CodeRemovedPluginType,
@@ -64,6 +66,17 @@ var pluginForms = []ConfigForm{
 		},
 		Migrate: func(m *Migration, at FormMatch) error {
 			m.Set(ensureMapping(at.Node, "configuration"), "mode", Scalar(SystemPromptModeReplace))
+			return nil
+		},
+	},
+	{
+		Code:    CodeRemovedField,
+		Paths:   slices.Concat(RoutingScopes("decisions[].plugins[]"), RoutingScopes("plugins[]"), []string{"global.plugins[]"}),
+		Match:   hasPluginFields(DecisionPluginRequestParams, "strip_unknown"),
+		What:    "request_params strip_unknown is removed: the Router never read it",
+		Becomes: "nothing; the Router refuses a request field its wire format does not declare",
+		Migrate: func(m *Migration, at FormMatch) error {
+			m.Delete(mappingValue(at.Node, "configuration"), "strip_unknown")
 			return nil
 		},
 	},

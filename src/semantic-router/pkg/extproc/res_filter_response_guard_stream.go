@@ -69,6 +69,7 @@ func (r *OpenAIRouter) handleHeldStreamBody(body []byte, endOfStream bool, ctx *
 	r.initializeSemanticResponseStream(ctx)
 	if len(body) > responseGuardHoldLimit-hold.read {
 		r.completeSemanticStream(ctx, errResponseGuardHoldLimit)
+		ctx.ResponsePath = headers.ResponsePathBlocked
 		return r.endUnreadStream(ctx, responseGuardOverLimit, llmprotocol.NewError(llmprotocol.ErrorPermission,
 			"response_guard_hold_limit", "Response blocked: the answer is larger than the response guard can check", nil))
 	}
@@ -180,9 +181,13 @@ func (r *OpenAIRouter) recordUnreadStream(ctx *RequestContext, outcome string) {
 }
 
 // refuseHeldStream answers the client with protocolError in its protocol's
-// streaming form, in place of everything the hold kept.
+// streaming form, in place of everything the hold kept. The guard's own
+// refusal names the blocked response path; a stream that failed keeps its.
 func (r *OpenAIRouter) refuseHeldStream(ctx *RequestContext, protocolError *llmprotocol.ProtocolError) *ext_proc.ProcessingResponse {
 	response := heldStreamPart(r.encodeStreamRefusal(ctx, protocolError))
+	if ctx.ResponsePath == headers.ResponsePathBlocked {
+		setResponseBodyHeaderOverwrite(response, headers.VSRResponsePath, ctx.ResponsePath)
+	}
 	if trace := responseTrace(ctx); trace != "" {
 		setResponseBodyHeaderOverwrite(response, headers.VSRTrace, trace)
 	}
