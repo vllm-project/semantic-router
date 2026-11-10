@@ -487,8 +487,8 @@ const config: Config = {
           ],
         },
         {
-          label: 'Dashboard',
-          href: 'https://app.vllm-sr.ai',
+          label: 'System Duo',
+          href: 'https://app.vllm-sr.ai/',
           className: 'nav-dashboard-cta',
           position: 'right',
         },

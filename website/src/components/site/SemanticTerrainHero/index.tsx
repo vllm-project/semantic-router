@@ -137,12 +137,12 @@ export default function SemanticTerrainHero(): JSX.Element {
               <div className={styles.actions}>
                 <PillLink
                   className={styles.primaryCta}
-                  href="https://app.vllm-sr.ai/playground"
+                  href="https://app.vllm-sr.ai/#try"
                   target="_blank"
                   rel="noreferrer"
                 >
                   <Translate id="homepage.hero.primaryCta">
-                    Try the Playground
+                    Try System Duo
                   </Translate>
                   <span aria-hidden="true">→</span>
                 </PillLink>

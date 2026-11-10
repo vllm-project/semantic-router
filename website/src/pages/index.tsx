@@ -93,20 +93,20 @@ function FinalCtaSection(): JSX.Element {
               </h2>
               <p>
                 <Translate id="homepage.finalCta.description">
-                  Explore intelligent routing in the Playground. Bring it to your own stack when you're ready.
+                  Explore intelligent routing in System Duo. Bring it to your own stack when you're ready.
                 </Translate>
               </p>
             </div>
             <div className={styles.finalCtaActions}>
               <Link
                 className={styles.finalCtaLink}
-                href="https://app.vllm-sr.ai/playground"
+                href="https://app.vllm-sr.ai/#try"
                 rel="noreferrer"
                 target="_blank"
               >
                 <span className={styles.finalCtaIcon} aria-hidden="true"><FiGlobe /></span>
                 <span className={styles.finalCtaLinkCopy}>
-                  <strong><Translate id="homepage.finalCta.playground">Try the Playground</Translate></strong>
+                  <strong><Translate id="homepage.finalCta.playground">Try System Duo</Translate></strong>
                   <span><Translate id="homepage.finalCta.playgroundDetail">See how requests find the right model.</Translate></span>
                 </span>
                 <FiArrowUpRight className={styles.finalCtaArrow} aria-hidden="true" />

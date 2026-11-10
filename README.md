@@ -6,7 +6,7 @@
 
 <p>
   <a href="https://vllm-sr.ai">Documentation</a> |
-  <a href="https://app.vllm-sr.ai/playground">Playground</a> |
+  <a href="https://app.vllm-sr.ai/">System Duo</a> |
   <a href="https://vllm-sr.ai/blog/">Blog</a> |
   <a href="https://vllm-sr.ai/publications/">Publications</a> |
   <a href="https://huggingface.co/vllm-sr">Hugging Face</a> |
@@ -62,14 +62,9 @@ Point your harness at the Router's inference endpoint. Use a public model ID suc
 
 Follow **[Connect an agent harness](https://vllm-sr.ai/docs/next/installation/agent-harness/)** for setup and compatibility.
 
-### Online playground
+### Try it online
 
-Try the online playground at <https://app.vllm-sr.ai/playground>.
-
-Credentials:
-
-- Username: `love@vllm-sr.ai`
-- Password: `vllm-sr-read`
+Try [System Duo](https://app.vllm-sr.ai/#try): pick an example and it runs live in your browser, with a free key on first run.
 
 ## Latest News
 

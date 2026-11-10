@@ -71,9 +71,9 @@
     "message": "讨论区",
     "description": "Navbar item with label Discussions"
   },
-  "item.label.Dashboard": {
-    "message": "控制台",
-    "description": "Navbar item with label Dashboard"
+  "item.label.System Duo": {
+    "message": "System Duo",
+    "description": "Navbar item with label System Duo"
   },
   "item.label.GitHub": {
     "message": "GitHub",
