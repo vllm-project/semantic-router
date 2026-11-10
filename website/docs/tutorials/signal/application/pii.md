@@ -48,7 +48,7 @@ recipes:
         - name: tool_result_pii
           input:
             tool_results: true
-            turn: false
+            request: false
     decisions:
       - name: keep-private
         priority: 200
@@ -68,7 +68,7 @@ recipes:
 | `ignore_labels` | Labels the rule never counts |
 | `input.history` | Also read the earlier user turns |
 | `input.tool_results` | Also read the request's tool results |
-| `input.turn` | `false` leaves the current user turn out, so the rule reads only the earlier user turns or tool results it names |
+| `input.request` | `false` leaves the current user turn out, so the rule reads only the earlier user turns or tool results it names |
 | `on_unknown` | What the rule reports when its model gives no answer: `no_match` (the default) or `match` |
 | `deployment`, `timeout_ms` | The deployment that answers, and the answer's deadline |
 
@@ -88,7 +88,7 @@ cannot hide in a fake memory block.
 A coding agent's user turn carries its harness's own instructions: Claude Code
 2.1.317, for example, puts a commit trailer with an email address into a
 reminder in the first user message. A rule meant for what the agent's tools
-bring back sets `input.turn: false` with `input.tool_results: true`, as
+bring back sets `input.request: false` with `input.tool_results: true`, as
 `tool_result_pii` above does, so it reads the tool results alone, and leaves
 out the current turn with what `routing_input` removed from it. Such a rule is
 not asked, and does not match, before the request has a tool result.

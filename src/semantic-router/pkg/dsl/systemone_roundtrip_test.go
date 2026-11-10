@@ -42,7 +42,7 @@ func TestSystemOneSignalAndAlgorithmRoundTrip(t *testing.T) {
 			Question: config.SystemOneQuestion{Type: "span", Instructions: "Which spans name a place?", Head: "broad", Labels: []config.SystemOneOption{{Key: "city"}}},
 		},
 		{
-			Name: "tool_output_failure", Deployment: "decision-kai", Input: config.SystemOneInput{ToolResults: true, Turn: new(bool)},
+			Name: "tool_output_failure", Deployment: "decision-kai", Input: config.SystemOneInput{ToolResults: true, Request: new(bool)},
 			Question: config.SystemOneQuestion{Type: "noul", Instructions: "Does this tool output show a failure?"},
 		},
 		{

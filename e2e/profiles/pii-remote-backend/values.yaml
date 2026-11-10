@@ -41,7 +41,7 @@ config:
               gte: 0.5
             input:
               tool_results: true
-              turn: false
+              request: false
       decisions:
         - name: block_tool_output_pii
           description: Personal data the agent's tools brought back

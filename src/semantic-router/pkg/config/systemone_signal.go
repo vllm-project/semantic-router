@@ -107,12 +107,12 @@ type SystemOneInput struct {
 	Context bool `yaml:"context,omitempty"`
 	// ToolResults adds the request's tool results.
 	ToolResults bool `yaml:"tool_results,omitempty"`
-	// Turn false leaves the current user turn out, so a request-stage rule
+	// Request false leaves the current user turn out, so a request-stage rule
 	// reads only the earlier user turns or the tool results it names, and is
 	// not asked when they hold no text. An agent's user turn carries its
 	// harness's own instructions, which a rule about tool output must not
 	// read. Unset reads the turn.
-	Turn *bool `yaml:"turn,omitempty"`
+	Request *bool `yaml:"request,omitempty"`
 	// Image, Audio and Video add the request's parts of that medium; the
 	// answering deployment must declare the input modality.
 	Image bool `yaml:"image,omitempty"`
@@ -123,9 +123,9 @@ type SystemOneInput struct {
 	PreviousAnswer bool `yaml:"-" json:"-"`
 }
 
-// ReadsTurn reports whether a rule reads the current user turn.
-func (i SystemOneInput) ReadsTurn() bool {
-	return i.Turn == nil || *i.Turn
+// ReadsRequest reports whether a rule reads the current user turn.
+func (i SystemOneInput) ReadsRequest() bool {
+	return i.Request == nil || *i.Request
 }
 
 // Input modalities a rule reads besides text.

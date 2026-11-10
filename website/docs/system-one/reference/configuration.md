@@ -53,7 +53,7 @@ the fields its type allows:
 | `fact_check`, `user_feedbacks` | `labels`, `predicate` |
 | `jailbreak` | `predicate`, `stage`, `input.history`, `on_unknown` |
 | `safety` | `labels` (harm categories), `predicate`, `stage` |
-| `pii` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results`, `input.turn`, `on_unknown` |
+| `pii` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results`, `input.request`, `on_unknown` |
 | `hallucination`, `refusal` | `predicate` |
 | `turn_relation` | `labels`, `input.previous_turns` (default 4) |
 | `complexity` | `labels` |

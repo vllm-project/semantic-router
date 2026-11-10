@@ -188,8 +188,8 @@ func systemOneInputValue(input config.SystemOneInput) map[string]interface{} {
 	if input.PreviousTurns > 0 {
 		value["previous_turns"] = input.PreviousTurns
 	}
-	if !input.ReadsTurn() {
-		value["turn"] = false
+	if !input.ReadsRequest() {
+		value["request"] = false
 	}
 	return value
 }

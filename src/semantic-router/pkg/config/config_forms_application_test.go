@@ -104,7 +104,7 @@ func TestAToolResultPIIRuleKeepsReadingOnlyTheToolResults(t *testing.T) {
 	if !ok {
 		t.Fatal("the pii rule is gone")
 	}
-	if input := rule.Rule.Input; input.ReadsTurn() || input.History || !input.ToolResults {
+	if input := rule.Rule.Input; input.ReadsRequest() || input.History || !input.ToolResults {
 		t.Fatalf("the migrated rule reads %+v, want the tool results alone", input)
 	}
 }

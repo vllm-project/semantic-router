@@ -240,7 +240,7 @@ recipes:
 - `previous_turns` (0 to 32): the last turns of the conversation, user and
   assistant, as a transcript.
 - `tool_results`: the request's tool results.
-- `turn: false`: leave the current user turn out, so a request-stage rule
+- `request: false`: leave the current user turn out, so a request-stage rule
   reads only the earlier user turns or the tool results it names, as its
   request. It needs `history` or `tool_results`, takes no `previous_turns`
   or media, and is not asked, so it does not match, while those hold no

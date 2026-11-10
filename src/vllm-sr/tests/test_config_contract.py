@@ -29,13 +29,13 @@ def test_pii_input_survives_cli_round_trip_and_rejects_unknown_fields():
 
 
 def test_pii_input_can_leave_the_user_turn_out_only_with_something_else_to_read():
-    rule = PIIRule(name="tool-output", input={"tool_results": True, "turn": False})
+    rule = PIIRule(name="tool-output", input={"tool_results": True, "request": False})
 
-    assert rule.model_dump(exclude_none=True)["input"]["turn"] is False
+    assert rule.model_dump(exclude_none=True)["input"]["request"] is False
     with pytest.raises(
         ValueError, match=re.escape("input.history or input.tool_results")
     ):
-        PIIRule(name="nothing", input={"turn": False})
+        PIIRule(name="nothing", input={"request": False})
 
 
 def test_unknown_policy_literal_matches_allowed_values():

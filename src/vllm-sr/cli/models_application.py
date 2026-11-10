@@ -103,7 +103,7 @@ class PIIInput(BaseModel):
     history: bool = False
     tool_results: bool = False
     # False leaves the current user turn out, as a systemone rule's input does.
-    turn: bool | None = None
+    request: bool | None = None
 
 
 class PIIRule(ApplicationRule):

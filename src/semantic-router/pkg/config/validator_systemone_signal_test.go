@@ -133,13 +133,13 @@ func TestSystemOneRuleFieldErrors(t *testing.T) {
 			cfg.SystemOneRules[0].Stage, cfg.SystemOneRules[0].Input.Context = SystemOneStageRequest, true
 		}, "a request-stage rule does not have"},
 		"turn left out with nothing else": {func(cfg *RouterConfig) {
-			cfg.SystemOneRules[0].Input.Turn = new(bool)
+			cfg.SystemOneRules[0].Input.Request = new(bool)
 		}, "the rule reads input.history or input.tool_results"},
 		"turn left out at the response stage": {func(cfg *RouterConfig) {
-			cfg.SystemOneRules[0].Stage, cfg.SystemOneRules[0].Input = SystemOneStageResponse, SystemOneInput{ToolResults: true, Turn: new(bool)}
-		}, "input.turn: false applies to a request-stage rule"},
+			cfg.SystemOneRules[0].Stage, cfg.SystemOneRules[0].Input = SystemOneStageResponse, SystemOneInput{ToolResults: true, Request: new(bool)}
+		}, "input.request: false applies to a request-stage rule"},
 		"turn left out with an image": {func(cfg *RouterConfig) {
-			cfg.SystemOneRules[0].Input = SystemOneInput{ToolResults: true, Image: true, Turn: new(bool)}
+			cfg.SystemOneRules[0].Input = SystemOneInput{ToolResults: true, Image: true, Request: new(bool)}
 		}, "drop input.previous_turns and the media inputs"},
 		"unknown stage":    {func(cfg *RouterConfig) { cfg.SystemOneRules[0].Stage = "routing" }, "stage must be request or response"},
 		"unknown coverage": {func(cfg *RouterConfig) { cfg.SystemOneRules[0].Coverage = "whole" }, "coverage must be truncate or full"},
@@ -162,7 +162,7 @@ func TestSystemOneRuleFieldErrors(t *testing.T) {
 	accepted.SystemOneRules[0].Stage = SystemOneStageResponse
 	accepted.SystemOneRules[0].Input = SystemOneInput{Answer: true, Context: true, History: true, PreviousTurns: MaxSystemOnePreviousTurns, ToolResults: true}
 	accepted.SystemOneRules[0].Coverage, accepted.SystemOneRules[0].OnUnscanned = SystemOneCoverageFull, SystemOneUnscannedNoMatch
-	accepted.SystemOneRules[2].Input = SystemOneInput{History: true, ToolResults: true, Turn: new(bool)}
+	accepted.SystemOneRules[2].Input = SystemOneInput{History: true, ToolResults: true, Request: new(bool)}
 	accepted.SystemOneRules[1].Labels = []string{"math"}
 	accepted.SystemOneRules[3].IgnoreLabels = []string{"shipping"}
 	if err := validateSystemOneContracts(accepted); err != nil {

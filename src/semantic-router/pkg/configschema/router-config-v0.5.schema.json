@@ -4527,7 +4527,7 @@
         "tool_results": {
           "type": "boolean"
         },
-        "turn": {
+        "request": {
           "type": "boolean"
         }
       },
@@ -6251,7 +6251,7 @@
         "tool_results": {
           "type": "boolean"
         },
-        "turn": {
+        "request": {
           "type": "boolean"
         },
         "image": {

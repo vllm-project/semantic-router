@@ -124,24 +124,24 @@ class SystemOneInput(BaseModel):
     # False leaves the current user turn out: the rule reads only the earlier
     # user turns or the tool results it names, and is not asked before they
     # hold text.
-    turn: bool | None = None
+    request: bool | None = None
 
 
 def turnless_input_error(reads, stage: str | None) -> str | None:
     """What is wrong with an input that leaves the current user turn out."""
-    if reads.turn is not False:
+    if reads.request is not False:
         return None
     if (stage or "request") != "request":
-        return "input.turn: false applies to a request-stage rule"
+        return "input.request: false applies to a request-stage rule"
     if not reads.history and not reads.tool_results:
         return (
-            "input.turn: false leaves the current user turn out, so the rule "
+            "input.request: false leaves the current user turn out, so the rule "
             "reads input.history or input.tool_results"
         )
     media = (getattr(reads, key, False) for key in ("image", "audio", "video"))
     if getattr(reads, "previous_turns", 0) > 0 or any(media):
         return (
-            "input.turn: false reads only the earlier user turns and the tool "
+            "input.request: false reads only the earlier user turns and the tool "
             "results; drop input.previous_turns and the media inputs"
         )
     return None

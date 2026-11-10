@@ -560,7 +560,7 @@ recipes:
             gte: 0.8
           input:
             tool_results: true
-            turn: false
+            request: false
           deployment: primary
         # The masking plugin of static_business_route masks what this rule
         # detects in the request as it is sent.
@@ -732,7 +732,7 @@ recipes:
             instructions: Does this tool output show a failed command or a failing test?
           input:
             tool_results: true
-            turn: false
+            request: false
         # Image and video parts of the current turn go to a deployment that
         # declares the input modality (input.audio is refused until one can).
         - name: chart_request

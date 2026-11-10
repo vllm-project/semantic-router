@@ -19,7 +19,7 @@ SIGNAL modality image_out { labels: ["image", "text_image"] predicate: { gte: 0.
 SIGNAL jailbreak attack { predicate: { gte: 0.7 } stage: "request" input: { history: true } }
 SIGNAL safety harmful { labels: ["Harassment"] stage: "response" }
 SIGNAL pii personal { predicate: { gte: 0.8 } ignore_labels: ["EMAIL_ADDRESS"] input: { history: true, tool_results: true } }
-SIGNAL pii tool_output { input: { tool_results: true, turn: false } }
+SIGNAL pii tool_output { input: { tool_results: true, request: false } }
 SIGNAL hallucination unsupported { predicate: { gte: 0.6 } }
 SIGNAL refusal refused { predicate: { gte: 0.5 } }
 ROUTE guard { PRIORITY 1 WHEN jailbreak("attack") MODEL "m:1b" }

@@ -96,8 +96,8 @@ func (r systemOneReading) previousAnswer() string {
 // others as context). A part with nothing to read is left out.
 func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request {
 	input := rule.Input
-	if !input.ReadsTurn() {
-		return modelservice.Request{State: strings.Join(r.besidesTurn(input), "\n\n")}
+	if !input.ReadsRequest() {
+		return modelservice.Request{State: strings.Join(r.besidesRequest(input), "\n\n")}
 	}
 	if request, ok := r.spanScan(rule); ok {
 		return request
@@ -154,7 +154,7 @@ func (r systemOneReading) spanScan(rule config.SystemOneRule) (modelservice.Requ
 	if rule.Question.Type != config.SystemOneQuestionSpan || input.Answer || input.Context || input.PreviousTurns > 0 {
 		return modelservice.Request{}, false
 	}
-	scanned := r.besidesTurn(input)
+	scanned := r.besidesRequest(input)
 	if len(scanned) == 0 {
 		return modelservice.Request{}, false
 	}
@@ -168,9 +168,9 @@ func (r systemOneReading) spanScan(rule config.SystemOneRule) (modelservice.Requ
 	return request, true
 }
 
-// besidesTurn is the text a rule reads in the earlier user turns and the tool
+// besidesRequest is the text a rule reads in the earlier user turns and the tool
 // results, without the turns and results that hold none.
-func (r systemOneReading) besidesTurn(input config.SystemOneInput) []string {
+func (r systemOneReading) besidesRequest(input config.SystemOneInput) []string {
 	var texts []string
 	if input.History {
 		texts = append(texts, r.history...)
@@ -185,7 +185,7 @@ func (r systemOneReading) besidesTurn(input config.SystemOneInput) []string {
 // current user turn out has none until the earlier turns or the tool results
 // it reads hold some, and is not asked, so it does not match.
 func (r systemOneReading) hasInput(rule config.SystemOneRule) bool {
-	return rule.Input.ReadsTurn() || len(r.besidesTurn(rule.Input)) > 0
+	return rule.Input.ReadsRequest() || len(r.besidesRequest(rule.Input)) > 0
 }
 
 // askedRule is one rule a stage asks: a systemone rule, or an application

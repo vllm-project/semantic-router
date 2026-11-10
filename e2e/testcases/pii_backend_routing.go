@@ -18,7 +18,7 @@ func init() {
 		Fn:          testPIIBackendRouting,
 	})
 	pkgtestcases.Register("pii-tool-output-only", pkgtestcases.TestCase{
-		Description: "Verify a pii rule with input.turn: false reads the tool results and never the user turn",
+		Description: "Verify a pii rule with input.request: false reads the tool results and never the user turn",
 		Tags:        []string{"systemone", "routing", "pii", "agent"},
 		Fn:          testPIIToolOutputOnly,
 	})

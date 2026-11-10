@@ -183,7 +183,7 @@ recipes:
 | `jailbreak` and `pii` rules under `on_error: block` | `on_unknown: match` on the rules |
 | `safety` `threshold`, `labels`, `unsafe_labels`, `model` | `predicate`; `labels` name [harm categories](../system-one/reference/presets#harm-categories); `deployment` |
 | `safety` `hazard` | The [harm categories](../system-one/reference/presets#harm-categories) its `categories` name, in the rule's `labels`, with `hazard.threshold` as the `predicate`; the unsafe `threshold` has no counterpart, and a rule whose categories name none keeps the unsafe verdict (migrate notes both) |
-| `pii` `threshold`, `pii_types_allowed`, `include_history`, `source: tool_result` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results`; `source: tool_result` read the tool results alone, so it becomes `input: {tool_results: true, turn: false}` and drops `include_history` |
+| `pii` `threshold`, `pii_types_allowed`, `include_history`, `source: tool_result` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results`; `source: tool_result` read the tool results alone, so it becomes `input: {tool_results: true, request: false}` and drops `include_history` |
 | `fact_check` rule named `no_fact_check_needed` without labels | `labels: [NO_FACT_CHECK_NEEDED]` with a predicate |
 | `user_feedbacks` and `modality` rules whose name chose the option | The option in `labels` |
 | `reasks`, `topic_continuity` | `turn_relation` with `labels` |

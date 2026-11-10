@@ -516,7 +516,7 @@ var applicationFieldForms = []ConfigForm{
 				input := ensureMapping(at.Node, "input")
 				m.Delete(input, "history")
 				setNode(input, "tool_results", boolScalar())
-				setNode(input, "turn", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "false"})
+				setNode(input, "request", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "false"})
 			}
 			m.Delete(at.Node, "source")
 			return nil

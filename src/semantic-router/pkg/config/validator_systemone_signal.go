@@ -199,17 +199,17 @@ func validateSystemOneInput(rule SystemOneRule) error {
 // belongs to the turn or to the answer.
 func validateTurnlessInput(rule SystemOneRule) error {
 	input := rule.Input
-	if input.ReadsTurn() {
+	if input.ReadsRequest() {
 		return nil
 	}
 	if rule.EffectiveStage() != SystemOneStageRequest {
-		return fmt.Errorf("input.turn: false applies to a request-stage rule")
+		return fmt.Errorf("input.request: false applies to a request-stage rule")
 	}
 	if !input.History && !input.ToolResults {
-		return fmt.Errorf("input.turn: false leaves the current user turn out, so the rule reads input.history or input.tool_results")
+		return fmt.Errorf("input.request: false leaves the current user turn out, so the rule reads input.history or input.tool_results")
 	}
 	if input.PreviousTurns > 0 || input.Image || input.Audio || input.Video {
-		return fmt.Errorf("input.turn: false reads only the earlier user turns and the tool results; drop input.previous_turns and the media inputs")
+		return fmt.Errorf("input.request: false reads only the earlier user turns and the tool results; drop input.previous_turns and the media inputs")
 	}
 	return nil
 }
