@@ -103,7 +103,8 @@ The candidates and the result depend on the mode:
   `match.judge.max_candidates` tools (255 by default): the first as the
   request or the catalog lists them. More tools are never refused; a
   `recall: {method: bm25, top_k: ...}` stage instead narrows them to the ones
-  whose descriptions share the most terms with the request. Each truncation is
+  whose descriptions share the most terms with the request. Recall only
+  narrows, so a `match` block without a judge fails to load. Each truncation is
   a `match.judge.truncated` event on the request's trace span and a count in
   `vsr_match_judge_truncated_total`.
 - `timeout_ms` bounds the call, up to 60000. Without it a systemone

@@ -46,6 +46,7 @@ recipes:
                 - type: rag
                   backend: vectorstore
                   backend_config: {vector_store_id: vs_docs}
+                - type: memory
 global:
   stores:
     memory: {}

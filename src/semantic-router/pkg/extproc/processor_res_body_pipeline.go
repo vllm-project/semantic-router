@@ -124,7 +124,9 @@ func (r *OpenAIRouter) finalizeResponsePolicy(
 // from irreversible persistence. Fallback can therefore validate the final
 // public wire before committing memory, Responses, and replay side effects.
 type responsePolicyPlan struct {
-	blocked    *ext_proc.ProcessingResponse
+	blocked *ext_proc.ProcessingResponse
+	// refusal is the error a streaming client receives for blocked.
+	refusal    *llmprotocol.ProtocolError
 	finalBody  []byte
 	response   *ext_proc.ProcessingResponse
 	commitFunc func()
@@ -166,11 +168,12 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
 	logResponseGuard(ctx, ctx.ResponseGuard)
 	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {
-		return &responsePolicyPlan{blocked: refused}
+		return &responsePolicyPlan{blocked: r.encodeImmediateResponseForClient(refused, ctx), refusal: ctx.ImmediateProtocolError}
 	}
 	if rule := ctx.ResponseGuard.blocking(); rule != nil {
 		return &responsePolicyPlan{
 			blocked: r.createErrorResponse(403, responseGuardBlockMessage(rule)),
+			refusal: responseGuardRefusal(rule),
 			commitFunc: func() {
 				r.recordRouterReplayResponseGuard(ctx)
 				r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "response_blocked", false)

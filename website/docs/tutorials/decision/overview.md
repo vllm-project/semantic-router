@@ -76,7 +76,8 @@ decision "billing": rules.conditions[1]: NOT requires exactly one child conditio
 ### Unknown signals
 
 A signal that failed or answered late is unknown. By default, its condition
-evaluates as `False`. Two settings change that:
+evaluates as `False`, and a `NOT` over it stays `False`. Two settings change
+that:
 
 | Setting | Effect |
 | --- | --- |

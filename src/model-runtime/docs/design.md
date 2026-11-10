@@ -332,14 +332,24 @@ MPS backend and run the pure-torch references; they are marked unvalidated.
 
 `Accelerator.golden_reference(device)` names an optional hardware-qualified
 golden reference. Its default is `accelerator:arch`; CPU adds PyTorch's selected
-instruction set and native or emulated BF16 capability, for example
-`cpu:x86_64:avx2:bf16_emulated`. Device inventory architecture names stay unchanged.
+instruction set and whether its kernels compute BF16 natively, for example
+`cpu:x86_64:avx2:bf16_emulated`. Native BF16 needs AVX-512 BF16 or AMX, and
+oneDNN not capped below them (`ONEDNN_MAX_CPU_ISA`): an AVX-512 BF16 host run
+with `ATEN_CPU_CAPABILITY=avx2 ONEDNN_MAX_CPU_ISA=AVX2` answers as an AVX2 host
+does and selects that host's reference. Device inventory architecture names
+stay unchanged.
 
 `tools/golden_answers.py --record` writes both the generic device-class baseline
-and any qualified reference. The first generic baseline is preserved within a
-revision; later hardware runs update only their qualified entries. A revision
-change clears all old references. Record the new revision on the intended
-baseline device before adding other hardware classes.
+and any qualified reference, with the PyTorch version each was recorded with
+(`torch`). It loads the model without comparing it to the references it
+replaces. The first generic baseline is preserved within a revision and
+PyTorch version; later hardware runs update only their qualified entries. A
+revision change clears all old references, and a PyTorch change starts a new
+baseline for its device class. Record the new revision on the intended
+baseline device before adding other hardware classes. Decision 3.0 computes in
+BF16 on CPU, where a new PyTorch can move its answers past the CPU tolerance:
+its CPU references are recorded with the PyTorch the CPU images pin, and a
+test fails when they are not.
 
 ### 5.4 Engine arguments
 
@@ -615,7 +625,9 @@ model is ready, with the process state (`starting`, `loading`, `warming`,
 `ready`, `degraded`, `failed`) and, when the process serves several models,
 each model's state. `/health/live` is
 liveness (`Liveness`): 200 with `status: alive` while the process serves
-HTTP, whatever its models' states. All three report `api_version`, the
+HTTP, whatever its models' states, and 503 with `status: stalled` and a
+`reason` while a forward has run longer than `--forward-timeout-seconds`
+(section 10). All three report `api_version`, the
 contract version (`info.version`). A router and its runtime come from one
 release, so the router accepts only a runtime of exactly its contract version.
 `/metrics` is Prometheus text with a `model` label on every model-scoped
@@ -1208,7 +1220,14 @@ with a clean device context. The accelerator decides what is one (on CUDA and
 ROCm: a CUDA or HIP error, a device-side assert or an illegal memory access;
 running out of memory is not). Any other error in a forward fails only the
 requests whose jobs were in that batch, as `internal_error`, and so does an
-answer holding NaN or infinity; the model keeps serving. A model that fails
+answer holding NaN or infinity; the model keeps serving. A forward that runs
+longer than `--forward-timeout-seconds` (300 s) is taken for a hung device:
+its model reports `degraded` and takes no requests, and `/health/live`
+answers 503 with `status: stalled`, so a liveness probe restarts the
+process; a forward that does return gives the model back its state. A forward
+on a device cannot be interrupted, so on SIGTERM the server waits
+`--shutdown-grace-seconds` (8 s) for the requests and forwards in flight, then
+exits with status 4, logging each forward it abandoned. A model that fails
 to load releases its worker and device memory. A package or golden-answer
 failure is final; any other load failure (no device with enough free memory,
 a download, a busy device) is retried `--load-attempts` times in all (5),

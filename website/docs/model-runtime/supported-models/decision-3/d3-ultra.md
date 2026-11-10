@@ -59,6 +59,7 @@ Each time it loads, the model compares its answers with the reference
 answers recorded for its revision. They are recorded for:
 
 - CPU (`cpu`)
+- x86-64 CPU with AVX2 (BF16 emulated) (`cpu:x86_64:avx2:bf16_emulated`)
 - x86-64 CPU with AVX-512 BF16 (`cpu:x86_64:avx512:bf16_native`)
 - AMD GPU (ROCm) (`rocm`)
 - AMD Instinct MI300X or MI325X (gfx942) (`rocm:gfx942`)

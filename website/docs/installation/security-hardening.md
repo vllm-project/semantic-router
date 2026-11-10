@@ -201,7 +201,11 @@ The principal is a property of the call:
   dispatch, fallback attempts, Looper hops, System One decision-model calls,
   `escalate` judges, `api_format: systemone` targets, response checks and
   recall embeddings. When the request carries none, the Router answers `401`
-  before the call.
+  before the call, and a fallback chain or Looper run that reaches such a call
+  ends with that `401` instead of another model's answer. A guard that keeps
+  true streaming makes its check only after the client received the answer, so
+  a refused check does not refuse that answer, but no response cache, memory or
+  stored Responses object keeps it.
 - **Calls the Router makes on its own behalf** never carry it, and a delegated
   upstream refuses them: probes, model listings, `router_replay.shadow`
   copies, automatic-output render, store building and management diagnostics.

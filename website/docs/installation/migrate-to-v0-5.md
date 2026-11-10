@@ -442,7 +442,7 @@ providers:
 | `provider: candle`, `ort` or `openvino` | `provider: model_runtime`, on its device, with its artifact's Hub repository; see [Migrate to the model runtime](../model-runtime/deploy/migrate) for `precision`, `profile` and the other engine fields |
 | `global.model_catalog.external[]` | Removed; the `memory_rewrite` model becomes an `openai_chat` deployment that `global.stores.memory.query_rewrite` names, and its access key an environment variable |
 | A backend's `base_url`, `api_key_env`, `auth_header`, `auth_prefix`, `extra_headers` | `endpoint` (a full URL), `auth: {header, prefix, api_key_env}`, `headers` |
-| `global.router.auto_model_names`, `auto_model_name` | An entrypoint of the default recipe with the names the earlier release served: `auto_model_names`, or else `vllm-sr/auto`, `auto` and the `auto_model_name`; beside the file's own entrypoint of the default recipe, whose names stay its own |
+| `global.router.auto_model_names`, `auto_model_name` | An entrypoint of the default recipe with the names the earlier release served: `auto_model_names`, or else `vllm-sr/auto`, `auto` and the `auto_model_name`, `MoM` unless set, so a file of an earlier release that writes neither gets `vllm-sr/auto`, `auto` and `MoM`, less a name a configured model takes, which a request for it now reaches; beside the file's own entrypoint of the default recipe, whose names stay its own, as does a name another entrypoint serves |
 | `global.router.include_config_models_in_list` | `global.router.list_backend_models` |
 | `global.integrations.looper.endpoint` | Removed: the Router makes a Looper's model calls in process |
 | `global.integrations.looper.<algorithm>.model_names` | An entrypoint of those names, for a recipe migrate writes: the default recipe with only its decisions of that algorithm |
@@ -460,7 +460,13 @@ with only those decisions, and an entrypoint of the names for it. With a second
 recipe, the default recipe's entrypoint is marked `default: true`. One thing
 changes: a request none of those decisions matches now goes to the default
 model, as on every entrypoint, where it used to fail. Names no decision ran
-served no request, and migrate drops them.
+served no request, and migrate drops them. A v0.3 file that lists no names for
+an algorithm the default recipe's decisions run served its built-in name,
+`vllm-sr/remom`, `vllm-sr/fusion` or `vllm-sr/flow`, and migrate writes that
+name the same way. A v0.3 file whose entrypoints name a name v0.4 served by
+default, such as `vllm-sr/auto`, `MoM` or `vllm-sr/fusion`, was written for
+main between v0.4 and v0.5: v0.4 refused those entrypoint names, and main
+served only entrypoints, so migrate writes no other name for it.
 
 ```yaml removed
 global:
@@ -482,7 +488,8 @@ recipes:
     description: The fusion decisions of recipe default
     # the signals and settings of recipe default, and only its fusion decisions
 entrypoints:
-  - model_names: [vllm-sr/auto]
+  # the auto model names, here of a file that writes none
+  - model_names: [vllm-sr/auto, auto, MoM]
     recipe: default
     default: true
   - model_names: [vllm-sr/fusion]

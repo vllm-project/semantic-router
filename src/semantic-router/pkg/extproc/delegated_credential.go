@@ -32,10 +32,6 @@ const (
 	delegatedCredentialCode    = "delegated_credential_missing" // #nosec G101 -- error code, not a credential
 )
 
-// delegatedCredentialMissingBody is the OpenAI-style error a fallback attempt
-// refused for want of a delegated credential ends with.
-var delegatedCredentialMissingBody = []byte(`{"error":{"message":"` + delegatedCredentialMessage + `","type":"authentication_error","code":"` + delegatedCredentialCode + `"}}`)
-
 func (r *OpenAIRouter) delegatedCredentialConfig() config.DelegatedCredentialConfig {
 	if r == nil || r.Config == nil {
 		return config.DelegatedCredentialConfig{}
