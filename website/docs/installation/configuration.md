@@ -295,6 +295,9 @@ api_key: ${MODEL_API_KEY}
 | `${VAR-default}` | `default` when `VAR` is unset |
 | `$$` | A literal `$` |
 
+- `VAR` is an uppercase name: `A`-`Z`, digits and `_`, not starting with a
+  digit. Any other `$` text stays as written, such as `$100`, a template's
+  `{{range $i := ...}}` or a `${user_content}` placeholder.
 - A custom recipe must authorize the host variables it needs with
   `--recipe-env NAME`.
 - On Kubernetes, put sensitive values in Secrets, not ConfigMaps or Helm

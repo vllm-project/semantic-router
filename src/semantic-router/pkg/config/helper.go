@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -193,21 +192,21 @@ func (c *RouterConfig) GetModelAccessKeyForProvider(modelName, provider string) 
 	if c == nil || c.ModelConfig == nil {
 		return ""
 	}
+	// The loader already expanded each key once; it is used as it stands.
 	if modelConfig, ok := c.ModelConfig[modelName]; ok {
-		if rawKey := modelConfig.AccessKeys[provider]; rawKey != "" {
-			return os.ExpandEnv(rawKey)
+		if key := modelConfig.AccessKeys[provider]; key != "" {
+			return key
 		}
-		if rawKey := modelConfig.AccessKey; provider == "" && rawKey != "" {
-			expandedKey := os.ExpandEnv(rawKey)
-			return expandedKey
+		if provider == "" && modelConfig.AccessKey != "" {
+			return modelConfig.AccessKey
 		}
 	}
 	if _, baseConfig, ok := c.resolveLoRABaseModel(modelName); ok {
-		if rawKey := baseConfig.AccessKeys[provider]; rawKey != "" {
-			return os.ExpandEnv(rawKey)
+		if key := baseConfig.AccessKeys[provider]; key != "" {
+			return key
 		}
-		if provider == "" && baseConfig.AccessKey != "" {
-			return os.ExpandEnv(baseConfig.AccessKey)
+		if provider == "" {
+			return baseConfig.AccessKey
 		}
 	}
 	return ""

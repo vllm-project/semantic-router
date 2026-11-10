@@ -382,26 +382,17 @@ func TestPackageValidationRejectsLiteralCredentialBeforeInstall(t *testing.T) {
 }
 
 func TestEnvironmentReferenceScannerMatchesRouterExpansionForms(t *testing.T) {
+	// The Router reads only uppercase names; other $ text is not a binding.
 	config := []byte(`
 plain: $PLAIN_NAME
 braced: ${BRACED_NAME}
 empty_default: ${EMPTY_DEFAULT:-fallback}
 unset_default: ${UNSET_DEFAULT-fallback}
-lowercase: ${host_secret}
-invalid_default_name: ${:-fallback}
 escaped: $$NOT_A_REFERENCE
+template: "{{range $i, $resp := .ReferenceResponses}}{{$resp.Content}}{{end}}"
+not_names: $100 ${host_secret} ${:-fallback} ${user_content}
 `)
-	_, err := extractEnvironmentBindings(config)
-	if err == nil {
-		t.Fatal("lowercase environment reference was accepted")
-	}
-	if (!strings.Contains(err.Error(), "/lowercase") && !strings.Contains(err.Error(), "/invalid_default_name")) || strings.Contains(err.Error(), "host-secret-value") {
-		t.Fatalf("unsafe binding error = %v", err)
-	}
-
-	valid := bytes.Replace(config, []byte("${host_secret}"), []byte("${HOST_SECRET}"), 1)
-	valid = bytes.Replace(valid, []byte("${:-fallback}"), []byte("${VALID_DEFAULT:-fallback}"), 1)
-	bindings, err := extractEnvironmentBindings(valid)
+	bindings, err := extractEnvironmentBindings(config)
 	if err != nil {
 		t.Fatalf("extractEnvironmentBindings() = %v", err)
 	}
@@ -409,13 +400,9 @@ escaped: $$NOT_A_REFERENCE
 	for _, binding := range bindings {
 		names = append(names, binding.name)
 	}
-	for _, expected := range []string{"PLAIN_NAME", "BRACED_NAME", "EMPTY_DEFAULT", "UNSET_DEFAULT", "HOST_SECRET", "VALID_DEFAULT"} {
-		if !slices.Contains(names, expected) {
-			t.Fatalf("bindings = %#v, missing %s", bindings, expected)
-		}
-	}
-	if slices.Contains(names, "NOT_A_REFERENCE") {
-		t.Fatalf("escaped dollar became binding: %#v", bindings)
+	slices.Sort(names)
+	if want := []string{"BRACED_NAME", "EMPTY_DEFAULT", "PLAIN_NAME", "UNSET_DEFAULT"}; !slices.Equal(names, want) {
+		t.Fatalf("binding names = %v, want %v", names, want)
 	}
 }
 
