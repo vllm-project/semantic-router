@@ -25,6 +25,7 @@ from .models_application import (
 )
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
@@ -1483,6 +1484,42 @@ class DecisionAction(BaseModel):
         return self
 
 
+# The retry_on names Envoy documents, HTTP then gRPC, as the Router's
+# config.RetryOnConditions lists them. Envoy and the standalone gateway both
+# ignore a name they do not know, so a typo would turn its retries off.
+RETRY_ON_CONDITIONS = (
+    "5xx",
+    "gateway-error",
+    "reset",
+    "reset-before-request",
+    "connect-failure",
+    "envoy-ratelimited",
+    "retriable-4xx",
+    "refused-stream",
+    "retriable-status-codes",
+    "retriable-headers",
+    "http3-post-connect-failure",
+    "cancelled",
+    "deadline-exceeded",
+    "internal",
+    "resource-exhausted",
+    "unavailable",
+)
+
+
+def _known_retry_on(value: str) -> str:
+    for token in value.split(","):
+        token = token.strip()
+        if token and token not in RETRY_ON_CONDITIONS:
+            raise ValueError(
+                f"has unknown condition {token!r}; expected any of "
+                + ", ".join(RETRY_ON_CONDITIONS)
+            )
+    return value
+
+
+RetryOn = Annotated[str, AfterValidator(_known_retry_on)]
+
 # Decision reliability fields Envoy cannot apply to one request.
 DECISION_RELIABILITY_NATIVE_ONLY = (
     "idle_timeout",
@@ -1509,7 +1546,7 @@ class DecisionReliability(BaseModel):
     idle_timeout: Optional[str] = None
     first_byte_timeout: Optional[str] = None
     retry_count: Optional[int] = Field(default=None, ge=0, le=5)
-    retry_on: Optional[str] = None
+    retry_on: Optional[RetryOn] = None
     retriable_status_codes: Optional[List[Annotated[int, Field(ge=100, le=599)]]] = None
     retry_back_off_base: Optional[str] = None
     retry_back_off_max: Optional[str] = None
@@ -1733,7 +1770,7 @@ class ProviderReliability(BaseModel):
 
     lb_policy: Literal["round_robin", "least_request"] = "round_robin"
     retry_count: int = Field(default=0, ge=0, le=5)
-    retry_on: str = "connect-failure,refused-stream"
+    retry_on: RetryOn = "connect-failure,refused-stream"
     consecutive_5xx: int = Field(default=0, ge=0)
     base_ejection_time: str = "30s"
     max_ejection_percent: int = Field(default=50, ge=0, le=100)

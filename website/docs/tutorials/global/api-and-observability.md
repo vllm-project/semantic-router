@@ -214,7 +214,7 @@ The model latency names describe what they observe:
 
 | Metric | Measures |
 | --- | --- |
-| `llm_model_first_response_observation_seconds` | The first stream chunk, or a non-streaming response's headers |
+| `llm_model_first_response_observation_seconds` | The first stream chunk, or a non-streaming response's headers, of successful responses only |
 | `llm_model_response_duration_per_output_token_seconds` | Complete response time divided by reported output tokens |
 
 Neither is first-token latency or decode-only inter-token latency. The

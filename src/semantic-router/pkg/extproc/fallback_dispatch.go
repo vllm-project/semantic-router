@@ -318,6 +318,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	origSemanticRequest := ctx.SemanticRequest
 	origRateLimitCtx := ctx.RateLimitCtx
 	origDiags := ctx.ProtocolDiagnostics
+	origTargetFormat := ctx.TargetFormat
 	var candidateSucceeded bool
 	defer func() {
 		ctx.TraceContext = origTraceContext
@@ -478,6 +479,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	ctx.VSRSelectedModel = candidateModel
 	ctx.ResponsePath = headers.ResponsePathFallback
 	ctx.UpstreamStatusCode = statusCode
+	ctx.TargetFormat = dispatch.targetFormat
 	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
 	ctx.SemanticResponse = &candidateResponse
 	ctx.SemanticRequest = reqCopy
@@ -556,7 +558,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 					} else {
 						attemptOutcome.Error = validateErr
 						attemptOutcome.Discarded = true
-						r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming)
+						r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming, origTargetFormat)
 						evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 						return nil, evalResult, fmt.Errorf("finalized fallback stream validation failed: %w", validateErr)
 					}
@@ -564,7 +566,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 			} else {
 				attemptOutcome.Error = streamErr
 				attemptOutcome.Discarded = true
-				r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming)
+				r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming, origTargetFormat)
 				evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 				return nil, evalResult, fmt.Errorf("finalized fallback stream encoding failed: %w", streamErr)
 			}
@@ -573,7 +575,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		if validateErr := engine.ValidateEncodedResponse(finalBody, false); validateErr != nil {
 			attemptOutcome.Error = validateErr
 			attemptOutcome.Discarded = true
-			r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming)
+			r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming, origTargetFormat)
 			evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 			return nil, evalResult, fmt.Errorf("finalized fallback body wire validation failed: %w", validateErr)
 		}
@@ -759,6 +761,9 @@ func (r *OpenAIRouter) settleFallbackCandidateUsage(ctx *RequestContext, attempt
 	if !ctx.StartTime.IsZero() {
 		completionLatency = time.Since(ctx.StartTime)
 	}
+	// The answer replaces the failed primary's response headers, so the
+	// candidate's own call time is its first response time.
+	recordNonStreamingFirstResponse(ctx, attemptDuration)
 	usage := r.takeNeutralResponseUsage(ctx)
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
@@ -1067,6 +1072,7 @@ func (r *OpenAIRouter) rollbackFallbackContext(
 	origPath string,
 	origDiags []llmprotocol.Diagnostic,
 	wasStreaming bool,
+	origTargetFormat llmprotocol.WireFormat,
 ) {
 	if ctx == nil {
 		return
@@ -1075,6 +1081,7 @@ func (r *OpenAIRouter) rollbackFallbackContext(
 	ctx.VSRSelectedModel = primaryModel
 	ctx.ResponsePath = origPath
 	ctx.UpstreamStatusCode = primaryStatusCode
+	ctx.TargetFormat = origTargetFormat
 	ctx.ProtocolDiagnostics = origDiags
 	ctx.IsStreamingResponse = wasStreaming
 	ctx.ResponseVendor = ""

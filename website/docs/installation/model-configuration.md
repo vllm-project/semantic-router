@@ -198,7 +198,7 @@ providers:
 | `per_try_timeout` | none | Time for each attempt until its response starts. |
 | `first_byte_timeout` | none | Time for the first response byte, so a stream that stalls before it starts can still be retried. Standalone mode only. |
 | `retry_count` | `0` | Retries after the first attempt, up to 5. |
-| `retry_on` | `connect-failure,refused-stream` | When to retry, with Envoy's conditions: `5xx`, `gateway-error`, `reset`, `connect-failure`, `refused-stream`, `retriable-status-codes`, `retriable-4xx`, `reset-before-request`. |
+| `retry_on` | `connect-failure,refused-stream` | When to retry, with Envoy's condition names. Both gateways act on `5xx`, `gateway-error`, `reset`, `connect-failure`, `refused-stream`, `retriable-status-codes`, `retriable-4xx`, `reset-before-request`, and `envoy-ratelimited`. Envoy's other names (`retriable-headers`, `http3-post-connect-failure`, and the gRPC `cancelled`, `deadline-exceeded`, `internal`, `resource-exhausted`, `unavailable`) load, and the standalone gateway ignores them. A name Envoy does not know fails the configuration load. |
 | `retriable_status_codes` | none | Statuses retried under `retriable-status-codes`, such as `429`. |
 | `retry_back_off_base`, `retry_back_off_max` | `25ms`, ten times the base | Bounds of the randomized exponential wait between retries. |
 | `retry_after_max` | none | Wait the `Retry-After` seconds a response asks for, up to this bound. |

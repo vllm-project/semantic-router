@@ -192,7 +192,7 @@ Router Memory 计数器只使用有界标签。参见 [Router Memory Prometheus 
 
 | 指标 | 测量 |
 | --- | --- |
-| `llm_model_first_response_observation_seconds` | 首个流式响应块，或非流式响应的响应头 |
+| `llm_model_first_response_observation_seconds` | 首个流式响应块，或非流式响应的响应头，仅统计成功响应 |
 | `llm_model_response_duration_per_output_token_seconds` | 完整响应耗时除以上报的输出 token 数 |
 
 两者都不等同于首 token 延迟或仅解码阶段的逐 token 延迟。可选的窗口指标每个模型最多汇总 10,000 次已完成的响应，不估算利用率、队列深度或提供方错误率。
