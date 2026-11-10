@@ -4,7 +4,7 @@
 
 `user_feedbacks` reads what the current user turn says about the previous answer.
 It asks the `feedback`
-[preset](../../../system-one/reference#preset-catalog), "What feedback does
+[preset](../../../system-one/reference/presets#preset-catalog), "What feedback does
 this user turn give about the previous answer?", over five options: `SAT`,
 `NEED_CLARIFICATION`, `WRONG_ANSWER`, `WANT_DIFFERENT` and `NO_FEEDBACK`.
 
@@ -72,7 +72,7 @@ as feedback; validate that case before feedback changes the selected model.
 
 The decision model answers every feedback rule, unless the `user_feedback`
 binding or the rule's `deployment` names another; see
-[Choose a deployment](../../../system-one/deployments). vela3-fast, the Vela
+[Choose a deployment](../../../system-one/deploy/deployments). vela3-fast, the Vela
 3.0 d3 sizes and Vela 2.0 have trained forms of the question.
 
 See a complete example:

@@ -11,7 +11,7 @@ status: Implemented
 > **Lifecycle update:** Engine and Router modes share one persistent frontend
 > and model pool. Router is the default even when a model is supplied. Use
 > `vllm-sr serve ARTIFACT --engine` for Engine mode; see
-> [the current Quickstart](../model-runtime/quickstart.md).
+> [the current Quickstart](../model-runtime/get-started/quickstart.md).
 
 ## Summary
 

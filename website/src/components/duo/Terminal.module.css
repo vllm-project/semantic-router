@@ -1,0 +1,30 @@
+/* Duo's syntax colours on ink, each at least 5:1. */
+.prompt {
+  color: #8b8f99;
+  user-select: none;
+}
+
+.bin {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.sub {
+  color: #ff8c69;
+}
+
+.flag {
+  color: #9ec1ef;
+}
+
+.str {
+  color: #f3d3a8;
+}
+
+.val {
+  color: #ffcf7a;
+}
+
+.op {
+  color: #b8c6dc;
+}

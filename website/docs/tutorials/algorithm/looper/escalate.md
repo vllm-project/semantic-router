@@ -134,16 +134,21 @@ the worst-case chain.
 
 ### On System One
 
-A recipe published with `api: systemone` runs escalate with `escalate.stages`.
-This guide starts with **Decision 2.0 Kai 0.6B → Vega 27B**: Kai answers the
-original request; escalate checks that answer before deciding whether to call
-Vega. It does not make a separate mandatory Kai classification call or rerun the
-recipe after the first answer. It supports `choice`, `score`, and `noul`
-requests and keeps the original question bundle together.
+A recipe published with `api: systemone` runs escalate with
+`escalate.stages`. This guide starts with **Decision 2.0 Kai 0.6B → Vega 27B**:
+
+- Kai answers the original request, and escalate checks that answer before
+  deciding whether to call Vega.
+- There is no separate mandatory Kai classification call, and the recipe does
+  not run again after the first answer.
+- It supports `choice`, `score` and `noul` requests, and keeps the original
+  question bundle together.
 
 #### Connect the models
 
-Model aliases are shared resources under `providers.models`. A local alias refers to a model runtime deployment; a remote alias refers to a concrete Engine or compatible System One endpoint. Choose one transport per alias.
+Model aliases are shared resources under `providers.models`. A local alias
+refers to a model runtime deployment; a remote alias refers to a concrete
+Engine or compatible System One endpoint. Choose one transport per alias.
 
 ```yaml
 providers:
@@ -167,11 +172,18 @@ global:
         device: auto
 ```
 
-`provider_model_id` is the model name sent to the remote endpoint. If a backend requires authentication, set `auth: {api_key_env: <VARIABLE>}` on its backend ref. Credentials stay on that backend. Replicas of the same remote model go in its `backend_refs`; different models are separate aliases and stages.
+- `provider_model_id` is the model name sent to the remote endpoint.
+- If a backend requires authentication, set `auth: {api_key_env: <VARIABLE>}`
+  on its backend ref. Credentials stay on that backend.
+- Replicas of the same remote model go in its `backend_refs`; different models
+  are separate aliases and stages.
 
 #### Publish an auto entrypoint
 
-An API-scoped entrypoint makes the recipe available as `vllm-sr/auto`. The listener must explicitly allow that native name. Chat and System One aliases are separate: publishing this entrypoint does not change the Chat default recipe.
+An API-scoped entrypoint makes the recipe available as `vllm-sr/auto`. The
+listener must explicitly allow that native name. Chat and System One aliases
+are separate: publishing this entrypoint does not change the Chat default
+recipe.
 
 ```yaml
 listeners:
@@ -187,17 +199,23 @@ entrypoints:
     recipe: native-escalate
 ```
 
-Add client authentication to the listener before exposing it beyond a trusted development environment. To allow a concrete model as well, add its native provider alias to `systemone.models`.
+Add client authentication to the listener before exposing it beyond a trusted
+development environment. To allow a concrete model as well, add its native
+provider alias to `systemone.models`.
 
 #### Define the stages
 
-The following fragment accepts `choice`, `score` and `noul` requests. Kai exits
-early only when every answer passes its type-specific gate. The threshold below
-is a frozen pilot operating point for Decision 2.0 Kai → Vega, not a general
-recommended default or an accuracy guarantee. The [reproduction guide](https://github.com/vllm-project/semantic-router/tree/main/tools/calibration/systemone_auto)
-pins that experiment’s models and public benchmark. Choose thresholds on
-independent calibration data for your own workload, then freeze them before
+The following fragment accepts `choice`, `score` and `noul` requests. Kai
+exits early only when every answer passes its type-specific gate.
+
+:::warning The threshold is a pilot operating point
+It was frozen for Decision 2.0 Kai → Vega, and is not a recommended default
+or an accuracy guarantee. The
+[reproduction guide](https://github.com/vllm-project/semantic-router/tree/main/tools/calibration/systemone_auto)
+pins that experiment's models and public benchmark. Choose thresholds on
+independent calibration data for your workload, then freeze them before
 evaluation.
+:::
 
 ```yaml
 recipes:
@@ -233,37 +251,76 @@ entrypoints:
     default: true
 ```
 
-The common `gte: 0` rules require a valid distribution for every answer; they
-do not claim an accuracy floor. Vega can return a complete valid answer after
-Kai fails its stricter early-exit gate. This sample has no model-backed routing
-signals, so its two-call budget covers Kai and, when needed, Vega. If a transport
-retry consumes a call, fewer calls remain for later stages.
+- **The common rules check validity, not accuracy.** The `gte: 0` rules
+  require a valid distribution for every answer; they claim no accuracy floor.
+- **Vega answers after Kai fails its gate.** Vega can return a complete valid
+  answer after Kai fails the stricter early-exit gate.
+- **The budget.** This sample has no model-backed routing signals, so its
+  two-call budget covers Kai and, when needed, Vega. A transport retry that
+  uses a call leaves fewer for later stages.
 
-A stage runs a native model unless it says `kind: judge`, and is named by its
-model unless it sets `name`. `modelRefs` is the complete candidate roster. Each stage names one member and can set its own timeout. Stage names cannot use `abstain`, which is reserved for the judge’s no-selection result. A stage cannot add a model that the decision did not declare.
+Stage rules:
 
-For a native request, the Router starts one deadline and physical-call ledger when the public request handler begins, before it reads the body. The request ceiling is derived from the largest `algorithm.budget.deadline` and `algorithm.budget.max_calls` among the recipe's native decisions. After selecting a decision, the Router tightens both limits to that decision's configured budget. This preserves existing per-decision configuration without adding a recipe-level budget field.
+- A stage runs a native model unless it says `kind: judge`, and is named by its
+  model unless it sets `name`.
+- `modelRefs` is the complete candidate roster. Each stage names one member,
+  can set its own timeout, and cannot add a model the decision didn't declare.
+- Stage names cannot use `abstain`, which is reserved for the judge's
+  no-selection result.
 
-Decision signals and built-in model signals run inside the request deadline and call ledger. Their own timeouts remain upper bounds. Every physical exchange counts, including remote decision-model calls and provider transport retries. Signal telemetry tracks signal exchanges; each algorithm stage's call telemetry includes its retries and judge calls. If signals exhaust the request ceiling, remaining signals stay unknown and execution stops. If the selected decision's tighter budget is already exhausted, its algorithm does not start. Either case returns `systemone_budget_exhausted` with `reason: max_calls` or `reason: deadline`; `model_calls` reports all physical exchanges charged so far. The call ledger cannot see work hidden inside an opaque external provider.
+Budget and deadline:
 
-The Router validates every required answer before accepting a response. Missing answers, invalid values, unsupported question types and unproven full-input coverage do not become successful results. If no declared stage satisfies the rule before the budget is exhausted, the request is unresolved: System One escalate always fails rather than serving a rejected answer, so its `on_error` can only be `fail`. Without `quality`, a stage accepts any complete answer that passes its own rules.
+- **One budget per request.** The Router starts one deadline and
+  physical-call ledger when the public request handler begins, before it reads
+  the body.
+- **The ceiling** is the largest `algorithm.budget.deadline` and
+  `algorithm.budget.max_calls` among the recipe's native decisions. Once a
+  decision is selected, both tighten to that decision's budget.
+- **Signals count.** Decision signals and built-in model signals run inside
+  the same deadline and ledger; their own timeouts remain upper bounds.
+- **Every physical exchange counts,** including remote decision-model calls
+  and provider transport retries. Signal telemetry tracks signal exchanges, and
+  each stage's call telemetry includes its retries and judge calls.
 
+When the budget runs out:
+
+| Situation | What happens |
+| --- | --- |
+| Signals exhaust the request ceiling | The remaining signals stay unknown, and execution stops. |
+| The selected decision's tighter budget is already spent | Its algorithm does not start. |
+
+Both return `systemone_budget_exhausted` with `reason: max_calls` or
+`reason: deadline`, and `model_calls` reports every physical exchange charged
+so far. The ledger can't see work hidden inside an opaque external provider.
+
+Acceptance:
+
+- **Every required answer is validated** before a response is accepted.
+  Missing answers, invalid values, unsupported question types and unproven
+  full-input coverage never become successful results.
+- **No stage accepted means unresolved.** System One escalate always fails
+  rather than serving a rejected answer, so its `on_error` can only be `fail`.
+- **Without `quality`,** a stage accepts any complete answer that passes its
+  own rules.
+
+:::note
 The native budget does not replace HTTP server, proxy and client timeouts for
-the complete request. In particular, Dashboard's
-operator diagnostics use the management API's two-minute response write limit;
-configure the full serving path appropriately for longer requests.
+the complete request. Dashboard's operator diagnostics, for example, use the
+management API's two-minute response write limit.
+:::
 
 #### Try the route
 
 Combine the model, listener, entrypoint and recipe snippets in a configuration
-file with `version: v0.3`, connect the Vega Engine endpoint, and start the Router:
+file with `version: v0.5`, connect the Vega Engine endpoint, and start the Router:
 
 ```bash
 vllm-sr serve --config config.yaml
 ```
 
-Then send a request to its native endpoint. The question names and criteria reach each attempted model unchanged.
-Use your listener's API key if authentication is enabled.
+Then send a request to its native endpoint. The question names and criteria
+reach each attempted model unchanged. Use your listener's API key if
+authentication is enabled.
 
 ```bash
 curl -sS http://localhost:8801/v1/systemone \
@@ -287,35 +344,56 @@ curl -sS http://localhost:8801/v1/systemone \
 
 The response's `routing` field reports the selected model, stage and physical
 algorithm model-call count, including retries. A `503` with
-`systemone_unresolved` means no complete answer
-passed the configured rule; it does not mean that an omitted answer was false.
-See the [Router API (English)](https://vllm-sr.ai/docs/next/api/router#route-a-system-one-request) for the
-response fields and error contract.
+`systemone_unresolved` means no complete answer passed the configured rule; it
+does not mean that an omitted answer was false. See the
+[Router API (English)](https://vllm-sr.ai/docs/api/router#route-a-system-one-request)
+for the response fields and error contract.
 
-In Dashboard, open **System One → Decision Playground**, then choose
-`vllm-sr/auto` under **Automatic routes**. Load an example supported by your
-recipe or enter your own questions, then select **Run**. Dashboard uses your
-signed-in management permissions, so you do not need to paste a public API key.
-**Decision Monitoring** shows stage outcomes, request rates and latency. These
-describe live execution; evaluate labeled requests separately to measure
-accuracy.
+To try it in Dashboard:
+
+1. Open **System One → Decision Playground**, and choose `vllm-sr/auto` under
+   **Automatic routes**.
+2. Load an example your recipe supports, or enter your own questions, then
+   select **Run**. Dashboard uses your signed-in management permissions, so no
+   public API key is needed.
+3. Open **Decision Monitoring** for stage outcomes, request rates and latency.
+
+These views describe live execution; evaluate labeled requests separately to
+measure accuracy.
 
 #### Add routing signals
 
-Native signals inspect the complete task document, including its states and questions. The request does not supply a Chat conversation or trusted identity envelope. References to `authz`, `metadata`, `conversation`, `reask`, `user_feedback` and `input_modality` therefore fail configuration validation, including through projections. KB signals are also unavailable in native recipes.
+Native signals inspect the complete task document, including its states and
+questions. The request carries no Chat conversation or trusted identity, so
+references to `authz`, `metadata`, `conversation`, `turn_relation`,
+`user_feedback` and `input_modality` fail configuration validation, including
+through projections.
 
-Preference signals must use a native decision task deployment. Explicit contrastive or external preference adapters and MCP domain classifiers are unavailable in native recipes until they share the request lifecycle. Supported model-backed signals retain their own transport timeouts inside the shared request deadline and call ledger.
+Supported model-backed signals keep their own transport timeouts inside the shared request deadline and call ledger.
 
-The recipe's `strategy` still chooses among matching decisions. Native execution uses its explicit stages and budget rather than Chat fallback, candidate requirements, decision reliability, output contracts or adaptation controls. Keep Chat fallback disabled for this native recipe. `modelRefs` declares aliases only; stage order determines selection, so Chat reasoning controls and model weights are rejected. Provider-level retry and timeout settings still apply to remote exchanges.
+What a native recipe keeps and drops:
+
+- **Kept:** the recipe's `strategy` still chooses among matching decisions,
+  and provider-level retry and timeout settings still apply to remote
+  exchanges.
+- **Dropped:** native execution uses its explicit stages and budget instead of
+  Chat fallback, candidate requirements, decision reliability, output
+  contracts or adaptation controls. Keep Chat fallback disabled for this
+  recipe.
+- **Aliases only:** `modelRefs` declares aliases, and stage order decides
+  selection, so Chat reasoning controls and model weights are rejected.
 
 A recipe can contain several decisions, each with its own stages and budget.
-For example, a keyword decision can send requests mentioning an appeal directly
-to Vega with one stage, while the default decision tries Kai → Vega. Only the
-selected decision executes, and its budget is tightened from the shared request
-ceiling after selection.
-Keywords inspect the task document, including question text, and callers can
-trigger them deliberately. Use them as routing hints, not authorization or a
-promise of better accuracy.
+For example, a keyword decision can send requests that mention an appeal
+straight to Vega with one stage, while the default decision tries Kai → Vega.
+Only the selected decision runs, and its budget tightens from the shared
+request ceiling.
+
+:::warning Keywords are hints, not authorization
+Keywords inspect the task document, question text included, so callers can
+trigger them deliberately. Don't use them for authorization or as a promise of
+better accuracy.
+:::
 
 #### Choose acceptance evidence
 
@@ -324,29 +402,85 @@ An uncalibrated rule can inspect these observations:
 | Field | Meaning |
 | --- | --- |
 | `top_probability` | Largest probability in the native answer distribution; for `noul`, `max(p, 1-p)` |
-| `confidence` | The confidence reported by the native model, when present: System One's published statistic for Choice and Score (see [Decisions](https://vllm-sr.ai/docs/next/model-runtime/reference#decisions)); since runtime contract 3.2.0 its values differ from earlier releases, so recheck thresholds |
+| `confidence` | The confidence reported by the native model, when present: System One's published statistic for Choice and Score (see [Decisions](https://vllm-sr.ai/docs/model-runtime/reference/http-api#decisions)); since runtime contract 3.2.0 its values differ from earlier releases, so recheck thresholds |
 | `probability_margin` | For `noul`, `2 × abs(p - 0.5)`; both confident true and confident false answers have a large margin |
 
-A rule bounds its field with `gt`, `gte`, `lt`, or `lte`, in `[0, 1]`. A rule can target a `question_type`, a named `question`, or both, and optionally a named `state`. All required answers need rule coverage. A stage-local `accept` rule adds a condition; it cannot weaken the algorithm's common quality rule.
+- **Bounds.** A rule bounds its field with `gt`, `gte`, `lt` or `lte`, in
+  `[0, 1]`.
+- **Targets.** A rule can target a `question_type`, a named `question` or
+  both, and optionally a named `state`. Every required answer needs rule
+  coverage.
+- **Stage rules only add.** A stage-local `accept` rule adds a condition; it
+  cannot weaken the algorithm's common quality rule.
 
-A high model probability is not a measured accuracy guarantee. `quality.type: calibrated` instead names an immutable resource in `evaluation.calibrations`, declares `loss: bundle_error` and an explicit `max_risk`. The runtime must verify both the artifact's hash and its applicability to the deployed model, task and arrival population. A missing or incompatible artifact must not silently become an uncalibrated pass.
+A high model probability is not a measured accuracy guarantee.
+`quality.type: calibrated` instead names an immutable resource in
+`evaluation.calibrations`, and declares `loss: bundle_error` and an explicit
+`max_risk`. The runtime must verify the artifact's hash and its fit to the
+deployed model, task and arrival population; a missing or incompatible
+artifact never silently becomes an uncalibrated pass.
 
 #### Use independently certified acceptance
 
-Calibrated execution is an experimental, narrower path. It currently supports native stages in recipes without signals or projections. Judges and model-backed signal paths need additional inference provenance before they can use certified acceptance. Uncalibrated stages can still use the full routing path and an optional judge.
+:::warning Experimental
+Calibrated execution is a narrower path. It currently supports native stages
+in recipes without signals or projections; judges and model-backed signals
+need more inference provenance before they can use it. Uncalibrated stages can
+still use the full routing path and an optional judge.
+:::
 
 To prepare a `systemone-calibration/v1` artifact:
 
-1. Freeze the task's question instructions, criteria and inference options, the policy, and each probability bin's acceptance decision. Input text can vary; changing a question creates a different task template. `options.return_meta` controls evidence visibility and does not change the task identity.
-2. Collect a fresh certification cohort independently from training and threshold selection. Count source bundles, rather than their questions or augmented copies. The statistical assumption is i.i.d. draws from the declared conditional population; a stratified benchmark average does not automatically satisfy it.
-3. Record the full native arrival history and actual model identity from each response. The runtime checks the model, revision, content hash, engine, dtype, numerics and accelerator. A model name alone is insufficient.
-4. Record bundle-error counts in each frozen bin and retain the source manifest, labeling rules and gate-definition digest for audit. A bundle is erroneous when any required answer fails the cohort's predeclared correctness rule. The artifact's `certification` identifies this evaluated population and declares the independent sampling method.
+1. **Freeze the task:** its question instructions, criteria and inference
+   options, the policy, and each probability bin's acceptance decision.
+   - Input text can vary; changing a question creates a different task
+     template.
+   - `options.return_meta` controls evidence visibility, and doesn't change
+     the task identity.
+2. **Collect a fresh certification cohort,** independent from training and
+   threshold selection.
+   - Count source bundles, not their questions or augmented copies.
+   - The statistics assume i.i.d. draws from the declared conditional
+     population; a stratified benchmark average does not automatically
+     satisfy that.
+3. **Record the full native arrival history** and the actual model identity
+   from each response. The runtime checks the model, revision, content hash,
+   engine, dtype, numerics and accelerator; a model name alone is not enough.
+4. **Record bundle-error counts in each frozen bin,** and keep the source
+   manifest, labeling rules and gate-definition digest for audit.
+   - A bundle is erroneous when any required answer fails the cohort's
+     predeclared correctness rule.
+   - The artifact's `certification` identifies the evaluated population and
+     declares the independent sampling method.
 
-The runtime computes a one-sided Clopper–Pearson upper bound from the counts, with a Bonferroni correction across all declared bins. Every predeclared accepting bin must meet `max_risk`, or loading fails. Counts cannot turn a previously rejecting bin into an accepting bin: doing so would change the arrival population of later stages. An unvisited bin can have zero samples only when it remains rejecting.
+How the runtime uses the counts:
 
-The artifact binds the recipe's execution semantics and frozen gates, rather than a global configuration hash. Moving credentials, changing listeners or updating explanatory text does not invalidate it. Missing runtime identity, an unknown task, an error history or an uncovered bin leaves the request unresolved. An artifact's declarations still require a dataset audit; the bound describes its evaluated population and makes no guarantee about distribution shifts or an individual request.
+- It computes a one-sided Clopper–Pearson upper bound, with a Bonferroni
+  correction across all declared bins.
+- Every predeclared accepting bin must meet `max_risk`, or loading fails.
+- Counts can't turn a rejecting bin into an accepting one, because that would
+  change the arrival population of later stages. An unvisited bin can have
+  zero samples only while it stays rejecting.
 
-The Go artifact helpers are `CalibrationTaskSHA256`, `CalibrationPolicySHA256` and `CalibrationGateSHA256` in `pkg/systemone`. Pilot tuning results are not certification artifacts: even zero errors in 96 independent examples gives an approximately 3.1% upper risk bound at 95% confidence before correcting for multiple bins.
+What the artifact binds:
+
+- **The recipe's execution semantics and frozen gates,** not a global
+  configuration hash. Moving credentials, changing listeners or editing
+  explanatory text doesn't invalidate it.
+- **Unresolved requests:** missing runtime identity, an unknown task, an error
+  history or an uncovered bin leave the request unresolved.
+- **Its limits:** the declarations still need a dataset audit. The bound
+  describes the evaluated population, and promises nothing about distribution
+  shifts or an individual request.
+
+The Go artifact helpers are `CalibrationTaskSHA256`, `CalibrationPolicySHA256`
+and `CalibrationGateSHA256` in `pkg/systemone`.
+
+:::note
+Pilot tuning results are not certification artifacts. Even zero errors in 96
+independent examples gives an upper risk bound of about 3.1% at 95%
+confidence, before correcting for multiple bins.
+:::
 
 #### Add an optional LLM judge
 
@@ -355,13 +489,16 @@ selects a complete response from earlier native attempts. It preserves that
 response's native answer probabilities; an LLM's self-reported confidence does
 not replace them. Declare `generation.max_output_tokens` to bound its output.
 
-For an uncalibrated experiment, keep a minimum acceptance floor in the common
-quality rule and put stricter early-exit thresholds in the native stages'
-`accept` rules. The judge can then choose a valid earlier answer that meets the
-common floor even when it did not meet an early-exit threshold. If the common
-rule itself rejects that answer, the judge cannot make it pass merely by
-selecting it. A judge is additional evidence to evaluate, not an accuracy
-guarantee.
+For an uncalibrated experiment:
+
+- Keep a minimum acceptance floor in the common quality rule, and put stricter
+  early-exit thresholds in the native stages' `accept` rules.
+- The judge can then choose a valid earlier answer that meets the common
+  floor, even if it missed an early-exit threshold.
+- If the common rule rejects an answer, the judge cannot make it pass by
+  selecting it.
+
+A judge is additional evidence to evaluate, not an accuracy guarantee.
 
 ```yaml
 stages:
@@ -387,11 +524,13 @@ responses, not a replacement answer synthesized by an LLM.
 
 #### Measure the tradeoff
 
-Compare direct Kai, direct Vega and escalate on the same requests. Choose
-acceptance thresholds on separate calibration data, then freeze the complete
-configuration before evaluation. Report complete responses, unresolved requests,
-escalation rates and measured frontend latency together. A threshold does not
-enforce a fixed fast-path fraction when the request distribution changes.
+- **Compare on the same requests:** direct Kai, direct Vega and escalate.
+- **Freeze before evaluating.** Choose acceptance thresholds on separate
+  calibration data, then freeze the complete configuration.
+- **Report together:** complete responses, unresolved requests, escalation
+  rates and measured frontend latency.
+- **Expect drift.** A threshold does not enforce a fixed fast-path fraction
+  when the request distribution changes.
 
 Count model-backed signals, retries and judge calls when measuring total
 request cost; the algorithm call count covers only execution after the
