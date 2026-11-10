@@ -474,6 +474,12 @@ Keep datasets out of this repository.
 
 Open **Insights** in the Dashboard, or use the
 [Replay API](../../api/router#router-replay) to filter records and inspect a session.
+The search finds a record by its request id, its recipe or its session id, so
+the session id an agent harness sends, such as Claude Code's
+`x-claude-code-session-id`, finds every call of that session. A record's session
+routing history lists the session's calls in order and names the subagent of
+each one by a short hash of its agent identity header, or `main` for the main
+conversation.
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
 not invoices. Missing prices and usage remain unknown.
 

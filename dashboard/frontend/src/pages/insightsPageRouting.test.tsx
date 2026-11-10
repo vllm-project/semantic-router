@@ -135,6 +135,7 @@ describe('recorded routing explanation', () => {
         {
           record_id: 'two',
           timestamp: record.timestamp,
+          agent: '9f2c1a',
           turn_index: 1,
           decision: 'review',
           previous_model: 'alpha',
@@ -162,6 +163,9 @@ describe('recorded routing explanation', () => {
     expect(html).toContain('observe_only')
     expect(html).toContain('/insights/one')
     expect(html).toContain('/insights/two')
+    // a subagent's call names its agent, the main conversation's says main
+    expect(html).toContain('9f2c1a')
+    expect(html).toContain('>main<')
   })
 
   it.each(['first', ''])('requests the exact record recipe scope %j', async (recipe) => {

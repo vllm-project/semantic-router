@@ -27,6 +27,7 @@ func buildTrajectoryRoutes(records []routerreplay.RoutingRecord) []trajectoryRou
 			Decision:       record.Decision, SelectedModel: record.SelectedModel,
 			SelectionMethod: record.SelectionMethod, LifecycleState: record.LifecycleState,
 			ResponseStatus: record.ResponseStatus, DurationMS: record.DurationMS,
+			Agent: agentOf(record),
 		}
 		if diagnostics := record.RouteDiagnostics; diagnostics != nil {
 			route.PreviousModel = diagnostics.PreviousModel
@@ -38,4 +39,13 @@ func buildTrajectoryRoutes(records []routerreplay.RoutingRecord) []trajectoryRou
 		routes = append(routes, route)
 	}
 	return routes
+}
+
+// agentOf is the short hash of the agent identity the protection policy
+// recorded for a call, "" when the harness sent none.
+func agentOf(record routerreplay.RoutingRecord) string {
+	identity, _ := record.SessionPolicy["identity"].(map[string]interface{})
+	agent, _ := identity["agent"].(map[string]interface{})
+	hash, _ := agent["hash"].(string)
+	return hash
 }

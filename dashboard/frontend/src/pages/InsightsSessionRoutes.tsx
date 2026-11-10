@@ -28,7 +28,7 @@ export default function InsightsSessionRoutes({
         <table className={styles.projectionTraceTable}>
           <thead>
             <tr>
-              {['Turn', 'Decision', 'Model', 'Action', 'Reason', 'Result', 'Duration'].map(
+              {['Turn', 'Agent', 'Decision', 'Model', 'Action', 'Reason', 'Result', 'Duration'].map(
                 (heading) => (
                   <th key={heading}>{heading}</th>
                 ),
@@ -42,7 +42,7 @@ export default function InsightsSessionRoutes({
                 (index === 0 ||
                   route.conversation_id !== trajectory.routes?.[index - 1]?.conversation_id) ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       {route.conversation_id ? (
                         <details>
                           <summary>{labels.get(route.conversation_id)}</summary>
@@ -57,6 +57,9 @@ export default function InsightsSessionRoutes({
                 <tr data-record-id={route.record_id}>
                   <td>
                     <Link to={getInsightsRecordPath(route.record_id)}>{route.turn_index + 1}</Link>
+                  </td>
+                  <td title={route.agent ? 'Agent identity hash' : undefined}>
+                    {route.agent || 'main'}
                   </td>
                   <td>{route.decision || 'Unresolved'}</td>
                   <td>

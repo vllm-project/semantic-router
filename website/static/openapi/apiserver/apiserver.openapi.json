@@ -23721,6 +23721,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
                           "conversation_id": {
                             "type": "string"
                           },
