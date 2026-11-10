@@ -74,7 +74,7 @@ recipes:
 
 规则按顺序读取，第一条拦截的规则结束读取。响应阶段信号只在规则读到它时才求值，并且无论多少规则读取它，每个回答只求值一次。
 
-规则添加的警告码有 `hallucination`（回答无法检查时为 `unverified_factual`）、`response_jailbreak`，其他规则为 `response_guard`。被拦截的回答会替换为一条说明发现了什么的消息，而不会说明某项检查失败。
+规则添加的警告码有 `hallucination`（回答无法检查时为 `unverified_factual`）、`response_jailbreak`，其他规则为 `response_guard`，每个已匹配条件中的响应阶段信号各一个；规则无法判定时，取其所有条件。被拦截的回答会替换为一条说明发现了什么的消息，而不会说明某项检查失败。
 
 依据上下文是 [context 插件](./context.md)检索到的文档，以及请求自身的工具结果。
 
@@ -93,7 +93,7 @@ recipes:
 
 - 模型流出的原始事件，包括 usage 块和终止事件，守卫的警告码写入 `x-vsr-warnings`；
 - 对带 `details` 的规则，回答开头带有守卫说明的回答事件；
-- 缓冲回答的 403 所携带的拒绝消息，以该协议的流错误形式发送：Chat 的 `error` 块、Responses 的 `response.failed` 事件或 Messages 的 `error` 事件。
+- 缓冲回答的 403 所携带的拒绝消息，以该协议的流错误形式发送：Chat 的 `error` 块、Responses 的 `response.failed` 事件或 Messages 的 `error` 事件。守卫询问的部署需要委托凭据而请求没有携带时，缓冲回答以 `401` 拒绝，流错误则改为携带这一拒绝。
 
 在 Envoy 之后，Router 只为这些请求要求缓冲响应体；独立运行时，Router 自行缓冲响应体。代价是首 token 时间：模型完成之前客户端收不到任何内容，因此长回答必须在客户端和所有代理的空闲超时之内完成。被扣住的回答上限为 64 MiB，即 Router 接受任何模型响应的大小，Envoy 自身的缓冲上限先于它生效。更大的回答不经读取即以同样的流错误拒绝；没有得到完整回答就结束的流只发送它的失败信息：守卫没有读过的内容不会到达客户端。
 

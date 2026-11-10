@@ -34,7 +34,7 @@ several models. The contract is the OpenAPI document served at
 | `POST /v1/bundle` | Several of the above, for one or more models, in one call. |
 | `GET /v1/models` | What each model is, what it serves, its labels, limits, device and self-check status, and the process's `limits`: the most tasks one `/v1/bundle` may carry and the largest request body. With `/health` and `/health/live`, it reports the contract's `api_version`. `models` lists the decision models as `{name, description, release_date}`, the shape the System One SDKs read. |
 | `GET /health` | Readiness: 200 when every model is ready, 503 otherwise. `status` is `starting`, `loading`, `warming`, `ready`, `degraded` or `failed`, and a process that serves several models lists each model's state. |
-| `GET /health/live` | Liveness: 200 with `"status": "alive"` while the process serves requests, whether or not its models are ready. |
+| `GET /health/live` | Liveness: 200 with `"status": "alive"` while the process serves requests, whether or not its models are ready; 503 with `"status": "stalled"` and a `reason` while a forward has run longer than `--forward-timeout-seconds`. |
 | `GET /metrics` | Prometheus metrics. |
 
 A response carries the answers and `usage`. Add
@@ -348,7 +348,11 @@ a batch: named standard requests under `states`, answered in one call. Every
 entry holds a `state` and its own `questions`, and may hold `images` and
 `videos`; it is read exactly as a standard request with them and the batch's
 `model`, `options` and `assets` would be, and is answered under the same name
-in the response's `states`. The two forms are mutually exclusive: a batch has
+in the response's `states`. An entry whose images, videos, assets or tokens
+are refused fails each of its questions with `invalid_input` (reason
+`input_malformed`) and the refusal's message, and the other entries are
+answered; a batch every entry of which is refused is answered with the first
+refusal. The two forms are mutually exclusive: a batch has
 no top-level `state`, `questions`, `images` or `videos`, and a body that mixes
 the forms is answered 400 `invalid_request`. The Router sends a batch when one
 request stage asks a deployment about several texts: the candidates a
@@ -509,7 +513,8 @@ about a video keeps `limits.video_max_seconds`.
 **Errors.** On `/v1/systemone` a request any of whose questions fails is
 answered as a whole, as System One answers it, so that every answer a client
 receives has its question's type: `{"error": {"code": "question_failed", "question_error",
-"reason", "question", "message"}}`, 422 for `invalid_question`, 400 for
+"reason", "question", "message"}}` (in a batch, with the question's entry as `"state"`),
+422 for `invalid_question`, 400 for
 `max_length_exceeded`, `scan_budget_exceeded` and `invalid_input`, 500 for
 `invalid_model_output`, 503 for `unavailable` and 504 for `deadline_exceeded`.
 The first failed question decides, and the message lists them all.
