@@ -348,7 +348,11 @@ a batch: named standard requests under `states`, answered in one call. Every
 entry holds a `state` and its own `questions`, and may hold `images` and
 `videos`; it is read exactly as a standard request with them and the batch's
 `model`, `options` and `assets` would be, and is answered under the same name
-in the response's `states`. The two forms are mutually exclusive: a batch has
+in the response's `states`. An entry whose images, videos, assets or tokens
+are refused fails each of its questions with `invalid_input` (reason
+`input_malformed`) and the refusal's message, and the other entries are
+answered; a batch every entry of which is refused is answered with the first
+refusal. The two forms are mutually exclusive: a batch has
 no top-level `state`, `questions`, `images` or `videos`, and a body that mixes
 the forms is answered 400 `invalid_request`. The Router sends a batch when one
 request stage asks a deployment about several texts: the candidates a
