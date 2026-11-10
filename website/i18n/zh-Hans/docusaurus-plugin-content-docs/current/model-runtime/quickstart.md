@@ -34,7 +34,7 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev --no-launch
 
 不加 `--engine`（简写 `-e`）的每次启动都使用 Router 模式，包括已保存的 Engine
 配置。MODEL 只修改默认判断模型的 artifact，保留已有副本位置和引擎参数；全新配置
-默认使用 Vela 2.0 0.3B。`--platform auto` 检查实际部署目标，可显式选择 `cpu`、`cuda`
+默认使用 Vela 3.0 vela3-fast。`--platform auto` 检查实际部署目标，可显式选择 `cpu`、`cuda`
 或 `rocm`；`--device-ids` 使用 Docker 主机 GPU 编号并遵守已有可见设备掩码。
 
 ## 2. 运行模型 {#2-serve-a-model}

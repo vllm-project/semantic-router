@@ -171,7 +171,7 @@ GPU 的支持见 [#4636](https://github.com/vllm-project/semantic-router/issues/
 `vllm-sr serve [MODEL]` 每次默认启动 Router；`--engine`（`-e`）启动 Engine。
 两者使用同一前端和模型池，保留已保存的路由配置。Dashboard 只展示启动模式，
 不提供运行时切换入口。MODEL 只覆盖默认判断 deployment 的 artifact；未填写的
-引擎参数和副本位置保留原值，全新配置默认 Vela 2.0 0.3B。
+引擎参数和副本位置保留原值，全新配置默认 Vela 3.0 vela3-fast。
 
 | 范围 | 选项 |
 | --- | --- |

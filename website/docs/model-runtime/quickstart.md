@@ -78,7 +78,7 @@ listener. An existing config keeps its explicit `listeners[].systemone.models`
 allowlist and API keys; restarting in another mode or selecting a model never
 broadens it. Every start without `--engine` uses Router mode; MODEL alone does
 not select Engine mode. Bare `vllm-sr serve` preserves the configured default
-judgment deployment, or initializes Vela 2.0 0.3B in a new configuration.
+judgment deployment, or initializes Vela 3.0 vela3-fast in a new configuration.
 In a second terminal, inspect the public native model list:
 
 ```bash
