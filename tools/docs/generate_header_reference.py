@@ -134,9 +134,10 @@ def cell(value: str) -> str:
 
 def code_list(names: list[str]) -> str:
     quoted = [f"`{name}`" for name in names]
-    if len(quoted) < 3:
-        return " and ".join(quoted)
-    return ", ".join(quoted[:-1]) + " and " + quoted[-1]
+    if not quoted:
+        return ""
+    *rest, last = quoted
+    return f"{', '.join(rest)} and {last}" if rest else last
 
 
 def table(header: str, rows: list[str]) -> list[str]:
