@@ -282,7 +282,7 @@ target runs on the CPU only.
   `provider: model_runtime` and `device: rocm:N`, `cuda:N`, `cpu` or `auto`
   (the first validated GPU with enough free memory, else the CPU). A named GPU
   must exist, or the model fails to load with the reason. See
-  [Choose a model](https://vllm-sr.ai/docs/model-runtime/choose-a-model).
+  [Choose a model](https://vllm-sr.ai/docs/model-runtime/get-started/choose-a-model).
 - Only the deployments that a rule, a feature or a native grant resolves to
   start. `GET $ROUTER_ORIGIN/api/v1/inventory/model-runtime` shows each one's
   `state`, `ready`, `device` and replicas; a running process alone does not
@@ -328,7 +328,7 @@ The frontend publishes `POST /v1/systemone` and `GET /v1/systemone/models`
 according to `listeners[].systemone.models` and the listener's API keys. A body
 is a standard request (`state` and `questions`) or a batch (`states`, a map of
 named standard requests), never both; see
-[the System One API](https://vllm-sr.ai/docs/system-one/api). The Router and its model
+[the System One API](https://vllm-sr.ai/docs/system-one/use/api). The Router and its model
 runtime speak runtime contract 4.0.0 and must come from one release.
 
 MODEL replaces only the default decision deployment's artifact; without it,
@@ -340,7 +340,7 @@ and `--enable-shared-context` set the deployment's engine arguments, and
 `-dp N` (`--data-parallel-size N`) writes N replicas. A new placement uses the
 first N available GPUs; `--device-ids 0` puts all N on one host GPU, and
 `--device-ids 0,1` one per GPU. See the
-[model runtime Quickstart](https://vllm-sr.ai/docs/model-runtime/quickstart).
+[model runtime Quickstart](https://vllm-sr.ai/docs/model-runtime/get-started/quickstart).
 
 ## Envoy in front: `--gateway extproc`
 

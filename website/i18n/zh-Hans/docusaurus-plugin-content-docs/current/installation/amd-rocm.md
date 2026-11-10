@@ -113,7 +113,7 @@ curl --fail http://127.0.0.1:8000/v1/chat/completions \
 
 ## 安装并配置 Semantic Router
 
-按[快速开始](installation/installation.md#安装)安装 CLI。只安装 CLI、不启动栈：
+按[快速开始](installation/installation.md#install)安装 CLI。只安装 CLI、不启动栈：
 
 ```bash
 curl -fsSL https://vllm-sr.ai/install.sh | \
@@ -159,7 +159,7 @@ curl --fail --include http://127.0.0.1:8899/v1/chat/completions \
 
 ## 在 AMD 上运行 Vela 路由模型 {#run-vela-routing-models-on-amd}
 
-Router 自身的模型（Vela 分类器、embedding 和决策模型）运行在[模型运行时](model-runtime/overview.md)中。在 AMD Instinct MI300X 和 MI325X GPU 上，运行时通过 ROCm 版 PyTorch 执行这些模型，该路径已经验证。`--platform rocm` 选择 AMD 镜像，其中包含运行时和经过验证的软件栈（ROCm 7.2 版 PyTorch 2.12、FLA 0.5.2，以及为 ROCm 构建的 `causal-conv1d` 1.7.0），并把 GPU 传给 Router。每个模型加载时都会用在该栈上核验过的参考答案自检；见[选择模型](model-runtime/choose-a-model.md#hardware)。
+Router 自身的模型（决策模型和嵌入模型）运行在[模型运行时](model-runtime/get-started/overview.md)中。在 AMD Instinct MI300X 和 MI325X GPU 上，运行时通过 ROCm 版 PyTorch 执行这些模型，该路径已经验证。`--platform rocm` 选择 AMD 镜像，其中包含运行时和经过验证的软件栈（ROCm 7.2 版 PyTorch 2.12、FLA 0.5.2，以及为 ROCm 构建的 `causal-conv1d` 1.7.0），并把 GPU 传给 Router。每个模型加载时都会用在该栈上核验过的参考答案自检；见[选择模型](model-runtime/get-started/choose-a-model.md#hardware)。
 
 [Vela AMD 模型卡片](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)及完整配置把决策模型和 embedding 模型放在 `rocm:0` 上。连接已有的 OpenAI 兼容后端，使用 `--served-model-name vela-default`。配置预期地址是 `http://vllm:8000`：将后端接入 `vllm-sr-network` 并设置网络别名 `vllm`，或修改 endpoint。先用这个名称验证直连请求。为 Router 和生成后端保留足够内存与算力；选择 Router GPU 时使用 `VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES`，deployment 中索引 `0` 指向可见 GPU。
 
@@ -198,9 +198,9 @@ global:
         device: rocm:0
 ```
 
-越狱、安全、PII 和幻觉问题分窗口读取完整输入；其他问题读取能放进模型输入的部分。这个上限只作用于决策模型，不会缩短聊天请求，也不改变生成模型的上下文窗口。见[长输入](../system-one/performance#long-inputs)。
+越狱、安全、PII 和幻觉问题分窗口读取完整输入；其他问题读取能放进模型输入的部分。这个上限只作用于决策模型，不会缩短聊天请求，也不改变生成模型的上下文窗口。见[长输入](../system-one/deploy/performance#long-inputs)。
 
-早期版本在这里选择固定的 ONNX Runtime 计算图（`head: onnx/model_rocm_32k.onnx`）和 MIGraphX 编译缓存。`vllm-sr config migrate` 会移除这些设置，见[从原生绑定迁移](model-runtime/migrate.md)。
+早期版本在这里选择固定的 ONNX Runtime 计算图（`head: onnx/model_rocm_32k.onnx`）和 MIGraphX 编译缓存。`vllm-sr config migrate` 会移除这些设置，见[从原生绑定迁移](../model-runtime/deploy/migrate.md)。
 
 ## 生产检查清单
 
