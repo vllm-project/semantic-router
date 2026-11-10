@@ -7,11 +7,13 @@ import yaml
 from pydantic import ValidationError as PydanticValidationError
 
 from cli.models import (
+    FastResponsePluginConfig,
     PluginConfig,
     PluginType,
     RouterReplayPluginConfig,
     ContextPluginConfig,
     ContextSource,
+    ResponseGuardPluginConfig,
     ToolsPluginConfig,
 )
 from cli.parser import ConfigParseError, parse_user_config
@@ -112,6 +114,15 @@ decisions:
             assert len(errors) == 0, f"Unexpected validation errors: {errors}"
         finally:
             os.unlink(temp_path)
+
+    @pytest.mark.parametrize(
+        "model", [FastResponsePluginConfig, ResponseGuardPluginConfig]
+    )
+    def test_enabled_false_alone_turns_off_an_inherited_plugin(self, model):
+        """A decision turns off an inherited plugin with enabled: false alone."""
+        assert model(enabled=False).enabled is False
+        with pytest.raises(PydanticValidationError):
+            model()
 
 
 class TestRouterReplayPluginConfig:

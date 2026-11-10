@@ -227,3 +227,29 @@ func TestHeaderMutationDefaultsCannotWriteTheHeadersTheRouterOwns(t *testing.T) 
 		t.Errorf("a header the decision does not write was refused at the decision: %v", err)
 	}
 }
+
+// A request that matches no decision runs the default plugins, so automatic
+// output beside a router_replay shadow there fails the load, even when every
+// decision sets its own output default.
+func TestDefaultPluginsCannotPairAutomaticOutputWithAShadow(t *testing.T) {
+	doc := strings.Replace(decisionReliabilityDoc, "\n        reliability:\n", `
+        plugins:
+          - type: request_params
+            configuration:
+              default_max_tokens: 256
+        reliability:
+`, 1) + `global:
+  plugins:
+    - type: request_params
+      configuration:
+        default_max_tokens: auto
+    - type: router_replay
+      configuration:
+        enabled: true
+        shadow: {model: model-a}
+`
+	_, err := ParseYAMLBytes([]byte(doc))
+	if err == nil || !strings.Contains(err.Error(), `"recipes[default].plugins": automatic output does not support a router_replay shadow`) {
+		t.Fatalf("load error = %v, want the default plugins' automatic output refused beside a shadow", err)
+	}
+}

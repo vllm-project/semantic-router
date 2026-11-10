@@ -307,7 +307,7 @@ func shadowProfileAuthHeader(profile *config.ProviderProfile) string {
 }
 
 // shadowExtraHeaders carries the span context to the shadow backend, the W3C
-// traceparent and tracestate headers only, plus the decision header mutations
+// traceparent and tracestate headers only, plus the header_mutation headers
 // the plugin explicitly allowlists in forward_headers. Baggage is never
 // propagated: with tracing enabled the request phase extracts client baggage
 // into the trace context, so injecting through the global propagator would
@@ -328,9 +328,6 @@ func (r *OpenAIRouter) shadowExtraHeaders(
 			extra[pair[0]] = pair[1]
 		}
 	}
-	if ctx.VSRSelectedDecision == nil {
-		return extra
-	}
 	var primaryAuthHeader string
 	if dispatch != nil {
 		primaryAuthHeader = shadowProfileAuthHeader(dispatch.profile)
@@ -345,7 +342,7 @@ func (r *OpenAIRouter) shadowExtraHeaders(
 		if reason := shadowMutationDropReason(name, primaryAuthHeader, cfg); reason != "" {
 			logging.ComponentDebugEvent("extproc", "shadow_header_mutation_dropped", map[string]interface{}{
 				"request_id": ctx.RequestID,
-				"decision":   ctx.VSRSelectedDecision.Name,
+				"decision":   ctx.VSRSelectedDecisionName,
 				"header":     name,
 				"reason":     reason,
 			})

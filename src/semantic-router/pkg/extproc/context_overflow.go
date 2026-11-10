@@ -84,7 +84,7 @@ func (r *OpenAIRouter) prepareDecisionContextOverflow(ctx *RequestContext, origi
 	if ctx == nil || ctx.VSRSelectedDecision == nil || ctx.VSRSelectedDecision.GetFastResponseConfig() != nil {
 		return nil
 	}
-	if ctx != nil && decisionUsesAutomaticOutput(ctx.SemanticRequest, ctx.VSRSelectedDecision) {
+	if decisionUsesAutomaticOutput(ctx.SemanticRequest, ctx.VSRSelectedDecision) {
 		refs := ctx.VSRSelectedDecision.ModelRefs
 		if action := ctx.VSRSelectedDecision.Action; action != nil && action.Type == config.DecisionActionRoute {
 			refs = append([]config.ModelRef{{Model: action.Destination}}, refs...)
@@ -94,7 +94,7 @@ func (r *OpenAIRouter) prepareDecisionContextOverflow(ctx *RequestContext, origi
 		return r.prepareAutomaticCandidates(ctx, refs)
 	}
 	cfg := contextOverflowConfig(r.Config, ctx)
-	if cfg == nil || ctx.SemanticRequest == nil || ctx.VSRSelectedDecision.GetFastResponseConfig() != nil {
+	if cfg == nil || ctx.SemanticRequest == nil {
 		return nil
 	}
 	decision := ctx.VSRSelectedDecision
