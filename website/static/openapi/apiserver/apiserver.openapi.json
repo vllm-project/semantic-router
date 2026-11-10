@@ -28740,6 +28740,10 @@
                     "nullable": true,
                     "type": "object",
                     "properties": {
+                      "enabled": {
+                        "nullable": true,
+                        "type": "boolean"
+                      },
                       "message": {
                         "type": "string"
                       }

@@ -324,10 +324,7 @@ func replayRequestToolTrace(ctx *RequestContext) *routerreplay.ToolTrace {
 // pre-mask request. Replay snapshots the neutral request before dispatch, so
 // omitting the body is the only option that cannot store it raw (D3, #3566).
 func replaySuppressesBody(ctx *RequestContext) bool {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
-		return false
-	}
-	cfg := ctx.VSRSelectedDecision.GetMaskingConfig()
+	cfg := requestMasking(ctx)
 	return cfg != nil && cfg.Enabled
 }
 
@@ -394,13 +391,13 @@ func cloneReplayInterfaceMap(values map[string]interface{}) map[string]interface
 }
 
 func replayGuardrailState(ctx *RequestContext) (bool, bool, bool, bool) {
+	guard := requestResponseGuard(ctx)
+	hallucinationEnabled := guard != nil && guard.Reads(config.SignalTypeHallucination)
 	if ctx.VSRSelectedDecision == nil {
-		return false, false, false, false
+		return false, false, false, hallucinationEnabled
 	}
 	jailbreakEnabled := ctx.VSRSelectedDecision.HasSignalType("jailbreak")
 	piiEnabled := ctx.VSRSelectedDecision.HasSignalType("pii")
-	guard := ctx.VSRSelectedDecision.GetResponseGuardConfig()
-	hallucinationEnabled := guard != nil && guard.Reads(config.SignalTypeHallucination)
 	return jailbreakEnabled || piiEnabled, jailbreakEnabled, piiEnabled, hallucinationEnabled
 }
 

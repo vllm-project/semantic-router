@@ -21,9 +21,13 @@ func (c *Classifier) getUsedSignalsForDecisions(decisions []config.Decision) map
 
 	for i := range decisions {
 		c.analyzeRuleCombination(decisions[i].Rules, usedSignals)
-		for _, condition := range c.Config.ResponseGuardRequestConditions(&decisions[i]) {
+		for _, condition := range c.Config.ResponseGuardRequestConditions(decisions[i].Plugins) {
 			c.analyzeRuleCombination(condition, usedSignals)
 		}
+	}
+	// A request that matches no decision runs the default plugins' guard.
+	for _, condition := range c.Config.ResponseGuardRequestConditions(c.Config.DefaultPlugins) {
+		c.analyzeRuleCombination(condition, usedSignals)
 	}
 	// Replay's privacy check reads the PII rules after routing (ReplayPromptEvidence), never here.
 	c.expandTransitiveSignalDependencies(usedSignals)
