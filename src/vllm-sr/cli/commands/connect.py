@@ -226,7 +226,10 @@ def _json_of(argv: list[str], env: dict[str, str]):
 def _probe(gateway: str, harness: str, model: str, token: str) -> None:
     result = rc.probe_gateway(gateway, harness, model, token)
     if not result.ok:
-        raise click.ClickException(f"System Two: failed. {result.detail}")
+        raise click.ClickException(
+            f"System Two: failed. {result.detail}\n"
+            "The changes above stay written; take them back with --undo."
+        )
     success(
         f"System Two: ok (selected model {result.model or 'not reported'}; {result.detail})"
     )
