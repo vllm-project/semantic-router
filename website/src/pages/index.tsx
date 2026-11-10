@@ -94,7 +94,7 @@ function FinalCtaSection(): JSX.Element {
 function useHomeChrome(): void {
   useEffect(() => {
     const root = document.documentElement
-    const actions = document.querySelector('[data-field-calm]')
+    const actions = document.querySelector('[data-hero-actions]')
     let frame = 0
     const update = () => {
       frame = 0

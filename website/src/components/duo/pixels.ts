@@ -1,4 +1,4 @@
-/* Shared by the homepage's canvases (the block field, the section bands, the mosaic rules): Duo's seeded random
+/* Shared by the homepage's canvases (the section bands, the interludes, the mosaic rules): Duo's seeded random
  * numbers and smoothstep, and colours read from the duo-home CSS custom properties, so each canvas follows the
  * colour mode. */
 

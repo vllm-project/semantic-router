@@ -9,53 +9,22 @@
   background: var(--paper);
 }
 
-/* Porcelain light with three glows at the field's height; at night the same glows over ink. */
-.masthead::before {
-  content: '';
-  position: absolute;
-  z-index: -2;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(60% 50% at 50% 0%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 72%),
-    radial-gradient(24% 16% at 50% 80%, rgba(214, 172, 228, 0.24), rgba(214, 172, 228, 0) 80%),
-    radial-gradient(36% 20% at 18% 74%, rgba(255, 196, 168, 0.26), rgba(255, 196, 168, 0) 78%),
-    radial-gradient(40% 22% at 80% 72%, rgba(178, 194, 246, 0.3), rgba(178, 194, 246, 0) 78%),
-    linear-gradient(180deg, #fcfbf8 0%, #faf8f3 50%, #f8f4ec 82%, var(--paper) 100%);
-}
-
-:global([data-theme='dark']) .masthead::before {
-  background:
-    radial-gradient(60% 50% at 50% 0%, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 72%),
-    radial-gradient(24% 16% at 50% 80%, rgba(162, 131, 240, 0.13), rgba(162, 131, 240, 0) 80%),
-    radial-gradient(36% 20% at 18% 74%, rgba(239, 86, 48, 0.12), rgba(239, 86, 48, 0) 78%),
-    radial-gradient(40% 22% at 80% 72%, rgba(91, 130, 224, 0.15), rgba(91, 130, 224, 0) 78%),
-    linear-gradient(180deg, #171a21 0%, #15171d 50%, #13151a 82%, var(--paper) 100%);
-}
-
-/* The canvas is sized in whole blocks by field.ts and may overflow the field; it must not be squeezed. */
-.field {
+/* The ocean fills the masthead behind the copy and paints its own ground: porcelain in light, black water at night. */
+.ocean {
   position: absolute;
   z-index: -1;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 60svh;
-  overflow: hidden;
-  pointer-events: none;
+  inset: 0;
 }
 
-.field canvas {
+/* Night's black water fades into the dark paper where the masthead meets the next section. */
+:global([data-theme='dark']) .masthead::after {
+  content: '';
   position: absolute;
-  bottom: 0;
-  left: 0;
-  max-width: none;
-  visibility: hidden;
-  image-rendering: pixelated;
-}
-
-.field[data-state='on'] canvas {
-  visibility: visible;
+  z-index: -1;
+  inset: auto 0 0;
+  height: 120px;
+  background: linear-gradient(180deg, rgba(18, 20, 25, 0), var(--paper));
+  pointer-events: none;
 }
 
 .inner {
@@ -202,10 +171,6 @@
 
   .masthead .slogan {
     font-size: clamp(21px, 6vw, 26px);
-  }
-
-  .field {
-    height: 50svh;
   }
 
   .actions {
