@@ -113,7 +113,7 @@ curl --fail http://127.0.0.1:8000/v1/chat/completions \
 
 ## 安装并配置 Semantic Router
 
-按[快速开始](installation/installation.md#安装)安装 CLI。只安装 CLI、不启动栈：
+按[快速开始](installation/installation.md#install)安装 CLI。只安装 CLI、不启动栈：
 
 ```bash
 curl -fsSL https://vllm-sr.ai/install.sh | \

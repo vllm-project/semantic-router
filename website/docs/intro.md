@@ -21,45 +21,54 @@ import ThemedImage from '@theme/ThemedImage';
 </div>
 
 Give your agent harness a stable model API. vLLM Semantic Router selects or
-combines models through explicit policy, behind an OpenAI- or Anthropic-compatible
-endpoint. Change the models and policy without rewriting the harness integration.
+combines models through explicit policy, behind an OpenAI- or
+Anthropic-compatible endpoint, so you can change models and policy without
+rewriting the harness integration.
 
-Applications can also call [System One](./model-runtime/get-started/quickstart) directly for
-typed judgments. Router and Engine modes share a frontend and model runtime;
-recipes add the optional routing layer. See the [component architecture](overview/component-architecture)
-for the module boundaries and replica pools.
+- **Route each call:** a fast local model for one call, a specialist, a longer
+  context or a second opinion for the next.
+- **Judge with one model:** a decision model answers the policy's questions
+  about each request.
+- **Serve judgments directly:** applications can also ask the decision model
+  through the [System One](system-one/overview) API.
 
 ## Why route?
 
-One call needs a fast local model; another needs a specialist, longer context,
-or verification across models. Capability, latency, cost, and trust vary with the
-request, user, session, and available infrastructure. Shared routing policy keeps
-these choices out of each harness's code.
+Capability, latency, cost and trust vary with the request, the user, the
+session and the infrastructure at hand. A shared routing policy keeps these
+choices out of each harness's code.
 
 ## What you can program
 
-An entrypoint selects an isolated recipe. Its signals capture intent, difficulty,
-context, modality, identity, risk, preference, and configured runtime observations.
-Use those signals to:
+An entrypoint selects an isolated recipe. Its signals capture intent,
+difficulty, context, modality, identity, risk and runtime observations. Use
+them to:
 
 - **Select or combine models:** choose a local model or specialist, escalate
   from a small model to a stronger one, or run a bounded multi-model workflow.
 - **Add route behavior:** prompts, retrieval, memory, tool filtering, caching,
-  safety checks, and verification.
-- **Choose an execution path:** configured cloud, data-center, or edge backends
-  across heterogeneous hardware.
-- **Inspect and improve decisions:** routing metadata, feedback, replay, and
+  safety checks and verification.
+- **Choose an execution path:** cloud, data-center or edge backends across
+  heterogeneous hardware.
+- **Inspect and improve decisions:** routing metadata, feedback, replay and
   evaluation.
 
-The harness owns the agent loop, tool execution, and task state. The Router owns
-per-call policy and bounded model collaboration. The standalone frontend carries
-requests by default; Envoy is an optional transport integration. The model runtime
-executes judgment and feature-extraction tasks, while external inference platforms
-run the Chat backends and manage their placement, batching, and capacity.
+## Who does what
+
+| Part | Owns |
+| --- | --- |
+| **Agent harness** | The agent loop, tool execution and task state |
+| **Semantic Router** | Per-call policy and bounded model collaboration |
+| **Model runtime** | The Router's own decision and embedding models |
+| **Inference platforms** | Chat backends, with their placement, batching and capacity |
+
+The Router serves its own listeners by default; an Envoy-based gateway is
+optional. See the [component architecture](overview/component-architecture)
+for the module boundaries.
 
 ## Start here
 
-- [Run the Quickstart](/docs/installation).
+- [Run the Quickstart](installation/installation.md).
 - [Connect an agent harness](installation/agent-harness).
 - Explore [use cases](overview/use-cases).
 - Read the [System Overview](overview/semantic-router-overview) and
