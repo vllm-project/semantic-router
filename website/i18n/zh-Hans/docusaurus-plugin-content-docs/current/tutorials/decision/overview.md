@@ -74,7 +74,7 @@ decision "billing": rules.conditions[1]: NOT requires exactly one child conditio
 
 ### 未知的信号 {#unknown-signals}
 
-失败或超时作答的信号是未知的。默认情况下，它的条件评估为 `False`。有两个设置可以改变这一点：
+失败或超时作答的信号是未知的。默认情况下，它的条件评估为 `False`，其上的 `NOT` 仍为 `False`。有两个设置可以改变这一点：
 
 | 设置 | 效果 |
 | --- | --- |

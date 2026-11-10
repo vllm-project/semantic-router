@@ -143,10 +143,11 @@ The router reads a long request through Vela 2.0 in two ways. A routing
 question (domain, fact check, feedback, modality, `systemone` questions
 without `coverage: full`, and the `systemone` selector) truncates. A safety question (jailbreak, safety,
 PII and hallucination) reads it whole, up to the model's scan budget or the
-deployment's `input.max_tokens` with `overflow: window`. Content past it, or
-a safety scan that misses the signals' deadline
-(`global.model_catalog.signal_timeout_ms`), was not read: a jailbreak or PII
-rule matches it as `unscanned`.
+deployment's `input.max_tokens` with `overflow: window`. Content past it was
+not read: a jailbreak or PII rule matches it as `unscanned`. A safety scan
+that misses the signals' deadline (`global.model_catalog.signal_timeout_ms`)
+gives no answer: a jailbreak or PII rule then does not match unless it sets
+`on_unknown: match`.
 
 Token budgets describe input coverage, not response time. Complete long-input
 embeddings and scans can exceed the signal deadline on a CPU with few cores.
@@ -348,7 +349,11 @@ a batch: named standard requests under `states`, answered in one call. Every
 entry holds a `state` and its own `questions`, and may hold `images` and
 `videos`; it is read exactly as a standard request with them and the batch's
 `model`, `options` and `assets` would be, and is answered under the same name
-in the response's `states`. The two forms are mutually exclusive: a batch has
+in the response's `states`. An entry whose images, videos, assets or tokens
+are refused fails each of its questions with `invalid_input` (reason
+`input_malformed`) and the refusal's message, and the other entries are
+answered; a batch every entry of which is refused is answered with the first
+refusal. The two forms are mutually exclusive: a batch has
 no top-level `state`, `questions`, `images` or `videos`, and a body that mixes
 the forms is answered 400 `invalid_request`. The Router sends a batch when one
 request stage asks a deployment about several texts: the candidates a
@@ -509,7 +514,8 @@ about a video keeps `limits.video_max_seconds`.
 **Errors.** On `/v1/systemone` a request any of whose questions fails is
 answered as a whole, as System One answers it, so that every answer a client
 receives has its question's type: `{"error": {"code": "question_failed", "question_error",
-"reason", "question", "message"}}`, 422 for `invalid_question`, 400 for
+"reason", "question", "message"}}` (in a batch, with the question's entry as `"state"`),
+422 for `invalid_question`, 400 for
 `max_length_exceeded`, `scan_budget_exceeded` and `invalid_input`, 500 for
 `invalid_model_output`, 503 for `unavailable` and 504 for `deadline_exceeded`.
 The first failed question decides, and the message lists them all.

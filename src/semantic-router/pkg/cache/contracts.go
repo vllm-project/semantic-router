@@ -165,6 +165,9 @@ type CacheResult struct {
 	Age           time.Duration        `json:"-"`
 	AgeKnown      bool                 `json:"-"`
 	ExpiresAt     time.Time            `json:"expires_at,omitempty"`
+	// RequestID names the request that wrote a semantic hit's entry, so
+	// the store can count the hit its caller serves.
+	RequestID string `json:"-"`
 }
 
 type BackendCapabilities struct {

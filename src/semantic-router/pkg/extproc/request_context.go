@@ -181,6 +181,9 @@ type RequestContext struct {
 	// of the sessionIDHeaders the Router reads in order.
 	SessionIDHeader  string
 	sessionIDHeaders []string
+	// identity names the headers the Router reads the caller's user and
+	// groups from: global.services.authz.identity, else the x-authz-* names.
+	identity config.IdentityConfig
 	// AuthenticatedPrincipal is the trusted gateway-authenticated user ID
 	// (from the configured authz header, via authHeaderUserID) — never a
 	// client-supplied or derived value. Empty when the request carries no

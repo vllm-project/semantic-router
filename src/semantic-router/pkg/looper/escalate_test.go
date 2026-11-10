@@ -264,6 +264,72 @@ func TestEscalateOrder(t *testing.T) {
 	}
 }
 
+// order: size and order: cost read the sizes and prices a loaded configuration
+// carries, built-in catalog sizes such as "397B (17B active)" and "1.6T (49B
+// active)" included, and try a model with neither last.
+func TestEscalateOrderTriesUnknownSizeAndPriceLast(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
+listeners: []
+providers:
+  defaults:
+    model: small
+  models:
+    - name: small
+      catalog: qwen/qwen3.6-27b
+      pricing: {currency: USD, prompt_per_1m: 3}
+      backend_refs: [{endpoint: 127.0.0.1:8000, provider: vllm}]
+    - name: huge
+      catalog: qwen/qwen3.5-397b-a17b
+      pricing: {currency: USD, prompt_per_1m: 0.1}
+      backend_refs: [{endpoint: 127.0.0.1:8000, provider: vllm}]
+    - name: giant
+      catalog: deepseek/deepseek-v4-pro
+      pricing: {currency: USD, prompt_per_1m: 1}
+      backend_refs: [{endpoint: 127.0.0.1:8000, provider: vllm}]
+    - name: unknown
+      backend_refs: [{endpoint: 127.0.0.1:8000, provider: vllm}]
+recipes:
+  - name: default
+    decisions:
+      - name: escalate
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: unknown}, {model: giant}, {model: huge}, {model: small}]
+        algorithm:
+          type: escalate
+          escalate:
+            order: size
+            accept: {confidence: {method: avg_logprob, gte: 0.99}}
+`))
+	if err != nil {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+	for _, test := range []struct {
+		order string
+		want  []string
+	}{
+		{order: config.EscalateOrderSize, want: []string{"small", "huge", "giant", "unknown"}},
+		{order: config.EscalateOrderCost, want: []string{"huge", "giant", "small", "unknown"}},
+	} {
+		t.Run(test.order, func(t *testing.T) {
+			server, calls := newEscalateLogprobBackend(t, map[string]int{"small": 1, "huge": 1, "giant": 1, "unknown": 1}, true)
+			defer server.Close()
+			decision := cfg.Decisions[0]
+			escalate := *decision.Algorithm.Escalate
+			escalate.Order = test.order
+			request := escalateRequest(config.EscalateOnErrorLastAttempt, "")
+			request.ModelRefs, request.ModelParams = decision.ModelRefs, cfg.ModelConfig
+			request.Algorithm.Escalate = &escalate
+			// No answer reaches the threshold, so every model is called.
+			if _, err := NewEscalateLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), request); err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			if !slices.Equal(*calls, test.want) {
+				t.Fatalf("backend attempt order = %v, want %v", *calls, test.want)
+			}
+		})
+	}
+}
+
 func TestConfidenceEvaluator_Creation(t *testing.T) {
 	tests := []struct {
 		name         string

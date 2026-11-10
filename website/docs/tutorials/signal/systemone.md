@@ -108,7 +108,7 @@ rewrites them to `systemone`.
 | --- | --- |
 | `name` | The rule's name, which conditions and projections use. |
 | `question` | The typed question: `type`, `instructions`, and its `choices`, `levels` or `labels`. |
-| `labels` | The options a `choice`, `set` or `span` rule matches. A condition can still name any option. |
+| `labels` | The options a `choice`, `set` or `span` rule matches. A condition on a `choice` rule can still name any option; one on a `set` or `span` rule names a counted label. |
 | `ignore_labels` | `set` and `span` only: labels that never count toward the rule. |
 | `predicate` | The probability or level the answer must meet (`gt`, `gte`, `lt`, `lte`). |
 | `deployment` | The deployment that answers; without one, the decision model. |
@@ -135,8 +135,9 @@ A `set` or `span` rule counts `labels`, or every label of the question
 without them, less `ignore_labels`. A condition may add its own `predicate`;
 for a condition with a `label`, it reads that label's value. The
 configuration is refused when a `label` or an entry of `labels` or
-`ignore_labels` is not an option of the question, when a condition names an
-ignored label, and when an unlabelled condition names a `choice` rule
+`ignore_labels` is not an option of the question, when a condition names a
+label a `set` or `span` rule does not count (an ignored one, or one outside
+its `labels`), and when an unlabelled condition names a `choice` rule
 without `labels`.
 
 The rule publishes these values, which a condition's `predicate` and a
@@ -146,7 +147,7 @@ The rule publishes these values, which a condition's `predicate` and a
 | --- | --- | --- |
 | `noul` | P(yes) | — |
 | `score` | the expected level | — |
-| `choice` | P(chosen) | P(key) for every option |
+| `choice` | the highest P among `labels`; P(chosen) for a rule without them | P(key) for every option |
 | `set` | the highest P among the counted labels | P(key) for every label |
 | `span` | the highest probability among the counted labels | the label's most probable span (0 when none) |
 

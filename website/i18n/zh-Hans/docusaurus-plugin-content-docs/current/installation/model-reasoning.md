@@ -64,7 +64,7 @@ providers:
           protocol: http
 ```
 
-Canonical v0.3 没有用户编写的全局家族注册表。旧的 `providers.defaults.reasoning_families` 加上按模型的 `reasoning_family` 组合会迁移到 `providers.models[].reasoning`：内置 ID 变为 `family` 引用，而自定义定义会被内联复制到每个使用它们的自定义 Model 上。
+Canonical v0.5 没有用户编写的全局家族注册表。旧的 `providers.defaults.reasoning_families` 加上按模型的 `reasoning_family` 组合会迁移到 `providers.models[].reasoning`：内置 ID 变为 `family` 引用，而自定义定义会被内联复制到每个使用它们的自定义 Model 上。
 
 在控制面板中使用 **Manual setup** 编写内联家族。将 **Built-in Catalog Model** 和 **Reasoning Family** 留空，然后填写 **Inline Reasoning** 字段。
 
@@ -97,7 +97,8 @@ recipes:
           operator: AND
           conditions:
             - type: complexity
-              name: needs_reasoning:hard
+              name: needs_reasoning
+              label: hard
         modelRefs:
           - model: private-reasoner
             use_reasoning: true

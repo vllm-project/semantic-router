@@ -41,8 +41,9 @@ The System One paths read bodies compressed with one layer of gzip or zstd
 The Router decodes these before it reads the request and forwards the JSON
 request, with each part's image as `data_base64`, to the model. On
 `/v1/systemone` a request with a failed question is answered as a whole with
-`question_failed`, the question's `question_error`, fixed `reason` and ID,
-while `/v1/decisions` answers each question in place. A model the listener does
+`question_failed`, the question's `question_error`, fixed `reason` and ID
+(in a batch, also its entry as `state`), while `/v1/decisions` answers each
+question in place. A model the listener does
 not publish returns `403` `model_not_allowed` with the models it does publish.
 See [System One compatibility](../model-runtime/reference/http-api.md#system-one-compatibility)
 for assets, Box, track and long context.
@@ -325,7 +326,12 @@ decision (it matches none, matches one that answers in text, or names a model
 directly instead of an entrypoint such as `vllm-sr/auto`) gets `400`
 `image_route_required` before any model is called. A Chat Completions or
 Anthropic Messages request that reaches an image decision gets `400`
-`unsupported_capability`, since neither API can return an image.
+`unsupported_capability`, since neither API can return an image. One Responses
+API call generates one image, so `n` above 1 needs a decision with a model on
+the Images API; a decision whose models are all on the Responses API answers it
+with `400` `unsupported_capability` before any model is called, unless its
+[`request_params`](../tutorials/plugin/request-params) `max_n` caps `n` to 1
+or its `blocked_params` removes `n`.
 
 ### Azure OpenAI clients
 

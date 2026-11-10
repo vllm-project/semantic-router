@@ -1,6 +1,7 @@
 package config
 
 import (
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -112,6 +113,79 @@ func TestMigratedModelNamesReachTheirRecipes(t *testing.T) {
 			case recipe != "" && string(got.Name) != recipe:
 				t.Errorf("%s: %s reaches recipe %s, want %s", after, model, got.Name, recipe)
 			}
+		}
+	}
+}
+
+// After migrate, a configuration an earlier release shipped serves the model
+// names that release served, those it served without the file naming them
+// included: vllm-sr/auto, auto and MoM for the default recipe when no auto
+// model name is written (releases before v0.4 served auto and MoM, and v0.5
+// serves the default recipe as vllm-sr/auto), and a Looper algorithm's
+// built-in name for its decisions when it names no model names. The names an
+// entrypoint serves already stay its own, and a configured model's name
+// reaches that model. A v0.3 document whose entrypoints name one of those
+// names, which v0.4 refused, was written for main, which served only its
+// entrypoints, and serves them alone.
+func TestMigrateKeepsTheModelNamesAReleaseServed(t *testing.T) {
+	auto := map[string]string{"vllm-sr/auto": "default", "auto": "default", "MoM": "default"}
+	for before, want := range map[string]map[string]string{
+		"testdata/migrate_releases/v0.4.0-config/before.yaml": {
+			"vllm-sr/auto": "default", "auto": "default", "exhaustive-reference": "default",
+			"vllm-sr/exhaustive-default": "default", "vllm-sr/exhaustive-privacy": "privacy-first",
+			"vllm-sr/remom": "default-remom", "vllm-sr/fusion": "default-fusion", "vllm-sr/flow": "default-flow",
+		},
+		"testdata/migrate_releases/v0.4.0-cli-template/before.yaml":              auto,
+		maintainedRepoPrefix + "config/recipes/built-in/v0.4/mom-v1/config.yaml": auto,
+		"testdata/migrate_releases/v0.1.0-config/before.yaml":                    auto,
+		"testdata/migrate_releases/v0.1.0-cli-template/before.yaml":              auto,
+		"testdata/migrate_releases/v0.2.0-config/before.yaml":                    auto,
+		"testdata/migrate_releases/v0.2.0-cli-template/before.yaml":              auto,
+		"testdata/migrate/invalid-value-version-default-model-names/before.yaml": {
+			"vllm-sr/auto": "default", "auto": "default", "MoM": "default", "vllm-sr/fusion": "default-fusion",
+		},
+		"testdata/migrate/invalid-value-version-served-model-names/before.yaml":     {"vllm-sr/auto": "default", "MoM": "private"},
+		"testdata/migrate/invalid-value-version-configured-model-names/before.yaml": {"vllm-sr/auto": "default"},
+		"testdata/migrate_releases/main-accuracy/before.yaml":                       {"vllm-sr/auto": "default"},
+		"testdata/migrate_releases/main-feedback/before.yaml":                       {"vllm-sr/auto": "default"},
+	} {
+		migrated, _, err := MigrateConfig(readGolden(t, before))
+		if err != nil {
+			t.Errorf("%s: %v", before, err)
+			continue
+		}
+		cfg, err := ParseYAMLBytesWithoutEnvExpansion(migrated)
+		if err != nil {
+			t.Fatalf("%s: %v", before, err)
+		}
+		served := map[string]string{}
+		for _, entrypoint := range cfg.EffectiveEntrypoints(ChatAPI) {
+			for _, name := range entrypoint.ModelNames {
+				served[name] = string(entrypoint.Recipe)
+			}
+		}
+		if !maps.Equal(served, want) {
+			t.Errorf("%s: migrated, it serves %v, want %v", before, served, want)
+		}
+	}
+}
+
+// An auto model name another entrypoint serves already stays that
+// entrypoint's, even when it is the only one written.
+func TestMigrateKeepsAServedAutoModelNameOnItsEntrypoint(t *testing.T) {
+	before := append(readGolden(t, "testdata/migrate/invalid-value-version-served-model-names/before.yaml"),
+		[]byte("global:\n  router:\n    auto_model_names: [MoM]\n")...)
+	migrated, _, err := MigrateConfig(before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ParseYAMLBytesWithoutEnvExpansion(migrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entrypoint := range cfg.EffectiveEntrypoints(ChatAPI) {
+		if slices.Contains(entrypoint.ModelNames, "MoM") && entrypoint.Recipe != "private" {
+			t.Errorf("MoM reaches %s, want private", entrypoint.Recipe)
 		}
 	}
 }

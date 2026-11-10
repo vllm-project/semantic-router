@@ -239,15 +239,16 @@ func groundedGuard(action string, details bool, onUnknown string) config.Respons
 }
 
 // newHallucinationSignalRouter wires a single-profile router whose decision
-// model is decider, with one hallucination rule and one keyword-selected
-// decision carrying guard. The request needs fact checking and carried the
-// grounding context as a tool result.
-func newHallucinationSignalRouter(t *testing.T, decider *responseStageDecider, guard config.ResponseGuardPluginConfig) (*OpenAIRouter, *RequestContext) {
+// model is decider, with one hallucination rule, the given jailbreak rules,
+// and one keyword-selected decision carrying guard. The request needs fact
+// checking and carried the grounding context as a tool result.
+func newHallucinationSignalRouter(t *testing.T, decider *responseStageDecider, guard config.ResponseGuardPluginConfig, jailbreak ...config.JailbreakRule) (*OpenAIRouter, *RequestContext) {
 	t.Helper()
 	cfg := &config.RouterConfig{}
 	cfg.KeywordRules = []config.KeywordRule{responseStageKeyword()}
 	cfg.FactCheckRules = []config.FactCheckRule{{Name: "needs_fact_check"}}
 	cfg.HallucinationRules = []config.HallucinationRule{{Name: hallucinationRuleName}}
+	cfg.JailbreakRules = jailbreak
 	cfg.Decisions = []config.Decision{keywordDecision(hallucinationRouteName, guardPlugin(guard))}
 	router, ctx := routerWithSelectedDecision(cfg, responseStageClassifier(t, cfg, decider), hallucinationRouteName)
 	ctx.ResponseStage = classification.ResponseInput{Request: hallucinationQuestion}

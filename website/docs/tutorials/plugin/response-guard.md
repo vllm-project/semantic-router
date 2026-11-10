@@ -83,8 +83,10 @@ recipe's signals, so it runs no guard, not even one in `global.plugins`.
 
 The warning codes a rule adds are `hallucination` (`unverified_factual` when
 the answer could not be checked), `response_jailbreak`, and `response_guard`
-for any other rule. A blocked answer is replaced with a message that names what
-was found, never that a check failed.
+for any other rule, one for each response-stage signal among the conditions
+that matched, or among all of them when the rule could not be decided. A
+blocked answer is replaced with a message that names what was found, never
+that a check failed.
 
 The grounding context is the documents the [context plugin](./context.md) retrieved and
 the request's own tool results.

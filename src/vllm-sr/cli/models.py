@@ -1612,6 +1612,12 @@ class FallbackPolicy(FallbackOverride):
     circuit_breaker: Optional[FallbackCircuitBreaker] = None
 
 
+class CandidateIteration(BaseModel):
+    """A decision's candidate iteration; the CLI checks only its models."""
+
+    models: List[ModelRef] = Field(default_factory=list)
+
+
 class Decision(BaseModel):
     """Routing decision configuration."""
 
@@ -1628,6 +1634,7 @@ class Decision(BaseModel):
     output_contract: Optional[str] = None
     output_contract_spec: Optional[OutputContractSpec] = None
     modelRefs: List[ModelRef] = Field(default_factory=list, alias="modelRefs")
+    candidateIterations: List[CandidateIteration] = Field(default_factory=list)
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
     adaptations: Optional[DecisionAdaptationsConfig] = None
     reliability: Optional[DecisionReliability] = None
