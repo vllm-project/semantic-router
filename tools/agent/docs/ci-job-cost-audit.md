@@ -403,22 +403,25 @@ qualifying launches one short job instead of the full qualification. A dispatch
 cancels the qualification it supersedes, a scheduled run waits for a running
 one, and a failed first attempt re-runs only its failed jobs, once.
 
-Routine Main source/component qualification remains, and every push publishes
-its commit's complete image set, so its development CLI's commit-addressed
-defaults remain usable. Expensive qualification stays an explicit decision
-(a publication dispatch) and the daily Nightly Qualification.
+Routine Main source/component qualification remains, and a push that isn't
+superseded publishes its commit's complete image set, so its development
+CLI's commit-addressed defaults remain usable. Expensive qualification stays
+an explicit decision (a publication dispatch) and the daily Nightly
+Qualification.
 
 A push publication costs about 240 runner-minutes, measured from the image
 work of the 5 Nov publication dispatch (run 42040614554): image builds 181
-(ROCm alone 84), image publication 53, the CLI package 3 and the chart 1. At
-the 12.6 merges a day of 27 Oct to 10 Nov that is about 3,000 runner-minutes a
-day, and 7,400 on the busiest day (31 merges), against about 430 for one full
-qualification. Hosted runners are free for this public repository; the bound
-is the organization's concurrent-job limit. A push run holds at most six image
-builds at once, then the ROCm build alone for about an hour. Every push run
-finishes, so every merge gets its images. If queueing slows PR CI, one shared
-push publication group with `cancel-in-progress` would publish only the newest
-merge of a burst.
+(ROCm alone 84), image publication 53, the CLI package 3 and the chart 1. A
+push run holds at most six image builds at once, then the ROCm build alone for
+about an hour. A newer push cancels an older push's run while it is queued or
+qualifying, about 90 minutes from the merge, and the newest run checks the
+cancelled commits' changes. Replaying the 194 pushes of 27 Oct to 10 Nov (12.6
+a day) with that window, 60 publish and 134 are cancelled after spending part
+of their builds: about 27,600 runner-minutes instead of 46,900 if every merge
+published, 41% less. On the busiest day, 31 merges publish 7 times for about
+3,100 runner-minutes instead of 7,500 (59% less). One full qualification costs
+about 430. Hosted runners are free for this public repository; the bound is
+the organization's concurrent-job limit.
 
 Batching exchanges less repeated preparation for less parallelism and coarser
 reruns. If one profile fails, rerunning its Actions job reruns its successful

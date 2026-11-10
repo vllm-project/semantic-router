@@ -63,8 +63,12 @@ can increase the elapsed time of an individual worker.
   images under the commit SHA, `latest`, the development CLI, and the
   `0.0.0-latest` chart when the push changed it. A push does not run the full
   CPU inventory; the reviewed PR qualified the change and the nightly run
-  qualifies main. Every push run finishes, so every merge gets its images and
-  CLI. The `latest` job moves the tag once the complete set exists, one run at
+  qualifies main. A newer push cancels an older push's run while it is queued
+  or qualifying (group `main-push`), so a burst of merges publishes only the
+  newest; its plan compares with the last commit whose CI Gate finished
+  (`main_push_base.py`), so the cancelled commits' changes are still checked.
+  Publication jobs queue in groups of their own and are never cancelled once
+  started. The `latest` job moves the tag once the complete set exists, one run at
   a time, and skips an image whose `latest` already holds a newer main
   commit's image, so a slower older run keeps only its SHA tags. The chart
   publishes only if main's head carries the same chart. The CLI is published

@@ -56,6 +56,20 @@ jobs:
         with:
           version: ${{ env.HELM_VERSION }}
 
+      # Chart.lock pins the dependency charts, so its hash keys their archives
+      # and a hit downloads nothing.
+      - name: Cache dependency charts
+        id: dependency-cache
+        uses: actions/cache@v4
+        with:
+          path: deploy/helm/semantic-router/charts/*.tgz
+          key: helm-dependencies-${{ hashFiles('deploy/helm/semantic-router/Chart.lock') }}
+
+      - name: Fetch dependency charts
+        env:
+          HELM_DEPENDENCIES_CACHED: ${{ steps.dependency-cache.outputs.cache-hit }}
+        run: deploy/helm/fetch-dependencies.sh "$CHART_PATH"
+
       - name: Resolve chart versions
         id: versions
         env:
@@ -99,7 +113,9 @@ jobs:
       - name: Package chart
         id: package
         run: |
-          helm package -u "${{ env.CHART_PATH }}" \
+          # The locked dependency charts are in charts/; -u would re-resolve
+          # them to their newest versions instead.
+          helm package "${{ env.CHART_PATH }}" \
             --version "${{ steps.versions.outputs.chart_version }}" \
             --app-version "${{ steps.versions.outputs.app_version }}" \
             --destination .

@@ -130,6 +130,16 @@ class DevelopmentChartTests(unittest.TestCase):
             if step.get("id") == "current"
         )
 
+    def test_packaging_ships_the_locked_dependency_charts(self) -> None:
+        package = next(
+            step
+            for step in self.jobs["package"]["steps"]
+            if step.get("id") == "package"
+        )["run"]
+        self.assertIn("helm package", package)
+        self.assertNotIn("package -u", package)
+        self.assertNotIn("dependency update", package)
+
     def test_publishes_only_the_chart_mains_head_carries(self) -> None:
         self.assertEqual(self.step["if"], "inputs.mode == 'main'")
         self.assertIn(
@@ -173,8 +183,59 @@ class DevelopmentChartTests(unittest.TestCase):
                     self.assertEqual(output.read_text(), f"current={current}\n")
 
 
+# Every job that packages or renders the chart: workflow, job, checkout path.
+CHART_DEPENDENCY_JOBS = (
+    ("helm-publish.yml", "package", ""),
+    ("security-scan.yml", "security", "pr-code/"),
+    ("test-and-build.yml", "test-and-build", ""),
+)
+
+
+class ChartDependencyTests(unittest.TestCase):
+    def test_chart_jobs_fetch_through_the_lock_keyed_cache_and_retries(self) -> None:
+        for name, job, prefix in CHART_DEPENDENCY_JOBS:
+            with self.subTest(workflow=name):
+                steps = yaml.safe_load(
+                    (REPO_ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+                )["jobs"][job]["steps"]
+                cache_at, cache = next(
+                    (index, step)
+                    for index, step in enumerate(steps)
+                    if step.get("uses", "").startswith("actions/cache@")
+                )
+                self.assertEqual(cache["with"]["path"], f"{prefix}{CHART}/charts/*.tgz")
+                self.assertEqual(
+                    cache["with"]["key"],
+                    f"helm-dependencies-${{{{ hashFiles('{prefix}{CHART}/Chart.lock') }}}}",
+                )
+                fetch_at, fetch = next(
+                    (index, step)
+                    for index, step in enumerate(steps)
+                    if "HELM_DEPENDENCIES_CACHED" in step.get("env", {})
+                )
+                self.assertLess(cache_at, fetch_at)
+                self.assertEqual(
+                    fetch["env"]["HELM_DEPENDENCIES_CACHED"],
+                    f"${{{{ steps.{cache['id']}.outputs.cache-hit }}}}",
+                )
+                self.assertRegex(
+                    fetch["run"],
+                    r"deploy/helm/fetch-dependencies\.sh|make helm-ci-(setup|validate)",
+                )
+
+    def test_make_fetches_through_the_retrying_script(self) -> None:
+        helm_mk = (REPO_ROOT / "tools/make/helm.mk").read_text(encoding="utf-8")
+        setup = helm_mk.split("\nhelm-ci-setup:\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("deploy/helm/fetch-dependencies.sh", setup)
+        self.assertIn('HELM_DEPENDENCIES_CACHED="$(HELM_DEPENDENCIES_CACHED)"', setup)
+        self.assertNotIn("helm dependency", setup)
+        self.assertIn("\nhelm-package: helm-ci-setup\n", helm_mk)
+
+
 class MainWorkflowContractTests(unittest.TestCase):
-    def test_main_validation_runs_cannot_be_coalesced(self) -> None:
+    def test_a_newer_push_supersedes_qualification_but_never_publication(
+        self,
+    ) -> None:
         workflow = yaml.safe_load(
             (REPO_ROOT / ".github" / "workflows" / "main.yml").read_text(
                 encoding="utf-8"
@@ -184,19 +245,22 @@ class MainWorkflowContractTests(unittest.TestCase):
         self.assertNotIn(
             "concurrency",
             workflow,
-            "main push runs must remain per-commit so change classification cannot skip a commit",
+            "a workflow-level group would cancel publications that started",
         )
         group = workflow["jobs"]["ci"]["concurrency"]["group"]
         expression = group.removeprefix("${{").removesuffix("}}").strip()
-        for event, publish, expected in (
-            ("push", None, "main-7"),
-            ("workflow_dispatch", False, "main-7"),
-            ("workflow_dispatch", True, "main-publication"),
+        for event, publish, attempt, expected in (
+            ("push", None, "1", "main-push"),
+            # Re-running a cancelled push must not cancel the newest push.
+            ("push", None, "2", "main-7"),
+            ("workflow_dispatch", False, "1", "main-7"),
+            ("workflow_dispatch", True, "1", "main-publication"),
         ):
-            with self.subTest(event=event, publish=publish):
+            with self.subTest(event=event, publish=publish, attempt=attempt):
                 python = (
                     expression.replace("github.event_name", repr(event))
                     .replace("inputs.publish", repr(publish))
+                    .replace("github.run_attempt", repr(attempt))
                     .replace("github.run_id", "'7'")
                     .replace("&&", " and ")
                     .replace("||", " or ")
@@ -208,6 +272,27 @@ class MainWorkflowContractTests(unittest.TestCase):
                 )
                 self.assertEqual(actual, expected)
         self.assertTrue(workflow["jobs"]["ci"]["concurrency"]["cancel-in-progress"])
+        # Publication queues in groups of its own; a newer push cannot cancel it.
+        for job in ("images", "latest", "helm", "pypi"):
+            with self.subTest(job=job):
+                concurrency = workflow["jobs"][job]["concurrency"]
+                self.assertIs(concurrency["cancel-in-progress"], False)
+                self.assertNotIn("main-push", concurrency["group"])
+        errors: list[str] = []
+        validate_main_latest(
+            {"main.yml": SimpleNamespace(jobs=workflow["jobs"])}, errors
+        )
+        self.assertEqual(errors, [])
+        jobs = copy.deepcopy(workflow["jobs"])
+        jobs["pypi"]["concurrency"]["cancel-in-progress"] = True
+        validate_main_latest({"main.yml": SimpleNamespace(jobs=jobs)}, errors)
+        self.assertEqual(len(errors), 1)
+        # The superseding run checks the cancelled commits' changes too.
+        base = yaml.safe_load(
+            (REPO_ROOT / ".github/workflows/ci-changes.yml").read_text(encoding="utf-8")
+        )["jobs"]["plan"]["steps"]
+        script = next(step for step in base if step.get("id") == "base")["run"]
+        self.assertIn("tools/ci/main_push_base.py", script)
 
     def test_pypi_accepts_only_qualified_main_publication_or_stable_tag(self) -> None:
         workflow = yaml.safe_load(

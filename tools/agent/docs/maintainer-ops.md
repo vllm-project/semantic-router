@@ -175,8 +175,11 @@ rather than resetting the comparison.
 
 ## Development Publication
 
-Every merge to `main` publishes its commit once the `Main` run's automatic
-checks pass:
+A merge to `main` publishes its commit once the `Main` run's automatic checks
+pass. A newer merge cancels an older merge's run while it is still queued or
+qualifying, so when merges land together only the newest publishes, and the
+cancelled commits get no SHA images; the newest run checks their changes too.
+A publication that started always finishes. A publication is:
 
 - the six production images under the commit SHA, multi-arch where the image
   supports it;
@@ -191,7 +194,8 @@ checks pass:
 
 A push runs no full CPU qualification: the reviewed PR qualified the change,
 and Nightly Qualification qualifies `main` every day. When a push's
-publication fails, re-run its failed jobs. Dispatching `Main` with
+publication fails, re-run its failed jobs; to publish a cancelled commit,
+re-run its run. A re-run neither cancels nor is cancelled by a newer push. Dispatching `Main` with
 `publish: true` qualifies `main`'s head fully and then publishes the same set,
 always including the chart.
 

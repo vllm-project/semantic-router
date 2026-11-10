@@ -310,6 +310,15 @@ def validate_main_latest(workflows: dict[str, WorkflowLike], errors: list[str]) 
             ".github/workflows/main.yml: 'latest' must move latest one run at a "
             "time, after its commit's complete image set is published"
         )
+    qualification = jobs.get("ci", {}).get("concurrency", {}).get("group")
+    for job_id in ("images", "helm", "pypi"):
+        concurrency = jobs.get(job_id, {}).get("concurrency", {})
+        cancels = concurrency.get("cancel-in-progress") is not False
+        if cancels or concurrency.get("group") in {None, qualification}:
+            errors.append(
+                f".github/workflows/main.yml: '{job_id}' must queue in its own "
+                "group, so a newer push never cancels a publication that started"
+            )
 
 
 def validate_release_contract(
