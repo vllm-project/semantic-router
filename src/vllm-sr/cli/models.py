@@ -1508,8 +1508,8 @@ RETRY_ON_CONDITIONS = (
 
 
 def _known_retry_on(value: str) -> str:
-    for token in value.split(","):
-        token = token.strip()
+    for raw in value.split(","):
+        token = raw.strip()
         if token and token not in RETRY_ON_CONDITIONS:
             raise ValueError(
                 f"has unknown condition {token!r}; expected any of "
