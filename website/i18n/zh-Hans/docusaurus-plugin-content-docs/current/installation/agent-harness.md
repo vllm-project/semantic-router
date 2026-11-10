@@ -78,7 +78,7 @@ entrypoints:
 listener 的 `timeout`（默认 300 秒）限制整个调用，包括流式响应，到达的输出不会延长它。达到上限的调用会被截断：流被重置，回答的其余部分永远不会到达。
 
 :::warning 长时间推理的调用会触及 listener 超时
-对于 agent 模型，请把模型的 `total_timeout` 设为 `0s`，并保留 `idle_timeout` 来限制停滞的流；见[模型配置](model-configuration)。在 Claude Code 2.1.304 以 `xhigh` 推理强度在 Qwen3.8-27B-FP8（vLLM 0.32，一块 MI300X）上运行的 Terminal-Bench 2.1 实测中，2.5% 到 4% 的调用超过 300 秒，最长约 17 分钟。
+对于 agent 模型，请把模型的 `total_timeout` 设为 `0s`，并保留 `idle_timeout` 来限制停滞的流；见[模型配置](model-configuration#tune-timeouts-retries-and-endpoint-health)。在 Claude Code 2.1.304 以 `xhigh` 推理强度在 Qwen3.8-27B-FP8（vLLM 0.32，一块 MI300X）上运行的 Terminal-Bench 2.1 实测中，2.5% 到 4% 的调用超过 300 秒，最长约 17 分钟。
 :::
 
 ## 保持工具与对话连续性 {#preserve-tool-and-conversation-continuity}
@@ -141,7 +141,7 @@ Claude Code 发送 `x-claude-code-session-id` 而不是 `x-session-id`，Codex C
 Agent 在每次调用时都会重发整个对话，因此每个提示的大部分是后端已经处理过的前缀。这个前缀是否仍在缓存中，很大程度上决定了调用的延迟和成本，而有三件事会让它失效。
 
 - **换模型。** 提示缓存属于某一个模型，运行中途切换模型会在新模型上重新计算整个上下文。请按上文所述让每次运行保持在一个模型上。[multi_factor 选择器](../tutorials/algorithm/selection/multi-factor#cache-affinity)也会偏向服务过该会话上一轮的模型。
-- **换副本。** 每个副本都有自己的前缀缓存，而模型的 `lb_policy`（`round_robin` 或 `least_request`，见[模型配置](model-configuration)）不会把会话固定在一个副本上。当多个副本服务 agent 会话时，请把该模型路由到按前缀缓存和负载放置请求的调度器所管理的模型池，例如 [llm-d](k8s/llm-d)（实验性集成），而不是把副本逐个列为 `backend_refs`。
+- **换副本。** 每个副本都有自己的前缀缓存，而模型的 `lb_policy`（`round_robin` 或 `least_request`，见[模型配置](model-configuration#tune-timeouts-retries-and-endpoint-health)）不会把会话固定在一个副本上。当多个副本服务 agent 会话时，请把该模型路由到按前缀缓存和负载放置请求的调度器所管理的模型池，例如 [llm-d](k8s/llm-d)（实验性集成），而不是把副本逐个列为 `backend_refs`。
 - **驱逐。** 当进行中的会话需要的 KV 缓存超过 GPU 容量时，回来的会话会发现自己的前缀已被驱逐。后端的 CPU 卸载层（例如 vLLM 的 LMCache）可以把这些前缀取回来，而不必重新计算。
 
 Harness 也可能自己让提示从头开始。当它压缩历史（用摘要替换之前的轮次以保持在上下文窗口内）时，后端会在同一模型和副本上重新计算新提示的大部分内容。这既不是 Router 造成的，也不是它能阻止的，因此压缩之后前缀复用率下降并不是路由或放置的问题。
