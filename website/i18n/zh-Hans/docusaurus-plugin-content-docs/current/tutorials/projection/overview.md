@@ -27,7 +27,7 @@ translation:
 
 ## 解决什么问题？
 
-单个信号刻意保持狭窄。真实路由策略常常需要从一组竞争意图中选出一个胜者，或从若干弱指标得到一条可复用的难度分数。没有投影时，该逻辑会在决策间重复，数值阈值也难以审计。
+单个信号刻意保持狭窄。真实路由策略常常需要从一组竞争领域中选出一个胜者，或从若干弱指标得到一条可复用的难度分数。没有投影时，该逻辑会在决策间重复，数值阈值也难以审计。
 
 ## 何时使用
 
@@ -62,26 +62,25 @@ recipes:
   - name: default
     signals:
       domains:
-        - name: technical-support
+        - name: computing
           labels: [computer science]
-        - name: account-management
-          labels: [business]
+        - name: business
       context:
         - name: long-context
           min_tokens: 4K
           max_tokens: 200K
     projections:
       partitions:
-        - name: support-intents
+        - name: subject-areas
           semantics: exclusive
-          members: [technical-support, account-management]
-          default: technical-support
+          members: [computing, business]
+          default: computing
       scores:
         - name: request-difficulty
           method: weighted_sum
           inputs:
             - type: domain
-              name: technical-support
+              name: computing
               value_source: confidence
               weight: 0.5
             - type: context
@@ -92,21 +91,21 @@ recipes:
           source: request-difficulty
           method: threshold_bands
           outputs:
-            - name: support-fast
+            - name: difficulty-low
               lt: 0.5
-            - name: support-escalated
+            - name: difficulty-high
               gte: 0.5
     decisions:
-      - name: escalated-support
-        description: Route difficult support requests to the larger model.
+      - name: escalated-computing
+        description: Route difficult computing requests to the larger model.
         priority: 150
         rules:
           operator: AND
           conditions:
             - type: projection
-              name: support-escalated
+              name: difficulty-high
         modelRefs:
-          - model: support-large
+          - model: large-model
 ```
 
 只有映射输出名用 `type: projection` 引用。决策不直接引用分区名或分数名。

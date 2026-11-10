@@ -25,7 +25,7 @@ The route pipeline is:
 ## What Problem Does It Solve?
 
 Individual signals are intentionally narrow. Real routing policy often needs
-one winner from a competing intent group or one reusable difficulty score from
+one winner from a competing domain group or one reusable difficulty score from
 several weak indicators. Without projections, that logic is duplicated across
 decisions and numeric thresholds become hard to audit.
 
@@ -64,26 +64,25 @@ recipes:
   - name: default
     signals:
       domains:
-        - name: technical-support
+        - name: computing
           labels: [computer science]
-        - name: account-management
-          labels: [business]
+        - name: business
       context:
         - name: long-context
           min_tokens: 4K
           max_tokens: 200K
     projections:
       partitions:
-        - name: support-intents
+        - name: subject-areas
           semantics: exclusive
-          members: [technical-support, account-management]
-          default: technical-support
+          members: [computing, business]
+          default: computing
       scores:
         - name: request-difficulty
           method: weighted_sum
           inputs:
             - type: domain
-              name: technical-support
+              name: computing
               value_source: confidence
               weight: 0.5
             - type: context
@@ -94,21 +93,21 @@ recipes:
           source: request-difficulty
           method: threshold_bands
           outputs:
-            - name: support-fast
+            - name: difficulty-low
               lt: 0.5
-            - name: support-escalated
+            - name: difficulty-high
               gte: 0.5
     decisions:
-      - name: escalated-support
-        description: Route difficult support requests to the larger model.
+      - name: escalated-computing
+        description: Route difficult computing requests to the larger model.
         priority: 150
         rules:
           operator: AND
           conditions:
             - type: projection
-              name: support-escalated
+              name: difficulty-high
         modelRefs:
-          - model: support-large
+          - model: large-model
 ```
 
 Only mapping output names are referenced with `type: projection`. Decisions do
