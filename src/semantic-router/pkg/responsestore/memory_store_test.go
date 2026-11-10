@@ -2,6 +2,7 @@ package responsestore
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -102,5 +103,21 @@ func TestMemoryStoreGetConversationChainSelfReference(t *testing.T) {
 	}
 	if chain[0].ID != "resp_self" {
 		t.Errorf("chain[0].ID = %q, want %q", chain[0].ID, "resp_self")
+	}
+}
+
+// An ancestor that expired before its descendants leaves the chain incomplete:
+// continuing with the remainder answers a shorter conversation as if it were
+// the whole one.
+func TestMemoryStoreGetConversationChainExpiredAncestor(t *testing.T) {
+	store := newChainTestStore(t)
+
+	mustStoreResponse(t, store, &responseapi.StoredResponse{ID: "resp_root_expired", TTL: time.Now().Add(-time.Minute)})
+	mustStoreResponse(t, store, &responseapi.StoredResponse{ID: "resp_mid", PreviousResponseID: "resp_root_expired"})
+	mustStoreResponse(t, store, &responseapi.StoredResponse{ID: "resp_leaf", PreviousResponseID: "resp_mid"})
+
+	chain, err := store.GetConversationChain(context.Background(), "resp_leaf")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("GetConversationChain(resp_leaf) = %d entries, err = %v; want ErrNotFound", len(chain), err)
 	}
 }

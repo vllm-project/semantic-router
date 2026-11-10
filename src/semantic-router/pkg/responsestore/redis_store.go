@@ -685,13 +685,11 @@ func (s *RedisStore) collectChainIDs(ctx context.Context, startID string) ([]str
 		response, err := s.GetResponse(ctx, currentID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
-				// If this is the first response (start of chain), return error
-				if len(responseIDs) == 1 {
-					return nil, ErrNotFound
-				}
-				// Otherwise, just break - the chain ended early
+				// A gap anywhere in the chain leaves the history incomplete. The
+				// caller answers previous_response_not_found instead of continuing
+				// with the remainder as if it were the whole conversation.
 				logging.Warnf("RedisStore: response %s not found in chain", currentID)
-				break
+				return nil, ErrNotFound
 			}
 			return nil, fmt.Errorf("failed to fetch response %s: %w", currentID, err)
 		}
