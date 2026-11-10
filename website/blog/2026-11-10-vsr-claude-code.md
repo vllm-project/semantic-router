@@ -238,8 +238,13 @@ On a CPU, each app's wait is the dial. Redact, shield and guard wait 3, 2 and 3 
 
 ## What's next
 
-vSR is the first integration under `src/agent-harness/`, the repository's home for coding-agent integrations. The decision model and its runtime do not depend on Claude Code, so the same checks can sit behind other agent harnesses next. Two improvements are already tracked: a `/vsr` pane that scrolls through every decision it keeps ([#6049](https://github.com/vllm-project/semantic-router/issues/6049)), and checks that recover on their own when a busy CPU stalls them, without a plugin reload ([#6050](https://github.com/vllm-project/semantic-router/issues/6050)).
+vSR is the first plugin under `src/agent-harness/`, the repository's home for bringing the decision model into coding agents. Nothing in the decision model or its runtime is tied to Claude Code: every check is one request to `/v1/decisions`. That opens a few directions:
 
-The quickest way to make vSR better is to use it: answer `right call` or `wrong call` on the decisions it makes, run `/vsr:calibrate`, and tell us where it got things wrong.
+- **More agent harnesses.** Other coding agents, such as Codex, raise the same moments: a subtask starts, a file is read, a command is about to run. The same apps can sit behind their hooks, with the same model and the same thresholds.
+- **One runtime for a team.** A shared GPU runtime answers fast enough for every app, check included, and keeps one set of calibrated thresholds for everyone who points at it.
+- **Thresholds that learn from use.** Every `right call` and `wrong call` is a label. `/vsr:calibrate` already fits one person's thresholds to them; the same answers can tune the defaults vSR ships with.
+- **More questions on the same model.** Vela answers more kinds of questions than vSR asks today, so new checks can come as new apps rather than new models.
+
+The quickest way to shape what comes next is to use vSR: answer `right call` or `wrong call` on the decisions it makes, run `/vsr:calibrate`, and tell us where it got things wrong.
 
 **[Plugin README](https://github.com/vllm-project/semantic-router/tree/main/src/agent-harness/claude-code) · [Report an issue](https://github.com/vllm-project/semantic-router/issues)**
