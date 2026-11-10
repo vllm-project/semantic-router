@@ -97,20 +97,30 @@ function remoteEndpoint(embeddings: Record<string, unknown>): Record<string, unk
   return Object.fromEntries(Object.entries(form).filter(([, value]) => value !== undefined))
 }
 
-function remoteEmbeddingDeployment(endpoint: Record<string, unknown>): Record<string, unknown> {
-  const apiKeyEnv = trimmedString(endpoint.api_key_env)
+// The auth patch of the card, which edits only api_key_env. A cleared key
+// removes the key's auth, its header with it, unless the saved auth has a
+// credential the card does not show (credential: delegated or api_key_file),
+// which the merge then keeps.
+function remoteAuth(apiKeyEnv: string, saved: unknown): Record<string, unknown> | null {
+  if (apiKeyEnv) return { api_key_env: apiKeyEnv }
+  const auth = asRecord(saved)
+  return auth?.credential || auth?.api_key_file ? { api_key_env: null } : null
+}
+
+function remoteEmbeddingDeployment(
+  endpoint: Record<string, unknown>,
+  saved: Record<string, unknown> | undefined,
+): Record<string, unknown> {
   const timeout = positiveNumber(endpoint.timeout_seconds)
   const retries = positiveNumber(endpoint.max_retries)
   const maxResponseBytes = positiveNumber(endpoint.max_response_bytes)
   const dimensions = positiveNumber(endpoint.dimensions)
-  // A null removes the field from a deployment saved before. The card edits
-  // only api_key_env, so the merge keeps the auth fields it does not show,
-  // such as credential: delegated.
+  // A null removes the field from a deployment saved before.
   return {
     provider: REMOTE_PROVIDER,
     endpoint: trimmedString(endpoint.base_url).replace(/\/+$/, ''),
     model: trimmedString(endpoint.model),
-    auth: { api_key_env: apiKeyEnv || null },
+    auth: remoteAuth(trimmedString(endpoint.api_key_env), saved?.auth),
     timeout_ms: timeout === undefined ? null : Math.round(timeout * 1000),
     max_retries: retries ?? null,
     limits: maxResponseBytes === undefined ? null : { max_response_bytes: maxResponseBytes },
@@ -229,6 +239,7 @@ export function embeddingModelsPatch(rawData: EditFormData): Record<string, unkn
     remote ? rawData : { ...rawData, endpoint: undefined },
   )
   const catalog = { ...(asRecord(normalized.__catalog) ?? {}) }
+  const deployments = asRecord(catalog[DEPLOYMENTS_KEY])
   delete catalog[DEPLOYMENTS_KEY]
 
   if (remote) {
@@ -236,7 +247,9 @@ export function embeddingModelsPatch(rawData: EditFormData): Record<string, unkn
     validateRemoteEndpoint(endpoint)
     const name = trimmedString(normalized.__deployment_name) || DEFAULT_REMOTE_DEPLOYMENT
     return {
-      deployments: { [name]: remoteEmbeddingDeployment(endpoint ?? {}) },
+      deployments: {
+        [name]: remoteEmbeddingDeployment(endpoint ?? {}, asRecord(deployments?.[name])),
+      },
       embeddings: { ...catalog, default: defaultBinding(name) },
     }
   }

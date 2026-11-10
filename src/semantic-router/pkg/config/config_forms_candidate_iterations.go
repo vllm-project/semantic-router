@@ -1,11 +1,28 @@
 package config
 
 // candidateIterationForms are the candidate iteration models an earlier
-// release loaded and this one refuses: a lora_name the model's
-// providers.models entry does not declare, as it is refused in modelRefs.
-// Candidate iterations do not choose the model a request is sent to, so
-// migrate drops the name.
+// release loaded and this one refuses, as it refuses them in modelRefs: a
+// model providers.models does not declare, and a lora_name the model's
+// providers.models entry does not declare. Candidate iterations do not choose
+// the model a request is sent to, so migrate drops the model, or the name.
 var candidateIterationForms = []ConfigForm{
+	{
+		Code:    CodeInvalidValue,
+		Paths:   RoutingScopes("decisions[].candidateIterations[].models[]"),
+		MatchAt: unknownIterationModel,
+		What:    "a candidate iteration model names a model providers.models does not declare",
+		Becomes: "the iteration without the model, and with no model left, the decision without the iteration; declare the model in providers.models to keep it",
+		Migrate: func(m *Migration, at FormMatch) error {
+			removeItem(at.Parent, at.Node)
+			if iterations := at.Above(3); len(at.Parent.Content) == 0 {
+				removeItem(iterations, at.Above(2))
+				if len(iterations.Content) == 0 {
+					m.Delete(at.Above(4), "candidateIterations")
+				}
+			}
+			return nil
+		},
+	},
 	{
 		Code:    CodeInvalidValue,
 		Paths:   RoutingScopes("decisions[].candidateIterations[].models[]"),
@@ -17,6 +34,29 @@ var candidateIterationForms = []ConfigForm{
 			return nil
 		},
 	},
+}
+
+// unknownIterationModel reports a candidate iteration model that names neither
+// a providers.models entry nor a LoRA one declares. As in modelRefs, the load
+// checks the name only once providers.models declares a model.
+func unknownIterationModel(at FormMatch) bool {
+	name := scalarAt(at.Node, "model")
+	models := sequenceAt(at.Root, "providers", "models")
+	if name == "" || len(models) == 0 {
+		return false
+	}
+	for _, model := range models {
+		model = resolveAlias(model)
+		if scalarAt(model, "name") == name {
+			return false
+		}
+		for _, lora := range sequenceAt(model, "loras") {
+			if scalarAt(lora, "name") == name {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // undeclaredIterationLoRA reports a candidate iteration model whose lora_name
