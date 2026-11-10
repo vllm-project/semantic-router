@@ -30,6 +30,10 @@ queries. See [Router management API](./apiserver).
 | `POST` | `/v1/systemone`, `/v1/decisions` | Native System One | Direct decision models or explicitly published native recipes on a standalone listener |
 | `GET` | `/v1/systemone/models` | Native model discovery | Lists that listener's published System One models |
 
+`GET /v1/responses/{id}/input_items` includes nonempty stored `instructions` as a
+system-message item before the stored input items. Item IDs, `first_id`, and
+`last_id` remain stable across repeated reads of an unchanged stored response.
+
 Engine mode serves the native System One paths with recipe routing disabled.
 Publish native model IDs in `listeners[].systemone.models`; the Chat `models`
 allowlist does not grant native access. Both APIs use the listener's API keys.
