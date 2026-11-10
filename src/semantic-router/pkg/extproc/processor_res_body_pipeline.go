@@ -126,7 +126,10 @@ func (r *OpenAIRouter) finalizeResponsePolicy(
 type responsePolicyPlan struct {
 	blocked *ext_proc.ProcessingResponse
 	// refusal is the error a streaming client receives for blocked.
-	refusal    *llmprotocol.ProtocolError
+	refusal *llmprotocol.ProtocolError
+	// finalBody is the answer with the guard's notes, which Router Replay
+	// keeps at commit: a caller that sends the client another form of it
+	// replaces it first.
 	finalBody  []byte
 	response   *ext_proc.ProcessingResponse
 	commitFunc func()
@@ -194,17 +197,15 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 	}
 
 	response, finalBody := r.applySemanticResponseWarnings(ctx, semanticResponse, clientBody)
-	return &responsePolicyPlan{
-		finalBody: finalBody,
-		response:  response,
-		commitFunc: func() {
-			r.recordRouterReplayResponseGuard(ctx)
-			r.scheduleSemanticResponseMemoryStore(ctx, memoryResponse)
-			addResponseCostHeaders(ctx, response)
-			r.persistResponseObject(ctx)
-			r.attachRouterReplayResponse(ctx, finalBody, true)
-		},
+	plan := &responsePolicyPlan{finalBody: finalBody, response: response}
+	plan.commitFunc = func() {
+		r.recordRouterReplayResponseGuard(ctx)
+		r.scheduleSemanticResponseMemoryStore(ctx, memoryResponse)
+		addResponseCostHeaders(ctx, response)
+		r.persistResponseObject(ctx)
+		r.attachRouterReplayResponse(ctx, plan.finalBody, true)
 	}
+	return plan
 }
 
 func (r *OpenAIRouter) applySemanticResponseWarnings(
