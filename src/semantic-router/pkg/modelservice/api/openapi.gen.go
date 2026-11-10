@@ -860,6 +860,9 @@ type ErrorBody struct {
 	// These fixed words never carry request data, so a gateway may show them where it must not show
 	// `message`.
 	Reason *ErrorBodyReason `json:"reason,omitempty"`
+
+	// State In a batch, the name of the entry `question` belongs to.
+	State *string `json:"state,omitempty"`
 }
 
 // ErrorBodyCode The request's error. `question_failed` (POST /v1/systemone): the request is answered as a whole for

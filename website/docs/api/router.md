@@ -41,8 +41,9 @@ The System One paths read bodies compressed with one layer of gzip or zstd
 The Router decodes these before it reads the request and forwards the JSON
 request, with each part's image as `data_base64`, to the model. On
 `/v1/systemone` a request with a failed question is answered as a whole with
-`question_failed`, the question's `question_error`, fixed `reason` and ID,
-while `/v1/decisions` answers each question in place. A model the listener does
+`question_failed`, the question's `question_error`, fixed `reason` and ID
+(in a batch, also its entry as `state`), while `/v1/decisions` answers each
+question in place. A model the listener does
 not publish returns `403` `model_not_allowed` with the models it does publish.
 See [System One compatibility](../model-runtime/reference/http-api.md#system-one-compatibility)
 for assets, Box, track and long context.

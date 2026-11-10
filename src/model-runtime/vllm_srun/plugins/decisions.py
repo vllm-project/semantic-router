@@ -21,6 +21,7 @@ from typing import Any, ClassVar, Generic
 
 from .. import assets as assetlib
 from ..errors import (
+    INVALID_INPUT,
     INVALID_QUESTION,
     QUESTION_FAILED,
     MediaError,
@@ -164,19 +165,46 @@ def split_states(body: Any) -> tuple[list[dict[str, Any]], list[str]] | None:
 
 
 def join_states(
-    outcomes: list[tuple[int, dict[str, Any]]], names: list[str]
+    outcomes: list[tuple[int, dict[str, Any]]],
+    names: list[str],
+    bodies: list[dict[str, Any]],
 ) -> tuple[int, dict[str, Any]]:
     """A batch's response from its entries' responses: each under its name, and the usage of them all.
 
-    The first failure answers the batch. A batch none of whose questions is
-    valid is refused, as ``refuse_unanswerable`` refuses a standard request.
-    With ``return_meta`` the batch has the model's ``meta``, which every entry
-    shares: the entries run in one job group.
+    An entry refused for its input (a rejected image, video or asset, or its
+    tokens: the refusals with a reason) fails each question of its request in
+    ``bodies`` with ``invalid_input`` and the refusal's message, and the other
+    entries are answered. Any other failure, or a refusal of every entry,
+    answers the batch. A batch none of whose questions is valid is refused, as
+    ``refuse_unanswerable`` refuses a standard request. With ``return_meta``
+    the batch has the model's ``meta``, which every entry shares: the entries
+    run in one job group.
     """
-    for status, body in outcomes:
-        if status != HTTPStatus.OK:
+    alone = [
+        status == HTTPStatus.BAD_REQUEST and "reason" in body["error"]
+        for status, body in outcomes
+    ]
+    for (status, body), refused in zip(outcomes, alone, strict=True):
+        if status != HTTPStatus.OK and (not refused or all(alone)):
             return status, body
-    entries = {name: body for name, (_, body) in zip(names, outcomes, strict=True)}
+    first = next(body for status, body in outcomes if status == HTTPStatus.OK)
+    entries = {}
+    for name, (status, body), sent in zip(names, outcomes, bodies, strict=True):
+        if status == HTTPStatus.OK:
+            entries[name] = body
+            continue
+        failure = QuestionError(INVALID_INPUT, body["error"]["message"])
+        entries[name] = {
+            "model": first["model"],
+            "answers": {
+                question_id: question_error(
+                    question.get("type") if isinstance(question, dict) else None,
+                    failure,
+                )
+                for question_id, question in sent["questions"].items()
+            },
+            "usage": {"input_tokens": 0, "output_tokens": 0},
+        }
     answers = [
         (name, question_id, answer)
         for name, body in entries.items()
@@ -194,9 +222,9 @@ def join_states(
             f"no question is valid ({reasons})",
             answers[0][2].get("reason"),
             question=answers[0][1],
+            state=answers[0][0],
         )
         return error.status, error.body()
-    first = outcomes[0][1]
     response: dict[str, Any] = {
         "model": first["model"],
         "states": entries,
@@ -216,8 +244,9 @@ def as_systemone(status: int, body: dict[str, Any]) -> tuple[int, dict[str, Any]
     System One answers carry no per-question error, and the official SDKs
     validate each answer by its type, so the first failed question (of a
     standard request, or of a batch's entries in order) answers the request
-    with its code, fixed reason and ID; the message lists every failure. A
-    request none of whose questions is valid is that question's error too.
+    with its code, fixed reason and ID, and in a batch its entry's name; the
+    message lists every failure. A request none of whose questions is valid is
+    that question's error too.
     """
     if status == HTTPStatus.OK:
         failures = [
@@ -239,13 +268,14 @@ def as_systemone(status: int, body: dict[str, Any]) -> tuple[int, dict[str, Any]
             + (f": {answer['message']}" if answer.get("message") else "")
             for question_id, answer, name in failures
         )
-        question_id, answer, _ = failures[0]
+        question_id, answer, name = failures[0]
         error = RuntimeServiceError(
             QUESTION_FAILED,
             f"{len(failures)} question(s) cannot be answered: {listed}",
             answer.get("reason"),
             question=question_id,
             question_error=answer["error"],
+            state=name,
         )
         return error.status, error.body()
     refused = body.get("error") if isinstance(body, dict) else None
@@ -260,6 +290,7 @@ def as_systemone(status: int, body: dict[str, Any]) -> tuple[int, dict[str, Any]
             refused.get("reason"),
             question=refused["question"],
             question_error=INVALID_QUESTION,
+            state=refused.get("state"),
         )
         return error.status, error.body()
     return status, body
