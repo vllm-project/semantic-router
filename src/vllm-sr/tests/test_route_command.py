@@ -337,15 +337,18 @@ def test_recipe_learning_artifact_contains_metrics_patch_candidates_and_seed_pac
     None
 ):
     recipe = {
-        "version": "v0.3",
-        "routing": {
-            "decisions": [
-                {
-                    "name": "simple_general",
-                    "adaptations": {"protection": {"stability_weight": 1.0}},
-                }
-            ]
-        },
+        "version": "v0.5",
+        "recipes": [
+            {
+                "name": "default",
+                "decisions": [
+                    {
+                        "name": "simple_general",
+                        "adaptations": {"protection": {"stability_weight": 1.0}},
+                    }
+                ],
+            }
+        ],
     }
     artifact = build_recipe_learning_artifact([_sample_learning_record()], {}, recipe)
 
@@ -361,7 +364,7 @@ def test_recipe_learning_artifact_contains_metrics_patch_candidates_and_seed_pac
     assert artifact["recipe_patch"]["suggestions"][0]["finding_id"].startswith("rlf_")
     assert artifact["candidate_recipes"]
     assert artifact["candidate_recipes"][0]["recipe"] is not None
-    candidate_decision = artifact["candidate_recipes"][0]["recipe"]["routing"][
+    candidate_decision = artifact["candidate_recipes"][0]["recipe"]["recipes"][0][
         "decisions"
     ][0]
     assert candidate_decision["adaptations"]["adaptation"]["candidate_set"] == "tier"
@@ -420,13 +423,16 @@ def test_recipe_learning_detects_route_model_and_protection_gaps() -> None:
         )
     }
     recipe = {
-        "version": "v0.3",
-        "routing": {
-            "decisions": [
-                {"name": "simple_general", "priority": 50},
-                {"name": "domain_math", "priority": 40},
-            ]
-        },
+        "version": "v0.5",
+        "recipes": [
+            {
+                "name": "default",
+                "decisions": [
+                    {"name": "simple_general", "priority": 50},
+                    {"name": "domain_math", "priority": 40},
+                ],
+            }
+        ],
     }
 
     artifact = build_recipe_learning_artifact([record], cases, recipe)
@@ -451,11 +457,11 @@ def test_recipe_learning_detects_route_model_and_protection_gaps() -> None:
         if candidate.get("recipe") is not None
     ]
     assert any(
-        recipe["routing"]["decisions"][0].get("priority") == 40
+        recipe["recipes"][0]["decisions"][0].get("priority") == 40
         for recipe in materialized
     )
     assert any(
-        recipe["routing"]["decisions"][0]
+        recipe["recipes"][0]["decisions"][0]
         .get("adaptations", {})
         .get("protection", {})
         .get("mode")
@@ -483,13 +489,14 @@ def test_recipe_learning_command_reads_file_and_writes_artifacts(
     )
     recipe_path.write_text(
         """
-version: v0.3
-routing:
-  decisions:
-    - name: simple_general
-      adaptations:
-        protection:
-          stability_weight: 1.0
+version: v0.5
+recipes:
+  - name: default
+    decisions:
+      - name: simple_general
+        adaptations:
+          protection:
+            stability_weight: 1.0
 """.strip(),
         encoding="utf-8",
     )
@@ -703,8 +710,8 @@ def test_route_probe_emits_routing_receipt_and_uses_secret_from_environment(
     response.headers = {
         "x-vsr-selected-recipe": "balanced",
         "x-vsr-selected-decision": "coding",
-        "x-vsr-selected-algorithm": "multi_factor",
         "x-vsr-selected-model": "qwen",
+        "x-vsr-trace": "confidence=0.91, algorithm=multi_factor",
     }
     response.json.return_value = {
         "model": "Qwen/Qwen3.8-Flash-Next",
@@ -744,6 +751,10 @@ def test_route_probe_emits_routing_receipt_and_uses_secret_from_environment(
     receipt = json.loads(result.output)
     assert receipt["passed"] is True
     assert receipt["response"]["routing"]["x-vsr-selected-model"] == "qwen"
+    assert receipt["response"]["routing"]["trace"] == {
+        "confidence": "0.91",
+        "algorithm": "multi_factor",
+    }
     assert "probe-secret" not in result.output
     assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer probe-secret"
     assert post.call_args.kwargs["json"]["max_completion_tokens"] == 8192

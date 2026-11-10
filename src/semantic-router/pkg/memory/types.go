@@ -100,8 +100,13 @@ type RetrieveOptions struct {
 	// Limit is the maximum number of results to return (default: 5)
 	Limit int
 
-	// Threshold is the minimum similarity score (range 0.0 to 1.0, default: 0.70)
+	// Threshold is the minimum similarity score, a cosine. Unless
+	// ThresholdSet, zero or less takes the store's default_similarity_threshold.
 	Threshold float32
+
+	// ThresholdSet says the caller wrote Threshold, so a bound of zero or
+	// less applies as written.
+	ThresholdSet bool
 
 	// HybridSearch enables BM25 + n-gram re-ranking on top of vector search
 	HybridSearch bool
@@ -116,8 +121,16 @@ type RetrieveOptions struct {
 	AdaptiveThreshold bool
 }
 
+// minSimilarity is the least similarity a retrieval keeps: the caller's
+// Threshold, else the store's default.
+func (o RetrieveOptions) minSimilarity(storeDefault float32) float32 {
+	if o.ThresholdSet || o.Threshold > 0 {
+		return o.Threshold
+	}
+	return storeDefault
+}
+
 // DefaultMemoryConfig returns a default memory configuration.
-// EmbeddingModel is intentionally omitted - let router auto-detect from embedding_models config.
 func DefaultMemoryConfig() config.MemoryConfig {
 	return config.MemoryConfig{
 		Milvus: config.MemoryMilvusConfig{

@@ -93,7 +93,7 @@ func setupRedisCacheBench(b *testing.B) *RedisCache {
 		TTLSeconds:          300,
 		Enabled:             true,
 		Config:              redisConfig,
-		EmbeddingModel:      "qwen3",
+		EmbeddingDeployment: "qwen3-embedding",
 	})
 	if err != nil {
 		unavailable("redis server not available: %v", err)

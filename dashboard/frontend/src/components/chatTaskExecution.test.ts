@@ -98,7 +98,7 @@ describe('runPlaygroundTask', () => {
       stream: true,
     })
     expect(requestInit.headers).toMatchObject({
-      'x-session-id': 'conversation-1',
+      'x-vsr-session-id': 'conversation-1',
       'x-conversation-id': 'conversation-1',
     })
     expect(messages[messages.length - 1]).toMatchObject({
@@ -260,7 +260,7 @@ describe('runPlaygroundTask', () => {
       expect(fetchMock).toHaveBeenCalledTimes(2)
       for (const [, requestInit] of fetchMock.mock.calls as [string, RequestInit][]) {
         expect(requestInit.headers).toMatchObject({
-          'x-session-id': conversationId,
+          'x-vsr-session-id': conversationId,
           'x-conversation-id': conversationId,
         })
       }

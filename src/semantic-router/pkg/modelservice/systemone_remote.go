@@ -18,6 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 )
 
 // listingTimeout bounds one read of a remote models listing beside requests;
@@ -33,10 +34,6 @@ const listingLimit = 1 << 20
 // systemOneRequestLimit bounds one System One request body unless the
 // deployment's limits set another.
 const systemOneRequestLimit = 16 << 20
-
-// remoteStateLimit is how many texts one System One call asks about: the
-// request's own state and its further states.
-const remoteStateLimit = 8
 
 // remoteCacheTTL is how long a remote answer serves a repeated call. The
 // cache belongs to one configuration generation and is dropped with it.
@@ -98,17 +95,23 @@ func NewRemoteSystemOne(cfg *config.RouterConfig) (*RemoteSystemOne, error) {
 		transport := deployment
 		transport.TimeoutMs = 0
 		client, err := connector.ForDeployment(transport, connector.Options{
-			AttemptTimeout: time.Duration(config.MaxDecisionTimeoutMs) * time.Millisecond, MaxRetries: 0,
+			AttemptTimeout: time.Duration(config.MaxSystemOneTimeoutMs) * time.Millisecond, MaxRetries: 0,
 			MaxRequestBytes: systemOneRequestLimit, MaxResponseBytes: SystemOneResponseLimit, MaxErrorBytes: SystemOneResponseLimit,
 		})
 		if err != nil {
 			cancel()
 			return nil, fmt.Errorf("systemone deployment %q: %w", name, err)
 		}
+		// A delegated deployment answers each user with that user's
+		// credential, so no answer is kept for another request.
+		var cache *resultCache
+		if !deployment.Auth.Delegated() {
+			cache = newExpiringResultCache(ResultCacheEntries(), remoteCacheTTL)
+		}
 		remote.deployments[name] = &systemOneDeployment{
 			name: name, model: deployment.Model,
 			declared: deployment.DeclaredQuestionTypes(), presets: deployment.DeclaredPresets(),
-			client: client, cache: newExpiringResultCache(ResultCacheEntries(), remoteCacheTTL),
+			client: client, cache: cache,
 		}
 	}
 	return remote, nil
@@ -250,28 +253,39 @@ func (d *systemOneDeployment) declaredCard() ModelCard {
 	return RemoteCard(d.model, d.declared, d.presets)
 }
 
-func (d *systemOneDeployment) stateLimit() int { return remoteStateLimit }
-
 // send asks a fused task's questions in one System One call. A System One
-// API fails a call with a failed question as a whole and names the question;
-// send then asks the rest once more without it, within the same deadline,
-// and leaves only that question unknown. Any other failure leaves every
-// question of the task unknown.
+// API fails a call with a failed question as a whole and names the question
+// and, in a batch, its entry; send then asks the rest once more without it,
+// within the same deadline, and leaves only that question unknown (about that
+// entry, else about every state). An entry whose input the API refused
+// (invalid_input) is left out as a whole. When the retry fails the same
+// question about another entry, send asks once more without it about every
+// state. Any other failure leaves every question of the task unknown.
 func (d *systemOneDeployment) send(ctx context.Context, task *bundleTask) {
 	plan := sentAs(task)
 	status, data, err := d.post(ctx, *task.task.Decisions)
-	var failure *questionFailure
-	if err == nil {
-		if failed, ok := failedQuestion(status, data); ok && ctx.Err() == nil {
-			if retry, ok := plan.without(task, failed.question); ok {
-				systemOneRetries.WithLabelValues(d.name).Inc()
-				logging.ComponentDebugEvent("model_runtime", "systemone_question_retried", map[string]interface{}{
-					"deployment": d.name, "question": failed.question, "question_error": failed.code,
-				})
-				failure, plan = &failed, retry
-				status, data, err = d.post(ctx, plan.body)
-			}
+	var failures []questionFailure
+	for err == nil {
+		failed, ok := failedQuestion(status, data)
+		if len(failures) > 0 {
+			// At most one more retry, and only for the same question.
+			last := failures[len(failures)-1]
+			ok = ok && last.state != "" && failed.question == last.question
+			failed.state = ""
 		}
+		if !ok || ctx.Err() != nil {
+			break
+		}
+		retry, ok := plan.without(failed)
+		if !ok {
+			break
+		}
+		systemOneRetries.WithLabelValues(d.name).Inc()
+		logging.ComponentDebugEvent("model_runtime", "systemone_question_retried", map[string]interface{}{
+			"deployment": d.name, "question": failed.question, "state": failed.state, "question_error": failed.code,
+		})
+		failures, plan = append(failures, failed), retry
+		status, data, err = d.post(ctx, plan.body)
 	}
 	var responses []Response
 	if err == nil {
@@ -280,14 +294,16 @@ func (d *systemOneDeployment) send(ctx context.Context, task *bundleTask) {
 			d.reportFailure(status, ErrorReason(err), nil)
 		}
 	}
-	if err == nil && failure != nil {
-		failure.answer(task, responses)
+	if err == nil {
+		for _, failure := range failures {
+			failure.answer(task, responses)
+		}
 	}
 	if err == nil && task.decision.cache != nil {
 		for _, call := range task.calls {
 			cacheTotal.WithLabelValues(call.decision.deployment, "miss").Inc()
 		}
-		if failure == nil && completeAll(responses) {
+		if len(failures) == 0 && completeAll(responses) {
 			if len(responses) == 1 {
 				task.decision.cache.put(task.decision.key, responses[0])
 			} else {
@@ -384,6 +400,14 @@ func (d *systemOneDeployment) readListing(parent context.Context, timeout time.D
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	card, err := d.listing(ctx)
+	if errors.Is(err, principal.ErrRouterCall) {
+		// The listing is the Router's own read; a delegated deployment
+		// answers it for no one, so its declared card applies.
+		logging.ComponentWarnEvent("model_runtime", "delegated_router_call_refused", map[string]interface{}{
+			"call": "systemone_listing", "deployment": d.name, "question_types": d.declaredCard().QuestionTypes,
+		})
+		return
+	}
 	if err != nil {
 		logging.ComponentEvent("model_runtime", "systemone_deployment_unlisted", map[string]interface{}{
 			"deployment": d.name, "reason": err.Error(), "question_types": d.declaredCard().QuestionTypes,
@@ -511,19 +535,28 @@ func systemOneQuestion(question Question) api.Question {
 // decisions answer. A System One API answers a request with a failed question
 // as a whole, with an error status, so the call's questions share its error.
 func DecodeSystemOneResponse(status int, body []byte, questions []Question) (Response, error) {
-	decoded, err := decodeSystemOneBody(status, body)
+	decoded, err := decodeSystemOneBody(status, body, false)
 	if err != nil {
 		return Response{}, err
 	}
 	return decodeResponse(decoded, questions), nil
 }
 
-func decodeSystemOneBody(status int, body []byte) (api.DecisionResponse, error) {
+// decodeSystemOneBody reads a System One API's answer to a standard request,
+// or with batch to a batch, whose answers are its entries'. The connector
+// bounds body by the deployment's limits.max_response_bytes.
+func decodeSystemOneBody(status int, body []byte, batch bool) (api.DecisionResponse, error) {
 	if err := systemOneStatusError(status); err != nil {
 		return api.DecisionResponse{}, err
 	}
 	var decoded api.DecisionResponse
-	if len(body) > SystemOneResponseLimit || json.Unmarshal(body, &decoded) != nil || decoded.Answers == nil {
+	invalid := json.Unmarshal(body, &decoded) != nil
+	if batch {
+		invalid = invalid || decoded.States == nil
+	} else {
+		invalid = invalid || decoded.Answers == nil
+	}
+	if invalid {
 		return api.DecisionResponse{}, fmt.Errorf("%w: invalid System One response", ErrFailed)
 	}
 	return decoded, nil

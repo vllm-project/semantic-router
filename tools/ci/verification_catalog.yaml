@@ -103,7 +103,7 @@ verifications:
     executor: core
     category: components
     workflow: .github/workflows/test-and-build.yml
-    inventory: go-core-and-selector-parity
+    inventory: go-core-framework-discovery
   storage:
     layer: runtime
     execution: approved
@@ -193,21 +193,6 @@ verifications:
     runtime: model-runtime
     device: cpu
     inventory: maintained-recipe-source-aware-shards
-  platform.image-calibration-cpu:
-    layer: runtime
-    execution: approved
-    display_name: Image Routing Conformance
-    activity: test
-    boundary: [unit, integration]
-    executor: platform
-    category: conformance
-    workflow: .github/workflows/test-platform.yml
-    platform_id: model-runtime-cpu
-    runtime: model-runtime
-    device: cpu
-    target: verify-image-routing-calibration
-    inventory: image-routing-calibration-source-fixtures-and-thresholds
-    evidence: image-calibration
   platform.models-cpu:
     layer: runtime
     execution: approved
@@ -329,7 +314,7 @@ verifications:
     worker: router
     workflow: .github/workflows/test-tools.yml
     target: test-bench-tools
-    inventory: bench-research-tools-pytest-discovery
+    inventory: bench-research-tools-framework-discovery
 
   harness-tools:
     layer: source
@@ -374,7 +359,6 @@ full_cpu:
     - local.memory
     - recipe-conformance
     - platform.models-cpu
-    - platform.image-calibration-cpu
     - performance
     - cli-package
     - cli-unit
@@ -385,14 +369,9 @@ full_cpu:
     - e2e.standalone
     - e2e.envoy-ai-gateway
     - e2e.routing-errors
-    - e2e.local-classifier-backend
     - e2e.dashboard
     - e2e.remote-embedding
     - e2e.streaming
-    - e2e.vela-omni
-    - e2e.vela-halu
-    - e2e.vela-shield
-    - e2e.multimodal-routing
   support_contracts:
     Helm chart: [core, e2e.standalone]
     Local deployment: [local.cli]

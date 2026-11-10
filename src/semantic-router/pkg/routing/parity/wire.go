@@ -13,6 +13,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
@@ -44,7 +45,7 @@ func NewBackend(cases []Case) *Backend {
 
 // ServeHTTP answers with the fixture of the case named by x-request-id, or 404.
 func (b *Backend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	id := r.Header.Get("x-request-id")
+	id := r.Header.Get(headers.RequestID)
 	body, _ := io.ReadAll(r.Body)
 	message := &Message{Header: wireRequestHeader(r), Body: body}
 	b.mu.Lock()
@@ -127,7 +128,7 @@ func Send(ctx context.Context, client *http.Client, baseURL string, c Case) (*Me
 		// a gateway would forward like any client header.
 		req.Header.Set("User-Agent", "")
 	}
-	req.Header.Set("x-request-id", RequestIDPrefix+c.Name)
+	req.Header.Set(headers.RequestID, RequestIDPrefix+c.Name)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -193,14 +194,16 @@ func (c *Corpus) ConfigWithBackend(baseURL string) ([]byte, error) {
 	}
 	for _, model := range mappingSequence(mappingValue(documentRoot(&document), "providers"), "models") {
 		for _, ref := range mappingSequence(model, "backend_refs") {
-			if baseURLNode := mappingValue(ref, "base_url"); baseURLNode != nil {
-				original, err := url.Parse(baseURLNode.Value)
+			endpoint := mappingValue(ref, "endpoint")
+			switch {
+			case endpoint == nil:
+			case strings.Contains(endpoint.Value, "://"):
+				original, err := url.Parse(endpoint.Value)
 				if err != nil {
 					return nil, err
 				}
-				baseURLNode.Value = target.Scheme + "://" + target.Host + original.Path
-			}
-			if endpoint := mappingValue(ref, "endpoint"); endpoint != nil {
+				endpoint.Value = target.Scheme + "://" + target.Host + original.Path
+			default:
 				endpoint.Value = target.Host
 			}
 			if protocol := mappingValue(ref, "protocol"); protocol != nil {

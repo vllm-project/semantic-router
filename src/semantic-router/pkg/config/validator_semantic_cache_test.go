@@ -5,107 +5,51 @@ import (
 	"testing"
 )
 
-func f32(v float32) *float32 { return &v }
+func responseCacheDecision(configuration map[string]interface{}) Decision {
+	return Decision{Name: "route", Plugins: []DecisionPlugin{{Type: DecisionPluginResponseCache, Configuration: MustStructuredPayload(configuration)}}}
+}
 
-func TestValidateSemanticCacheThresholdRange(t *testing.T) {
+// A decision's semantic.match is checked as the response cache's block, at
+// its document path: recall from the cache index, bounded as a cosine.
+func TestValidateResponseCacheSemanticMatch(t *testing.T) {
 	cases := []struct {
-		name      string
-		threshold *float32
-		wantErr   bool
+		name    string
+		match   map[string]interface{}
+		wantErr string
 	}{
-		{"unset_ok", nil, false},
-		{"zero_ok", f32(0), false},
-		{"mid_ok", f32(0.8), false},
-		{"one_ok", f32(1.0), false},
-		{"above_one_rejected", f32(1.5), true},
-		{"negative_rejected", f32(-0.1), true},
+		{name: "recall", match: map[string]interface{}{"recall": map[string]interface{}{"top_k": 3, "min_similarity": 0.85}}},
+		{name: "empty", match: map[string]interface{}{}, wantErr: "recipes[default].decisions[route].plugins[0].configuration.semantic.match: match_empty"},
+		{name: "similarity beyond a cosine", match: map[string]interface{}{"recall": map[string]interface{}{"top_k": 3, "min_similarity": 2.0}}, wantErr: "semantic.match.recall.min_similarity must be a cosine similarity"},
+		{name: "judge without recall", match: map[string]interface{}{"judge": map[string]interface{}{"preset": "same_request"}}, wantErr: "add recall"},
+		{name: "bm25 recall", match: map[string]interface{}{"recall": map[string]interface{}{"method": "bm25", "top_k": 3}}, wantErr: "recalls with embedding only"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &RouterConfig{}
-			cfg.SemanticCache.SimilarityThreshold = tc.threshold
-			err := validateSemanticCacheContracts(cfg)
-			if tc.wantErr != (err != nil) {
-				t.Fatalf("threshold=%v: wantErr=%v, got err=%v", tc.threshold, tc.wantErr, err)
+			cfg.Decisions = []Decision{responseCacheDecision(map[string]interface{}{"enabled": true, "semantic": map[string]interface{}{"match": tc.match}})}
+			err := validateDecisionPluginContracts(cfg)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("error = %v, want containing %q", err, tc.wantErr)
 			}
 		})
 	}
 }
 
-func TestValidateSemanticCachePerDecisionThreshold(t *testing.T) {
-	mkDecision := func(name string, threshold float32) Decision {
-		return Decision{
-			Name: name,
-			Plugins: []DecisionPlugin{{
-				Type: "semantic-cache",
-				Configuration: MustStructuredPayload(map[string]interface{}{
-					"enabled":              true,
-					"similarity_threshold": threshold,
-				}),
-			}},
-		}
-	}
-
-	// Valid per-decision threshold passes.
-	okCfg := &RouterConfig{}
-	okCfg.Decisions = []Decision{mkDecision("route_ok", 0.7)}
-	if err := validateSemanticCacheContracts(okCfg); err != nil {
-		t.Fatalf("valid per-decision threshold rejected: %v", err)
-	}
-
-	// Out-of-range per-decision threshold is rejected and names the decision.
-	badCfg := &RouterConfig{}
-	badCfg.Decisions = []Decision{mkDecision("route_bad", 2.0)}
-	err := validateSemanticCacheContracts(badCfg)
-	if err == nil {
-		t.Fatal("out-of-range per-decision threshold must be rejected")
-	}
-	if !strings.Contains(err.Error(), "route_bad") {
-		t.Fatalf("error should name the offending decision, got: %v", err)
-	}
-}
-
-func TestValidateSemanticCacheNilConfig(t *testing.T) {
-	if err := validateSemanticCacheContracts(nil); err != nil {
-		t.Fatalf("nil config must be valid, got: %v", err)
-	}
-}
-
 func TestValidateSemanticCacheMode(t *testing.T) {
-	for _, mode := range []string{
-		"",
-		SemanticCacheModeSemantic,
-		SemanticCacheModeExact,
-		SemanticCacheModeExactThenSemantic,
-	} {
-		cfg := &RouterConfig{}
-		cfg.Decisions = []Decision{{
-			Name: "route",
-			Plugins: []DecisionPlugin{{
-				Type: "semantic-cache",
-				Configuration: MustStructuredPayload(map[string]interface{}{
-					"enabled": true,
-					"mode":    mode,
-				}),
-			}},
-		}}
-		if err := validateSemanticCacheContracts(cfg); err != nil {
+	for _, mode := range []string{"", ResponseCacheModeSemantic, ResponseCacheModeExact, ResponseCacheModeExactThenSemantic} {
+		decision := responseCacheDecision(map[string]interface{}{"enabled": true, "mode": mode})
+		if _, err := DecodeDecisionPluginAt(PluginAt{Decision: decision.Name, Type: decision.Plugins[0].Type}, decision.Plugins[0]); err != nil {
 			t.Fatalf("valid mode %q rejected: %v", mode, err)
 		}
 	}
-
-	cfg := &RouterConfig{}
-	cfg.Decisions = []Decision{{
-		Name: "route",
-		Plugins: []DecisionPlugin{{
-			Type: "semantic-cache",
-			Configuration: MustStructuredPayload(map[string]interface{}{
-				"enabled": true,
-				"mode":    "unsafe",
-			}),
-		}},
-	}}
-	if err := validateSemanticCacheContracts(cfg); err == nil {
-		t.Fatal("unknown semantic-cache mode must be rejected")
+	decision := responseCacheDecision(map[string]interface{}{"enabled": true, "mode": "unsafe"})
+	if _, err := DecodeDecisionPluginAt(PluginAt{Decision: decision.Name, Type: decision.Plugins[0].Type}, decision.Plugins[0]); err == nil {
+		t.Fatal("unknown response_cache mode must be rejected")
 	}
 }

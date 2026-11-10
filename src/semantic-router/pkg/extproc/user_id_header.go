@@ -25,11 +25,15 @@ func headerValueCI(ctx *RequestContext, canonical string) string {
 	return ""
 }
 
-// authHeaderUserID returns the authenticated user id from the authz header.
+// authHeaderUserID returns the authenticated user id from the configured
+// user id header (x-authz-user-id by default).
 // Matching is case-insensitive on the header name: Envoy/HTTP2 may normalize
 // keys differently than our canonical constant, and direct map lookup would miss.
 func authHeaderUserID(ctx *RequestContext) string {
-	return headerValueCI(ctx, headers.AuthzUserID)
+	if ctx == nil {
+		return ""
+	}
+	return headerValueCI(ctx, ctx.identity.GetUserIDHeader())
 }
 
 // cacheScopeUserID resolves the user id used only for semantic-cache key scoping.
@@ -79,10 +83,7 @@ func cacheScopeUserID(ctx *RequestContext) string {
 }
 
 func responseCacheScope(ctx *RequestContext) string {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
-		return "global"
-	}
-	plugin := ctx.VSRSelectedDecision.GetResponseCacheConfig()
+	plugin := requestResponseCache(ctx)
 	if plugin == nil {
 		return "global"
 	}
@@ -103,7 +104,7 @@ func responseCacheScopeIdentity(ctx *RequestContext) string {
 		if team := headerValueCI(ctx, headers.AuthzTeamID); team != "" {
 			return team
 		}
-		groups := strings.Split(headerValueCI(ctx, headers.AuthzUserGroups), ",")
+		groups := strings.Split(headerValueCI(ctx, ctx.identity.GetUserGroupsHeader()), ",")
 		if len(groups) > 0 {
 			return strings.TrimSpace(groups[0])
 		}

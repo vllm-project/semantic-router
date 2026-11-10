@@ -67,14 +67,14 @@ func assertNoFusionExtension(body []byte, testName string) error {
 // not advertise the judge.
 //
 // This is metadata, not an execution trace. The router now builds
-// x-vsr-looper-models-used from the panel models it dispatched, but the header
+// the trace's looper models from the panel models it dispatched, but they
 // still cannot prove a call was *not* made: a judge call whose output was
 // discarded would leave it unchanged. fusionBackendCounters is the oracle for
 // that; this only pins what the client is told.
 func assertFusionPlanExcludesJudge(response *localChatCompletionResponse, testName string) error {
-	modelsUsed := response.Headers.Get("x-vsr-looper-models-used")
+	modelsUsed := strings.Join(routerTrace(response.Headers)["looper"].Items, ",")
 	if modelsUsed == "" {
-		return fmt.Errorf("%s: x-vsr-looper-models-used header missing; cannot verify judge suppression", testName)
+		return fmt.Errorf("%s: the trace names no looper models; cannot verify judge suppression", testName)
 	}
 	for _, model := range strings.Split(modelsUsed, ",") {
 		if strings.TrimSpace(model) == looperFusionJudgeModel {

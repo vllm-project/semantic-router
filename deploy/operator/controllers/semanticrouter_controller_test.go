@@ -89,12 +89,12 @@ func TestGenerateConfigYAMLIncludesBackendTargetAndLoRACatalog(t *testing.T) {
 		t.Fatalf("failed to parse generated YAML: %v", err)
 	}
 
-	if len(parsed.Routing.ModelCards) != 1 {
-		t.Fatalf("expected one generated modelCard, got %#v", parsed.Routing.ModelCards)
+	if len(parsed.Providers.Models) != 1 {
+		t.Fatalf("expected one generated provider model, got %#v", parsed.Providers.Models)
 	}
 	assertGeneratedBackendTarget(t, parsed)
 
-	modelCard := parsed.Routing.ModelCards[0]
+	modelCard := parsed.Providers.Models[0]
 	if len(modelCard.LoRAs) != 1 {
 		t.Fatalf("expected one generated LoRA adapter, got %#v", modelCard.LoRAs)
 	}

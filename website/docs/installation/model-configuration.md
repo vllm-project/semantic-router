@@ -8,7 +8,7 @@ description: Choose a catalog-backed or custom model, bind it to providers, and 
 A configured Model joins a stable Router name to one model identity and one or
 more physical backends. Configure Models under `providers.models`, then refer to
 their `name` from `providers.defaults.model` and
-`routing.decisions[].modelRefs[].model`.
+`recipes[].decisions[].modelRefs[].model`.
 
 ## Understand the model identifiers
 
@@ -43,8 +43,7 @@ shows the supported combinations and invalid mixtures.
 ## Start with one custom model
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   defaults:
     model: local-chat
@@ -56,12 +55,12 @@ providers:
           provider: vllm
           endpoint: host.docker.internal:8000
           protocol: http
-
-routing: {}
+recipes:
+  - name: default
 ```
 
 The Router creates a sparse local Model Card for `local-chat`. Add a matching
-`routing.modelCards` entry only when routing needs metadata such as context
+`providers.models` entry only when routing needs metadata such as context
 window, capabilities, tags, or LoRAs. Add benchmark measurements independently
 under top-level `evaluation.records[]`.
 
@@ -73,11 +72,16 @@ a fallback from the matched decision. A fallback cannot reintroduce a model
 that was excluded by the request's context-window check.
 
 Model Card capability metadata accepts protocol names such as `image_input`
-and `image_generation`. The catalog aliases `vision`, `audio`, and `video`
-describe image, audio, and video **input**, respectively; they do not grant
-media-generation support. `structured_output` maps to `structured_json`, and
-`tool_use` maps to `tools`. Descriptive labels such as `long_context` or `coding`
-do not erase recognized capability declarations alongside them.
+and `image_generation`, and these catalog aliases:
+
+| Alias | Means |
+| --- | --- |
+| `vision`, `audio`, `video` | Image, audio and video **input**; they don't grant media generation |
+| `structured_output` | `structured_json` |
+| `tool_use` | `tools` |
+
+Descriptive labels such as `long_context` or `coding` don't erase the
+recognized capability declarations beside them.
 
 A model without any recognized capability declaration retains protocol-only
 compatibility. For an annotated model, a protocol that can encode a request
@@ -96,7 +100,7 @@ Open **Build → Routing → Models → Add Model**. You can then:
    `catalog`, inline reasoning fields, `provider_model_id`, `api_format`, and
    backend references.
 
-The Dashboard edits the same v0.3 document as YAML. Use one authoring owner for
+The Dashboard edits the same configuration document as YAML. Use one authoring owner for
 a deployment and review the exported YAML before serving it. See
 [Configuration workflows](configuration-workflows).
 
@@ -111,11 +115,20 @@ mismatch returns an error rather than restarting the selection or replacing the
 chosen candidate. Declare them on a model card:
 
 ```yaml
-routing:
-  modelCards:
+recipes:
+  - name: default
+providers:
+  models:
     - name: image-backend
+      api_format: images
       capabilities: [image_generation]
+      modalities: {input: [text], output: [image]}
 ```
+
+A model's `modalities` name the media it reads and writes; a model that
+declares none reads and writes text. A decision's
+[output contract](../tutorials/decision/output) checks them, with its
+capabilities, when the configuration loads.
 
 The protocol capability vocabulary is defined by the `llmprotocol` package,
 and a declaration reaches capability-aware dispatch in one of these states:
@@ -215,8 +228,8 @@ The Envoy data plane has no first-byte timeout, so a configuration that sets
 
 Active health checks run in the gateway that carries the client traffic. In
 standalone mode the Router probes each replica. Behind Envoy, Envoy probes
-them, and the model calls the Router makes itself, such as a Looper
-algorithm's, leave the rotation to outlier ejection (`consecutive_5xx`).
+them, and the model calls the Router makes itself, such as an executor's,
+leave the rotation to outlier ejection (`consecutive_5xx`).
 
 ### Override timeouts and retries for one decision
 
@@ -225,22 +238,23 @@ for example a long-context route that needs more time than its provider
 model's default:
 
 ```yaml
-routing:
-  decisions:
-    - name: long_context_route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: context
-            name: long_context
-      modelRefs:
-        - model: production
-      reliability:
-        total_timeout: 600s
-        per_try_timeout: 300s
-        retry_count: 1
-        retry_on: reset
+recipes:
+  - name: default
+    decisions:
+      - name: long_context_route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: context
+              name: long_context
+        modelRefs:
+          - model: production
+        reliability:
+          total_timeout: 600s
+          per_try_timeout: 300s
+          retry_count: 1
+          retry_on: reset
 ```
 
 The block takes the provider block's timeout and retry fields, and merges
@@ -300,20 +314,20 @@ global:
         consecutive_failures: 3
         cooldown_period: 30s
         half_open_probes: 1
-
-routing:
-  decisions:
-    - name: escalate
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: small
-        - model: large
-      fallback:
-        max_attempts: 2
-        retryable_status_codes: [429, 503]
+recipes:
+  - name: default
+    decisions:
+      - name: escalate
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: small
+          - model: large
+        fallback:
+          max_attempts: 2
+          retryable_status_codes: [429, 503]
 ```
 
 | Field | Default | Effect |
@@ -331,16 +345,17 @@ layer first:
 1. a request-graph step's `fallback`, for the model calls a request graph
    makes;
 2. the decision's `fallback`;
-3. the recipe's `routing.fallback`;
+3. the recipe's `recipes[].fallback`;
 4. `global.router.fallback`.
 
-A field a layer leaves out keeps the layer below, and `enabled` is only set
-where you write it. A decision's block takes every field except
-`circuit_breaker`, which belongs to the backends. The candidates are always
-the decision's ranked models that remain eligible for the request; there is
-no separate fallback list, and a provider model has no fallback of its own.
-Other replicas of the same model are tried through its retries, ejection and
-health checks instead.
+- **Layers.** A field a layer leaves out keeps the layer below, and `enabled`
+  is only set where you write it.
+- **Decisions.** A decision's block takes every field except
+  `circuit_breaker`, which belongs to the backends.
+- **Candidates** are always the decision's ranked models that remain eligible
+  for the request. There's no separate fallback list, and a provider model has
+  no fallback of its own: other replicas of the same model are tried through
+  its retries, ejection and health checks instead.
 
 Both gateway modes run the same policy, with one deliberate difference:
 standalone mode also falls back when no backend answered at all, such as a
@@ -366,6 +381,6 @@ Model Card identities, and backend-pool compatibility before startup.
 
 ## Configure models used by Router tasks
 
-For classifiers, safety checks, and embeddings used inside the Router, start
-with [Router Runtime](model-runtime/overview.md). It covers in-process and external
-models, their configuration, and operations.
+For the decision and embedding models the Router uses itself, start with the
+[model runtime](model-runtime/get-started/overview.md). It covers local and remote models,
+their configuration, and operations.

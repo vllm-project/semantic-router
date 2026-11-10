@@ -40,6 +40,7 @@ func buildSimulatedChatCompletionSSE(
 	model string,
 	contentChunks []string,
 	toolCalls []map[string]interface{},
+	finishReason string,
 ) []byte {
 	var body []byte
 	roleChoice := map[string]interface{}{
@@ -66,9 +67,9 @@ func buildSimulatedChatCompletionSSE(
 		body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, toolChoice, nil))
 	}
 
-	finalReason := "stop"
+	finalReason := finishReason
 	if len(toolCalls) > 0 {
-		finalReason = "tool_calls"
+		finalReason = toolCallFinishReason(finishReason)
 	}
 	finalChoice := map[string]interface{}{
 		"index":         0,
@@ -102,7 +103,7 @@ func buildReMoMStreamingSSE(
 	finalChoice := map[string]interface{}{
 		"index":         0,
 		"delta":         map[string]interface{}{},
-		"finish_reason": "stop",
+		"finish_reason": final.FinishReason,
 	}
 	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, final.Model, finalChoice, nil))
 	return appendSSEDone(body)

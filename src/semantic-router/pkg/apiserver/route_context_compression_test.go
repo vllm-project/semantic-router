@@ -23,12 +23,14 @@ func TestContextCompressionPreviewIsRedactedAndApplied(t *testing.T) {
 	body := map[string]interface{}{
 		"configuration": map[string]interface{}{
 			"enabled": true,
-			"mode":    "always",
-			"targets": map[string]interface{}{
-				"tool_outputs": map[string]interface{}{
-					"mode":          "extractive",
-					"min_tokens":    100,
-					"target_tokens": 20,
+			"compress": map[string]interface{}{
+				"mode": "always",
+				"targets": map[string]interface{}{
+					"tool_outputs": map[string]interface{}{
+						"mode":          "extractive",
+						"min_tokens":    100,
+						"target_tokens": 20,
+					},
 				},
 			},
 		},
@@ -48,7 +50,7 @@ func TestContextCompressionPreviewIsRedactedAndApplied(t *testing.T) {
 	encoded, _ := json.Marshal(body)
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/plugins/context_compression/preview",
+		"/api/v1/plugins/context/compression/preview",
 		bytes.NewReader(encoded),
 	)
 	recorder := httptest.NewRecorder()
@@ -73,11 +75,11 @@ func TestContextCompressionRoutesUseDedicatedPermissions(t *testing.T) {
 	for _, route := range apiRoutes() {
 		permissions[route.Path] = route.Permission
 	}
-	if permissions["/api/v1/observability/plugins/context_compression/stats"] != PermCompressionRead {
-		t.Fatalf("stats permission = %q", permissions["/api/v1/observability/plugins/context_compression/stats"])
+	if permissions["/api/v1/observability/plugins/context/compression/stats"] != PermCompressionRead {
+		t.Fatalf("stats permission = %q", permissions["/api/v1/observability/plugins/context/compression/stats"])
 	}
-	if permissions["/api/v1/plugins/context_compression/preview"] != PermCompressionPreview {
-		t.Fatalf("preview permission = %q", permissions["/api/v1/plugins/context_compression/preview"])
+	if permissions["/api/v1/plugins/context/compression/preview"] != PermCompressionPreview {
+		t.Fatalf("preview permission = %q", permissions["/api/v1/plugins/context/compression/preview"])
 	}
 	if permissions["/api/v1/storage/context-recovery/invalidate"] != PermCompressionManage {
 		t.Fatalf(
@@ -93,7 +95,7 @@ func TestContextCompressionPreviewHonorsDisabledPolicy(t *testing.T) {
 	}
 	request := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/plugins/context_compression/preview",
+		"/api/v1/plugins/context/compression/preview",
 		strings.NewReader(`{
 			"configuration":{"enabled":false},
 			"request_body":{"messages":[]}
@@ -117,7 +119,7 @@ func TestContextCompressionStatsDoNotExposeContent(t *testing.T) {
 	}
 	request := httptest.NewRequest(
 		http.MethodGet,
-		"/api/v1/observability/plugins/context_compression/stats",
+		"/api/v1/observability/plugins/context/compression/stats",
 		nil,
 	)
 	recorder := httptest.NewRecorder()

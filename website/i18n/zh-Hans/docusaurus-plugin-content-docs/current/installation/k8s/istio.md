@@ -113,7 +113,7 @@ kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semant
 kubectl get pods -n vllm-semantic-router-system
 ```
 
-**说明**：values 文件包含提供商 binding、信号、决策和路由规则。在适配真实提供商池之前，请下载并审阅 [values.yaml](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/semantic-router-values/values.yaml)。保持 `global.router.clear_route_cache: true`：ExtProc 写入 `x-selected-model` 后，Envoy 必须丢弃先前路由，并再次评估基于头的 `HTTPRoute`。
+**说明**：values 文件包含提供商 binding、信号、决策和路由规则。在适配真实提供商池之前，请下载并审阅 [values.yaml](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/semantic-router-values/values.yaml)。保持 `global.router.clear_route_cache: true`：ExtProc 写入 `x-vsr-route-model` 后，Envoy 必须丢弃先前路由，并再次评估基于头的 `HTTPRoute`。
 
 ## 步骤 6：安装额外的 Istio 配置
 
@@ -124,7 +124,7 @@ kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/
 kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/envoyfilter.yaml
 ```
 
-示例过滤器设置 `failure_mode_allow: true`，在 ExtProc 不可用时让 Envoy 继续其 HTTP 过滤器链。这并不保证请求能到达后端：所提供的路由要求 `x-selected-model`，因此当 Router 未添加该头时，路由选择仍可能失败。真正的旁路需要刻意的兜底路由，这也会改变安全边界。当语义路由是授权或数据边界控制时，优先使用 fail-close 行为，并在生产使用前测试确切的中断路径。
+示例过滤器设置 `failure_mode_allow: true`，在 ExtProc 不可用时让 Envoy 继续其 HTTP 过滤器链。这并不保证请求能到达后端：所提供的路由要求 `x-vsr-route-model`，因此当 Router 未添加该头时，路由选择仍可能失败。真正的旁路需要刻意的兜底路由，这也会改变安全边界。当语义路由是授权或数据边界控制时，优先使用 fail-close 行为，并在生产使用前测试确切的中断路径。
 
 ## 步骤 7：安装网关路由
 

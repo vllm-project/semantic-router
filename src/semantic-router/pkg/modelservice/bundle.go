@@ -99,8 +99,6 @@ type bundleCall struct {
 // remoteTarget is a deployment outside the model runtime, a remote System
 // One API, that answers a stage's fused decisions tasks to it.
 type remoteTarget interface {
-	// stateLimit is how many states one of its exchanges asks about.
-	stateLimit() int
 	// send answers the task in one exchange, or two when the first fails
 	// on one named question, and delivers every call's answers.
 	send(ctx context.Context, task *bundleTask)
@@ -504,6 +502,8 @@ func (b *Bundle) sendLocked(others bool, deployments []string) {
 		delete(b.since, deployment)
 	}
 	for _, client := range asked {
+		// The runtime runs each state of a task as a job of its own, so a
+		// task has at most as many states as one bundle has tasks.
 		tasks := fuseDecisions(int(client.bundleTasks.Load()), questions[client])
 		for _, task := range tasks {
 			b.countLocked(task)
@@ -536,9 +536,10 @@ func (b *Bundle) sendLocked(others bool, deployments []string) {
 
 // sendRemoteLocked sends a remote deployment's parked questions: one
 // exchange per fused task, each in a context that lasts as long as the
-// latest of its callers waits.
+// latest of its callers waits. Every state of the stage's calls may join one
+// task.
 func (b *Bundle) sendRemoteLocked(target remoteTarget, calls []*bundleCall) {
-	tasks := fuseDecisions(target.stateLimit(), calls)
+	tasks := fuseDecisions(len(calls), calls)
 	for _, task := range tasks {
 		b.countLocked(task)
 	}
