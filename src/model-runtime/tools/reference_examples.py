@@ -4,7 +4,7 @@
     python3 tools/reference_examples.py --url http://127.0.0.1:8100
 
 Each ``json title="POST /v1/decisions"`` block of
-``website/docs/model-runtime/reference.md`` is sent as written, and the
+``website/docs/model-runtime/reference/http-api.md`` is sent as written, and the
 answer must match the ``json title="Response"`` block that follows it: every
 documented field, with numbers within ``--tolerance`` of the printed value
 (the page rounds them). Fields the page leaves out, such as ``usage``, are
@@ -23,7 +23,8 @@ from pathlib import Path
 from typing import Any
 
 REFERENCE = (
-    Path(__file__).resolve().parents[3] / "website/docs/model-runtime/reference.md"
+    Path(__file__).resolve().parents[3]
+    / "website/docs/model-runtime/reference/http-api.md"
 )
 BLOCK = re.compile(r'```json title="(?P<title>[^"]+)"\n(?P<body>.*?)\n```', re.DOTALL)
 REQUEST_TITLE = "POST /v1/decisions"
