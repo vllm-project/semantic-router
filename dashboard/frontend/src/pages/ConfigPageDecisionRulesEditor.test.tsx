@@ -37,7 +37,7 @@ describe('decision rules editor', () => {
       {
         operator: 'AND',
         conditions: [
-          { type: 'classifier', name: 'intent', label: 'billing', predicate: { gte: 0.7, lt: 0.95 }, on_error: 'match' },
+          { type: 'systemone', name: 'intent', label: 'billing', predicate: { gte: 0.7, lt: 0.95 }, on_error: 'match' },
         ],
       },
       true,

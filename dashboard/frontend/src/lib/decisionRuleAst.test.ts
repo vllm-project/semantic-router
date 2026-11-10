@@ -62,14 +62,14 @@ describe('decision rule AST bridge', () => {
       {
         operator: 'OR',
         conditions: [
-          { type: 'classifier', name: 'intent', label: 'code', predicate: { gte: 0.7, lt: 0.95 }, on_error: 'match' },
-          { type: 'decision', name: 'route', label: 'fast', on_error: 'no_match' },
+          { type: 'systemone', name: 'intent', label: 'code', predicate: { gte: 0.7, lt: 0.95 }, on_error: 'match' },
+          { type: 'systemone', name: 'route', label: 'fast', on_error: 'no_match' },
         ],
       },
     ],
     [
       'a root on_unknown',
-      { operator: 'AND', conditions: [{ type: 'classifier', name: 'intent', label: 'code', predicate: { gte: 0.6 } }], on_unknown: 'fail_request' },
+      { operator: 'AND', conditions: [{ type: 'systemone', name: 'intent', label: 'code', predicate: { gte: 0.6 } }], on_unknown: 'fail_request' },
     ],
     ['on_unknown on an empty root', { on_unknown: 'match' }],
     [
@@ -87,12 +87,12 @@ describe('decision rule AST bridge', () => {
     expect(roundTrip(rules)).toEqual(rules)
   })
 
-  it('keeps repeated classifier references distinct by node, not by type and name', () => {
+  it('keeps repeated System One references distinct by node, not by type and name', () => {
     const rules: CanonicalRule = {
       operator: 'OR',
       conditions: [
-        { type: 'classifier', name: 'x', label: 'b', predicate: { gte: 0.9 } },
-        { type: 'classifier', name: 'x', label: 'a', predicate: { gt: 0.5 }, on_error: 'match' },
+        { type: 'systemone', name: 'x', label: 'b', predicate: { gte: 0.9 } },
+        { type: 'systemone', name: 'x', label: 'a', predicate: { gt: 0.5 }, on_error: 'match' },
       ],
     }
     const doc = canonicalToRuleDocument(rules)
@@ -187,12 +187,12 @@ describe('decision rule AST bridge', () => {
   })
 
   it('only emits defined predicate numbers and never emits undefined keys', () => {
-    const doc = canonicalToRuleDocument({ type: 'classifier', name: 'x', label: 'a', predicate: { gte: 0.5 } })
+    const doc = canonicalToRuleDocument({ type: 'systemone', name: 'x', label: 'a', predicate: { gte: 0.5 } })
     const leaf = doc.tree as RuleLeaf
     leaf.predicate = { gte: 0.5, lt: undefined }
     leaf.onError = undefined
     const out = ruleDocumentToCanonical(doc)
-    expect(out).toEqual({ type: 'classifier', name: 'x', label: 'a', predicate: { gte: 0.5 } })
+    expect(out).toEqual({ type: 'systemone', name: 'x', label: 'a', predicate: { gte: 0.5 } })
     expect(Object.keys(out.predicate ?? {})).toEqual(['gte'])
     expect(Object.keys(out)).toEqual(['type', 'name', 'label', 'predicate'])
   })

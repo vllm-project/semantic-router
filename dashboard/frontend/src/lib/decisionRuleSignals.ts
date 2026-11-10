@@ -6,7 +6,7 @@
  * reference is valid is checked by the Router when the config is saved.
  */
 
-import { DECISION_SIGNAL_TYPES } from '@/generated/routerConfigContract'
+import { DECISION_SIGNAL_TYPES, ROUTER_CONFIG_EXTENSION } from '@/generated/routerConfigContract'
 
 import type { ConfigProjections, ConfigSignals } from '../pages/configPageSupport'
 import { SIGNAL_CATALOG } from '../pages/configPageSignalCatalog'
@@ -35,19 +35,41 @@ function choiceKeys(choices: unknown): string[] {
     .filter((key): key is string => typeof key === 'string')
 }
 
-// Score and yes/no questions are matched without a label, so only choice,
-// set and span questions offer option keys as label suggestions.
-function decisionQuestionDescriptor(name: string, question: unknown): SignalDescriptor {
-  const descriptor: SignalDescriptor = { signalType: 'decision', name }
-  if (!isRecord(question) || question.type === 'score' || question.type === 'noul') return descriptor
-  const options = question.type === 'set' || question.type === 'span' ? question.labels : question.choices
-  descriptor.labels = choiceKeys(options)
-  return descriptor
+// Signal types whose conditions name a label (the contract's
+// reference_qualifier), and the one type that sets its own on_error.
+const LABELLED_SIGNAL_TYPES = new Set<string>(
+  ROUTER_CONFIG_EXTENSION.signals.flatMap((surface) =>
+    'reference_qualifier' in surface && surface.reference_qualifier === 'label' ? [surface.type] : [],
+  ),
+)
+
+export function isLabelledSignalType(signalType: string): boolean {
+  return LABELLED_SIGNAL_TYPES.has(signalType.trim().toLowerCase())
 }
 
-function classifierDescriptor(item: Record<string, unknown>): SignalDescriptor {
-  const labels = Array.isArray(item.labels) ? item.labels.filter((label): label is string => typeof label === 'string') : []
-  return { signalType: 'classifier', name: item.name as string, labels }
+export function supportsOnError(signalType: string): boolean {
+  return signalType.trim().toLowerCase() === 'systemone'
+}
+
+const COMPLEXITY_LEVELS = ['easy', 'medium', 'hard']
+
+function stringLabels(labels: unknown): string[] {
+  if (!Array.isArray(labels)) return []
+  return labels.filter((label): label is string => typeof label === 'string' && label !== '')
+}
+
+// A System One question offers its option keys as label suggestions; score
+// and yes/no questions are matched without a label.
+function systemOneLabels(item: Record<string, unknown>): string[] {
+  const question = item.question
+  if (isRecord(question) && question.type !== 'score' && question.type !== 'noul') {
+    const options = question.type === 'set' || question.type === 'span' ? question.labels : question.choices
+    const keys = choiceKeys(options)
+    if (keys.length > 0) return keys
+    const levels = stringLabels(question.levels)
+    if (levels.length > 0) return levels
+  }
+  return stringLabels(item.labels)
 }
 
 // A role binding is referenced by its name or its role.
@@ -76,17 +98,14 @@ export function decisionRuleSignalDescriptors(source: DecisionRuleSignalSource):
     }
     for (const item of namedItems(signals[entry.collection])) {
       const name = item.name as string
-      if (entry.type === 'classifier') {
-        descriptors.push(classifierDescriptor(item))
-      } else if (entry.type === 'decision') {
-        descriptors.push(decisionQuestionDescriptor(name, item.question))
-      } else if (entry.referenceSuffixes.length > 0) {
-        for (const suffix of entry.referenceSuffixes) {
-          descriptors.push({ signalType: entry.type, name: `${name}:${suffix}` })
-        }
-      } else {
-        descriptors.push({ signalType: entry.type, name })
+      const descriptor: SignalDescriptor = { signalType: entry.type, name }
+      if (isLabelledSignalType(entry.type)) {
+        const labels = entry.type === 'systemone' ? systemOneLabels(item) : stringLabels(item.labels)
+        // A complexity rule without labels still answers easy, medium or hard.
+        if (entry.type === 'complexity' && labels.length === 0) labels.push(...COMPLEXITY_LEVELS)
+        if (labels.length > 0) descriptor.labels = labels
       }
+      descriptors.push(descriptor)
     }
   }
   if (decisionTypes.has('projection')) {

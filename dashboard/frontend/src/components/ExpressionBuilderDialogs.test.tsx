@@ -27,23 +27,24 @@ describe('Expression builder dialog contracts', () => {
     expect(markup).toContain('aria-label="Close signal editor"')
     expect(markup).toContain('data-dialog-initial-focus="true"')
     expect(markup).toMatch(/<button[^>]*type="button"[^>]*>code<\/button>/)
-    // label and on_error only apply to classifier and decision conditions.
+    // A domain condition names a label; only System One conditions set on_error.
+    expect(markup).toContain('Label')
     expect(markup).not.toContain('On error')
     expect(markup).toContain('Score predicate')
   })
 
-  it('edits a classifier leaf label, predicate and on_error', () => {
+  it('edits a System One leaf label, predicate and on_error', () => {
     const markup = renderToStaticMarkup(
       createElement(EditSignalDialog, {
         initial: {
           id: 'r2',
-          signalType: 'classifier',
+          signalType: 'systemone',
           signalName: 'intent',
           label: 'billing',
           predicate: { gte: 0.7 },
           onError: 'match',
         },
-        availableSignals: [{ signalType: 'classifier', name: 'intent', labels: ['billing', 'support'] }],
+        availableSignals: [{ signalType: 'systemone', name: 'intent', labels: ['billing', 'support'] }],
         onSave: vi.fn(),
         onCancel: vi.fn(),
       }),
@@ -65,8 +66,8 @@ describe('Expression builder dialog contracts', () => {
 
     const markup = renderToStaticMarkup(
       createElement(EditSignalDialog, {
-        initial: { id: 'r3', signalType: 'classifier', signalName: 'intent', label: 'billing', predicate: initial },
-        availableSignals: [{ signalType: 'classifier', name: 'intent', labels: ['billing'] }],
+        initial: { id: 'r3', signalType: 'systemone', signalName: 'intent', label: 'billing', predicate: initial },
+        availableSignals: [{ signalType: 'systemone', name: 'intent', labels: ['billing'] }],
         onSave: vi.fn(),
         onCancel: vi.fn(),
       }),

@@ -12,7 +12,7 @@ import {
 
 const metadataLeaf: RuleLeaf = {
   id: 'leaf-a',
-  signalType: 'classifier',
+  signalType: 'systemone',
   signalName: 'intent',
   label: 'code',
   predicate: { gte: 0.7 },

@@ -8,7 +8,7 @@ import { decisionRuleSignalDescriptors } from './decisionRuleSignals'
 
 const config: RoutingScopedConfigLike = {
   routing: {
-    signals: { keywords: [{ name: 'root-keyword' }], classifiers: [{ name: 'root-intent', labels: ['x'] }] },
+    signals: { keywords: [{ name: 'root-keyword' }], systemone: [{ name: 'root-intent', labels: ['x'] }] },
     decisions: [],
   },
   entrypoints: [
@@ -19,20 +19,12 @@ const config: RoutingScopedConfigLike = {
     {
       name: 'balanced',
       routing: {
-        model_bindings: {
-          'classifier.bound': { deployment: 'cls', contract: 'label_scores.v1', operating_point: { name: 'default' } },
-          'classifier.unbound': { deployment: 'cls', contract: 'label_scores.v1' },
-        },
         signals: {
           keywords: [{ name: 'balanced-keyword' }],
-          complexity: [{ name: 'reasoning' }],
-          classifiers: [
-            { name: 'intent', type: 'llm', labels: ['code', 'chat'] },
-            { name: 'local-intent', type: 'local', labels: ['code'] },
-            { name: 'bound', type: 'sequence_classifier', labels: ['a'] },
-            { name: 'unbound', type: 'sequence_classifier', labels: ['a'] },
-          ],
-          decision: [
+          complexity: [{ name: 'reasoning' }, { name: 'hard-only', labels: ['hard'] }],
+          domains: [{ name: 'subject', labels: ['math', 'law'] }],
+          systemone: [
+            { name: 'intent', labels: ['code', 'chat'] },
             { name: 'route', question: { type: 'choice', choices: [{ key: 'fast' }, { key: 'deep' }] } },
             { name: 'tags', question: { type: 'set', labels: [{ key: 'pii' }, { key: 'code' }] } },
             { name: 'difficulty', question: { type: 'score', levels: ['low', 'mid', 'high'] } },
@@ -40,9 +32,8 @@ const config: RoutingScopedConfigLike = {
           ],
           safety: [{ name: 'balanced-safety' }],
           conversation: [{ name: 'balanced-conversation' }],
-          events: [{ name: 'balanced-event' }],
           input_modality: [{ name: 'balanced-image' }],
-          actions: [{ name: 'balanced-action' }],
+          turn_relation: [{ name: 'balanced-followup' }],
           hallucination: [{ name: 'not-referenceable' }],
         },
         projections: {
@@ -74,19 +65,18 @@ describe('decisionRuleSignalDescriptors', () => {
     const balanced = names('balanced')
     expect(balanced).toContain('keyword:balanced-keyword')
     expect(balanced).not.toContain('keyword:root-keyword')
-    expect(balanced).not.toContain('classifier:root-intent')
+    expect(balanced).not.toContain('systemone:root-intent')
     expect(balanced).not.toContain('pii:private-pii')
     expect(names('privacy')).toEqual(['pii:private-pii'])
   })
 
-  it('covers the catalog types, including safety, conversation, event, input_modality and action', () => {
+  it('covers the catalog types, including safety, conversation, input_modality and turn_relation', () => {
     expect(names('balanced')).toEqual(
       expect.arrayContaining([
         'safety:balanced-safety',
         'conversation:balanced-conversation',
-        'event:balanced-event',
         'input_modality:balanced-image',
-        'action:balanced-action',
+        'turn_relation:balanced-followup',
       ]),
     )
     expect(names('balanced').some((name) => name.startsWith('hallucination:'))).toBe(false)
@@ -97,25 +87,27 @@ describe('decisionRuleSignalDescriptors', () => {
     }
   })
 
-  it('expands complexity names with every reference suffix', () => {
-    expect(names('balanced')).toEqual(
-      expect.arrayContaining(['complexity:reasoning:easy', 'complexity:reasoning:medium', 'complexity:reasoning:hard']),
-    )
-    expect(names('balanced')).not.toContain('complexity:reasoning')
+  it('offers complexity levels as labels', () => {
+    const byName = new Map(decisionRuleSignalDescriptors(scoped('balanced')).map((d) => [`${d.signalType}:${d.name}`, d]))
+    expect(byName.get('complexity:reasoning')?.labels).toEqual(['easy', 'medium', 'hard'])
+    expect(byName.get('complexity:hard-only')?.labels).toEqual(['hard'])
   })
 
   it('lists projection mapping outputs', () => {
     expect(names('balanced')).toEqual(expect.arrayContaining(['projection:effort_low', 'projection:effort_high']))
   })
 
-  it('offers classifier labels and choice option keys as label suggestions', () => {
+  it('offers declared labels and System One option keys as label suggestions', () => {
     const byName = new Map(decisionRuleSignalDescriptors(scoped('balanced')).map((d) => [`${d.signalType}:${d.name}`, d]))
-    expect(byName.get('classifier:intent')).toEqual({ signalType: 'classifier', name: 'intent', labels: ['code', 'chat'] })
-    expect(byName.get('decision:route')?.labels).toEqual(['fast', 'deep'])
-    expect(byName.get('decision:tags')?.labels).toEqual(['pii', 'code'])
+    expect(byName.get('systemone:intent')).toEqual({ signalType: 'systemone', name: 'intent', labels: ['code', 'chat'] })
+    expect(byName.get('systemone:route')?.labels).toEqual(['fast', 'deep'])
+    expect(byName.get('systemone:tags')?.labels).toEqual(['pii', 'code'])
+    expect(byName.get('domain:subject')?.labels).toEqual(['math', 'law'])
     // Score and yes/no questions are matched without a label.
-    expect(byName.get('decision:difficulty')?.labels).toBeUndefined()
-    expect(byName.get('decision:is_code')?.labels).toBeUndefined()
+    expect(byName.get('systemone:difficulty')?.labels).toBeUndefined()
+    expect(byName.get('systemone:is_code')?.labels).toBeUndefined()
+    // Unlabelled signal types never carry suggestions.
+    expect(byName.get('keyword:balanced-keyword')?.labels).toBeUndefined()
   })
 
   it('offers an authz role binding by both its name and its role', () => {

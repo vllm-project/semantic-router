@@ -2,6 +2,7 @@ import React, { memo, useCallback, useId, useMemo, useState } from 'react'
 
 import { DECISION_SIGNAL_TYPES } from '@/generated/routerConfigContract'
 import { RULE_ON_ERROR_VALUES } from '@/lib/decisionRuleAst'
+import { isLabelledSignalType, supportsOnError } from '@/lib/decisionRuleSignals'
 
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import styles from './ExpressionBuilder.module.css'
@@ -23,12 +24,6 @@ interface EditSignalDialogProps {
   /** Fields set to undefined are cleared on the leaf. */
   onSave: (edit: Partial<RuleLeaf>) => void
   onCancel: () => void
-}
-
-// label and on_error only apply to classifier and decision conditions.
-const isLabelledType = (signalType: string) => {
-  const type = signalType.trim().toLowerCase()
-  return type === 'classifier' || type === 'decision'
 }
 
 export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
@@ -65,12 +60,17 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
       () => availableSignals.find(signal => signal.signalType === signalType && signal.name === signalName),
       [availableSignals, signalName, signalType]
     )
-    const labelled = isLabelledType(signalType)
+    const labelled = isLabelledSignalType(signalType)
+    const onErrorSupported = supportsOnError(signalType)
     const typeChanged = signalType !== initial.signalType
-    // A type change drops label and on_error only when the new type cannot
-    // carry them; an unchanged type keeps whatever the leaf already had.
-    const keepsLabelFields = labelled || !typeChanged
-    const dropsLabelFields = !keepsLabelFields && Boolean(initial.label || initial.onError)
+    // A type change drops label or on_error only when the new type cannot
+    // carry it; an unchanged type keeps whatever the leaf already had.
+    const keepsLabel = labelled || !typeChanged
+    const keepsOnError = onErrorSupported || !typeChanged
+    const droppedFields = [
+      !keepsLabel && initial.label ? 'a label' : '',
+      !keepsOnError && initial.onError ? 'on_error' : '',
+    ].filter(Boolean)
     const unsupportedPredicateKeys = useMemo(() => {
       const raw = (initial.predicate ?? {}) as Record<string, unknown>
       return Object.keys(raw).filter(
@@ -92,12 +92,12 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
         onSave({
           signalType,
           signalName,
-          label: keepsLabelFields && label !== '' ? label : undefined,
+          label: keepsLabel && label !== '' ? label : undefined,
           predicate: parsedPredicate.predicate,
-          onError: keepsLabelFields && onError !== '' ? (onError as RuleLeaf['onError']) : undefined,
+          onError: keepsOnError && onError !== '' ? (onError as RuleLeaf['onError']) : undefined,
         })
       },
-      [canSave, keepsLabelFields, label, onError, onSave, parsedPredicate.predicate, signalName, signalType]
+      [canSave, keepsLabel, keepsOnError, label, onError, onSave, parsedPredicate.predicate, signalName, signalType]
     )
 
     return (
@@ -176,38 +176,38 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
               </div>
             ) : null}
             {labelled ? (
-              <>
-                <label className={styles.editLabel}>
-                  Label
-                  <input
-                    className={styles.editInput}
-                    value={label}
-                    list={descriptor?.labels?.length ? labelListId : undefined}
-                    onChange={event => setLabel(event.target.value)}
-                    placeholder="Declared label"
-                  />
-                  {descriptor?.labels?.length ? (
-                    <datalist id={labelListId}>
-                      {descriptor.labels.map(option => (
-                        <option key={option} value={option} />
-                      ))}
-                    </datalist>
-                  ) : null}
-                </label>
-                <label className={styles.editLabel}>
-                  On error
-                  <select
-                    className={styles.editSelect}
-                    value={onError}
-                    onChange={event => setOnError(event.target.value)}
-                  >
-                    <option value="">Not set</option>
-                    {RULE_ON_ERROR_VALUES.map(value => (
-                      <option key={value} value={value}>{value}</option>
+              <label className={styles.editLabel}>
+                Label
+                <input
+                  className={styles.editInput}
+                  value={label}
+                  list={descriptor?.labels?.length ? labelListId : undefined}
+                  onChange={event => setLabel(event.target.value)}
+                  placeholder="Declared label"
+                />
+                {descriptor?.labels?.length ? (
+                  <datalist id={labelListId}>
+                    {descriptor.labels.map(option => (
+                      <option key={option} value={option} />
                     ))}
-                  </select>
-                </label>
-              </>
+                  </datalist>
+                ) : null}
+              </label>
+            ) : null}
+            {onErrorSupported ? (
+              <label className={styles.editLabel}>
+                On error
+                <select
+                  className={styles.editSelect}
+                  value={onError}
+                  onChange={event => setOnError(event.target.value)}
+                >
+                  <option value="">Not set</option>
+                  {RULE_ON_ERROR_VALUES.map(value => (
+                    <option key={value} value={value}>{value}</option>
+                  ))}
+                </select>
+              </label>
             ) : null}
             <fieldset className={styles.editLabel} style={{ border: 'none', margin: 0, padding: 0 }}>
               <legend>Score predicate</legend>
@@ -234,9 +234,10 @@ export const EditSignalDialog: React.FC<EditSignalDialogProps> = memo(
                 and reported as an error until removed from the config.
               </p>
             ) : null}
-            {dropsLabelFields ? (
+            {droppedFields.length > 0 ? (
               <p className={styles.editNote} role="note">
-                {signalType} conditions cannot carry a label or on_error, so saving clears them.
+                {signalType} conditions cannot carry {droppedFields.join(' or ')}, so saving clears{' '}
+                {droppedFields.length === 1 ? 'it' : 'them'}.
               </p>
             ) : null}
             <div className={styles.editDialogActions}>

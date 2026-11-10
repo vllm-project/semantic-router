@@ -25,10 +25,10 @@ describe('serializeRuleExpr', () => {
   it('writes leaf fields in Go decompileRuleLeaf order', () => {
     expect(
       serializeRuleExpr(
-        leaf('classifier', 'intent', { label: 'code', predicate: { gte: 0.7, lt: 0.95 }, onError: 'match' }),
+        leaf('systemone', 'intent', { label: 'code', predicate: { gte: 0.7, lt: 0.95 }, onError: 'match' }),
       ),
     ).toEqual({
-      text: 'classifier("intent", label: "code", predicate: { gte: 0.7, lt: 0.95 }, on_error: "match")',
+      text: 'systemone("intent", label: "code", predicate: { gte: 0.7, lt: 0.95 }, on_error: "match")',
       errors: [],
     })
   })
@@ -91,7 +91,7 @@ describe('serializeRuleExpr', () => {
 describe('parseRuleExpr', () => {
   it('round-trips fields, escapes and precedence', () => {
     const texts = [
-      'classifier("intent", label: "code", predicate: { gte: 0.7, lt: 0.95 }, on_error: "match")',
+      'systemone("intent", label: "code", predicate: { gte: 0.7, lt: 0.95 }, on_error: "match")',
       'keyword("say \\"hi\\" \\\\ bye")',
       '(keyword("a") AND keyword("b")) OR NOT (keyword("c") OR keyword("d"))',
       'keyword("a") AND (keyword("b") AND keyword("c"))',
@@ -104,9 +104,9 @@ describe('parseRuleExpr', () => {
   })
 
   it('accepts Go lexer forms: bare names, optional commas, negative and integer numbers, comments', () => {
-    const tree = parsed('classifier(intent label: code, predicate: {gt: -1 lte: 2}) # trailing comment')
+    const tree = parsed('systemone(intent label: code, predicate: {gt: -1 lte: 2}) # trailing comment')
     expect(tree).toMatchObject({
-      signalType: 'classifier',
+      signalType: 'systemone',
       signalName: 'intent',
       label: 'code',
       predicate: { gt: -1, lte: 2 },
@@ -150,7 +150,7 @@ describe('parseRuleExpr', () => {
     ['a lowercase operator', 'keyword("a") and keyword("b")', 14],
     ['an unknown field key', 'keyword("a", weight: 2)', 14],
     ['an empty name', 'keyword("")', 9],
-    ['an unknown predicate key', 'classifier("a", predicate: { eq: 1 })', 30],
+    ['an unknown predicate key', 'systemone("a", predicate: { eq: 1 })', 29],
     ['a missing group ")"', '(keyword("a") OR keyword("b")', 30],
     ['an unterminated string', 'keyword("a)', 9],
   ])('rejects %s with its column', (_, text, column) => {
@@ -175,10 +175,10 @@ describe('DSL AST conversion and Builder serialization', () => {
 
   it('reads signal_ref fields and keeps unknown ones as extra', () => {
     const node = boolExprToRuleNode(
-      ref('classifier', 'x', { label: 'y', predicate: { gte: 0.7 }, on_error: 'match', weight: 3 } as never),
+      ref('systemone', 'x', { label: 'y', predicate: { gte: 0.7 }, on_error: 'match', weight: 3 } as never),
     )
     expect(node).toMatchObject({
-      signalType: 'classifier',
+      signalType: 'systemone',
       signalName: 'x',
       label: 'y',
       predicate: { gte: 0.7 },
@@ -209,8 +209,8 @@ describe('DSL AST conversion and Builder serialization', () => {
 
   it('emits signal reference fields through serializeBoolExpr', () => {
     expect(
-      serializeBoolExpr(and(ref('classifier', 'x', { label: 'y', predicate: { gte: 0.7 } } as never), ref('keyword', 'k'))),
-    ).toBe('classifier("x", label: "y", predicate: { gte: 0.7 }) AND keyword("k")')
+      serializeBoolExpr(and(ref('systemone', 'x', { label: 'y', predicate: { gte: 0.7 } } as never), ref('keyword', 'k'))),
+    ).toBe('systemone("x", label: "y", predicate: { gte: 0.7 }) AND keyword("k")')
     expect(serializeBoolExpr(or(ref('keyword', 'a'), ref('keyword', 'b')))).toBe('keyword("a") OR keyword("b")')
     expect(serializeBoolExpr(null)).toBe('')
   })
@@ -222,7 +222,7 @@ describe('DSL AST conversion and Builder serialization', () => {
         {
           operator: 'OR' as const,
           conditions: [
-            { type: 'classifier', name: 'intent', label: 'b', predicate: { gte: 0.7 }, on_error: 'match' as const },
+            { type: 'systemone', name: 'intent', label: 'b', predicate: { gte: 0.7 }, on_error: 'match' as const },
             { type: 'keyword', name: 'urgent' },
           ],
         },
