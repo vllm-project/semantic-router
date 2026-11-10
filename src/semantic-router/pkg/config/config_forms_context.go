@@ -417,6 +417,7 @@ func migrateCompressionPlugin(m *Migration, at FormMatch) error {
 		}
 	}
 	budget := compressionBudget(m, at.Path+".configuration.budget", mappingValue(old, "budget"))
+	retrieved := decisionContext(at).Source(ContextSourceMemory) != nil
 	configuration, err := contextConfiguration(m, at)
 	if err != nil {
 		return err
@@ -424,15 +425,15 @@ func migrateCompressionPlugin(m *Migration, at FormMatch) error {
 	if mappingValue(configuration, "compress") != nil {
 		return fmt.Errorf("the decision's context plugin already compresses; keep one")
 	}
-	if !yamlTrue(mappingValue(configuration, "enabled")) {
-		keepGlobalMemoryOff(m, at, configuration)
-	}
 	m.Set(configuration, "enabled", boolNode(true))
 	m.Set(configuration, "compress", compress)
 	if budget != nil {
 		m.Set(configuration, "budget", budget)
 	}
 	orderKeys(configuration, contextKeyOrder)
+	if !retrieved {
+		keepGlobalMemoryOff(m, at, configuration)
+	}
 	return nil
 }
 
@@ -476,7 +477,7 @@ func contextConfiguration(m *Migration, at FormMatch) (*yaml.Node, error) {
 		return configuration, nil
 	}
 	configuration := mappingNode("enabled", boolNode(true))
-	if inheritedMemory(at) && pluginOfType(at.Parent, "memory") == nil {
+	if decisionContext(at).Source(ContextSourceMemory) != nil && pluginOfType(at.Parent, "memory") == nil {
 		m.Set(configuration, "sources", &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Content: []*yaml.Node{mappingNode("type", Scalar(ContextSourceMemory))}})
 		m.Changed(at.Path, "the global memory now reaches this decision through its context plugin's memory source")
 	}
@@ -485,43 +486,51 @@ func contextConfiguration(m *Migration, at FormMatch) (*yaml.Node, error) {
 	return configuration, nil
 }
 
-// globalMemory reports whether a decision's context plugin that lists no
-// sources retrieves the global memory: the memory store's switch is on, which
-// migrate makes a memory source of global.plugins' context plugin, or that
-// plugin lists one.
-func globalMemory(root *yaml.Node) bool {
-	global := mappingAt(root, "global")
-	context := pluginOfType(mappingValue(global, "plugins"), DecisionPluginContext)
-	return yamlTrue(mappingValue(mappingAt(global, "stores", "memory"), "enabled")) ||
-		pluginOfType(mappingValue(mappingAt(context, "configuration"), "sources"), ContextSourceMemory) != nil
-}
-
-// inheritedMemory reports whether the context plugin of the decision at, when
-// it lists no sources, retrieves memory: its recipe's context plugin decides
-// when that plugin lists sources, the global memory otherwise.
-func inheritedMemory(at FormMatch) bool {
-	for i := len(at.Ancestors) - 1; i >= 0; i-- {
-		holder := at.Ancestors[i]
-		if mappingValue(holder, "decisions") == nil {
-			continue
-		}
-		recipe := pluginOfType(mappingValue(holder, "plugins"), DecisionPluginContext)
-		if sources := mappingValue(mappingAt(recipe, "configuration"), "sources"); sources != nil {
-			return pluginOfType(sources, ContextSourceMemory) != nil
-		}
-		break
+// decisionContext is the enabled context plugin the decision at runs, nil
+// without one: its own context plugin layered over its recipe's and
+// global.plugins', as the loader layers them, where the memory store's
+// switch is the context plugin with a memory source it becomes.
+func decisionContext(at FormMatch) *ContextPluginConfig {
+	global := mappingAt(at.Root, "global")
+	var memorySwitch *yaml.Node
+	if yamlTrue(mappingValue(mappingAt(global, "stores", "memory"), "enabled")) {
+		memorySwitch = mappingNode("type", DecisionPluginContext, "configuration", mappingNode(
+			"enabled", boolNode(true),
+			"sources", sequenceOf(mappingNode("type", ContextSourceMemory)),
+		))
 	}
-	return globalMemory(at.Root)
+	var plugins []DecisionPlugin
+	for _, layer := range []*yaml.Node{
+		memorySwitch,
+		pluginOfType(mappingValue(global, "plugins"), DecisionPluginContext),
+		pluginOfType(mappingValue(at.Above(4), "plugins"), DecisionPluginContext),
+		pluginOfType(at.Parent, DecisionPluginContext),
+	} {
+		var plugin DecisionPlugin
+		if layer != nil && layer.Decode(&plugin) == nil {
+			plugins, _ = layerPlugins(plugins, []DecisionPlugin{plugin})
+		}
+	}
+	return ContextPluginOf(plugins)
 }
 
 // keepGlobalMemoryOff writes sources: [] in the configuration of a decision's
 // context plugin that lists none, for a decision that did not retrieve the
-// memory it would inherit: written sources replace the inherited ones.
+// memory it would inherit: written sources replace the inherited ones, and
+// its injection, which places what sources retrieve, is dropped. A plugin
+// that would then neither retrieve nor compress writes enabled: false.
 func keepGlobalMemoryOff(m *Migration, at FormMatch, configuration *yaml.Node) {
-	if configuration == nil || mappingValue(configuration, "sources") != nil || !inheritedMemory(at) {
+	context := decisionContext(at)
+	if configuration == nil || mappingValue(configuration, "sources") != nil || context.Source(ContextSourceMemory) == nil {
+		return
+	}
+	if context.Compress == nil {
+		m.Set(configuration, "enabled", boolNode(false))
+		m.Changed(at.Path, "the decision did not retrieve memory and its context plugin lists no sources and compresses nothing, so it writes enabled: false; one that lists no sources inherits the memory source of its recipe or global.plugins")
 		return
 	}
 	m.Set(configuration, "sources", sequenceOf())
+	m.Delete(configuration, "injection")
 	orderKeys(configuration, contextKeyOrder)
 	m.Changed(at.Path, "the decision did not retrieve memory, so its context plugin writes sources: []; one that lists no sources inherits the memory source of its recipe or global.plugins")
 }

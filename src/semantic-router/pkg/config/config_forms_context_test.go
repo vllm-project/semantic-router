@@ -23,34 +23,49 @@ recipes:
 global: GLOBAL
 `
 
-// The memory a decision inherits off, on by the memory store's switch, on
-// as the memory source of global.plugins' context plugin, and on as the
-// memory source of its recipe's context plugin.
-var contextFormsGlobals = map[string]string{
-	"off":            `{stores: {memory: {enabled: false, backend: milvus, milvus: {address: "127.0.0.1:19530"}}}}`,
-	"store switch":   `{stores: {memory: {enabled: true, backend: milvus, milvus: {address: "127.0.0.1:19530"}}}}`,
-	"global.plugins": `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}}, plugins: [{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]}`,
-	"recipe":         `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}}}`,
+// The context plugin a decision inherits: none, the one with a memory source
+// the memory store's switch becomes, global.plugins' or its recipe's with a
+// memory source, and global.plugins' or its recipe's disabled over a memory
+// source. listed is whether it lists a memory source, enabled whether it is
+// enabled.
+var contextFormsInherited = []struct {
+	name, global, recipe string
+	listed, enabled      bool
+}{
+	{"off", `{stores: {memory: {enabled: false, backend: milvus, milvus: {address: "127.0.0.1:19530"}}}}`, "[]", false, false},
+	{"store switch", `{stores: {memory: {enabled: true, backend: milvus, milvus: {address: "127.0.0.1:19530"}}}}`, "[]", true, true},
+	{"global.plugins", contextFormsGlobalMemory, "[]", true, true},
+	{"recipe", `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}}}`, `[{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]`, true, true},
+	{"global.plugins disabled", `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}}, plugins: [{type: context, configuration: {enabled: false, sources: [{type: memory}]}}]}`, "[]", true, false},
+	{"recipe disabled", contextFormsGlobalMemory, `[{type: context, configuration: {enabled: false}}]`, true, false},
 }
 
+const contextFormsGlobalMemory = `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}}, plugins: [{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]}`
+
 // The old plugins of a decision that turn memory on or off, or bring other
-// context, and a context plugin that compresses and lists no sources.
+// context, and context plugins that list no sources and compress, set the
+// injection, or both.
 var contextFormsPlugins = map[string]string{
 	"memory on":   `{type: memory, configuration: {enabled: true}}`,
 	"memory off":  `{type: memory, configuration: {enabled: false}}`,
 	"rag":         `{type: rag, configuration: {enabled: true, backend: vectorstore, backend_config: {vector_store_id: vs_docs}}}`,
 	"compression": `{type: context_compression, configuration: {enabled: true, mode: auto}}`,
 	"context":     `{type: context, configuration: {enabled: true, compress: {mode: auto}}}`,
+	"injection":   `{type: context, configuration: {enabled: true, injection: {mode: system_prompt}}}`,
+	"both":        `{type: context, configuration: {enabled: true, compress: {mode: auto}, injection: {mode: system_prompt}}}`,
 }
 
 // After migrate and load, every decision retrieves memories and compresses
-// as it did: memory where the global memory was on and no memory plugin
-// turned it off, or an enabled memory plugin turned it on, in either plugin
-// order.
+// as it did: memory where an enabled memory plugin turned it on, or none
+// turned it off and its context plugin, inherited or its own over an
+// inherited memory source, retrieved it, in either plugin order.
 func TestMigrateKeepsWhetherADecisionRetrievesMemory(t *testing.T) {
-	for _, global := range []string{"off", "store switch", "global.plugins", "recipe"} {
+	for _, inherited := range contextFormsInherited {
 		for _, memory := range []string{"", "memory on", "memory off"} {
-			for _, other := range []string{"", "rag", "compression", "context"} {
+			for _, other := range []string{"", "rag", "compression", "context", "injection", "both"} {
+				if (other == "injection" || other == "both") && !inherited.listed {
+					continue // a plugin that sets the injection loads over a source
+				}
 				orders := [][]string{{memory, other}}
 				if memory != "" && other != "" {
 					orders = append(orders, []string{other, memory})
@@ -62,12 +77,8 @@ func TestMigrateKeepsWhetherADecisionRetrievesMemory(t *testing.T) {
 							plugins = append(plugins, contextFormsPlugins[name])
 						}
 					}
-					t.Run(global+"/"+strings.Join(order, ","), func(t *testing.T) {
-						recipe := "[]"
-						if global == "recipe" {
-							recipe = `[{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]`
-						}
-						doc := strings.NewReplacer("PLUGINS", strings.Join(plugins, ", "), "GLOBAL", contextFormsGlobals[global], "RECIPE", recipe).Replace(contextFormsDoc)
+					t.Run(inherited.name+"/"+strings.Join(order, ","), func(t *testing.T) {
+						doc := strings.NewReplacer("PLUGINS", strings.Join(plugins, ", "), "GLOBAL", inherited.global, "RECIPE", inherited.recipe).Replace(contextFormsDoc)
 						migrated, _, err := MigrateConfig([]byte(doc))
 						if err != nil {
 							t.Fatalf("migrate: %v", err)
@@ -77,11 +88,12 @@ func TestMigrateKeepsWhetherADecisionRetrievesMemory(t *testing.T) {
 							t.Fatalf("load: %v\n%s", err, migrated)
 						}
 						context := cfg.ContextPlugin(cfg.GetDecisionByName("assistant"))
-						wantMemory := memory == "memory on" || memory == "" && global != "off"
+						ownContext := other == "context" || other == "injection" || other == "both"
+						wantMemory := memory == "memory on" || memory == "" && inherited.listed && (inherited.enabled || ownContext)
 						if got := context.Source(ContextSourceMemory) != nil; got != wantMemory {
 							t.Errorf("retrieves memory = %t, want %t\n%s", got, wantMemory, migrated)
 						}
-						wantCompress := other == "compression" || other == "context"
+						wantCompress := other == "compression" || other == "context" || other == "both"
 						if got := context != nil && context.Compress.CompressesRequest(); got != wantCompress {
 							t.Errorf("compresses = %t, want %t\n%s", got, wantCompress, migrated)
 						}
