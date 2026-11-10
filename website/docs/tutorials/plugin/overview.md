@@ -145,7 +145,7 @@ span and counts in `vsr_match_judge_truncated_total`.
 | `context.sources[rag].match` | `recall: {method: embedding, top_k: 20, min_similarity: 0.3}`, `judge: {preset: relevance, top_k: 6, min_score: 0.5}` | `recall: {method: bm25}` and a judge without recall read a local knowledge base: a `vectorstore` source over the in-memory vector store. A source over an external vector database recalls by `embedding` |
 | `context.sources[memory].match` | `recall: {method: embedding, top_k: 5, min_similarity: 0.7}` | The memory store's `default_retrieval_limit` and `default_similarity_threshold` replace the recall defaults. A judge without recall reads the user's newest memories |
 | `context.compress.match` | `recall: {method: bm25}`, `judge: {preset: relevance}` | Each segment of the request is a candidate about the latest user message; BM25 prefilters for the judge's 64; the budget bounds what is kept |
-| `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | At most 255 tools; more are truncated, or narrowed by `recall: {method: bm25}` |
+| `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | At most 255 tools; more are truncated, or narrowed by `recall: {method: bm25}`; a block without a judge fails to load |
 
 Every stage is counted in `vsr_match_recall_total` (feature, method, outcome)
 or `vsr_match_judge_total` (feature, preset, outcome), and timed in

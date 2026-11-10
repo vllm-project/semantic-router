@@ -93,8 +93,8 @@ plugins:
   [`tool_selection_failed`](../../api/router.md#routing-errors)。
 - 一个问题最多有 255 个选项，所以 judge 最多读取 `match.judge.max_candidates` 个工具（默认 255）：按请求
   或目录列出的顺序取前面的工具。更多的工具从不被拒绝；也可以写 `recall: {method: bm25, top_k: ...}`，按与请求
-  共有的词把工具缩小到描述最相关的那些。每次截断都会在请求的 trace span 上记一个 `match.judge.truncated`
-  事件，并计入 `vsr_match_judge_truncated_total`。
+  共有的词把工具缩小到描述最相关的那些。召回只负责缩小范围，因此没有 judge 的 `match` 块在加载时失败。
+  每次截断都会在请求的 trace span 上记一个 `match.judge.truncated` 事件，并计入 `vsr_match_judge_truncated_total`。
 - `timeout_ms` 限制调用时长，最多 60000。未设置时使用 systemone 部署自己的 `timeout_ms`，否则为 1000。
   judge 自己的 `on_error` 和 `timeout_ms` 不被接受：以选择的设置为准。
 
