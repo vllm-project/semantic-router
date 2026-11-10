@@ -94,9 +94,10 @@ out the current turn with what `routing_input` removed from it. Such a rule is
 not asked, and does not match, before the request has a tool result.
 
 It reads its whole input, in windows when the input is longer than one
-forward. Text the model did not read (over its input or scan budget,
-truncated, or not read by the signals' deadline) counts as personal data, so
-text that could not be checked cannot pass as clean.
+forward. Text the model did not read (over its input or scan budget, or
+truncated) counts as personal data, so text that could not be checked cannot
+pass as clean. A scan that misses the signals' deadline gives no answer, which
+matches only with `on_unknown: match`.
 
 A model may find a value once and miss its later copies. Every other exact,
 whole-word copy of a found value of two or more characters is reported too,
@@ -133,7 +134,8 @@ The decision model answers every PII rule, unless the `pii` binding or the
 rule's `deployment` names another; see
 [Choose a deployment](../../../system-one/deploy/deployments). The question needs
 spans: a rule that resolves to a deployment without span answers, such as a
-d3 model, fails to load with `span_required`. vela3-fast (the default), the
+d3 model, fails to load with `span_required`, unless that deployment declares
+the `pii` preset in its `capabilities`. vela3-fast (the default), the
 Vela 3.0 d3 sizes and Vela 2.0 answer it with their own PII question, in the
 same call as the request's other questions about the same text.
 

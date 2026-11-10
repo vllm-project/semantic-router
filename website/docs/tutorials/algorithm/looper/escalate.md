@@ -75,7 +75,9 @@ recipes:
 
 `order` sets the escalation order: `size` tries the smallest
 `providers.models[].param_size` first, `cost` the cheapest priced model
-first, and omitting it keeps the `modelRefs` order.
+first, and omitting it keeps the `modelRefs` order. `size` reads the leading
+count of a size, so `397B (17B active)` is 397B and `1.6T` is 1600B. A model
+without a readable size, or for `cost` without pricing, is tried last.
 
 `accept` names exactly one check:
 
@@ -104,7 +106,9 @@ named System One deployment, its `answer_check` preset question about the
 request and the candidate's answer. `refusal: false` asks the `refusal`
 preset question; `refusal: true` is rejected, because it would accept only
 refusals. Both checks are one decision-model call per judged answer; the call
-counts against the executor's `deadline` but not its `max_calls`.
+counts against the executor's `deadline` but not its `max_calls`. An answer
+that calls tools is judged with each call's tool name and arguments after its
+text.
 
 `on_error` decides what happens when no answer is accepted:
 

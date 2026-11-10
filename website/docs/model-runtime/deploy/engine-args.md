@@ -136,23 +136,37 @@ container's CPU quota), at most 4, started when a model that reads media loads;
 ## Precision
 
 `--dtype auto` runs a model in the precision it was published in, which is the
-precision its readiness check was recorded at:
+precision its readiness check was recorded at, except Decision 3.0 on a CPU:
 
 | Models | `auto` on a GPU | `auto` on a CPU |
 | --- | --- | --- |
-| Decision 3.0 | BF16 | BF16 |
+| Decision 3.0 and the Vela 3.0 sizes on it (vela3-lite and up) | BF16 | FP32 |
 | Decision 2.0; Decision 1.0 and Vela 2.0 on Qwen3.5 | BF16 | FP32 |
 | Vela 1.0 task models, embedders and rerankers, Vela 1.0 Omni, Vela 2.0 0.3B, Decision 1.0 Kai, Lex and Route | FP32 | FP32 |
 
+Decision 3.0 was published in BF16, but on a CPU its BF16 answers depend on
+the CPU's kernels: an Intel Xeon with AMX and an AMD EPYC with AVX-512 BF16
+answer up to 0.003 apart, an AVX2 CPU up to 0.027, beyond the readiness check's
+CPU tolerance of 0.001. Its FP32 answers agree on every CPU class to within a
+few millionths, so a CPU computes it in FP32 and one reference checks it
+everywhere. FP32 holds twice the bytes of BF16. On a CPU that computes BF16
+natively (AVX-512 BF16 or AMX) a request takes 1.2 to 3.5 times as long, the
+larger sizes the most; on one that emulates BF16 (AVX2) FP32 is three to six
+times faster than BF16
+([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/d3-cpu-fp32.md)).
+`--dtype bfloat16` runs the published BF16 on a CPU instead; its readiness
+check then compares the BF16 references recorded for that CPU class.
+
 Another value holds every weight of the backbone in that dtype and computes in
-it, with the reference kernels. A value that names the published precision is
-the same as `auto`.
+it, with the reference kernels. A value that names the `auto` precision is the
+same as `auto`.
 
 :::note
 The runtime still checks at startup that the model answers its recorded
-requests the same way twice, but the recorded references apply only to `auto`,
-so the model's `golden.status` is `unverified`. `float16` runs on GPUs only,
-and the ONNX Runtime engine runs only `auto`.
+requests the same way twice, but only references recorded at that dtype apply
+(Decision 3.0's BF16 on a CPU), so otherwise the model's `golden.status` is
+`unverified`. `float16` runs on GPUs only, and the ONNX Runtime engine runs
+only `auto`.
 :::
 
 To hold a Decision 3.0 model in fewer bits, serve one of its

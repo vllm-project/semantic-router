@@ -432,6 +432,37 @@ func TestApply_SameValueAcrossBlocksSharesPlaceholder(t *testing.T) {
 	}
 }
 
+// Case: JSON members are masked in key order, so the same tool call
+// arguments and tool result always get the same placeholders.
+func TestApply_JSONMembersGetDeterministicPlaceholders(t *testing.T) {
+	names := map[string]bool{"Alice": true, "Bob": true, "Carol": true, "Dave": true}
+	scan := func(text string) ([]Span, error) {
+		if !names[text] {
+			return nil, nil
+		}
+		return []Span{{EntityType: "PERSON", Start: 0, End: len(text), Confidence: 1.0}}, nil
+	}
+	const document = `{"from":"Alice","to":"Bob","cc":"Carol","bcc":"Dave"}`
+	const want = `{"bcc":"[PERSON_0]","cc":"[PERSON_1]","from":"[PERSON_2]","to":"[PERSON_3]"}`
+	for run := 0; run < 50; run++ {
+		call := &llmprotocol.ToolCall{ID: "call_1", Name: "send_email", Arguments: document}
+		result := &llmprotocol.ToolResult{CallID: "call_1", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: document}}}
+		request := &llmprotocol.Request{
+			Messages: []llmprotocol.Message{
+				{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: call}}},
+				{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: result}}},
+			},
+		}
+
+		if _, err := Apply(request, NewAllocator(defaultCfg()), scan); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if call.Arguments != want || result.Content[0].Text != want {
+			t.Fatalf("run %d: arguments %s, tool result %s, want %s", run, call.Arguments, result.Content[0].Text, want)
+		}
+	}
+}
+
 // Case: Result hygiene — the Result never carries a raw value or placeholder.
 func TestApply_ResultHygiene(t *testing.T) {
 	request := &llmprotocol.Request{

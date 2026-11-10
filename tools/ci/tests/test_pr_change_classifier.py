@@ -25,6 +25,7 @@ from ci_plan import (  # noqa: E402
 )
 from classify_pr_changes import (  # noqa: E402
     CLI_RUNTIME_IMAGES,
+    PRODUCTION_RELEASE_IMAGES,
     classify,
     full_e2e_profiles,
 )
@@ -213,6 +214,7 @@ class SelectionTests(unittest.TestCase):
                         [path],
                         source_sha=SHA,
                         profile=profile,
+                        full=profile == "main",
                         publish=profile == "main",
                     )
                     self.assertIn("local.cli", plan["expected_verification_ids"])
@@ -413,7 +415,7 @@ class SelectionTests(unittest.TestCase):
             affected = make_plan([path], source_sha=SHA)
             for options in (
                 {"profile": "pr", "full": True},
-                {"profile": "main", "publish": True},
+                {"profile": "main", "full": True, "publish": True},
             ):
                 with self.subTest(path=path, options=options):
                     complete = make_plan([path], source_sha=SHA, **options)
@@ -430,7 +432,7 @@ class SelectionTests(unittest.TestCase):
         for profile, flags in (
             ("nightly", []),
             ("release", []),
-            ("main", ["--publish"]),
+            ("main", ["--publish", "--full"]),
         ):
             with (
                 self.subTest(profile=profile),
@@ -487,7 +489,7 @@ class SelectionTests(unittest.TestCase):
         baseline = make_plan(["e2e/profiles/ai-gateway/profile.go"], source_sha=SHA)
         self.assertIn("provider-mocker", baseline["images"])
 
-    def test_main_push_runs_source_checks_without_republishing_artifacts(self):
+    def test_unpublished_main_run_checks_source_without_artifacts(self):
         for path in (
             "README.md",
             "src/vllm-sr/cli/core.py",
@@ -503,8 +505,38 @@ class SelectionTests(unittest.TestCase):
                 self.assertEqual(plan["deferred_verifications"], [])
                 self.assertFalse(plan["approval_required"])
 
-    def test_explicit_main_publication_qualifies_all_commit_addressed_images(self):
-        plan = make_plan(["README.md"], source_sha=SHA, profile="main", publish=True)
+    def test_main_push_publishes_its_complete_set_after_automatic_checks(self):
+        records = verification_records(load_domain_registry())
+        for path, helm in (
+            ("README.md", False),
+            ("src/semantic-router/pkg/config/loader.go", False),
+            ("deploy/helm/semantic-router/values.yaml", True),
+        ):
+            with self.subTest(path=path):
+                plan = make_plan([path], source_sha=SHA, profile="main", publish=True)
+                self.assertFalse(plan["full_cpu"])
+                self.assertTrue(plan["publication"])
+                self.assertTrue(
+                    all(
+                        records[name]["execution"] == "automatic"
+                        for name in plan["expected_verification_ids"]
+                    )
+                )
+                self.assertIn("cli-package", plan["expected_verification_ids"])
+                self.assertEqual(
+                    plan["publish_images"], list(PRODUCTION_RELEASE_IMAGES)
+                )
+                self.assertEqual(plan["images"], sorted(PRODUCTION_RELEASE_IMAGES))
+                self.assertTrue(plan["multiarch"])
+                self.assertTrue(plan["publish_python"])
+                self.assertEqual(plan["publish_helm"], helm)
+        unpublished = make_plan(["README.md"], source_sha=SHA, profile="main")
+        self.assertNotIn("cli-package", unpublished["expected_verification_ids"])
+
+    def test_main_publication_dispatch_qualifies_all_commit_addressed_images(self):
+        plan = make_plan(
+            ["README.md"], source_sha=SHA, profile="main", full=True, publish=True
+        )
         self.assertTrue(plan["publish_python"])
         self.assertTrue(plan["publish_helm"])
         self.assertTrue(plan["full_cpu"])

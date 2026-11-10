@@ -51,6 +51,40 @@ LEGACY_FEEDBACK_LABELS = {
     "want_different": "WANT_DIFFERENT",
 }
 LEGACY_MODALITY_LABELS = {"AR": "text", "DIFFUSION": "image", "BOTH": "text_image"}
+# The domains the Router's domain classifier reports.
+ROUTING_DOMAINS = (
+    "biology",
+    "business",
+    "chemistry",
+    "computer science",
+    "economics",
+    "engineering",
+    "health",
+    "history",
+    "law",
+    "math",
+    "other",
+    "philosophy",
+    "physics",
+    "psychology",
+)
+# What each form of a domain rule without labels or mmlu_categories is, and
+# what it becomes (_domain_rule_form), in the Router's form order; "dropped"
+# also drops the conditions on the rule.
+DOMAIN_RULE_FORMS = {
+    "cased": (
+        "a domain rule named for a domain in another case matched that domain, since rule names were matched in any case",
+        "the domain in lower case, in the rule and each condition, score input and partition that names it",
+    ),
+    "dropped": (
+        "a domain rule without labels or mmlu_categories whose name is no domain never matched, since the domain classifier reports domains",
+        "drop it; to route on it, set labels to the domains it means",
+    ),
+    "partition": (
+        "a domain rule without labels or mmlu_categories whose name is no domain matched only as the default of a projection partition that names it",
+        "labels: [other], so the partition keeps it",
+    ),
+}
 # (module, its threshold key, what the threshold becomes)
 REMOVED_MODULES = (
     ("safety", "", ""),
@@ -275,6 +309,26 @@ def _application_field_forms(data: dict[str, Any]) -> Iterator[Form]:
                 "domain conditions no longer declare the domains they name",
                 "signals.domains with one rule per domain the conditions name",
             )
+    yield from _domain_rules(data, "cased")
+    dropped = [
+        (prefix, rule.get("name"))
+        for prefix, routing in recipe_scopes(data)
+        for _, rule in _rules(prefix, routing, "domains")
+        if _domain_rule_form(routing, rule) == "dropped"
+    ]
+    for path, node in _condition_nodes(data):
+        if node.get("type") == "domain" and any(
+            path.startswith(f"{prefix}.") and node.get("name") == name
+            for prefix, name in dropped
+        ):
+            yield (
+                path,
+                "invalid_value",
+                "a domain condition reads a domain rule named for no domain, which never matched",
+                "nothing: the condition never matches, so migrate drops a decision that needs it, its term of an OR and a score input on it",
+            )
+    yield from _domain_rules(data, "dropped")
+    yield from _domain_rules(data, "partition")
     yield from _unlabeled_rules(
         data,
         "fact_check",
@@ -292,6 +346,7 @@ def _application_field_forms(data: dict[str, Any]) -> Iterator[Form]:
             "a user_feedbacks rule's name no longer chooses its feedback",
             f"labels: [{LEGACY_FEEDBACK_LABELS[name]}]",
         ),
+        signal_type="user_feedback",
     )
     yield from _unlabeled_rules(
         data,
@@ -301,6 +356,7 @@ def _application_field_forms(data: dict[str, Any]) -> Iterator[Form]:
             "a modality rule's name no longer chooses its output (AR, DIFFUSION and BOTH are text, image and text_image)",
             f"labels: [{LEGACY_MODALITY_LABELS[name]}]",
         ),
+        signal_type="modality",
     )
     yield from _rules_with_any_key(
         data,
@@ -442,12 +498,120 @@ def _unlabeled_rules(
     collection: str,
     legacy: Callable[[str], bool],
     describe: Callable[[str], tuple[str, str]],
+    signal_type: str = "",
 ) -> Iterator[Form]:
+    """Rules without labels whose name chose their option. With signal_type, a
+    rule a condition or score input names with one of its options is a v0.5
+    rule without labels, whatever its name, and is left alone."""
+
     for prefix, routing in recipe_scopes(data):
         for path, rule in _rules(prefix, routing, collection):
             name = rule.get("name")
-            if isinstance(name, str) and legacy(name) and "labels" not in rule:
+            if (
+                isinstance(name, str)
+                and legacy(name)
+                and "labels" not in rule
+                and not (signal_type and _named_with_label(routing, signal_type, name))
+            ):
                 yield (path, "invalid_value", *describe(name))
+
+
+def _named_with_label(routing: dict[str, Any], signal_type: str, name: str) -> bool:
+    return any(
+        node.get("type") == signal_type
+        and (
+            (node.get("name") == name and bool(node.get("label")))
+            or str(node.get("name", "")).startswith(name + ":")
+        )
+        for node in _routing_conditions(routing)
+    )
+
+
+def _routing_conditions(routing: dict[str, Any]) -> list[dict[str, Any]]:
+    """The places a routing scope names a signal: its decisions' conditions at
+    any depth and its score inputs."""
+
+    nodes = [
+        node
+        for decision in _mappings(routing.get("decisions"))
+        for _, node in _walk("", decision.get("rules"))
+    ]
+    for score in _mappings(_mapping_at(routing, "projections").get("scores")):
+        nodes.extend(_mappings(score.get("inputs")))
+    return nodes
+
+
+def _domain_rules(data: dict[str, Any], form: str) -> Iterator[Form]:
+    for prefix, routing in recipe_scopes(data):
+        for path, rule in _rules(prefix, routing, "domains"):
+            if _domain_rule_form(routing, rule) == form:
+                yield (path, "invalid_value", *DOMAIN_RULE_FORMS[form])
+
+
+def _domain_rule_form(routing: dict[str, Any], rule: dict[str, Any]) -> str:
+    """The form of a domain rule without labels or mmlu_categories, as the
+    Router reads it: "cased" for a domain in another case, "partition" for a
+    name of no domain a projection partition names, "dropped" for any other
+    name of no domain; "" for a domain, or for a name the Router suggests a
+    domain for that the routing scope reads, whose load error is the
+    suggestion."""
+
+    name = rule.get("name")
+    name = name if isinstance(name, str) else ""
+    if "labels" in rule or "mmlu_categories" in rule or _is_domain(name):
+        return ""
+    if _is_domain(name.lower()):
+        return "cased"
+    partitions = [
+        partition
+        for partition in _mappings(
+            _mapping_at(routing, "projections").get("partitions")
+        )
+        if partition.get("default") == name
+        or name in _strings(partition.get("members"))
+    ]
+    named = partitions or any(
+        node.get("type") == "domain" and node.get("name") == name
+        for node in _routing_conditions(routing)
+    )
+    if _domain_suggestion(name) and named:
+        return ""
+    return "partition" if partitions else "dropped"
+
+
+def _is_domain(name: str) -> bool:
+    return name.strip() in ROUTING_DOMAINS
+
+
+def _domain_suggestion(name: str) -> str:
+    """The domain the Router suggests for a name that is close to one
+    (SuggestSupportedRoutingDomainName), or ""."""
+
+    name = name.strip()
+    if "_" in name and _is_domain(name.replace("_", " ")):
+        return name.replace("_", " ")
+    best, best_distance = "", len(name) + 1
+    for domain in ROUTING_DOMAINS:
+        distance = _edit_distance(name.lower(), domain)
+        if distance < best_distance and distance <= len(domain) // 2 + 1:
+            best, best_distance = domain, distance
+    return best
+
+
+def _edit_distance(a: str, b: str) -> int:
+    previous = list(range(len(b) + 1))
+    for i, left in enumerate(a, 1):
+        current = [i]
+        for j, right in enumerate(b, 1):
+            current.append(
+                min(
+                    previous[j] + 1,
+                    current[j - 1] + 1,
+                    previous[j - 1] + (left != right),
+                )
+            )
+        previous = current
+    return previous[-1]
 
 
 def _rules_with_any_key(
@@ -502,13 +666,18 @@ def _named_domains(node: Any) -> list[str]:
 
 def _condition_nodes(data: dict[str, Any]) -> Iterator[tuple[str, dict[str, Any]]]:
     """Every place a routing scope names a signal: decision conditions at any
-    depth, then projection score inputs."""
+    depth and projection score inputs, in the order the scope writes them, as
+    the Router lists them."""
 
-    yield from _decision_condition_nodes(data)
     for prefix, routing in recipe_scopes(data):
-        scores = _mapping_at(routing, "projections").get("scores")
-        for path, score in _named_items(f"{prefix}.projections.scores", scores):
-            yield from _named_items(f"{path}.inputs", score.get("inputs"))
+        for key in routing:
+            if key == "decisions":
+                for path, decision in _named_items(f"{prefix}.decisions", routing[key]):
+                    yield from _walk(f"{path}.rules", decision.get("rules"))
+            elif key == "projections":
+                scores = _mapping_at(routing, key).get("scores")
+                for path, score in _named_items(f"{prefix}.projections.scores", scores):
+                    yield from _named_items(f"{path}.inputs", score.get("inputs"))
 
 
 def _decision_condition_nodes(

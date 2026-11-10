@@ -1244,3 +1244,35 @@ func TestMilvusStore_Retrieve_ProjectScopeWidensPastLegacyCandidates(t *testing.
 		})
 	}
 }
+
+// A memory source's min_similarity is any cosine: a bound of zero or less
+// applies as written, and only an unset one takes the store's
+// default_similarity_threshold.
+func TestMilvusStore_Retrieve_KeepsANonPositiveMinSimilarity(t *testing.T) {
+	store, mockClient := setupTestStore()
+	mockClient.SearchFunc = func(context.Context, string, []string, string, []string, []entity.Vector, string, entity.MetricType, int, entity.SearchParam, ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		return []client.SearchResult{{
+			ResultCount: 3,
+			Scores:      []float32{0.85, 0.3, -0.1},
+			Fields: []entity.Column{
+				entity.NewColumnVarChar("id", []string{"id1", "id2", "id3"}),
+				entity.NewColumnVarChar("content", []string{"c1", "c2", "c3"}),
+				entity.NewColumnVarChar("memory_type", []string{"semantic", "semantic", "semantic"}),
+			},
+		}}, nil
+	}
+	for _, tt := range []struct {
+		name string
+		opts RetrieveOptions
+		want int
+	}{
+		{name: "zero", opts: RetrieveOptions{Threshold: 0, ThresholdSet: true}, want: 2},
+		{name: "negative", opts: RetrieveOptions{Threshold: -0.2, ThresholdSet: true}, want: 3},
+		{name: "unset", opts: RetrieveOptions{}, want: 1},
+	} {
+		tt.opts.Query, tt.opts.UserID = "test", "u1"
+		results, err := store.Retrieve(context.Background(), tt.opts)
+		require.NoError(t, err)
+		assert.Len(t, results, tt.want, tt.name)
+	}
+}

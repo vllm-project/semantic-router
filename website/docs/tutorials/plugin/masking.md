@@ -28,7 +28,7 @@ recipes:
     signals:
       pii:
         - name: contact_details
-          threshold: 0.85
+          predicate: {gte: 0.85}
           description: Contact details masked before the request leaves the Router.
     decisions:
       - name: support

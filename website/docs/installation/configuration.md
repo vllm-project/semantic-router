@@ -354,7 +354,9 @@ its recipe:
 - **Plugins merge by type, field by field.** Mappings merge key by key; a list
   or scalar replaces the value below it.
 - **Unmatched requests.** A request that matches no decision runs its recipe's
-  layered plugins; a request for a concrete model runs `global.plugins`.
+  layered plugins; a request for a concrete model runs `global.plugins` but
+  skips what needs a recipe: the response cache, the context plugin's
+  retrieval, `response_guard` and masking.
 - **Model facts.** `capabilities`, `modalities`, `context_window_size`,
   `max_output_tokens` and `loras` sit on the model's `providers.models[]`
   entry.

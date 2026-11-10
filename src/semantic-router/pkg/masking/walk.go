@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 
@@ -361,8 +363,10 @@ func maskJSONValue(value any, a *Allocator, scan ScanFunc, out *Result) (any, bo
 		return masked, changed, nil
 	case map[string]any:
 		changed := false
-		for key, child := range typed {
-			maskedChild, childChanged, err := maskJSONValue(child, a, scan, out)
+		// Keys in sorted order, the order json.Marshal writes them: map
+		// order would number the same request's placeholders differently.
+		for _, key := range slices.Sorted(maps.Keys(typed)) {
+			maskedChild, childChanged, err := maskJSONValue(typed[key], a, scan, out)
 			if err != nil {
 				return nil, false, err
 			}

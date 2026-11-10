@@ -72,7 +72,7 @@ d3 不回答 span 问题。当某个 d3 规格作为决策模型时，把 `pii` 
 
 ## 精度与硬件 {#precision-and-hardware}
 
-- d3 在每种设备上都以 BF16 运行，即其发布时的精度。
+- d3 在 GPU 上以 BF16 运行，即其发布时的精度；在 CPU 上以 FP32 运行，因为它的 BF16 回答取决于 CPU 的 kernel，而 FP32 回答不受影响。FP32 占用的字节是 BF16 的两倍；在原生计算 BF16 的 CPU 上每个请求的耗时是 BF16 的 1.2 到 3.5 倍，在模拟 BF16 的 AVX2 CPU 上它反而更快。`--dtype bfloat16` 在 CPU 上运行 BF16，并比对该类 CPU 的 BF16 参考答案（[引擎参数](../../deploy/engine-args.md#precision)）。
 - 它在 AMD Instinct MI300X 和 MI325X 上经过验证；模型页面列出了每个修订版本记录了参考答案的设备。
 - ROCm 镜像的 PyTorch 没有 CPU LAPACK，而 Qwen3.5 骨干网络在 CPU 上需要它：请在 GPU 上运行 d3，或用 CPU 镜像在 CPU 上运行。
 - 在 GPU 上，d3 把文本行和图像或视频行放在不同的通道中批处理，并把一次合并的前向计算控制在约 0.3 秒的设备时间（[引擎参数](../../deploy/engine-args.md#batching)）。

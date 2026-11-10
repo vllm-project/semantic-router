@@ -89,7 +89,7 @@ const (
 	ResponsePathFastResponse    = "fast_response"    // short-circuited by the fast_response plugin
 	ResponsePathLooper          = "looper"           // produced by the agent looper
 	ResponsePathImageGeneration = "image_generation" // produced by the image-generation path
-	ResponsePathBlocked         = "blocked"          // rejected by a guardrail (e.g. jailbreak/PII)
+	ResponsePathBlocked         = "blocked"          // an answer the response_guard plugin refused
 	ResponsePathRateLimited     = "rate_limited"     // rejected by rate limiting
 	ResponsePathError           = "error"            // router-side error response
 	ResponsePathFallback        = "fallback"         // produced by upstream error fallback

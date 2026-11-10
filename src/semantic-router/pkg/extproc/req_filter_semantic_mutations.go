@@ -167,18 +167,21 @@ func (r *OpenAIRouter) addSemanticSystemPromptIfConfigured(
 	model string,
 	ctx *RequestContext,
 ) (bool, error) {
-	if request == nil || decisionName == "" || ctx == nil || ctx.VSRSelectedDecision == nil {
+	if request == nil || ctx == nil {
 		return false, nil
 	}
-	decision := ctx.VSRSelectedDecision
-	promptConfig := decision.GetSystemPromptConfig()
-	if promptConfig == nil || promptConfig.SystemPrompt == "" || !decision.IsSystemPromptEnabled() {
+	promptConfig := config.SystemPromptPluginOf(requestPlugins(r.Config, ctx))
+	if promptConfig == nil || promptConfig.SystemPrompt == "" || !promptConfig.IsEnabled() {
 		return false, nil
 	}
 	start := time.Now()
 	_, span := tracing.StartPluginSpan(ctx.TraceContext, "system_prompt", decisionName)
-	mode := decision.GetSystemPromptMode()
+	mode := promptConfig.EffectiveMode()
+	routerContext := contextPromptBlocks(ctx, request, mode)
 	injected := llmprotocol.SetSystemInstruction(request, promptConfig.SystemPrompt, mode)
+	if len(routerContext) > 0 {
+		request.Instructions[0].Content = append(request.Instructions[0].Content, routerContext...)
+	}
 	latency := time.Since(start).Milliseconds()
 	tracing.SetSpanAttributes(span,
 		attribute.Bool("system_prompt.injected", injected),
@@ -191,16 +194,30 @@ func (r *OpenAIRouter) addSemanticSystemPromptIfConfigured(
 	return true, nil
 }
 
+// contextPromptBlocks are the blocks the context plugin put at the front of
+// the first system instruction. replace keeps them after its prompt: it drops
+// what the caller sent, not the context the Router retrieved.
+func contextPromptBlocks(ctx *RequestContext, request *llmprotocol.Request, mode string) []llmprotocol.Content {
+	if mode == config.SystemPromptModeInsert {
+		return nil
+	}
+	for _, instruction := range request.Instructions {
+		if instruction.Role == llmprotocol.RoleSystem {
+			return instruction.Content[:min(ctx.contextPrefixBlocks, len(instruction.Content))]
+		}
+	}
+	return nil
+}
+
 func (r *OpenAIRouter) applySemanticRequestParams(
-	decision *config.Decision,
+	params *config.RequestParamsPluginConfig,
 	request *llmprotocol.Request,
-	routingScope config.RecipeName,
+	decisionKey string,
 ) (bool, error) {
-	if decision == nil || request == nil || decision.GetRequestParamsConfig() == nil {
+	if params == nil || request == nil {
 		return false, nil
 	}
-	result, err := pluginruntime.ApplyRequestParams(request, decision.GetRequestParamsConfig())
-	decisionKey := config.RoutingDecisionKey(routingScope, decision.Name)
+	result, err := pluginruntime.ApplyRequestParams(request, params)
 	for _, field := range result.Blocked {
 		metrics.RecordBlockedParam(decisionKey, field)
 	}

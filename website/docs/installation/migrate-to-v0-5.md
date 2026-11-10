@@ -178,15 +178,17 @@ recipes:
 | `signals.decision`, `algorithm.type: decision` | `systemone` (loads with a warning) |
 | `domains[].mmlu_categories` | `domains[].labels` |
 | Domain conditions that declared their own domains | One `domains` rule per domain the conditions name |
-| `jailbreak` `threshold`, `direction`, `include_history` | `predicate`, `stage`, `input.history` |
+| A `domains` rule without `labels` or `mmlu_categories` named for a domain in another case, such as `Math` | The domain in lower case, in the rule and each condition, score input and partition that names it |
+| A `domains` rule without `labels` or `mmlu_categories` whose name is no domain | Dropped: the classifier reported domains, so it never matched; so are a decision that needs it, its term of an `OR` and a score input on it (migrate notes each). A rule a projection partition names stays, with `labels: [other]`, since the partition's default matched it. A name the load suggests a domain for, such as `maths`, keeps that error while a condition reads it |
+| `jailbreak` `threshold`, `direction`, `include_history` | `predicate`, `stage`, `input.history`; a `method: contrastive` threshold bounded a similarity gap, not a probability, and migrate notes to re-fit it |
 | `jailbreak` `method`, `jailbreak_patterns`, `benign_patterns` | Removed: the decision model reads the request. For a deterministic hard block, write the patterns as a [`keywords`](../tutorials/signal/heuristic/keyword) rule that a blocking decision reads |
 | `jailbreak` and `pii` rules under `on_error: block` | `on_unknown: match` on the rules |
 | `safety` `threshold`, `labels`, `unsafe_labels`, `model` | `predicate`; `labels` name [harm categories](../system-one/reference/presets#harm-categories); `deployment` |
 | `safety` `hazard` | The [harm categories](../system-one/reference/presets#harm-categories) its `categories` name, in the rule's `labels`, with `hazard.threshold` as the `predicate`; the unsafe `threshold` has no counterpart, and a rule whose categories name none keeps the unsafe verdict (migrate notes both) |
 | `pii` `threshold`, `pii_types_allowed`, `include_history`, `source: tool_result` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results`; `source: tool_result` read the tool results alone, so it becomes `input: {tool_results: true, request: false}` and drops `include_history` |
 | `fact_check` rule named `no_fact_check_needed` without labels | `labels: [NO_FACT_CHECK_NEEDED]` with a predicate |
-| `user_feedbacks` and `modality` rules whose name chose the option | The option in `labels` |
-| `reasks`, `topic_continuity` | `turn_relation` with `labels` |
+| `user_feedbacks` and `modality` rules without `labels` whose name chose the option | The option in `labels`, unless a condition names one of the rule's options as its `label`, or a score input as `<rule>:<label>`: that rule is written for v0.5 and stays as it is |
+| `reasks`, `topic_continuity` | `turn_relation` with `labels`; a reask rule's streak over a `lookback_turns` above 1 has no counterpart, `input.previous_turns` stops at 32, and migrate notes both |
 | `complexity` example banks and thresholds; `name: difficulty:hard` conditions | `complexity`; `{name: difficulty, label: hard}` |
 | `modality` names `AR`, `DIFFUSION`, `BOTH`; the keyword fallback | `labels` `text`, `image`, `text_image`; the fallback becomes a `keywords` rule (review) |
 | `classifiers`, `preferences`, text `embeddings` rules | [`systemone` questions](../system-one/use/custom-questions#questions-that-replace-removed-signals) |
@@ -251,8 +253,8 @@ recipes:
 
 | Before | After |
 | --- | --- |
-| `prompt`, `router_dc` | `systemone`, which asks the decision model with the same instructions or the candidates' descriptions |
-| `knn`, `kmeans`, `svm`, `mlp` | `systemone`, or `static` for a decision with one candidate; the trained model is not used |
+| `prompt`, `router_dc` | `systemone`, which asks the decision model with the same instructions or the candidates' descriptions, or `static` as for `knn` |
+| `knn`, `kmeans`, `svm`, `mlp` | `systemone` over the first `modelRefs` entry of each model (migrate notes the LoRA adapters it drops), or `static` when every candidate is one model, as one candidate or one model's LoRA adapters are; the trained model is not used |
 | `automix`, `hybrid`, `latency_aware` | `multi_factor`, with weights migrate writes out |
 | `confidence` (Looper) | `escalate` with `escalate.accept.confidence` |
 | `cascade` (System One) | `escalate` with `escalate.stages` |
@@ -280,7 +282,8 @@ recipes:
 | A recipe's `data_policy` | The recipe's `router_replay` plugin: `enabled: false` for `replay: false`, `capture_personal_data: false` for `replay_personal_data: false`, on its decisions too |
 | `emits[].retention` | The decision's [`retention`](../tutorials/decision/retention) attribute |
 | `masking` `threshold` | `masking.signal`, naming a `pii` rule whose `predicate` applies |
-| `system_prompt` `mode: append` | `mode: replace`, which is what it did |
+| `system_prompt` `mode: append` | `mode: replace`, which drops every system and developer instruction the caller sent, where `append` replaced only the first system message |
+| `request_params` `strip_unknown` | Removed: the Router never read it, and it refuses a request field the client's wire format does not declare |
 
 `global.model_catalog.modules` is removed. Its `prompt_compression` compressed
 the text the routing signals read, which is now the `compress.signals` block of

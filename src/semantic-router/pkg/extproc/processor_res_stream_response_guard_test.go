@@ -377,9 +377,16 @@ func TestHeldStreamOverTheLimitIsRefusedUnread(t *testing.T) {
 			before := bufferedCount(ctx, responseGuardOverLimit)
 
 			answerHeaders(t, router, ctx, "text/event-stream")
-			client, _ := answerBody(t, router, ctx, tc.parts(parts))
+			client, replies := answerBody(t, router, ctx, tc.parts(parts))
 
 			assertRefusedStream(t, llmprotocol.OpenAIChatV1, client, "larger than the response guard can check", benignAnswer)
+			blocked := false
+			for _, reply := range replies {
+				blocked = blocked || bodyPhaseHeader(reply, headers.VSRResponsePath) == headers.ResponsePathBlocked
+			}
+			if !blocked {
+				t.Fatalf("no reply set %s to %q", headers.VSRResponsePath, headers.ResponsePathBlocked)
+			}
 			if calls.Load() != 0 {
 				t.Fatalf("the guard asked the decision model %d time(s) about an answer it did not hold", calls.Load())
 			}
