@@ -634,10 +634,6 @@ func applyCardMetadataOverlay(effective *EffectiveModelCard, overlay ModelCardOv
 		effective.LoRAs = append([]LoRAAdapter(nil), (*overlay.LoRAs)...)
 		effective.Provenance["loras"] = SourceOperator
 	}
-	if overlay.RuntimeModality != nil {
-		effective.RuntimeModality = *overlay.RuntimeModality
-		effective.Provenance["runtime_modality"] = SourceOperator
-	}
 	if overlay.Verification != nil {
 		effective.Card.Verification = *overlay.Verification
 		effective.Provenance["verification"] = SourceOperator

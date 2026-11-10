@@ -20,11 +20,11 @@ func TestApplicable(t *testing.T) {
 		apply    bool
 		reason   SkipReason
 	}{
-		{"text request, text backend", config.DecisionPluginRAG, text, text, true, true, ""},
-		{"text and image request keeps running", config.DecisionPluginMemory, both, both, true, true, ""},
-		{"undeclared backend is not gated", config.DecisionPluginRAG, text, llmprotocol.CapabilitySet{}, false, true, ""},
-		{"image-only request has no text to act on", config.DecisionPluginRAG, image, both, true, false, SkipRequestDoesNotRequire},
-		{"text is assumed, so a card without text still runs", config.DecisionPluginMemory, text, image, true, true, ""},
+		{"text request, text backend", config.DecisionPluginContext, text, text, true, true, ""},
+		{"text and image request keeps running", config.DecisionPluginContext, both, both, true, true, ""},
+		{"undeclared backend is not gated", config.DecisionPluginContext, text, llmprotocol.CapabilitySet{}, false, true, ""},
+		{"image-only request has no text to act on", config.DecisionPluginContext, image, both, true, false, SkipRequestDoesNotRequire},
+		{"text is assumed, so a card without text still runs", config.DecisionPluginContext, text, image, true, true, ""},
 		{"ungated plugin always runs", config.DecisionPluginRouterReplay, image, image, true, true, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

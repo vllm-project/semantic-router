@@ -37,13 +37,13 @@ func (s *persistentIdentityStore) records() []persistedSemanticRecord {
 	return records
 }
 
-func (s *persistentIdentityStore) LookupSemantic(_ context.Context, query SemanticLookup) (CacheResult, error) {
+func (s *persistentIdentityStore) LookupSemantic(_ context.Context, query SemanticLookup) (SemanticRecall, error) {
 	for _, record := range s.records() {
 		if record.Partition == query.Identity.Partition.Key() {
-			return CacheResult{Found: true, ResponseBody: record.Body, Similarity: 1}, nil
+			return SemanticRecall{Candidates: []CacheResult{{Found: true, ResponseBody: record.Body, Similarity: 1, AgeKnown: true}}}, nil
 		}
 	}
-	return CacheResult{}, nil
+	return SemanticRecall{}, nil
 }
 
 func (s *persistentIdentityStore) StoreSemantic(_ context.Context, write CacheWrite) error {
@@ -70,25 +70,25 @@ func TestEmbeddingIdentityIsolatesPersistentSemanticCacheWithoutDeletingLegacy(t
 		}
 	}
 	current := newService("new-model")
-	result, err := current.LookupSemantic(ctx, SemanticLookup{Identity: request})
+	result, err := semanticHit(current.LookupSemantic(ctx, SemanticLookup{Identity: request, Bounds: atThreshold(0)}))
 	if err != nil || result.Found {
 		t.Fatalf("old/untagged vector adopted: %#v, %v", result, err)
 	}
 	// A resolved lease from an old service must not carry the old epoch through.
 	oldResolved := newService("old-model").ResolveIdentity(request)
-	if result, err = current.LookupSemantic(ctx, SemanticLookup{Identity: oldResolved}); err != nil || result.Found {
+	if result, err = semanticHit(current.LookupSemantic(ctx, SemanticLookup{Identity: oldResolved, Bounds: atThreshold(0)})); err != nil || result.Found {
 		t.Fatalf("old resolved identity bypassed isolation: %#v %v", result, err)
 	}
 	if err = current.StoreSemantic(ctx, CacheWrite{Identity: request, ResponseBody: []byte("new response")}); err != nil {
 		t.Fatal(err)
 	}
 	// A fresh service has an empty L1 and reopens the persistent data.
-	result, err = newService("new-model").LookupSemantic(ctx, SemanticLookup{Identity: request})
+	result, err = semanticHit(newService("new-model").LookupSemantic(ctx, SemanticLookup{Identity: request, Bounds: atThreshold(0)}))
 	if err != nil || !result.Found || string(result.ResponseBody) != "new response" {
 		t.Fatalf("current space did not survive reopen: %#v %v", result, err)
 	}
 	for _, space := range []string{"", "old-model"} {
-		result, err = newService(space).LookupSemantic(ctx, SemanticLookup{Identity: request})
+		result, err = semanticHit(newService(space).LookupSemantic(ctx, SemanticLookup{Identity: request, Bounds: atThreshold(0)}))
 		if err != nil || !result.Found || string(result.ResponseBody) != space+" response" {
 			t.Fatalf("old data was destroyed: %#v %v", result, err)
 		}
@@ -106,17 +106,17 @@ func TestEmbeddingIdentityIsolatesPersistentSemanticCacheWithoutDeletingLegacy(t
 }
 
 func TestCacheEmbeddingSettingsReflectActualBackend(t *testing.T) {
-	memory := NewInMemoryCache(InMemoryCacheOptions{EmbeddingModel: "mmbert"})
+	memory := NewInMemoryCache(InMemoryCacheOptions{EmbeddingDeployment: "vela-embedding", EmbeddingDimension: 256, EmbeddingLayer: 6})
 	settings, ok := LocalEmbeddingSettings(memory)
 	if !ok || settings.Layer != 6 || settings.Dimension != 256 {
 		t.Fatalf("inmemory actual settings: %#v %v", settings, ok)
 	}
-	persistent := &QdrantCache{embeddingModel: "mmbert", embeddingProvider: storagetest.Vectors{Size: 768}}
+	persistent := &QdrantCache{embeddingDeployment: "vela-embedding", embeddingProvider: storagetest.Vectors{Size: 768}}
 	settings, ok = LocalEmbeddingSettings(persistent)
 	if !ok || settings.Layer != 0 || settings.Dimension != 768 {
 		t.Fatalf("persistent actual settings: %#v %v", settings, ok)
 	}
-	if _, ok = LocalEmbeddingSettings(NewInMemoryCache(InMemoryCacheOptions{EmbeddingModel: "qwen3"})); ok {
-		t.Fatal("unsupported provider received guessed identity")
+	if _, ok = LocalEmbeddingSettings(NewInMemoryCache(InMemoryCacheOptions{})); ok {
+		t.Fatal("a cache without an embedding deployment received an identity")
 	}
 }

@@ -237,38 +237,53 @@ func (s *ResponseCacheService) StoreExact(ctx context.Context, write CacheWrite)
 	return nil
 }
 
+// LookupSemantic recalls the fresh cached entries most similar to the
+// lookup's query, within its bounds, most similar first. A caller serves at
+// most one of them and counts the lookup with RecordSemantic.
 func (s *ResponseCacheService) LookupSemantic(
 	ctx context.Context,
 	lookup SemanticLookup,
-) (result CacheResult, err error) {
-	start := time.Now()
-	defer func() {
-		s.recordOperation("lookup_semantic", lookup.Identity, result, err, start)
-	}()
+) (SemanticRecall, error) {
 	if s == nil || s.store == nil {
-		return CacheResult{HitKind: HitKindMiss}, nil
+		return SemanticRecall{}, nil
 	}
 	lookup.Identity = s.ResolveIdentity(lookup.Identity)
-	result, err = s.store.LookupSemantic(ctx, lookup)
+	recall, err := s.store.LookupSemantic(ctx, lookup)
 	if err != nil {
 		s.failOpen.Add(1)
-		return CacheResult{}, err
+		return SemanticRecall{}, err
 	}
-	if result.Found && lookup.MaxAge != nil &&
-		(!result.AgeKnown || result.Age > *lookup.MaxAge) {
+	fresh := recall.Candidates[:0]
+	for _, candidate := range recall.Candidates {
+		if lookup.MaxAge != nil && (!candidate.AgeKnown || candidate.Age > *lookup.MaxAge) {
+			continue
+		}
+		candidate.HitKind, candidate.Source = HitKindSemantic, CacheSourceL2
+		fresh = append(fresh, candidate)
+	}
+	if len(fresh) == 0 && len(recall.Candidates) > 0 {
 		s.staleMisses.Add(1)
-		result = CacheResult{HitKind: HitKindMiss}
 	}
-	if result.Found {
-		result.HitKind = HitKindSemantic
-		result.Source = CacheSourceL2
+	recall.Candidates = fresh
+	return recall, nil
+}
+
+// RecordSemantic counts one semantic lookup that began at start by what it
+// served: hit, or a miss when hit is not found.
+func (s *ResponseCacheService) RecordSemantic(identity CacheIdentity, hit CacheResult, err error, start time.Time) {
+	if s == nil {
+		return
+	}
+	switch {
+	case err != nil:
+	case hit.Found:
 		s.semanticHits.Add(1)
 		s.l2Hits.Add(1)
-	} else {
-		result.HitKind = HitKindMiss
+	default:
+		hit.HitKind = HitKindMiss
 		s.misses.Add(1)
 	}
-	return result, nil
+	s.recordOperation("lookup_semantic", identity, hit, err, start)
 }
 
 func (s *ResponseCacheService) StoreSemantic(ctx context.Context, write CacheWrite) error {

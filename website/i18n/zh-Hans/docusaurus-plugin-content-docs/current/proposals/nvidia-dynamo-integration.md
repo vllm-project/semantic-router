@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: NVIDIA Dynamo 的语义智能层
 description: 提出语义请求路由与 NVIDIA Dynamo 基础设施级路由之间的分层集成。
 created: 2025-10-09

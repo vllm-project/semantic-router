@@ -67,7 +67,7 @@ type answerOutcome struct {
 }
 
 // failedQuestion is the first failed question of a runtime's 200 answer: of
-// the request's own state, then of each states entry.
+// a standard request, or of a batch's entries in order.
 func failedQuestion(result map[string]json.RawMessage) (questionFailure, bool) {
 	var found questionFailure
 	scan := func(raw json.RawMessage) {

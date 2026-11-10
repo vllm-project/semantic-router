@@ -62,6 +62,8 @@ func mergeRouterSessionSnapshots(remote, local RouterSessionSnapshot) RouterSess
 	// replayed save; it cannot sum concurrent per-replica deltas.
 	merged.TurnCount = max(remote.TurnCount, local.TurnCount)
 	merged.SwitchCount = max(remote.SwitchCount, local.SwitchCount)
+	merged.UserTurnCount = max(remote.UserTurnCount, local.UserTurnCount)
+	merged.LastReleaseUserTurn = max(remote.LastReleaseUserTurn, local.LastReleaseUserTurn)
 	merged.ModelTurns = mergeModelTurns(remote.ModelTurns, local.ModelTurns)
 	merged.CumulativePromptTokens = max(remote.CumulativePromptTokens, local.CumulativePromptTokens)
 	merged.CumulativeCachedTokens = max(remote.CumulativeCachedTokens, local.CumulativeCachedTokens)

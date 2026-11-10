@@ -432,6 +432,14 @@ const optionalNumber = (value: string): number | undefined => {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+// A model reads and writes text unless it declares otherwise.
+const advancedModalities = (advanced: ConnectModelAdvancedValues) => {
+  const input = listValues(advanced.inputModalities)
+  const output = listValues(advanced.outputModalities)
+  if (!input.length && !output.length) return undefined
+  return { input: input.length ? input : ['text'], output: output.length ? output : ['text'] }
+}
+
 function advancedInput(advanced: ConnectModelAdvancedValues) {
   const inputCost = optionalNumber(advanced.inputCost)
   const costConfigured = [
@@ -462,7 +470,7 @@ function advancedInput(advanced: ConnectModelAdvancedValues) {
     reasoningFamily: advanced.reasoningFamily || undefined,
     metadata: {
       description: advanced.description.trim() || undefined,
-      modality: advanced.modality || undefined,
+      modalities: advancedModalities(advanced),
       param_size: advanced.parameterSize.trim() || undefined,
       context_window_size: optionalNumber(advanced.contextWindow),
       capabilities: listValues(advanced.capabilities),

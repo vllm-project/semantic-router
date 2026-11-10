@@ -6,12 +6,18 @@ import json
 import pytest
 import torch
 from torch import nn
+from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.engines.native.engine import NativeEngine
 from vllm_srun.engines.native.quantized import Int4Linear
 from vllm_srun.errors import PackageError
+from vllm_srun.families.decision3.family import Decision3Family
+from vllm_srun.plugins.base import DeviceInfo, EngineOptions, PackageRef
 from vllm_srun.quantization import parse
 from vllm_srun.testing.decision3 import pack_int4, write_quantized_fixture
 
 from tests.conftest import start_runtime
+
+CPU = DeviceInfo(accelerator="cpu", index=None, name="cpu")
 
 QUESTIONS = {
     "domain": {
@@ -223,6 +229,39 @@ def test_an_fp8_package_needs_an_fp8_gpu(tmp_path, d3_text_package):
         start_runtime(packed)
 
 
+class GPUBound(CPUAccelerator):
+    """Reads a model as for a GPU; ``_host`` only asks which device it is for."""
+
+    def torch_device(self, device):
+        return torch.device("cuda")
+
+
+@pytest.mark.parametrize("scheme", ["int4", "float8"])
+def test_a_gpu_bound_load_keeps_quantized_weights_in_the_file_mapping(
+    tmp_path, monkeypatch, d3_text_package, scheme
+):
+    from vllm_srun.engines.native import weights
+
+    packed = write_quantized_fixture(d3_text_package, tmp_path / scheme, scheme=scheme)
+    family = Decision3Family()
+    spec = family.describe(family.verify(PackageRef(packed)))
+    shared = {}
+    set_buffer = weights.set_buffer
+
+    def recorded(root, name, tensor, *args, **kwargs):
+        set_buffer(root, name, tensor, *args, **kwargs)
+        shared[name] = root.get_buffer(name).data_ptr() == tensor.data_ptr()
+
+    monkeypatch.setattr(weights, "set_buffer", recorded)
+    NativeEngine()._host(spec, GPUBound(), CPU, EngineOptions())
+    stored = {
+        name: same
+        for name, same in shared.items()
+        if name.endswith(("weight", "weight_packed"))
+    }
+    assert stored and all(stored.values())
+
+
 @pytest.mark.parametrize(
     "safe, ada, unscaled, captured",
     [
@@ -432,3 +471,72 @@ def test_nvfp4_siblings_stay_apart_unless_one_product_gives_their_outputs(apart)
         mlp.up_proj.weight_global_scale.fill_(2.0)
     assert quantized.merge_siblings(mlp) == 0
     assert mlp.gate_proj.merged is None and mlp.up_proj.merged is None
+
+
+@pytest.fixture
+def flashinfer_on_12x(monkeypatch):
+    """``flashinfer_nvfp4.load`` on a compute capability 12.0 GPU, with ``modules`` standing in for FlashInfer's."""
+    import importlib
+    import types
+
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    monkeypatch.setattr(
+        torch.cuda, "get_device_capability", lambda device=None: (12, 0)
+    )
+    monkeypatch.setattr(torch.version, "cuda", "12.8")
+    monkeypatch.delenv(flashinfer_nvfp4.ARCH_LIST, raising=False)
+    modules: dict[str, object] = {
+        "flashinfer": types.SimpleNamespace(mm_fp4="mm_fp4"),
+        "flashinfer.tllm_utils": types.SimpleNamespace(
+            get_trtllm_utils_module=lambda: None
+        ),
+    }
+    real = importlib.import_module
+
+    def import_module(name, *args):
+        if name in modules:
+            module = modules[name]
+            if isinstance(module, Exception):
+                raise module
+            return module
+        return real(name, *args)
+
+    monkeypatch.setattr(importlib, "import_module", import_module)
+    return modules
+
+
+def test_flashinfer_runs_nvfp4_products_on_compute_capability_12_only(
+    flashinfer_on_12x, monkeypatch
+):
+    import os
+
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    device = torch.device("cuda", 0)
+    assert flashinfer_nvfp4.load(device) == ("mm_fp4", None)
+    # PyTorch's CUDA 12.8 would make FlashInfer refuse 12.x: the family target is named for it
+    assert os.environ[flashinfer_nvfp4.ARCH_LIST] == "12.0f"
+    monkeypatch.setattr(
+        torch.cuda, "get_device_capability", lambda device=None: (10, 0)
+    )
+    product, reason = flashinfer_nvfp4.load(device)
+    assert product is None and "12.x, not 10.0" in reason
+
+
+def test_flashinfer_is_refused_where_it_is_missing_or_cannot_tune(flashinfer_on_12x):
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    device = torch.device("cuda", 0)
+
+    def no_compiler():
+        raise FileNotFoundError("ninja")
+
+    flashinfer_on_12x["flashinfer.tllm_utils"].get_trtllm_utils_module = no_compiler
+    product, reason = flashinfer_nvfp4.load(device)
+    assert product is None and "cannot tune" in reason and "ninja" in reason
+    flashinfer_on_12x["flashinfer"] = ModuleNotFoundError(
+        "No module named 'flashinfer'"
+    )
+    product, reason = flashinfer_nvfp4.load(device)
+    assert product is None and "not installed" in reason

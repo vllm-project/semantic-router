@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 智能体感知的 Router 契约
 description: 在 Epic #2994 下，关于有界智能体事实、外部运行时交接和所有权边界的设计提案。
 created: 2026-08-29

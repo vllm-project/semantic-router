@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/api/apiserver.md"
-  outdated: false
+  outdated: true
 ---
 
 # 路由器管理接口 {#router-management-api}
@@ -106,10 +107,6 @@ curl -sS http://localhost:8080/api/v1/diagnostics/classify/intent \
 | `POST` | `/api/v1/diagnostics/classify/combined` | 运行意图、PII 和安全分类 |
 | `POST` | `/api/v1/diagnostics/classify/batch` | 对批次运行选定的分类器 |
 | `POST` | `/api/v1/routing/preview` | 评估所有已配置信号 |
-| `POST` | `/api/v1/diagnostics/nli` | 评估前提/假设对 |
-| `POST` | `/api/v1/diagnostics/embeddings` | 生成已配置的文本或图像嵌入 |
-| `POST` | `/api/v1/diagnostics/similarity` | 比较一对文本 |
-| `POST` | `/api/v1/diagnostics/similarity/batch` | 运行批量相似度匹配 |
 
 名称、分数和匹配规则取决于当前配方。各端点支持的输入形式见实时 schema。
 
@@ -131,7 +128,6 @@ curl -sS http://localhost:8080/api/v1/diagnostics/classify/intent \
 | `POST /label-scores` | 独立标签分数及操作点策略 | Safety、Hazard |
 | `POST /tokens` | 原始 UTF-8 字节偏移对应的实体 | PII |
 | `POST /embeddings` | 绑定的有效嵌入表示 | Embedding |
-| `POST /rerank` | 按输入顺序返回查询/文档相关性分数 | Reranker |
 
 ```bash
 curl -sS 'http://localhost:8080/api/v1/diagnostics/models?recipe=default'
@@ -146,7 +142,7 @@ curl -sS http://localhost:8080/api/v1/diagnostics/models/labels \
 Hazard 保留阈值及策略摘要。Vela Encoder 是任务共享的底层 artifact，不需要独立推理端点。
 发现接口只列出当前准备的任务，不触发模型加载。
 
-原有 classification、embedding、NLI 和 similarity 便利接口也接受可选 `recipe`：
+原有 classification、embedding 和 similarity 便利接口也接受可选 `recipe`：
 省略时保持默认 Recipe 行为，指定时必须准确解析。验证具体模型时优先使用上述 typed binding API。Rerank 批量受
 `global.services.api.batch_classification.max_batch_size` 限制，未设置时为 100 对。调用复用模型资源的
 admission，并设定两分钟请求 deadline；原生推理即使被取消，也在实际结束后才释放租约。
@@ -235,16 +231,15 @@ Router 管理的存储和记忆：
 | 插件 | 管理方式 |
 | --- | --- |
 | `system_prompt`、`request_params`、`header_mutation`、`fast_response` | `POST /api/v1/plugins/{type}/preview`，使用 typed `configuration` 或活动 `binding` |
-| `hallucination`、`response_jailbreak` | 预览策略和输入条件；`mode: probe` 调用已配置检测器 |
-| `rag` | 用 `supplied_context` 预览注入；`mode: probe` 执行检索并绕过 RAG 结果缓存 |
-| `tools`、`tool_selection` | 预览静态工具策略；语义选择必须显式使用 `mode: probe` |
-| `context_compression` | 保留已有压缩预览契约 |
-| `response_cache`、`memory` | 操作 `/api/v1/storage` 下的资源 |
+| `response_guard` | 在给定的问题、上下文和回答上读取活动守卫的规则；`mode: probe` 调用已配置的模型 |
+| `context` | 用 `supplied_context` 预览 RAG 源的注入；`mode: probe` 执行检索并绕过 RAG 结果缓存。压缩有自己的预览，位于 `/api/v1/plugins/context/compression` 下 |
+| `tools` | 预览工具策略；决策模型的工具选择必须显式使用 `mode: probe` |
+| `response_cache`、记忆源 | 操作 `/api/v1/storage` 下的资源 |
 | `router_replay`、`shadow_dispatch` | 通过 `/api/v1/observability/replays` 查询记录 |
 
 Guard、RAG 和工具预览要求显式 `binding: {"recipe":"<name>","decision":"<name>"}`。
-默认 `mode` 为 `preview`，不会自动升级为 probe。Probe 可以调用已配置的本地或远程分类器、
-嵌入服务及检索后端，但不会执行选中的工具或生成 provider 回答。RAG 需要 `data.read`，工具策略需要 `config.read`，
+默认 `mode` 为 `preview`，不会自动升级为 probe。Probe 可以调用决策模型、
+嵌入部署及检索后端，但不会执行选中的工具或生成 provider 回答。RAG 需要 `data.read`，工具策略需要 `config.read`，
 Guard 探测需要 `classify.invoke`。响应中的 `mode`、
 `persisted`、`backend_calls` 描述实际影响。`persisted: false` 表示不写插件数据或会话状态；
 probe 可以更新指标和嵌入记忆缓存，外部检索服务也可能产生其自身的副作用。
@@ -279,10 +274,10 @@ Header 预览中的值需要 `secret_view`。
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| `GET` | `/api/v1/plugins/context_compression/capabilities` | 运行时能力 |
-| `GET` | `/api/v1/plugins/context_compression/health` | 运行时健康 |
-| `GET` | `/api/v1/observability/plugins/context_compression/stats` | 脱敏统计 |
-| `POST` | `/api/v1/plugins/context_compression/preview` | 预览压缩而不持久化 |
+| `GET` | `/api/v1/plugins/context/compression/capabilities` | 运行时能力 |
+| `GET` | `/api/v1/plugins/context/compression/health` | 运行时健康 |
+| `GET` | `/api/v1/observability/plugins/context/compression/stats` | 脱敏统计 |
+| `POST` | `/api/v1/plugins/context/compression/preview` | 预览压缩而不持久化 |
 | `POST` | `/api/v1/storage/context-recovery/invalidate` | 使受信任的恢复范围失效 |
 
 在重要流量上启用压缩前，使用 `preview` 评估会保留什么。
@@ -323,5 +318,5 @@ curl -sS http://localhost:8080/api/v1/observability/outcomes \
 
 旧 `/api/v1/response-cache/*` 和 `/api/v1/context-compression/*` 已移除。请从 `/api/v1`
 或 `/api/v1/plugins` 重新发现操作：缓存迁至 `/api/v1/storage/response-cache/*`，
-压缩能力/健康/预览迁至 `/api/v1/plugins/context_compression/*`，统计、恢复失效和审计分别
+压缩能力/健康/预览迁至 `/api/v1/plugins/context/compression/*`，统计、恢复失效和审计分别
 使用上文的 observability/storage 路径。旧地址没有变更语义重定向或兼容 handler。

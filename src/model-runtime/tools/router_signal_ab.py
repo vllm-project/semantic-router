@@ -121,7 +121,7 @@ def full_config(port: int) -> dict[str, Any]:
         "listeners": [{"name": f"http-{port}", "address": "127.0.0.1", "port": port, "timeout": "300s"}],
         "providers": {"defaults": {"model": "general-model"}, "models": [
             {"name": "general-model", "provider_model_id": "general-model", "api_format": "openai", "backend_refs": [backend]}]},
-        "routing": {"modelCards": [{"name": "general-model", "description": "General model.", "modality": "omni"}],
+        "routing": {"modelCards": [{"name": "general-model", "description": "General model."}],
                     "signals": signals, "decisions": decisions},
         "global": {"model_catalog": {"modules": {"modality_detector": {
             "enabled": True, "method": "classifier", "confidence_threshold": 0.7,

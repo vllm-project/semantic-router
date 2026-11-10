@@ -3,8 +3,6 @@ package extproc
 import (
 	"time"
 
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -236,26 +234,4 @@ func recordPromptCacheReceipt(
 		"inserted":   inserted,
 		"preserved":  preserved,
 	})
-}
-
-func addPromptCacheReceiptToImmediateResponse(
-	response *ext_proc.ProcessingResponse,
-	ctx *RequestContext,
-) {
-	if response == nil ||
-		ctx == nil ||
-		ctx.PromptCacheAction == "" ||
-		!debugHeadersRequested(ctx) {
-		return
-	}
-	immediate := response.GetImmediateResponse()
-	if immediate == nil {
-		return
-	}
-	if immediate.Headers == nil {
-		immediate.Headers = &ext_proc.HeaderMutation{}
-	}
-	builder := newResponseHeaderMutationBuilder()
-	addPromptCacheReceiptHeaders(builder, ctx)
-	immediate.Headers.SetHeaders = append(immediate.Headers.SetHeaders, builder.setHeaders...)
 }

@@ -458,6 +458,129 @@ def test_the_nvfp4_layer_replays_in_a_graph(blackwell):
     assert got.equal(want)
 
 
+def captured(module, x):
+    """``module(x)`` captured in a graph and replayed once."""
+    stream = torch.cuda.Stream()
+    stream.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(stream):
+        module(x)
+    torch.cuda.current_stream().wait_stream(stream)
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        got = module(x)
+    graph.replay()
+    torch.cuda.synchronize()
+    return got
+
+
+@pytest.fixture
+def mm_fp4(blackwell):
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    product, reason = flashinfer_nvfp4.load(blackwell)
+    if product is None:
+        pytest.skip(reason)
+    return product
+
+
+@pytest.mark.parametrize(
+    "shape", [(384, 256, 1), (384, 256, 37), (5120, 17408, 300), (34816, 5120, 512)]
+)
+def test_flashinfer_multiplies_nvfp4_as_cublas_does(blackwell, mm_fp4, shape):
+    from vllm_srun.engines.native import quantized
+
+    rows, columns, inputs = shape
+    module, _ = nvfp4_layer(rows, columns, blackwell)
+    x = torch.randn(inputs, columns, device=blackwell).to(torch.bfloat16)
+    q, scale = module.quantize(x, module.input_global)
+    got = module._flashinfer_product(mm_fp4, q, scale).float()
+    want = module._product(q, scale).float()
+    # the same FP4 products, summed in another order
+    assert ((got - want).norm() / want.norm()) < quantized.FLASHINFER_TOLERANCE
+    generator = torch.Generator(device=blackwell).manual_seed(0)
+    assert module.flashinfer_disagrees(mm_fp4, generator) is None
+
+
+def test_an_autotune_cache_records_flashinfer_tiles_once_per_shape(
+    blackwell, mm_fp4, tmp_path, monkeypatch
+):
+    import importlib
+
+    from vllm_srun.accel import autotune, flashinfer_nvfp4
+
+    flashinfer = importlib.import_module("flashinfer")
+    monkeypatch.setitem(autotune._FROZEN, "directory", tmp_path)
+    timed = []
+    real = flashinfer.autotune
+
+    def recorded(tune_mode=True, cache=None, **kwargs):
+        timed.append(tune_mode)
+        return real(tune_mode, cache=cache, **kwargs)
+
+    monkeypatch.setattr(flashinfer, "autotune", recorded)
+    flashinfer_nvfp4.tune(mm_fp4, [(384, 256), (256, 512)], blackwell)
+    assert timed == [True, True] and len(list(tmp_path.glob("flashinfer-fp4-*"))) == 2
+    # a later process loads them untimed: its tiles are the first one's
+    flashinfer_nvfp4.tune(mm_fp4, [(384, 256), (256, 512)], blackwell)
+    assert timed == [True, True, False, False]
+
+
+def test_only_graph_captures_of_up_to_its_rows_take_flashinfer(blackwell):
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    module, _ = nvfp4_layer(256, 512, blackwell)
+    calls = []
+
+    def product(q, weight_t, *_, **__):
+        calls.append(q.shape[0])
+        return torch.zeros(
+            q.shape[0], weight_t.shape[1], dtype=torch.bfloat16, device=q.device
+        )
+
+    module.flashinfer = product
+    small = torch.randn(37, 512, device=blackwell).to(torch.bfloat16)
+    big = torch.randn(flashinfer_nvfp4.GRAPH_ROWS + 1, 512, device=blackwell).to(
+        torch.bfloat16
+    )
+    assert module(small).abs().max() > 0 and not calls  # eager forwards keep cuBLAS
+    assert not captured(module, small).any() and calls == [37]
+    assert captured(module, big).equal(module(big)) and calls == [37]
+
+
+def test_shapes_flashinfer_multiplies_otherwise_keep_cublas(blackwell, monkeypatch):
+    from vllm_srun.accel import flashinfer_nvfp4
+    from vllm_srun.engines.native import quantized
+
+    wrong, _ = nvfp4_layer(256, 512, blackwell)
+    failing, _ = nvfp4_layer(128, 256, blackwell)
+    right, _ = nvfp4_layer(384, 256, blackwell)
+    monkeypatch.setattr(flashinfer_nvfp4, "load", lambda device: (None, "absent"))
+    assert quantized.use_flashinfer([right], blackwell) == {"skipped": "absent"}
+    assert right.flashinfer is None
+
+    def product(q, weight_t, scale, *_, **__):
+        columns = weight_t.shape[1]
+        if columns == 128:
+            raise RuntimeError("no tile for this shape")
+        if columns == 256:  # far from cuBLAS's product
+            return torch.zeros(q.shape[0], 256, dtype=torch.bfloat16, device=q.device)
+        return right._product(q, scale.flatten())
+
+    tuned = []
+    monkeypatch.setattr(flashinfer_nvfp4, "load", lambda device: (product, None))
+    monkeypatch.setattr(
+        flashinfer_nvfp4, "tune", lambda mm, shapes, device: tuned.extend(shapes)
+    )
+    receipt = quantized.use_flashinfer([wrong, failing, right], blackwell)
+    assert receipt["cublas_shapes"] == {
+        "256x512": "relative error 1.0e+00 at 1 rows",
+        "128x256": "RuntimeError: no tile for this shape",
+    }
+    assert wrong.flashinfer is None and failing.flashinfer is None
+    assert right.flashinfer is product
+    assert tuned == [(256, 512), (128, 256), (384, 256)]  # tuned before the check
+
+
 def test_projections_of_one_input_scale_share_its_quantization(blackwell):
     from vllm_srun.accel import triton_nvfp4
     from vllm_srun.engines.native.quantized import project
@@ -665,6 +788,60 @@ def test_cuda_offers_nvfp4_where_its_fp4_tensor_cores_run(device):
     assert offered is (nvfp4_unavailable(info.index) is None)
     if not offered:
         assert "Blackwell" in accelerator.lacks(info, "nvfp4")
+
+
+def served(package, dtype):
+    """Each fixture state answered twice (graphs capture on a shape's first uses) and the engine's receipt."""
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
+
+    from tests.test_quantized import QUESTIONS, STATES
+
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(package), device="cuda:0", dtype=dtype),)
+        )
+    )
+    runtime.start(background=False)
+    try:
+        bodies = [
+            asyncio.run(runtime.call("decisions", {"state": s, "questions": QUESTIONS}))
+            for _ in range(2)
+            for s in STATES
+        ]
+        return bodies[len(STATES) :], runtime.lookup(None).model.engine_model.receipt()
+    finally:
+        runtime.stop()
+
+
+def test_graphs_of_an_nvfp4_package_take_flashinfer_with_close_answers(
+    mm_fp4, tmp_path, d3_text_package, monkeypatch
+):
+    from vllm_srun.accel import flashinfer_nvfp4
+
+    packed = write_quantized_fixture(
+        d3_text_package, tmp_path / "nvfp4", scheme="nvfp4"
+    )
+    product, captured_calls = flashinfer_nvfp4.product, []
+
+    def counted(*args, **kwargs):
+        if torch.cuda.is_current_stream_capturing():
+            captured_calls.append(args[1].shape[0])
+        return product(*args, **kwargs)
+
+    monkeypatch.setattr(flashinfer_nvfp4, "product", counted)
+    # the fixture's forwards run 612 to 8,192 rows
+    monkeypatch.setattr(flashinfer_nvfp4, "GRAPH_ROWS", 8192)
+    got, receipt = served(packed, "auto")
+    assert receipt["nvfp4_product"] == {"graphs": "flashinfer-cutlass", "rows": 8192}
+    assert captured_calls
+    monkeypatch.setattr(flashinfer_nvfp4, "load", lambda device: (None, "absent"))
+    want, receipt = served(packed, "auto")
+    assert receipt["nvfp4_product"] == {"skipped": "absent"}
+    # the same FP4 products summed in another order
+    assert (numbers(got) - numbers(want)).abs().max() < 0.01
+    # an explicit --dtype runs exact kernels only, which keep cuBLAS
+    assert "nvfp4_product" not in served(packed, "float16")[1]
 
 
 def test_an_nvfp4_package_answers_as_an_fp32_emulation_of_its_fp4_products(

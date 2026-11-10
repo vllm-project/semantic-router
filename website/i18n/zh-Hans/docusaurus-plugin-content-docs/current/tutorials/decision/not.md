@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/decision/not.md"
@@ -35,19 +36,20 @@ translation:
 ## 配置
 
 ```yaml
-routing:
-  decisions:
-    - name: safe_only_route
-      description: Match only when the known prompt-injection signal is absent.
-      priority: 70
-      rules:
-        operator: NOT
-        conditions:
-          - type: jailbreak
-            name: prompt_injection
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: safe_only_route
+        description: Match only when the known prompt-injection signal is absent.
+        priority: 70
+        rules:
+          operator: NOT
+          conditions:
+            - type: jailbreak
+              name: prompt_injection
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
 ```
 
 请谨慎使用 `NOT`，并保持被排除信号显式，否则决策会难以审计。

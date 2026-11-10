@@ -23,8 +23,8 @@ func (responseCacheAPITestStore) StoreExact(context.Context, cache.CacheWrite) e
 	return nil
 }
 
-func (responseCacheAPITestStore) LookupSemantic(context.Context, cache.SemanticLookup) (cache.CacheResult, error) {
-	return cache.CacheResult{}, nil
+func (responseCacheAPITestStore) LookupSemantic(context.Context, cache.SemanticLookup) (cache.SemanticRecall, error) {
+	return cache.SemanticRecall{}, nil
 }
 
 func (responseCacheAPITestStore) StoreSemantic(context.Context, cache.CacheWrite) error {

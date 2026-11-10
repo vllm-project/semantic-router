@@ -26,7 +26,7 @@ from . import wire
 OPENAPI_PATH = Path(__file__).with_name("openapi.yaml")
 _SURROGATE_ESCAPE = re.compile(rb"\\u[dD][89a-fA-F]")
 # The contract version (``info.version`` in openapi.yaml), reported to clients.
-API_VERSION = "3.2.0"
+API_VERSION = "4.0.0"
 # Recorded for a request whose client disconnected before its answer (nginx's code).
 CLIENT_CLOSED = 499
 

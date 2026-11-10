@@ -1007,6 +1007,35 @@ def test_coalescing_jobs_join_a_busy_worker_after_one_window():
         scheduler.stop()
 
 
+def test_requests_that_arrive_while_a_batch_waits_share_its_forward():
+    blocker, first = threading.Event(), threading.Event()
+    model = GatedModel(gates={"blocker": blocker, "a": first})
+    scheduler = Scheduler(
+        model,
+        batcher(model, EngineArgs(max_num_batched_tokens=16)),
+        SchedulerLimits(batch_window_ms=20),
+    )
+    scheduler.start()
+    try:
+        scheduler.submit([item("blocker", 8)], deadline=None)
+        assert model.entered.wait(5)
+        model.entered.clear()
+        waiting = [scheduler.submit([item(name, 8)], deadline=None) for name in "abc"]
+        blocker.set()
+        # [a, b] runs, [c] waits for the device.
+        assert model.entered.wait(5)
+        late = scheduler.submit([item("d", 8)], deadline=None)
+        time.sleep(0.05)
+        first.set()
+        for future in [*waiting, late]:
+            future.result(timeout=5)
+        assert model.calls == [["blocker"], ["a", "b"], ["c", "d"]]
+    finally:
+        blocker.set()
+        first.set()
+        scheduler.stop()
+
+
 def test_a_job_past_its_deadline_skips_its_remaining_batches():
     gate = threading.Event()
     model = GatedModel(budget=64, gates={"long0": gate})

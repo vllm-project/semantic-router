@@ -1,10 +1,12 @@
 schema_version: vllm-sr/recipe-metadata/v1
 id: knowledge
 name: Knowledge-Aware Routing
-version: 0.1.0
+version: 0.2.0
 description: >-
-  Uses versioned knowledge-base evidence to keep low-uplift domains local and
+  Uses measured domain evidence to keep low-uplift subjects local and
   escalate questions where measured model capability justifies the cost.
+  Its declared decision model, Vela 2.0 0.8B, names each question's subject
+  in one call, and the subject decides the lane.
 authors:
   - name: vLLM Semantic Router Contributors
     url: https://github.com/vllm-project/semantic-router/graphs/contributors
@@ -12,6 +14,7 @@ license: Apache-2.0
 tags:
   - accuracy
   - cost
+  - decision-model
   - knowledge
   - multimodal
   - mmlu

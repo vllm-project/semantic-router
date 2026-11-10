@@ -33,6 +33,7 @@ func (s *Server) StartContextWithoutExtProc(ctx context.Context, onServing func(
 		close(ready)
 	}
 	s.servingMu.Unlock()
+	watch := s.prepareConfigWatch()
 	if onServing != nil {
 		onServing()
 	}
@@ -40,7 +41,7 @@ func (s *Server) StartContextWithoutExtProc(ctx context.Context, onServing func(
 	defer s.lifecycle.beginShutdown()
 	go func() {
 		defer watcherDone()
-		s.watchConfigAndReload(watchCtx)
+		watch(watchCtx)
 	}()
 	<-ctx.Done()
 	return nil

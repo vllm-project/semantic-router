@@ -424,7 +424,7 @@ How it lands here:
 
 - **Typed extension registries:** signals, algorithms, plugins, graph nodes and filters register by `type` with
   their Go implementation, schema, defaults and validator; adding an extension needs no change to core code.
-- **Validation:** the JSON schema generated from the Go types (`router-config-v0.3.schema.json` today), plus
+- **Validation:** the JSON schema generated from the Go types (`router-config-v0.5.schema.json` today), plus
   cross-reference checks, plus capability checks. A field the active mode cannot honor fails at load and points
   to the mode that can (for example `--gateway extproc`).
 - **Lifecycle:** compile, validate, warm, activate (an atomic swap, as the router generation swap does today),

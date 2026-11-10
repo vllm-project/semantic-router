@@ -10,28 +10,19 @@ import (
 )
 
 func validateDecisionContracts(cfg *RouterConfig) error {
-	if err := validateClassifierContextLimits(cfg); err != nil {
-		return err
-	}
-	if err := validateSafetySignalContracts(cfg); err != nil {
-		return err
-	}
 	if err := validateMetadataContracts(cfg); err != nil {
-		return err
-	}
-	if err := validateClassifierSignalContracts(cfg); err != nil {
 		return err
 	}
 	if err := validateInputModalityContracts(cfg); err != nil {
 		return err
 	}
-	if err := validateDecisionSignalContracts(cfg); err != nil {
+	if err := validateSystemOneContracts(cfg); err != nil {
 		return err
 	}
 	if err := validateDecisionModelContracts(cfg); err != nil {
 		return err
 	}
-	if err := validateDecisionEmitContracts(cfg); err != nil {
+	if err := validateDecisionRetentionContracts(cfg); err != nil {
 		return err
 	}
 	reportAmbiguousConfidencePools(cfg)
@@ -86,17 +77,18 @@ func validateDecisionLeafNode(
 	decisionName string,
 	node *RuleNode,
 ) error {
-	labelled := strings.EqualFold(node.Type, SignalTypeClassifier) || strings.EqualFold(node.Type, SignalTypeDecision)
-	if node.Label != "" && !labelled {
-		return fmt.Errorf("decision '%s': label is only supported on classifier and decision conditions", decisionName)
+	systemOne := strings.EqualFold(node.Type, SignalTypeSystemOne)
+	application := IsApplicationSignalType(strings.ToLower(strings.TrimSpace(node.Type)))
+	if node.Label != "" && !systemOne && !application {
+		return fmt.Errorf("decision '%s': label is only supported on systemone and application signal conditions", decisionName)
 	}
-	if strings.EqualFold(node.Type, SignalTypeClassifier) {
-		if err := validateClassifierDecisionLeaf(cfg, decisionName, node); err != nil {
+	if systemOne {
+		if err := validateSystemOneLeaf(cfg, decisionName, node); err != nil {
 			return err
 		}
 	}
-	if strings.EqualFold(node.Type, SignalTypeDecision) {
-		if err := validateDecisionModelLeaf(cfg, decisionName, node); err != nil {
+	if application {
+		if err := validateApplicationLeaf(cfg, decisionName, node); err != nil {
 			return err
 		}
 	}
@@ -116,9 +108,9 @@ func validateDecisionLeafNode(
 			node.Name,
 		)
 	}
-	if node.OnError != "" && !labelled {
+	if node.OnError != "" && !systemOne {
 		return fmt.Errorf(
-			"decision '%s': condition %s(%q) on_error is only supported for classifier and decision conditions",
+			"decision '%s': condition %s(%q) on_error is only supported for systemone conditions",
 			decisionName,
 			node.Type,
 			node.Name,
@@ -136,60 +128,6 @@ func metadataRuleByName(rules []MetadataRule, name string) *MetadataRule {
 	return nil
 }
 
-func validateClassifierDecisionLeaf(
-	cfg *RouterConfig,
-	decisionName string,
-	node *RuleNode,
-) error {
-	rule := classifierSignalRuleByName(cfg.ClassifierRules, node.Name)
-	if rule == nil {
-		return fmt.Errorf(
-			"decision '%s': classifier condition references unknown signal %q",
-			decisionName,
-			node.Name,
-		)
-	}
-	if node.Label == "" || !stringSliceContains(rule.Labels, node.Label) {
-		return fmt.Errorf(
-			"decision '%s': classifier condition %q requires a declared label",
-			decisionName,
-			node.Name,
-		)
-	}
-	if bound, ok := cfg.ModelBindings["classifier."+node.Name]; ok && bound.OperatingPoint != nil && bound.Contract == RemoteClassifierContractLabelScores {
-		// A prepared operating point supplies the default label threshold. An
-		// explicit predicate remains a query of the raw independent score.
-		return nil
-	}
-	if node.Predicate == nil {
-		return fmt.Errorf(
-			"decision '%s': classifier condition %q requires a score predicate",
-			decisionName,
-			node.Name,
-		)
-	}
-	if rule.Type == ClassifierSignalTypeLocal {
-		return validateLocalClassifierDecisionPredicate(decisionName, node)
-	}
-	return nil
-}
-
-func validateLocalClassifierDecisionPredicate(
-	decisionName string,
-	node *RuleNode,
-) error {
-	predicate := node.Predicate
-	if predicate.GTE == nil || *predicate.GTE < 0.5 ||
-		predicate.GT != nil || predicate.LT != nil || predicate.LTE != nil {
-		return fmt.Errorf(
-			"decision '%s': local classifier condition %q supports only predicate.gte >= 0.5",
-			decisionName,
-			node.Name,
-		)
-	}
-	return nil
-}
-
 func validateDecisionLeafPredicate(decisionName string, node *RuleNode) error {
 	if node.Predicate == nil {
 		return nil
@@ -202,18 +140,6 @@ func validateDecisionLeafPredicate(decisionName string, node *RuleNode) error {
 			node.Name,
 			err,
 		)
-	}
-	return nil
-}
-
-func classifierSignalRuleByName(
-	rules []ClassifierSignalRule,
-	name string,
-) *ClassifierSignalRule {
-	for i := range rules {
-		if rules[i].Name == name {
-			return &rules[i]
-		}
 	}
 	return nil
 }
@@ -375,7 +301,12 @@ func validateDecisionCandidateIterationOutputs(iter CandidateIterationConfig, co
 	return nil
 }
 
+// validateDecisionPluginContracts checks a recipe's default plugins before its
+// decisions', which layer them, so a refused default names its own path.
 func validateDecisionPluginContracts(cfg *RouterConfig) error {
+	if err := validateDefaultPluginContracts(cfg); err != nil {
+		return err
+	}
 	for _, decision := range cfg.AllRoutingDecisions() {
 		if err := validateOneDecisionPluginContracts(
 			cfg,
@@ -387,136 +318,135 @@ func validateDecisionPluginContracts(cfg *RouterConfig) error {
 	return nil
 }
 
+// validateGlobalPluginContracts checks global.plugins at every load: a request
+// that routes through no recipe runs them as written.
+func validateGlobalPluginContracts(cfg *RouterConfig) error {
+	configuration := func(_ int, pluginType string) string {
+		return fmt.Sprintf("global.plugins[%s].configuration", NormalizeDecisionPluginType(pluginType))
+	}
+	return validatePluginContracts(cfg, "global.plugins", cfg.GlobalPlugins, configuration)
+}
+
+// validateDefaultPluginContracts checks the plugins a request that matches no
+// decision runs, global.plugins layered with its recipe's, as a decision's
+// plugins are checked.
+func validateDefaultPluginContracts(cfg *RouterConfig) error {
+	recipes := cfg.Recipes
+	if len(recipes) == 0 {
+		recipes = []RoutingRecipe{*cfg.DefaultRecipe()}
+	}
+	for i := range recipes {
+		owner := recipePath(string(recipes[i].Name)) + ".plugins"
+		configuration := func(_ int, pluginType string) string {
+			return fmt.Sprintf("%s[%s].configuration", owner, NormalizeDecisionPluginType(pluginType))
+		}
+		if err := validatePluginContracts(cfg, owner, recipes[i].Profile.DefaultPlugins, configuration); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func validateOneDecisionPluginContracts(
 	cfg *RouterConfig,
 	decision *Decision,
 ) error {
-	seenPluginTypes := make(map[string]string, len(decision.Plugins))
-	for index, plugin := range decision.Plugins {
+	configuration := func(index int, _ string) string {
+		return cfg.ScopePath(fmt.Sprintf("decisions[%s].plugins[%d].configuration", decision.Name, index))
+	}
+	if err := validatePluginContracts(cfg, decision.Name, decision.Plugins, configuration); err != nil {
+		return err
+	}
+	if err := validateDecisionSignalsCompression(decision, configuration); err != nil {
+		return err
+	}
+	if err := validateDecisionReplayShadow(cfg, decision); err != nil {
+		return err
+	}
+	warnCachedPersonalization(cfg, decision)
+	return nil
+}
+
+// validateDecisionSignalsCompression refuses compress.signals in a decision's
+// own context plugin: the routing signals read the request before a decision
+// is chosen.
+func validateDecisionSignalsCompression(decision *Decision, configuration func(index int, pluginType string) string) error {
+	for index, plugin := range decision.DeclaredPlugins() {
+		if NormalizeDecisionPluginType(plugin.Type) != DecisionPluginContext {
+			continue
+		}
+		context := decodePlugin([]DecisionPlugin{plugin}, DecisionPluginContext, &ContextPluginConfig{})
+		if context != nil && context.Compress != nil && context.Compress.Signals != nil {
+			return fmt.Errorf("%s.compress.signals: the routing signals read the request before a decision is chosen; set compress.signals in global.plugins or the recipe's plugins", configuration(index, plugin.Type))
+		}
+	}
+	return nil
+}
+
+// validatePluginContracts checks the plugins one request runs; owner names
+// them, and configuration is the path of a plugin's configuration.
+func validatePluginContracts(
+	cfg *RouterConfig,
+	owner string,
+	plugins []DecisionPlugin,
+	configuration func(index int, pluginType string) string,
+) error {
+	seenPluginTypes := make(map[string]string, len(plugins))
+	for index, plugin := range plugins {
 		normalizedType := NormalizeDecisionPluginType(plugin.Type)
 		if previous, exists := seenPluginTypes[normalizedType]; exists {
 			return fmt.Errorf(
 				"decision %q has duplicate plugin %q via %q and %q",
-				decision.Name,
+				owner,
 				normalizedType,
 				previous,
 				plugin.Type,
 			)
 		}
 		seenPluginTypes[normalizedType] = plugin.Type
-		if err := validateDecisionPluginPayload(
-			decision.Name,
-			index,
-			plugin,
-		); err != nil {
+		payload, err := DecodeDecisionPluginAt(PluginAt{Decision: owner, Index: index, Type: plugin.Type}, plugin)
+		if err != nil {
 			return err
 		}
-	}
-	if toolsCfg := decision.GetToolsConfig(); toolsCfg != nil {
-		if err := toolsCfg.Validate(); err != nil {
-			return fmt.Errorf("decision '%s': %w", decision.Name, err)
+		path := configuration(index, plugin.Type)
+		switch typed := payload.(type) {
+		case *ToolsPluginConfig:
+			err = validateToolsPlugin(cfg, path, typed)
+		case *ContextPluginConfig:
+			err = validateContextPlugin(cfg, path, typed)
+		case *ResponseCachePluginConfig:
+			err = validateMatch(cfg, path+".semantic.match", typed.SemanticMatch(), MatchResponseCache)
 		}
-	}
-	if tsCfg := decision.GetToolSelectionConfig(); tsCfg != nil {
-		if err := tsCfg.Validate(); err != nil {
-			return fmt.Errorf("decision '%s': %w", decision.Name, err)
+		if err != nil {
+			return err
 		}
-	}
-	if err := validateDecisionShadowDispatchPlugin(cfg, decision); err != nil {
-		return err
-	}
-	return validateDecisionRAGAndMemoryPlugins(cfg, decision)
-}
-
-// validateDecisionRAGAndMemoryPlugins validates RAG config and warns about
-// cache + personalization conflicts for a single decision.
-func validateDecisionRAGAndMemoryPlugins(cfg *RouterConfig, decision *Decision) error {
-	ragCfg := decision.GetRAGConfig()
-	if ragCfg != nil {
-		if err := ragCfg.Validate(); err != nil {
-			return fmt.Errorf("decision '%s': RAG plugin: %w", decision.Name, err)
-		}
-		if ragCfg.Enabled && ragCfg.Rerank != nil {
-			if _, ok := cfg.ModelBindings[RAGRerankerConsumer]; !ok {
-				return fmt.Errorf("decision %q: rerank requires recipe-local model_bindings.%s", decision.Name, RAGRerankerConsumer)
-			}
-		}
-	}
-
-	cacheCfg := decision.GetResponseCacheConfig()
-	memCfg := decision.GetMemoryConfig()
-	cacheActive := cacheCfg != nil && cacheCfg.Enabled
-	ragActive := ragCfg != nil && ragCfg.Enabled
-	memActive := memCfg != nil && memCfg.Enabled
-	if !memActive && cfg.Memory.Enabled {
-		memActive = memCfg == nil
-	}
-	if cacheActive && (ragActive || memActive) {
-		logging.Warnf("Decision '%s': response_cache is enabled alongside %s. "+
-			"Cache reads will be automatically bypassed to preserve personalized responses. "+
-			"Cache writes still occur for observability. Remove the cache plugin if this is intentional.",
-			decision.Name, cachePersonalizationConflictDescription(ragActive, memActive))
-	}
-	return validateDecisionContextCompressionRecovery(cfg, decision)
-}
-
-func validateDecisionContextCompressionRecovery(
-	cfg *RouterConfig,
-	decision *Decision,
-) error {
-	compression := decision.GetContextCompressionConfig()
-	if compression == nil ||
-		compression.Recovery == nil ||
-		!compression.Recovery.Enabled {
-		return nil
-	}
-	store := strings.TrimSpace(compression.Recovery.Store)
-	if store == "response_cache" {
-		store = strings.TrimSpace(cfg.SemanticCache.BackendType)
-	}
-	switch store {
-	case "redis":
-		if cfg.SemanticCache.Redis == nil {
-			return fmt.Errorf(
-				"decision %q: context_compression recovery requires response_cache.redis configuration",
-				decision.Name,
-			)
-		}
-	case "valkey":
-		if cfg.SemanticCache.Valkey == nil {
-			return fmt.Errorf(
-				"decision %q: context_compression recovery requires response_cache.valkey configuration",
-				decision.Name,
-			)
-		}
-	default:
-		return fmt.Errorf(
-			"decision %q: context_compression recovery requires a Redis or Valkey shared store",
-			decision.Name,
-		)
 	}
 	return nil
 }
 
-func cachePersonalizationConflictDescription(ragActive, memActive bool) string {
-	switch {
-	case ragActive && memActive:
-		return "RAG and memory plugins"
-	case ragActive:
-		return "RAG plugin"
-	default:
-		return "memory plugin"
+// warnCachedPersonalization warns that a decision's response cache is read
+// past: a cached response would miss the documents and memories its context
+// retrieves.
+func warnCachedPersonalization(cfg *RouterConfig, decision *Decision) {
+	cacheCfg := decision.GetResponseCacheConfig()
+	plugin := cfg.ContextPlugin(decision)
+	if cacheCfg == nil || !cacheCfg.Enabled || plugin == nil || len(plugin.Sources) == 0 {
+		return
 	}
+	sources := make([]string, len(plugin.Sources))
+	for index, source := range plugin.Sources {
+		sources[index] = source.Type
+	}
+	logging.Warnf("Decision '%s': response_cache is enabled alongside the context plugin's %s sources. "+
+		"Cache reads will be automatically bypassed to preserve personalized responses. "+
+		"Cache writes still occur for observability. Remove the cache plugin if this is intentional.",
+		decision.Name, strings.Join(sources, " and "))
 }
 
 func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, algorithm *AlgorithmConfig) error {
 	if algorithm == nil {
 		return nil
 	}
-	if err := validateNativeAlgorithmConfig(decisionName, modelRefs, algorithm); err != nil {
-		return err
-	}
-
 	normalizedType, displayType, err := normalizeDecisionAlgorithmType(
 		decisionName,
 		algorithm,
@@ -528,7 +458,7 @@ func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, 
 		return minimumErr
 	}
 
-	configuredBlocks := configuredAlgorithmBlocks(algorithm)
+	configuredBlocks := configuredDecisionAlgorithmBlocks(algorithm)
 	terminal, err := validateAlgorithmBlockContract(
 		decisionName,
 		normalizedType,
@@ -536,6 +466,9 @@ func validateDecisionAlgorithmConfig(decisionName string, modelRefs []ModelRef, 
 		configuredBlocks,
 	)
 	if err != nil {
+		return err
+	}
+	if err := validateExecutorSettings(decisionName, normalizedType, algorithm); err != nil {
 		return err
 	}
 	if terminal {
@@ -576,17 +509,13 @@ func normalizeDecisionAlgorithmType(
 	if displayType == "" {
 		displayType = "<empty>"
 	}
-	if normalizedType == "session_aware" || algorithm.SessionAware != nil {
+	if normalizedType == "session_aware" {
 		return "", "", fmt.Errorf(
 			"decision '%s': algorithm.type=session_aware is no longer supported; remove algorithm.type=session_aware and enable global.router.learning.protection. If this decision needs an explicit base selector, configure a normal algorithm.type; otherwise omit algorithm",
 			decisionName,
 		)
 	}
-	if err := validateMigratedLearningAlgorithm(
-		decisionName,
-		normalizedType,
-		algorithm,
-	); err != nil {
+	if err := validateMigratedLearningAlgorithm(decisionName, normalizedType); err != nil {
 		return "", "", err
 	}
 	return normalizedType, displayType, nil
@@ -632,7 +561,7 @@ func blocklessAlgorithmTypeSupported(normalizedType string) bool {
 	return supported && configField == ""
 }
 
-func validateMigratedLearningAlgorithm(decisionName string, normalizedType string, algorithm *AlgorithmConfig) error {
+func validateMigratedLearningAlgorithm(decisionName string, normalizedType string) error {
 	migrations := map[string]string{
 		"elo":             "global.router.learning.adaptation",
 		"rl_driven":       "global.router.learning.adaptation",
@@ -648,31 +577,7 @@ func validateMigratedLearningAlgorithm(decisionName string, normalizedType strin
 			target,
 		)
 	}
-	if algorithm.Elo != nil {
-		return fmt.Errorf("decision '%s': algorithm.elo is no longer supported; use global.router.learning.adaptation", decisionName)
-	}
-	if algorithm.RLDriven != nil {
-		return fmt.Errorf("decision '%s': algorithm.rl_driven is no longer supported; use global.router.learning.adaptation", decisionName)
-	}
-	if algorithm.GMTRouter != nil {
-		return fmt.Errorf("decision '%s': algorithm.gmtrouter is no longer supported; use global.router.learning.adaptation", decisionName)
-	}
 	return nil
-}
-
-func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
-	configuredBlocks := configuredDecisionAlgorithmBlocks(algorithm)
-	addBlock := func(name string, configured bool) {
-		if configured {
-			configuredBlocks = append(configuredBlocks, name)
-		}
-	}
-
-	addBlock("elo", algorithm.Elo != nil)
-	addBlock("rl_driven", algorithm.RLDriven != nil)
-	addBlock("gmtrouter", algorithm.GMTRouter != nil)
-	addBlock("session_aware", algorithm.SessionAware != nil)
-	return configuredBlocks
 }
 
 func expectedAlgorithmBlock(normalizedType string) (string, bool) {
@@ -682,25 +587,45 @@ func expectedAlgorithmBlock(normalizedType string) (string, bool) {
 
 func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRef, normalizedType string, algorithm *AlgorithmConfig) error {
 	switch normalizedType {
-	case "confidence":
-		return wrapAlgorithmValidationError(decisionName, "confidence", ValidateConfidenceAlgorithmConfig(algorithm.Confidence))
-	case "latency_aware":
-		return validateDecisionLatencyAwareAlgorithm(decisionName, algorithm.LatencyAware)
-	case "remom":
+	case DecisionAlgorithmEscalate:
+		return validateEscalateAlgorithmConfig(decisionName, modelRefs, algorithm)
+	case DecisionAlgorithmReMoM:
 		return validateDecisionReMoMAlgorithm(decisionName, modelRefs, algorithm.ReMoM)
-	case "fusion":
+	case DecisionAlgorithmFusion:
 		return validateDecisionFusionAlgorithm(decisionName, modelRefs, algorithm.Fusion)
-	case "workflows":
+	case DecisionAlgorithmWorkflows:
 		return validateDecisionWorkflowsAlgorithm(decisionName, modelRefs, algorithm.Workflows)
-	case "prompt":
-		return validatePromptAlgorithmConfig(decisionName, modelRefs, algorithm)
-	case DecisionAlgorithmDecision:
-		return validateDecisionSelectorConfig(decisionName, modelRefs, algorithm)
-	case "multi_factor":
+	case DecisionAlgorithmSystemOne:
+		return validateSystemOneSelectorConfig(decisionName, modelRefs, algorithm)
+	case DecisionAlgorithmMultiFactor:
 		return validateDecisionMultiFactorAlgorithm(decisionName, algorithm.MultiFactor)
 	}
 	if _, registered, err := DecodeDecisionAlgorithm(decisionName, algorithm); registered {
 		return err
+	}
+	return nil
+}
+
+// validateExecutorSettings checks the executors' shared budget and on_error,
+// and refuses them on a selector, which calls one candidate. Escalate's
+// on_error depends on its path and is checked with its block.
+func validateExecutorSettings(decisionName, algorithmType string, algorithm *AlgorithmConfig) error {
+	if !IsExecutorAlgorithmType(algorithmType) {
+		if algorithm.Budget != nil || algorithm.OnError != "" {
+			return fmt.Errorf("decision '%s': algorithm.budget and algorithm.on_error apply to executors; %s is a selector", decisionName, algorithmType)
+		}
+		return nil
+	}
+	if algorithmType == DecisionAlgorithmEscalate {
+		return nil
+	}
+	switch algorithm.OnError {
+	case "", FusionOnErrorSkip, FusionOnErrorFail:
+	default:
+		return fmt.Errorf("decision '%s': algorithm.on_error of %s must be %q or %q, got %q", decisionName, algorithmType, FusionOnErrorSkip, FusionOnErrorFail, algorithm.OnError)
+	}
+	if err := algorithm.Budget.Validate(); err != nil {
+		return fmt.Errorf("decision '%s': %w", decisionName, err)
 	}
 	return nil
 }
@@ -816,62 +741,9 @@ func wrapAlgorithmValidationError(decisionName, algorithmType string, err error)
 	return fmt.Errorf("decision '%s', algorithm.%s: %w", decisionName, algorithmType, err)
 }
 
-func validateDecisionLatencyAwareAlgorithm(decisionName string, cfg *LatencyAwareAlgorithmConfig) error {
-	if cfg == nil {
-		return fmt.Errorf("decision '%s': algorithm.type=latency_aware requires algorithm.latency_aware configuration", decisionName)
-	}
-	return wrapAlgorithmValidationError(decisionName, "latency_aware", validateLatencyAwareAlgorithmConfig(cfg))
-}
-
 func validateDecisionReMoMAlgorithm(decisionName string, modelRefs []ModelRef, cfg *ReMoMAlgorithmConfig) error {
 	if err := ValidateReMoMAlgorithmConfig(cfg); err != nil {
 		return wrapAlgorithmValidationError(decisionName, "remom", err)
 	}
 	return wrapAlgorithmValidationError(decisionName, "remom", ValidateReMoMModelRefs(cfg, modelRefs))
-}
-
-// validateLatencyAwareAlgorithmConfig validates latency_aware algorithm configuration.
-func validateLatencyAwareAlgorithmConfig(cfg *LatencyAwareAlgorithmConfig) error {
-	hasTPOTPercentile := cfg.TPOTPercentile > 0
-	hasTTFTPercentile := cfg.TTFTPercentile > 0
-
-	if !hasTPOTPercentile && !hasTTFTPercentile {
-		return fmt.Errorf("must specify at least one of tpot_percentile (1-100) or ttft_percentile (1-100). RECOMMENDED: use both for comprehensive latency evaluation")
-	}
-
-	warnIncompleteLatencyAwarePercentiles(hasTPOTPercentile, hasTTFTPercentile)
-
-	for _, field := range []struct {
-		name    string
-		value   int
-		enabled bool
-	}{
-		{name: "tpot_percentile", value: cfg.TPOTPercentile, enabled: hasTPOTPercentile},
-		{name: "ttft_percentile", value: cfg.TTFTPercentile, enabled: hasTTFTPercentile},
-	} {
-		if err := validateLatencyAwarePercentile(field.name, field.value, field.enabled); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func warnIncompleteLatencyAwarePercentiles(hasTPOTPercentile bool, hasTTFTPercentile bool) {
-	if hasTPOTPercentile && !hasTTFTPercentile {
-		logging.Warnf("algorithm.latency_aware: only tpot_percentile is set. RECOMMENDED: also set ttft_percentile for comprehensive latency evaluation (user-perceived latency)")
-	}
-	if !hasTPOTPercentile && hasTTFTPercentile {
-		logging.Warnf("algorithm.latency_aware: only ttft_percentile is set. RECOMMENDED: also set tpot_percentile for comprehensive latency evaluation (token generation throughput)")
-	}
-}
-
-func validateLatencyAwarePercentile(name string, value int, enabled bool) error {
-	if !enabled {
-		return nil
-	}
-	if value < 1 || value > 100 {
-		return fmt.Errorf("%s must be between 1 and 100, got: %d", name, value)
-	}
-	return nil
 }

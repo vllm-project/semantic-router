@@ -72,7 +72,6 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	})
 	registerSRBenchRoutes(mux, cfg)
 	mcpManager := SetupMCP(mux, cfg, wf)
-	registerMLPipelineRoutes(mux, cfg, wf)
 	setupTrainingRoutes(mux, cfg, wf)
 	registerProxyRoutes(mux, cfg, authSvc, setupResolver, recipeStore)
 	capabilityProber := handlers.NewCapabilityProber(cfg, statusMonitor)

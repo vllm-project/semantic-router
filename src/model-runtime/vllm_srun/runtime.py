@@ -71,6 +71,8 @@ from .timing import RunTiming, ServerTiming
 
 log = logging.getLogger("vllm_srun")
 AUTO_ENGINE = "auto"
+# The families whose input limit max_model_len may lower: each reads it from package.max_input_tokens.
+MAX_MODEL_LEN_FAMILIES = frozenset({"decision1", "decision2", "decision3"})
 
 
 def _bf16_parameters(spec: ModelSpec, config: ModelConfig, dtype: str) -> int:
@@ -374,9 +376,21 @@ class ServedModel:
             offline=process.offline,
         )
         family = self._family(ref, options)
+        limit = self.requested_args.max_model_len
+        if limit is not None and family.name not in MAX_MODEL_LEN_FAMILIES:
+            raise RuntimeError(
+                f"max_model_len applies to Decision models only, not {family.name}"
+            )
         ref = family.fetch(ref)
         self.health.set("loading", "verifying the package")
         package = family.verify(ref)
+        if limit is not None:
+            if limit > package.max_input_tokens:
+                raise RuntimeError(
+                    f"max_model_len {limit} is above {package.model_name}'s "
+                    f"limit of {package.max_input_tokens} tokens"
+                )
+            package = replace(package, max_input_tokens=limit)
         spec = family.describe(package)
         parameters = package.loaded_parameters or 0
         budget = config.memory_budget_gib or process.memory_budget_gib
@@ -563,6 +577,13 @@ class ServedModel:
             self.health.golden = replace(
                 self.health.golden,
                 detail=f"golden references are recorded at --dtype auto, not {self.dtype}",
+            )
+        limit = self.requested_args.max_model_len
+        if self.health.golden.status == "failed" and limit is not None:
+            self.health.golden = replace(
+                self.health.golden,
+                detail=f"{self.health.golden.detail}; max_model_len {limit} "
+                "may be below the length of the model's golden questions",
             )
         if self.health.golden.status == "failed":
             raise VerificationError(self.health.golden.detail or "golden check failed")
@@ -1049,7 +1070,7 @@ class Runtime:
     ) -> Prepared:
         """Validate a surface request and plan it for its model (runs off the event loop).
 
-        ``part`` marks one state of a decisions request with several (``states``).
+        ``part`` marks one entry of a decisions batch (``states``).
         """
         if surface not in SURFACES:
             raise RuntimeServiceError("invalid_request", f"unknown surface {surface!r}")
@@ -1190,8 +1211,8 @@ class Runtime:
         A group holds a model's tasks, whatever their deadlines: each job
         keeps its own. A lone request planned off the event loop runs
         on its planning thread when its model's scheduler is idle. A decisions
-        request with further ``states`` runs as one request per state, in its
-        model's group, and their answers join into its response.
+        batch (``states``) runs as one request per entry, in its model's
+        group, and their answers join into its response.
         """
         if timing is None:
             timing = ServerTiming()
@@ -1228,8 +1249,8 @@ class Runtime:
     ) -> list[tuple[int, dict[str, Any]]]:
         received = time.monotonic()
         parts: list[tuple[str, Any, bool]] = []
-        # Per request: where its parts start, and its states' names or the
-        # error it already has.
+        # Per request: where its parts start, and its batch entries' names or
+        # the error it already has.
         joins: list[tuple[int, list[str] | None, _Outcome | None]] = []
         for surface, sent in requests:
             body = sent
@@ -1259,7 +1280,7 @@ class Runtime:
                 joined.append(outcomes[start])
             else:
                 joined.append(
-                    join_states(outcomes[start : start + 1 + len(states)], states)
+                    join_states(outcomes[start : start + len(states)], states)
                 )
         return joined
 

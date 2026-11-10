@@ -7,18 +7,30 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/match"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
-func ragPluginConfig(storeID string, topK int, threshold float32) *config.RAGPluginConfig {
-	return &config.RAGPluginConfig{
-		Enabled:             true,
-		Backend:             "vectorstore",
-		TopK:                &topK,
-		SimilarityThreshold: &threshold,
-		BackendConfig:       config.MustStructuredPayload(&config.VectorStoreRAGConfig{VectorStoreID: storeID}),
+// vectorStoreSource is a rag source over a vector store that recalls
+// topK documents at least threshold similar, without a judge.
+func vectorStoreSource(storeID string, topK int, threshold float64) *config.ContextSource {
+	return &config.ContextSource{
+		Type:          config.ContextSourceRAG,
+		Backend:       "vectorstore",
+		BackendConfig: config.MustStructuredPayload(&config.VectorStoreRAGConfig{VectorStoreID: storeID}),
+		Match:         &config.MatchConfig{Recall: &config.MatchRecall{TopK: topK, MinSimilarity: &threshold}},
 	}
+}
+
+// recalledTexts are the texts of recalled documents, joined as a source
+// injects them.
+func recalledTexts(documents []match.Scored) string {
+	texts := make([]string, len(documents))
+	for index, document := range documents {
+		texts[index] = document.Text
+	}
+	return strings.Join(texts, "\n\n---\n\n")
 }
 
 func ragVectorStoreFixture(t *testing.T, embedder vectorstore.Embedder) (*OpenAIRouter, string) {
@@ -78,10 +90,12 @@ func TestRAGVectorStoreEmbedsTheWholeQueryOnce(t *testing.T) {
 		embedder := &plainRAGEmbedder{}
 		router, storeID := ragVectorStoreFixture(t, embedder)
 
-		retrieved, err := router.retrieveFromVectorStore(context.Background(), &RequestContext{UserContent: query}, ragPluginConfig(storeID, 2, 0.5))
+		source := vectorStoreSource(storeID, 2, 0.5)
+		documents, err := router.recallFromVectorStore(context.Background(), source, query, *source.Match.Recall)
 		if err != nil {
 			t.Fatal(err)
 		}
+		retrieved := recalledTexts(documents)
 		if len(embedder.seen) != 1 || embedder.seen[0] != query {
 			t.Fatalf("embedded %q, want the whole query once", embedder.seen)
 		}
@@ -106,12 +120,13 @@ func TestRAGVectorStoreRetrievesWithAPreparedRemoteEmbedder(t *testing.T) {
 	}
 
 	router, storeID := ragVectorStoreFixture(t, wrapped)
-	rag := ragPluginConfig(storeID, 2, 0.5)
+	rag := vectorStoreSource(storeID, 2, 0.5)
 
-	retrieved, err := router.retrieveFromVectorStore(context.Background(), &RequestContext{UserContent: "how long does a refund take"}, rag)
+	documents, err := router.recallFromVectorStore(context.Background(), rag, "how long does a refund take", *rag.Match.Recall)
 	if err != nil {
 		t.Fatalf("prepared remote embedder failed RAG retrieval: %v", err)
 	}
+	retrieved := recalledTexts(documents)
 	if len(plain.seen) != 1 {
 		t.Fatalf("prepared remote embedder was asked to embed %d times, want 1", len(plain.seen))
 	}

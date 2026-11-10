@@ -84,9 +84,10 @@ def test_an_unusable_device_fails_before_the_model_is_resolved(
         Runtime(ServeConfig(models=(model,))).load()
 
 
-def test_cuda_is_marked_unvalidated_and_rocm_validated():
-    assert CUDAAccelerator.validated is False
+def test_cuda_and_rocm_are_validated():
+    assert CUDAAccelerator.validated is True
     assert ROCmAccelerator.validated is True
+    assert CUDAAccelerator.descriptor()["validated"] is True
 
 
 @pytest.mark.gpu

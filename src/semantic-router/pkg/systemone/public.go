@@ -15,7 +15,9 @@ import (
 	"time"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 )
 
 // RequestLimit bounds one native request body. Requests may carry images and
@@ -32,10 +34,26 @@ const publicWait = 30 * time.Second
 // Invoke is a retained inference call supplied by the serving owner.
 type Invoke func(context.Context, string, json.RawMessage) (int, []byte, error)
 
+type requestArrivalContextKey struct{}
+
+// WithRequestArrival records when native request handling began.
+func WithRequestArrival(ctx context.Context, arrival time.Time) context.Context {
+	return context.WithValue(ctx, requestArrivalContextKey{}, arrival)
+}
+
+// RequestArrival reports when native request handling began.
+func RequestArrival(ctx context.Context) (time.Time, bool) {
+	arrival, ok := ctx.Value(requestArrivalContextKey{}).(time.Time)
+	return arrival, ok
+}
+
 // Handler serves only the selected listener's native model grant. Authentication
 // is independent of Dashboard sessions and of the listener's Chat model grant.
 func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener, invoke Invoke) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := RequestArrival(r.Context()); !ok {
+			r = r.WithContext(WithRequestArrival(r.Context(), time.Now()))
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
 		listing := r.Method == http.MethodGet && (r.URL.Path == "/v1/systemone/models" || r.URL.Path == "/v1/models")
@@ -130,7 +148,7 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			publicSystemOneError(w, http.StatusNotFound, "systemone_routing_disabled")
 			return
 		}
-		if r.Header.Get(BackendRequestHeader) != "" {
+		if r.Header.Get(headers.VSRSystemOneBackend) != "" {
 			remoteAlias := config.IsSystemOneBackend(model) && config.ModelConfig[model].Deployment == ""
 			if routed || remoteAlias {
 				publicSystemOneError(w, http.StatusConflict, "systemone_nested_routing")
@@ -152,12 +170,39 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			defer cancel()
 		}
 		code, response, err := invoke(ctx, target, body)
+		if errors.Is(err, principal.ErrCredentialMissing) {
+			publicSystemOneErrorMessage(w, http.StatusUnauthorized, delegatedCredentialMissingCode, delegatedCredentialMissingMessage)
+			return
+		}
+		if errors.Is(err, principal.ErrRouterCall) {
+			publicSystemOneErrorMessage(w, http.StatusForbidden, "delegated_router_call_refused", principal.ErrRouterCall.Error())
+			return
+		}
+		var budgetErr *BudgetExhaustedError
+		if routed && errors.As(err, &budgetErr) {
+			status := code
+			if status < 400 || status > 599 {
+				status = http.StatusServiceUnavailable
+				if errors.Is(err, context.DeadlineExceeded) {
+					status = http.StatusGatewayTimeout
+				}
+			}
+			writeErrorBody(w, status, map[string]any{
+				"code": "systemone_budget_exhausted", "type": "systemone_error",
+				"reason": budgetErr.Reason, "message": budgetErr.Error(), "model_calls": budgetErr.Calls,
+			})
+			return
+		}
 		if routed && errors.Is(err, ErrUnresolved) {
 			publicSystemOneError(w, http.StatusServiceUnavailable, "systemone_unresolved")
 			return
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			publicSystemOneError(w, http.StatusGatewayTimeout, "systemone_deadline_exceeded")
+			if routed {
+				publicSystemOneError(w, http.StatusGatewayTimeout, "systemone_deadline_exceeded")
+			} else {
+				publicSystemOneErrorMessage(w, http.StatusGatewayTimeout, "systemone_deadline_exceeded", deadlineExceeded(wait, limit))
+			}
 			return
 		}
 		if err != nil && (code < 400 || code > 599) {

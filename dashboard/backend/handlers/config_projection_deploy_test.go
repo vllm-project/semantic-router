@@ -36,18 +36,19 @@ func TestDeployHandler_PersistsConfigProjectionAfterSuccessfulDeploy(t *testing.
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
-	deployYAML := `routing:
-  decisions:
-    - name: projection-deploy-route
-      priority: 9
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
+	deployYAML := `recipes:
+  - name: default
+    decisions:
+      - name: projection-deploy-route
+        priority: 9
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
 `
 	body := DeployRequest{
 		YAML: deployYAML,
@@ -101,18 +102,19 @@ func TestRollbackHandler_RefreshesConfigProjectionAfterSuccessfulRollback(t *tes
 	tempDir := t.TempDir()
 	configPath := createValidTestConfig(t, tempDir)
 
-	deployYAML := `routing:
-  decisions:
-    - name: rollback-projection-route
-      priority: 8
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
+	deployYAML := `recipes:
+  - name: default
+    decisions:
+      - name: rollback-projection-route
+        priority: 8
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
 `
 	deployBody := DeployRequest{YAML: deployYAML, DSL: "route rollback-projection-route {}"}
 	deployBodyBytes, err := json.Marshal(deployBody)

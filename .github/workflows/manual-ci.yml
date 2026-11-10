@@ -19,7 +19,8 @@ jobs:
       contents: read
       actions: read
       issues: write
-      pull-requests: read
+      # PR timeline feedback needs PR write access even through /issues APIs.
+      pull-requests: write
     outputs:
       authorized: ${{ steps.request.outputs.authorized }}
       pr_run_id: ${{ steps.request.outputs.pr_run_id }}
@@ -67,7 +68,7 @@ jobs:
       contents: read
       actions: write
       issues: write
-      pull-requests: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:

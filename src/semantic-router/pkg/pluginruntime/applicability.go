@@ -18,8 +18,7 @@ const (
 // pluginRequirements lists what each gated plugin acts on. A plugin missing
 // here is not gated and keeps running on configuration alone.
 var pluginRequirements = map[string]llmprotocol.CapabilitySet{
-	config.DecisionPluginRAG:    llmprotocol.Capabilities(llmprotocol.CapabilityText),
-	config.DecisionPluginMemory: llmprotocol.Capabilities(llmprotocol.CapabilityText),
+	config.DecisionPluginContext: llmprotocol.Capabilities(llmprotocol.CapabilityText),
 }
 
 // Applicable reports whether a plugin runs: what it needs must be within the

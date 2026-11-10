@@ -3,7 +3,7 @@
 
 The Router runs a Vela 2.0 deployment itself: a tiny random-weight encoder
 package that the router image's `vllm-srun fixture` writes into the models
-directory, so nothing is downloaded. Three signals ask it: the prompt guard
+directory, so nothing is downloaded. Three signals ask it: a jailbreak rule
 and a PII rule, which also read the conversation's earlier turns, and a
 decision question. A long request with earlier turns must reach the
 deployment as exactly one decisions call, which the Router counts in
@@ -91,7 +91,7 @@ class TestServeAsksADecisionModelOneCallPerStage(
     def _write_config(self, mock_container: str) -> None:
         config_path = Path(
             self.write_minimal_canonical_config(
-                base_url=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}",
+                endpoint=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}",
                 provider="openai",
                 api_only=True,
             )
@@ -105,26 +105,24 @@ class TestServeAsksADecisionModelOneCallPerStage(
                 "device": "cpu",
             }
         }
-        catalog["bindings"] = {
-            "prompt_guard": {
-                "deployment": DEPLOYMENT,
-                "contract": "label_distribution.v1",
-            },
-            "pii_classifier": {"deployment": DEPLOYMENT, "contract": "token_spans.v1"},
-        }
-        # The bindings serve the guard and PII models, which the API-only global
-        # block leaves unnamed and turns off.
-        modules = catalog.setdefault("modules", {})
-        modules["prompt_guard"] = {"enabled": True}
-        modules.get("classifier", {}).pop("pii", None)
-        config["routing"]["signals"] = {
+        config["recipes"][0]["signals"] = {
             "jailbreak": [
-                {"name": "attack", "threshold": 0.99, "include_history": True}
+                {
+                    "name": "attack",
+                    "deployment": DEPLOYMENT,
+                    "predicate": {"gte": 0.99},
+                    "input": {"history": True},
+                }
             ],
             "pii": [
-                {"name": "personal_data", "threshold": 0.99, "include_history": True}
+                {
+                    "name": "personal_data",
+                    "deployment": DEPLOYMENT,
+                    "predicate": {"gte": 0.99},
+                    "input": {"history": True},
+                }
             ],
-            "decision": [
+            "systemone": [
                 {
                     "name": "answered",
                     "deployment": DEPLOYMENT,
@@ -138,15 +136,15 @@ class TestServeAsksADecisionModelOneCallPerStage(
                 }
             ],
         }
-        default_route = config["routing"]["decisions"][0]
+        default_route = config["recipes"][0]["decisions"][0]
         refs = default_route["modelRefs"]
-        config["routing"]["decisions"] = [
+        config["recipes"][0]["decisions"] = [
             {
                 "name": "answered",
                 "priority": default_route["priority"] + 200,
                 "rules": {
                     "operator": "AND",
-                    "conditions": [{"type": "decision", "name": "answered"}],
+                    "conditions": [{"type": "systemone", "name": "answered"}],
                 },
                 "modelRefs": refs,
             },

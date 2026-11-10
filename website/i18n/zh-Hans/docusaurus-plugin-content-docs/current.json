@@ -35,9 +35,13 @@
     "message": "启发式",
     "description": "The label for category Heuristic in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.Learned": {
-    "message": "学习型",
-    "description": "The label for category Learned in sidebar tutorialSidebar"
+  "sidebar.tutorialSidebar.category.Application": {
+    "message": "应用型",
+    "description": "The label for category Application in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.System One": {
+    "message": "System One",
+    "description": "The label for category System One in sidebar tutorialSidebar"
   },
   "sidebar.tutorialSidebar.category.Projections": {
     "message": "投影",
@@ -95,6 +99,10 @@
     "message": "模型",
     "description": "The label for category Models in sidebar tutorialSidebar"
   },
+  "sidebar.tutorialSidebar.category.Router Model Catalog": {
+    "message": "Router 模型目录",
+    "description": "The label for category Router Model Catalog in sidebar tutorialSidebar"
+  },
   "sidebar.tutorialSidebar.category.Deploy": {
     "message": "部署",
     "description": "The label for category Deploy in sidebar tutorialSidebar"
@@ -139,10 +147,6 @@
     "message": "模型运行时",
     "description": "The label for category Model Runtime in sidebar tutorialSidebar"
   },
-  "sidebar.tutorialSidebar.category.Model Runtime Guides": {
-    "message": "任务指南",
-    "description": "The label for category Model Runtime Guides in sidebar tutorialSidebar"
-  },
   "sidebar.tutorialSidebar.category.Proposals": {
     "message": "提案",
     "description": "The label for category Proposals in sidebar tutorialSidebar"
@@ -178,10 +182,6 @@
   "sidebar.tutorialSidebar.category.Embedding Models": {
     "message": "嵌入模型",
     "description": "The label for category Embedding Models in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.category.Classifier Models": {
-    "message": "分类器模型",
-    "description": "The label for category Classifier Models in sidebar tutorialSidebar"
   },
   "sidebar.tutorialSidebar.category.Evaluate and Select": {
     "message": "评测与选择",

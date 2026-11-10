@@ -59,6 +59,9 @@ videos as described in [Router and Engine modes](https://github.com/vllm-project
 `vllm-sr serve vllm-sr/d3-turbo --engine --platform rocm` starts d3-turbo, which
 reads each input once for all of its questions and also finds things in images
 and videos ([Box and track questions](https://github.com/vllm-project/semantic-router/blob/main/src/vllm-sr/INSTANCE_MODES.md#find-things-in-images-and-videos)).
+`vllm-sr serve vllm-sr/d3-ultra --engine --platform rocm` starts d3-ultra, which
+answers the same questions and reads a text request's question list in front of
+its state.
 
 In Engine mode the CLI starts only the persistent frontend and a managed model
 worker: one Router container. `--dashboard` adds the Dashboard, `--observability`
@@ -123,8 +126,8 @@ explicit public model ID; it answers a failed question in place, where
 `/v1/systemone` answers the request as a whole, as System One does. Native
 discovery uses `/v1/systemone/models`; `/v1/models` remains Chat discovery, and
 in Engine mode it also lists the System One models as `models: [{name,
-description, release_date}]`. The worker's classify, embeddings, rerank and
-bundle APIs are separate; see the [task guides](./guides/classify.md).
+description, release_date}]`. The worker's other APIs are separate; see the
+[HTTP API reference](./reference.md#http-api).
 Compressed bodies, multipart image uploads, assets, Box, track and long
 context are in
 [System One compatibility](./reference.md#system-one-compatibility).
@@ -132,12 +135,12 @@ context are in
 ## 4. Use it from the router
 
 The router runs models for you. Name the model as a **deployment** with
-`provider: model_runtime`, then ask it questions in a `decision` signal. Save
+`provider: model_runtime`, then ask it questions in a `systemone` signal. Save
 this as `config.yaml`, replacing `host.docker.internal:8000` with an
 OpenAI-compatible backend that answers your users:
 
 ```yaml
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -153,38 +156,37 @@ providers:
         - name: answer
           endpoint: host.docker.internal:8000
           protocol: http
-routing:
-  modelCards:
-    - name: answer-model
-  signals:
-    decision:
-      - name: needs_reasoning
-        deployment: primary
-        question:
-          type: noul
-          instructions: Does answering this request need multi-step reasoning?
-        predicate:
-          gte: 0.7
-  decisions:
-    - name: think-first
-      priority: 100
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: decision
-            name: needs_reasoning
-      modelRefs:
-        - model: answer-model
-          use_reasoning: true
-    - name: default-route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: answer-model
-          use_reasoning: false
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: needs_reasoning
+          deployment: primary
+          question:
+            type: noul
+            instructions: Does answering this request need multi-step reasoning?
+          predicate:
+            gte: 0.7
+    decisions:
+      - name: think-first
+        priority: 100
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: needs_reasoning
+        modelRefs:
+          - model: answer-model
+            use_reasoning: true
+      - name: default-route
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: answer-model
+            use_reasoning: false
 global:
   model_catalog:
     deployments:
@@ -216,19 +218,20 @@ curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
 ```
 
 `x-vsr-selected-decision` names the route, and
-`x-vsr-matched-decision-model` lists the decision signals that matched. If the
+the `signals` member of `x-vsr-trace` lists the `systemone` signals that
+matched. If the
 runtime restarts later, the signal is unknown until the model is back and
 `on_unknown: no_match` sends requests to `default-route` meanwhile.
 
 Router and Engine mode share one managed instance. To attach an independently
-operated worker instead, use an explicit `endpoint` and `served_name`; the
+operated worker instead, use an explicit `endpoint` and `model`; the
 [deployment guide](./deploy.md) describes its separate worker API and lifecycle.
 
 ## Next steps
 
 - [Choose a model, size and hardware](model-runtime/choose-a-model.md)
-- Turn on a built-in feature: [classify requests](./guides/classify.md),
-  [detect PII](./guides/pii.md), [stop prompt attacks](./guides/safety.md),
-  [use embeddings](./guides/embeddings.md)
+- Turn on a built-in feature: [the application signals](../tutorials/signal/overview#application-signals),
+  [your own questions](../system-one/custom-questions),
+  [embeddings for recall](./guides/embeddings.md)
 - [Run it with the router](./deploy.md): GPUs, Kubernetes, sharing a runtime
 - [Troubleshooting](model-runtime/troubleshooting.md)

@@ -24,6 +24,10 @@ interface ReviewActivatePanelProps {
   previewSource: string;
   readonlyLoading: boolean;
   isReadonly: boolean;
+  /** Why the setup capability does not allow activation, or null. */
+  activationBlockedReason: string | null;
+  /** A degraded setup capability's caveat, such as running `vllm-sr serve`. */
+  activationNotice: string | null;
   onValidateAgain: () => void;
 }
 
@@ -41,6 +45,8 @@ export function ReviewActivatePanel({
   previewSource,
   readonlyLoading,
   isReadonly,
+  activationBlockedReason,
+  activationNotice,
   onValidateAgain,
 }: ReviewActivatePanelProps) {
   return (
@@ -134,6 +140,18 @@ export function ReviewActivatePanel({
             <div className={styles.readonlyPanel}>
               This dashboard is running in read-only mode. Review is available,
               but activation is disabled.
+            </div>
+          )}
+
+          {activationBlockedReason && !(!readonlyLoading && isReadonly) && (
+            <div className={styles.readonlyPanel} role="status">
+              {activationBlockedReason}
+            </div>
+          )}
+
+          {activationNotice && !activationBlockedReason && (
+            <div className={styles.asyncNotice} role="status">
+              {activationNotice}
             </div>
           )}
 

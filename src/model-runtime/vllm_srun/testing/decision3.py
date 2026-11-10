@@ -28,8 +28,17 @@ from .fixtures import qwen3_5_config, save
 # ``validated`` variant reads images and declares a validated length below its maximum, so a question longer than
 # it needs long context. ``turbo`` has d3-turbo's card: ``prefix_bidir``, the validated length, and the
 # ``systemone`` block of its decision_config (Box and track, question and criteria images, the video forms' clip
-# limit and a Box-confidence map).
-VARIANTS = ("vision", "text", "pruned", "validated", "turbo", *pkg.STATE_ONCE_MODES)
+# limit and a Box-confidence map). ``ultra`` has d3-ultra's card: turbo's, with the ``header-v1`` prompt layout
+# and d3-ultra's temperature per request size.
+VARIANTS = (
+    "vision",
+    "text",
+    "pruned",
+    "validated",
+    "turbo",
+    "ultra",
+    *pkg.STATE_ONCE_MODES,
+)
 VALIDATED_LENGTH = 512
 # Long enough for the System One SDK suites' requests without the long-context header, as d3-turbo's 32,768 is.
 TURBO_VALIDATED_LENGTH, TURBO_MAX_LENGTH = 4096, 32768
@@ -39,6 +48,11 @@ TURBO_SYSTEMONE = {
     "track_rates": [1, 2],
     "box_video_max_seconds": 60,
     "box_calibration": [[0.0, 0.0], [0.5, 0.4], [1.0, 1.0]],
+}
+ULTRA_TEMPERATURE = 1.0
+ULTRA_TEMPERATURES = {
+    "max_questions": [1, 4, 16],
+    "temperature": [1.046, 1.0, 1.0, 1.0],
 }
 # A pruned backbone keeps an irregular subset of its layers, as d3-edge does; full_attention_interval no
 # longer describes them, so the layers must follow layer_types.
@@ -249,18 +263,24 @@ def sha256(path: Path) -> str:
 
 
 def write_fixture(
-    output: str | Path, variant: str | None, seed: int, validated: bool = False
+    output: str | Path,
+    variant: str | None,
+    seed: int,
+    validated: bool = False,
+    overrides: dict[str, Any] | None = None,
 ) -> Path:
     """The fixture command's writer: a package that reads images (``vision``), text only (``text``), images
     with a pruned backbone (``pruned``), images with a validated length below its maximum (``validated``),
-    images under a state-once layout (``prefix_bidir``, ``prefix_causal``, ``causal``), or d3-turbo's card on
-    ``prefix_bidir`` (``turbo``). ``validated`` gives any variant the validated length.
+    images under a state-once layout (``prefix_bidir``, ``prefix_causal``, ``causal``), d3-turbo's card on
+    ``prefix_bidir`` (``turbo``) or d3-ultra's (``ultra``). ``validated`` gives any variant the validated length;
+    ``overrides`` sets fields of its decision_config (None removes one).
     """
     from ..engines.native import models
 
     variant = variant or VARIANTS[0]
     vision = variant != "text"
-    turbo = variant == "turbo"
+    ultra = variant == "ultra"
+    turbo = variant == "turbo" or ultra
     attention = (
         "prefix_bidir"
         if turbo
@@ -345,6 +365,15 @@ def write_fixture(
     if turbo:
         decision["validated_length"] = TURBO_VALIDATED_LENGTH
         decision["systemone"] = TURBO_SYSTEMONE
+    if ultra:
+        decision["temperature"] = ULTRA_TEMPERATURE
+        decision["temperature_by_questions"] = ULTRA_TEMPERATURES
+        decision["prompt_layout"] = pkg.HEADER_V1
+    for key, value in (overrides or {}).items():
+        if value is None:
+            decision.pop(key, None)
+        else:
+            decision[key] = value
     (root / "decision_config.json").write_text(
         json.dumps(decision, indent=2) + "\n", encoding="utf-8"
     )
@@ -381,7 +410,9 @@ def write_manifest(root: Path, counts: dict[str, int]) -> None:
         "identity": {
             "model_sha256": pkg.model_identity(identity_files, decision),
             "files_sha256": identity_files,
-            "decision": {key: decision[key] for key in pkg.INFERENCE_FIELDS},
+            "decision": {
+                key: decision[key] for key in pkg.INFERENCE_FIELDS if key in decision
+            },
         },
         "parameters": {
             **counts,

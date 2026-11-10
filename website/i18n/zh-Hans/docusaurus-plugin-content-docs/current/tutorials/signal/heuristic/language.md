@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/tutorials/signal/heuristic/language.md"
@@ -9,7 +10,7 @@ translation:
 
 ## 概览 {#overview}
 
-`language` 检测请求语言并将其暴露为路由信号。在 `routing.signals.language` 下定义语言规则。
+`language` 检测请求语言并将其暴露为路由信号。在 `recipes[].signals.language` 下定义语言规则。
 
 它使用轻量语言检测器，而不是通用分类器模型。
 
@@ -38,14 +39,15 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    language:
-      - name: zh
-        description: Chinese-language requests.
-        threshold: 0.6
-      - name: es
-        description: Spanish-language requests.
+recipes:
+  - name: default
+    signals:
+      language:
+        - name: zh
+          description: Chinese-language requests.
+          threshold: 0.6
+        - name: es
+          description: Spanish-language requests.
 ```
 
 规则名应与决策要引用的语言代码一致，例如 `zh`、`es` 或 `en`。`threshold` 是检测器的最低置信度，范围从 `0` 到 `1`；省略（或设为 `0`）则使用运行时默认值 `0.3`。更高阈值会减少误报，但可能让更多请求落到回退路由。

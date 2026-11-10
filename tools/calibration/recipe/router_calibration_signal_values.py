@@ -9,22 +9,23 @@ from typing import Any
 SIGNAL_VALUE_KEY = re.compile(r"^[a-z][a-z0-9_]*:\S(?:.*\S)?$")
 VALUE_RESPONSE_TYPES = {
     "keyword": "keywords",
-    "embedding": "embeddings",
     "domain": "domains",
-    "preference": "preferences",
 }
-VALUE_SUFFIXES = {
-    "embedding": {"best", "support", "prototype_count"},
-    "complexity": {
-        "text_hard_score",
-        "text_easy_score",
-        "text_margin",
-        "image_hard_score",
-        "image_easy_score",
-        "image_margin",
-        "margin",
-        "score",
-    },
+# Rules of these types ask a System One question: each publishes a value under
+# "<type>:<rule>:<label>" for every option or label, and its name has no colon.
+LABELLED_TYPES = {
+    "domain",
+    "fact_check",
+    "user_feedback",
+    "jailbreak",
+    "safety",
+    "pii",
+    "hallucination",
+    "refusal",
+    "turn_relation",
+    "complexity",
+    "modality",
+    "systemone",
 }
 
 
@@ -69,12 +70,8 @@ def signal_value_reference(
     names = configured.get(family, set())
     if name in names:
         return family, name
-    rule, separator, suffix = name.rpartition(":")
-    if (
-        separator
-        and rule in names
-        and (raw_type == "classifier" or suffix in VALUE_SUFFIXES.get(raw_type, set()))
-    ):
+    rule, separator, _ = name.partition(":")
+    if separator and rule in names and raw_type in LABELLED_TYPES:
         return family, rule
     raise ValueError(f"expected_signal_values references unknown signal rule {key!r}")
 
@@ -92,24 +89,6 @@ def compare_signal_values(
         pieces = key.split(":")
         error_keys = {":".join(pieces[:i]) for i in range(1, len(pieces) + 1)}
         related_errors = [name for name in signal_errors if name in error_keys]
-        if pieces[0] == "complexity":
-            # Complexity publishes a final metric suffix and errors under a
-            # final verdict suffix. Keep any colons inside the rule name.
-            base, _, metric = key.rpartition(":")
-            if base == "complexity" or metric not in VALUE_SUFFIXES["complexity"]:
-                base = key
-            related_errors = [
-                name
-                for name in signal_errors
-                if isinstance(name, str)
-                and (
-                    name in (key, "complexity")
-                    or (
-                        name.rpartition(":")[0] == base
-                        and name.rpartition(":")[2] in {"easy", "medium", "hard"}
-                    )
-                )
-            ]
         if related_errors:
             errors.append(
                 f"{key}: signal error ({', '.join(sorted(set(related_errors)))})"

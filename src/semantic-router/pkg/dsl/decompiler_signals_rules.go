@@ -2,25 +2,12 @@ package dsl
 
 import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 
-func (d *decompiler) decompileDomainSignals() {
-	for _, cat := range d.cfg.Categories {
-		d.write("SIGNAL domain %s {\n", quoteName(cat.Name))
-		if cat.Description != "" {
-			d.write("  description: %q\n", cat.Description)
-		}
-		if len(cat.MMLUCategories) > 0 {
-			d.write("  mmlu_categories: %s\n", formatStringArray(cat.MMLUCategories))
-		}
-		if len(cat.ModelScores) > 0 {
-			d.write("  model_scores: %s\n", formatPluginConfigValue(modelScoresToList(cat.ModelScores)))
-		}
-		d.write("}\n\n")
-	}
-}
-
 func (d *decompiler) decompileKeywordSignals() {
 	for _, kw := range d.cfg.KeywordRules {
 		d.write("SIGNAL keyword %s {\n", quoteName(kw.Name))
+		if kw.Description != "" {
+			d.write("  description: %q\n", kw.Description)
+		}
 		if kw.Operator != "" {
 			d.write("  operator: %q\n", kw.Operator)
 		}
@@ -51,89 +38,11 @@ func (d *decompiler) decompileKeywordSignals() {
 		if kw.IncludeHistory {
 			d.write("  include_history: true\n")
 		}
-		d.write("}\n\n")
-	}
-}
-
-func (d *decompiler) decompileEmbeddingSignals() {
-	for _, emb := range d.cfg.EmbeddingRules {
-		d.write("SIGNAL embedding %s {\n", quoteName(emb.Name))
-		if emb.PrototypeScoring != nil {
-			d.write("  prototype_scoring: %s\n", formatPluginConfigValue(fieldsToMap(prototypeScoringFields(emb.PrototypeScoring))))
+		if kw.Count != nil {
+			d.write("  count: %s\n", formatPluginConfigValue(numericPredicateToMap(kw.Count)))
 		}
-		if emb.SimilarityThreshold != 0 {
-			d.write("  threshold: %v\n", emb.SimilarityThreshold)
-		}
-		if len(emb.Candidates) > 0 {
-			d.write("  candidates: %s\n", formatStringArray(emb.Candidates))
-		}
-		if emb.AggregationMethodConfiged != "" {
-			d.write("  aggregation_method: %q\n", string(emb.AggregationMethodConfiged))
-		}
-		for _, list := range []struct {
-			name   string
-			values []string
-		}{
-			{"image_candidates", emb.ImageCandidates}, {"negative_candidates", emb.NegativeCandidates}, {"negative_image_candidates", emb.NegativeImageCandidates},
-		} {
-			if len(list.values) > 0 {
-				d.write("  %s: %s\n", list.name, formatStringArray(list.values))
-			}
-		}
-		if emb.QueryModality != "" && emb.QueryModality != config.QueryModalityText {
-			d.write("  query_modality: %q\n", string(emb.QueryModality))
-		}
-		d.write("}\n\n")
-	}
-}
-
-func (d *decompiler) decompileFactCheckSignals() {
-	for _, fc := range d.cfg.FactCheckRules {
-		d.write("SIGNAL fact_check %s {\n", quoteName(fc.Name))
-		if fc.Description != "" {
-			d.write("  description: %q\n", fc.Description)
-		}
-		d.write("}\n\n")
-	}
-}
-
-func (d *decompiler) decompileUserFeedbackSignals() {
-	for _, uf := range d.cfg.UserFeedbackRules {
-		d.write("SIGNAL user_feedback %s {\n", quoteName(uf.Name))
-		if uf.Description != "" {
-			d.write("  description: %q\n", uf.Description)
-		}
-		d.write("}\n\n")
-	}
-}
-
-func (d *decompiler) decompileReaskSignals() {
-	for _, rule := range d.cfg.ReaskRules {
-		d.write("SIGNAL reask %s {\n", quoteName(rule.Name))
-		if rule.Description != "" {
-			d.write("  description: %q\n", rule.Description)
-		}
-		if rule.Threshold != 0 {
-			d.write("  threshold: %g\n", rule.Threshold)
-		}
-		if rule.LookbackTurns != 0 {
-			d.write("  lookback_turns: %d\n", rule.LookbackTurns)
-		}
-		d.write("}\n\n")
-	}
-}
-
-func (d *decompiler) decompilePreferenceSignals() {
-	for _, pref := range d.cfg.PreferenceRules {
-		d.write("SIGNAL preference %s {\n", quoteName(pref.Name))
-		if pref.Description != "" {
-			d.write("  description: %q\n", pref.Description)
-		}
-		if len(pref.Examples) > 0 {
-			d.write("  examples: %s\n", formatStringArray(pref.Examples))
-		}
-		if pref.Threshold != 0 {
-			d.write("  threshold: %g\n", pref.Threshold)
+		if kw.Density != nil {
+			d.write("  density: %s\n", formatPluginConfigValue(numericPredicateToMap(kw.Density)))
 		}
 		d.write("}\n\n")
 	}
@@ -168,20 +77,6 @@ func (d *decompiler) decompileContextSignals() {
 	}
 }
 
-func (d *decompiler) decompileStructureSignals() {
-	for _, structure := range d.cfg.StructureRules {
-		d.write("SIGNAL structure %s {\n", quoteName(structure.Name))
-		if structure.Description != "" {
-			d.write("  description: %q\n", structure.Description)
-		}
-		d.write("  feature: %s\n", formatPluginConfigValue(structureFeatureToMap(structure.Feature)))
-		if structure.Predicate != nil {
-			d.write("  predicate: %s\n", formatPluginConfigValue(structurePredicateToMap(structure.Predicate)))
-		}
-		d.write("}\n\n")
-	}
-}
-
 func (d *decompiler) decompileConversationSignals() {
 	for _, conv := range d.cfg.ConversationRules {
 		d.write("SIGNAL conversation %s {\n", quoteName(conv.Name))
@@ -190,7 +85,7 @@ func (d *decompiler) decompileConversationSignals() {
 		}
 		d.write("  feature: %s\n", formatPluginConfigValue(conversationFeatureToMap(conv.Feature)))
 		if conv.Predicate != nil {
-			d.write("  predicate: %s\n", formatPluginConfigValue(structurePredicateToMap(conv.Predicate)))
+			d.write("  predicate: %s\n", formatPluginConfigValue(numericPredicateToMap(conv.Predicate)))
 		}
 		d.write("}\n\n")
 	}
@@ -231,76 +126,38 @@ func (d *decompiler) decompileInputModalitySignals() {
 	}
 }
 
-// decompileTopicContinuitySignals writes only explicitly set fields, so an
-// omitted default stays omitted across a compile/decompile round trip.
-func (d *decompiler) decompileTopicContinuitySignals() {
-	for _, rule := range d.cfg.TopicContinuityRules {
-		d.write("SIGNAL topic_continuity %s {\n", quoteName(rule.Name))
-		if rule.Description != "" {
-			d.write("  description: %q\n", rule.Description)
-		}
-		if rule.IncludeAssistant != nil {
-			d.write("  include_assistant: %t\n", *rule.IncludeAssistant)
-		}
-		if thresholds := topicContinuityThresholdsValue(rule.Thresholds); thresholds != nil {
-			d.write("  thresholds: %s\n", formatPluginConfigValue(thresholds))
-		}
-		if limits := topicContinuityLimitsValue(rule.Limits); limits != nil {
-			d.write("  limits: %s\n", formatPluginConfigValue(limits))
-		}
-		d.write("}\n\n")
-	}
-}
-
-func topicContinuityThresholdsValue(thresholds *config.TopicContinuityThresholds) map[string]interface{} {
-	if thresholds == nil {
-		return nil
-	}
-	value := map[string]interface{}{}
-	if thresholds.Continuation != nil {
-		value["continuation"] = *thresholds.Continuation
-	}
-	if thresholds.Change != nil {
-		value["change"] = *thresholds.Change
-	}
-	if len(value) == 0 {
-		return nil
-	}
-	return value
-}
-
-func topicContinuityLimitsValue(limits *config.TopicContinuityEvidenceLimits) map[string]interface{} {
-	if limits == nil {
-		return nil
-	}
-	value := map[string]interface{}{}
-	if limits.MaxPriorTurns != 0 {
-		value["max_prior_turns"] = limits.MaxPriorTurns
-	}
-	if limits.MaxTurnBytes != 0 {
-		value["max_turn_bytes"] = limits.MaxTurnBytes
-	}
-	if limits.MaxInputBytes != 0 {
-		value["max_input_bytes"] = limits.MaxInputBytes
-	}
-	if len(value) == 0 {
-		return nil
-	}
-	return value
-}
-
-func (d *decompiler) decompileDecisionModelSignals() {
-	for _, rule := range d.cfg.DecisionRules {
-		d.write("SIGNAL decision %s {\n", quoteName(rule.Name))
+func (d *decompiler) decompileSystemOneSignals() {
+	for _, rule := range d.cfg.SystemOneRules {
+		d.write("SIGNAL systemone %s {\n", quoteName(rule.Name))
 		if rule.Description != "" {
 			d.write("  description: %q\n", rule.Description)
 		}
 		if rule.Deployment != "" {
 			d.write("  deployment: %q\n", rule.Deployment)
 		}
-		d.write("  question: %s\n", formatPluginConfigValue(decisionQuestionValue(rule.Question)))
+		d.write("  question: %s\n", formatPluginConfigValue(systemOneQuestionValue(rule.Question)))
+		for _, labels := range []struct {
+			field string
+			keys  []string
+		}{{"labels", rule.Labels}, {"ignore_labels", rule.IgnoreLabels}} {
+			if len(labels.keys) > 0 {
+				d.write("  %s: %s\n", labels.field, formatPluginConfigValue(stringListValue(labels.keys)))
+			}
+		}
 		if predicate := numericPredicateValue(rule.Predicate); predicate != nil {
 			d.write("  predicate: %s\n", formatPluginConfigValue(predicate))
+		}
+		if rule.Stage != "" {
+			d.write("  stage: %q\n", rule.Stage)
+		}
+		if input := systemOneInputValue(rule.Input); len(input) > 0 {
+			d.write("  input: %s\n", formatPluginConfigValue(input))
+		}
+		if rule.Coverage != "" {
+			d.write("  coverage: %q\n", rule.Coverage)
+		}
+		if rule.OnUnscanned != "" {
+			d.write("  on_unscanned: %q\n", rule.OnUnscanned)
 		}
 		if rule.TimeoutMs > 0 {
 			d.write("  timeout_ms: %d\n", rule.TimeoutMs)
@@ -309,7 +166,32 @@ func (d *decompiler) decompileDecisionModelSignals() {
 	}
 }
 
-func decisionQuestionValue(question config.DecisionQuestion) map[string]interface{} {
+func stringListValue(values []string) []interface{} {
+	list := make([]interface{}, len(values))
+	for index, value := range values {
+		list[index] = value
+	}
+	return list
+}
+
+// systemOneInputValue holds the input fields a rule sets.
+func systemOneInputValue(input config.SystemOneInput) map[string]interface{} {
+	value := map[string]interface{}{}
+	for key, set := range map[string]bool{
+		"history": input.History, "answer": input.Answer, "context": input.Context, "tool_results": input.ToolResults,
+		"image": input.Image, "audio": input.Audio, "video": input.Video,
+	} {
+		if set {
+			value[key] = true
+		}
+	}
+	if input.PreviousTurns > 0 {
+		value["previous_turns"] = input.PreviousTurns
+	}
+	return value
+}
+
+func systemOneQuestionValue(question config.SystemOneQuestion) map[string]interface{} {
 	value := map[string]interface{}{"type": question.Type, "instructions": question.Instructions}
 	if len(question.Choices) > 0 {
 		value["choices"] = decisionChoicesValue(question.Choices)
@@ -333,7 +215,7 @@ func decisionQuestionValue(question config.DecisionQuestion) map[string]interfac
 	return value
 }
 
-func decisionChoicesValue(choices []config.DecisionChoice) []interface{} {
+func decisionChoicesValue(choices []config.SystemOneOption) []interface{} {
 	entries := make([]interface{}, 0, len(choices))
 	for _, choice := range choices {
 		entry := map[string]interface{}{"key": choice.Key}
@@ -358,85 +240,6 @@ func numericPredicateValue(predicate *config.NumericPredicate) map[string]interf
 	return value
 }
 
-func (d *decompiler) decompileClassifierSignals() {
-	for _, rule := range d.cfg.ClassifierRules {
-		d.write("SIGNAL classifier %s {\n", quoteName(rule.Name))
-		if rule.Description != "" {
-			d.write("  description: %q\n", rule.Description)
-		}
-		d.write("  type: %q\n", rule.Type)
-		if rule.Model != "" {
-			d.write("  model: %q\n", rule.Model)
-		}
-		if rule.ModelPath != "" {
-			d.write("  model_path: %q\n", rule.ModelPath)
-		}
-		d.write("  labels: %s\n", formatStringArray(rule.Labels))
-		if rule.Instructions != "" {
-			d.write("  instructions: %q\n", rule.Instructions)
-		}
-		if rule.DisableRationale {
-			d.write("  disable_rationale: true\n")
-		}
-		if rule.UseCPU {
-			d.write("  use_cpu: true\n")
-		}
-		d.write("}\n\n")
-	}
-}
-
-func (d *decompiler) decompileComplexitySignals() {
-	for _, comp := range d.cfg.ComplexityRules {
-		d.write("SIGNAL complexity %s {\n", quoteName(comp.Name))
-		if comp.PrototypeScoring != nil {
-			d.write("  prototype_scoring: %s\n", formatPluginConfigValue(fieldsToMap(prototypeScoringFields(comp.PrototypeScoring))))
-		}
-		// A written zero is kept as written, so the round trip does not turn
-		// a stated threshold into an absent one.
-		if comp.Threshold != 0 || comp.ThresholdSet {
-			d.write("  threshold: %v\n", comp.Threshold)
-		}
-		// The explicit boundary pair. Omitting these here would silently
-		// revert a rule to threshold semantics on a YAML -> DSL -> YAML round
-		// trip, discarding its declared cut points.
-		if comp.HardAbove != nil {
-			d.write("  hard_above: %v\n", *comp.HardAbove)
-		}
-		if comp.EasyBelow != nil {
-			d.write("  easy_below: %v\n", *comp.EasyBelow)
-		}
-		if comp.HardBelow != nil {
-			d.write("  hard_below: %v\n", *comp.HardBelow)
-		}
-		if comp.EasyAbove != nil {
-			d.write("  easy_above: %v\n", *comp.EasyAbove)
-		}
-		if comp.Description != "" {
-			d.write("  description: %q\n", comp.Description)
-		}
-		if comp.Composer != nil {
-			d.write("  composer: %s\n", decompileComposerObj(comp.Composer))
-		}
-		if len(comp.Hard.Candidates) > 0 || len(comp.Hard.ImageCandidates) > 0 {
-			d.write("  hard: %s\n", formatPluginConfigValue(complexityCandidatesToMap(comp.Hard)))
-		}
-		if len(comp.Easy.Candidates) > 0 || len(comp.Easy.ImageCandidates) > 0 {
-			d.write("  easy: %s\n", formatPluginConfigValue(complexityCandidatesToMap(comp.Easy)))
-		}
-		d.write("}\n\n")
-	}
-}
-
-func (d *decompiler) decompileModalitySignals() {
-	for _, mod := range d.cfg.ModalityRules {
-		d.write("SIGNAL modality %s {\n", quoteName(mod.Name))
-		if mod.Description != "" {
-			d.write("  description: %q\n", mod.Description)
-		}
-		d.write("}\n\n")
-	}
-}
-
 func (d *decompiler) decompileAuthzSignals() {
 	for _, rb := range d.cfg.RoleBindings {
 		d.write("SIGNAL authz %s {\n", quoteName(rb.Name))
@@ -458,125 +261,6 @@ func (d *decompiler) decompileAuthzSignals() {
 		}
 		d.write("}\n\n")
 	}
-}
-
-func (d *decompiler) decompileJailbreakSignals() {
-	for _, jb := range d.cfg.JailbreakRules {
-		d.write("SIGNAL jailbreak %s {\n", quoteName(jb.Name))
-		if jb.Method != "" {
-			d.write("  method: %q\n", jb.Method)
-		}
-		if jb.Threshold != 0 {
-			d.write("  threshold: %v\n", jb.Threshold)
-		}
-		if jb.IncludeHistory {
-			d.write("  include_history: true\n")
-		}
-		if jb.Direction != "" {
-			d.write("  direction: %q\n", jb.Direction)
-		}
-		if jb.Description != "" {
-			d.write("  description: %q\n", jb.Description)
-		}
-		if len(jb.JailbreakPatterns) > 0 {
-			d.write("  jailbreak_patterns: %s\n", formatStringArray(jb.JailbreakPatterns))
-		}
-		if len(jb.BenignPatterns) > 0 {
-			d.write("  benign_patterns: %s\n", formatStringArray(jb.BenignPatterns))
-		}
-		d.write("}\n\n")
-	}
-}
-
-func (d *decompiler) decompileHallucinationSignals() {
-	for _, rule := range d.cfg.HallucinationRules {
-		d.write("SIGNAL hallucination %s {\n", quoteName(rule.Name))
-		if rule.Description != "" {
-			d.write("  description: %q\n", rule.Description)
-		}
-		d.write("}\n\n")
-	}
-}
-
-func (d *decompiler) decompilePIISignals() {
-	for _, pii := range d.cfg.PIIRules {
-		d.write("SIGNAL pii %s {\n", quoteName(pii.Name))
-		if pii.Threshold != 0 {
-			d.write("  threshold: %v\n", pii.Threshold)
-		}
-		if len(pii.PIITypesAllowed) > 0 {
-			d.write("  pii_types_allowed: %s\n", formatStringArray(pii.PIITypesAllowed))
-		}
-		if pii.IncludeHistory {
-			d.write("  include_history: true\n")
-		}
-		if pii.Source != "" {
-			d.write("  source: %q\n", pii.Source)
-		}
-		if pii.Description != "" {
-			d.write("  description: %q\n", pii.Description)
-		}
-		d.write("}\n\n")
-	}
-}
-
-func (d *decompiler) decompileKBSignals() {
-	for _, kb := range d.cfg.KBRules {
-		d.write("SIGNAL kb %s {\n", quoteName(kb.Name))
-		if kb.KB != "" {
-			d.write("  kb: %q\n", kb.KB)
-		}
-		d.write("  target: { kind: %q, value: %q }\n", kb.Target.Kind, kb.Target.Value)
-		if kb.Match != "" {
-			d.write("  match: %q\n", kb.Match)
-		}
-		d.write("}\n\n")
-	}
-}
-
-func (d *decompiler) decompileEventSignals() {
-	for _, rule := range d.cfg.EventRules {
-		d.write("SIGNAL event %s {\n", quoteName(rule.Name))
-		if len(rule.EventTypes) > 0 {
-			d.write("  event_types: %s\n", formatStringArray(rule.EventTypes))
-		}
-		if len(rule.Severities) > 0 {
-			d.write("  severities: %s\n", formatStringArray(rule.Severities))
-		}
-		if len(rule.ActionCodes) > 0 {
-			d.write("  action_codes: %s\n", formatStringArray(rule.ActionCodes))
-		}
-		if rule.Temporal {
-			d.write("  temporal: true\n")
-		}
-		d.write("}\n\n")
-	}
-}
-
-func modelScoresToList(scores []config.ModelScore) []interface{} {
-	items := make([]interface{}, 0, len(scores))
-	for _, score := range scores {
-		item := map[string]interface{}{
-			"model": score.Model,
-			"score": score.Score,
-		}
-		if score.UseReasoning != nil {
-			item["use_reasoning"] = *score.UseReasoning
-		}
-		items = append(items, item)
-	}
-	return items
-}
-
-func complexityCandidatesToMap(candidates config.ComplexityCandidates) map[string]interface{} {
-	fields := make(map[string]interface{})
-	if len(candidates.Candidates) > 0 {
-		fields["candidates"] = candidates.Candidates
-	}
-	if len(candidates.ImageCandidates) > 0 {
-		fields["image_candidates"] = candidates.ImageCandidates
-	}
-	return fields
 }
 
 func (d *decompiler) decompileProjectionSignals() {

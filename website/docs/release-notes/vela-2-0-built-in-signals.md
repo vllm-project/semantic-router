@@ -1,5 +1,15 @@
 # Release note: the built-in signals default to Vela 2.0 0.3B
 
+:::note
+This note records an earlier release and keeps its original examples. Their
+system lines, modules and `modality_detector.classifier.model_path` are
+removed forms: they fail at load with a one-line hint, and
+`vllm-sr config migrate` rewrites them.
+[Migrate to v0.5](../installation/migrate-to-v0-5) shows the current form of
+each, and [Migrate model resources](../installation/model-resource-migration)
+covers the model fields.
+:::
+
 Vela 2.0 is public on Hugging Face:
 [`vllm-sr/Vela-2.0-0.3B`, `-0.8B`, `-4B` and `-9B`](https://huggingface.co/collections/vllm-sr/vela-20),
 Apache-2.0, with no token needed. The model runtime keeps the revisions it

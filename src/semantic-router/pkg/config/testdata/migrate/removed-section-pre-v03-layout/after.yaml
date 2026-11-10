@@ -1,0 +1,35 @@
+version: v0.5
+providers:
+  models:
+    - name: general
+      backend_refs:
+        - name: local
+          endpoint: 127.0.0.1:8000
+          weight: 1
+          api_key: written-inline-test-key
+      reasoning: {type: chat_template_kwargs, parameter: enable_thinking}
+  defaults:
+    model: general
+    reasoning_effort: high
+evaluation:
+  records:
+    - model: general
+      benchmark: vllm-sr/operator-rating@1.0.0
+      metrics:
+        score: 0.8
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - {name: urgent, operator: OR, keywords: [urgent]}
+    decisions:
+      - name: urgent
+        priority: 100
+        rules: {operator: AND, conditions: [{type: keyword, name: urgent}]}
+        modelRefs: [{model: general, use_reasoning: true}]
+global:
+  router:
+    strategy: priority
+  stores:
+    response_cache:
+      backend_type: memory
