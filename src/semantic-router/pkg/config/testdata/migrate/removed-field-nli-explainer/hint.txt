@@ -1,0 +1,1 @@
+recipes[default].signals.hallucination[ungrounded].use_nli: removed_field: use_nli is removed: NLI explanations are retired; run `vllm-sr config migrate` (nothing; the rule's spans stay in the response)

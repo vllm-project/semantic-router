@@ -217,8 +217,8 @@ func TestFallbackSuccessOn503(t *testing.T) {
 		t.Errorf("header %s = %q, want %q", headers.VSRSelectedModel, got, "model-fallback-1")
 	}
 
-	if got := headersMap[headers.VSRFallbackAttempts]; got != "2" {
-		t.Errorf("header %s = %q, want %q", headers.VSRFallbackAttempts, got, "2")
+	if got := fallbackTrace(t, resp, ctx)[headers.TraceFallbackAttempts]; got != "2" {
+		t.Errorf("header %s = %q, want %q", headers.TraceFallbackAttempts, got, "2")
 	}
 
 	if got := headersMap[headers.VSRResponsePath]; got != headers.ResponsePathFallback {
@@ -915,8 +915,8 @@ func TestFallbackTriggeredInHandleResponseHeaders(t *testing.T) {
 	if got := headersMap[headers.VSRSelectedModel]; got != "model-fallback-1" {
 		t.Errorf("header %s = %q, want %q", headers.VSRSelectedModel, got, "model-fallback-1")
 	}
-	if got := headersMap[headers.VSRFallbackAttempts]; got != "2" {
-		t.Errorf("header %s = %q, want %q", headers.VSRFallbackAttempts, got, "2")
+	if got := fallbackTrace(t, resp, ctx)[headers.TraceFallbackAttempts]; got != "2" {
+		t.Errorf("header %s = %q, want %q", headers.TraceFallbackAttempts, got, "2")
 	}
 	if got := headersMap[headers.VSRResponsePath]; got != headers.ResponsePathFallback {
 		t.Errorf("header %s = %q, want %q", headers.VSRResponsePath, got, headers.ResponsePathFallback)
@@ -1061,7 +1061,7 @@ func TestFallbackPreservesStreamingContractOpenAI(t *testing.T) {
 	if got := headersMap[headers.VSRSelectedModel]; got != "model-fallback-1" {
 		t.Errorf("expected model %q, got %q", "model-fallback-1", got)
 	}
-	if got := headersMap[headers.VSRFallbackAttempts]; got != "2" {
+	if got := fallbackTrace(t, resp, ctx)[headers.TraceFallbackAttempts]; got != "2" {
 		t.Errorf("expected 2 attempts, got %q", got)
 	}
 
@@ -2403,9 +2403,23 @@ func TestFallbackResponsesAPIStreamingWithPersistence(t *testing.T) {
 	}
 }
 
-func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
-	server := newJailbreakScoreServer(t, 0.95, 0.05)
-	router, ctx := newResponseStageRouter(t, server, "", "block")
+// guardedFallbackAnswer drives a fallback whose candidate's answer the
+// decision's response_guard scores at jailbreak and blocks over its
+// threshold, for a client that streams or not, with an exact response cache
+// on the decision. It returns the Router's reply and the cache.
+func guardedFallbackAnswer(t *testing.T, streaming bool, jailbreak float32) (*ext_proc.ImmediateResponse, *RequestContext, *mockStreamingCache) {
+	t.Helper()
+	server := newJailbreakDecider(jailbreak)
+	router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
+	responseCache := &mockStreamingCache{}
+	router.Cache = responseCache
+	router.Config.SemanticCache.InUse = true
+	router.Config.Decisions[0].Plugins = append(router.Config.Decisions[0].Plugins, config.DecisionPlugin{
+		Type:          config.DecisionPluginResponseCache,
+		Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "mode": config.ResponseCacheModeExact, "scope": "global"}),
+	})
+	ctx.RequestID = "guarded-fallback"
+	ctx.CacheExactFingerprint = "guarded-fallback-request"
 
 	policy := fallback.DefaultEnabledPolicy()
 	circuitBreaker := fallback.NewBackendCircuitBreaker(policy.CircuitBreaker)
@@ -2443,6 +2457,7 @@ func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
 		{Model: "model-fallback-1"},
 	}
 	ctx.SemanticRequest = testNeutralRequest("model-primary", "probe __probe__ prompt")
+	ctx.SemanticRequest.Stream = streaming
 	ctx.UpstreamStatusCode = 503
 
 	candidateRespJSON := []byte(`{
@@ -2484,23 +2499,63 @@ func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
 	if procResp == nil || procResp.GetImmediateResponse() == nil {
 		t.Fatalf("expected ImmediateResponse from fallback, got: %#v", procResp)
 	}
+	if matched, _ := ctx.ResponseGuard.jailbreakFinding(); matched != (jailbreak > 0.5) {
+		t.Fatalf("the guard recorded a response jailbreak = %v at score %v", matched, jailbreak)
+	}
+	return procResp.GetImmediateResponse(), ctx, responseCache
+}
 
-	imm := procResp.GetImmediateResponse()
+func TestFallbackResponsePolicyJailbreakBlock(t *testing.T) {
+	imm, _, responseCache := guardedFallbackAnswer(t, false, 0.95)
 	if imm.GetStatus().GetCode() != typev3.StatusCode_Forbidden {
 		t.Fatalf("expected HTTP 403 Forbidden due to response jailbreak block, got: %v", imm.GetStatus().GetCode())
-	}
-	if !ctx.ResponseJailbreakDetected {
-		t.Fatal("expected ctx.ResponseJailbreakDetected to be true")
 	}
 	bodyStr := string(imm.GetBody())
 	if !strings.Contains(bodyStr, "Response blocked: jailbreak content detected in LLM output") {
 		t.Errorf("expected jailbreak block message in body, got: %s", bodyStr)
 	}
+	if responseCache.exactAdded || responseCache.addEntryCalled {
+		t.Fatal("a fallback answer the guard blocked was written to the response cache")
+	}
+}
+
+// The guard passes the candidate's answer: the cache keeps the answer the
+// client received.
+func TestFallbackAnswerTheGuardPassesIsCached(t *testing.T) {
+	imm, _, responseCache := guardedFallbackAnswer(t, false, 0.01)
+	if imm.GetStatus().GetCode() != typev3.StatusCode_OK {
+		t.Fatalf("status = %v, want the candidate's answer", imm.GetStatus().GetCode())
+	}
+	if !responseCache.exactAdded || !strings.Contains(string(responseCache.exactResponseAdded), unsafeAnswer) {
+		t.Fatalf("cached %q, want the delivered answer", responseCache.exactResponseAdded)
+	}
+}
+
+// A streaming client receives a blocked fallback answer's refusal as a
+// stream, as it receives a blocked held stream's.
+func TestFallbackResponsePolicyRefusesAStreamingClientInStreamForm(t *testing.T) {
+	imm, ctx, responseCache := guardedFallbackAnswer(t, true, 0.95)
+	body := string(imm.GetBody())
+	if imm.GetStatus().GetCode() != typev3.StatusCode_OK || immediateHeaderValue(&ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_ImmediateResponse{ImmediateResponse: imm},
+	}, "content-type") != "text/event-stream" {
+		t.Fatalf("reply = %d %s, want the refusal as a 200 event stream", imm.GetStatus().GetCode(), body)
+	}
+	if !strings.HasPrefix(body, `data: {"error":`) || !strings.Contains(body, "jailbreak content detected in LLM output") ||
+		strings.Contains(body, unsafeAnswer) {
+		t.Fatalf("stream = %s, want one error chunk naming the block and none of the answer", body)
+	}
+	if ctx.FallbackRecord.FinalStatus != "policy_blocked" {
+		t.Fatalf("fallback status = %q, want policy_blocked", ctx.FallbackRecord.FinalStatus)
+	}
+	if responseCache.exactAdded || responseCache.addEntryCalled {
+		t.Fatal("a fallback answer the guard blocked was written to the response cache")
+	}
 }
 
 func TestFallbackResponsePolicyJailbreakWarningAndMemorySuppression(t *testing.T) {
-	server := newJailbreakScoreServer(t, 0.95, 0.05)
-	router, ctx := newResponseStageRouter(t, server, "", "warn")
+	server := newJailbreakDecider(0.95)
+	router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardAnnotate)
 
 	policy := fallback.DefaultEnabledPolicy()
 	circuitBreaker := fallback.NewBackendCircuitBreaker(policy.CircuitBreaker)
@@ -2508,7 +2563,8 @@ func TestFallbackResponsePolicyJailbreakWarningAndMemorySuppression(t *testing.T
 	router.FallbackOrchestrator = orchestrator
 	router.CredentialResolver = newTestCredentialResolver(router.Config)
 
-	router.Config.Memory.Enabled = true
+	router.Config.Memory.InUse = true
+	ctx.VSRSelectedDecision.Plugins = append(ctx.VSRSelectedDecision.Plugins, memoryTestPlugin())
 	router.Config.Memory.AutoStore = true
 	router.MemoryExtractor = memory.NewMemoryChunkStore(&noopMemoryStore{})
 
@@ -2592,10 +2648,10 @@ func TestFallbackResponsePolicyJailbreakWarningAndMemorySuppression(t *testing.T
 
 	imm := procResp.GetImmediateResponse()
 	if imm.GetStatus().GetCode() != typev3.StatusCode_OK {
-		t.Fatalf("expected HTTP 200 OK because action is warn, got: %v", imm.GetStatus().GetCode())
+		t.Fatalf("expected HTTP 200 OK because action is annotate, got: %v", imm.GetStatus().GetCode())
 	}
-	if !ctx.ResponseJailbreakDetected {
-		t.Fatal("expected ctx.ResponseJailbreakDetected to be true")
+	if matched, _ := ctx.ResponseGuard.jailbreakFinding(); !matched {
+		t.Fatal("expected the guard to record the response jailbreak it annotated")
 	}
 
 	// Verify warning header emitted
@@ -2603,9 +2659,9 @@ func TestFallbackResponsePolicyJailbreakWarningAndMemorySuppression(t *testing.T
 	for _, opt := range imm.GetHeaders().GetSetHeaders() {
 		headersMap[opt.GetHeader().GetKey()] = string(opt.GetHeader().GetRawValue())
 	}
-	warningsHeader := headersMap[headers.VSRResponseWarnings]
-	if !strings.Contains(warningsHeader, headers.ResponseWarningJailbreak) {
-		t.Errorf("expected warning header %s to contain %s, got: %s", headers.VSRResponseWarnings, headers.ResponseWarningJailbreak, warningsHeader)
+	warningsHeader := headersMap[headers.VSRWarnings]
+	if !strings.Contains(warningsHeader, headers.WarningJailbreak) {
+		t.Errorf("expected warning header %s to contain %s, got: %s", headers.VSRWarnings, headers.WarningJailbreak, warningsHeader)
 	}
 
 	// Verify memory suppression: suppressedResponseMemoryStore reports policy_blocked / response_jailbreak
@@ -2640,8 +2696,9 @@ func TestFallbackResponsePolicyHallucinationWarning(t *testing.T) {
 
 	ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-1"})
 	ctx.UpstreamStatusCode = 503
-	ctx.HallucinationDetected = true
-	ctx.VSRSelectedDecision = decisionWithHallucinationActions("header", "header")
+	// No classifier serves the request's recipe, so the guard cannot check
+	// the answer and annotates it as unverified.
+	ctx.VSRSelectedDecision = responseGuardDecision(groundedGuard(config.ResponseGuardAnnotate, false, ""))
 
 	candidateRespJSON := []byte(`{
 		"id": "chatcmpl-hal-1",
@@ -2692,9 +2749,9 @@ func TestFallbackResponsePolicyHallucinationWarning(t *testing.T) {
 	for _, opt := range imm.GetHeaders().GetSetHeaders() {
 		headersMap[opt.GetHeader().GetKey()] = string(opt.GetHeader().GetRawValue())
 	}
-	warningsHeader := headersMap[headers.VSRResponseWarnings]
-	if !strings.Contains(warningsHeader, headers.ResponseWarningHallucination) {
-		t.Errorf("expected warning header %s to contain %s, got: %s", headers.VSRResponseWarnings, headers.ResponseWarningHallucination, warningsHeader)
+	warningsHeader := headersMap[headers.VSRWarnings]
+	if !strings.Contains(warningsHeader, headers.WarningUnverifiedFactual) {
+		t.Errorf("expected warning header %s to contain %s, got: %s", headers.VSRWarnings, headers.WarningUnverifiedFactual, warningsHeader)
 	}
 }
 
@@ -2837,8 +2894,7 @@ func TestFallbackCandidateStreamPreservesHallucinationBodyWarning(t *testing.T) 
 	ctx.UpstreamStatusCode = 503
 	ctx.ExpectStreamingResponse = true
 	ctx.SemanticRequest.Stream = true
-	ctx.HallucinationDetected = true
-	ctx.VSRSelectedDecision = decisionWithHallucinationActions("body", "header")
+	ctx.VSRSelectedDecision = responseGuardDecision(groundedGuard(config.ResponseGuardAnnotate, true, ""))
 
 	// Candidate returns a valid buffered response.
 	// Initial text length is chosen so that:
@@ -2883,9 +2939,9 @@ func TestFallbackCandidateStreamPreservesHallucinationBodyWarning(t *testing.T) 
 	}
 
 	deliveredBody := string(imm.GetBody())
-	// Assert the delivered stream preserved the hallucination body warning
-	if !strings.Contains(deliveredBody, "[Hallucination Warning]") {
-		t.Errorf("expected delivered stream to contain [Hallucination Warning], got body prefix: %s", deliveredBody[:min(200, len(deliveredBody))])
+	// Assert the delivered stream preserved the guard's body note
+	if !strings.Contains(deliveredBody, "[Unverified Response]") {
+		t.Errorf("expected delivered stream to contain [Unverified Response], got body prefix: %s", deliveredBody[:min(200, len(deliveredBody))])
 	}
 
 	// Assert the stream is valid SSE and each frame satisfies limits
@@ -3201,7 +3257,7 @@ func TestFallbackWritesClientResponseToCache(t *testing.T) {
 	router, cfg := setupFallbackTestRouter(t, policy)
 	mockCache := &mockStreamingCache{}
 	router.Cache = mockCache
-	cfg.SemanticCache = config.SemanticCache{Enabled: true}
+	cfg.SemanticCache = config.SemanticCache{InUse: true}
 
 	decision := config.Decision{
 		Name: "chat_fallback_decision",
@@ -3260,8 +3316,8 @@ func TestFallbackWritesClientResponseToCache(t *testing.T) {
 }
 
 func TestFallbackBlockedResponseNotCached(t *testing.T) {
-	server := newJailbreakScoreServer(t, 0.95, 0.05)
-	router, ctx := newResponseStageRouter(t, server, "", "block")
+	server := newJailbreakDecider(0.95)
+	router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)
 
 	policy := fallback.DefaultEnabledPolicy()
 	circuitBreaker := fallback.NewBackendCircuitBreaker(policy.CircuitBreaker)
@@ -3271,7 +3327,7 @@ func TestFallbackBlockedResponseNotCached(t *testing.T) {
 
 	mockCache := &mockStreamingCache{}
 	router.Cache = mockCache
-	router.Config.SemanticCache = config.SemanticCache{Enabled: true}
+	router.Config.SemanticCache = config.SemanticCache{InUse: true}
 	router.Config.Decisions[0].Plugins = append(router.Config.Decisions[0].Plugins, config.DecisionPlugin{
 		Type: config.DecisionPluginResponseCache,
 		Configuration: config.MustStructuredPayload(map[string]interface{}{
@@ -3526,8 +3582,8 @@ func TestFallbackCandidateMalformed2xxAdvancesToNextCandidate(t *testing.T) {
 	if got := headersMap[headers.VSRSelectedModel]; got != "model-fallback-2" {
 		t.Errorf("header %s = %q, want %q", headers.VSRSelectedModel, got, "model-fallback-2")
 	}
-	if got := headersMap[headers.VSRFallbackAttempts]; got != "3" {
-		t.Errorf("header %s = %q, want %q", headers.VSRFallbackAttempts, got, "3")
+	if got := fallbackTrace(t, resp, ctx)[headers.TraceFallbackAttempts]; got != "3" {
+		t.Errorf("header %s = %q, want %q", headers.TraceFallbackAttempts, got, "3")
 	}
 
 	if ctx.FallbackRecord == nil {
@@ -3648,8 +3704,8 @@ func TestFallbackRecomputesAutomaticOutputAllowanceForCandidate(t *testing.T) {
 	for _, h := range imm.GetHeaders().GetSetHeaders() {
 		headersMap[h.GetHeader().GetKey()] = string(h.GetHeader().GetRawValue())
 	}
-	require.Equal(t, "32749", headersMap[headers.VSREffectiveMaxOutputTokens])
-	require.Equal(t, "19", headersMap[headers.VSREffectiveInputTokens])
+	require.Equal(t, "32749", fallbackTrace(t, resp, ctx)[headers.TraceEffectiveMaxOutputTokens])
+	require.Equal(t, "19", fallbackTrace(t, resp, ctx)[headers.TraceEffectiveInputTokens])
 	require.Equal(t, "narrow", headersMap[headers.VSRSelectedModel])
 
 	// RequestContext updated with fallback candidate facts
@@ -3749,7 +3805,7 @@ func TestFallbackAutomaticOutputCandidatesWithDifferentLimits(t *testing.T) {
 	for _, h := range imm.GetHeaders().GetSetHeaders() {
 		headersMap[h.GetHeader().GetKey()] = string(h.GetHeader().GetRawValue())
 	}
-	require.Equal(t, "32749", headersMap[headers.VSREffectiveMaxOutputTokens])
+	require.Equal(t, "32749", fallbackTrace(t, resp, ctx)[headers.TraceEffectiveMaxOutputTokens])
 	require.Equal(t, "narrow", headersMap[headers.VSRSelectedModel])
 }
 
@@ -3966,4 +4022,16 @@ func TestResponsePolicyPersistenceIsDeferredUntilCommit(t *testing.T) {
 	after, ok := recorder.GetRecord(recordID)
 	require.True(t, ok)
 	require.Equal(t, string(body), after.ResponseBody)
+}
+
+// fallbackTrace finishes a fallback answer at the reply boundary for a caller
+// allowed the debug headers and returns its trace.
+func fallbackTrace(t *testing.T, resp *ext_proc.ProcessingResponse, ctx *RequestContext) map[string]string {
+	t.Helper()
+	if ctx.Headers == nil {
+		ctx.Headers = map[string]string{}
+	}
+	ctx.Headers[headers.VSRDebug] = "true"
+	appendRoutedResponseHeaders(resp, ctx)
+	return traceOf(t, resp.GetImmediateResponse().GetHeaders().GetSetHeaders())
 }

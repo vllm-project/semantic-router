@@ -16,18 +16,20 @@ each earlier field next to the deployment-and-binding form that replaces it.
 
 Earlier releases ran models inside the router with three back ends: candle,
 ONNX Runtime (`ort`) and OpenVINO. Those in-process back ends are gone. Local
-routing models now run in the [model runtime](model-runtime/overview.md);
-external classifier and embedding services retain their separate adapters.
+routing models now run in the [model runtime](model-runtime/overview.md), and
+remote ones are [System One APIs](../system-one/deployments#remote-system-one-apis)
+or embedding services.
 `vllm-sr serve --platform auto` detects the host or target; use `--platform cpu`
 to select the CPU image explicitly. The [release note](release-notes/built-in-model-runtime.md)
 lists every breaking change of that release.
 
-**Review defaults as well as field migrations.** Features without an explicit
-model override use current defaults, including vela3-fast for common judgment
-tasks. A historical configuration that relied on Vela 1.0 defaults may therefore
-change answers even when its YAML still parses. Review
-[model and threshold choices](./choose-a-model.md#built-in-signals) and test representative
-requests before rollout; explicit specialist assignments remain available.
+**Review defaults as well as field migrations.** Every routing signal now asks
+the decision model, vela3-fast unless you choose another. A historical
+configuration that relied on Vela 1.0 classifiers therefore changes answers
+even when it migrates cleanly. Review
+[model and threshold choices](./choose-a-model.md#built-in-signals) and test
+representative requests before rollout. [Migrate to v0.5](../installation/migrate-to-v0-5)
+covers the configuration changes of the current release.
 
 You need to migrate if your configuration contains any of these:
 
@@ -58,10 +60,10 @@ example:
 
 ```text
 Changes to review
-  global.model_catalog.deployments.vela-domain
-      provider candle -> model_runtime, device cuda:0
+  global.model_catalog.deployments.vela-embedding
+      provider ort is removed: the built-in model runtime serves every local model; rewritten as provider: model_runtime, on its device, with its artifact's Hub repository (2 places)
   global.model_catalog.deployments.vela-domain.precision
-      removed fp16: the model runs in its published precision (dtype: auto); dtype: float16 runs it in half precision on a GPU
+      the model runs in its published precision (dtype: auto); dtype: float16 runs it in half precision on a GPU
 ```
 
 It prints a **Warning** for anything you still have to do yourself: a
@@ -85,35 +87,28 @@ or stored vectors to re-embed because their embedding model changed (see
 | `custom_ops_profile`, `compilation_cache_dir` | removed: the runtime picks its own kernels |
 | a graph `head` such as `onnx/model_fa.onnx` | removed: the runtime picks the model's graphs |
 | `artifact: models/Vela-1.0-Encoder-307M-...` | `artifact: vllm-sr/Vela-1.0-Encoder-307M-...`, the Hub repository |
-| `embedding_config.backend: candle` or `openvino` | removed |
-| `gemma_model_path` or `bert_model_path`, even empty | removed: the runtime has no EmbeddingGemma or MiniLM family, and Vela Embedding (`mmbert_model_path`) replaces them |
-| `embedding_model: bert` or `gemma` on the response cache, memory or vector store, or no `embedding_model` where MiniLM was the default | `embedding_model: mmbert` (Vela Embedding); re-embed stored vectors |
-| a vector size Vela Embedding does not serve (such as MiniLM's 384) on a store that embeds with `mmbert` | 256 for memory, 768 for the response cache and the vector store; re-create the collection or index at that size |
-| `model_selection.ml.model_type: bert` or `gemma` | `model_type: mmbert`; retrain the selection models on Vela Embedding vectors |
+| `embeddings.semantic`, with its `embedding_config.backend: candle` or `openvino` and its `gemma_model_path` or `bert_model_path` | removed: the runtime has no EmbeddingGemma or MiniLM family; `embeddings.default` names the embedding deployment, Vela Embedding unless you change it (see [Embeddings](./guides/embeddings.md)) |
+| `embedding_model: bert` or `gemma` on the response cache, memory or vector store | removed: the store embeds with `embeddings.default`; re-embed stored vectors |
+| a vector size Vela Embedding does not serve (such as MiniLM's 384) on a store that embeds with it | kept: set 256 for memory, 768 for the response cache and the vector store, and re-create the collection or index at that size |
+| `global.router.model_selection.ml`, with the trained `knn`, `kmeans`, `svm` and `mlp` selectors | removed: the `systemone` selector, which needs no trained model, replaces them |
 | `variant`, `model_type`, `use_modernbert`, `use_mmbert_32k` on a module | removed: the runtime reads the architecture from the model |
 | a label map inside an older model's directory, such as `category_mapping_path: models/mom-domain-classifier/category_mapping.json` | removed: the router reads the labels of the model it runs |
-| `mlp.device` on the MLP selection algorithm | removed: the MLP selector runs in the router |
-| `grounding.nli_contradiction_penalty` of the fusion algorithm | `grounding.contradiction_penalty`: grounding now reads the hallucination detector |
-| a hallucination detector with `backend: endpoint`, `endpoint` and `model_id` | an `openai_chat` deployment of that chat service and a `hallucination` binding to it; an endpoint whose path is not `/v1` has to be written by hand |
+| `grounding.nli_contradiction_penalty` of the fusion algorithm | `grounding.contradiction_penalty`: grounding now reads the hallucination question |
+| a hallucination detector with `backend: endpoint`, `endpoint` and `model_id` | removed: the `hallucination` signal asks a span-capable System One deployment |
 
 ### Model names that changed
 
-Older task models are replaced by the Vela 1.0 model for the same task. The
-replacements use the same label names, so your signal rules and route
-conditions keep matching what they matched before.
+The Router no longer runs task classifiers: a domain, PII, jailbreak,
+fact-check, feedback, modality or hallucination model of an earlier release,
+whether an older name such as `mom-domain-classifier` or a Vela 1.0 task
+model, is replaced by the [decision model](../system-one/overview), which
+asks that signal's question. Its labels are the ones your rules already use.
+Embedding models are replaced as follows:
 
 | Old model | New model | What changes |
 | --- | --- | --- |
-| `mom-domain-classifier`, `mmbert32k-intent-*` and their aliases | `Vela-1.0-Encoder-307M-Domain` | Same 14 domains |
-| `mom-pii-classifier`, `mom-mmbert-pii-detector`, `mmbert32k-pii-*` | `Vela-1.0-Encoder-307M-PII` | Same 17 PII types |
-| `mom-jailbreak-classifier`, `mmbert32k-jailbreak-*` | `Vela-1.0-Encoder-307M-Guard` | Same `benign` / `jailbreak` labels |
-| `mom-halugate-sentinel`, `mmbert32k-factcheck-*` | `Vela-1.0-Encoder-307M-FactCheck` | Same labels |
-| `mom-feedback-detector`, `mmbert32k-feedback-*` | `Vela-1.0-Encoder-307M-Feedback` | Adds `NO_FEEDBACK` for messages without feedback |
-| `mmbert32k-modality-router-merged` | `Vela-1.0-Encoder-307M-Modality` | Same `AR` / `DIFFUSION` / `BOTH` labels |
-| `mom-halugate-detector`, LettuceDetect v1 and v2 | `Vela-1.0-Encoder-307M-Halu` | Same inputs; answer spans as before |
 | `mmbert-embed-32k-2d-matryoshka` | `Vela-1.0-Encoder-307M-Embedding` | **Re-embed** stored vectors |
 | EmbeddingGemma (`mom-embedding-flash`), MiniLM (`mom-embedding-light`) | `Vela-1.0-Encoder-307M-Embedding`, or an OpenAI-compatible embedding endpoint | **Re-embed** stored vectors |
-| `multi-modal-embed-small` / `-large` | `Vela-1.0-Omni-Nano` / `-Mini` | **Re-embed** stored vectors |
 | Qwen3-Embedding-0.6B (`mom-embedding-pro`) | unchanged | |
 
 ### Features that were retired
@@ -150,11 +145,11 @@ when every deployment is ready.
 ## A complete example
 
 This configuration uses ONNX Runtime on an AMD GPU for embeddings, candle on
-an NVIDIA GPU for a domain classifier, an older jailbreak model and the NLI
-explainer:
+an NVIDIA GPU for a domain classifier, and the response cache's NLI polarity
+guard:
 
 ```yaml title="legacy.yaml"
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -165,13 +160,14 @@ providers:
         - name: answer
           endpoint: vllm:8000
           provider: vllm
-routing:
-  model_bindings:
-    embedding:
-      deployment: vela-embedding
-      contract: embedding.v1
-      adapter: mmbert
-      head: onnx/model_fa.onnx
+recipes:
+  - name: default
+    model_bindings:
+      embedding:
+        deployment: vela-embedding
+        contract: embedding.v1
+        adapter: mmbert
+        head: onnx/model_fa.onnx
 global:
   model_catalog:
     deployments:
@@ -186,31 +182,22 @@ global:
         provider: candle
         device: cuda:0
         precision: fp16
-    modules:
-      prompt_guard:
-        enabled: true
-        model_id: models/mom-jailbreak-classifier
-        variant: candle
-      hallucination_mitigation:
-        enabled: true
-        detector:
-          backend: candle
-          model_id: models/Vela-1.0-Encoder-307M-Halu
-          enable_nli_filtering: true
-        explainer:
-          model_id: models/mom-halugate-explainer
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
       polarity_guard:
         mode: lexical+nli
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
 ```
 
 `vllm-sr config migrate --config legacy.yaml` writes:
 
 ```yaml title="legacy.migrated.yaml"
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -221,22 +208,11 @@ providers:
         - name: answer
           endpoint: vllm:8000
           provider: vllm
-routing:
-  model_bindings:
-    embedding: vela-embedding
+recipes:
+  - name: default
 global:
   model_catalog:
     deployments:
-      Vela-1.0-Encoder-307M-Guard:
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Guard
-        revision: 087f9e401012df839c83717b746967ac7aebfa3e
-        provider: model_runtime
-        device: cpu
-      Vela-1.0-Encoder-307M-Halu:
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Halu
-        revision: ca87531211e414ac21c641b2faa8b8e21619de8f
-        provider: model_runtime
-        device: cpu
       vela-domain:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
         provider: model_runtime
@@ -245,26 +221,20 @@ global:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
         provider: model_runtime
         device: rocm:0
-    modules:
-      prompt_guard:
-        enabled: true
-      hallucination_mitigation:
-        enabled: true
-    bindings:
-      hallucination: Vela-1.0-Encoder-307M-Halu
-      jailbreak: Vela-1.0-Encoder-307M-Guard
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
-      embedding_model: mmbert
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
 ```
 
-The response cache had no `embedding_model`, so it used MiniLM, the former
-default; it now names Vela Embedding. The guard and the hallucination detector,
-which a module `model_id` named, are now deployments named after their models
-and bound with `bindings.jailbreak` and `bindings.hallucination`. Running the
-command again on the migrated file changes nothing.
+The embedding binding is dropped: the response cache embeds with
+`embeddings.default`, the `vela-embedding` deployment the file declares, now
+served by the model runtime on the AMD GPU. Running the command again on the
+migrated file changes nothing.
 
 ## Engine arguments
 
@@ -312,10 +282,9 @@ carry over:
 - **Vector stores and RAG:** re-index your documents with the new model.
   Milvus, Qdrant and hybrid RAG backends embed the query with Vela Embedding
   (768 dimensions) where they used MiniLM (384), so re-embed their collections
-  with Vela Embedding; the migration prints a warning for each one.
-- **Embedding signals and knowledge bases:** their example texts are embedded
-  again at startup. Check similarity thresholds on your own traffic; the
-  scores of a different model are not comparable.
+  with Vela Embedding, or name the deployment that indexed a collection in its
+  source's `backend_config.embedding`. Check similarity thresholds on your own
+  traffic; the scores of a different model are not comparable.
 
 ## Kubernetes and Docker
 
@@ -325,12 +294,9 @@ variables, init containers or volumes that existed only for candle, ONNX
 Runtime or OpenVINO. For GPUs, run a GPU runtime and attach to it; see
 [Run it with the router](./deploy.md#on-kubernetes).
 
-If you deploy with the operator, remove `embedding_models.gemma_model_path`
-from your `SemanticRouter` resources before you upgrade. The resource
-definition no longer has the field: kubectl's default strict validation
-refuses a manifest that still sets it (`unknown field`), and a resource stored
-before the upgrade loses the field, as if it had never been set: its router
-embeds with the model the rest of the resource configures, such as Vela
-Embedding through `mmbert_model_path`. Re-embed the vectors that EmbeddingGemma
-stored (see
+If you deploy with the operator, remove `embedding_models` from your
+`SemanticRouter` resources before you upgrade. The operator refuses a resource
+that still sets it; its router embeds with `embeddings.default`, Vela Embedding
+unless the resource's configuration names another deployment. Re-embed the
+vectors that EmbeddingGemma stored (see
 [Re-embed when the embedding model changes](#re-embed-when-the-embedding-model-changes)).

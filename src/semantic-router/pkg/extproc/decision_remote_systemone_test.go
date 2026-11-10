@@ -23,7 +23,7 @@ import (
 // deployment's answer. Its API sits behind a gateway with its own credential
 // header and path prefix; any other answer, or none, goes to fast.
 const systemOneRoutingConfig = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -37,29 +37,30 @@ providers:
       backend_refs: [{name: fast, endpoint: "BACKEND", protocol: http, weight: 1}]
     - name: deep
       backend_refs: [{name: deep, endpoint: "BACKEND", protocol: http, weight: 1}]
-routing:
-  signals:
-    decision:
-      - name: support_team
-        deployment: gateway-d3
-        question:
-          type: choice
-          instructions: Which team should handle this ticket?
-          choices:
-            - {key: billing, description: Payments and refunds}
-            - {key: engineering, description: Outages and bugs}
-  decisions:
-    - name: engineering
-      priority: 200
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions: [{type: decision, name: support_team, label: engineering}]
-      modelRefs: [{model: deep}]
-    - name: everything-else
-      priority: 10
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: fast}]
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: support_team
+          deployment: gateway-d3
+          question:
+            type: choice
+            instructions: Which team should handle this ticket?
+            choices:
+              - {key: billing, description: Payments and refunds}
+              - {key: engineering, description: Outages and bugs}
+    decisions:
+      - name: engineering
+        priority: 200
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions: [{type: systemone, name: support_team, label: engineering}]
+        modelRefs: [{model: deep}]
+      - name: everything-else
+        priority: 10
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: fast}]
 global:
   router:
     list_backend_models: true
@@ -208,7 +209,7 @@ func TestSystemOneDeploymentRoutesChatAndPreview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gateway.asked.Load() != asked+1 || preview.SignalConfidences["decision:support_team"] < 0.8 || preview.DecisionResult == nil || preview.DecisionResult.DecisionName != "engineering" {
+	if gateway.asked.Load() != asked+1 || preview.SignalConfidences["systemone:support_team"] < 0.8 || preview.DecisionResult == nil || preview.DecisionResult.DecisionName != "engineering" {
 		t.Fatalf("routing preview asks the deployment: confidences %v errors %v decision %+v", preview.SignalConfidences, preview.SignalErrors, preview.DecisionResult)
 	}
 }
@@ -219,7 +220,7 @@ func TestDecisionSelectorAsksASystemOneDeployment(t *testing.T) {
 	gatewayServer := httptest.NewServer(gateway)
 	defer gatewayServer.Close()
 	t.Setenv("REMOTE_DECISION_TEST_KEY", "fake-gateway-key")
-	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
 providers:
   defaults: {model: fast}
   models:
@@ -227,20 +228,21 @@ providers:
       backend_refs: [{name: fast, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
     - name: deep
       backend_refs: [{name: deep, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
-routing:
-  decisions:
-    - name: choose
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: fast}, {model: deep}]
-      algorithm:
-        type: decision
-        decision:
-          deployment: gateway-d3
-          instructions: Which model should answer this request?
-          candidates:
-            fast: Quick answers to routine requests
-            deep: Careful multi-step reasoning
+recipes:
+  - name: default
+    decisions:
+      - name: choose
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: fast}, {model: deep}]
+        algorithm:
+          type: systemone
+          systemone:
+            deployment: gateway-d3
+            instructions: Which model should answer this request?
+            candidates:
+              fast: Quick answers to routine requests
+              deep: Careful multi-step reasoning
 global:
   model_catalog:
     deployments:
@@ -264,13 +266,13 @@ global:
 	defer remote.Close()
 	router := &OpenAIRouter{Config: cfg, decisionCards: cards, systemOneDecider: remote}
 	decision := cfg.GetDecisionByName("choose")
-	result, err := router.newDecisionModelSelector(*decision.Algorithm.Decision).Select(t.Context(), &selection.SelectionContext{
+	result, err := router.newDecisionModelSelector(*decision.Algorithm.SystemOne).Select(t.Context(), &selection.SelectionContext{
 		Query: "Prove that the square root of two is irrational.", DecisionName: decision.Name, CandidateModels: decision.ModelRefs,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.SelectedModel != "deep" || result.Method != selection.MethodDecision || gateway.asked.Load() != 1 {
+	if result.SelectedModel != "deep" || result.Method != selection.MethodSystemOne || gateway.asked.Load() != 1 {
 		t.Fatalf("result %+v after %d remote calls", result, gateway.asked.Load())
 	}
 	if body, _ := gateway.body.Load().(string); !strings.Contains(body, `"criteria":{"fast":"Quick answers to routine requests","deep":"Careful multi-step reasoning"}`) {

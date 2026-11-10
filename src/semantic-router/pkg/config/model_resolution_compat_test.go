@@ -14,20 +14,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// The golden files list, for each configuration, the model every active
-// signal of every scope resolves to and the model_runtime deployments the
-// Router starts. testdata/model_resolution/deprecated holds one fixture for
-// each deprecated way to choose a model; its golden is what the same
-// fixture resolved to before the fields were deprecated, except where the
-// release notes say otherwise: a systemone decision model now answers the
-// built-in signals (07), and a hazard part without a hazard deployment uses
-// the pre-declared hazard deployment instead of failing to load under a
-// systemone decision model (08). The maintained golden
-// pins the shipped configurations. UPDATE_MODEL_RESOLUTION=1 rewrites both.
+// The golden file lists, for each shipped configuration, the model every
+// active signal of every scope resolves to and the model_runtime deployments
+// the Router starts. UPDATE_MODEL_RESOLUTION=1 rewrites it.
 
 const (
-	deprecatedFixtures   = "testdata/model_resolution/deprecated"
-	deprecatedGolden     = "testdata/model_resolution/deprecated.golden.json"
 	maintainedGolden     = "testdata/model_resolution/maintained.golden.json"
 	maintainedRepoPrefix = "../../../../"
 )
@@ -44,10 +35,9 @@ var maintainedConfigDirs = []string{
 // resolutionSummary is a configuration's effective models: an error, or each
 // scope's active signals and the deployments it starts.
 type resolutionSummary struct {
-	Error    string            `json:"error,omitempty"`
-	Signals  map[string]string `json:"signals,omitempty"`
-	Started  []string          `json:"started,omitempty"`
-	Warnings int               `json:"deprecated_fields,omitempty"`
+	Error   string            `json:"error,omitempty"`
+	Signals map[string]string `json:"signals,omitempty"`
+	Started []string          `json:"started,omitempty"`
 }
 
 func resolvedIdentity(name string, d ModelDeployment) string {
@@ -57,12 +47,8 @@ func resolvedIdentity(name string, d ModelDeployment) string {
 		if !d.Managed() {
 			return fmt.Sprintf("model_runtime %s %s", d.Endpoint, d.ServedModel(name))
 		}
-		artifact := d.Artifact
-		if path := d.LegacyModelPath(); path != "" && RegisteredModel(path) == nil {
-			artifact = path
-		}
-		return strings.TrimSpace(fmt.Sprintf("model_runtime %s@%s %s replicas=%d", artifact, d.Revision, d.Device, len(d.Replicas)))
-	case ClassifyProvider, OpenAIChatProvider, LegacyHTTPProvider:
+		return strings.TrimSpace(fmt.Sprintf("model_runtime %s@%s %s replicas=%d", d.Artifact, d.Revision, d.Device, len(d.Replicas)))
+	case OpenAIChatProvider:
 		return strings.TrimSpace(fmt.Sprintf("remote %s %s", strings.TrimSuffix(strings.TrimRight(d.Endpoint, "/"), "/v1"), d.Model))
 	}
 	return strings.TrimSpace(fmt.Sprintf("%s %s %s", d.Provider, d.Endpoint, d.Model))
@@ -70,39 +56,21 @@ func resolvedIdentity(name string, d ModelDeployment) string {
 
 func summarizeResolution(cfg *RouterConfig) resolutionSummary {
 	summary := resolutionSummary{Signals: map[string]string{}}
-	for _, warning := range cfg.ModelResourceWarnings {
-		if warning.Code == warningDeprecatedModelField {
-			summary.Warnings++
-		}
-	}
-	if _, err := compileModelBindings(cfg); err != nil {
+	if err := validateModelBindingContracts(cfg); err != nil {
 		summary.Error = "plan: " + err.Error()
 		return summary
 	}
 	for recipe, scoped := range cfg.consumerScopes() {
-		for _, consumer := range scoped.scopeConsumers() {
-			if !TaskConsumerInUse(scoped, recipe, consumer) {
-				continue
-			}
-			key := string(recipe) + "/" + BindingKey(consumer)
-			resolved, ok, err := scoped.ResolveTask(consumer)
-			var deferred *DeferredModelError
-			switch {
-			case errors.As(err, &deferred):
-				summary.Signals[key] = "fails when it runs: " + deferred.Path
-			case err != nil:
-				summary.Signals[key] = "error: " + err.Error()
-			case !ok:
-				summary.Signals[key] = "none"
-			case resolved.Deployment.MissingLocalModel() != nil:
-				summary.Signals[key] = "fails when it runs: " + resolved.Deployment.LegacyModelPath()
-			default:
-				summary.Signals[key] = resolvedIdentity(resolved.Name, resolved.Deployment)
-			}
+		for _, requirement := range EmbeddingRequirements(scoped, false) {
+			summary.Signals[string(recipe)+"/embedding"] = resolvedIdentity(requirement.Deployment, cfg.ModelDeployments[requirement.Deployment])
 		}
-		for _, rule := range scoped.DecisionRules {
-			name := scoped.DecisionQuestionDeployment(rule)
-			summary.Signals[string(recipe)+"/decision."+rule.Name] = resolvedIdentity(name, cfg.ModelDeployments[name])
+		for _, rule := range scoped.SystemOneRules {
+			name := scoped.SystemOneRuleDeployment(rule)
+			summary.Signals[string(recipe)+"/systemone."+rule.Name] = resolvedIdentity(name, cfg.ModelDeployments[name])
+		}
+		for _, rule := range scoped.ApplicationRules() {
+			name := scoped.SystemOneRuleDeployment(rule.Rule)
+			summary.Signals[string(recipe)+"/"+rule.Type+"."+rule.Rule.Name] = resolvedIdentity(name, cfg.ModelDeployments[name])
 		}
 	}
 	for name, deployment := range ModelRuntimeDeploymentsInUse(cfg) {
@@ -110,18 +78,6 @@ func summarizeResolution(cfg *RouterConfig) resolutionSummary {
 	}
 	sort.Strings(summary.Started)
 	return summary
-}
-
-func summarizeFile(path string) resolutionSummary {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return resolutionSummary{Error: err.Error()}
-	}
-	cfg, err := ParseYAMLBytesWithoutEnvExpansion(data)
-	if err != nil {
-		return resolutionSummary{Error: err.Error()}
-	}
-	return summarizeResolution(cfg)
 }
 
 func compareResolutionGolden(t *testing.T, golden string, got map[string]resolutionSummary) {
@@ -169,22 +125,6 @@ func sortedSummaryKeys(maps ...map[string]resolutionSummary) []string {
 	return keys
 }
 
-func TestDeprecatedModelFieldsResolveAsBefore(t *testing.T) {
-	files, err := filepath.Glob(filepath.Join(deprecatedFixtures, "*.yaml"))
-	if err != nil || len(files) == 0 {
-		t.Fatalf("no fixtures: %v", err)
-	}
-	got := map[string]resolutionSummary{}
-	for _, file := range files {
-		summary := summarizeFile(file)
-		if summary.Error == "" && summary.Warnings == 0 {
-			t.Errorf("%s writes deprecated fields but loads without a deprecation warning", file)
-		}
-		got[filepath.Base(file)] = summary
-	}
-	compareResolutionGolden(t, deprecatedGolden, got)
-}
-
 func TestMaintainedConfigsResolveToTheirModels(t *testing.T) {
 	got := map[string]resolutionSummary{}
 	repo := os.DirFS(maintainedRepoPrefix)
@@ -225,11 +165,6 @@ func TestMaintainedConfigsResolveToTheirModels(t *testing.T) {
 		})
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			t.Fatal(err)
-		}
-	}
-	for path, summary := range got {
-		if summary.Warnings > 0 {
-			t.Errorf("%s writes %d deprecated model fields; write the canonical form", path, summary.Warnings)
 		}
 	}
 	compareResolutionGolden(t, maintainedGolden, got)

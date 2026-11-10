@@ -17,7 +17,7 @@ spec:
         value: /
       headers:
       - type: Exact
-        name: x-selected-model
+        name: x-vsr-route-model
         value: gpt-4o-mini
     filters:
     - type: RequestHeaderModifier

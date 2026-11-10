@@ -44,22 +44,39 @@ translation:
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
-      similarity_threshold: 0.8
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        semantic:
+          match:
+            recall: {top_k: 1, min_similarity: 0.8}
 ```
+
+store 只提供缓存后端。[`response_cache` 插件](../plugin/response-cache)负责开启缓存：写在 `global.plugins` 中对每个请求生效，写在决策的插件中只对该决策的请求生效。
 
 #### 否定防护 {#negation-guard}
 
-双编码器相似度可能无法区分 *“turn on dark mode”* 和 *“turn off dark mode”*：相反含义的查询常常超过 `similarity_threshold`，而真正的改写可能低于它，因此提高阈值不能可靠地避免误命中。所有缓存后端都会在返回语义候选前执行词面防护：对词面接近的英文问题，检查否定线索和已知反义词替换。它不需要模型、没有任何设置，在内存、Redis、Valkey、Milvus、Qdrant 和混合缓存中始终运行；不覆盖缺少词面线索、仅词序变化或非英文的含义变化。
+双编码器相似度可能无法区分 *“turn on dark mode”* 和 *“turn off dark mode”*：相反含义的查询常常超过召回的 `min_similarity`，而真正的改写可能低于它，因此提高阈值不能可靠地避免误命中。所有缓存后端都会在返回语义候选前执行词面防护：对词面接近的英文问题，检查否定线索和已知反义词替换。它不需要模型、没有任何设置，在内存、Redis、Valkey、Milvus、Qdrant 和混合缓存中始终运行；不覆盖缺少词面线索、仅词序变化或非英文的含义变化。
 
-拒绝会记录为 `cache_negation_reject`，计入未命中，被拒绝的分数仍通过 `x-vsr-cache-similarity` 提供。远端和混合缓存会拒绝缺少原始问题的候选，并继续检查有数量上限的已检索候选。混合缓存回退到 Milvus 时同样执行该检查。
+拒绝会记录为 `cache_negation_reject`，计入未命中，被拒绝的分数仍作为 `x-vsr-trace` 的 `cache_similarity` 提供。远端和混合缓存会拒绝缺少原始问题的候选，并继续检查有数量上限的已检索候选。混合缓存回退到 Milvus 时同样执行该检查。
 
 早期版本用 `polarity_guard` 配置它，内存后端还可选 NLI 层（`nli`、`lexical+nli`）。NLI 模型已退役，路由器会拒绝 `polarity_guard`；`vllm-sr config migrate` 会移除它。
 
 ### 记忆 {#memory}
 
-记忆存储支持三种后端：`milvus`（默认）、`valkey` 和 `qdrant`。
+记忆存储支持三种后端：`milvus`（默认）、`valkey` 和 `qdrant`。带 `memory` 源的 [`context` 插件](../plugin/context#memory-sources)负责读写它：写在 `global.plugins` 中对每个请求生效，写在决策的插件中只对该决策的请求生效：
+
+```yaml
+global:
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        sources:
+          - type: memory
+```
 
 **Milvus 后端**（默认）：
 
@@ -67,7 +84,6 @@ global:
 global:
   stores:
     memory:
-      enabled: true
       milvus:
         address: milvus:19530
         collection: agentic_memory
@@ -80,7 +96,6 @@ global:
 global:
   stores:
     memory:
-      enabled: true
       backend: valkey
       valkey:
         host: valkey
@@ -97,19 +112,17 @@ global:
 global:
   stores:
     memory:
-      enabled: true
       backend: qdrant
       qdrant:
         host: qdrant
         port: 6334
         collection: agentic_memory
         dimension: 256
-      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.30
 ```
 
-三个示例都使用默认的 `mmbert`（Vela Embedding）生成嵌入，因此 `dimension` 取其提供的维度之一：64、128、256、512 或 768。
+三个示例都使用 `embeddings.default` 指定的 Vela Embedding 生成嵌入，因此 `dimension` 取其提供的维度之一：64、128、256、512 或 768。用别的模型建索引的库，要在 `embedding` 块里写明它的部署和维度（见[嵌入](../../model-runtime/guides/embeddings.md#stores-indexed-with-another-model)）。
 若设为其他值，Router 会记录 `Failed to create memory store: … Memory will be disabled`，并在没有记忆的情况下运行。
 Qdrant 示例的 0.30 阈值基于原始余弦分数，只是起点，而不是校准值；上线前还需检查无关查询和已更正的旧事实。
 
@@ -136,7 +149,7 @@ global:
 
 #### 混合检索与反思 {#hybrid-search-and-reflection}
 
-`hybrid_mode` 和 `reflection.algorithm` 可以在 `global.stores.memory` 下全局设置，也可以在决策的 `memory` 插件中覆盖。配置其他任何值（包括 recipe 决策中设置的值）时，Router 将拒绝启动：
+`hybrid_mode` 和 `reflection.algorithm` 可以在 `global.stores.memory` 下全局设置，也可以在决策 `context` 插件的记忆源中覆盖。配置其他任何值（包括 recipe 决策中设置的值）时，Router 将拒绝启动：
 
 | 字段 | 可接受的值 | 默认值 |
 |------|-----------|--------|
@@ -168,18 +181,12 @@ global:
 
 ### 工具 {#tools}
 
-```yaml
-global:
-  integrations:
-    tools:
-      enabled: true
-      top_k: 3
-      tools_db_path: config/runtime/tools/tools_db.json
-```
+工具目录属于决策，而不属于 `global`：决策的[工具插件](../plugin/tools.md)中 `select.tools_db_path`
+指定其 add 模式从中选择的目录。
 
 ## 数据与安全 {#data-and-security}
 
 - 缓存、memory 和向量存储可能包含提示词、响应、嵌入、检索文档或提取的记忆。为所选后端配置认证、加密、保留策略和租户/用户范围。
 - 嵌入维度必须与现有集合匹配。嵌入模型或维度变更时，请重建或迁移索引。
-- 工具检索控制向模型展示什么；它不授权工具执行。请在工具服务上强制权限。
+- 工具选择控制向模型展示什么；它不授权工具执行。请在工具服务上强制权限。
 - 见[完整后端示例](https://github.com/vllm-project/semantic-router/tree/main/config/runtime)以及 [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml) 中的完整配置契约。

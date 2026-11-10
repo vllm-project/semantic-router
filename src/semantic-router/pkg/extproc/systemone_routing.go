@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 )
@@ -78,6 +79,9 @@ func (r *OpenAIRouter) RouteSystemOne(ctx context.Context, model string, body js
 		classification.ConversationFacts{}, "", classification.RequestFacts{Context: ctx}, recipe.Profile.Decisions,
 	)
 	metrics.RecordSystemOneSignalCalls(ledger.Used() - signalCallsBefore)
+	if principal.Refused(ctx) {
+		return http.StatusUnauthorized, nil, principal.ErrCredentialMissing
+	}
 	if contextErr := ctx.Err(); contextErr != nil {
 		if errors.Is(contextErr, context.DeadlineExceeded) {
 			return systemOneBudgetExhausted(http.StatusGatewayTimeout, "deadline", contextErr, ledger)
@@ -113,6 +117,9 @@ func (r *OpenAIRouter) RouteSystemOne(ctx context.Context, model string, body js
 	ctx, cancel = context.WithDeadline(ctx, requestStarted.Add(duration))
 	defer cancel()
 	result, err := executor.Execute(ctx, request, invoke)
+	if principal.Refused(ctx) {
+		return http.StatusUnauthorized, nil, principal.ErrCredentialMissing
+	}
 	if err != nil {
 		if errors.Is(err, budget.ErrExhausted) {
 			return systemOneBudgetExhausted(http.StatusServiceUnavailable, "max_calls", err, ledger)
@@ -135,7 +142,7 @@ func (r *OpenAIRouter) RouteSystemOne(ctx context.Context, model string, body js
 	response["routing"], _ = json.Marshal(map[string]any{
 		"recipe": string(recipe.Name), "decision": decision.Decision.Name,
 		"algorithm": decision.Decision.Algorithm.Type, "stage": result.Stage, "selected_model": result.Model,
-		"quality": decision.Decision.Algorithm.Quality.Type, "model_calls": ledger.Used(),
+		"quality": decision.Decision.Algorithm.NativeQuality().EffectiveType(), "model_calls": ledger.Used(),
 	})
 	encoded, err := json.Marshal(response)
 	return http.StatusOK, encoded, err

@@ -14,7 +14,7 @@ from cli.validator import validate_user_config
 
 def _write_config(tmp_path, aliases, address="127.0.0.1"):
     document = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "local", "address": address, "port": 8899}],
         "providers": {
             "defaults": {"model": aliases[0]},
@@ -28,7 +28,7 @@ def _write_config(tmp_path, aliases, address="127.0.0.1"):
                 for index, alias in enumerate(aliases)
             ],
         },
-        "routing": {},
+        "recipes": [{"name": "default"}],
     }
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(document))
@@ -46,7 +46,7 @@ def _model_routes(rendered):
         header["string_match"]["exact"]: route["route"]["cluster"]
         for route in _routes(rendered)
         for header in route["match"].get("headers", [])
-        if header["name"] == "x-selected-model"
+        if header["name"] == "x-vsr-route-model"
     }
 
 
@@ -190,14 +190,14 @@ def test_bridge_listener_is_reachable_without_widening_host_publication(
 @pytest.mark.parametrize(
     ("configured", "stripped"),
     [
-        (None, ["x-vsr-gateway-credential"]),
+        (None, ["x-vsr-delegated-credential"]),
         (
             " X-Gateway-Token ",
-            ["x-vsr-gateway-credential", "x-gateway-token"],
+            ["x-vsr-delegated-credential", "x-gateway-token"],
         ),
     ],
 )
-def test_gateway_credential_is_stripped_ahead_of_extproc(
+def test_delegated_credential_is_stripped_ahead_of_extproc(
     tmp_path, configured, stripped
 ):
     path = _write_config(tmp_path, ["model-a"])
@@ -205,7 +205,7 @@ def test_gateway_credential_is_stripped_ahead_of_extproc(
     document["listeners"][0]["api_keys"] = ["listener-key"]
     if configured is not None:
         document["global"] = {
-            "services": {"authz": {"gateway_credential": {"header": configured}}}
+            "services": {"authz": {"delegated_credential": {"header": configured}}}
         }
     path.write_text(yaml.safe_dump(document))
     config = parse_user_config(str(path))
@@ -230,11 +230,11 @@ def test_gateway_credential_is_stripped_ahead_of_extproc(
     assert set(stripped) <= set(removed)
 
 
-def test_gateway_credential_header_must_be_a_plain_name(tmp_path):
+def test_delegated_credential_header_must_be_a_plain_name(tmp_path):
     path = _write_config(tmp_path, ["model-a"])
     document = yaml.safe_load(path.read_text())
     document["global"] = {
-        "services": {"authz": {"gateway_credential": {"header": 'x-a")..evil'}}}
+        "services": {"authz": {"delegated_credential": {"header": 'x-a")..evil'}}}
     }
     path.write_text(yaml.safe_dump(document))
     config = parse_user_config(str(path))

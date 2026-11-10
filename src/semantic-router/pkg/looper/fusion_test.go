@@ -323,7 +323,8 @@ func TestResolveFusionExecutionConfigAllowsCallTraceVisibility(t *testing.T) {
 func newRecipeOwnedFusionRequest() *Request {
 	req := newFusionTestRequest()
 	req.Algorithm = &config.AlgorithmConfig{
-		Type: config.DecisionAlgorithmFusion,
+		Type:    config.DecisionAlgorithmFusion,
+		OnError: config.FusionOnErrorFail,
 		Fusion: &config.FusionAlgorithmConfig{
 			Model:          "recipe-judge",
 			AnalysisModels: []string{"recipe-panel-a", "recipe-panel-b"},
@@ -339,7 +340,6 @@ func newRecipeOwnedFusionRequest() *Request {
 			Temperature:                  float64Ptr(0.4),
 			IncludeAnalysis:              boolPtr(true),
 			IncludeIntermediateResponses: boolPtr(true),
-			OnError:                      config.FusionOnErrorFail,
 			AnalysisTemplate:             "recipe analysis",
 			SynthesisTemplate:            "recipe synthesis",
 			JudgePromptVersion:           "recipe-v1",
@@ -496,13 +496,13 @@ func TestFusionLooperPanelQuorumSkipsSlowWorker(t *testing.T) {
 
 	req := newFusionTestRequest()
 	req.Algorithm = &config.AlgorithmConfig{
-		Type: "fusion",
+		Type:    "fusion",
+		OnError: config.FusionOnErrorSkip,
 		Fusion: &config.FusionAlgorithmConfig{
 			Model:                  "judge",
 			AnalysisModels:         []string{"panel-a", "panel-b", "panel-c"},
 			MaxConcurrent:          3,
 			MinSuccessfulResponses: 2,
-			OnError:                config.FusionOnErrorSkip,
 		},
 	}
 
@@ -836,13 +836,13 @@ func TestFusionRecipeOwnedQuorumAndFallbackCannotBeWeakened(t *testing.T) {
 
 			req := newFusionTestRequest()
 			req.Algorithm = &config.AlgorithmConfig{
-				Type: config.DecisionAlgorithmFusion,
+				Type:    config.DecisionAlgorithmFusion,
+				OnError: tt.recipeOnError,
 				Fusion: &config.FusionAlgorithmConfig{
 					Model:                  "judge",
 					AnalysisModels:         []string{"panel-a", "panel-b"},
 					MaxConcurrent:          2,
 					MinSuccessfulResponses: tt.recipeQuorum,
-					OnError:                tt.recipeOnError,
 				},
 			}
 			req.Fusion = &config.FusionRequestConfig{
@@ -882,11 +882,11 @@ func TestFusionLooperUsesDecisionModelRefs(t *testing.T) {
 func TestFusionLooperRejectsInvalidOnError(t *testing.T) {
 	req := newFusionTestRequest()
 	req.Algorithm = &config.AlgorithmConfig{
-		Type: "fusion",
+		Type:    "fusion",
+		OnError: "ignore",
 		Fusion: &config.FusionAlgorithmConfig{
 			Model:          "judge",
 			AnalysisModels: []string{"panel-a"},
-			OnError:        "ignore",
 		},
 	}
 

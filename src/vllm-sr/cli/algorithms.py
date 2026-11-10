@@ -12,13 +12,22 @@ from pydantic import (
     model_validator,
 )
 
-from cli.config_schema import surface_types
+from cli.config_algorithm_forms import REMOVED_ALGORITHM_TYPES
+from cli.config_schema import routing_surface_catalog, surface_types
 
 from .config_contract import QuorumFailurePolicy
-from .models_decision import DecisionSelectionConfig
-from .models_native import AlgorithmBudget, NativeQuality, NativeStage
+from .models_native import AlgorithmBudget, EscalateAlgorithm
+from .models_systemone import SystemOneSelectionConfig
 
 SUPPORTED_ALGORITHM_TYPES = frozenset(surface_types("algorithms"))
+
+# Executors call several candidates and read the shared budget and on_error;
+# selectors choose one candidate before calling it.
+EXECUTOR_ALGORITHM_TYPES = frozenset(
+    entry["type"]
+    for entry in routing_surface_catalog().get("algorithms", [])
+    if isinstance(entry, dict) and entry.get("kind") == "executor"
+)
 
 # Types the Router retired, whose blocks are refused rather than passed on as
 # a Router build's own algorithm.
@@ -51,47 +60,12 @@ class ModelRef(BaseModel):
     weight: float | None = None
 
 
-class HybridWeightsConfig(BaseModel):
-    """Weights configuration for hybrid confidence method."""
-
-    logprob_weight: float | None = 0.5  # Weight for avg_logprob (default: 0.5)
-    margin_weight: float | None = 0.5  # Weight for margin (default: 0.5)
-
-
-class ConfidenceAlgorithmConfig(BaseModel):
-    """Configuration for confidence algorithm.
-
-    This algorithm tries smaller models first and escalates to larger models if confidence is low.
-    """
-
-    # Confidence evaluation method
-    # - "avg_logprob": Use average logprob across all tokens (default)
-    # - "margin": Use average margin between top-1 and top-2 logprobs (more accurate)
-    # - "hybrid": Use weighted combination of both methods
-    confidence_method: str | None = "avg_logprob"
-
-    # Threshold for escalation (meaning depends on confidence_method)
-    # For avg_logprob: negative, closer to 0 = more confident (default: -1.0)
-    # For margin: positive, higher = more confident (default: 0.5)
-    # For hybrid: 0-1 normalized score (default: 0.5)
-    threshold: float | None = None
-
-    # Hybrid weights (only used when confidence_method="hybrid")
-    hybrid_weights: HybridWeightsConfig | None = None
-
-    # Behavior on model call failure: "skip" or "fail"
-    on_error: str | None = "skip"
-
-    max_response_bytes: int | None = Field(default=None, ge=0)
-
-
 class RatingsAlgorithmConfig(BaseModel):
-    """Configuration for the ratings looper algorithm."""
+    """Configuration for the ratings executor."""
 
     model_config = ConfigDict(extra="forbid")
 
     max_concurrent: int | None = Field(default=None, ge=1)
-    on_error: str | None = "skip"
 
 
 class ReMoMAlgorithmConfig(BaseModel):
@@ -135,14 +109,11 @@ class ReMoMAlgorithmConfig(BaseModel):
     max_completion_tokens: int | None = Field(default=None, ge=1)
 
     # Maximum wall-clock time to wait for a ReMoM round before using partial
-    # responses when on_error="skip".
+    # responses when algorithm.on_error="skip".
     round_timeout_seconds: int | None = Field(default=None, ge=1)
 
     # Return from a parallel round as soon as this many responses succeed.
     min_successful_responses: int | None = Field(default=None, ge=1)
-
-    # Behavior on model call failure: "skip" or "fail"
-    on_error: str | None = "skip"
 
     # Random seed for shuffling responses (for reproducibility)
     shuffle_seed: int | None = 42
@@ -215,10 +186,9 @@ class FusionAlgorithmConfig(BaseModel):
     temperature: float | None = Field(default=None, ge=0)
     include_analysis: bool | None = True
     include_intermediate_responses: bool | None = True
-    on_error: Literal["skip", "fail"] | None = "skip"
     # Panel-level policy for a usable-response count below
-    # min_successful_responses. Independent of on_error, which only governs a
-    # single failed panel attempt. Bounds here MUST match the Go validator in
+    # min_successful_responses. Independent of algorithm.on_error, which only
+    # governs a single failed panel attempt. Bounds here MUST match the Go validator in
     # pkg/config/fusion_config.go (validateFusionQuorumFailure).
     quorum_failure_policy: QuorumFailurePolicy | None = None
     quorum_fallback_target: str | None = None
@@ -306,102 +276,6 @@ class WorkflowsAlgorithmConfig(BaseModel):
     min_successful_responses: int | None = Field(default=None, ge=1)
     temperature: float | None = Field(default=None, ge=0)
     include_intermediate_responses: bool | None = True
-    on_error: Literal["skip", "fail"] | None = "fail"
-
-
-class LatencyAwareAlgorithmConfig(BaseModel):
-    """Configuration for latency_aware algorithm."""
-
-    tpot_percentile: int | None = None
-    ttft_percentile: int | None = None
-    description: str | None = None
-
-
-# =============================================================================
-# Model Selection Algorithm Configs
-# Reference papers:
-#   - RouterDC: Query-Based Router by Dual Contrastive Learning (arXiv:2409.19886)
-#   - AutoMix: Automatically Mixing Language Models (arXiv:2310.12963)
-#   - Hybrid: Cost-Efficient Quality-Aware Query Routing (arXiv:2404.14618)
-# =============================================================================
-
-
-class RouterDCSelectionConfig(BaseModel):
-    """Configuration for RouterDC (Dual-Contrastive) model selection.
-
-    Matches queries to models using embedding similarity based on model descriptions.
-    """
-
-    # Temperature for softmax scaling (default: 0.07)
-    temperature: float | None = Field(default=0.07, gt=0)
-
-    # Embedding dimension size (default: 768)
-    dimension_size: int | None = Field(default=768, gt=0)
-
-    # Minimum similarity threshold for valid matches
-    min_similarity: float | None = Field(default=0.3, ge=0, le=1)
-
-    # Enable query-side contrastive learning
-    use_query_contrastive: bool | None = True
-
-    # Enable model-side contrastive learning
-    use_model_contrastive: bool | None = True
-
-    # Require all models to have descriptions
-    require_descriptions: bool | None = False
-
-    # Include capability tags in embeddings
-    use_capabilities: bool | None = True
-
-
-class AutoMixSelectionConfig(BaseModel):
-    """Configuration for AutoMix (POMDP-based) model selection.
-
-    Optimizes cost-quality tradeoff using Partially Observable MDP.
-    """
-
-    # Self-verification confidence threshold (default: 0.7)
-    verification_threshold: float | None = Field(default=0.7, ge=0, le=1)
-
-    # Maximum escalation attempts (default: 2)
-    max_escalations: int | None = Field(default=2, ge=0)
-
-    # Enable cost-quality tradeoff optimization
-    cost_aware_routing: bool | None = True
-
-    # Balance between cost (1.0) and quality (0.0) (default: 0.3)
-    cost_quality_tradeoff: float | None = Field(default=0.3, ge=0, le=1)
-
-    # POMDP discount factor (default: 0.95)
-    discount_factor: float | None = Field(default=0.95, ge=0, le=1)
-
-    # Use logprobs for confidence verification
-    use_logprob_verification: bool | None = True
-
-
-class HybridSelectionConfig(BaseModel):
-    """Configuration for Hybrid model selection.
-
-    Combines multiple selection methods with configurable weights.
-    """
-
-    # Weight for feedback-derived experience evidence (0-1).
-    experience_weight: float | None = Field(default=0.3, ge=0, le=1)
-
-    # Weight for RouterDC embedding similarity (0-1)
-    router_dc_weight: float | None = Field(default=0.3, ge=0, le=1)
-
-    # Weight for AutoMix POMDP value (0-1)
-    automix_weight: float | None = Field(default=0.2, ge=0, le=1)
-
-    # Weight for cost consideration (0-1)
-    cost_weight: float | None = Field(default=0.2, ge=0, le=1)
-
-    # Quality gap threshold for escalation
-    quality_gap_threshold: float | None = Field(default=0.1, ge=0, le=1)
-
-    # Normalize scores before combination
-    normalize_scores: bool | None = True
 
 
 class MultiFactorWeightsConfig(BaseModel):
@@ -502,31 +376,15 @@ class MultiFactorSelectionConfig(BaseModel):
         return self
 
 
-class PromptSelectionConfig(BaseModel):
-    """Configuration for prompt-driven candidate selection."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    model: str
-    instructions: str
-    timeout_seconds: int | None = Field(default=None, ge=0)
-
-    @model_validator(mode="after")
-    def validate_required_text(self):
-        if not self.model.strip():
-            raise ValueError("model is required")
-        if not self.instructions.strip():
-            raise ValueError("instructions are required")
-        return self
-
-
 class AlgorithmConfig(BaseModel):
     """Algorithm configuration for multi-model decisions.
 
-    Specifies how multiple models in a decision should be orchestrated.
+    A selector chooses one candidate before calling it; an executor calls
+    several and returns one response. Each type's settings are the block
+    named after it; budget and on_error are the executors' shared settings.
 
-    The supported selector and looper types come from the generated Router
-    contract. Cross-request systems live under global.router.learning.
+    The supported types come from the generated Router contract.
+    Cross-request systems live under global.router.learning.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -550,6 +408,7 @@ class AlgorithmConfig(BaseModel):
         if (
             algorithm_type in SUPPORTED_ALGORITHM_TYPES
             or algorithm_type in RETIRED_ALGORITHM_TYPES
+            or algorithm_type in REMOVED_ALGORITHM_TYPES
             or algorithm_type not in data
         ):
             return data
@@ -583,63 +442,50 @@ class AlgorithmConfig(BaseModel):
             data.update(self.extensions)
         return data
 
-    # Native payloads are structural projections of the generated Go schema.
-    quality: NativeQuality | None = None
-    stages: list[NativeStage] | None = None
+    # The executors' shared settings: the calls an executor may make within
+    # its deadline, and what it does when its calls fail.
     budget: AlgorithmBudget | None = None
+    on_error: str | None = None
 
-    # Looper algorithm configurations
-    confidence: ConfidenceAlgorithmConfig | None = None
+    # The executors' blocks. escalate is a structural projection of the
+    # generated Go schema: its Chat accept check or its System One stages.
+    escalate: EscalateAlgorithm | None = None
     ratings: RatingsAlgorithmConfig | None = None
     remom: ReMoMAlgorithmConfig | None = None
     fusion: FusionAlgorithmConfig | None = None
     workflows: WorkflowsAlgorithmConfig | None = None
-    latency_aware: LatencyAwareAlgorithmConfig | None = None
 
-    # Selection algorithm configurations
-    router_dc: RouterDCSelectionConfig | None = None
-    automix: AutoMixSelectionConfig | None = None
-    hybrid: HybridSelectionConfig | None = None
+    # The selectors' blocks.
     multi_factor: MultiFactorSelectionConfig | None = None
-    prompt: PromptSelectionConfig | None = None
-    decision: DecisionSelectionConfig | None = None
-    # Behavior on algorithm failure: "skip" or "fail"
-    on_error: str | None = "skip"
+    systemone: SystemOneSelectionConfig | None = None
 
     @model_validator(mode="after")
-    def native_execution_fields(self):
-        if self.type == "cascade":
-            if self.minimum_candidates is not None:
-                raise ValueError("cascade uses authored stages, not minimum_candidates")
-            if "on_error" not in self.model_fields_set:
-                self.on_error = None
-            elif self.on_error:
-                raise ValueError("native algorithms do not support on_error")
-            if not self.quality or not self.stages or not self.budget:
-                raise ValueError(
-                    "cascade requires quality, stages and algorithm.budget"
-                )
-        elif (
-            self.quality is not None
-            or self.stages is not None
-            or self.budget is not None
-        ):
-            raise ValueError("native budget, quality and stages require cascade")
+    def executor_settings(self):
+        if self.type in EXECUTOR_ALGORITHM_TYPES:
+            return self
+        if self.budget is not None or self.on_error:
+            raise ValueError(
+                f"algorithm.budget and algorithm.on_error apply to executors; {self.type} is a selector"
+            )
         return self
 
     @model_validator(mode="after")
-    def normalize_prompt_fallback(self):
-        if self.type == "prompt":
-            if self.prompt is None:
-                raise ValueError("algorithm.type=prompt requires prompt configuration")
-            if self.on_error == "skip":
-                self.on_error = "fallback"
-            if self.on_error not in (None, "", "fallback"):
-                raise ValueError("prompt on_error must be fallback")
-        elif self.prompt is not None:
-            raise ValueError("prompt configuration requires algorithm.type=prompt")
-        if self.type == "decision" and self.decision is None:
-            raise ValueError("algorithm.type=decision requires decision configuration")
-        if self.type != "decision" and self.decision is not None:
-            raise ValueError("decision configuration requires algorithm.type=decision")
+    def required_blocks(self):
+        if self.type == "escalate" and self.escalate is None:
+            raise ValueError("algorithm.type=escalate requires escalate configuration")
+        if self.type == "escalate" and self.escalate.get("stages"):
+            if self.budget is None:
+                raise ValueError("escalate stages require algorithm.budget")
+            if self.minimum_candidates is not None:
+                raise ValueError(
+                    "escalate stages name their models; minimum_candidates is a Chat setting"
+                )
+        if self.type == "systemone" and self.systemone is None:
+            raise ValueError(
+                "algorithm.type=systemone requires systemone configuration"
+            )
+        if self.type != "systemone" and self.systemone is not None:
+            raise ValueError(
+                "systemone configuration requires algorithm.type=systemone"
+            )
         return self

@@ -369,7 +369,7 @@ scores just above the `confidential` threshold, and a correction wrapped in a
 translation request scores just above `quoted`. Validate representative
 traffic, and prefer a larger decision model where routing errors are costly.
 Context accounting includes conversation history and output reserves but remains
-an estimate rather than a provider-tokenizer guarantee. Learned signals can
+an estimate rather than a provider-tokenizer guarantee. Model-judged signals can
 misclassify requests, so validate representative traffic before rollout.
 
 Balance's effort boundaries and its code lane were chosen with Vela 2.0 4B on

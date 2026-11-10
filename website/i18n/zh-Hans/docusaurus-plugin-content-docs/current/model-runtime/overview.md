@@ -2,7 +2,7 @@
 is_mtpe: false
 title: 模型运行时
 sidebar_label: 概览
-description: 对请求进行分类、防护、向量化和路由的模型都运行在内置模型运行时中。从这里开始。
+description: Router 会询问的决策模型和嵌入模型都运行在内置模型运行时中。从这里开始。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/model-runtime/overview.md"
@@ -11,7 +11,7 @@ translation:
 
 # 模型运行时
 
-**内置模型运行时**提供路由功能需要的判断、分类、embedding、重排序和幻觉检测模型。
+**内置模型运行时**提供路由功能会询问的模型：回答每个 System One 问题的[决策模型](../system-one/overview)，以及召回功能使用的嵌入模型。
 它可以管理本地 worker，也可以附加到独立运行的 worker。绑定到[远程服务](../installation/runtime/external)的功能则调用相应服务。
 
 运行时不是你的聊天模型运行的地方。回答用户的模型留在你的提供方后面（vLLM、Ollama、托管 API）；
@@ -42,14 +42,8 @@ Router 模式可以同时提供原生 System One 与经过路由的 Chat 请求�
 
 | 任务 | 内置模型 | 指南 |
 | --- | --- | --- |
-| 识别领域、判断是否需要事实核查、读取用户反馈、识别请求的输出模态 | Vela 1.0 Domain、FactCheck、Feedback、Modality | [请求分类](model-runtime/guides/classify.md) |
-| 发现个人信息 | Vela 1.0 PII | [检测 PII](model-runtime/guides/pii.md) |
-| 拦截提示词攻击和不安全内容 | Vela 1.0 Guard、Safety、Shield、Hazard | [提示词攻击与不安全内容](model-runtime/guides/safety.md) |
-| 对照来源检查回答 | Vela 1.0 Halu | [幻觉检查](model-runtime/guides/hallucination.md) |
-| 语义缓存、记忆、RAG、工具选择、embedding 信号 | Vela 1.0 Embedding、Qwen3-Embedding-0.6B | [Embeddings](model-runtime/guides/embeddings.md) |
-| 对检索到的文档重排序 | Vela 1.0 Reranker | [文档重排序](model-runtime/guides/rerank.md) |
-| 按图片和音频路由 | Vela 1.0 Omni Nano 和 Mini | [图片与音频](model-runtime/guides/multimodal.md) |
-| 用自然语言提出你自己的路由问题 | Decision 2.0、Decision 1.0、Vela 2.0 | [决策模型](model-runtime/guides/decisions.md) |
+| 回答每个路由判断：应用信号、你自己的问题、System One 选择器、防护和评审 | Vela 3.0（默认为 vela3-fast）、Decision 3.0、Decision 2.0 和 1.0、Vela 2.0 | [System One](../system-one/overview) |
+| 为响应缓存、记忆和 RAG 召回 | Vela 1.0 Embedding、Qwen3-Embedding-0.6B | [Embeddings](model-runtime/guides/embeddings.md) |
 
 [选择模型](model-runtime/choose-a-model.md)帮助你挑选规模和硬件。
 

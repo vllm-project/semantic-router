@@ -4,7 +4,7 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -16,84 +16,88 @@ config:
             provider: vllm
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    # Both response_jailbreak decisions are selected by a deterministic
-    # keyword signal, so the E2E exercises the same harness path a real
-    # request takes (auto model -> signal -> decision -> plugin) rather than
-    # a passthrough to a concrete backend model, which skips plugins
-    # entirely (see performDecisionEvaluation).
-    #
-    # There is deliberately no request-direction jailbreak rule here:
-    # prompt_guard is enabled for the response filter, but nothing on the
-    # request path thresholds it, so the probe prompt reaches the backend and
-    # comes back as LLM output - which is the surface under test. The one
-    # jailbreak rule below has direction: response, so it is scored from that
-    # output only.
-    decisions:
-      - name: response_jailbreak_block
-        description: Blocks the response when the guardrail flags LLM output
-        priority: 200
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: response_block_probe
-        modelRefs:
-          - model: openai/mock-model
-            use_reasoning: false
-        plugins:
-          - type: response_jailbreak
-            configuration:
-              enabled: true
-              threshold: 0.5
-              action: block
-      - name: response_jailbreak_warn
-        description: Warns via x-vsr-response-warnings when the guardrail flags LLM output
-        priority: 200
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: response_warn_probe
-        modelRefs:
-          - model: openai/mock-model
-            use_reasoning: false
-        plugins:
-          - type: response_jailbreak
-            configuration:
-              enabled: true
-              threshold: 0.5
-              action: header
-      - name: default_decision
-        description: Catch-all decision with response jailbreak detection disabled
-        priority: 1
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: openai/mock-model
-            use_reasoning: false
-    signals:
-      keywords:
-        - name: response_block_probe
-          operator: OR
-          keywords:
-            - __response_block_probe__
-        - name: response_warn_probe
-          operator: OR
-          keywords:
-            - __response_warn_probe__
-      # Scored from the model's output, not the request. The block and warn
-      # decisions above enforce on this observation through their
-      # response_jailbreak plugins; their plugin thresholds are ignored once
-      # this rule exists, so the threshold that decides lives here.
-      jailbreak:
-        - name: unsafe_completion
-          direction: response
-          threshold: 0.5
-          description: Detect jailbreak content in the model's own output.
-    modelCards:
-      - name: openai/mock-model
+  recipes:
+    - name: default
+      # Both response_guard decisions are selected by a deterministic
+      # keyword signal, so the E2E exercises the same harness path a real
+      # request takes (auto model -> signal -> decision -> plugin) rather than
+      # a passthrough to a concrete backend model, which skips plugins
+      # entirely (see performDecisionEvaluation).
+      #
+      # There is deliberately no request-stage jailbreak rule here: nothing on
+      # the request path asks about the probe prompt, so it reaches the backend
+      # and comes back as LLM output - which is the surface under test. The one
+      # jailbreak rule below has stage: response, so it is asked about that
+      # output only.
+      decisions:
+        - name: response_jailbreak_block
+          description: Blocks the response when the guardrail flags LLM output
+          priority: 200
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: response_block_probe
+          modelRefs:
+            - model: openai/mock-model
+              use_reasoning: false
+          plugins:
+            - type: response_guard
+              configuration:
+                rules:
+                  - when:
+                      type: jailbreak
+                      name: unsafe_completion
+                    action: block
+                on_unknown: block
+        - name: response_jailbreak_warn
+          description: Warns via x-vsr-warnings when the guardrail flags LLM output
+          priority: 200
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: response_warn_probe
+          modelRefs:
+            - model: openai/mock-model
+              use_reasoning: false
+          plugins:
+            - type: response_guard
+              configuration:
+                rules:
+                  - when:
+                      type: jailbreak
+                      name: unsafe_completion
+                    action: annotate
+                on_unknown: annotate
+        - name: default_decision
+          description: Catch-all decision with response jailbreak detection disabled
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/mock-model
+              use_reasoning: false
+      signals:
+        keywords:
+          - name: response_block_probe
+            operator: OR
+            keywords:
+              - __response_block_probe__
+          - name: response_warn_probe
+            operator: OR
+            keywords:
+              - __response_warn_probe__
+        # Scored from the model's output, not the request. The block and warn
+        # decisions above act on this observation through their
+        # response_guard rules; the threshold that decides lives here.
+        jailbreak:
+          - name: unsafe_completion
+            description: Detect jailbreak content in the model's own output.
+            predicate:
+              gte: 0.5
+            stage: response
   global:
     router:
       strategy: priority
@@ -101,8 +105,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: false
@@ -111,59 +113,22 @@ config:
       observability:
         tracing:
           enabled: false
-    stores:
-      response_cache:
-        enabled: false
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
-      vector_store:
-        embedding_model: mmbert
     integrations: {}
     model_catalog:
-      kbs: []
       deployments:
-        # The same provider-mocker that serves the chat backend also serves the
-        # classification API on /classify. It scores only the first
-        # CLASSIFY_WINDOW_CHARS of whatever it is sent, the way a real
-        # sequence classifier only ever sees its own sequence window - which
-        # is what lets this profile tell a whole-response scan apart from a
-        # first-chunk-only one.
-        mock-guardrail:
-          provider: classify
-          endpoint: http://provider-mocker.default.svc.cluster.local:8000
-          model: mock-guardrail
+        # The same provider-mocker that serves the chat backend also serves
+        # the System One fixture on /v1/systemone (see its README). It reads
+        # all of every answer, so a phrase at the end of a long answer is
+        # found only when the Router sends the whole answer.
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
           timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
       bindings:
-        jailbreak: mock-guardrail
-      modules:
-        prompt_guard:
-          enabled: true
-          threshold: 0.5
-          positive_labels: [jailbreak]
-          jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-        classifier:
-          domain:
-            enabled: false
-            category_mapping_path: ""
-          pii:
-            enabled: false
-            pii_mapping_path: ""
-        hallucination_mitigation:
-          enabled: false
-# The router requires a jailbreak_type_mapping.json on disk even when a
-# classify deployment answers the jailbreak signal, so a minimal stand-in
-# mapping is mounted from the
-# ConfigMap applied as a prerequisite - no need to bake the real model.
-extraVolumes:
-  - name: jailbreak-mapping
-    configMap:
-      name: response-jailbreak-mapping
-extraVolumeMounts:
-  - name: jailbreak-mapping
-    mountPath: /app/models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-    subPath: jailbreak_type_mapping.json
-    readOnly: true
+        jailbreak: fake-systemone
 
 resources:
   # Same headroom as the jailbreak-onerror profile: the startup embedding

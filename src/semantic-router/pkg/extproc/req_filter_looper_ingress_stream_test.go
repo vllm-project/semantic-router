@@ -112,9 +112,10 @@ func TestLooperIngressPreservesClientResponseContract(t *testing.T) {
 					}
 					if format != llmprotocol.OpenAIChatV1 {
 						require.NotContains(t, body, `"fusion"`)
-						warning := immediateHeaderValue(response, headers.VSRProtocolWarnings)
+						appendRoutedResponseHeaders(response, ctx)
+						warning := immediateHeaderValue(response, headers.VSRWarnings)
 						if trace {
-							require.Contains(t, warning, "dropped;router_extension_unsupported_protocol;fusion")
+							require.Contains(t, warning, `protocol;action=dropped;reason="router_extension_unsupported_protocol";field="fusion"`)
 						} else {
 							require.NotContains(t, warning, "router_extension")
 						}
@@ -143,7 +144,7 @@ func TestRatingsResponsesIngressPreservesCapabilityGate(t *testing.T) {
 				request, rejected := router.prepareProtocolRequest(looperIngressBody(t, ctx.SourceFormat, stream), ctx)
 				require.Nil(t, rejected)
 				refs := []config.ModelRef{{Model: "panel-a"}, {Model: "panel-b"}}
-				decision := &config.Decision{Name: "ratings-ingress", ModelRefs: refs[:candidates], Algorithm: &config.AlgorithmConfig{Type: "ratings", Ratings: &config.RatingsAlgorithmConfig{OnError: "fail"}}}
+				decision := &config.Decision{Name: "ratings-ingress", ModelRefs: refs[:candidates], Algorithm: &config.AlgorithmConfig{Type: "ratings", OnError: "fail", Ratings: &config.RatingsAlgorithmConfig{}}}
 				response, err := router.handleLooperExecution(context.Background(), request, decision, ctx)
 				require.NoError(t, err)
 				if candidates == 2 {

@@ -15,9 +15,9 @@ translation:
 
 路由管道是：
 
-1. `routing.signals` 提取事实。
-2. `routing.projections` 协调或派生事实。
-3. `routing.decisions` 匹配策略并选择候选模型。
+1. `recipes[].signals` 提取事实。
+2. `recipes[].projections` 协调或派生事实。
+3. `recipes[].decisions` 匹配策略并选择候选模型。
 
 ## 主要优势
 
@@ -58,58 +58,57 @@ translation:
 ## 配置
 
 ```yaml
-routing:
-  signals:
-    embeddings:
-      - name: technical-support
-        threshold: 0.75
-        candidates: [installation help, troubleshooting]
-      - name: account-management
-        threshold: 0.72
-        candidates: [billing issue, subscription change]
-    context:
-      - name: long-context
-        min_tokens: 4K
-        max_tokens: 200K
-
-  projections:
-    partitions:
-      - name: support-intents
-        semantics: exclusive
-        members: [technical-support, account-management]
-        default: technical-support
-    scores:
-      - name: request-difficulty
-        method: weighted_sum
-        inputs:
-          - type: embedding
-            name: technical-support
-            value_source: confidence
-            weight: 0.5
-          - type: context
-            name: long-context
-            weight: 0.5
-    mappings:
-      - name: difficulty-band
-        source: request-difficulty
-        method: threshold_bands
-        outputs:
-          - name: support-fast
-            lt: 0.5
-          - name: support-escalated
-            gte: 0.5
-
-  decisions:
-    - name: escalated-support
-      description: Route difficult support requests to the larger model.
-      priority: 150
-      rules:
-        operator: AND
-        conditions:
-          - type: projection
-            name: support-escalated
-      modelRefs:
-        - model: support-large
+recipes:
+  - name: default
+    signals:
+      embeddings:
+        - name: technical-support
+          threshold: 0.75
+          candidates: [installation help, troubleshooting]
+        - name: account-management
+          threshold: 0.72
+          candidates: [billing issue, subscription change]
+      context:
+        - name: long-context
+          min_tokens: 4K
+          max_tokens: 200K
+    projections:
+      partitions:
+        - name: support-intents
+          semantics: exclusive
+          members: [technical-support, account-management]
+          default: technical-support
+      scores:
+        - name: request-difficulty
+          method: weighted_sum
+          inputs:
+            - type: embedding
+              name: technical-support
+              value_source: confidence
+              weight: 0.5
+            - type: context
+              name: long-context
+              weight: 0.5
+      mappings:
+        - name: difficulty-band
+          source: request-difficulty
+          method: threshold_bands
+          outputs:
+            - name: support-fast
+              lt: 0.5
+            - name: support-escalated
+              gte: 0.5
+    decisions:
+      - name: escalated-support
+        description: Route difficult support requests to the larger model.
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: projection
+              name: support-escalated
+        modelRefs:
+          - model: support-large
 ```
 
 只有映射输出名用 `type: projection` 引用。决策不直接引用分区名或分数名。

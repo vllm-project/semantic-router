@@ -100,19 +100,20 @@ family cannot be selected with `use_reasoning: false`.
 After the Model has a family, configure its decision reference:
 
 ```yaml
-routing:
-  decisions:
-    - name: complex-request
-      rules:
-        operator: AND
-        conditions:
-          - type: complexity
-            name: needs_reasoning:hard
-      modelRefs:
-        - model: private-reasoner
-          use_reasoning: true
-          reasoning_mode: enabled
-          reasoning_effort: high
+recipes:
+  - name: default
+    decisions:
+      - name: complex-request
+        rules:
+          operator: AND
+          conditions:
+            - type: complexity
+              name: needs_reasoning:hard
+        modelRefs:
+          - model: private-reasoner
+            use_reasoning: true
+            reasoning_mode: enabled
+            reasoning_effort: high
 ```
 
 The effort must be listed by the family and allowed by every Provider binding

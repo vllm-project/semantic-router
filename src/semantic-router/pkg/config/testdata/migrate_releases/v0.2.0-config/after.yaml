@@ -1,0 +1,413 @@
+# config/config.yaml at the v0.2.0 tag.
+# You can override by specifying your own mappings below:
+# Uncomment and customize if you need different model mappings:
+# mom_registry:
+#   "models/mom-domain-classifier": "LLM-Semantic-Router/lora_intent_classifier_bert-base-uncased_model"
+#   "models/mom-pii-classifier": "LLM-Semantic-Router/lora_pii_detector_bert-base-uncased_model"
+#   "models/mom-jailbreak-classifier": "LLM-Semantic-Router/lora_jailbreak_classifier_bert-base-uncased_model"
+#   "models/mom-halugate-detector": "KRLabsOrg/lettucedect-base-modernbert-en-v1"
+#   "models/mom-halugate-sentinel": "LLM-Semantic-Router/halugate-sentinel"
+#   "models/mom-halugate-explainer": "tasksource/ModernBERT-base-nli"
+#   "models/mom-embedding-pro": "Qwen/Qwen3-Embedding-0.6B"
+#   "models/mom-embedding-flash": "google/embeddinggemma-300m"
+
+version: v0.5
+providers:
+  models:
+    - name: qwen2.5:3b
+      backend_refs:
+        - name: ollama
+          endpoint: 127.0.0.1:11434
+          weight: 1
+      reasoning:
+        type: "chat_template_kwargs"
+        parameter: "enable_thinking"
+        modes: [enabled, disabled]
+        default_mode: enabled
+  defaults:
+    model: "qwen2.5:3b"
+    reasoning_effort: low
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: business
+          description: "Business and management related queries"
+          labels: ["business"]
+          predicate:
+            gte: 0.6
+        - name: law
+          description: "Legal questions and law-related topics"
+          labels: ["law"]
+          predicate:
+            gte: 0.6
+        - name: psychology
+          description: "Psychology and mental health topics"
+          labels: ["psychology"]
+          predicate:
+            gte: 0.6
+        - name: biology
+          description: "Biology and life sciences questions"
+          labels: ["biology"]
+          predicate:
+            gte: 0.6
+        - name: chemistry
+          description: "Chemistry and chemical sciences questions"
+          labels: ["chemistry"]
+          predicate:
+            gte: 0.6
+        - name: history
+          description: "Historical questions and cultural topics"
+          labels: ["history"]
+          predicate:
+            gte: 0.6
+        - name: other
+          description: "General knowledge and miscellaneous topics"
+          labels: ["other"]
+          predicate:
+            gte: 0.6
+        - name: health
+          description: "Health and medical information queries"
+          labels: ["health"]
+          predicate:
+            gte: 0.6
+        - name: economics
+          description: "Economics and financial topics"
+          labels: ["economics"]
+          predicate:
+            gte: 0.6
+        - name: math
+          description: "Mathematics and quantitative reasoning"
+          labels: ["math"]
+          predicate:
+            gte: 0.6
+        - name: physics
+          description: "Physics and physical sciences"
+          labels: ["physics"]
+          predicate:
+            gte: 0.6
+        - name: computer_science
+          description: "Computer science and programming"
+          labels: ["computer science"]
+          predicate:
+            gte: 0.6
+        - name: philosophy
+          description: "Philosophy and ethical questions"
+          labels: ["philosophy"]
+          predicate:
+            gte: 0.6
+        - name: engineering
+          description: "Engineering and technical problem-solving"
+          labels: ["engineering"]
+          predicate:
+            gte: 0.6
+    decisions:
+      - name: "business_decision"
+        description: "Business and management queries"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "business"
+        modelRefs:
+          - model: "qwen2.5:3b"
+            use_reasoning: false
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations."
+      - name: "law_decision"
+        description: "Legal questions and law-related topics"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "law"
+        modelRefs:
+          - model: "qwen2.5:3b"
+            use_reasoning: false
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters."
+      - name: "psychology_decision"
+        description: "Psychology and mental health topics"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "psychology"
+        modelRefs:
+          - model: "qwen2.5:3b"
+            use_reasoning: false
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice."
+          - type: response_cache
+            configuration:
+              enabled: true
+              semantic:
+                match:
+                  recall:
+                    top_k: 3
+                    min_similarity: 0.92
+      - name: "biology_decision"
+        description: "Biology and life sciences questions"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "biology"
+        modelRefs:
+          - model: "qwen2.5:3b"
+            use_reasoning: false
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems."
+      - name: "chemistry_decision"
+        description: "Chemistry and chemical sciences questions"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "chemistry"
+        modelRefs:
+          - model: "qwen2.5:3b"
+            use_reasoning: true
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations."
+      - name: "history_decision"
+        description: "Historical questions and cultural topics"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "history"
+        modelRefs:
+          - model: "qwen2.5:3b"
+            use_reasoning: false
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis."
+      - name: "health_decision"
+        description: "Health and medical information queries"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "health"
+        modelRefs:
+          - model: "qwen2.5:3b"
+            use_reasoning: false
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies."
+          - type: response_cache
+            configuration:
+              enabled: true
+              semantic:
+                match:
+                  recall:
+                    top_k: 3
+                    min_similarity: 0.95
+      - name: "economics_decision"
+        description: "Economics and financial topics"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "economics"
+        modelRefs:
+          - model: "qwen2.5:3b"
+            use_reasoning: false
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses."
+      - name: "math_decision"
+        description: "Mathematics and quantitative reasoning"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "math"
+        modelRefs:
+          - model: "qwen2.5:3b"
+            use_reasoning: true
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way."
+      - name: "physics_decision"
+        description: "Physics and physical sciences"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "physics"
+        modelRefs:
+          - model: "qwen2.5:3b"
+            use_reasoning: true
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate."
+      - name: "computer_science_decision"
+        description: "Computer science and programming"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "computer_science"
+        modelRefs:
+          - model: "qwen2.5:3b"
+            use_reasoning: false
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful."
+      - name: "philosophy_decision"
+        description: "Philosophy and ethical questions"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "philosophy"
+        modelRefs:
+          - model: "qwen2.5:3b"
+            use_reasoning: false
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates."
+      - name: "engineering_decision"
+        description: "Engineering and technical problem-solving"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "engineering"
+        modelRefs:
+          - model: "qwen2.5:3b"
+            use_reasoning: false
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards."
+      - name: "general_decision"
+        description: "General knowledge and miscellaneous topics"
+        priority: 50
+        rules:
+          operator: "AND"
+          conditions:
+            - type: "domain"
+              name: "other"
+        modelRefs:
+          - model: "qwen2.5:3b"
+            use_reasoning: false
+        plugins:
+          - type: "system_prompt"
+            configuration:
+              system_prompt: "You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics."
+          - type: response_cache
+            configuration:
+              enabled: true
+              semantic:
+                match:
+                  recall:
+                    top_k: 3
+                    min_similarity: 0.75
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: memory
+                  match:
+                    recall:
+                      method: embedding
+                      top_k: 5
+                      min_similarity: 0.70
+                  store:
+                    auto: false
+global:
+  services:
+    response_api:
+      enabled: true
+      store_backend: "memory" # Options: "memory", "milvus", "redis"
+      ttl_seconds: 86400 # 24 hours
+      max_responses: 1000
+    router_replay:
+      store_backend: "memory" # Options: "memory", "redis", "postgres", "milvus"
+      ttl_seconds: 2592000 # 30 days retention (for persistent backends)
+      async_writes: true # Enable async writes for better performance
+      # Redis backend settings (uncomment if using Redis)
+      # redis:
+      #   address: "redis:6379"
+      #   db: 0
+      #   key_prefix: "router_replay"
+      # PostgreSQL backend settings (uncomment if using PostgreSQL)
+      # postgres:
+      #   host: "postgres"
+      #   port: 5432
+      #   database: "semantic_router"
+      #   user: "router"
+      #   password: "router_password"
+      #   table_name: "replay_records"
+      # Milvus backend settings (uncomment if using Milvus)
+      # milvus:
+      #   address: "milvus:19530"
+      #   collection_name: "replay_records"
+    api:
+      batch_classification:
+        max_batch_size: 100
+        metrics:
+          enabled: true
+          detailed_goroutine_tracking: true
+          high_resolution_timing: false
+          sample_rate: 1.0
+          duration_buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30]
+          size_buckets: [1, 2, 5, 10, 20, 50, 100, 200]
+    observability:
+      metrics:
+        enabled: true # Set to false to disable the Prometheus /metrics endpoint
+      tracing:
+        enabled: true # Enable distributed tracing
+        provider: "opentelemetry" # Provider: opentelemetry, openinference, openllmetry
+        exporter:
+          type: "otlp" # Export spans to Jaeger (via OTLP gRPC)
+          endpoint: "jaeger:4317" # Jaeger collector inside compose network
+          insecure: true # Use insecure connection (no TLS)
+        sampling:
+          type: "always_on" # Sampling: always_on, always_off, probabilistic
+          rate: 1.0 # Sampling rate for probabilistic (0.0-1.0)
+        resource:
+          service_name: "vllm-semantic-router"
+          service_version: "v0.1.0"
+          deployment_environment: "development"
+  stores:
+    response_cache:
+      backend_type: "memory" # Options: "memory", "milvus", or "hybrid"
+      max_entries: 1000 # Only applies to memory backend
+      ttl_seconds: 3600
+      eviction_policy: "fifo"
+  router:
+    strategy: "priority"

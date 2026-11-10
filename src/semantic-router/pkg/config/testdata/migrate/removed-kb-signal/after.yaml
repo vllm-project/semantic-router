@@ -1,0 +1,45 @@
+# The kb signal, its conditions, kb_metric inputs and the knowledge bases they
+# read are removed. A kb rule never matches now: migrate drops it, a decision
+# that needs it, its term of an OR, and a score's input on it, and a NOT of it
+# always holds. Each note names the systemone question that replaces it.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - {name: urgent, operator: any, keywords: [urgent]}
+    projections:
+      scores:
+        - name: pressure
+          method: weighted_sum
+          inputs:
+            - {type: keyword, name: urgent, weight: 0.5}
+      mappings:
+        - name: pressure_band
+          source: pressure
+          method: threshold_bands
+          outputs: [{name: pressured, gte: 0.5}]
+    decisions:
+      - name: urgent_or_private
+        priority: 90
+        rules:
+          operator: OR
+          conditions:
+            - {type: keyword, name: urgent}
+        modelRefs: [{model: general}]
+      - name: urgent_public
+        priority: 80
+        rules:
+          operator: AND
+          conditions:
+            - {type: keyword, name: urgent}
+        modelRefs: [{model: general}]
+      - name: pressured
+        priority: 60
+        rules: {type: projection, name: pressured}
+        modelRefs: [{model: general}]

@@ -1,0 +1,25 @@
+# A recipe's routing block is its own fields: recipes[].routing.<field> is
+# recipes[].<field>.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+  - name: support
+    description: Support requests.
+    strategy: priority
+    signals:
+      keywords:
+        - {name: refund, operator: OR, keywords: [refund]}
+    decisions:
+      - name: refund
+        priority: 100
+        rules: {type: keyword, name: refund}
+        modelRefs: [{model: general}]
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
