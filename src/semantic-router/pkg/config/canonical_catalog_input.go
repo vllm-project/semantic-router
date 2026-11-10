@@ -8,7 +8,7 @@ import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
-// canonicalCatalogInput adapts the existing v0.3 hierarchy to the catalog's
+// canonicalCatalogInput adapts the v0.5 hierarchy to the catalog's
 // normalized resource graph. This is the only place where public config joins
 // aliases, cards, provider definitions, and operator evaluations.
 func canonicalCatalogInput(canonical *CanonicalConfig) (modelcatalog.CompileInput, error) {
@@ -28,9 +28,6 @@ func canonicalCatalogInput(canonical *CanonicalConfig) (modelcatalog.CompileInpu
 		if err := builder.addModel(model, modelIndex); err != nil {
 			return builder.input, err
 		}
-	}
-	if err := builder.finishCards(canonical); err != nil {
-		return builder.input, err
 	}
 	if err := builder.addEvaluationRecords(canonical.Evaluation); err != nil {
 		return builder.input, err
@@ -61,12 +58,9 @@ func newCatalogInputBuilder(canonical *CanonicalConfig) (*catalogInputBuilder, e
 	if err != nil {
 		return nil, err
 	}
-	cards := make(map[string]RoutingModel, len(canonical.Routing.ModelCards))
-	for cardIndex, card := range canonical.Routing.ModelCards {
-		if _, exists := cards[card.Name]; exists {
-			return nil, fmt.Errorf("routing.modelCards[%d].name %q is duplicated", cardIndex, card.Name)
-		}
-		cards[card.Name] = card
+	cards, err := canonicalModelCardIndex(canonical.Providers.Models)
+	if err != nil {
+		return nil, err
 	}
 	return &catalogInputBuilder{
 		input: input, builtIn: builtIn, benchmarks: benchmarks, cards: cards,
@@ -82,7 +76,7 @@ func (builder *catalogInputBuilder) addModel(model CanonicalProviderModel, model
 	}
 	if model.APIFormat != "" && catalogProtocolForAPIFormat(model.APIFormat) == "" {
 		return fmt.Errorf(
-			"providers.models[%d].api_format %q is unsupported; use openai, responses, anthropic, or systemone",
+			"providers.models[%d].api_format %q is unsupported; use openai, responses, anthropic, images, or systemone",
 			modelIndex, model.APIFormat,
 		)
 	}
@@ -128,14 +122,14 @@ func catalogProviderBinding(
 	}
 	instance := modelcatalog.ProviderInstance{
 		Name: instanceName, Catalog: providerID, BaseURL: canonicalBackendURL(backend),
-		Credentials: modelcatalog.CredentialsRef{APIKey: backend.APIKey, APIKeyEnv: backend.APIKeyEnv},
-		Headers:     copyStringMap(backend.ExtraHeaders), APIVersion: backend.APIVersion,
-		AuthHeader: backend.AuthHeader, ChatPath: backend.ChatPath,
-		OpenAICompatGateway: backend.OpenAICompatGateway,
+		Credentials: modelcatalog.CredentialsRef{APIKey: backend.APIKey},
+		Headers:     copyStringMap(backend.Headers), APIVersion: backend.APIVersion, ChatPath: backend.ChatPath,
 	}
-	if backend.AuthPrefix != nil {
-		instance.AuthPrefix = *backend.AuthPrefix
-		instance.AuthPrefixSet = true
+	if auth := backend.Auth; auth != nil {
+		instance.Credentials.APIKeyEnv, instance.AuthHeader, instance.AuthCredential = auth.APIKeyEnv, auth.Header, auth.Credential
+		if auth.Prefix != nil {
+			instance.AuthPrefix, instance.AuthPrefixSet = *auth.Prefix, true
+		}
 	}
 	if backend.Weight != 0 {
 		endpointURL := instance.BaseURL
@@ -233,45 +227,7 @@ func (builder *catalogInputBuilder) addEvaluationRecords(evaluation *CanonicalEv
 	return nil
 }
 
-func (builder *catalogInputBuilder) finishCards(canonical *CanonicalConfig) error {
-	if len(canonical.Providers.Models) == 0 {
-		return builder.materializeRoutingOnlyCards(canonical.Routing.ModelCards)
-	}
-	for cardIndex, card := range canonical.Routing.ModelCards {
-		if _, bound := builder.boundCards[card.Name]; !bound {
-			return fmt.Errorf(
-				"routing.modelCards[%d].name %q does not match a providers.models catalog identity",
-				cardIndex, card.Name,
-			)
-		}
-	}
-	return nil
-}
-
-func (builder *catalogInputBuilder) materializeRoutingOnlyCards(cards []RoutingModel) error {
-	// Routing fragments intentionally contain cards without provider bindings.
-	// Materialize each as a metadata-only local alias for offline consumers.
-	for _, card := range cards {
-		if _, alreadyBound := builder.boundCards[card.Name]; alreadyBound {
-			continue
-		}
-		if err := builder.materializeCard(
-			card, CanonicalProviderModel{Name: card.Name},
-		); err != nil {
-			return err
-		}
-		builder.configuredCards[card.Name] = struct{}{}
-		builder.input.Models = append(builder.input.Models, modelcatalog.ModelAlias{
-			Name: card.Name, Catalog: card.Name,
-		})
-	}
-	return nil
-}
-
 func canonicalBackendURL(backend CanonicalBackendRef) string {
-	if strings.TrimSpace(backend.BaseURL) != "" {
-		return strings.TrimSpace(backend.BaseURL)
-	}
 	endpoint := strings.TrimSpace(backend.Endpoint)
 	if endpoint == "" || strings.Contains(endpoint, "://") {
 		return endpoint
@@ -289,6 +245,8 @@ func catalogProtocolForAPIFormat(apiFormat string) string {
 		return "anthropic/messages@1"
 	case APIFormatOpenAI:
 		return "openai/chat-completions@1"
+	case APIFormatImages:
+		return "openai/images@1"
 	default:
 		return ""
 	}
@@ -363,10 +321,6 @@ func applyCatalogCardLists(card RoutingModel, overlay *modelcatalog.ModelCardOve
 	if card.Modalities != nil {
 		value := *card.Modalities
 		overlay.Modalities = &value
-	}
-	if card.Modality != "" {
-		value := card.Modality
-		overlay.RuntimeModality = &value
 	}
 	if card.Tags != nil {
 		value := append([]string(nil), card.Tags...)

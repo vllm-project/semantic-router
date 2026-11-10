@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from manual_ci import ManualCIError
 from pr_ci_status import (
     APP_ID,
     CAPABILITIES,
@@ -68,6 +69,8 @@ class Client:
         self.checks, self.comments, self.writes = [], [], []
         self.ready, self.missing_report, self.newer_run = True, False, False
         self.parents = [BASE, HEAD]
+        self.main_sha, self.base_ancestor = BASE, BASE
+        self.compare_error = None
         self.refresh_report()
 
     def refresh_report(self):
@@ -102,6 +105,15 @@ class Client:
         prefix = f"repos/{REPO}/"
         self.assert_prefix(endpoint, prefix)
         path = endpoint[len(prefix) :]
+        if path == "git/ref/heads/main":
+            return {
+                "ref": "refs/heads/main",
+                "object": {"type": "commit", "sha": self.main_sha},
+            }
+        if path.startswith(f"compare/{BASE}..."):
+            if self.compare_error is not None:
+                raise self.compare_error
+            return {"merge_base_commit": {"sha": self.base_ancestor}}
         if path == "actions/runs/101":
             return copy.deepcopy(self.run)
         if path == "actions/workflows/pr.yml":
@@ -116,9 +128,24 @@ class Client:
         if path == "pulls/3":
             return copy.deepcopy(self.pull)
         if path.startswith(f"commits/{HEAD}/check-runs?"):
-            return {"check_runs": copy.deepcopy(self.checks)}
+            checks = self.checks
+            if "filter=latest" in path:
+                checks = [
+                    item
+                    for item in checks
+                    if item.get("run_attempt", self.run["run_attempt"])
+                    == self.run["run_attempt"]
+                ]
+            return {"check_runs": copy.deepcopy(checks)}
         if path.startswith("actions/runs/101/attempts/"):
-            return {"jobs": copy.deepcopy(self.jobs)}
+            return {
+                "jobs": [
+                    copy.deepcopy(item)
+                    for item in self.jobs
+                    if item.get("run_attempt", self.run["run_attempt"])
+                    == self.run["run_attempt"]
+                ]
+            }
         if path.startswith("actions/runs/101/artifacts?"):
             gate = "name=ci-gate" in path
             if gate and self.missing_report:
@@ -169,6 +196,9 @@ class Client:
                 **copy.deepcopy(payload),
                 "id": max([50, *(item["id"] for item in self.checks)]) + 1,
                 "app": {"id": APP_ID},
+                # GitHub's attempt membership survives PATCH, including an
+                # external_id rewrite, and controls filter=latest visibility.
+                "run_attempt": self.run["run_attempt"],
             }
             self.checks.append(check)
         elif "/check-runs/" in endpoint:
@@ -182,6 +212,7 @@ class Client:
             job = {"id": check["id"]}
             self.jobs.append(job)
         job.update({key: check.get(key) for key in ("name", "status", "conclusion")})
+        job["run_attempt"] = check.get("run_attempt", self.run["run_attempt"])
         return copy.deepcopy(check)
 
 
@@ -272,7 +303,43 @@ class PRStatusTests(unittest.TestCase):
                 for _ in range(2):
                     result = reconcile(client, REPO, 101)
                     self.assertEqual(result["check"]["conclusion"], "success")
-                self.assertEqual(len(client.checks), 1)
+                self.assertEqual(len(client.checks), 2)
+
+    def test_rerun_replaces_hidden_check_even_with_current_external_id(self):
+        endpoint = f"repos/{REPO}/commits/{HEAD}/check-runs"
+        for old_status in ("in_progress", "completed"):
+            for verdict in ("success", "failure"):
+                with self.subTest(old_status=old_status, verdict=verdict):
+                    client = Client()
+                    reconcile(client, REPO, 101)
+                    old = client.checks[0]
+                    # Reproduce an already affected PR: the old publisher
+                    # changed the external_id but not the check's attempt.
+                    old.update(external_id=f"{PREFIX}3:101:2", status=old_status)
+                    if old_status == "completed":
+                        old["conclusion"] = "success"
+                    client.run.update(run_attempt=2, conclusion=verdict)
+                    client.plan.update(
+                        expected_verification_ids=["quality", "e2e.dashboard"],
+                        deferred_verifications=[],
+                        deferred_images=[],
+                    )
+                    client.refresh_report()
+                    self.assertEqual(
+                        client.request(f"{endpoint}?filter=latest")["check_runs"], []
+                    )
+                    for _ in range(2):
+                        result = reconcile(client, REPO, 101)
+                        self.assertEqual(result["state"], verdict)
+                        latest = client.request(f"{endpoint}?filter=latest")[
+                            "check_runs"
+                        ]
+                        self.assertEqual(len(latest), 1)
+                        self.assertNotEqual(latest[0]["id"], old["id"])
+                        self.assertEqual(latest[0]["conclusion"], verdict)
+                        self.assertEqual(latest[0]["run_attempt"], 2)
+                    self.assertEqual(len(client.checks), 2)
+                    self.assertEqual(old["run_attempt"], 1)
 
     def test_unowned_failed_checks_are_still_ci_failures(self):
         for override in (
@@ -367,11 +434,49 @@ class PRStatusTests(unittest.TestCase):
 
     def test_changed_base_stays_pending_and_requests_branch_update(self):
         client = Client()
-        client.pull["merge_commit_sha"] = "f" * 40
+        client.main_sha = "f" * 40
+        client.base_ancestor = "e" * 40
         result = reconcile(client, REPO, 101)
         self.assertEqual(result["state"], "stale")
         self.assertEqual(result["check"]["status"], "in_progress")
         self.assertIn("Update the branch", result["comment"])
+
+    def test_unreachable_base_compare_api_error_marks_gate_stale(self):
+        client = Client()
+        client.main_sha = "f" * 40
+        client.compare_error = ManualCIError(
+            "Comparison not found (HTTP 404).", http_status=404
+        )
+        client.pull["merge_commit_sha"] = "d" * 40
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "stale")
+        self.assertEqual(result["check"]["status"], "in_progress")
+        self.assertIn("Update the branch", result["comment"])
+
+    def test_advanced_main_with_unchanged_head_does_not_mark_gate_stale(self):
+        client = Client()
+        client.main_sha = "f" * 40
+        client.base_ancestor = BASE
+        client.pull["merge_commit_sha"] = "d" * 40
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "awaiting-approval")
+        self.assertEqual(result["check"]["status"], "in_progress")
+        self.assertNotIn("Update the branch", result["comment"])
+
+    def test_advanced_main_with_passed_verdict_publishes_success(self):
+        client = Client()
+        client.main_sha = "f" * 40
+        client.base_ancestor = BASE
+        client.pull["merge_commit_sha"] = "d" * 40
+        client.plan.update(
+            expected_verification_ids=["quality", "e2e.dashboard"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "success")
+        self.assertEqual(result["check"]["conclusion"], "success")
 
     def test_late_event_reads_current_attempt_before_publishing(self):
         client = Client()
@@ -388,10 +493,14 @@ class PRStatusTests(unittest.TestCase):
         result = reconcile(client, REPO, 101)
         self.assertEqual(result["state"], "running")
         self.assertTrue(result["check"]["external_id"].endswith(":2"))
-        self.assertEqual(client.writes[0][0], f"repos/{REPO}/check-runs/77")
-        self.assertEqual(client.writes[0][2], {"method": "PATCH"})
+        self.assertEqual(client.writes[0][0], f"repos/{REPO}/check-runs")
+        self.assertEqual(client.writes[0][2], {})
+        self.assertEqual(client.checks[0]["external_id"], f"{PREFIX}3:101:1")
+        self.assertEqual(client.checks[0]["conclusion"], "neutral")
+        self.assertEqual(client.checks[1]["status"], "in_progress")
+        self.assertNotIn("conclusion", client.checks[1])
 
-    def test_approval_completion_resolves_latest_pending_check_in_the_same_run(self):
+    def test_approval_completion_retires_only_same_run_pending_checks(self):
         client = Client()
         client.run["run_attempt"] = 3
         client.plan.update(
@@ -419,12 +528,23 @@ class PRStatusTests(unittest.TestCase):
         result = reconcile(client, REPO, 101)
         self.assertEqual(result["state"], "success")
         endpoint, payload, options = client.writes[0]
-        self.assertEqual(endpoint, f"repos/{REPO}/check-runs/78")
-        self.assertEqual(options, {"method": "PATCH"})
+        self.assertEqual(endpoint, f"repos/{REPO}/check-runs")
+        self.assertEqual(options, {})
         self.assertEqual(payload["external_id"], f"{PREFIX}3:101:3")
         self.assertEqual(payload["status"], "completed")
         self.assertEqual(payload["conclusion"], "success")
-        self.assertNotIn("head_sha", payload)
+        self.assertEqual(payload["head_sha"], HEAD)
+        retired = client.writes[1:]
+        self.assertEqual(
+            [endpoint for endpoint, _, _ in retired],
+            [f"repos/{REPO}/check-runs/{identity}" for identity in (77, 78)],
+        )
+        for _, update, options in retired:
+            self.assertEqual(options, {"method": "PATCH"})
+            self.assertEqual(update["status"], "completed")
+            self.assertEqual(update["conclusion"], "neutral")
+            self.assertNotIn("head_sha", update)
+            self.assertNotIn("external_id", update)
 
     def test_completed_or_different_run_or_pr_check_is_not_reused(self):
         for external, status in (

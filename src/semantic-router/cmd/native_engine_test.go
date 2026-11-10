@@ -35,7 +35,7 @@ func TestEngineFrontendNativeInferenceNeedsNeitherRouterNorUpstream(t *testing.T
 	disabled := false
 	cfg := &config.RouterConfig{RouterOptions: config.RouterOptions{RouterEnabled: &disabled}}
 	cfg.DecisionModel = "primary"
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: "example/vela", Endpoint: worker.URL, ServedName: "served"}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: "example/vela", Endpoint: worker.URL, Model: "served"}}
 	cfg.Listeners = []config.Listener{{Name: "native", Port: 8899, APIKeys: []string{"key"}, SystemOne: &config.ListenerSystemOne{Models: []string{"example/vela"}}}}
 	if err := manager.Reconcile(cfg); err != nil {
 		t.Fatal(err)

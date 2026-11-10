@@ -7,7 +7,11 @@ from copy import deepcopy
 import click
 
 from cli.bootstrap import build_bootstrap_config
-from cli.decision_model import configured_decision_model, decision_model_deployment
+from cli.decision_model import (
+    configured_decision_model,
+    decision_model_deployment,
+    remote_decision_model,
+)
 from cli.model_revision import builtin_releases, resolve_model_revision
 from cli.utils import get_logger
 from cli.validator_decision_model import engine_args_error, public_model_name
@@ -190,10 +194,16 @@ def apply_instance_options(
         global_config = document.setdefault("global", {})
         global_config.setdefault("router", {})["enabled"] = not engine
     key = configured_decision_model(document)
+    remote = remote_decision_model(document) is not None
+    if remote and model_options:
+        raise ValueError(
+            "serve model overrides apply to a local decision model; "
+            f"{key!r} is a systemone deployment, configured in --config"
+        )
     catalog = global_config.get("model_catalog") or {}
     deployments = catalog.get("deployments") or {}
     authored = key in deployments
-    if model_options or (not authored and platform in {"cuda", "rocm"}):
+    if not remote and (model_options or (not authored and platform in {"cuda", "rocm"})):
         catalog = document.setdefault("global", {}).setdefault("model_catalog", {})
         deployments = catalog.setdefault("deployments", {})
         defaults = decision_model_deployment(document)

@@ -6,4 +6,3 @@ plugin:
       - top_logprobs
     max_tokens_limit: 500
     max_n: 1
-    strip_unknown: true

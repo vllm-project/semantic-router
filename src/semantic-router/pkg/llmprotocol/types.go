@@ -88,6 +88,9 @@ type Content struct {
 	GeneratedImage *GeneratedImage
 	Signature      string
 	Reasoning      ReasoningScope
+	// ReasoningDetail is a typed continuity block, distinct from display text.
+	// Its identity and opaque payload must survive routing and tool turns.
+	ReasoningDetail *ReasoningDetail
 }
 
 // CacheDirective marks a request block or tool definition as an explicit

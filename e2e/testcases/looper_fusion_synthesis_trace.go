@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -52,7 +53,11 @@ func validateLooperResponsesSynthesisStream(result responseAPIStreamingSSEResult
 	if !strings.Contains(string(result.body), "fusion-none-answer") || strings.Contains(string(result.body), `"fusion"`) {
 		return fmt.Errorf("responses synthesis stream lost its final answer or leaked the optional trace")
 	}
-	if !strings.Contains(result.protocolWarnings, "dropped;router_extension_unsupported_protocol;fusion") || len(result.protocolWarnings) > 4096 {
+	traceOmitted := slices.ContainsFunc(parseWarnings(result.protocolWarnings), func(warning warningMember) bool {
+		return warning.Code == "protocol" && warning.Params["action"] == "dropped" &&
+			warning.Params["reason"] == "router_extension_unsupported_protocol" && warning.Params["field"] == "fusion"
+	})
+	if !traceOmitted || len(result.protocolWarnings) > 4096 {
 		return fmt.Errorf("responses synthesis stream did not publish a bounded trace-omission diagnostic")
 	}
 	return nil

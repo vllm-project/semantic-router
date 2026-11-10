@@ -14,7 +14,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("looper-latency-token-headers", pkgtestcases.TestCase{
-		Description: "Verify looper aggregate latency and token usage surface as x-vsr-looper-latency-ms and x-vsr-looper-*-tokens response headers (issue #2694)",
+		Description: "Verify looper aggregate latency and token usage surface in the trace's looper member (issue #2694)",
 		Tags:        []string{"kubernetes", "routing", "looper", "headers"},
 		Fn:          testLooperLatencyTokenHeaders,
 	})
@@ -23,14 +23,14 @@ func init() {
 // looperMetricsProbeKeyword is the sentinel token wired into the kubernetes
 // profile's looper_metrics_probe_decision (see
 // e2e/profiles/ai-gateway/values.yaml). A prompt containing it deterministically
-// routes to that confidence-algorithm decision, which executes the looper
+// routes to that escalate decision, which executes the looper
 // across two model refs.
 const looperMetricsProbeKeyword = "__MULTI_MODEL_PROBE__"
 
 // testLooperLatencyTokenHeaders asserts the response-header half of the #2694
 // contract end-to-end: after a looper execution, the aggregate wall-clock
 // latency and aggregate token usage (already recorded internally by #2593)
-// are surfaced as x-vsr-debug-gated headers.
+// are surfaced in the trace, which x-vsr-debug asks for.
 func testLooperLatencyTokenHeaders(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
 		fmt.Println("[Test] Testing looper latency/token usage response headers")
@@ -67,20 +67,16 @@ func testLooperLatencyTokenHeaders(ctx context.Context, client *kubernetes.Clien
 	// duration cannot round down to zero milliseconds. A ">= 0" floor would
 	// let a regression that always emits "0" (aggregation silently broken, or
 	// ExecuteWithLatency wired to the wrong response) pass this test vacuously.
-	values, err := parsePositiveIntHeaders(response.Headers, opts.Verbose,
-		"x-vsr-looper-latency-ms",
-		"x-vsr-looper-prompt-tokens",
-		"x-vsr-looper-completion-tokens",
-		"x-vsr-looper-total-tokens",
-	)
+	values, err := parsePositiveLooperCounts(response.Headers, opts.Verbose,
+		"latency_ms", "prompt_tokens", "completion_tokens", "total_tokens")
 	if err != nil {
 		return err
 	}
 
 	// The total must equal the sum of its parts; this catches an aggregation
 	// bug that would otherwise slip through the per-header positivity checks.
-	if got, want := values["x-vsr-looper-total-tokens"], values["x-vsr-looper-prompt-tokens"]+values["x-vsr-looper-completion-tokens"]; got != want {
-		return fmt.Errorf("x-vsr-looper-total-tokens = %d, want prompt+completion = %d", got, want)
+	if got, want := values["total_tokens"], values["prompt_tokens"]+values["completion_tokens"]; got != want {
+		return fmt.Errorf("looper total_tokens = %d, want prompt+completion = %d", got, want)
 	}
 
 	if opts.SetDetails != nil {
@@ -92,25 +88,26 @@ func testLooperLatencyTokenHeaders(ctx context.Context, client *kubernetes.Clien
 	}
 
 	if opts.Verbose {
-		fmt.Println("[Test] Looper latency/token usage response headers verified ✓")
+		fmt.Println("[Test] Looper latency/token usage trace verified ✓")
 	}
 	return nil
 }
 
-// parsePositiveIntHeaders parses each named header as a strictly positive
-// int64, returning an error naming the first header that fails to parse or
-// isn't positive.
-func parsePositiveIntHeaders(respHeaders http.Header, verbose bool, headerNames ...string) (map[string]int64, error) {
-	values := make(map[string]int64, len(headerNames))
-	for _, header := range headerNames {
-		raw := respHeaders.Get(header)
+// parsePositiveLooperCounts parses each named count of the trace's looper
+// member as a strictly positive int64, returning an error naming the first
+// count that fails to parse or isn't positive.
+func parsePositiveLooperCounts(respHeaders http.Header, verbose bool, names ...string) (map[string]int64, error) {
+	looper := routerTrace(respHeaders)["looper"]
+	values := make(map[string]int64, len(names))
+	for _, name := range names {
+		raw := looper.Params[name]
 		value, parseErr := strconv.ParseInt(raw, 10, 64)
 		if parseErr != nil || value <= 0 {
-			return nil, fmt.Errorf("header %s: expected a positive integer, got %q", header, raw)
+			return nil, fmt.Errorf("looper %s: expected a positive integer, got %q", name, raw)
 		}
-		values[header] = value
+		values[name] = value
 		if verbose {
-			fmt.Printf("[Test]   %s = %d\n", header, value)
+			fmt.Printf("[Test]   looper %s = %d\n", name, value)
 		}
 	}
 	return values, nil

@@ -100,10 +100,7 @@ func isSensitiveConfigKey(key string) bool {
 	if strings.HasSuffix(compact, "env") || strings.HasSuffix(compact, "envset") {
 		return false
 	}
-	switch compact {
-	case "apikey", "xapikey", "accesskey", "password", "authpassword",
-		"clientsecret", "privatekey", "authorization", "proxyauthorization",
-		"credential", "secret", "token":
+	if isSensitiveConfigName(compact) {
 		return true
 	}
 	for _, suffix := range []string{
@@ -119,6 +116,24 @@ func isSensitiveConfigKey(key string) bool {
 		if strings.HasSuffix(compact, suffix) {
 			return true
 		}
+	}
+	// A plural names the same secret only when its singular is one of the names
+	// above: listeners[].api_keys, tokens, credentials. It is not a suffix rule,
+	// which would read a count such as max_tokens as a token.
+	if strings.HasSuffix(compact, "s") && isSensitiveConfigName(strings.TrimSuffix(compact, "s")) {
+		return true
+	}
+	return false
+}
+
+// isSensitiveConfigName reports a key that is itself a secret, without the
+// prefix rules a longer name may carry.
+func isSensitiveConfigName(compact string) bool {
+	switch compact {
+	case "apikey", "xapikey", "accesskey", "password", "authpassword",
+		"clientsecret", "privatekey", "authorization", "proxyauthorization",
+		"credential", "secret", "token":
+		return true
 	}
 	return false
 }

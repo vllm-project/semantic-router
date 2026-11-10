@@ -62,15 +62,15 @@ func overflowFramingReserve(request *llmprotocol.Request) int {
 	return reserve
 }
 
-func contextOverflowConfig(ctx *RequestContext) *config.ContextCompressionPluginConfig {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+func contextOverflowConfig(routerConfig *config.RouterConfig, ctx *RequestContext) *config.ContextPluginConfig {
+	if ctx == nil {
 		return nil
 	}
-	cfg := ctx.VSRSelectedDecision.GetContextCompressionConfig()
-	if cfg == nil || !cfg.Enabled || cfg.Targets == nil || cfg.Targets.CurrentUser.Mode != config.ContextCompressionTargetTruncate {
+	cfg := contextCompression(requestPlugins(routerConfig, ctx))
+	if cfg == nil || cfg.Compress.Targets == nil || cfg.Compress.Targets.CurrentUser.Mode != config.ContextCompressionTargetTruncate {
 		return nil
 	}
-	applyContextCompressionRequestControls(ctx, cfg)
+	applyContextCompressionRequestControls(ctx, cfg.Compress)
 	if ctx.ContextCompressionSkipReason == "request_bypass" {
 		return nil
 	}
@@ -81,10 +81,10 @@ func contextOverflowConfig(ctx *RequestContext) *config.ContextCompressionPlugin
 // budget eligibility. It does not choose a backend: the widest compatible
 // assigned budget only bounds the request that normal selection will inspect.
 func (r *OpenAIRouter) prepareDecisionContextOverflow(ctx *RequestContext, originalModel string) error {
-	if ctx != nil && ctx.VSRSelectedDecision != nil && ctx.VSRSelectedDecision.GetFastResponseConfig() != nil {
+	if ctx == nil || ctx.VSRSelectedDecision == nil || ctx.VSRSelectedDecision.GetFastResponseConfig() != nil {
 		return nil
 	}
-	if ctx != nil && decisionUsesAutomaticOutput(ctx.SemanticRequest, ctx.VSRSelectedDecision) {
+	if decisionUsesAutomaticOutput(ctx.SemanticRequest, ctx.VSRSelectedDecision) {
 		refs := ctx.VSRSelectedDecision.ModelRefs
 		if action := ctx.VSRSelectedDecision.Action; action != nil && action.Type == config.DecisionActionRoute {
 			refs = append([]config.ModelRef{{Model: action.Destination}}, refs...)
@@ -93,8 +93,8 @@ func (r *OpenAIRouter) prepareDecisionContextOverflow(ctx *RequestContext, origi
 		}
 		return r.prepareAutomaticCandidates(ctx, refs)
 	}
-	cfg := contextOverflowConfig(ctx)
-	if cfg == nil || ctx.SemanticRequest == nil || ctx.VSRSelectedDecision.GetFastResponseConfig() != nil {
+	cfg := contextOverflowConfig(r.Config, ctx)
+	if cfg == nil || ctx.SemanticRequest == nil {
 		return nil
 	}
 	decision := ctx.VSRSelectedDecision
@@ -130,7 +130,7 @@ func (r *OpenAIRouter) prepareDecisionContextOverflow(ctx *RequestContext, origi
 	return nil
 }
 
-func (r *OpenAIRouter) contextOverflowInputBudget(model string, demand selection.CandidateDemand, cfg *config.ContextCompressionPluginConfig) int {
+func (r *OpenAIRouter) contextOverflowInputBudget(model string, demand selection.CandidateDemand, cfg *config.ContextPluginConfig) int {
 	params, _ := selection.CandidateModelParams(r.Config.ModelConfig, nil, model)
 	if params.ContextWindowSize <= 0 || params.MaxOutputTokens <= 0 {
 		return 0
@@ -154,7 +154,7 @@ func (r *OpenAIRouter) prepareDispatchContextOverflow(ctx *RequestContext, reque
 	if request != nil && request.Sampling.AutomaticOutput {
 		return nil
 	} // Exact render owns automatic admission and confirmed-overflow compression.
-	cfg := contextOverflowConfig(ctx)
+	cfg := contextOverflowConfig(r.Config, ctx)
 	if cfg == nil {
 		return nil
 	}
@@ -172,7 +172,7 @@ func overflowBudgetError(message string) error {
 	return &selection.RequestBudgetError{Code: "context_length_exceeded", Message: message}
 }
 
-func (r *OpenAIRouter) applyContextOverflow(ctx *RequestContext, request *llmprotocol.Request, cfg *config.ContextCompressionPluginConfig, decision *config.Decision, model string, available int) error {
+func (r *OpenAIRouter) applyContextOverflow(ctx *RequestContext, request *llmprotocol.Request, cfg *config.ContextPluginConfig, decision *config.Decision, model string, available int) error {
 	start := time.Now()
 	counter := overflowTokenCounter{decision: decision}
 	before, _ := counter.CountRequest(model, &contextcompression.RequestIR{Semantic: request})
@@ -187,13 +187,13 @@ func (r *OpenAIRouter) applyContextOverflow(ctx *RequestContext, request *llmpro
 	}
 	ir := contextcompression.ParseSemanticRequest(detached, contextcompression.Provenance{
 		ProtectedMessages: ctx.ProtectedContextMessages, OriginalHistory: ctx.OriginalContextHistory,
-		RAGToolCallIDs: ctx.RAGToolCallIDs, MemoryMessageIndexes: ctx.MemoryMessageIndexes,
+		RAGToolCallIDs: ctx.RAGToolCallIDs, MemoryToolCallIDs: ctx.MemoryToolCallIDs,
 	})
-	policy := contextcompression.PolicyFromConfig(cfg, ctx.ContextCompressionTargetTokens)
+	policy := contextcompression.PolicyFromConfig(cfg.Compress, cfg.Budget, ctx.ContextCompressionTargetTokens)
 	policy.Mode = contextcompression.ModeAlways
 	policy.Budget.TargetTokens = available
-	if cfg.Budget != nil && cfg.Budget.TargetTokens != nil && !cfg.Budget.TargetTokens.Auto && cfg.Budget.TargetTokens.Value > 0 {
-		policy.Budget.TargetTokens = min(available, cfg.Budget.TargetTokens.Value)
+	if cfg.Budget != nil && cfg.Budget.MaxTokens != nil && !cfg.Budget.MaxTokens.Auto && cfg.Budget.MaxTokens.Value > 0 {
+		policy.Budget.TargetTokens = min(available, cfg.Budget.MaxTokens.Value)
 	}
 	if ctx.ContextCompressionTargetTokens != nil {
 		policy.Budget.TargetTokens = min(policy.Budget.TargetTokens, *ctx.ContextCompressionTargetTokens)
@@ -214,7 +214,7 @@ func (r *OpenAIRouter) applyContextOverflow(ctx *RequestContext, request *llmpro
 	result := r.contextCompressionService().Apply(callContext, contextcompression.Request{
 		Model: model, Scope: r.contextCompressionScope(ctx), Request: ir, Policy: policy,
 		Capabilities: contextcompression.ModelContextCapabilities{ContextWindow: available}, TokenCounter: counter,
-		Scorer: r.contextCompressionScorer(callContext, cfg, ctx),
+		Scorer: r.contextCompressionScorer(cfg.Compress),
 	})
 	after, _ := counter.CountRequest(model, ir)
 	if result.Failure != nil || !result.Applied || after > available {
@@ -223,7 +223,8 @@ func (r *OpenAIRouter) applyContextOverflow(ctx *RequestContext, request *llmpro
 	*request = *detached
 	request.Generation++
 	ctx.ContextRequestIR = nil
-	ctx.VSRContextTokenCount = llmprotocol.EstimateInput(request).Tokens
+	estimate := llmprotocol.EstimateInput(request)
+	ctx.VSRContextTokenCount, ctx.VSRContextReserveTokens = estimate.Tokens, estimate.ReserveTokens
 	result.Plan.TriggerReason = "context_window"
 	r.recordCompressionPlan(ctx, result)
 	if fingerprint, fingerprintErr := cache.FingerprintValue(cfg); fingerprintErr == nil && len(fingerprint) >= 12 {

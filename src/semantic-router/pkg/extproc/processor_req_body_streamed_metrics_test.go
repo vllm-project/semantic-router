@@ -209,8 +209,6 @@ func TestPromptCompressionRecordsDurationAndOutcome(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			const recipe = "prompt-compression-metrics-test"
-			router := &OpenAIRouter{Config: &config.RouterConfig{}}
-			router.Config.PromptCompression = test.compression
 			ctx := &RequestContext{}
 			ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: recipe})
 			ctx.TraceContext, ctx.RequestSpan = tracing.StartSpan(t.Context(), tracing.SpanRequest)
@@ -221,7 +219,7 @@ func TestPromptCompressionRecordsDurationAndOutcome(t *testing.T) {
 			outcomesBefore := quorumMetricSamples(t, "llm_prompt_compression_total", outcomeLabels)
 			durationsBefore := quorumMetricSamples(t, "llm_routing_stage_duration_seconds", stageLabels)
 
-			compressed, _, run := router.compressSignalEvaluationText(test.text)
+			compressed, _, run := compressSignalEvaluationText(test.text, &test.compression)
 			observePromptCompression(ctx, run.outcome, run.elapsed)
 
 			assert.Equal(t, test.outcome, run.outcome)
@@ -238,13 +236,20 @@ func TestPromptCompressionRecordsDurationAndOutcome(t *testing.T) {
 	}
 }
 
+// The signals compress by the compress.signals of the request's recipe: its
+// default plugins, global.plugins layered with its own.
 func TestDecisionEvaluationRecordsPromptCompressionOutcome(t *testing.T) {
 	const recipe = "prompt-compression-decision-test"
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
-	router.Config.PromptCompression = config.PromptCompressionConfig{Enabled: true, MaxTokens: 10_000}
 	router.Config.Decisions = []config.Decision{{Name: "only"}}
+	contextPlugin := config.MustStructuredPayload(map[string]interface{}{
+		"enabled":  true,
+		"compress": map[string]interface{}{"signals": map[string]interface{}{"enabled": true, "max_tokens": 10_000}},
+	})
 	ctx := &RequestContext{}
-	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: recipe})
+	ctx.Routing.SelectRecipe(&config.RoutingRecipe{Name: recipe, Profile: config.RoutingProfile{
+		DefaultPlugins: []config.DecisionPlugin{{Type: config.DecisionPluginContext, Configuration: contextPlugin}},
+	}})
 	ctx.TraceContext, ctx.RequestSpan = tracing.StartSpan(t.Context(), tracing.SpanRequest)
 	defer ctx.RequestSpan.End()
 

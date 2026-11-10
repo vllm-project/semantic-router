@@ -25,7 +25,7 @@ import (
 // falls back in the router's response phase; the native gateway runs the same
 // policy in the upstream layer.
 const fallbackConfig = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -51,27 +51,25 @@ providers:
           endpoint: SECONDARY
           protocol: http
           provider: vllm
-routing:
-  modelCards:
-    - name: primary-model
-    - name: fallback-model
-  decisions:
-    - name: default_route
-      priority: 10
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: primary-model
-          use_reasoning: false
-        - model: fallback-model
-          use_reasoning: false
-      algorithm:
-        type: static
-  fallback:
-    enabled: true
-    max_attempts: 3
-    retryable_status_codes: [502, 503, 504]
+recipes:
+  - name: default
+    decisions:
+      - name: default_route
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: primary-model
+            use_reasoning: false
+          - model: fallback-model
+            use_reasoning: false
+        algorithm:
+          type: static
+    fallback:
+      enabled: true
+      max_attempts: 3
+      retryable_status_codes: [502, 503, 504]
 `
 
 const fallbackRequest = `{"model":"vllm-sr/auto","messages":[{"role":"user","content":"Hello there."}]}`
@@ -158,13 +156,11 @@ func gatewayOver(t *testing.T, configYAML string, backends map[string]http.Handl
 }
 
 // answer is what a client can tell about a response: status, the headers the
-// router sets (content type and the x-vsr-* family, without timings) and body.
-// routingLatency is the one timing, kept apart because its value varies.
+// router sets (content type and the public x-vsr-* set) and body.
 type answer struct {
-	status         int
-	header         map[string]string
-	body           string
-	routingLatency string
+	status int
+	header map[string]string
+	body   string
 }
 
 func (a answer) String() string { return fmt.Sprintf("%d %v %s", a.status, a.header, a.body) }
@@ -200,18 +196,15 @@ func postChatWithHeaders(t *testing.T, frontend *httptest.Server, extra map[stri
 	header := map[string]string{}
 	for name, values := range resp.Header {
 		name = strings.ToLower(name)
-		if name == "content-type" || (strings.HasPrefix(name, "x-vsr-") && name != "x-vsr-routing-latency-ms") {
+		if name == "content-type" || strings.HasPrefix(name, "x-vsr-") {
 			header[name] = strings.Join(values, ",")
 		}
 	}
-	return answer{
-		status: resp.StatusCode, header: header, body: string(body),
-		routingLatency: resp.Header.Get("x-vsr-routing-latency-ms"),
-	}
+	return answer{status: resp.StatusCode, header: header, body: string(body)}
 }
 
 // A candidate's success reaches the client the same way in both modes, with
-// the decision headers of any routed response. Envoy mode answers with an
+// the public set of any routed response. Envoy mode answers with an
 // immediate response, which replaces the primary's response and its headers;
 // the native gateway passes the candidate's response through the response
 // phases.
@@ -225,13 +218,11 @@ func TestFallbackServesTheCandidateInBothModes(t *testing.T) {
 		if got.status != http.StatusOK || !strings.Contains(got.body, "from the fallback model") {
 			t.Fatalf("native=%t: response = %s, want the fallback model's answer", native, got)
 		}
-		if got.header["x-vsr-selected-model"] != "fallback-model" || got.header["x-vsr-fallback-attempts"] != "2" {
-			t.Fatalf("native=%t: headers = %v, want the serving model after two attempts", native, got.header)
+		if got.header["x-vsr-selected-model"] != "fallback-model" || got.header["x-vsr-response-path"] != "fallback" {
+			t.Fatalf("native=%t: headers = %v, want the serving model on the fallback path", native, got.header)
 		}
-		if got.header["x-vsr-selected-decision"] != "default_route" || got.header["x-vsr-selected-algorithm"] != "static" ||
-			got.routingLatency == "" {
-			t.Fatalf("native=%t: headers = %v, routing latency %q, want the decision headers of a routed response",
-				native, got.header, got.routingLatency)
+		if got.header["x-vsr-selected-decision"] != "default_route" {
+			t.Fatalf("native=%t: headers = %v, want the decision of a routed response", native, got.header)
 		}
 		if primary.hits.Load() != 1 || secondary.hits.Load() != 1 {
 			t.Fatalf("native=%t: backend hits primary=%d secondary=%d, want one each",
@@ -242,16 +233,16 @@ func TestFallbackServesTheCandidateInBothModes(t *testing.T) {
 		// mode's response-phase fallback sends the candidate only the provider's
 		// headers.
 		primarySeen, candidateSeen := *primary.seen.Load(), *secondary.seen.Load()
-		if primarySeen.Get(clientTag) != "from-the-client" || primarySeen.Get("X-Selected-Model") != "primary-model" {
+		if primarySeen.Get(clientTag) != "from-the-client" || primarySeen.Get("X-Vsr-Route-Model") != "primary-model" {
 			t.Fatalf("native=%t: the primary got %v, want the client's request", native, primarySeen)
 		}
 		wantCandidate := http.Header{}
 		if native {
 			wantCandidate.Set(clientTag, "from-the-client")
-			wantCandidate.Set("X-Selected-Model", "fallback-model")
+			wantCandidate.Set("X-Vsr-Route-Model", "fallback-model")
 			wantCandidate.Set("X-Request-Id", primarySeen.Get("X-Request-Id"))
 		}
-		for _, name := range []string{clientTag, "X-Selected-Model", "X-Request-Id"} {
+		for _, name := range []string{clientTag, "X-Vsr-Route-Model", "X-Request-Id"} {
 			if candidateSeen.Get(name) != wantCandidate.Get(name) {
 				t.Fatalf("native=%t: the candidate got %s %q, want %q", native, name, candidateSeen.Get(name), wantCandidate.Get(name))
 			}

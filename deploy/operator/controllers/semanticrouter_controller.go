@@ -38,8 +38,8 @@ type SemanticRouterReconciler struct {
 	Scheme *runtime.Scheme
 
 	// Cache for OpenShift detection
-	isOpenShift     *bool
-	isOpenShiftOnce sync.Once
+	isOpenShift   *bool
+	isOpenShiftMu sync.Mutex
 }
 
 // +kubebuilder:rbac:groups=vllm.ai,resources=semanticrouters,verbs=get;list;watch;create;update;patch;delete

@@ -12,9 +12,9 @@ score into named outputs a decision can reference.
 
 The route pipeline is:
 
-1. `routing.signals` extracts facts.
-2. `routing.projections` coordinates or derives facts.
-3. `routing.decisions` matches policy and chooses candidate models.
+1. `recipes[].signals` extracts facts.
+2. `recipes[].projections` coordinates or derives facts.
+3. `recipes[].decisions` matches policy and chooses candidate models.
 
 ## Key Advantages
 
@@ -25,7 +25,7 @@ The route pipeline is:
 ## What Problem Does It Solve?
 
 Individual signals are intentionally narrow. Real routing policy often needs
-one winner from a competing intent group or one reusable difficulty score from
+one winner from a competing domain group or one reusable difficulty score from
 several weak indicators. Without projections, that logic is duplicated across
 decisions and numeric thresholds become hard to audit.
 
@@ -33,7 +33,7 @@ decisions and numeric thresholds become hard to audit.
 
 Use projections when:
 
-- only one member of a domain or embedding group should remain active
+- only one member of a domain group should remain active
 - several signals should contribute to one continuous score
 - several decisions should share the same named threshold bands
 
@@ -44,7 +44,7 @@ when multiple matches should remain independently visible.
 
 | Type | Goal | Decision-visible? | Guide |
 |---|---|---|---|
-| `partitions` | Keep one winner from competing domain or embedding signals | No; decisions still reference the winning raw signal | [Partitions](./partitions) |
+| `partitions` | Keep one winner from competing domain signals | No; decisions still reference the winning raw signal | [Partitions](./partitions) |
 | `scores` | Combine signal values with `weighted_sum` | No; scores feed mappings or other scores | [Scores](./scores) |
 | `mappings` | Convert a score into named threshold outputs | Yes, through `type: projection` | [Mappings](./mappings) |
 | trace | Explain partition, score, and mapping results in Router Replay | Operational only | [Projection Traces](./traces) |
@@ -60,58 +60,54 @@ Current methods are:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    embeddings:
-      - name: technical-support
-        threshold: 0.75
-        candidates: [installation help, troubleshooting]
-      - name: account-management
-        threshold: 0.72
-        candidates: [billing issue, subscription change]
-    context:
-      - name: long-context
-        min_tokens: 4K
-        max_tokens: 200K
-
-  projections:
-    partitions:
-      - name: support-intents
-        semantics: exclusive
-        members: [technical-support, account-management]
-        default: technical-support
-    scores:
-      - name: request-difficulty
-        method: weighted_sum
-        inputs:
-          - type: embedding
-            name: technical-support
-            value_source: confidence
-            weight: 0.5
-          - type: context
-            name: long-context
-            weight: 0.5
-    mappings:
-      - name: difficulty-band
-        source: request-difficulty
-        method: threshold_bands
-        outputs:
-          - name: support-fast
-            lt: 0.5
-          - name: support-escalated
-            gte: 0.5
-
-  decisions:
-    - name: escalated-support
-      description: Route difficult support requests to the larger model.
-      priority: 150
-      rules:
-        operator: AND
-        conditions:
-          - type: projection
-            name: support-escalated
-      modelRefs:
-        - model: support-large
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: computing
+          labels: [computer science]
+        - name: business
+      context:
+        - name: long-context
+          min_tokens: 4K
+          max_tokens: 200K
+    projections:
+      partitions:
+        - name: subject-areas
+          semantics: exclusive
+          members: [computing, business]
+          default: computing
+      scores:
+        - name: request-difficulty
+          method: weighted_sum
+          inputs:
+            - type: domain
+              name: computing
+              value_source: confidence
+              weight: 0.5
+            - type: context
+              name: long-context
+              weight: 0.5
+      mappings:
+        - name: difficulty-band
+          source: request-difficulty
+          method: threshold_bands
+          outputs:
+            - name: difficulty-low
+              lt: 0.5
+            - name: difficulty-high
+              gte: 0.5
+    decisions:
+      - name: escalated-computing
+        description: Route difficult computing requests to the larger model.
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: projection
+              name: difficulty-high
+        modelRefs:
+          - model: large-model
 ```
 
 Only mapping output names are referenced with `type: projection`. Decisions do
@@ -130,5 +126,7 @@ under **Config > Projections**.
   families. Evaluate weights and mapping bands together on labeled traffic.
 - Cycles between derived scores are rejected during validation.
 - See the
-  [`balance` recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)
-  for an end-to-end example.
+  [`feedback` recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/feedback/config.yaml)
+  for an end-to-end example of scores and mappings, and
+  [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)
+  for a partition.

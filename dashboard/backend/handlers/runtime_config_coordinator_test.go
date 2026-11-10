@@ -159,7 +159,7 @@ func TestManagedMarkerGuardsAllOrdinaryRuntimeWriters(t *testing.T) {
 	}{
 		{name: "router defaults", path: "/api/router/config/global/update", body: `{}`, handler: UpdateRouterDefaultsHandler(configPath, false, root)},
 		{name: "global raw", path: "/api/router/config/global/raw/update", body: "router: {}\n", handler: UpdateGlobalConfigYAMLHandler(configPath, false, root)},
-		{name: "deploy", path: "/api/router/config/deploy", body: `{"yaml":"routing: {}\\n"}`, handler: DeployHandler(configPath, false, root)},
+		{name: "deploy", path: "/api/router/config/deploy", body: `{"yaml":"recipes:\\n  - name: default\\n"}`, handler: DeployHandler(configPath, false, root)},
 		{name: "rollback", path: "/api/router/config/rollback", body: `{"version":"does-not-matter"}`, handler: RollbackHandler(configPath, false, root)},
 	}
 	for _, test := range tests {

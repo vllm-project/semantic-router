@@ -258,6 +258,9 @@ func (s *Stack) semanticRouterInstallOptions(opts *framework.SetupOptions) helm.
 		"image.repository": imageRepository,
 		"image.tag":        opts.ImageTag,
 		"image.pullPolicy": imagePullPolicy,
+		// The suites assert the matched signals and other debug headers, which
+		// the Router sends no client by default.
+		"config.global.router.headers.debug": "any",
 	}
 	for key, value := range s.config.SemanticRouterSet {
 		setValues[key] = value
