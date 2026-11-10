@@ -992,10 +992,10 @@ Route Claude Code's model calls through the gateway.
 
 | Parameter | Description |
 | --- | --- |
-| `--gateway TEXT` | The Router listener the harness calls.  [default: http://localhost:8899] |
+| `--config FILE` | The Router configuration: its first listener is the gateway, and it is checked for what the harness needs. Never edited.  [default: config.yaml] |
+| `--base-url TEXT` | The gateway's origin; otherwise derived from --config. |
 | `--model TEXT` | The entrypoint the harness asks for.  [default: vllm-sr/auto] |
 | `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
-| `--config FILE` | The Router configuration to check (default: ./config.yaml when present). Never edited. |
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
 | `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
 | `--yes` | Write without asking. Default: false. |
@@ -1012,10 +1012,10 @@ Route Codex CLI through the gateway with a profile of its own.
 
 | Parameter | Description |
 | --- | --- |
-| `--gateway TEXT` | The Router listener the harness calls.  [default: http://localhost:8899] |
+| `--config FILE` | The Router configuration: its first listener is the gateway, and it is checked for what the harness needs. Never edited.  [default: config.yaml] |
+| `--base-url TEXT` | The gateway's origin; otherwise derived from --config. |
 | `--model TEXT` | The entrypoint the harness asks for.  [default: vllm-sr/auto] |
 | `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
-| `--config FILE` | The Router configuration to check (default: ./config.yaml when present). Never edited. |
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
 | `--undo` | Take back what earlier runs set; keys changed since are left as they are. Default: false. |
 | `--yes` | Write without asking. Default: false. |

@@ -167,6 +167,13 @@ def _codex_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
     return findings
 
 
+def system_one_models(doc: dict | None) -> list[str]:
+    """The System One models the first listener publishes, which vSR can ask there."""
+    listeners = (doc or {}).get("listeners") or []
+    first = listeners[0] if listeners else None
+    return [str(m) for m in _get(first, "systemone", "models") or []]
+
+
 def check_router_config(doc: dict, harness: str) -> list[RouterFinding]:
     """What this harness needs from a v0.5 Router configuration and does not find."""
     router = _get(doc, "global", "router") or {}

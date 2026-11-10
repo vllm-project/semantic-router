@@ -103,13 +103,15 @@ with vSR 0.1.10, Claude Code 2.1.317 without it, and Codex CLI 0.166.0, against
 
 ```bash
 export VLLM_SR_API_KEY=<the listener's API key>   # leave unset when it has none
-vllm-sr connect claude-code --gateway http://localhost:8899 --config claude-code.yaml
-vllm-sr connect codex --gateway http://localhost:8900 --config codex.yaml
+vllm-sr connect claude-code --config claude-code.yaml
+vllm-sr connect codex --config codex.yaml
 codex --profile vllm-sr
 ```
 
-Here each harness has its own Router, on port 8899 with `claude-code.yaml` and
-on port 8900 with `codex.yaml`.
+Here each harness has its own Router, served from `claude-code.yaml` and
+`codex.yaml`. The command reaches the gateway at the first listener of the
+configuration it is given (`config.yaml` by default); `--base-url` names
+another origin.
 
 The command shows the changes and asks before writing them:
 
@@ -127,7 +129,9 @@ It then checks the Router configuration given with `--config` and prints the
 settings below that are missing, without changing it, and sends one tool call
 in the harness's protocol: `System Two: ok` names the model that answered and
 whether it called the tool. With the vSR plugin installed it warns while the
-plugin's router app is on. `--dry-run` prints the plan and writes nothing.
+plugin's router app is on, and when the listener also serves System One it
+prints the setting that points vSR at it. `--dry-run` prints the plan and writes
+nothing.
 `--undo` puts back what each key, or the Codex profile, held before the first
 run, leaves alone what changed since, and keeps everything else in the files.
 
@@ -194,6 +198,33 @@ Responses service and store. See [Codex CLI](protocol-compatibility#codex-cli)
 for the other fields Codex sends.
 
 ### With the vSR plugin
+
+One listener can serve both systems: the routed model calls for Claude Code
+and, at `/v1/decisions`, the System One questions vSR asks. Publish the decision
+model on the listener and point vSR at it, so the plugin and the gateway share
+one address, one API key and one decision model:
+
+```yaml
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+    systemone:
+      models: [vela3-fast]       # the public names vSR may ask for
+global:
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        public_name: vela3-fast
+        artifact: vllm-sr/vela3-fast
+```
+
+```bash
+echo '{"runtime": "remote", "runtimeModel": "vela3-fast",
+  "runtimeUrl": "http://localhost:8899/v1/decisions"}' \
+  | claude plugin configure vsr@vllm-sr --values-stdin
+```
 
 Turn the plugin's router app off (`/vsr router off`) so the plugin and the
 Router do not both choose a subagent's model. Its escalate app still asks Claude

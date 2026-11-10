@@ -17,6 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 main = importlib.import_module("cli.main").main
 hc = importlib.import_module("cli.harness_connect")
 rc = importlib.import_module("cli.harness_router_check")
+chat_client = importlib.import_module("cli.chat_client")
 
 MESSAGES_REPLY = {
     "type": "message",
@@ -266,11 +267,12 @@ def test_probe_refuses_a_200_that_is_not_a_reply(gateway):
 
 def test_cli_dry_run_writes_nothing_and_hides_the_key(tmp_path, gateway, monkeypatch):
     url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
     monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
     monkeypatch.setattr("shutil.which", lambda _: None)
     result = CliRunner().invoke(
-        main, ["connect", "claude-code", "--gateway", url, "--dry-run"]
+        main, ["connect", "claude-code", "--base-url", url, "--dry-run"]
     )
     assert result.exit_code == 0, result.output
     assert "sk-secret" not in result.output
@@ -280,9 +282,10 @@ def test_cli_dry_run_writes_nothing_and_hides_the_key(tmp_path, gateway, monkeyp
 
 def test_cli_writes_probes_and_undoes(tmp_path, gateway, monkeypatch):
     url, seen, _ = gateway
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("CODEX_HOME", str(tmp_path))
     monkeypatch.delenv("VLLM_SR_API_KEY", raising=False)
-    result = CliRunner().invoke(main, ["connect", "codex", "--gateway", url, "--yes"])
+    result = CliRunner().invoke(main, ["connect", "codex", "--base-url", url, "--yes"])
     assert result.exit_code == 0, result.output
     assert "System Two: ok" in result.output
     assert seen[-1][0] == "/v1/responses"
@@ -294,9 +297,10 @@ def test_cli_writes_probes_and_undoes(tmp_path, gateway, monkeypatch):
 
 def test_cli_fails_when_the_gateway_refuses(tmp_path, gateway, monkeypatch):
     url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("CODEX_HOME", str(tmp_path))
     result = CliRunner().invoke(
-        main, ["connect", "codex", "--gateway", url + "/nope", "--yes"]
+        main, ["connect", "codex", "--base-url", url + "/nope", "--yes"]
     )
     assert result.exit_code != 0
     assert "System Two: failed" in result.output
@@ -312,7 +316,7 @@ def test_cli_project_scope_keeps_the_key_out_of_git(tmp_path, gateway, monkeypat
     monkeypatch.setattr("shutil.which", lambda _: None)
     result = CliRunner().invoke(
         main,
-        ["connect", "claude-code", "--scope", "project", "--gateway", url, "--yes"],
+        ["connect", "claude-code", "--scope", "project", "--base-url", url, "--yes"],
     )
     assert result.exit_code == 0, result.output
     assert "sk-secret" in (tmp_path / ".claude" / "settings.local.json").read_text()
@@ -323,3 +327,31 @@ def test_cli_project_scope_keeps_the_key_out_of_git(tmp_path, gateway, monkeypat
         check=True,
     )
     assert status.stdout == ""
+
+
+def test_cli_takes_the_gateway_from_the_configurations_listener(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    (tmp_path / "config.yaml").write_text(
+        "version: v0.5\nlisteners:\n  - {name: http, address: 0.0.0.0, port: 8899}\n"
+    )
+    host, port = chat_client.resolve_listener_host_port("config.yaml")
+    result = CliRunner().invoke(main, ["connect", "claude-code", "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert f'"ANTHROPIC_BASE_URL": "http://{host}:{port}"' in result.output
+
+
+def test_vsr_is_pointed_at_the_listeners_system_one(monkeypatch, capsys):
+    connect_command = importlib.import_module("cli.commands.connect")
+    doc = {"listeners": [{"port": 8899, "systemone": {"models": ["vela3-fast"]}}]}
+    inputs = {"router": "false", "runtimeUrl": "http://127.0.0.1:8790/v1/decisions"}
+    monkeypatch.setattr(connect_command, "_vsr_plugin", lambda env: {"inputs": inputs})
+    connect_command._check_vsr({}, "http://localhost:8899", doc)
+    shown = capsys.readouterr().out
+    assert '"runtimeUrl": "http://localhost:8899/v1/decisions"' in shown
+    assert '"runtimeModel": "vela3-fast"' in shown
+
+    inputs["runtimeUrl"] = "http://localhost:8899/v1/decisions"
+    connect_command._check_vsr({}, "http://localhost:8899", doc)
+    assert "System One" not in capsys.readouterr().out
