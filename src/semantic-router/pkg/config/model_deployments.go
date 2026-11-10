@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,12 +11,11 @@ import (
 // inference service. Artifact aliases and module policy remain in the catalog;
 // recipe bindings select the adapter and head separately from execution.
 type ModelDeployment struct {
-	Artifact      string           `yaml:"artifact,omitempty" json:"artifact,omitempty"`
-	Revision      string           `yaml:"revision,omitempty" json:"revision,omitempty"`
-	ExternalModel string           `yaml:"external_model,omitempty" json:"external_model,omitempty"`
-	Provider      string           `yaml:"provider" json:"provider"`
-	Device        string           `yaml:"device,omitempty" json:"device,omitempty"`
-	Input         ModelInputBudget `yaml:"input,omitempty" json:"input,omitempty"`
+	Artifact string           `yaml:"artifact,omitempty" json:"artifact,omitempty"`
+	Revision string           `yaml:"revision,omitempty" json:"revision,omitempty"`
+	Provider string           `yaml:"provider" json:"provider"`
+	Device   string           `yaml:"device,omitempty" json:"device,omitempty"`
+	Input    ModelInputBudget `yaml:"input,omitempty" json:"input,omitempty"`
 	// MaxNumSeqs bounds the rows (one per question or input) one forward of a
 	// model_runtime deployment holds; 1 runs every row alone. Unset leaves it
 	// to the runtime, which picks it by the device's memory class.
@@ -34,15 +34,46 @@ type ModelDeployment struct {
 	// EnableSharedContext computes the shared state of a multi-question
 	// request once; unset leaves it to the model family (on for Decision 2.0).
 	EnableSharedContext *bool `yaml:"enable_shared_context,omitempty" json:"enable_shared_context,omitempty"`
+	// MaxModelLen is the most input tokens one question of a local Decision
+	// deployment may have: it lowers the package's limit and never raises it.
+	// Unset keeps the package's limit; attached endpoints and replicas refuse it.
+	MaxModelLen *int `yaml:"max_model_len,omitempty" json:"max_model_len,omitempty"`
 	// Endpoint attaches a model_runtime deployment to an engine the Router does
-	// not manage (unix:///path, http://host:port or https://host:port).
+	// not manage (unix:///path, http://host:port or https://host:port). For a
+	// systemone deployment it is the URL its System One API answers POST
+	// requests on, path prefix included (https://host/v1/systemone); for the
+	// other remote providers it is the base URL of their API
+	// (https://host/v1), which their operation path follows.
 	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty"`
+	// Model is the model a remote API answers with; on an attached
+	// model_runtime endpoint it selects the served model.
+	Model string `yaml:"model,omitempty" json:"model,omitempty"`
+	// Auth is the credential an attached or remote deployment takes.
+	Auth *DeploymentAuth `yaml:"auth,omitempty" json:"auth,omitempty"`
+	// Headers are further non-secret headers every call carries.
+	Headers map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
+	// TimeoutMs bounds one attempt of a call to an attached or remote
+	// deployment; a decision question or selector's own timeout_ms wins.
+	TimeoutMs int `yaml:"timeout_ms,omitempty" json:"timeout_ms,omitempty"`
+	// MaxRetries is the number of transport retries after a first attempt,
+	// within the caller's deadline.
+	MaxRetries *int `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
+	// TLS verifies an https endpoint and presents a client certificate.
+	TLS *DeploymentTLS `yaml:"tls,omitempty" json:"tls,omitempty"`
+	// Limits bounds the request and response bodies of one exchange.
+	Limits *DeploymentLimits `yaml:"limits,omitempty" json:"limits,omitempty"`
+	// Capabilities declares what a remote model answers when its API lists
+	// nothing for it.
+	Capabilities *DeploymentCapabilities `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
+	// Generation sets the completion length and sampling temperature of an
+	// openai_chat deployment's calls.
+	Generation *DeploymentGeneration `yaml:"generation,omitempty" json:"generation,omitempty"`
 	// Replicas places independent workers for this logical resource. Omission
 	// uses the single device/endpoint placement above.
 	Replicas []ModelReplica `yaml:"replicas,omitempty" json:"replicas,omitempty"`
-	// ServedName selects the model on an attached runtime that serves several
-	// (default: the deployment name).
-	ServedName string `yaml:"served_name,omitempty" json:"served_name,omitempty"`
+	// OutlierDetection ejects a model_runtime replica whose exchanges keep
+	// running out of their deadline; unset keeps its defaults.
+	OutlierDetection *DeploymentOutlierDetection `yaml:"outlier_detection,omitempty" json:"outlier_detection,omitempty"`
 	// PublicName is the inference API identity. It never identifies a socket,
 	// local package path, or internal deployment key.
 	PublicName string `yaml:"public_name,omitempty" json:"public_name,omitempty"`
@@ -69,48 +100,23 @@ type ModelInputBudget struct {
 	Overflow  string `yaml:"overflow,omitempty" json:"overflow,omitempty"`
 }
 
-// ModelBinding declares a shared task default or a recipe-local deployment use.
-// Head and MappingPath
-// describe task interpretation and never imply physical resource compatibility.
+// ModelBinding names the deployment that answers one application signal
+// type, globally or in one recipe (see model_binding_forms.go).
 type ModelBinding struct {
-	Deployment     string                   `yaml:"deployment" json:"deployment"`
-	Contract       string                   `yaml:"contract" json:"contract"`
-	Adapter        string                   `yaml:"adapter" json:"adapter"`
-	Head           string                   `yaml:"head,omitempty" json:"head,omitempty"`
-	MappingPath    string                   `yaml:"mapping_path,omitempty" json:"mapping_path,omitempty"`
-	PairScorer     *PairScorerSelection     `yaml:"pair_scorer,omitempty" json:"pair_scorer,omitempty"`
-	OperatingPoint *OperatingPointReference `yaml:"operating_point,omitempty" json:"operating_point,omitempty"`
+	Deployment string `yaml:"deployment" json:"deployment"`
 }
 
-// DecisionTaskContract binds a semantic judgment without requiring token
-// positions or a classifier head. Its concrete typed question comes from the
-// consumer's task definition.
-const DecisionTaskContract = "decision.v1"
-
 // ResolvedModelBinding is immutable preparation input, containing no engine
-// handles or secrets. The runtime attaches the corresponding typed task handle
-// before publishing its generation.
+// handles or secrets: the deployment one consumer asks and the contract it
+// reads the answers by. The runtime attaches the corresponding typed task
+// handle before publishing its generation.
 type ResolvedModelBinding struct {
 	Recipe     RecipeName
 	Name       string
+	Contract   string
 	Binding    ModelBinding
 	Deployment ModelDeployment
 	Admission  AdmissionConfig
-}
-
-// ModelBindingPlan contains already-resolved recipe references. Lookup is
-// exact: absence never falls back to a binding from a different recipe.
-type ModelBindingPlan struct {
-	recipes map[RecipeName]map[string]ResolvedModelBinding
-	global  map[string]ResolvedModelBinding
-}
-
-func (p *ModelBindingPlan) Lookup(recipe RecipeName, name string) (ResolvedModelBinding, bool) {
-	if p == nil {
-		return ResolvedModelBinding{}, false
-	}
-	binding, ok := p.recipes[recipe][name]
-	return binding, ok
 }
 
 func (d ModelDeployment) WithDefaults() ModelDeployment {
@@ -147,196 +153,45 @@ func (d ModelDeployment) ValidateDecisionInput(name string) error {
 	return fmt.Errorf("deployment %q: decision models never truncate; input takes overflow: window with max_tokens, the scan budget of a model that reads a long part in windows, or nothing", name)
 }
 
-func (d ModelDeployment) validate(cfg *RouterConfig) error {
+func (d ModelDeployment) validate() error {
 	if d.PublicName != "" && (strings.TrimSpace(d.PublicName) != d.PublicName || strings.ContainsAny(d.PublicName, "\x00\r\n\t ") || strings.HasPrefix(d.PublicName, "/") || strings.Contains(d.PublicName, "://")) {
 		return fmt.Errorf("public_name must be a trimmed public model ID, not a path or endpoint")
 	}
 	switch d.Provider {
-	case "http":
-		if d.Artifact != "" || strings.TrimSpace(d.ExternalModel) == "" {
-			return fmt.Errorf("http deployment requires external_model and cannot set artifact")
-		}
-		if d.Device != "" {
-			return fmt.Errorf("external service devices are not controlled by the router")
-		}
-		if _, err := findNamedExternalModel(cfg, d.ExternalModel); err != nil {
-			return err
-		}
+	case SystemOneProvider:
+		return d.validateSystemOne()
+	case OpenAIEmbeddingsProvider, OpenAIChatProvider:
+		return d.validateRemote()
 	case ModelRuntimeProvider:
 		return d.validateModelRuntime()
 	default:
 		return fmt.Errorf("unsupported provider %q", d.Provider)
 	}
-	if d.HasEngineArgs() || d.Endpoint != "" || len(d.Replicas) != 0 || d.ServedName != "" {
-		return fmt.Errorf("engine arguments, endpoint, replicas and served_name apply only to model_runtime deployments")
-	}
-	if d.Input.MaxTokens < 0 {
-		return fmt.Errorf("input.max_tokens must not be negative")
-	}
-	switch d.Input.Overflow {
-	case "reject", "truncate", "window":
-	default:
-		return fmt.Errorf("unsupported input.overflow %q", d.Input.Overflow)
+}
+
+// validateRecipeBindings checks each binding a recipe writes: it names a
+// declared deployment that answers its application signal.
+func validateRecipeBindings(recipe RecipeName, scoped *RouterConfig) error {
+	bindings := scoped.RecipeBindings()
+	for _, key := range sortedModelKeys(bindings) {
+		if err := validateModelBinding(scoped, key, bindings[key]); err != nil {
+			return fmt.Errorf("recipes[%s].model_bindings.%s: %w", recipe, key, err)
+		}
 	}
 	return nil
 }
 
-// CompileModelBindings resolves all declarations before loading resources.
-// Existing module defaults remain canonical catalog bindings; explicit recipe
-// declarations override those defaults only for their own consumers.
-func CompileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
-	if cfg == nil {
-		return nil, fmt.Errorf("model bindings require router configuration")
+// validateModelBinding checks one binding: an application signal type bound
+// to a declared deployment whose provider answers it.
+func validateModelBinding(cfg *RouterConfig, key string, binding ModelBinding) error {
+	if !knownBindingKey(key) {
+		return fmt.Errorf("unknown signal type %q", key)
 	}
-	if err := validateModelDeploymentContracts(cfg); err != nil {
-		return nil, err
+	deployment, exists := cfg.ModelDeployments[binding.Deployment]
+	if !exists {
+		return fmt.Errorf("unknown deployment %q; %s", binding.Deployment, declaredDeployments(cfg.ModelDeployments))
 	}
-	return compileModelBindings(cfg)
-}
-
-// compileModelBindings assumes global deployment contracts were already
-// validated by the caller, then resolves global defaults and recipe overrides.
-func compileModelBindings(cfg *RouterConfig) (*ModelBindingPlan, error) {
-	global, err := resolveGlobalModelBindings(cfg)
-	if err != nil {
-		return nil, err
-	}
-	plan := &ModelBindingPlan{recipes: make(map[RecipeName]map[string]ResolvedModelBinding), global: global}
-	profiles := cfg.Recipes
-	if len(profiles) == 0 {
-		recipe := cfg.RoutingScope
-		if recipe == "" {
-			recipe = DefaultRecipeName
-		}
-		profiles = []RoutingRecipe{{Name: recipe, Profile: RoutingProfile{ModelBindings: cfg.ModelBindings, Signals: cfg.Signals}}}
-	}
-	for _, recipe := range profiles {
-		declarations := cfg.EffectiveModelBindings(recipe.Profile.Signals, recipe.Profile.ModelBindings)
-		bindings := make(map[string]ResolvedModelBinding, len(declarations))
-		for _, name := range sortedModelKeys(declarations) {
-			decl := declarations[name]
-			deployment, exists := cfg.ModelDeployments[decl.Deployment]
-			if !exists {
-				return nil, fmt.Errorf("recipes[%s].routing.model_bindings.%s: unknown deployment %q", recipe.Name, name, decl.Deployment)
-			}
-			deployment = deployment.WithDefaults()
-			if err := validateTaskModelBinding(name, decl, deployment); err != nil {
-				return nil, fmt.Errorf("recipes[%s].routing.model_bindings.%s: %w", recipe.Name, name, err)
-			}
-			if strings.HasPrefix(name, "classifier.") {
-				rule := classifierSignalRuleByName(recipe.Profile.Signals.ClassifierRules, strings.TrimPrefix(name, "classifier."))
-				if err := validateGenericModelBinding(cfg, rule, decl, deployment); err != nil {
-					return nil, fmt.Errorf("recipes[%s].routing.model_bindings.%s: %w", recipe.Name, name, err)
-				}
-			}
-			if strings.HasPrefix(name, "safety.") {
-				if err := validateSafetyModelBinding(recipe.Profile.Signals.SafetyRules, name, decl, deployment); err != nil {
-					return nil, fmt.Errorf("recipes[%s].routing.model_bindings.%s: %w", recipe.Name, name, err)
-				}
-			}
-			bindings[name] = ResolvedModelBinding{Recipe: recipe.Name, Name: name, Binding: decl, Deployment: deployment, Admission: cfg.ModelAdmission[decl.Deployment]}
-		}
-		plan.recipes[recipe.Name] = bindings
-	}
-	return plan, nil
-}
-
-func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDeployment) error {
-	if decl.Contract == DecisionTaskContract {
-		allowed := name == "pii_classifier" || name == "hallucination_detector" || name == "preference" || name == "reask" || name == "complexity" || strings.HasPrefix(name, "classifier.") || strings.HasPrefix(name, "safety.")
-		if !allowed || !deployment.IsModelRuntime() || decl.Head != "" || decl.MappingPath != "" || decl.OperatingPoint != nil || decl.PairScorer != nil {
-			return fmt.Errorf("decision.v1 requires a supported judgment consumer and model_runtime deployment, without head, mapping_path or a classifier operating point")
-		}
-		return nil
-	}
-	want := ""
-	if decl.OperatingPoint != nil {
-		if !strings.HasPrefix(name, "classifier.") {
-			return fmt.Errorf("operating_point is only supported by generic classifier bindings")
-		}
-		if err := decl.OperatingPoint.Validate(); err != nil {
-			return err
-		}
-	}
-	if decl.PairScorer != nil && name != RAGRerankerConsumer {
-		return fmt.Errorf("pair_scorer selection is only supported by rag.reranker")
-	}
-	switch name {
-	case "prompt_guard":
-		want = RemoteClassifierContractLabelDistribution
-		if deployment.Provider == "http" && decl.Adapter == RemoteClassifierProtocolHTTPChat {
-			want = "label_decision.v1"
-		}
-	case "domain_classifier", "fact_check_classifier", "feedback_detector", "modality_detector":
-		want = RemoteClassifierContractLabelDistribution
-	case "pii_classifier":
-		want = RemoteClassifierContractTokenSpans
-	case "hallucination_detector":
-		want = RemoteClassifierContractTokenSpans
-	case "embedding":
-		want = "embedding.v1"
-	case RAGRerankerConsumer:
-		want = RelevanceScoresContract
-		if err := validateRerankerBinding(decl, deployment); err != nil {
-			return err
-		}
-	case "complexity":
-		if decl.Contract == RemoteClassifierContractLabelDistribution {
-			want = RemoteClassifierContractLabelDistribution
-			break
-		}
-		want = RemoteClassifierContractScore
-	default:
-		if strings.HasPrefix(name, "safety.") {
-			// The matching rule disambiguates names containing ".hazard".
-			want = decl.Contract
-			if want != RemoteClassifierContractLabelDistribution && want != RemoteClassifierContractLabelScores {
-				return fmt.Errorf("safety binding requires a categorical or independent label contract")
-			}
-			break
-		}
-		if !strings.HasPrefix(name, "classifier.") {
-			return fmt.Errorf("unknown task consumer %q", name)
-		}
-		want = RemoteClassifierContractLabelDistribution
-		if decl.Contract == RemoteClassifierContractLabelScores {
-			want = RemoteClassifierContractLabelScores
-		}
-	}
-	if decl.Contract != want {
-		return fmt.Errorf("contract must be %q for %s", want, name)
-	}
-	if strings.TrimSpace(decl.Adapter) == "" && !deployment.IsModelRuntime() {
-		return fmt.Errorf("adapter is required")
-	}
-	if name == "complexity" && deployment.Provider != "http" {
-		return fmt.Errorf("complexity requires an HTTP score or distribution adapter")
-	}
-	if deployment.Provider == "http" && decl.Head != "" {
-		return fmt.Errorf("remote task cannot bind a local head")
-	}
-	if deployment.Provider == "http" {
-		if name == "fact_check_classifier" || name == "feedback_detector" || name == "modality_detector" {
-			return fmt.Errorf("%s has no HTTP task adapter", name)
-		}
-		if name != "embedding" && (deployment.Input.MaxTokens != 0 || deployment.Input.Overflow != "reject") {
-			return fmt.Errorf("HTTP classifier adapters cannot enforce local tokenizer input budgets")
-		}
-		if name == "hallucination_detector" && decl.Adapter != RemoteClassifierProtocolHTTPChat && decl.Adapter != RemoteClassifierProtocolHTTPClassify {
-			return fmt.Errorf("hallucination detector requires http_chat or http_classify adapter")
-		}
-	}
-	if decl.Adapter == "vela_halu" {
-		if name != "hallucination_detector" || !deployment.IsModelRuntime() {
-			return fmt.Errorf("vela_halu requires a local hallucination_detector binding")
-		}
-		if deployment.Input.MaxTokens > 8192 {
-			return fmt.Errorf("vela_halu task input budget cannot exceed 8192 tokens")
-		}
-	}
-	// Artifact-specific capacity is checked by the loaded provider. Config
-	// cannot infer a checkpoint limit from its adapter name or a fixed 512 cap.
-	return nil
+	return providerAnswers(key, deployment.WithDefaults())
 }
 
 func sortedModelKeys[T any](values map[string]T) []string {
@@ -375,14 +230,36 @@ func validateModelDeploymentContracts(cfg *RouterConfig) error {
 		if strings.HasPrefix(name, ImplicitDeploymentPrefix) {
 			return fmt.Errorf("global.model_catalog.deployments.%s: names starting with %q are reserved for module defaults", name, ImplicitDeploymentPrefix)
 		}
-		if err := cfg.ModelDeployments[name].WithDefaults().validate(cfg); err != nil {
+		if err := cfg.ModelDeployments[name].WithDefaults().validate(); err != nil {
 			return fmt.Errorf("global.model_catalog.deployments.%s: %w", name, err)
 		}
 	}
 	return nil
 }
 
+// ValidateModelBindings checks the deployments of a configuration built in
+// code and every binding it writes, globally and in each recipe, before any
+// model is prepared; a loaded configuration was checked as it loaded.
+func ValidateModelBindings(cfg *RouterConfig) error {
+	if err := validateModelDeploymentContracts(cfg); err != nil {
+		return err
+	}
+	if err := validateGlobalModelBindingContracts(cfg); err != nil {
+		return err
+	}
+	return validateModelBindingContracts(cfg)
+}
+
+// validateModelBindingContracts checks the bindings of every recipe; the
+// global ones are checked with the global contracts.
 func validateModelBindingContracts(cfg *RouterConfig) error {
-	_, err := compileModelBindings(cfg)
-	return err
+	if len(cfg.Recipes) == 0 {
+		return validateRecipeBindings(cmp.Or(cfg.RoutingScope, DefaultRecipeName), cfg)
+	}
+	for i := range cfg.Recipes {
+		if err := validateRecipeBindings(cfg.Recipes[i].Name, cfg.ConfigForRecipe(&cfg.Recipes[i])); err != nil {
+			return err
+		}
+	}
+	return nil
 }

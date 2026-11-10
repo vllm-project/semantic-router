@@ -27,9 +27,10 @@ func EffectiveCandidateRequest(request *llmprotocol.Request, decision *config.De
 		if prompt := decision.GetSystemPromptConfig(); prompt != nil && decision.IsSystemPromptEnabled() {
 			llmprotocol.SetSystemInstruction(&view, prompt.SystemPrompt, decision.GetSystemPromptMode())
 		}
-		if tools := decision.GetToolsConfig(); tools != nil && tools.Enabled && tools.EffectiveMode() == config.ToolsPluginModeNone {
-			llmprotocol.StripTools(&view, tools.StripToolHistory)
+		if policy := decision.GetToolsConfig().ActivePolicy(); policy.EffectiveMode() == config.ToolsPolicyModeNone {
+			llmprotocol.StripTools(&view, policy.StripToolHistory)
 		}
+		ApplyDecisionOutput(&view, decision)
 		if params := decision.GetRequestParamsConfig(); params != nil {
 			for _, field := range params.BlockedParams {
 				if _, err := llmprotocol.BlockRequestField(&view, strings.TrimSpace(field)); err != nil {

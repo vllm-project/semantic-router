@@ -45,7 +45,7 @@ func TestListenerTLSParsesFromTheCanonicalDocument(t *testing.T) {
 	}
 }
 
-const canonicalTLSDocument = `version: v0.3
+const canonicalTLSDocument = `version: v0.5
 listeners:
   - name: https
     address: 0.0.0.0
@@ -62,9 +62,8 @@ providers:
         - endpoint: 127.0.0.1:8000
           protocol: http
           provider: vllm
-routing:
-  modelCards:
-    - name: m
+recipes:
+  - name: default
 `
 
 func TestSystemOneListenerScopeNeverInheritsChatModels(t *testing.T) {

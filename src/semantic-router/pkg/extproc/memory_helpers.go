@@ -235,8 +235,13 @@ func extractTextFromContentParts(parts []responseapi.ContentPart) string {
 }
 
 // extractCurrentUserMessage extracts the current user message from the request context.
-// Supports both Response API and Chat Completions.
+// Supports both Response API and Chat Completions. When routing_input changed
+// the request, it is the routing text, so recalled memories and client
+// metadata are not stored as the user's words.
 func extractCurrentUserMessage(ctx *RequestContext) string {
+	if ctx.RoutingInput.Changed() {
+		return ctx.UserContent
+	}
 	if ctx.SemanticRequest != nil {
 		for index := len(ctx.SemanticRequest.Messages) - 1; index >= 0; index-- {
 			message := ctx.SemanticRequest.Messages[index]

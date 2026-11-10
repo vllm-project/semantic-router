@@ -42,11 +42,18 @@ function buildConfig() {
         prompt_per_1m: index / 100,
         completion_per_1m: index / 50,
       },
+      description:
+        index === 299
+          ? 'Unique needle model for large inventory search coverage.'
+          : `Scale-test routing model ${index}`,
+      capabilities: index % 2 === 0 ? ['chat', 'reasoning'] : ['chat'],
+      tags: [index % 2 === 0 ? 'rocm' : 'fallback'],
+      param_size: `${8 + (index % 4) * 8}B`,
     }
   })
 
   return {
-    version: 'v0.3',
+    version: 'v0.5',
     listeners: [{ name: 'public', address: '0.0.0.0', port: 8801 }],
     providers: {
       defaults: {
@@ -54,37 +61,28 @@ function buildConfig() {
       },
       models,
     },
-    routing: {
-      modelCards: models.map((model, index) => ({
-        name: model.name,
-        description:
-          index === 299
-            ? 'Unique needle model for large inventory search coverage.'
-            : `Scale-test routing model ${index}`,
-        capabilities: index % 2 === 0 ? ['chat', 'reasoning'] : ['chat'],
-        tags: [index % 2 === 0 ? 'rocm' : 'fallback'],
-        modality: 'text',
-        param_size: `${8 + (index % 4) * 8}B`,
-      })),
-      signals: {},
-      decisions: [
-        {
-          name: 'protected-production-route',
-          description: 'Keeps one non-default model protected by a routing reference.',
-          priority: 1,
-          rules: { operator: 'AND' as const, conditions: [] },
-          modelRefs: [
-            {
-              model: REFERENCED_MODEL,
-              use_reasoning: false,
-              weight: 1,
-            },
-          ],
-        },
-      ],
-    },
+    recipes: [
+      {
+        name: 'default',
+        signals: {},
+        decisions: [
+          {
+            name: 'protected-production-route',
+            description: 'Keeps one non-default model protected by a routing reference.',
+            priority: 1,
+            rules: { operator: 'AND' as const, conditions: [] },
+            modelRefs: [
+              {
+                model: REFERENCED_MODEL,
+                use_reasoning: false,
+                weight: 1,
+              },
+            ],
+          },
+        ],
+      },
+    ],
     global: {},
-    plugins: {},
   }
 }
 
@@ -240,7 +238,6 @@ test.describe('Models inventory at 300+ scale', () => {
     await connectionDialog
       .getByLabel('Description Optional')
       .fill('Added from the 305-model inventory.')
-    await connectionDialog.getByLabel('Modality Optional').selectOption('ar')
     await connectionDialog.getByLabel('Parameter size Optional').fill('32B')
     await connectionDialog.getByLabel('Context window Optional').fill('131072')
     await connectionDialog.getByLabel('Capabilities Comma separated').fill('chat, reasoning')
@@ -257,11 +254,10 @@ test.describe('Models inventory at 300+ scale', () => {
     expect(addedConfig).not.toHaveProperty('signals')
     expect(addedConfig).not.toHaveProperty('decisions')
     expect(addedConfig).not.toHaveProperty('model_config')
-    expect(addedConfig.version).toBe('v0.3')
+    expect(addedConfig.version).toBe('v0.5')
     expect(addedConfig.providers.defaults.model).toBe(DEFAULT_MODEL)
     expect(addedConfig.providers.defaults).not.toHaveProperty('default_model')
     expect(addedConfig.providers.models).toHaveLength(MODEL_COUNT + 1)
-    expect(addedConfig.routing.modelCards).toHaveLength(MODEL_COUNT + 1)
     expect(
       addedConfig.providers.models.find(
         (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
@@ -274,7 +270,7 @@ test.describe('Models inventory at 300+ scale', () => {
       backend_refs: [
         {
           name: 'vllm-primary',
-          base_url: 'http://localhost:8000/v1',
+          endpoint: 'http://localhost:8000/v1',
           provider: 'vllm',
           api_key: 'test-provider-key',
         },
@@ -287,16 +283,9 @@ test.describe('Models inventory at 300+ scale', () => {
         cache_write_per_1m: 0.25,
       },
       reliability: { retry_count: 2, lb_policy: 'LEAST_REQUEST' },
-    })
-    expect(
-      addedConfig.routing.modelCards.find(
-        (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
-      ),
-    ).toMatchObject({
       description: 'Added from the 305-model inventory.',
       capabilities: ['chat', 'reasoning'],
       tags: ['rocm', 'new'],
-      modality: 'ar',
       param_size: '32B',
       context_window_size: 131072,
     })
@@ -325,19 +314,12 @@ test.describe('Models inventory at 300+ scale', () => {
     expect(editedConfig).not.toHaveProperty('model_config')
     expect(editedConfig.providers.defaults.model).toBe(DEFAULT_MODEL)
     expect(editedConfig.providers.models).toHaveLength(MODEL_COUNT + 1)
-    expect(editedConfig.routing.modelCards).toHaveLength(MODEL_COUNT + 1)
     expect(
       editedConfig.providers.models.find(
         (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
       ),
     ).toMatchObject({
       provider_model_id: 'physical/Qwen-Scale-305-v2',
-    })
-    expect(
-      editedConfig.routing.modelCards.find(
-        (model) => model.name === 'model-305-added/physical/Qwen-Scale-305',
-      ),
-    ).toMatchObject({
       description: 'Updated without shrinking the large inventory.',
       tags: ['rocm', 'updated'],
     })

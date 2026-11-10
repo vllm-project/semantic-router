@@ -65,8 +65,8 @@ func (a *Allocator) Placeholder(entityType, value string) string {
 }
 
 // filter drops spans whose entity type is excluded by cfg.EntityTypes (an
-// include list; empty means every type is masked) or whose confidence is
-// below cfg.Threshold (requirement 8).
+// include list; empty means every type is masked). The pii rule the plugin
+// names already dropped the spans below its threshold.
 func (a *Allocator) filter(spans []Span) []Span {
 	if len(spans) == 0 {
 		return spans
@@ -81,9 +81,6 @@ func (a *Allocator) filter(spans []Span) []Span {
 	filtered := make([]Span, 0, len(spans))
 	for _, span := range spans {
 		if allowed != nil && !allowed[span.EntityType] {
-			continue
-		}
-		if span.Confidence < a.cfg.Threshold {
 			continue
 		}
 		filtered = append(filtered, span)

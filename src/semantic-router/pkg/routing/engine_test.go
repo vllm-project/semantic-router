@@ -70,7 +70,7 @@ func newScripted(effects map[Phase][]*Effect) (*scriptedSession, Engine) {
 
 func chatRequest(body string) *Request {
 	return &Request{
-		Header: header(":method", "POST", ":path", "/v1/chat/completions", ":authority", "router", "content-length", "4", "x-selected-model", "client-pick"),
+		Header: header(":method", "POST", ":path", "/v1/chat/completions", ":authority", "router", "content-length", "4", "x-vsr-route-model", "client-pick"),
 		Body:   []byte(body),
 	}
 }
@@ -81,7 +81,7 @@ func TestPlanAppliesRequestEffectsAndPicksTheRoute(t *testing.T) {
 	session, engine := newScripted(map[Phase][]*Effect{
 		PhaseRequestHeaders: {{Header: &HeaderMutation{Set: []HeaderOption{set("accept-encoding", "identity")}}}},
 		PhaseRequestBody: {{
-			Header:          &HeaderMutation{Set: []HeaderOption{set("x-selected-model", "model-a"), set(":path", "/v1/messages"), set("content-length", "7")}},
+			Header:          &HeaderMutation{Set: []HeaderOption{set("x-vsr-route-model", "model-a"), set(":path", "/v1/messages"), set("content-length", "7")}},
 			Body:            &BodyMutation{Body: []byte("rewired")},
 			ClearRouteCache: true,
 		}},
@@ -117,7 +117,7 @@ func TestPlanAppliesRequestEffectsAndPicksTheRoute(t *testing.T) {
 func TestPlanKeepsTheOriginalRouteWithoutARouteCacheClear(t *testing.T) {
 	_, engine := newScripted(map[Phase][]*Effect{
 		PhaseRequestBody: {
-			{Header: &HeaderMutation{Set: []HeaderOption{set("x-selected-model", "model-a"), set("content-length", "4")}}},
+			{Header: &HeaderMutation{Set: []HeaderOption{set("x-vsr-route-model", "model-a"), set("content-length", "4")}}},
 		},
 	})
 	plan, err := engine.Plan(context.Background(), chatRequest("ping"))

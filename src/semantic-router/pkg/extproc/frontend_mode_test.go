@@ -13,7 +13,7 @@ import (
 )
 
 func TestFrontendEngineStartsWithoutRoutingOrProviders(t *testing.T) {
-	cfg, err := config.ParseYAMLBytes([]byte("version: v0.3\nglobal:\n  router:\n    enabled: false\n"))
+	cfg, err := config.ParseYAMLBytes([]byte("version: v0.5\nglobal:\n  router:\n    enabled: false\n"))
 	if err != nil {
 		t.Fatal(err)
 	}

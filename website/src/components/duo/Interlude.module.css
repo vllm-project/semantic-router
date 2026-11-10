@@ -1,0 +1,175 @@
+/* The interludes between sections. Each has a fixed height and draws its blocks behind its text, which stays
+ * readable from the CSS alone when the canvas never runs. */
+.band {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  max-width: none;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
+.content {
+  position: relative;
+  width: min(100% - 2 * var(--gut), 1040px);
+  text-align: center;
+}
+
+/* Dawn: the paper warms towards a horizon; the line resolves out of the risen blocks. */
+.dawn {
+  height: clamp(240px, 24vw, 320px);
+  background: linear-gradient(180deg, var(--paper) 0%, color-mix(in srgb, var(--paper) 90%, rgb(var(--px-duo-2))) 100%);
+}
+
+.band .dawnLine {
+  margin: 0;
+  color: var(--ink);
+  font: 500 clamp(34px, 4.4vw, 60px) / 1.08 var(--serif);
+  letter-spacing: -0.01em;
+  transition: opacity 0.5s var(--ease);
+}
+
+.dawn[data-state='wait'] .dawnLine {
+  opacity: 0;
+}
+
+/* Night: an ink strip whose pixel edges and stars the canvas adds. */
+.night {
+  height: clamp(200px, 18vw, 240px);
+  background: linear-gradient(
+    180deg,
+    transparent 32px,
+    rgb(var(--night-rgb)) 32px,
+    rgb(var(--night-rgb)) calc(100% - 32px),
+    transparent calc(100% - 32px)
+  );
+}
+
+.band .nightLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 22px;
+  margin: 0;
+  color: var(--on-ink);
+  font: 600 13px/1.4 var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.nightLine i,
+.quote figcaption i {
+  width: 6px;
+  height: 6px;
+  background: var(--ember-hi);
+}
+
+/* Ember: the mosaic wipes in, then the quote. Every ember shade keeps white text at 4.5:1 or more. */
+.ember {
+  height: clamp(280px, 26vw, 340px);
+  background: linear-gradient(
+    180deg,
+    transparent 16px,
+    rgb(var(--interlude-ember)) 16px,
+    rgb(var(--interlude-ember)) calc(100% - 16px),
+    transparent calc(100% - 16px)
+  );
+  color: #fff;
+}
+
+:global(html[data-js]) .ember[data-state='wait'] {
+  background: none;
+}
+
+:global(html[data-theme='dark']) .ember {
+  color: var(--on-ink);
+}
+
+.quote {
+  margin: 0 auto;
+  max-width: 30em;
+  transition: opacity 0.6s var(--ease);
+}
+
+.ember[data-state='wait'] .quote {
+  opacity: 0;
+}
+
+.band .quote blockquote {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: inherit;
+}
+
+.band .quote blockquote p {
+  margin: 0;
+  color: inherit;
+  font: italic 500 clamp(28px, 3.3vw, 44px) / 1.16 var(--serif);
+  letter-spacing: -0.005em;
+}
+
+.quote figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 14px;
+  margin-top: 20px;
+  color: inherit;
+  font: 600 12px/1.5 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.band .quote figcaption i {
+  background: currentColor;
+}
+
+.quote figcaption a {
+  flex-basis: 100%;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.25em;
+}
+
+.quote figcaption a:hover,
+.quote figcaption a:focus-visible {
+  color: inherit;
+  text-decoration-thickness: 2px;
+}
+
+.quote figcaption a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+:global(html[lang='zh-Hans']) .band .dawnLine {
+  font-size: clamp(30px, 3.8vw, 52px);
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 600px) {
+  .band .nightLine {
+    gap: 8px 14px;
+    font-size: 11.5px;
+    letter-spacing: 0.12em;
+  }
+
+  .quote figcaption {
+    font-size: 11px;
+  }
+}

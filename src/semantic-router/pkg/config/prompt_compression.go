@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -19,6 +20,37 @@ var promptCompressionProfiles = []string{
 	PromptCompressionProfileMedical,
 	PromptCompressionProfileSecurity,
 	PromptCompressionProfileMultiTurn,
+}
+
+// PromptCompressionConfig is a context plugin's compress.signals: it
+// compresses the text the routing signals read, before they run, to the
+// sentences its profile scores highest. The signals SkipSignals names read the
+// original text.
+type PromptCompressionConfig struct {
+	Enabled        bool     `json:"enabled" yaml:"enabled"`
+	Profile        string   `json:"profile,omitempty" yaml:"profile,omitempty"`
+	MaxTokens      int      `json:"max_tokens" yaml:"max_tokens"`
+	MinLength      int      `json:"min_length,omitempty" yaml:"min_length,omitempty"`
+	SkipSignals    []string `json:"skip_signals,omitempty" yaml:"skip_signals,omitempty"`
+	TextRankWeight float64  `json:"textrank_weight,omitempty" yaml:"textrank_weight,omitempty"`
+	PositionWeight float64  `json:"position_weight,omitempty" yaml:"position_weight,omitempty"`
+	TFIDFWeight    float64  `json:"tfidf_weight,omitempty" yaml:"tfidf_weight,omitempty"`
+	NoveltyWeight  float64  `json:"novelty_weight,omitempty" yaml:"novelty_weight,omitempty"`
+	PositionDepth  float64  `json:"position_depth,omitempty" yaml:"position_depth,omitempty"`
+	PreserveFirstN int      `json:"preserve_first_n,omitempty" yaml:"preserve_first_n,omitempty"`
+	PreserveLastN  int      `json:"preserve_last_n,omitempty" yaml:"preserve_last_n,omitempty"`
+}
+
+func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {
+	signals := pc.SkipSignals
+	if len(signals) == 0 {
+		signals = []string{SignalTypeJailbreak, SignalTypePII}
+	}
+	m := make(map[string]bool, len(signals))
+	for _, s := range signals {
+		m[s] = true
+	}
+	return m
 }
 
 // ValidPromptCompressionProfiles returns the stable built-in profile names
@@ -41,16 +73,14 @@ func (pc PromptCompressionConfig) NormalizedProfile() string {
 	return profile
 }
 
-func validatePromptCompressionContracts(cfg *RouterConfig) error {
-	profile := cfg.PromptCompression.NormalizedProfile()
-	for _, valid := range promptCompressionProfiles {
-		if profile == valid {
-			return nil
-		}
+// validateSignalsCompression checks the compress.signals block at path.
+func validateSignalsCompression(path string, signals *PromptCompressionConfig) error {
+	if !slices.Contains(promptCompressionProfiles, signals.NormalizedProfile()) {
+		return fmt.Errorf("%s.profile: unknown profile %q (valid profiles: %s)",
+			path, signals.Profile, strings.Join(promptCompressionProfiles, ", "))
 	}
-	return fmt.Errorf(
-		"unknown prompt_compression.profile %q (valid profiles: %s)",
-		cfg.PromptCompression.Profile,
-		strings.Join(promptCompressionProfiles, ", "),
-	)
+	if signals.Enabled && signals.MaxTokens < 1 {
+		return fmt.Errorf("%s.max_tokens must be at least 1: the signals read the text compressed down to it", path)
+	}
+	return nil
 }

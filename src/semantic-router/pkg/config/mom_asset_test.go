@@ -19,8 +19,8 @@ func TestMoMRecipeDocumentContract(t *testing.T) {
 	if err := yamlv3.Unmarshal(mustReadRepoFile(t, momAsset), &document); err != nil {
 		t.Fatalf("parse built-in MoM Recipe document: %v", err)
 	}
-	if document.Version != "v0.3" {
-		t.Fatalf("Recipe document version = %q, want v0.3", document.Version)
+	if document.Version != "v0.5" {
+		t.Fatalf("Recipe document version = %q, want v0.5", document.Version)
 	}
 	resolved, err := ParseYAMLBytes(mustReadRepoFile(t, momAsset))
 	if err != nil {
@@ -33,7 +33,7 @@ func TestMoMRecipeDocumentContract(t *testing.T) {
 	}
 
 	wantDecisions := map[string][]string{
-		"balance":  {"reasoning", "simple", "medium"},
+		"balance":  {"long_context", "vision", "recovery", "agentic", "facts", "frontier", "code", "hard", "standard", "fast"},
 		"speed":    {"tools", "reasoning", "fast"},
 		"cost":     {"tools", "reasoning", "economy"},
 		"accuracy": {"agent", "review", "reasoning", "simple"},
@@ -48,10 +48,10 @@ func TestMoMRecipeDocumentContract(t *testing.T) {
 		if !ok {
 			t.Fatalf("unexpected built-in Recipe %q", recipe.Name)
 		}
-		if got := len(recipe.Routing.Decisions); got != len(wantNames) {
+		if got := len(recipe.Decisions); got != len(wantNames) {
 			t.Fatalf("Recipe %q decision count = %d, want %d", recipe.Name, got, len(wantNames))
 		}
-		for i, decision := range recipe.Routing.Decisions {
+		for i, decision := range recipe.Decisions {
 			if decision.Name != wantNames[i] {
 				t.Errorf("Recipe %q decision %d = %q, want %q", recipe.Name, i, decision.Name, wantNames[i])
 			}
@@ -69,10 +69,7 @@ func TestMoMRecipeDocumentContract(t *testing.T) {
 
 func assertModelFreeRecipe(t *testing.T, recipe CanonicalRecipe) {
 	t.Helper()
-	if len(recipe.Routing.ModelCards) != 0 {
-		t.Fatalf("Recipe %q must not embed model cards", recipe.Name)
-	}
-	for _, decision := range recipe.Routing.Decisions {
+	for _, decision := range recipe.Decisions {
 		if len(decision.ModelRefs) != 0 {
 			t.Fatalf("Recipe %q decision %q must receive models through assignments", recipe.Name, decision.Name)
 		}

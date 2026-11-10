@@ -70,10 +70,7 @@ func (m *MilvusStore) normalizeRetrieveOpts(opts RetrieveOptions) (limit int, th
 	if limit <= 0 {
 		limit = m.config.DefaultRetrievalLimit
 	}
-	threshold = opts.Threshold
-	if threshold <= 0 {
-		threshold = m.config.DefaultSimilarityThreshold
-	}
+	threshold = opts.minSimilarity(m.config.DefaultSimilarityThreshold)
 	if opts.Query == "" {
 		return 0, 0, fmt.Errorf("query is required")
 	}
