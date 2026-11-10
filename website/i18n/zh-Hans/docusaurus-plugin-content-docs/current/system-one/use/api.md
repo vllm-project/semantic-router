@@ -137,7 +137,7 @@ Router 会拒绝其他契约版本的运行时：Router 与其模型运行时来
 | `threshold` | `set`、`span` | 替换模型自己的判定阈值；实际应用的值在 `thresholds` 中返回 |
 | `head` | `span` | `router` 或 `broad`，适用于有 broad span head 的模型 |
 | `preset` | 全部 | 模型自己定义的问题（例如 `pii`），列在其模型卡的 `presets` 中 |
-| `over` | 全部 | 问题读取的状态部分 |
+| `over` | Vela 模型 | 问题读取的状态部分：Vela 2.0 上任何问题都可用；Vela 3.0 上限于 `span`、预设问题和 vela3-fast 训练过的路由问题。Decision 1.0、2.0 和 3.0 以 `invalid_question` 拒绝 |
 | `overflow` | 全部 | `window`（分窗口完整读取较长部分）或 `truncate`（只读其开头的 token），适用于有扫描预算的模型 |
 
 `choices`、`levels` 和 `labels` 是 System One `criteria` 的有序形式；一个问题只能用其中一种。问题只接受其类型的字段，其他字段会以 `invalid_question` 被拒绝。

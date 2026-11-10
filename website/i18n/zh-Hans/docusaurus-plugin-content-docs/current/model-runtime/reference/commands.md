@@ -51,8 +51,8 @@ translation:
 | `--served-model-name` | 模型名 | API 报告的模型 ID，对一个 `MODEL` 生效。 |
 | `--threads` | 全部核 | 进程的 CPU 线程数。ONNX Runtime 模型的每张图各跑一个至多这么多线程的池，大机器上值得设。 |
 | `--memory-budget GIB` | | 预估大小超过这个值的模型，拒绝加载。 |
-| `--max-queue` | `256` | 每个模型排多少请求之后，runtime 开始答 429。 |
-| `--max-queued-tokens` | `4194304` | 每个模型排多少 token 之后答 429。 |
+| `--max-queue` | `256` | 每个模型排多少请求之后，runtime 开始答 429。批量请求（`states`）的每个条目各算一个。超过此值的请求在没有其他排队时照常运行。 |
+| `--max-queued-tokens` | `4194304` | 每个模型排多少 token 之后答 429。超过此值的请求在没有其他排队时照常运行。 |
 | `--max-num-seqs` | `8192` | 一次前向最多装多少行（跨请求计）：决策请求每个问题一行，其他请求每个输入或窗口一行。`1` 表示每行单独跑。默认值在默认 token 预算下永远不会成为限制。见[引擎参数](../deploy/engine-args.md)。 |
 | `--max-num-batched-tokens` | `65536` | 一次前向最多装多少个补齐后的 token：行数乘以最长那一行；对打包行的模型也这样计数。 |
 | `--batch-window-ms` | `2.0` | `--max-num-seqs` 大于 1 时，第一个请求到达后调度器再等多久收集更多请求。 |

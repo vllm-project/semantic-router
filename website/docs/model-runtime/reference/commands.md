@@ -79,8 +79,8 @@ a frontend attaches to, or for direct runtime development:
 | `--served-model-name` | the model name | The model ID the API reports, for one `MODEL`. |
 | `--threads` | all cores | CPU threads for the process. Each graph of an ONNX Runtime model runs its own pool of up to this many threads, so set it on a large host. |
 | `--memory-budget GIB` | | Refuse to load a model estimated above this size. |
-| `--max-queue` | `256` | Queued requests per model before the runtime answers 429. |
-| `--max-queued-tokens` | `4194304` | Queued tokens per model before 429. |
+| `--max-queue` | `256` | Queued requests per model before the runtime answers 429. Each entry of a batch (`states`) counts as one. A request larger than this runs when nothing else is queued. |
+| `--max-queued-tokens` | `4194304` | Queued tokens per model before 429. A request larger than this runs when nothing else is queued. |
 | `--max-num-seqs` | `8192` | Most rows one forward holds, across requests: one per question of a decision request, one per input or window otherwise. `1` runs every row alone. The default never binds at the default token budget. See [Engine arguments](../deploy/engine-args.md). |
 | `--max-num-batched-tokens` | `65536` | Padded tokens one forward may hold: its rows times its longest row, counted so also for models that pack rows. |
 | `--batch-window-ms` | `2.0` | How long the scheduler waits after the first request to collect more, when `--max-num-seqs` is above 1. |

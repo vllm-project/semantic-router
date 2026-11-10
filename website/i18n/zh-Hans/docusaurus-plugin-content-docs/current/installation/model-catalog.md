@@ -83,7 +83,7 @@ global:
 | `device` | `cpu`、`auto`（主机上最好的设备）、`cuda`、`rocm`，或单个设备，例如 `cuda:0` |
 | `input` | 部署的输入预算：`max_tokens`，以及 `overflow`（`reject`、`truncate` 或 `window`） |
 | `replicas` | 同一逻辑部署的多个 worker：每个是一个 `device`，或在别处启动的 worker 的 `endpoint` 和 `model` |
-| `outlier_detection` | 某个副本的请求连续 `consecutive_timeouts` 次（默认 3；0 表示关闭）超出调用方的截止时间时，它离开调度 `base_ejection_ms`（30000），每连续一次时间翻倍，最长 `max_ejection_ms`（基础时长的十倍）；同时被剔除的副本最多占 `max_ejection_percent`（50）。见 [剔除持续超时的副本](../model-runtime/deploy/placement-and-scaling.md#eject-a-replica-that-keeps-timing-out) |
+| `outlier_detection` | 某个副本的请求连续 `consecutive_timeouts` 次（默认 3；0 表示关闭）超出截止时间（调用方的截止时间或部署的 `timeout_ms`）时，它离开调度 `base_ejection_ms`（30000），每连续一次时间翻倍，最长 `max_ejection_ms`（基础时长的十倍）；同时被剔除的副本最多占 `max_ejection_percent`（50）。见 [剔除持续超时的副本](../model-runtime/deploy/placement-and-scaling.md#eject-a-replica-that-keeps-timing-out) |
 | `public_name` | 部署在推理 API 上的名称 |
 | `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context`、`max_model_len` | 引擎参数；参见[引擎参数](../model-runtime/deploy/engine-args.md) |
 

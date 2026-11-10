@@ -78,7 +78,7 @@ match:
 | `judge.question` | 代替预设的自定义问题：`choice`（候选即其选项）、`noul` 或 `score` |
 | `judge.deployment` | 回答问题的部署；不写时为决策模型 |
 | `judge.top_k`、`judge.min_score`、`judge.min_ratio` | 保留哪些被评判的候选：最好的 `top_k` 个、至少 `min_score` 的、至少达到最佳者 `min_ratio` 的 |
-| `judge.max_candidates` | 评审最多读取的候选数：choice 评审为 255（也是上限），逐个候选的评审默认 64；小于 1，或 choice 评审上大于 255，会导致加载失败 |
+| `judge.max_candidates` | 评审最多读取的候选数：choice 评审为 255（也是上限），逐个候选的评审默认 64、最多 4096；小于 1 或超过上限会导致加载失败 |
 | `judge.on_error` | `skip`（默认；保留召回结果，没有召回时保留原样的候选）或 `fail`（该功能的匹配失败） |
 | `judge.timeout_ms` | 评审调用的截止时间；未设置时使用部署的 `timeout_ms`，再没有则为 1000 ms |
 

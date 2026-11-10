@@ -151,7 +151,7 @@ an empty `states`, is refused with 400 `invalid_request`.
 | `threshold` | `set`, `span` | Replaces the model's own decision threshold; the applied value comes back in `thresholds` |
 | `head` | `span` | `router` or `broad`, on models with a broad span head |
 | `preset` | all | A question the model itself defines (for example `pii`), listed in its card's `presets` |
-| `over` | all | The state part, or parts, the question reads |
+| `over` | Vela models | The state part, or parts, the question reads: any question on Vela 2.0, and on Vela 3.0 a `span`, a preset or one of vela3-fast's trained router questions. Decision 1.0, 2.0 and 3.0 refuse it with `invalid_question` |
 | `overflow` | all | `window` (read a long part whole, in windows) or `truncate` (its first tokens), on models with a scan budget |
 
 `choices`, `levels` and `labels` are ordered forms of System One `criteria`; a
