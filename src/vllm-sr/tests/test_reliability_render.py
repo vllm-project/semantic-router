@@ -23,25 +23,24 @@ DEFAULTS = yaml.safe_load(
 )
 
 _ROUTING = """
-routing:
-  modelCards:
-    - name: m
-  decisions:
-    - name: default-route
-      description: default route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: m
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        description: default route
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: m
 """
 
 
 def _render(tmp_path, monkeypatch, providers: str, listeners: str = ""):
     config_path = tmp_path / "config.yaml"
     output_path = tmp_path / "envoy.yaml"
-    config_path.write_text("version: v0.3\n" + listeners + providers + _ROUTING)
+    config_path.write_text("version: v0.5\n" + listeners + providers + _ROUTING)
     monkeypatch.setenv("ENVOY_EXTPROC_ADDRESS", "localhost")
     monkeypatch.setenv("ENVOY_ROUTER_API_ADDRESS", "localhost")
     generate_envoy_config_from_user_config(

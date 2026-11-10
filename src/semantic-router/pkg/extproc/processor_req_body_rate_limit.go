@@ -87,12 +87,12 @@ func (r *OpenAIRouter) createRateLimitResponse(decision *ratelimit.Decision) *ex
 	}
 	if decision != nil {
 		responseHeaders = append(responseHeaders,
-			&core.HeaderValueOption{Header: &core.HeaderValue{Key: "x-ratelimit-limit", RawValue: []byte(fmt.Sprintf("%d", decision.Limit))}},
-			&core.HeaderValueOption{Header: &core.HeaderValue{Key: "x-ratelimit-remaining", RawValue: []byte(fmt.Sprintf("%d", decision.Remaining))}},
+			&core.HeaderValueOption{Header: &core.HeaderValue{Key: headers.RateLimitLimit, RawValue: []byte(fmt.Sprintf("%d", decision.Limit))}},
+			&core.HeaderValueOption{Header: &core.HeaderValue{Key: headers.RateLimitRemaining, RawValue: []byte(fmt.Sprintf("%d", decision.Remaining))}},
 		)
 		if !decision.ResetAt.IsZero() {
 			responseHeaders = append(responseHeaders, &core.HeaderValueOption{Header: &core.HeaderValue{
-				Key: "x-ratelimit-reset", RawValue: []byte(fmt.Sprintf("%d", decision.ResetAt.Unix())),
+				Key: headers.RateLimitReset, RawValue: []byte(fmt.Sprintf("%d", decision.ResetAt.Unix())),
 			}})
 		}
 	}

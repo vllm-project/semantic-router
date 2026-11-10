@@ -130,7 +130,7 @@ func TestInputModalityDecisionKeepsStructuralEvidenceUnscored(t *testing.T) {
 		{name: "presence"}, {name: "count", predicate: &config.NumericPredicate{GTE: &minimum}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			engine := decision.NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "image_route", Rules: config.RuleNode{Type: "input_modality", Name: "image_input", Predicate: test.predicate}}}, config.RoutingStrategyPriority)
+			engine := decision.NewDecisionEngine([]config.Decision{{Name: "image_route", Rules: config.RuleNode{Type: "input_modality", Name: "image_input", Predicate: test.predicate}}}, config.RoutingStrategyPriority)
 			out, err := engine.EvaluateDecisionsWithSignals(&decision.SignalMatches{InputModalityRules: results.MatchedInputModalityRules, SignalConfidences: results.SignalConfidences, SignalValues: results.SignalValues})
 			if err != nil {
 				t.Fatal(err)

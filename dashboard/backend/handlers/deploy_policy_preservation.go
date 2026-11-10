@@ -1,29 +1,33 @@
 package handlers
 
-import "gopkg.in/yaml.v3"
+import (
+	"gopkg.in/yaml.v3"
 
-// preserveBaseDecisionAdaptations copies each base decision's adaptations into
-// the fragment decision with the same name, matching recipes by name first.
-// The DSL cannot express adaptations, so compiled fragments never carry them;
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
+)
+
+// preserveBaseDecisionFields copies each base decision's dsl.BaseDecisionFields
+// into the fragment decision with the same name, matching recipes by name
+// first. The DSL cannot express them, so compiled fragments never carry them;
 // a value already in the fragment wins. dsl.MergeRoutingIntoBase applies the
 // same rule for CLI compiles with a base config.
-func preserveBaseDecisionAdaptations(baseRoot, fragmentRoot *yaml.Node) {
-	preserveDecisionAdaptations(mappingValueNode(baseRoot, "routing"), mappingValueNode(fragmentRoot, "routing"))
+func preserveBaseDecisionFields(baseRoot, fragmentRoot *yaml.Node) {
 	baseRecipes := sequenceItemsByName(mappingValueNode(baseRoot, "recipes"))
 	for _, recipe := range sequenceItems(mappingValueNode(fragmentRoot, "recipes")) {
-		baseRecipe := baseRecipes[itemName(recipe)]
-		preserveDecisionAdaptations(mappingValueNode(baseRecipe, "routing"), mappingValueNode(recipe, "routing"))
+		preserveDecisionFields(baseRecipes[itemName(recipe)], recipe)
 	}
 }
 
-func preserveDecisionAdaptations(baseRouting, fragmentRouting *yaml.Node) {
-	baseDecisions := sequenceItemsByName(mappingValueNode(baseRouting, "decisions"))
-	for _, decision := range sequenceItems(mappingValueNode(fragmentRouting, "decisions")) {
-		if mappingValueNode(decision, "adaptations") != nil {
-			continue
-		}
-		if adaptations := mappingValueNode(baseDecisions[itemName(decision)], "adaptations"); adaptations != nil {
-			setMappingValueNode(decision, "adaptations", adaptations)
+func preserveDecisionFields(baseRecipe, fragmentRecipe *yaml.Node) {
+	baseDecisions := sequenceItemsByName(mappingValueNode(baseRecipe, "decisions"))
+	for _, decision := range sequenceItems(mappingValueNode(fragmentRecipe, "decisions")) {
+		for _, field := range dsl.BaseDecisionFields() {
+			if mappingValueNode(decision, field) != nil {
+				continue
+			}
+			if value := mappingValueNode(baseDecisions[itemName(decision)], field); value != nil {
+				setMappingValueNode(decision, field, value)
+			}
 		}
 	}
 }

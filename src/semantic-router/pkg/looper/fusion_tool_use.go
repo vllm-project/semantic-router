@@ -57,6 +57,7 @@ func buildFusionStreamingToolCallSSE(
 	created int64,
 	model string,
 	raw []byte,
+	finishReason string,
 ) ([]byte, error) {
 	toolCalls, err := fusionToolCallDeltasFromRaw(raw)
 	if err != nil {
@@ -81,7 +82,7 @@ func buildFusionStreamingToolCallSSE(
 	finalChoice := map[string]interface{}{
 		"index":         0,
 		"delta":         map[string]interface{}{},
-		"finish_reason": "tool_calls",
+		"finish_reason": toolCallFinishReason(finishReason),
 	}
 	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, finalChoice, nil))
 	return appendSSEDone(body), nil

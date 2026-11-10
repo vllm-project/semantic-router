@@ -74,7 +74,7 @@ func TestConfigWrittenAsTheServerReportsServingIsReloaded(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			defer stubReloadSeams(t)()
 			configPath := filepath.Join(t.TempDir(), "config.yaml")
-			if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+			if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			reloaded := make(chan struct{}, 1)
@@ -92,7 +92,7 @@ func TestConfigWrittenAsTheServerReportsServingIsReloaded(t *testing.T) {
 			done := make(chan error, 1)
 			go func() {
 				done <- start(server, ctx, func() {
-					if err := os.WriteFile(configPath, []byte("version: v0.3\n# edited\n"), 0o600); err != nil {
+					if err := os.WriteFile(configPath, []byte("version: v0.5\n# edited\n"), 0o600); err != nil {
 						t.Error(err)
 					}
 				})

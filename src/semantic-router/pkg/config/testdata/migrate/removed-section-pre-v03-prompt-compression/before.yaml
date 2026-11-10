@@ -1,0 +1,24 @@
+# Prompt compression in the Router's flat layout before config v0.3, with the
+# fields v0.2 read. Migrate places it with the other pre-v0.3 blocks first and
+# then moves it to compress.signals of the context plugin in global.plugins,
+# in one run.
+vllm_endpoints:
+  - {name: local, address: 127.0.0.1, port: 8000, weight: 1}
+model_config:
+  general: {preferred_endpoints: [local]}
+default_model: general
+prompt_compression:
+  enabled: true
+  max_tokens: 512
+  min_length: 256
+  textrank_weight: 0.2
+  position_weight: 0.4
+  tfidf_weight: 0.4
+  position_depth: 0.5
+categories:
+  - {name: math, mmlu_categories: [math]}
+decisions:
+  - name: math
+    priority: 100
+    rules: {operator: AND, conditions: [{type: domain, name: math}]}
+    modelRefs: [{model: general, use_reasoning: false}]

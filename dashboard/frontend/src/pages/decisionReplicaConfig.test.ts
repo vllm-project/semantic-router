@@ -73,12 +73,12 @@ describe('replica placement updates', () => {
     ])
   })
 
-  it('reads a deprecated served_name and writes it back as model', () => {
+  it('reads an attached model and writes it on each replica', () => {
     const current = snapshot()
     const deployment = decisionRuntimeDeclarations(current).primary
     delete deployment.device
     deployment.endpoint = 'http://worker:8100'
-    deployment.served_name = 'upstream-id'
+    deployment.model = 'upstream-id'
     const replicas = deploymentPlacements(deployment)
     expect(replicas).toEqual([{ endpoint: 'http://worker:8100', model: 'upstream-id' }])
     const next = withDecisionReplicas(current, 'primary', [
@@ -86,15 +86,13 @@ describe('replica placement updates', () => {
       { endpoint: 'http://worker2:8100', model: 'another-id' },
     ])
     expect(decisionRuntimeDeclarations(next).primary).not.toHaveProperty('endpoint')
-    expect(decisionRuntimeDeclarations(next).primary).not.toHaveProperty('served_name')
+    expect(decisionRuntimeDeclarations(next).primary).not.toHaveProperty('model')
     expect(decisionRuntimeDeclarations(next).primary.replicas).toEqual([
       { endpoint: 'http://worker:8100', model: 'upstream-id' },
       { endpoint: 'http://worker2:8100', model: 'another-id' },
     ])
     expect(
-      deploymentPlacements({
-        replicas: [{ endpoint: 'unix:///run/worker.sock', served_name: 'm' }],
-      }),
+      deploymentPlacements({ replicas: [{ endpoint: 'unix:///run/worker.sock', model: 'm' }] }),
     ).toEqual([{ endpoint: 'unix:///run/worker.sock', model: 'm' }])
   })
 

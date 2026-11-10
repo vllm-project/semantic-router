@@ -308,10 +308,11 @@ records are removed during subsequent writes.
 volume. Other deployment methods need a PostgreSQL connection and credentials
 in `global.services.router_replay.postgres`.
 
-- To disable default capture, set `global.services.router_replay.enabled: false`.
-  Individual decisions can still opt in.
-- To disable capture for a decision, set its `router_replay` plugin to
-  `configuration: {enabled: false}`. There is no recipe-level Replay override.
+- To disable default capture, set `enabled: false` on the `router_replay`
+  plugin in `global.plugins`. A recipe or a decision can still opt in.
+- To disable capture for one recipe or decision, set its `router_replay` plugin
+  to `configuration: {enabled: false}`. A decision's plugin overrides its
+  recipe's, which overrides `global.plugins`, field by field.
 - Set `capture_personal_data: false` globally or in the decision plugin to omit
   content when PII is detected or its status is unknown. Balance declares no
   PII rule, so with that setting its records keep no request or response
@@ -369,7 +370,7 @@ scores just above the `confidential` threshold, and a correction wrapped in a
 translation request scores just above `quoted`. Validate representative
 traffic, and prefer a larger decision model where routing errors are costly.
 Context accounting includes conversation history and output reserves but remains
-an estimate rather than a provider-tokenizer guarantee. Learned signals can
+an estimate rather than a provider-tokenizer guarantee. Model-judged signals can
 misclassify requests, so validate representative traffic before rollout.
 
 Balance's effort boundaries and its code lane were chosen with Vela 2.0 4B on

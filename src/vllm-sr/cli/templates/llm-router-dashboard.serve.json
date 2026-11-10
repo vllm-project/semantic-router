@@ -2229,7 +2229,7 @@
           ],
           "title": "Looper attempt outcomes",
           "type": "timeseries",
-          "description": "Detailed attempt instrumentation currently covers Confidence execution. An absent series for another algorithm does not prove zero attempts. One terminal event per instrumented attempt. Internal model/verifier attempts are distinct from public inference request outcomes."
+          "description": "Detailed attempt instrumentation currently covers escalate execution. An absent series for another algorithm does not prove zero attempts. One terminal event per instrumented attempt. Internal model/verifier attempts are distinct from public inference request outcomes."
         },
         {
           "datasource": {
@@ -2319,7 +2319,7 @@
           ],
           "title": "Looper attempt duration",
           "type": "timeseries",
-          "description": "Detailed attempt instrumentation currently covers Confidence execution. An absent series for another algorithm does not prove zero attempts. Mean measured end-to-end attempt duration by stage and outcome. Milliseconds are converted to seconds by the emitter."
+          "description": "Detailed attempt instrumentation currently covers escalate execution. An absent series for another algorithm does not prove zero attempts. Mean measured end-to-end attempt duration by stage and outcome. Milliseconds are converted to seconds by the emitter."
         },
         {
           "datasource": {
@@ -2409,7 +2409,7 @@
           ],
           "title": "Known Looper attempt cost rate",
           "type": "timeseries",
-          "description": "Detailed attempt instrumentation currently covers Confidence execution. An absent series for another algorithm does not prove zero attempts. Known configured-price amounts only, not invoices or hardware cost. Unknown usage or prices are omitted; a known subtotal does not prove complete accounting. Currencies remain separate; no savings percentage is inferred. Each series is known currency units per second. Do not sum with model cost counters."
+          "description": "Detailed attempt instrumentation currently covers escalate execution. An absent series for another algorithm does not prove zero attempts. Known configured-price amounts only, not invoices or hardware cost. Unknown usage or prices are omitted; a known subtotal does not prove complete accounting. Currencies remain separate; no savings percentage is inferred. Each series is known currency units per second. Do not sum with model cost counters."
         },
         {
           "datasource": {
@@ -2499,7 +2499,7 @@
           ],
           "title": "Looper attempt tokens",
           "type": "timeseries",
-          "description": "Detailed attempt instrumentation currently covers Confidence execution. An absent series for another algorithm does not prove zero attempts. Reported prompt/completion usage for internal model and verifier stages. These attempt observations may overlap model usage counters and must not be added to them."
+          "description": "Detailed attempt instrumentation currently covers escalate execution. An absent series for another algorithm does not prove zero attempts. Reported prompt/completion usage for internal model and verifier stages. These attempt observations may overlap model usage counters and must not be added to them."
         }
       ],
       "title": "Accounting and MoM execution",

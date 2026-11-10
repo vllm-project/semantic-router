@@ -69,8 +69,9 @@ not request previews. A collaborator with current **write**, **maintain**, or
 PR targeting `main` to build its current head commit, including fork PRs.
 
 The **Netlify Preview** workflow builds that exact commit and uploads the static
-site as a draft. Its `netlify-preview/PR-<number>` commit status and Actions summary
-link to the preview. Repeated requests for a pending or successful commit are
+site as a draft. It comments the preview link on the PR, updating its one comment
+on each new preview, and its `netlify-preview/PR-<number>` commit status and
+Actions summary link to it too. Repeated requests for a pending or successful commit are
 skipped; failed requests can be retried with a new `/netlify` comment. Each new
 commit needs a new comment. A PR that closes or changes head before publication
 does not publish the old build. Editing a comment does not trigger a build.

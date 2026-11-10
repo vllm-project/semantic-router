@@ -48,12 +48,27 @@ jobs:
       chart: ${{ steps.package.outputs.chart }}
       version: ${{ steps.versions.outputs.chart_version }}
       app_version: ${{ steps.versions.outputs.app_version }}
+      current: ${{ steps.current.outputs.current }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: azure/setup-helm@v4
         with:
           version: ${{ env.HELM_VERSION }}
+
+      # Chart.lock pins the dependency charts, so its hash keys their archives
+      # and a hit downloads nothing.
+      - name: Cache dependency charts
+        id: dependency-cache
+        uses: actions/cache@v4
+        with:
+          path: deploy/helm/semantic-router/charts/*.tgz
+          key: helm-dependencies-${{ hashFiles('deploy/helm/semantic-router/Chart.lock') }}
+
+      - name: Fetch dependency charts
+        env:
+          HELM_DEPENDENCIES_CACHED: ${{ steps.dependency-cache.outputs.cache-hit }}
+        run: deploy/helm/fetch-dependencies.sh "$CHART_PATH"
 
       - name: Resolve chart versions
         id: versions
@@ -98,7 +113,9 @@ jobs:
       - name: Package chart
         id: package
         run: |
-          helm package -u "${{ env.CHART_PATH }}" \
+          # The locked dependency charts are in charts/; -u would re-resolve
+          # them to their newest versions instead.
+          helm package "${{ env.CHART_PATH }}" \
             --version "${{ steps.versions.outputs.chart_version }}" \
             --app-version "${{ steps.versions.outputs.app_version }}" \
             --destination .
@@ -132,6 +149,20 @@ jobs:
           sha256sum "$CHART" > qualified-chart.sha256
           printf '%s\n' "$GITHUB_SHA" > chart-source.txt
 
+      - name: Publish only the chart main's head carries
+        id: current
+        if: inputs.mode == 'main'
+        run: |
+          # Overlapping runs share the one mutable 0.0.0-latest version, so each
+          # may push only the chart main holds, whichever run finishes last.
+          git fetch --quiet --depth=1 origin main
+          if git diff --quiet HEAD FETCH_HEAD -- "$CHART_PATH"; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::A newer main commit changed the chart; its run publishes 0.0.0-latest."
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           overwrite: true
@@ -149,6 +180,7 @@ jobs:
       always() && !cancelled() && !failure()
       && !inputs.build-only
       && (inputs.prebuilt-chart || needs.package.result == 'success')
+      && needs.package.outputs.current != 'false'
     runs-on: ubuntu-latest
     permissions:
       contents: read

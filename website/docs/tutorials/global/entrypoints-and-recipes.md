@@ -34,13 +34,16 @@ When the request `model` matches an `entrypoints[].model_names` value, the
 Router evaluates only the mapped recipe. The virtual model name is then
 replaced by the backend selected from that recipe.
 
-The top-level `routing` block is the `default` recipe. It is published as
-`vllm-sr/auto` unless you declare an entrypoint for `recipe: default`.
-An explicit default entrypoint replaces that built-in name; include
-`vllm-sr/auto` in its `model_names` if clients should keep using it. Names such
-as `auto` or `vllm-sr/flow` work only when explicitly declared. The selected
-recipe's decisions choose its algorithms. If no decision matches, the Router
-uses `providers.defaults.model`.
+- **One recipe** is published as `vllm-sr/auto` and needs no entrypoints.
+- **Several recipes** need exactly one chat entrypoint marked
+  `default: true`; its recipe is the default recipe.
+- **Names are explicit.** An entrypoint for the default recipe replaces the
+  built-in name, so include `vllm-sr/auto` in its `model_names` if clients
+  should keep using it. Names such as `auto` or `vllm-sr/flow` work only when
+  declared.
+- **No match** sends the request to `providers.defaults.model`.
+
+The selected recipe's decisions choose its algorithms.
 
 Concrete backend model names are different: they select that model directly
 and bypass recipe routing. Use a virtual entrypoint when clients should ask for
@@ -49,63 +52,63 @@ exact backend.
 
 ## Configuration
 
-The model catalog is shared. Each named recipe owns its signals, projections,
+The model catalog is shared. Each recipe owns its signals, projections,
 decisions, strategy, algorithms, and route-local plugins.
 
 ```yaml
-routing:
-  modelCards:
-    - name: fast-model
-    - name: accurate-model
-
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/mom-v1-flash]
     recipe: flash
   - model_names: [vllm-sr/mom-v1-ultra]
     recipe: ultra
-
 recipes:
+  - name: default
   - name: flash
     description: Prefer the lowest-latency eligible backend.
-    routing:
-      strategy: priority
-      decisions:
-        - name: fast-path
-          description: Serve requests with the fast model.
-          priority: 100
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: fast-model
-
+    strategy: priority
+    decisions:
+      - name: fast-path
+        description: Serve requests with the fast model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: fast-model
   - name: ultra
     description: Prefer the highest-quality eligible backend.
-    routing:
-      strategy: priority
-      decisions:
-        - name: quality-path
-          description: Serve requests with the accurate model.
-          priority: 100
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: accurate-model
+    strategy: priority
+    decisions:
+      - name: quality-path
+        description: Serve requests with the accurate model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: accurate-model
+providers:
+  models:
+    - name: fast-model
+    - name: accurate-model
 ```
 
-Shared strategy and fallback defaults live in `global.router`. Top-level
-`routing` is the default recipe, not a parent of named recipes. Each
-`recipes[].routing` resolves missing strategy and fallback fields directly from
-the global defaults, then a decision may override its own effective fallback.
-A sparse override such as `fallback: {enabled: false}` changes only that field;
-it does not discard shared timeout or retry settings. Direct and passthrough
-requests use the global fallback policy. The runtime default strategy is
-`priority`.
+Shared strategy and fallback defaults live in `global.router`:
 
-Replay follows a separate service contract: shared capture defaults live in
-`global.services.router_replay`, with explicit overrides in each decision's
-`router_replay` plugin. Recipes do not add another Replay inheritance layer.
+- **No parent recipe.** The default recipe is not a parent of the others.
+  Each `recipes[]` entry fills missing strategy and fallback fields directly
+  from the global defaults, and a decision can override its own fallback.
+- **Sparse overrides.** `fallback: {enabled: false}` changes only that field,
+  and keeps the shared timeout and retry settings.
+- **Direct requests** use the global fallback policy. The runtime default
+  strategy is `priority`.
+
+Replay capture defaults are a `router_replay` plugin in `global.plugins`,
+with storage in `global.services.router_replay`; a recipe's or decision's
+`router_replay` plugin overrides them field by field.
 
 Clients can discover entrypoint names through `/v1/models`. Routed responses
 include `x-vsr-selected-recipe`, so operators can confirm which policy handled
@@ -155,8 +158,10 @@ For a recipe that selects among the three models below, configure a
 Leave image input and reasoning settings off.
 
 ```yaml
-routing:
-  modelCards:
+recipes:
+  - name: default
+providers:
+  models:
     - name: local-coder
       context_window_size: 32768
       max_output_tokens: 8192
@@ -173,22 +178,36 @@ routing:
 
 By default, the Router skips a candidate whose declared context window is
 smaller than the estimated input, or whose declared capabilities lack a
-required input such as images. It does not check output limits, so a request
-for 16,384 output tokens can still reach `local-coder`. With
-[`candidate_requirements`](../../installation/configuration#recipe-candidate-requirements)
-on the recipe, the Router also checks output limits and tool, reasoning, and
-structured-output declarations before scoring. A request that fits only some
-candidates goes to one of them, and one that fits none is rejected before
-dispatch; see [Request budget errors](../../api/router#request-budget-errors).
+required input such as images:
+
+- **Conservative estimate.** Structured data such as tool-call arguments
+  counts one token per byte, and images, audio, video and files carry
+  reserves of their own. A coding agent's long session can therefore be
+  estimated above a window it fits.
+- **Second count.** When the estimate exceeds every candidate's window, the
+  Router counts the request without those reserves and keeps the candidates
+  that fit. It rejects the request only when it fits none, and the backend
+  still checks the real length.
+- **Output limits are not checked** by default, so a request for 16,384 output
+  tokens can still reach `local-coder`.
+
+With [`candidate_requirements`](../../installation/configuration#recipe-candidate-requirements)
+on the recipe, the Router also checks output limits and tool, reasoning and
+structured-output declarations before scoring. A request that fits none of the
+candidates is rejected before dispatch; see
+[Request budget errors](../../api/router#request-budget-errors).
+
+:::tip
 A client configured with the intersection keeps every candidate available to
 every request.
+:::
 
 ## When to Use
 
-Use named entrypoints and recipes when one deployment must expose more than one
-routing objective, policy boundary, or rollout track. Keep a single top-level
-`routing` profile when all clients should follow the same policy; the existing
-default `vllm-sr/auto` entrypoint needs no extra configuration.
+Use entrypoints and several recipes when one deployment must expose more than
+one routing objective, policy boundary, or rollout track. Keep a single recipe
+when all clients should follow the same policy; its `vllm-sr/auto` entrypoint
+needs no extra configuration.
 
 Continue with:
 

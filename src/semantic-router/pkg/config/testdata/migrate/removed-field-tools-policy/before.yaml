@@ -1,0 +1,36 @@
+# The tools plugin's policy fields at the top of its configuration, and the
+# fields of the removed embedding retrieval.
+version: v0.5
+providers:
+  defaults: {model: local}
+  models:
+    - name: local
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+      description: Local model
+recipes:
+  - name: default
+    decisions:
+      - name: private
+        priority: 200
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: local}]
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: none
+              strip_tool_history: true
+      - name: support
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: local}]
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: filtered
+              semantic_selection: false
+              strategy: default
+              allow_tools: [docs.search, tickets.lookup]
+              block_tools: [admin.delete]
+              dynamic_retrieval: {enabled: true, strategy: hybrid_history, history_window: 4}

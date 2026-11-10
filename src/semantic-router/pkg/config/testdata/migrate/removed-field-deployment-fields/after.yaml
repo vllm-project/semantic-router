@@ -1,0 +1,50 @@
+# A deployment's question_types moves under capabilities, and served_name,
+# on the deployment or one of its replicas, is model; a model written beside
+# served_name won.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    signals:
+      domains: [{name: math, description: Mathematics}]
+      safety:
+        - {name: unsafe, predicate: {gte: 0.5}}
+      systemone:
+        - name: needs_tools
+          question: {type: noul, instructions: "Does the request need a tool?"}
+    decisions:
+      - name: route
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - {type: domain, name: math}
+            - {type: safety, name: unsafe}
+            - {type: systemone, name: needs_tools}
+        modelRefs: [{model: general}]
+global:
+  model_catalog:
+    deployments:
+      d3-remote:
+        provider: systemone
+        endpoint: https://systemone.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth: {api_key_env: SYSTEMONE_KEY}
+        capabilities:
+          question_types: [choice, noul, score, set]
+      decision-kai:
+        provider: model_runtime
+        endpoint: https://decision-worker.example.com:8100
+        model: decision-kai
+      decision-pool:
+        provider: model_runtime
+        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        replicas:
+          - {endpoint: "http://worker-a:8100", model: kai-a}
+          - {endpoint: "http://worker-b:8100", model: kai-b}
+    system:
+      decision_model: {deployment: d3-remote}
