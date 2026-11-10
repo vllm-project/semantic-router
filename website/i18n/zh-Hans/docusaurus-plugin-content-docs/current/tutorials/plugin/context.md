@@ -79,7 +79,7 @@ plugins:
 | `external_api` | 自定义 HTTP 请求契约的服务 | `endpoint`、`request_format` |
 | `mcp` | 在 MCP 工具调用器可用之前，启动时拒绝 | `server_name`、`tool_name` |
 | `openai` | OpenAI 文件检索 | `vector_store_id`、`api_key` |
-| `vectorstore` | Router 管理的向量存储服务 | `vector_store_id` |
+| `vectorstore` | Router 管理的向量存储服务，需要 `global.stores.vector_store.enabled: true` | `vector_store_id` |
 | `hybrid` | 主后端加可选的回退后端 | `primary`，以及各后端自己的嵌套配置 |
 
 - **`hybrid.strategy`** 缺省为 `sequential`：只有主后端失败或没有返回文档时才运行回退后端。`parallel` 同时发起两个查询，主后端一有文档就返回。
@@ -99,7 +99,7 @@ plugins:
 
 External API 的文档带有服务返回的分数（Pinecone `score`、Weaviate `1 - distance`、Elasticsearch `_score`、自定义 `score`）；没有分数的文档按相似度 1 计。
 
-`on_failure` 决定检索失败时怎么做：`skip`（缺省）不带文档继续，`warn` 另外记录一条警告，`block` 以 `503` 拒绝请求。检索没有结果不算失败。`cache_results` 按查询、源和 match 块把保留的文档缓存 `cache_ttl_seconds`（缺省 3600）秒。
+`on_failure` 决定检索失败时怎么做：`skip`（缺省）不带文档继续，`warn` 另外记录一条警告，`block` 以 `503` 拒绝请求。检索没有结果不算失败。`cache_results` 按查询、源和 match 块把保留的文档缓存 `cache_ttl_seconds`（缺省 3600）秒；judge 失败时在 `on_error: skip` 下保留的未经评判的文档只用于当次请求，不缓存。
 
 :::caution
 检索到的文档会作为上下文发给模型提供商。请在 collection 级别做访问控制，不要把多个租户混在一个不受限的检索范围里。相似度阈值与 embedding 模型相关。

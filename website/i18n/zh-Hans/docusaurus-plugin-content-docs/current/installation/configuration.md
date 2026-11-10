@@ -303,7 +303,7 @@ Provider、存储和模型目录中的部署可以共享，而不会让策略状
 - **配方之间互不继承。** 每个配方都根据 `global` 解析自己的设置。
 - **部分覆盖。** `fallback: {enabled: false}` 保留其余 fallback 默认值。运行时的 strategy 默认值为 `priority`。
 - **插件按类型逐字段合并。** 映射逐键合并；列表或标量会替换下层的值。
-- **未匹配的请求。** 没有匹配决策的请求运行其配方分层后的插件；请求具体模型时运行 `global.plugins`。
+- **未匹配的请求。** 没有匹配决策的请求运行其配方分层后的插件；请求具体模型时运行 `global.plugins`，但跳过需要配方的部分：响应缓存、context 插件的检索、`response_guard` 和 masking。
 - **模型事实。** `capabilities`、`modalities`、`context_window_size`、`max_output_tokens` 和 `loras` 放在模型的 `providers.models[]` 条目上。
 
 如果没有决策匹配，配方使用 `providers.defaults.model`。虚拟入口名永远不会到达后端。

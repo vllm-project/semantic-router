@@ -65,6 +65,9 @@ func (r *OpenAIRouter) prepareLooperResponseWithEngine(resp *looper.Response, re
 		}
 		contentType = "text/event-stream"
 	} else if streaming {
+		// The stream codec renders the run's usage as the client's format and
+		// stream options require; a Messages client cannot ask for it.
+		codecBody = looper.StreamWithUsage(codecBody, resp.Model, resp.Usage)
 		streamContext := llmprotocol.StreamContext{
 			Context: reqCtx.TraceContext, Options: clientStreamOptions(reqCtx), PublicModel: resp.Model,
 			ResponseID: responseObjectPublicID(reqCtx), PreviousResponseID: responseObjectPreviousID(reqCtx),

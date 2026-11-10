@@ -15,7 +15,7 @@ the vLLM Semantic Router in a production environment.
 |---------|-------------|------------|----------|
 | **Versioned** | `v0.4.0` / `0.4.0` | Tagged releases only | Production release identifier; verify and pin a digest where immutability is required |
 | **Nightly** | `nightly-YYYYMMDD` | Daily, from the newest `main` commit that passes full qualification | Pre-release testing |
-| **Latest** | `latest` | Explicit `main` publications + releases | Development only |
+| **Latest** | `latest` | `main` merges (the newest, when several land together) + releases | Development only |
 
 :::tip Recommendation
 Use a **versioned** release in production, then record the resolved artifact

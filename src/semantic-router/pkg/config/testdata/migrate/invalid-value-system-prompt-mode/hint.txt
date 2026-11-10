@@ -1,1 +1,1 @@
-recipes[default].decisions[support].plugins[0]: invalid_value: system_prompt mode "append" is neither insert nor replace; run `vllm-sr config migrate` (mode: replace, which is what it did)
+recipes[default].decisions[support].plugins[0]: invalid_value: system_prompt mode "append" is neither insert nor replace; run `vllm-sr config migrate` (mode: replace, which now drops every system and developer instruction the caller sent, not only the first system message)

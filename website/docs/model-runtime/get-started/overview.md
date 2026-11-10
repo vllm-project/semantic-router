@@ -62,8 +62,8 @@ request paths.
 - **Startup waits for required models.** Attached model readiness follows the
   [readiness rules](../deploy/readiness-and-monitoring.md#when-a-model-is-not-ready).
 - **A slow model never stalls a request.** The signal deadline bounds how long
-  a request waits; unfinished signals follow their configured error or
-  unscanned policy.
+  a request waits; an unfinished signal gives no answer and resolves through
+  its `on_error` or `on_unknown` policy.
 
 ## What you can rely on
 

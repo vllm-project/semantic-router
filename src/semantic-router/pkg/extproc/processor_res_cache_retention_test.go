@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"testing"
+	"time"
 
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -10,6 +11,8 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -266,8 +269,11 @@ func TestApplyRetentionTTLOverride(t *testing.T) {
 		t.Fatalf("no retention: got %d, want base %d", got, base)
 	}
 	ctx := &RequestContext{Retention: &config.DecisionRetention{TTLTurns: intPtr(2)}}
-	if got := applyRetentionTTLOverride(base, ctx); got != 2*retentionDefaultSecondsPerTurn {
-		t.Fatalf("ttl_turns override: got %d, want %d", got, 2*retentionDefaultSecondsPerTurn)
+	if got := applyRetentionTTLOverride(base, ctx); got != base {
+		t.Fatalf("ttl_turns longer than base: got %d, want base %d", got, base)
+	}
+	if got := applyRetentionTTLOverride(-1, ctx); got != 2*retentionDefaultSecondsPerTurn {
+		t.Fatalf("ttl_turns over a store without expiry: got %d, want %d", got, 2*retentionDefaultSecondsPerTurn)
 	}
 }
 
@@ -287,6 +293,81 @@ func TestUpdateResponseCacheAppliesRetentionTTL(t *testing.T) {
 	}
 	if mockCache.lastTTLSeconds != 2*retentionDefaultSecondsPerTurn {
 		t.Fatalf("non-streaming ttl_turns override: got %d, want %d", mockCache.lastTTLSeconds, 2*retentionDefaultSecondsPerTurn)
+	}
+}
+
+// ttl_turns shortens a cache write's lifetime and never lengthens it: the
+// entry lives the least of the plugin's ttl_seconds, the caller's ttl and
+// ttl_turns, and a zero from the plugin or the caller still stores nothing.
+func TestUpdateResponseCacheRetentionTTLOnlyShortensTheLifetime(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		pluginTTL  *int
+		callerTTL  *int
+		wantStored bool
+		wantTTL    int
+	}{
+		{name: "caller ttl shorter than ttl_turns", pluginTTL: intPtr(60), callerTTL: intPtr(5), wantStored: true, wantTTL: 5},
+		{name: "plugin ttl shorter than ttl_turns", pluginTTL: intPtr(60), wantStored: true, wantTTL: 60},
+		{name: "ttl_turns under a store without expiry", wantStored: true, wantTTL: 10 * retentionDefaultSecondsPerTurn},
+		{name: "caller no-store", pluginTTL: intPtr(60), callerTTL: intPtr(0)},
+		{name: "plugin no-store", pluginTTL: intPtr(0)},
+		{name: "plugin no-store with a caller ttl", pluginTTL: intPtr(0), callerTTL: intPtr(5)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			decision := retentionCacheDecision("cache-decision", true)
+			if tt.pluginTTL != nil {
+				decision.Plugins[0].Configuration = config.MustStructuredPayload(map[string]interface{}{"enabled": true, "ttl_seconds": *tt.pluginTTL})
+			}
+			mockCache, router, selected := cacheRouterForDecision(decision)
+			ctx := withSelectedDecision(&RequestContext{
+				RequestID:            "req-retention-min-ttl",
+				RequestModel:         "test-model",
+				RequestQuery:         "hello",
+				SemanticRequest:      testNeutralRequest("test-model", "hello"),
+				CacheWriteTTLSeconds: tt.callerTTL,
+				Retention:            &config.DecisionRetention{TTLTurns: intPtr(10)},
+			}, selected)
+
+			router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
+			if mockCache.addEntryCalled != tt.wantStored || mockCache.lastTTLSeconds != tt.wantTTL {
+				t.Fatalf("stored=%v ttl=%d, want stored=%v ttl=%d", mockCache.addEntryCalled, mockCache.lastTTLSeconds, tt.wantStored, tt.wantTTL)
+			}
+		})
+	}
+}
+
+// A plugin without ttl_seconds stores for the store's ttl_seconds, and a
+// caller's ttl and ttl_turns only shorten that: with a 60 s store, a caller
+// ttl=600 or ttl_turns: 10 (600 s) still leaves an entry the store expires
+// within 60 s.
+func TestUpdateResponseCacheTTLNeverOutlivesTheStoreTTL(t *testing.T) {
+	callerTTL := 600
+	for name, request := range map[string]*RequestContext{
+		"caller ttl": {CacheWriteTTLSeconds: &callerTTL},
+		"ttl_turns":  {Retention: &config.DecisionRetention{TTLTurns: intPtr(10)}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			backend := cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: true, MaxEntries: 8, TTLSeconds: 60, EmbeddingProvider: storagetest.Vectors{Size: 8}})
+			t.Cleanup(func() { _ = backend.Close() })
+			_, router, decision := cacheRouterForDecision(retentionCacheDecision("cache-decision", true))
+			router.Cache = backend
+			router.Config.SemanticCache.TTLSeconds = 60
+			request.RequestID, request.RequestModel, request.RequestQuery = "req-store-ttl", "test-model", "hello"
+			request.SemanticRequest = testNeutralRequest("test-model", "hello")
+			ctx := withSelectedDecision(request, decision)
+
+			router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
+			identity := responseCacheIdentity(ctx, ctx.RequestModel)
+			recall, err := router.responseCacheService().LookupSemantic(context.Background(),
+				cache.SemanticLookup{Identity: identity, Bounds: cache.SimilarityBounds{MinSimilarity: -1, TopK: 1}})
+			if err != nil || len(recall.Candidates) != 1 {
+				t.Fatalf("recalled %d entries, err %v", len(recall.Candidates), err)
+			}
+			if left := time.Until(recall.Candidates[0].ExpiresAt); left > time.Minute {
+				t.Fatalf("the entry expires in %v, past the store's 60 s", left.Round(time.Second))
+			}
+		})
 	}
 }
 

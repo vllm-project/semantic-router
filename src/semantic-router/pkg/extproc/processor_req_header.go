@@ -27,6 +27,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	r.captureDelegatedCredential(ctx)
 	if r.Config != nil {
 		ctx.sessionIDHeaders = r.Config.Headers.SessionIDHeaderNames()
+		ctx.identity = r.Config.Authz.Identity
 	}
 	r.gateDebugHeaders(ctx)
 	setRequestHeaderSpanAttributes(span, ctx, method, path)

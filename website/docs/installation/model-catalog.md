@@ -149,8 +149,12 @@ question-style signal. Embeddings answer no signal: recall embeds with
 A rule's predicate you do not write comes from the model that answers: the
 threshold calibrated for `vela3-fast` or a Vela 2.0 size; 0.5 for any other
 model, local or `systemone`, which has none (the load warns
-`uncalibrated_preset`, naming the rule). A `predicate` you write is used as
-written.
+`uncalibrated_preset`, naming the rule). That default applies to domain, user
+feedback, modality and PII rules, and to a rule that reads its preset's
+positive option (`FACT_CHECK_NEEDED`, `unsafe`, `refusal`, `jailbreak`); any
+other rule without a predicate matches on the model's own selection, and a
+hallucination rule on the model's own span thresholds. A `predicate` you
+write is used as written.
 
 ## Admission
 

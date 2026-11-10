@@ -65,7 +65,7 @@ recipes:
                 hybrid_weights: {logprob_weight: 0.65, margin_weight: 0.35}
 ```
 
-`order` 设置升级顺序：`size` 先尝试 `providers.models[].param_size` 最小的模型，`cost` 先尝试定价最低的模型；省略时保持 `modelRefs` 的顺序。
+`order` 设置升级顺序：`size` 先尝试 `providers.models[].param_size` 最小的模型，`cost` 先尝试定价最低的模型；省略时保持 `modelRefs` 的顺序。`size` 读取规模开头的数值，因此 `397B (17B active)` 为 397B，`1.6T` 为 1600B。无法读取规模的模型，或在 `cost` 下没有定价的模型，最后尝试。
 
 `accept` 只能指定一项检查：
 
@@ -86,7 +86,7 @@ recipes:
 
 `gte` 为必填项，取值在 `[0, 1]` 内。`token_filter: tool_call_args` 只对生成的工具调用参数打分，而不是每个 token；`all`（默认）对每个 token 打分。
 
-`systemone: {gte, deployment, timeout_ms}` 就请求和候选回答，向决策模型（或指定的 System One 部署）提出 `answer_check` 预设问题。`refusal: false` 提出 `refusal` 预设问题；`refusal: true` 会被拒绝，因为它只会接受拒答。两种检查对每个被评判的回答各进行一次决策模型调用；该调用计入执行器的 `deadline`，但不计入 `max_calls`。
+`systemone: {gte, deployment, timeout_ms}` 就请求和候选回答，向决策模型（或指定的 System One 部署）提出 `answer_check` 预设问题。`refusal: false` 提出 `refusal` 预设问题；`refusal: true` 会被拒绝，因为它只会接受拒答。两种检查对每个被评判的回答各进行一次决策模型调用；该调用计入执行器的 `deadline`，但不计入 `max_calls`。调用工具的回答在评判时，于文本之后附上每个调用的工具名和参数。
 
 `on_error` 决定没有回答被接受时的处理方式：
 

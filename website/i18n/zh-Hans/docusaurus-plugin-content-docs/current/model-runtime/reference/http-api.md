@@ -70,7 +70,7 @@ Server-Timing: parse;dur=0.021, tokenize;dur=0.153, queue;dur=0.008, forward;dur
 
 唯一的字节限额是 `--max-request-bytes`，作用于整个请求。
 
-router 通过 Vela 2.0 用两种方式读长请求。路由问题（domain、fact check、feedback、modality、决策问题和决策模型选择器）截断。安全问题（jailbreak、safety、PII 和 hallucination）整读，上限是模型的扫描预算或部署的 `input.max_tokens`（带 `overflow: window`）。超出部分，或没赶上信号截止时间（`global.model_catalog.signal_timeout_ms`）的安全扫描，就是没读到的内容：越狱或 PII 规则把它匹配为 `unscanned`。
+router 通过 Vela 2.0 用两种方式读长请求。路由问题（domain、fact check、feedback、modality、决策问题和决策模型选择器）截断。安全问题（jailbreak、safety、PII 和 hallucination）整读，上限是模型的扫描预算或部署的 `input.max_tokens`（带 `overflow: window`）。超出部分是没读到的内容：越狱或 PII 规则把它匹配为 `unscanned`。没赶上信号截止时间（`global.model_catalog.signal_timeout_ms`）的安全扫描没有答案：越狱或 PII 规则此时不匹配，除非它设置了 `on_unknown: match`。
 
 ## 分类 {#classify}
 

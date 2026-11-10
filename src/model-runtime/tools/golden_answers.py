@@ -5,18 +5,22 @@
         --autotune-cache /var/cache/vllm-srun/autotune
     python3 tools/golden_answers.py --family task_heads --device cpu --offline \\
         --record vllm_srun/registry/golden_answers_vela1.json
+    python3 tools/golden_answers.py --family decision3 --device cpu --dtype bfloat16 \\
+        --record vllm_srun/registry/golden_answers_decision3.json
 
 The model is served as ``vllm-srun serve`` serves it (verification,
-pinned kernel choices) and answers its family's golden requests alone, in
-their released forwards, recorded as the readiness check compares them:
+pinned kernel choices, ``--dtype``) and answers its family's golden requests
+alone, in their released forwards, recorded as the readiness check compares them:
 decision answers, or a surface response's numbers (``LoadedModel.golden_values``).
 Loading checks that the answers are deterministic and well formed but does not
 compare them with the recorded references, which a recording replaces;
 ``previous`` counts the answers each recorded reference still matches.
 ``--record`` writes a generic device-class reference and any hardware-qualified
 reference, keyed by repository and pinned revision, with the PyTorch version
-each was recorded with (``torch``). Within a revision and PyTorch version, the
-first generic baseline is retained while hardware entries are updated. A new
+each was recorded with (``torch``); at a ``--dtype`` other than the model's
+``auto`` both keys carry it (``cpu@bfloat16``). Within a revision and PyTorch
+version, the first generic baseline is retained while hardware entries are
+updated; a hardware entry that answers as its baseline is not kept. A new
 revision discards the old references and starts a new baseline; a new PyTorch
 version starts a new baseline for its device class. Record it on the intended
 baseline device before adding other hardware classes.
@@ -36,7 +40,7 @@ from vllm_srun import runtime as serving
 from vllm_srun.config import ModelConfig, ServeConfig
 from vllm_srun.registry import builtin
 from vllm_srun.runtime import Runtime
-from vllm_srun.supervision.readiness import CPU_TOLERANCE, GPU_TOLERANCE
+from vllm_srun.supervision.readiness import CPU_TOLERANCE, GPU_TOLERANCE, qualified
 
 # Pinned by a family table but not served yet: the vela3 image package's
 # serving path is not implemented (#5625), so Runtime.load refuses it and a
@@ -67,7 +71,14 @@ def answers(
 ) -> dict[str, Any]:
     runtime = Runtime(
         ServeConfig(
-            models=(ModelConfig(model=model, revision=revision, device=args.device),),
+            models=(
+                ModelConfig(
+                    model=model,
+                    revision=revision,
+                    device=args.device,
+                    dtype=args.dtype,
+                ),
+            ),
             cache_dir=args.cache_dir,
             base_path=args.base_path,
             offline=args.offline,
@@ -98,16 +109,17 @@ def answers(
                 totals["checked"] += checked
                 totals["matched"] += matched
         info = served.model.info
-        goldens = {accelerator: values}
+        goldens = {qualified(accelerator, served.dtype): values}
         key = served.placement.accelerator.golden_reference(served.placement.device)
         if key is not None:
-            goldens[key] = values
+            goldens[qualified(key, served.dtype)] = values
         return {
             "model": info.id,
             "repo": info.repo,
             "revision": info.revision,
             "model_sha256": info.model_sha256,
             "device": served.placement.device.label,
+            "dtype": served.dtype,
             "torch": torch.__version__,
             "readiness": served.health.golden.describe(),
             "previous": previous,
@@ -123,17 +135,19 @@ def record(path: Path, entries: list[dict[str, Any]]) -> None:
         current = table.get(entry["repo"])
         if current is None or current.get("revision") != entry["revision"]:
             current = {"revision": entry["revision"], "answers": {}}
-        recorded_with = current.get("torch", {})
+        answers, recorded_with = current["answers"], current.get("torch", {})
         version = entry.get("torch")
-        generic = entry["device"].split(":", 1)[0]
+        generic = qualified(
+            entry["device"].split(":", 1)[0], entry.get("dtype", "auto")
+        )
         for key, values in entry["golden_answers"].items():
-            if (
-                key == generic
-                and key in current["answers"]
-                and recorded_with.get(key) == version
-            ):
+            if key == generic and key in answers and recorded_with.get(key) == version:
                 continue
-            current["answers"][key] = values
+            if key != generic and values == answers.get(generic):
+                answers.pop(key, None)
+                recorded_with.pop(key, None)
+                continue
+            answers[key] = values
             if version is None:
                 recorded_with.pop(key, None)
             else:
@@ -154,6 +168,9 @@ def main() -> None:
     parser.add_argument("--family", help="every built-in model of this family")
     parser.add_argument("--revision")
     parser.add_argument("--device", default="cpu")
+    parser.add_argument(
+        "--dtype", default="auto", help="serve and record at this --dtype"
+    )
     parser.add_argument("--cache-dir")
     parser.add_argument("--base-path")
     parser.add_argument("--offline", action="store_true")

@@ -257,7 +257,12 @@ func (r *OpenAIRouter) applyDispatchDecision(
 	ctx *RequestContext,
 ) (bool, error) {
 	if dispatch.decisionName == "" {
-		return false, nil
+		// A Looper hop already carries its decision's prompt; a request that
+		// matched no decision, or names a concrete model, runs its defaults'.
+		if ctx.VSRSelectedDecision != nil || ctx.LooperRequest {
+			return false, nil
+		}
+		return r.addSemanticSystemPromptIfConfigured(request, "", dispatch.logicalModel, ctx)
 	}
 	changed := false
 	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
@@ -276,12 +281,14 @@ func (r *OpenAIRouter) applyDispatchRequestParams(
 	request *llmprotocol.Request,
 	ctx *RequestContext,
 ) (bool, error) {
-	if ctx.VSRSelectedDecision != nil && ctx.VSRSelectedDecision.GetRequestParamsConfig() != nil {
-		return r.applySemanticRequestParams(
-			ctx.VSRSelectedDecision, request, ctx.Routing.RecipeName(),
-		)
+	decisionName := ""
+	if ctx.VSRSelectedDecision != nil {
+		decisionName = ctx.VSRSelectedDecision.Name
 	}
-	return false, nil
+	return r.applySemanticRequestParams(
+		config.RequestParamsPluginOf(requestPlugins(r.Config, ctx)), request,
+		config.RoutingDecisionKey(ctx.Routing.RecipeName(), decisionName),
+	)
 }
 
 func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {
@@ -654,13 +661,15 @@ func appendContentLengthHeader(headersOut *[]*core.HeaderValueOption, bodyLength
 }
 
 func (r *OpenAIRouter) applyDecisionHeaderMutations(state *routeHeaderState, ctx *RequestContext) {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+	if ctx == nil {
 		return
 	}
-	setHeaders, removeHeaders := r.buildHeaderMutations(ctx.VSRSelectedDecision)
+	setHeaders, removeHeaders := r.buildHeaderMutations(ctx)
 	state.setHeaders = append(state.setHeaders, setHeaders...)
 	state.removeHeaders = append(state.removeHeaders, removeHeaders...)
-	r.runRequestExtensions(state, ctx)
+	if ctx.VSRSelectedDecision != nil {
+		r.runRequestExtensions(state, ctx)
+	}
 }
 
 func buildRequestBodyContinueResponse(

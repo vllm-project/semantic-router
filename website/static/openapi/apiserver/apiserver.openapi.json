@@ -28740,6 +28740,10 @@
                     "nullable": true,
                     "type": "object",
                     "properties": {
+                      "enabled": {
+                        "nullable": true,
+                        "type": "boolean"
+                      },
                       "message": {
                         "type": "string"
                       }
@@ -29571,9 +29575,6 @@
                       "max_tokens_limit": {
                         "nullable": true,
                         "type": "integer"
-                      },
-                      "strip_unknown": {
-                        "type": "boolean"
                       }
                     },
                     "additionalProperties": false
