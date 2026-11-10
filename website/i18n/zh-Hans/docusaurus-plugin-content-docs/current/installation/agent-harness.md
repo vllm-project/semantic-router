@@ -85,7 +85,7 @@ listener 的 `timeout`（默认 300 秒）限制整个调用，包括流式响�
 
 运行一个真实的工具循环：模型请求工具 → harness 执行它 → 下一次调用携带对应的结果。对于流式输出，请检查完整的工具参数、终止事件和最终回答。仅凭协议兼容并不能证明模型和 harness 能配合工作。
 
-配置了 Router Learning 保护时，它需要明确的身份标识。默认的 `scope: conversation` 要求相关调用同时携带两个请求头：
+配置了 Router Learning 防护时，它需要明确的身份标识。默认的 `scope: conversation` 要求相关调用同时携带两个请求头：
 
 ```http
 x-session-id: harness-demo-session
@@ -96,12 +96,12 @@ x-conversation-id: harness-demo-conversation
 
 - **使用真实的标识。** 由 harness 或受信任的网关为你的 session 和 conversation 提供各自不同且稳定的标识。
 - **`scope: session`** 只要求配置的 session 请求头。
-- **缺少标识**时请求仍可路由，但保护不会保持任何模型。
+- **缺少标识**时请求仍可路由，但防护不会保持任何模型。
 - **Responses 历史**（包括 `previous_response_id`）不能替代这些请求头。
 
 身份的优先级和隐私边界见[会话标识](../api/session-identification)。
 
-任务进入新阶段时，harness 可以在同一会话中请求一次新的路由决策：在新阶段的第一个请求上发送 `x-vsr-protection-release: 1`，时机是用户轮次，而不是工具循环内部。被拒绝的释放会在 `x-vsr-warnings` 中返回原因。见[显式释放](../tutorials/learning/protection)。
+任务进入新阶段时，harness 可以在同一会话中请求一次新的路由决策：在新阶段的第一个请求上发送 `x-vsr-protection-release: 1`，时机是用户轮次，而不是工具循环内部。被拒绝的释放会在 `x-vsr-warnings` 中返回原因。见[显式释放](../tutorials/learning/protection#explicit-release)。
 
 :::warning 只在一个请求上发送释放请求头
 不要通过 Claude Code 的 `ANTHROPIC_CUSTOM_HEADERS` 设置它，那会在每个请求上都发送。
@@ -109,7 +109,7 @@ x-conversation-id: harness-demo-conversation
 
 请在工具续接和用户追问时检查所选的模型。工具权限、任务状态和外层循环仍由 harness 负责；配方不配置被委派的代理。
 
-Claude Code 发送 `x-claude-code-session-id` 而不是 `x-session-id`，Codex CLI 发送 `session-id` 和 `thread-id`。保持它们的运行及其子代理所用的身份请求头，见[委派子代理的 Agent](../tutorials/learning/protection)。
+Claude Code 发送 `x-claude-code-session-id` 而不是 `x-session-id`，Codex CLI 发送 `session-id` 和 `thread-id`。保持它们的运行及其子代理所用的身份请求头，见[委派子代理的 Agent](../tutorials/learning/protection#agents-that-delegate-to-subagents)。
 
 ### 以消息形式发送工具输出的 Agent {#agents-that-send-tool-output-as-messages}
 
