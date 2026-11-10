@@ -238,8 +238,6 @@ On a CPU, each app's wait is the dial. Redact, shield and guard wait 3, 2 and 3 
 
 ## What's next
 
-{/* DRAFT for Theo to confirm or rewrite: the roadmap is his call. */}
-
 vSR is the first integration under `src/agent-harness/`, the repository's home for coding-agent integrations. The decision model and its runtime do not depend on Claude Code, so the same checks can sit behind other agent harnesses next. Two improvements are already tracked: a `/vsr` pane that scrolls through every decision it keeps ([#6049](https://github.com/vllm-project/semantic-router/issues/6049)), and checks that recover on their own when a busy CPU stalls them, without a plugin reload ([#6050](https://github.com/vllm-project/semantic-router/issues/6050)).
 
 The quickest way to make vSR better is to use it: answer `right call` or `wrong call` on the decisions it makes, run `/vsr:calibrate`, and tell us where it got things wrong.
