@@ -1,0 +1,18 @@
+# Checks an answer against its grounding context when the prompt needs fact
+# checking, and delivers an unsupported one with x-vsr-warnings and a
+# note naming the unsupported spans. Reads the fact_check rule
+# needs_fact_check and the hallucination rule ungrounded_claims.
+plugin:
+  type: response_guard
+  configuration:
+    rules:
+      - when:
+          operator: AND
+          conditions:
+            - type: fact_check
+              name: needs_fact_check
+            - type: hallucination
+              name: ungrounded_claims
+        action: annotate
+        details: true
+    on_unknown: annotate

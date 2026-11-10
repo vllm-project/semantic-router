@@ -11,7 +11,7 @@ translation:
 
 ## 概览
 
-`routing.projections.partitions` 协调竞争的 `domain` 或 `embedding` 信号，并只保留一个胜者。
+`recipes[].projections.partitions` 协调竞争的 `domain` 或 `embedding` 信号，并只保留一个胜者。
 
 ## 解决什么问题？
 
@@ -48,20 +48,20 @@ translation:
 ## 配置
 
 ```yaml
-routing:
-  projections:
-    partitions:
-      - name: balance_domain_partition
-        semantics: softmax_exclusive
-        temperature: 0.10
-        members: [law, business, health, history, other]
-        default: other
-
-      - name: balance_intent_partition
-        semantics: softmax_exclusive
-        temperature: 0.18
-        members: [code_general, architecture_design, research_synthesis, general_chat_fallback]
-        default: general_chat_fallback
+recipes:
+  - name: default
+    projections:
+      partitions:
+        - name: balance_domain_partition
+          semantics: softmax_exclusive
+          temperature: 0.10
+          members: [law, business, health, history, other]
+          default: other
+        - name: balance_intent_partition
+          semantics: softmax_exclusive
+          temperature: 0.18
+          members: [code_general, architecture_design, research_synthesis, general_chat_fallback]
+          default: general_chat_fallback
 ```
 
 ## DSL {#dsl}

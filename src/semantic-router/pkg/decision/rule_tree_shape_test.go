@@ -44,7 +44,7 @@ func TestEvalNode_AgreesWithNormalizedOperatorSet(t *testing.T) {
 		{name: "name without type never matches", rules: config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{{Name: "a"}}}},
 	}
 
-	engine := NewDecisionEngine(nil, nil, nil, nil, config.RoutingStrategyPriority)
+	engine := NewDecisionEngine(nil, config.RoutingStrategyPriority)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			node := tc.rules
@@ -73,7 +73,7 @@ func TestEvalNode_AgreesWithNormalizedOperatorSet(t *testing.T) {
 func TestEvalNode_OperatorConstantsCoverEveryBranch(t *testing.T) {
 	kw := func(name string) config.RuleNode { return config.RuleNode{Type: config.SignalTypeKeyword, Name: name} }
 	signals := &SignalMatches{KeywordRules: []string{"a"}}
-	engine := NewDecisionEngine(nil, nil, nil, nil, config.RoutingStrategyPriority)
+	engine := NewDecisionEngine(nil, config.RoutingStrategyPriority)
 
 	for _, op := range config.RuleTreeOperators() {
 		children := []config.RuleNode{kw("a"), kw("missing")}

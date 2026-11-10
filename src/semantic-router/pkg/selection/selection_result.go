@@ -65,12 +65,10 @@ func ResolveSelectionCandidate(selCtx *SelectionContext, result *SelectionResult
 		return nil, fmt.Errorf("%w: selected candidate is not declared", ErrSelectedModelNotCandidate)
 	}
 	if candidate := CandidateForModel(selCtx.CandidateModels, selectedModel, nil); candidate != nil {
-		if result.Method != MethodPrompt || candidate.Model == selectedModel {
-			return candidate, nil
-		}
+		return candidate, nil
 	}
 	for _, ref := range selCtx.CandidateModels {
-		if ref.Model == selectedModel || (result.Method != MethodPrompt && ref.LoRAName != "" && ref.LoRAName == selectedModel) {
+		if ref.Model == selectedModel || (ref.LoRAName != "" && ref.LoRAName == selectedModel) {
 			return nil, fmt.Errorf("%w: ambiguous candidate %q requires an exact ModelRef", ErrNoEligibleCandidates, selectedModel)
 		}
 	}

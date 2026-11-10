@@ -40,10 +40,7 @@ func TestMemoryRetrievalDropsSupersededFactsWithLiveMilvus(t *testing.T) {
 	})
 
 	memoryConfig := memory.DefaultMemoryConfig()
-	embeddingConfig := memory.EmbeddingConfig{
-		Model:     memory.EmbeddingModelMMBERT,
-		Dimension: memoryConfig.Milvus.Dimension,
-	}
+	embeddingConfig := memory.EmbeddingConfig{Dimension: memoryConfig.Milvus.Dimension}
 	store, err := memory.NewMilvusStore(memory.MilvusStoreOptions{
 		Client:          milvusClient,
 		CollectionName:  collection,
@@ -127,9 +124,10 @@ func TestMemoryRetrievalDropsSupersededFactsWithLiveMilvus(t *testing.T) {
 			time.Sleep(2 * time.Second)
 
 			router := &OpenAIRouter{
-				Config: &config.RouterConfig{Memory: config.MemoryConfig{
-					Enabled: true, Backend: "milvus", DefaultSimilarityThreshold: 0.10,
-				}},
+				Config: &config.RouterConfig{
+					GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()},
+					Memory:        config.MemoryConfig{InUse: true, Backend: "milvus", DefaultSimilarityThreshold: 0.10},
+				},
 				MemoryStore: store,
 			}
 			request := testNeutralRequest("entrypoint", scenario.query)
@@ -138,7 +136,7 @@ func TestMemoryRetrievalDropsSupersededFactsWithLiveMilvus(t *testing.T) {
 				TraceContext:    ctx,
 				SemanticRequest: request,
 			}
-			require.NoError(t, router.handleMemoryRetrieval(requestContext, scenario.query, request))
+			require.NoError(t, router.retrieveContextSources(requestContext, scenario.query, request))
 			t.Logf("status=%s/%s results=%d\n%s", requestContext.MemoryStatus, requestContext.MemoryReason, requestContext.MemoryResultCount, requestContext.MemoryContext)
 			require.Equal(t, "used", requestContext.MemoryStatus)
 			for _, fact := range scenario.present {

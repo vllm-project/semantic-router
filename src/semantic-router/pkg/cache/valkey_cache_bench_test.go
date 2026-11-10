@@ -56,7 +56,7 @@ func setupValkeyCacheBench(b *testing.B) *ValkeyCache {
 		TTLSeconds:          300,
 		Enabled:             true,
 		Config:              valkeyConfig,
-		EmbeddingModel:      "qwen3",
+		EmbeddingDeployment: "qwen3-embedding",
 	})
 	if err != nil {
 		unavailable("valkey server not available: %v", err)

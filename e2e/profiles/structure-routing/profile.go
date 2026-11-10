@@ -20,7 +20,7 @@ var resourceManifests = []string{
 	"e2e/profiles/ai-gateway/gateway-resources/responses-route.yaml",
 }
 
-// Profile validates the structure signal's rule matching in isolation.
+// Profile validates routing on request shape, by keyword counts, in isolation.
 type Profile struct {
 	stack *gatewaystack.Stack
 }
@@ -41,7 +41,7 @@ func (p *Profile) Name() string { return "structure-routing" }
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests the structure signal's rule matching end-to-end"
+	return "Tests keyword count routing on request shape end-to-end"
 }
 
 // Setup deploys the shared gateway stack and this profile's resources.

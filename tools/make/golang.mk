@@ -14,6 +14,14 @@ config-schema-check: ## Check that generated Router config contracts match Go so
 	@$(LOG_TARGET)
 	@cd src/semantic-router && go run ../../tools/codegen/configschema/main.go --repository-root ../.. --check
 
+headers-generate: ## Generate the header reference and Dashboard header constants from the Router's header registry
+	@$(LOG_TARGET)
+	@cd src/semantic-router && go run ../../tools/codegen/headers/main.go --repository-root ../..
+
+headers-check: ## Check that the header reference and Dashboard header constants match the Router's header registry
+	@$(LOG_TARGET)
+	@cd src/semantic-router && go run ../../tools/codegen/headers/main.go --repository-root ../.. --check
+
 go-lint: ## Run golangci-lint for src/semantic-router
 	@$(LOG_TARGET)
 	@echo "Running golangci-lint for src/semantic-router..."
@@ -110,7 +118,7 @@ generate-api-check: install-controller-gen ## Check generated Kubernetes API cod
 		exit 1; \
 	fi
 
-.PHONY: config-schema-generate config-schema-check check-perf-go-mod-tidy check-go-mod-tidy
+.PHONY: config-schema-generate config-schema-check headers-generate headers-check check-perf-go-mod-tidy check-go-mod-tidy
 
 .PHONY: training-contract-generate training-contract-check
 training-contract-generate: ## Generate the shared training schema and Console types

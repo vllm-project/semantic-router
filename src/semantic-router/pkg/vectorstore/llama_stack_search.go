@@ -29,9 +29,10 @@ import (
 // Llama Stack searches by text query, not by embedding vector. The query text
 // must be passed via filter["_query_text"]; the queryEmbedding param is ignored.
 //
-// When searchType is "hybrid", the request includes ranking_options that tell
-// Llama Stack to combine vector similarity and BM25 keyword search using
-// Reciprocal Rank Fusion. This requires the Milvus vector_io provider.
+// When searchType is "hybrid", the request asks Llama Stack for its hybrid
+// search mode, which combines vector similarity and keyword search using
+// Reciprocal Rank Fusion. This requires a vector_io provider with keyword
+// search, such as sqlite-vec or Milvus.
 func (l *LlamaStackBackend) Search(
 	ctx context.Context, vectorStoreID string, queryEmbedding []float32,
 	topK int, threshold float32, filter map[string]interface{},
@@ -71,6 +72,9 @@ func (l *LlamaStackBackend) searchRequestBody(
 		"max_num_results": topK,
 	}
 	if l.searchType == "hybrid" {
+		// The ranker only fuses the results of hybrid mode; Llama Stack's
+		// default mode is vector-only.
+		body["search_mode"] = "hybrid"
 		body["ranking_options"] = map[string]interface{}{"ranker": "rrf"}
 	}
 	if fid, ok := filter["file_id"].(string); ok && fid != "" {

@@ -12,7 +12,7 @@ Choose two things independently:
 
 Chat provider models run behind reachable endpoints on the same host, in a
 cluster, or at a hosted API. vLLM-SR does not provision those generation
-backends. Its own decision, classifier, embedding, and reranking models use
+backends. Its own decision, classifier, and embedding models use
 managed or attached [model-runtime deployments](../model-runtime/deploy.md).
 For decision serving without Chat backends, start in
 [Engine mode](../model-runtime/quickstart.md).

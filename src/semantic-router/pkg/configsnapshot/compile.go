@@ -203,8 +203,8 @@ func (c *compiler) clusterSecret(alias string, params config.ModelParams, endpoi
 	if params.AuthoredModel != nil {
 		for _, ref := range params.AuthoredModel.BackendRefs {
 			switch {
-			case ref.APIKeyEnv != "":
-				spec.Env = appendUnique(spec.Env, ref.APIKeyEnv)
+			case ref.Auth != nil && ref.Auth.APIKeyEnv != "":
+				spec.Env = appendUnique(spec.Env, ref.Auth.APIKeyEnv)
 			case ref.APIKey != "":
 				spec.Inline++
 			}
@@ -231,9 +231,6 @@ func (c *compiler) programs() {
 	for _, recipe := range recipes {
 		name := string(recipe.Name)
 		path := "recipes[" + name + "]"
-		if recipe.Name == config.DefaultRecipeName {
-			path = "routing"
-		}
 		program := &Resource{Ref: Ref{Kind: KindProgram, Name: name}, Path: path, Hash: fingerprint(recipe)}
 		spec := ProgramSpec{}
 		clusters := make(map[string]bool)

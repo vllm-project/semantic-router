@@ -1,32 +1,27 @@
 package config
 
 import (
+	"math"
 	"testing"
 	"time"
-
-	"gopkg.in/yaml.v2"
 )
 
-func TestExternalModelTimeoutSecondsKeepsFractions(t *testing.T) {
+func TestDurationFromSecondsKeepsFractions(t *testing.T) {
 	cases := []struct {
-		name string
-		yaml string
-		want time.Duration
+		name    string
+		seconds float64
+		want    time.Duration
 	}{
-		{name: "fractional", yaml: "llm_timeout_seconds: 0.8\n", want: 800 * time.Millisecond},
-		{name: "integer", yaml: "llm_timeout_seconds: 5\n", want: 5 * time.Second},
-		{name: "omitted", yaml: "llm_model_name: classifier\n", want: 30 * time.Second},
-		{name: "zero", yaml: "llm_timeout_seconds: 0\n", want: 30 * time.Second},
-		{name: "negative", yaml: "llm_timeout_seconds: -1\n", want: 30 * time.Second},
+		{name: "fractional", seconds: 0.8, want: 800 * time.Millisecond},
+		{name: "integer", seconds: 5, want: 5 * time.Second},
+		{name: "zero", seconds: 0, want: 0},
+		{name: "negative", seconds: -1, want: 0},
+		{name: "not a number", seconds: math.NaN(), want: 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			var cfg ExternalModelConfig
-			if err := yaml.Unmarshal([]byte(tc.yaml), &cfg); err != nil {
-				t.Fatalf("yaml.Unmarshal() error = %v", err)
-			}
-			if got := cfg.GetTimeout(); got != tc.want {
-				t.Fatalf("GetTimeout() = %v, want %v (parsed llm_timeout_seconds = %v)", got, tc.want, cfg.TimeoutSeconds)
+			if got := DurationFromSeconds(tc.seconds); got != tc.want {
+				t.Fatalf("DurationFromSeconds(%v) = %v, want %v", tc.seconds, got, tc.want)
 			}
 		})
 	}

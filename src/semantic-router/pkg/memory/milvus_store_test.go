@@ -341,8 +341,8 @@ func setupTestStore() (*MilvusStore, *MockMilvusClient) {
 	mockClient := &MockMilvusClient{}
 	// The qwen3 model type stores the test provider's full output
 	testEmbeddingConfig := EmbeddingConfig{
-		Provider: memoryTestEmbeddingProvider(),
-		Model:    EmbeddingModelQwen3,
+		Provider:   memoryTestEmbeddingProvider(),
+		Deployment: "qwen3-embedding",
 	}
 	options := MilvusStoreOptions{
 		Client:          mockClient,
@@ -1054,8 +1054,8 @@ func TestMilvusStore_Schema_UserIDPartitionKey(t *testing.T) {
 	}
 
 	testEmbeddingConfig := EmbeddingConfig{
-		Provider: memoryTestEmbeddingProvider(),
-		Model:    EmbeddingModelQwen3,
+		Provider:   memoryTestEmbeddingProvider(),
+		Deployment: "qwen3-embedding",
 	}
 
 	config := DefaultMemoryConfig()

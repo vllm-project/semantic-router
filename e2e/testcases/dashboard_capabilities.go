@@ -38,7 +38,7 @@ type dashboardCapabilities struct {
 }
 
 var (
-	dashboardCapabilityIDs    = []string{"setup", "config", "evaluation", "mlPipeline", "mcp"}
+	dashboardCapabilityIDs    = []string{"setup", "config", "evaluation", "mcp"}
 	dashboardCapabilityStates = []string{"disabled", "unconfigured", "unauthorized", "unreachable", "degraded", "available"}
 )
 

@@ -8,21 +8,24 @@ import (
 )
 
 func TestDSLMergePreservesDecisionReliabilityAndFallback(t *testing.T) {
-	base := []byte(`version: v0.3
-routing:
-  decisions:
-    - name: shared
-      priority: 1
-      reliability: {total_timeout: 90s, retry_on: reset}
-      fallback: {enabled: true, max_attempts: 2}
+	base := []byte(`version: v0.5
 recipes:
+  - name: default
+    decisions:
+      - name: shared
+        priority: 1
+        reliability: {total_timeout: 90s, retry_on: reset}
+        fallback: {enabled: true, max_attempts: 2}
   - name: alpha
-    routing:
-      decisions:
-        - name: shared
-          priority: 1
-          reliability: {per_try_timeout: 5s}
-          fallback: {enabled: false}
+    decisions:
+      - name: shared
+        priority: 1
+        reliability: {per_try_timeout: 5s}
+        fallback: {enabled: false}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `)
 	original, err := config.ParseYAMLBytes(base)
 	if err != nil {
@@ -59,29 +62,31 @@ recipes:
 }
 
 func TestNamedRecipeMergePreservesAdaptationsWithinScope(t *testing.T) {
-	base := []byte(`version: v0.3
-routing:
-  decisions:
-    - name: shared
-      priority: 1
-      adaptations: {mode: observe}
+	base := []byte(`version: v0.5
 recipes:
+  - name: default
+    decisions:
+      - name: shared
+        priority: 1
+        adaptations: {mode: observe}
   - name: alpha
-    routing:
-      decisions:
-        - name: shared
-          priority: 1
-          adaptations: {mode: bypass}
-        - name: removed
-          priority: 2
-          adaptations: {mode: bypass}
+    decisions:
+      - name: shared
+        priority: 1
+        adaptations: {mode: bypass}
+      - name: removed
+        priority: 2
+        adaptations: {mode: bypass}
   - name: beta
-    routing:
-      decisions:
-        - name: shared
-          priority: 1
-          adaptations:
-            adaptation: {candidate_set: decision}
+    decisions:
+      - name: shared
+        priority: 1
+        adaptations:
+          adaptation: {candidate_set: decision}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `)
 	original, err := config.ParseYAMLBytes(base)
 	if err != nil {

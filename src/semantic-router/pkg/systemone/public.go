@@ -15,7 +15,9 @@ import (
 	"time"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 )
 
 // RequestLimit bounds one native request body. Requests may carry images and
@@ -146,7 +148,7 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			publicSystemOneError(w, http.StatusNotFound, "systemone_routing_disabled")
 			return
 		}
-		if r.Header.Get(BackendRequestHeader) != "" {
+		if r.Header.Get(headers.VSRSystemOneBackend) != "" {
 			remoteAlias := config.IsSystemOneBackend(model) && config.ModelConfig[model].Deployment == ""
 			if routed || remoteAlias {
 				publicSystemOneError(w, http.StatusConflict, "systemone_nested_routing")
@@ -168,6 +170,14 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			defer cancel()
 		}
 		code, response, err := invoke(ctx, target, body)
+		if errors.Is(err, principal.ErrCredentialMissing) {
+			publicSystemOneErrorMessage(w, http.StatusUnauthorized, delegatedCredentialMissingCode, delegatedCredentialMissingMessage)
+			return
+		}
+		if errors.Is(err, principal.ErrRouterCall) {
+			publicSystemOneErrorMessage(w, http.StatusForbidden, "delegated_router_call_refused", principal.ErrRouterCall.Error())
+			return
+		}
 		var budgetErr *BudgetExhaustedError
 		if routed && errors.As(err, &budgetErr) {
 			status := code

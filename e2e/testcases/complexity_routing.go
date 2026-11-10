@@ -25,7 +25,7 @@ func init() {
 func testComplexityRouting(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	return runSignalRoutingTest(ctx, client, opts, signalRoutingConfig{
 		TestDataPath:   "e2e/testcases/testdata/complexity_routing_cases.json",
-		MatchedHeader:  "x-vsr-matched-complexity",
+		SignalType:     "complexity",
 		TargetDecision: targetComplexityDecision,
 		ResultsTitle:   "COMPLEXITY ROUTING TEST RESULTS",
 		LogLabel:       "Complexity",

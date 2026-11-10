@@ -212,8 +212,7 @@ its optional manual profile and does not affect this fixed baseline.
 | Model-heavy singleton | `vela-omni` |
 | Dashboard lane | `dashboard` |
 | Provider fixture batch 1 | `envoy-ai-gateway`, `local-classifier-backend`, `routing-errors` |
-| Provider fixture batch 2 | `standalone`, `streaming`, `vela-halu` |
-| Provider fixture batch 3 | `vela-shield` |
+| Provider fixture batch 2 | `standalone`, `streaming` |
 | Router-only batch | `multimodal-routing`, `remote-embedding` |
 
 Each job has at most three profiles and at most 270 minutes of declared profile
@@ -228,6 +227,13 @@ The platform batch contains `platform.image-calibration-cpu` and
 `platform.models-cpu`: two 120-minute contract budgets, one 240-minute batch.
 It shares model files/runtime installation, but preserves separate evidence
 and process deadlines. This can take longer to finish than two concurrent jobs.
+
+Later, `local-classifier-backend`, `multimodal-routing` and `vela-omni` left the
+inventory with the classifier, embedding and image-routing paths they qualified,
+and `platform.image-calibration-cpu` left with them: the platform batch now
+holds `platform.models-cpu` alone. `vela-halu` and `vela-shield` left the
+provider fixture batches too: the Vela 1.0 Halu and Shield encoders answer no
+System One question, so no application rule can bind them.
 
 ### Recipe mapping
 

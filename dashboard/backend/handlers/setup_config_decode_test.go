@@ -51,7 +51,7 @@ func TestSetupRemoteImportRejectsUnknownFieldsBeforeTypedTransport(t *testing.T)
 	root := t.TempDir()
 	configPath := createBootstrapSetupConfig(t, root)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("version: v0.3\nglobal:\n  router:\n    modules: {}\n"))
+		_, _ = w.Write([]byte("version: v0.5\nglobal:\n  router:\n    modules: {}\n"))
 	}))
 	defer server.Close()
 	body := mustJSONRaw(t, SetupImportRemoteRequest{URL: server.URL})
@@ -64,8 +64,8 @@ func TestSetupRemoteImportRejectsUnknownFieldsBeforeTypedTransport(t *testing.T)
 }
 
 func TestSetupStrictDecodePreservesBootstrapMarkerStripping(t *testing.T) {
-	parsed, err := parseSetupCanonicalConfig([]byte("version: v0.3\nsetup:\n  mode: true\n"))
-	if err != nil || parsed.Setup != nil || parsed.Version != "v0.3" {
+	parsed, err := parseSetupCanonicalConfig([]byte("version: v0.5\nsetup:\n  mode: true\n"))
+	if err != nil || parsed.Setup != nil || parsed.Version != "v0.5" {
 		t.Fatalf("valid imported bootstrap marker was not removed: config=%+v err=%v", parsed, err)
 	}
 	root := t.TempDir()
@@ -78,8 +78,8 @@ func TestSetupStrictDecodePreservesBootstrapMarkerStripping(t *testing.T) {
 		t.Fatalf("valid patched bootstrap marker was not removed: config=%+v err=%v", candidate, err)
 	}
 	for _, invalid := range []string{
-		"version: v0.3\nsetup:\n  mode: true\n  unknown: true\n",
-		"version: v0.3\nsetup:\n  mode: not-a-boolean\n",
+		"version: v0.5\nsetup:\n  mode: true\n  unknown: true\n",
+		"version: v0.5\nsetup:\n  mode: not-a-boolean\n",
 	} {
 		if _, err := parseSetupCanonicalConfig([]byte(invalid)); err == nil {
 			t.Fatalf("invalid setup metadata was accepted: %q", invalid)

@@ -36,16 +36,26 @@ Use these blocks when:
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
-      similarity_threshold: 0.8
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        semantic:
+          match:
+            recall: {top_k: 1, min_similarity: 0.8}
 ```
+
+The store holds the cache backend. A
+[`response_cache` plugin](../plugin/response-cache) turns caching on: in
+`global.plugins` for every request, or in a decision's plugins for that
+decision's requests.
 
 #### Negation guard
 
 Bi-encoder similarity cannot tell *"turn on dark mode"* from *"turn off dark
-mode"*: opposite-meaning queries often score above `similarity_threshold`
-while genuine paraphrases score below it, so raising the threshold does not
+mode"*: opposite-meaning queries often score above the recall's
+`min_similarity` while genuine paraphrases score below it, so raising the threshold does not
 reliably prevent false hits. Every cache backend applies a lexical guard
 before it serves a semantic candidate: it catches negation cues and known
 antonym swaps in near-identical English token sets. It needs no model, has no
@@ -54,7 +64,7 @@ Valkey, Milvus, Qdrant and hybrid caches. It does not cover cue-less,
 word-order-only or non-English changes.
 
 Rejections are logged as `cache_negation_reject`, count as misses, and still
-surface the rejected score on `x-vsr-cache-similarity`. Remote and hybrid
+surface the rejected score as `cache_similarity` in `x-vsr-trace`. Remote and hybrid
 backends reject candidates without an original query and continue checking the
 bounded fetched candidate set. The same check also applies to hybrid's Milvus
 fallback.
@@ -66,6 +76,19 @@ the router refuses `polarity_guard`; `vllm-sr config migrate` removes it.
 ### Memory
 
 The memory store supports three backends: `milvus` (default), `valkey`, and `qdrant`.
+A [`context` plugin](../plugin/context#memory-sources) with a `memory` source
+reads and writes it, in `global.plugins` for every request or in a decision's
+plugins for that decision's requests:
+
+```yaml
+global:
+  plugins:
+    - type: context
+      configuration:
+        enabled: true
+        sources:
+          - type: memory
+```
 
 **Milvus backend** (default):
 
@@ -73,7 +96,6 @@ The memory store supports three backends: `milvus` (default), `valkey`, and `qdr
 global:
   stores:
     memory:
-      enabled: true
       milvus:
         address: milvus:19530
         collection: agentic_memory
@@ -86,7 +108,6 @@ global:
 global:
   stores:
     memory:
-      enabled: true
       backend: valkey
       valkey:
         host: valkey
@@ -103,20 +124,20 @@ global:
 global:
   stores:
     memory:
-      enabled: true
       backend: qdrant
       qdrant:
         host: qdrant
         port: 6334
         collection: agentic_memory
         dimension: 256
-      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.30
 ```
 
-All three examples embed with `mmbert` (Vela Embedding), the default, so
-`dimension` is one of its sizes: 64, 128, 256, 512 or 768. With any other size
+All three examples embed with Vela Embedding, which `embeddings.default` names,
+so `dimension` is one of its sizes: 64, 128, 256, 512 or 768. A store indexed
+with another model names its deployment and dimension in an `embedding` block
+(see [Embeddings](../../model-runtime/guides/embeddings.md#stores-indexed-with-another-model)). With any other size
 the router logs `Failed to create memory store: … Memory will be disabled` and
 runs without memory. The Qdrant example's 0.30 threshold, on plain cosine
 scores, is a starting point, not a calibrated value. Check unrelated queries
@@ -149,7 +170,8 @@ global:
 #### Hybrid search and reflection
 
 `hybrid_mode` and `reflection.algorithm` can be set globally under
-`global.stores.memory` and overridden in a decision's `memory` plugin. The
+`global.stores.memory` and overridden in a memory source of a decision's
+`context` plugin. The
 router refuses to start with any other value, including one set in a recipe's
 decisions:
 
@@ -163,10 +185,41 @@ use `hybrid_mode: rerank` or `algorithm: recency_semantic` fail at startup.
 Replace them with `weighted` and `heuristic`, which is how those values
 already ran.
 
+#### Corrections
+
+Memory stores each turn as it was said, so a fact and its later correction can
+both be retrieved for the same request. The default memory filter
+(`reflection.algorithm: heuristic`) then drops the older turn when a sentence in
+the newer one says the user changed something, as in "I moved", "we've
+switched", "I'm no longer" or "I don't ... anymore", and the part about the
+change shares a word pair with the older message, such as "work as" or "I live"
+followed by a place. A shared verb must keep its complement and a shared noun
+its purpose, so "I work as a paramedic now" doesn't correct "I work out every
+morning" and "my budget for groceries" doesn't correct "my budget for the Japan
+trip". The destination in "I moved to Denver" doesn't match other facts about
+Denver either. A question, a change made by someone else, or one that is
+negated, hypothetical or only planned doesn't count. A session-window memory
+loses only the corrected turn. When a message quotes a `---` line followed by a
+`Q:` line, the stored copy escapes that `Q:`, so the quote can't start a new
+turn. Windows stored before that escaping can still lose a corrected turn, but
+their turns never correct other memories.
+
+Stored records don't change. An old turn is hidden only when its correction is
+injected in the same request, and only if it states a single fact. A turn with
+several sentences or clauses, such as "I live in Boston and work as a nurse" or
+"I live in Boston, my dog is Biscuit", is kept because it may hold other facts.
+When a turn is hidden, a reply sentence about something else stays in the
+prompt, such as "Your dog Biscuit is a Boston terrier" after a move away from
+Boston. A session window carries the time of its newest turn only, so its
+earlier turns can correct turns before them in that window but not other
+memories. Corrections phrased another way or written in another language aren't
+recognized yet. Setting `reflection.algorithm: noop` turns this off along with
+the rest of the filter.
+
 #### Write path bounds
 
 Automatic persistence first respects Memory enablement, retention policy, and
-an explicit `auto_store: false` on the selected decision's memory plugin. A
+an explicit `store: {auto: false}` on the selected decision's memory source. A
 Responses request may opt out, but cannot override these server restrictions.
 When policy permits persistence, the Responses request's `auto_store` takes
 precedence over the decision's value, followed by `global.stores.memory`.
@@ -261,14 +314,9 @@ verification is a separate capability.
 
 ### Tools
 
-```yaml
-global:
-  integrations:
-    tools:
-      enabled: true
-      top_k: 3
-      tools_db_path: config/runtime/tools/tools_db.json
-```
+Tool catalogs belong to decisions, not to `global`: the `select.tools_db_path`
+of a decision's [tools plugin](../plugin/tools.md) names the catalog its
+add mode chooses from.
 
 ## Data and Security
 
@@ -277,7 +325,7 @@ global:
   encryption, retention, and tenant/user scope for the selected backend.
 - Embedding dimensions must match existing collections. Rebuild or migrate an
   index when the embedding model or dimension changes.
-- Tool retrieval controls what is shown to a model; it does not authorize tool
+- Tool selection controls what is shown to a model; it does not authorize tool
   execution. Enforce permissions at the tool service.
 - See
   [complete backend examples](https://github.com/vllm-project/semantic-router/tree/main/config/runtime)

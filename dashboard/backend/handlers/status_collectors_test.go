@@ -103,8 +103,8 @@ func TestManagedStandaloneStackStatusReportsNoEnvoy(t *testing.T) {
 // it, or nothing runs it. A stack the CLI did not create, such as a Kubernetes
 // deployment, gets no `vllm-sr serve` hint.
 func TestManagedStackStatusTellsStoppedServicesApart(t *testing.T) {
-	setupConfig := "version: v0.3\nsetup:\n  mode: true\n"
-	activatedConfig := "version: v0.3\nlisteners: []\n"
+	setupConfig := "version: v0.5\nsetup:\n  mode: true\n"
+	activatedConfig := "version: v0.5\nlisteners: []\n"
 	for _, test := range []struct {
 		name, config, heartbeat            string
 		staleHeartbeat, pending, notServed bool

@@ -329,7 +329,7 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("VLLM_SR_DETERMINISTIC_EMBEDDINGS", "1")
-			store := memory.NewInMemoryStoreWithConfig(memory.EmbeddingConfig{Model: memory.EmbeddingModelMMBERT})
+			store := memory.NewInMemoryStoreWithConfig(memory.EmbeddingConfig{})
 			chunks := memory.NewMemoryChunkStore(store)
 			bg := context.Background()
 			for _, turn := range tc.turns {
@@ -344,9 +344,10 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 
 			// 0.10 is what the memory integration config pairs with deterministic embeddings.
 			router := &OpenAIRouter{
-				Config: &config.RouterConfig{Memory: config.MemoryConfig{
-					Enabled: true, Backend: "memory", DefaultSimilarityThreshold: 0.10,
-				}},
+				Config: &config.RouterConfig{
+					GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()},
+					Memory:        config.MemoryConfig{InUse: true, Backend: "memory", DefaultSimilarityThreshold: 0.10},
+				},
 				MemoryStore: store,
 			}
 			request := testNeutralRequest("entrypoint", tc.query)
@@ -355,7 +356,7 @@ func TestMemoryRetrievalDropsSupersededFacts(t *testing.T) {
 				TraceContext:    bg,
 				SemanticRequest: request,
 			}
-			require.NoError(t, router.handleMemoryRetrieval(ctx, tc.query, request))
+			require.NoError(t, router.retrieveContextSources(ctx, tc.query, request))
 
 			t.Logf("status=%s/%s results=%d\n%s", ctx.MemoryStatus, ctx.MemoryReason, ctx.MemoryResultCount, ctx.MemoryContext)
 			assert.Equal(t, "used", ctx.MemoryStatus)

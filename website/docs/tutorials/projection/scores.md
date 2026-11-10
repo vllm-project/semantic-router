@@ -6,7 +6,7 @@ sidebar_position: 3
 
 ## Overview
 
-`routing.projections.scores` combines matched signal evidence into one continuous numeric value.
+`recipes[].projections.scores` combines matched signal evidence into one continuous numeric value.
 
 ## What Problem Does It Solve?
 
@@ -33,71 +33,58 @@ Defaults:
 - `match` defaults to `1.0`
 - `miss` defaults to `0.0`
 
-Most inputs reference a declared signal under `routing.signals`. The
-`kb_metric` and `projection` types instead reference derived runtime state as
-described below.
+Most inputs reference a declared signal under `recipes[].signals`. The
+`projection` type instead references an earlier score or mapping output.
 
-Supported input types include:
+The supported input types are:
 
 - `keyword`
-- `embedding`
 - `domain`
 - `fact_check`
 - `user_feedback`
-- `reask`
-- `preference`
 - `language`
 - `context`
-- `structure`
 - `complexity`
 - `modality`
 - `authz`
 - `jailbreak`
-- `pii`
-- `kb`
-- `conversation`
-- `event`
-- `metadata`
-- `classifier`
-- `input_modality`
-- `decision`
 - `safety`
-- `kb_metric`
+- `pii`
+- `turn_relation`
+- `conversation`
+- `input_modality`
+- `systemone`
 - `projection`
-
-For `kb_metric`, `kb` identifies a configured knowledge base, `metric` selects
-`best_score`, `best_matched_score`, or a metric declared by that knowledge
-base, and `value_source` is `score`. For `projection`, `name` identifies an
-earlier score or mapping output.
 
 Scores are internal projection state. Decisions do not reference score names directly; mappings consume them next.
 
 ## Configuration
 
 ```yaml
-routing:
-  projections:
-    scores:
-      - name: difficulty_score
-        method: weighted_sum
-        inputs:
-          - type: keyword
-            name: simple_request_markers
-            weight: -0.28
-          - type: context
-            name: long_context
-            weight: 0.18
-          - type: keyword
-            name: reasoning_request_markers
-            weight: 0.22
-            value_source: confidence
-          - type: embedding
-            name: agentic_workflows
-            weight: 0.18
-            value_source: confidence
-          - type: complexity
-            name: general_reasoning:hard
-            weight: 0.22
+recipes:
+  - name: default
+    projections:
+      scores:
+        - name: difficulty_score
+          method: weighted_sum
+          inputs:
+            - type: keyword
+              name: simple_request_markers
+              weight: -0.28
+            - type: context
+              name: long_context
+              weight: 0.18
+            - type: keyword
+              name: reasoning_request_markers
+              weight: 0.22
+              value_source: confidence
+            - type: embedding
+              name: agentic_workflows
+              weight: 0.18
+              value_source: confidence
+            - type: complexity
+              name: general_reasoning:hard
+              weight: 0.22
 ```
 
 ### Raw value source
@@ -105,20 +92,21 @@ routing:
 When a signal family exposes numeric measurements (counts, distances, token totals) through `SignalValues`, use `value_source: raw` to feed them directly into the weighted sum instead of reducing them to binary or confidence scalars.
 
 ```yaml
-routing:
-  projections:
-    scores:
-      - name: workload_pressure
-        method: weighted_sum
-        inputs:
-          - type: structure
-            name: many_questions
-            weight: 0.2
-            value_source: raw
-          - type: structure
-            name: nested_depth
-            weight: 0.4
-            value_source: raw
+recipes:
+  - name: default
+    projections:
+      scores:
+        - name: workload_pressure
+          method: weighted_sum
+          inputs:
+            - type: keyword
+              name: many_questions
+              weight: 0.2
+              value_source: raw
+            - type: conversation
+              name: tool_heavy
+              weight: 0.4
+              value_source: raw
 ```
 
 Raw values can differ in scale across signal families. Choose weights carefully or use threshold bands that account for the expected numeric range.
@@ -129,9 +117,8 @@ Raw values can differ in scale across signal families. Choose weights carefully 
 |-------|---------|
 | `name` | score identifier |
 | `method` | currently `weighted_sum` |
-| `inputs[].type` | supported signal family, `kb_metric`, or `projection` |
+| `inputs[].type` | supported signal family, or `projection` |
 | `inputs[].name` | declared signal name, or an earlier score/mapping output for `projection` |
-| `inputs[].kb` / `inputs[].metric` | knowledge-base name and numeric metric for `kb_metric` |
 | `inputs[].weight` | contribution multiplier; negative weights lower the score |
 | `inputs[].value_source` | `binary`, `confidence`, `raw`, or `score` (for projection inputs); `confidence` on a `projection` input reads a mapping output's calibrated confidence |
 | `inputs[].match` / `inputs[].miss` | explicit values for binary mode |
@@ -161,37 +148,36 @@ Scores can reference earlier projection scores or mapping output confidences usi
 Use `value_source: score` (or omit `value_source`) to read a previously computed score value:
 
 ```yaml
-routing:
-  projections:
-    scores:
-      - name: difficulty_score
-        method: weighted_sum
-        inputs:
-          - type: keyword
-            name: reasoning_request_markers
-            weight: 0.6
-            value_source: confidence
-
-      - name: verification_pressure
-        method: weighted_sum
-        inputs:
-          - type: projection
-            name: difficulty_score
-            value_source: score
-            weight: 0.8
-          - type: fact_check
-            name: needs_fact_check
-            weight: 0.4
-
-    mappings:
-      - name: verification_band
-        source: verification_pressure
-        method: threshold_bands
-        outputs:
-          - name: needs_deep_verify
-            gte: 0.7
-          - name: standard_verify
-            lt: 0.7
+recipes:
+  - name: default
+    projections:
+      scores:
+        - name: difficulty_score
+          method: weighted_sum
+          inputs:
+            - type: keyword
+              name: reasoning_request_markers
+              weight: 0.6
+              value_source: confidence
+        - name: verification_pressure
+          method: weighted_sum
+          inputs:
+            - type: projection
+              name: difficulty_score
+              value_source: score
+              weight: 0.8
+            - type: fact_check
+              name: needs_fact_check
+              weight: 0.4
+      mappings:
+        - name: verification_band
+          source: verification_pressure
+          method: threshold_bands
+          outputs:
+            - name: needs_deep_verify
+              gte: 0.7
+            - name: standard_verify
+              lt: 0.7
 ```
 
 ### Confidence Reference

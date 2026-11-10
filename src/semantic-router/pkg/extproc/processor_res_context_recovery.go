@@ -81,22 +81,21 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 
 func activeContextRecoveryPlugin(
 	requestCtx *RequestContext,
-) *config.ContextCompressionPluginConfig {
+) *config.ContextCompressConfig {
 	if requestCtx == nil ||
-		requestCtx.VSRSelectedDecision == nil ||
 		requestCtx.ExpectStreamingResponse ||
 		len(requestCtx.ContextCompressionRecoveryKeys) == 0 {
 		return nil
 	}
-	plugin := requestCtx.VSRSelectedDecision.GetContextCompressionConfig()
-	if plugin == nil || plugin.Recovery == nil || !plugin.Recovery.Enabled {
+	plugin := contextCompression(requestCtx.VSRSelectedDecision)
+	if plugin == nil || plugin.Compress.Recovery == nil || !plugin.Compress.Recovery.Enabled {
 		return nil
 	}
-	return plugin
+	return plugin.Compress
 }
 
 func contextRecoveryLimit(
-	plugin *config.ContextCompressionPluginConfig,
+	plugin *config.ContextCompressConfig,
 ) int {
 	if plugin.Recovery.MaxRetrievals > 0 {
 		return plugin.Recovery.MaxRetrievals
@@ -107,7 +106,7 @@ func contextRecoveryLimit(
 func (r *OpenAIRouter) loadContextRecoveryToolMessages(
 	ctx context.Context,
 	requestCtx *RequestContext,
-	plugin *config.ContextCompressionPluginConfig,
+	plugin *config.ContextCompressConfig,
 	calls []contextRecoveryCall,
 ) ([]llmprotocol.Message, error) {
 	store := r.contextCompressionRecoveryStore(plugin)

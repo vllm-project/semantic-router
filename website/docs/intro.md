@@ -43,7 +43,7 @@ context, modality, identity, risk, preference, and configured runtime observatio
 Use those signals to:
 
 - **Select or combine models:** choose a local model or specialist, escalate
-  through a cascade, or run a bounded multi-model workflow.
+  from a small model to a stronger one, or run a bounded multi-model workflow.
 - **Add route behavior:** prompts, retrieval, memory, tool filtering, caching,
   safety checks, and verification.
 - **Choose an execution path:** configured cloud, data-center, or edge backends

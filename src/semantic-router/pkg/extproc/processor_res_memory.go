@@ -7,7 +7,7 @@ import (
 
 	"github.com/openai/openai-go"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -167,16 +167,17 @@ func (r *OpenAIRouter) recordUnscheduledResponseMemoryStore(
 // suppressedResponseMemoryStore is the single enablement and response-stage
 // policy ladder: every path that owes a receipt reports the same verdict.
 func (r *OpenAIRouter) suppressedResponseMemoryStore(ctx *RequestContext) (string, string, bool) {
-	switch {
-	case r.MemoryExtractor == nil:
+	if r.MemoryExtractor == nil {
 		return "disabled", "no_extractor", true
-	case !r.responseMemoryAutoStoreEnabled(ctx):
+	}
+	if !r.responseMemoryAutoStoreEnabled(ctx) {
 		return "disabled", "auto_store_off", true
-	case ctx.ResponseJailbreakDetected:
-		if ctx.ResponseJailbreakType == classification.JailbreakClassificationErrorType {
-			return "policy_blocked", "jailbreak_unverified", true
-		}
+	}
+	switch matched, unverified := ctx.ResponseGuard.jailbreakFinding(); {
+	case matched:
 		return "policy_blocked", "response_jailbreak", true
+	case unverified:
+		return "policy_blocked", "jailbreak_unverified", true
 	}
 	return "", "", false
 }
@@ -187,8 +188,12 @@ func (r *OpenAIRouter) responseMemoryAutoStoreEnabled(ctx *RequestContext) bool 
 	if r == nil || r.Config == nil || ctx == nil || retentionDropsResponseContent(ctx) {
 		return false
 	}
-	memoryConfig, enabled := r.resolveMemoryPluginConfig(ctx)
-	if !enabled || (memoryConfig != nil && memoryConfig.AutoStore != nil && !*memoryConfig.AutoStore) {
+	source := config.ContextPluginOf(requestPlugins(r.Config, ctx)).Source(config.ContextSourceMemory)
+	if _, _, optedOut := r.memoryOptOut(ctx); source == nil || optedOut {
+		return false
+	}
+	auto := source.AutoStore()
+	if auto != nil && !*auto {
 		return false
 	}
 	if state := ctx.ResponseObjectState; state != nil && state.AutoStore != nil {
@@ -197,8 +202,8 @@ func (r *OpenAIRouter) responseMemoryAutoStoreEnabled(ctx *RequestContext) bool 
 	if requestAutoStore, ok := extractRequestAutoStore(ctx); ok {
 		return requestAutoStore
 	}
-	if memoryConfig != nil && memoryConfig.AutoStore != nil {
-		return *memoryConfig.AutoStore
+	if auto != nil {
+		return *auto
 	}
 	return r.Config.Memory.AutoStore
 }

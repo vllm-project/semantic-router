@@ -52,7 +52,7 @@ export default function DecisionTaskMonitoring({ refreshedAt }: { refreshedAt: D
     deployments[0]
   const tasks = [
     ...(deployment?.native_question_types.length
-      ? [{ id: 'decision', title: 'Recipe questions' }]
+      ? [{ id: 'systemone', title: 'Recipe questions' }]
       : []),
     ...(catalog.data?.tasks.filter((task) =>
       deployment?.tasks.some(
