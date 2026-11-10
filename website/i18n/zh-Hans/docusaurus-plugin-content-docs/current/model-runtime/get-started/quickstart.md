@@ -4,7 +4,7 @@ sidebar_position: 2
 description: 安装模型运行时，运行一个模型，向它发送请求，再让路由器使用它。
 is_mtpe: false
 translation:
-  source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
+  source_commit: "0811a3cb7de0e30e3dc2282233f573d554691bf1"
   source_file: "docs/model-runtime/get-started/quickstart.md"
   outdated: false
 ---
@@ -16,7 +16,7 @@ import TabItem from '@theme/TabItem'
 
 大约十分钟内，你将安装 `vllm-sr` CLI，运行一个决策模型，向它提问，然后让 Router 用同一个模型做路由。
 
-**你需要** Linux、macOS 或 WSL2，以及 Docker 或 Podman、Python 3.10 或更高版本，还要有几 GB 的可用磁盘空间存放 Router 镜像和下载的模型。不需要 GPU。
+**你需要** Linux、macOS 或 WSL2，以及 Docker 或 Podman、Python 3.10 或更高版本、12 GiB 内存，还要有大约 9 GB 的可用磁盘空间存放 Router 镜像和下载的模型。不需要 GPU。
 
 :::note
 Engine 模式（`vllm-sr serve ARTIFACT --engine`）比 0.4.0 发行版更新；参见[发布渠道说明](../../installation/installation.md)。
@@ -34,13 +34,13 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev --no-launch
 
 ## 2. 运行模型 {#2-serve-a-model}
 
-启动 Decision 2.0 Kai-0.6B，一个能在 CPU 上运行的小型决策模型。决策模型回答你用自然语言写的问题。
+启动 Vela 3.0 vela3-fast，即 Router 的默认决策模型，它以 FP32 在 CPU 上运行。决策模型回答你用自然语言写的问题。
 
 <Tabs groupId="platform">
 <TabItem value="cpu" label="CPU" default>
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
+vllm-sr serve vllm-sr/vela3-fast --engine --platform cpu
 ```
 
 在 macOS 上运行时在 CPU 上运行，因为那里的容器无法使用 GPU。
@@ -49,19 +49,23 @@ vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cpu
 <TabItem value="rocm" label="AMD GPU">
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform rocm --device-ids 0
+vllm-sr serve vllm-sr/vela3-fast --engine --platform rocm --device-ids 0
 ```
 
 `vllm-sr-rocm` 镜像首次使用时需要下载 6.5 GB。`--device-ids N` 在启动时选择一块主机 GPU；在规范 YAML 中用 `rocm:N` 选择。
+
+vela3-fast 的参考答案只为 CPU 录制，因此在 GPU 上它的自检显示 [`unverified`](../deploy/troubleshooting.md#a-ready-models-self-check-says-unverified)。
 
 </TabItem>
 <TabItem value="cuda" label="NVIDIA GPU">
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Kai-0.6B --engine --platform cuda --device-ids 0
+vllm-sr serve vllm-sr/vela3-fast --engine --platform cuda --device-ids 0
 ```
 
 `--platform cuda` 选择 `vllm-sr-cuda` 镜像并透传 GPU。
+
+vela3-fast 的参考答案只为 CPU 录制，因此在 GPU 上它的自检显示 [`unverified`](../deploy/troubleshooting.md#a-ready-models-self-check-says-unverified)。
 
 </TabItem>
 </Tabs>
@@ -98,7 +102,7 @@ Decision 3.0 模型还能回答关于图像和视频的问题。在 AMD GPU 上�
 
 ```bash
 curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
-  "model": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "model": "vllm-sr/vela3-fast",
   "state": "Write a Python function that merges two sorted lists.",
   "questions": {
     "kind": {"type": "choice", "instructions": "What kind of work is this?",
@@ -112,16 +116,16 @@ curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
 
 ```json title="Response"
 {
-  "model": "vllm-sr/Decision-2.0-Kai-0.6B",
+  "model": "vllm-sr/vela3-fast",
   "answers": {
-    "kind": {"type": "choice", "choice": "code", "probabilities": {"code": 0.504, "math": 0.133, "chat": 0.362}, "confidence": 0.256},
-    "reasoning": {"type": "noul", "noul": 0.519}
+    "kind": {"type": "choice", "choice": "code", "probabilities": {"code": 0.98, "math": 0.005, "chat": 0.015}, "confidence": 0.97},
+    "reasoning": {"type": "noul", "noul": 0.457}
   },
-  "usage": {"input_tokens": 168, "output_tokens": 0}
+  "usage": {"input_tokens": 68, "output_tokens": 0}
 }
 ```
 
-在记录的 worker 基准测试中，这个请求在 16 个 CPU 核上大约需要 0.2 秒。
+在 AMD EPYC 9575F 的 16 个核上，这个请求大约需要 0.1 秒。
 
 - 在请求中加入 `"options": {"return_meta": true}` 还会得到 `meta`：回答它的修订版本、精度（`dtype`）和设备，批处理是否会改变其答案（`numerics`），以及耗时。
 - `POST /v1/decisions` 接受相同的请求和相同的显式公共模型 ID。它就地回答失败的问题，而 `/v1/systemone` 像 System One 一样把请求作为整体回答。
@@ -140,7 +144,7 @@ listeners:
     address: 0.0.0.0
     port: 8899
     systemone:
-      models: [vllm-sr/Decision-2.0-Kai-0.6B]
+      models: [vllm-sr/vela3-fast]
 providers:
   defaults:
     model: answer-model
@@ -186,7 +190,7 @@ global:
     deployments:
       primary:
         provider: model_runtime
-        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        artifact: vllm-sr/vela3-fast
         device: cpu
 ```
 
