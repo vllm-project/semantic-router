@@ -85,7 +85,8 @@ deployment，`ready_models` 和 `total_models` 给出计数。`/startup-status` 
 列出它们，每项包含 `name`、`artifact`、`process`、`state`、`ready`，失败后还有 `reason`；启动完成后该列表仍然保留。
 模型加载失败时，启动以 `phase: error` 结束。配置重新加载不会让 `/ready` 变回 `503`：在新配置的模型就绪之前，
 上一份配置继续服务。standalone 监听器和 ext_proc gRPC 端口只在这些模型就绪后才打开，因此监听器的 `/ready`
-和 gRPC 健康服务不会早于管理端口的 `/ready` 报告就绪。
+和 gRPC 健康服务不会早于管理端口的 `/ready` 报告就绪。使用 `config_source: kubernetes` 时，两者还会等到来自
+Kubernetes 的第一份配置生效后才报告就绪。关闭开始后，两者都报告未就绪，同时排空进行中的请求。
 
 ## 不调用推理即可检查信号 {#inspect-signals-without-an-inference-call}
 
