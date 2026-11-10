@@ -80,7 +80,9 @@ func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string) *res
 		case decision.RuleUnknown:
 			ruleRun.action = guard.EffectiveOnUnknown()
 		}
-		ruleRun.codes = responseGuardCodes(cfg, rule.When, ruleRun.state, ruleRun.matchedRules)
+		ruleRun.codes = responseGuardCodes(cfg, rule.When, ruleRun.state, func(node config.RuleNode) bool {
+			return run.conditions.Evaluate(node).State == decision.RuleTrue
+		})
 		run.rules = append(run.rules, ruleRun)
 		if ruleRun.action == config.ResponseGuardBlock {
 			break
@@ -125,28 +127,24 @@ func (ctx *RequestContext) responseInput(answer string) classification.ResponseI
 
 // responseGuardCodes are the codes an annotating rule adds to
 // x-vsr-warnings, one per response-stage signal type of the conditions that
-// matched, or of every condition the rule reads when it is unknown:
+// made it true, or of every condition it reads when it is unknown:
 // hallucination (unverified_factual when the answer could not be checked),
-// response_jailbreak, and response_guard for any other rule.
-func responseGuardCodes(cfg *config.RouterConfig, when config.RuleNode, state decision.RuleState, matchedRules []string) []string {
+// response_jailbreak, and response_guard for any other rule. holds reads a
+// condition of a true rule over the signals the rule already read.
+func responseGuardCodes(cfg *config.RouterConfig, when config.RuleNode, state decision.RuleState, holds func(config.RuleNode) bool) []string {
 	var codes []string
 	var walk func(node *config.RuleNode)
 	walk = func(node *config.RuleNode) {
 		if !node.IsLeaf() {
 			for i := range node.Conditions {
-				walk(&node.Conditions[i])
+				if state != decision.RuleTrue || holds(node.Conditions[i]) {
+					walk(&node.Conditions[i])
+				}
 			}
 			return
 		}
 		signalType := strings.ToLower(strings.TrimSpace(node.Type))
 		if cfg.SignalStageOf(signalType, node.Name) != config.SignalStageResponse {
-			return
-		}
-		reference := signalKey(node.Type, node.Name)
-		if node.Label != "" {
-			reference += ":" + node.Label
-		}
-		if state == decision.RuleTrue && !slices.Contains(matchedRules, reference) {
 			return
 		}
 		code := headers.WarningGuard
