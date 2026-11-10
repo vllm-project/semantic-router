@@ -353,7 +353,8 @@ func rewriteTaggedToolCallResponse(raw []byte, finalModel string, usage ...Token
 			},
 		},
 	}
-	firstChoice["finish_reason"] = "tool_calls"
+	reason, _ := firstChoice["finish_reason"].(string)
+	firstChoice["finish_reason"] = toolCallFinishReason(reason)
 	completion["id"] = fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano())
 	completion["model"] = finalModel
 	if len(usage) > 0 {

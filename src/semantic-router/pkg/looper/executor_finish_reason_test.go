@@ -3,6 +3,7 @@ package looper
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -13,49 +14,61 @@ import (
 )
 
 // Each executor serves the backend finish_reason of the answer it publishes,
-// so a reply cut by max_tokens or a content filter does not reach the client
-// as a complete one.
+// streamed candidates and tool calls included, so a reply cut by max_tokens or
+// a content filter does not reach the client as a complete one.
 func TestLooperExecutorsPreserveTheServedFinishReason(t *testing.T) {
+	escalate := func() *Request {
+		request := escalateRequest(config.EscalateOnErrorLastAttempt, config.ConfidenceMethodAverageLogprob)
+		// Neither answer is accepted, so the last one is served.
+		request.Algorithm.Escalate.Accept.Confidence.GTE = gte(0.99)
+		return request
+	}
+	fusion := func() *Request {
+		request := newFusionTestRequest()
+		request.Algorithm = &config.AlgorithmConfig{Type: config.DecisionAlgorithmFusion, Fusion: &config.FusionAlgorithmConfig{
+			Model: "judge", AnalysisModels: []string{"panel-a", "panel-b"}, AnalysisMode: config.FusionAnalysisModeNone,
+		}}
+		return request
+	}
 	for _, executor := range []struct {
-		name    string
-		request func() *Request
-		cut     string   // the model whose answers end with the tested reason
-		served  []string // the models whose answers are served, by choice
+		name     string
+		request  func() *Request
+		cut      string   // the model whose answers end with the tested reason
+		served   []string // the models whose answers are served, by choice
+		toolCall bool     // the cut model answers with a tool call
 	}{
-		{"escalate", func() *Request {
-			request := escalateRequest(config.EscalateOnErrorLastAttempt, config.ConfidenceMethodAverageLogprob)
-			// Neither answer is accepted, so the last one is served.
-			request.Algorithm.Escalate.Accept.Confidence.GTE = gte(0.99)
-			return request
-		}, "large", []string{"large"}},
-		{"fusion", func() *Request {
-			request := newFusionTestRequest()
-			request.Algorithm = &config.AlgorithmConfig{Type: config.DecisionAlgorithmFusion, Fusion: &config.FusionAlgorithmConfig{
-				Model: "judge", AnalysisModels: []string{"panel-a", "panel-b"}, AnalysisMode: config.FusionAnalysisModeNone,
-			}}
-			return request
-		}, "judge", []string{"judge"}},
+		{"escalate", escalate, "large", []string{"large"}, false},
+		{"escalate_tool_call", escalate, "large", []string{"large"}, true},
+		{"fusion", fusion, "judge", []string{"judge"}, false},
+		{"fusion_tool_call", fusion, "judge", []string{"judge"}, true},
+		{"workflows_tool_call", func() *Request {
+			return &Request{
+				OriginalRequest: workflowToolTestRequest(),
+				ModelRefs:       []config.ModelRef{{Model: "worker-model"}, {Model: "final-model"}},
+				Algorithm: &config.AlgorithmConfig{Type: config.DecisionAlgorithmWorkflows, Workflows: &config.WorkflowsAlgorithmConfig{
+					Mode:  config.WorkflowModeStatic,
+					Roles: []config.WorkflowRoleConfig{{Name: "worker", Models: []string{"worker-model"}}},
+					Final: config.WorkflowFinalConfig{Model: "final-model"},
+				}},
+			}
+		}, "final-model", []string{"final-model"}, true},
 		{"remom", func() *Request {
 			return newReMoMTestRequest(&config.ReMoMAlgorithmConfig{
 				BreadthSchedule: []int{1}, ModelDistribution: remomDistributionFirstOnly,
 			}, false, []config.ModelRef{{Model: "model-a"}})
-		}, "model-a", []string{"model-a"}},
+		}, "model-a", []string{"model-a"}, false},
 		{"ratings", func() *Request {
 			return &Request{
 				OriginalRequest: workflowTestRequest(),
 				ModelRefs:       []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
 				Algorithm:       &config.AlgorithmConfig{Type: config.DecisionAlgorithmRatings, Ratings: &config.RatingsAlgorithmConfig{}},
 			}
-		}, "model-b", []string{"model-a", "model-b"}},
+		}, "model-b", []string{"model-a", "model-b"}, false},
 	} {
 		for _, streaming := range []bool{false, true} {
-			// Ratings streams its candidates, which carry no parsed completion.
-			if streaming && executor.name == "ratings" {
-				continue
-			}
 			for _, reason := range []string{"length", "content_filter"} {
 				t.Run(executor.name+"/"+map[bool]string{false: "json", true: "sse"}[streaming]+"/"+reason, func(t *testing.T) {
-					server := newFinishReasonBackend(t, executor.cut, reason)
+					server := newFinishReasonBackend(t, executor.cut, reason, executor.toolCall)
 					defer server.Close()
 					request := executor.request()
 					request.IsStreaming = streaming
@@ -81,13 +94,16 @@ func TestLooperExecutorsPreserveTheServedFinishReason(t *testing.T) {
 	}
 }
 
-// newFinishReasonBackend answers "<model> answer" with one token logprob,
-// ending the answers of the cut model with reason and every other with stop.
-func newFinishReasonBackend(t *testing.T, cut, reason string) *httptest.Server {
+// newFinishReasonBackend answers "<model> answer" with one token logprob, as
+// a stream when asked, ending the answers of the cut model with reason and
+// every other with stop. With toolCall, the cut model's answer is a tool call
+// whose arguments were cut off.
+func newFinishReasonBackend(t *testing.T, cut, reason string, toolCall bool) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request struct {
-			Model string `json:"model"`
+			Model  string `json:"model"`
+			Stream bool   `json:"stream"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Errorf("decode request: %v", err)
@@ -96,12 +112,27 @@ func newFinishReasonBackend(t *testing.T, cut, reason string) *httptest.Server {
 		if request.Model == cut {
 			finish = reason
 		}
+		if request.Stream {
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = fmt.Fprintf(w, "data: {\"id\":\"chatcmpl-finish\",\"object\":\"chat.completion.chunk\",\"model\":%q,"+
+				"\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"%s answer\"},\"finish_reason\":null}]}\n\n"+
+				"data: {\"id\":\"chatcmpl-finish\",\"object\":\"chat.completion.chunk\",\"model\":%q,"+
+				"\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":%q}]}\n\ndata: [DONE]\n\n",
+				request.Model, request.Model, request.Model, finish)
+			return
+		}
+		message := map[string]interface{}{"role": "assistant", "content": request.Model + " answer"}
+		if toolCall && request.Model == cut {
+			message = map[string]interface{}{"role": "assistant", "content": nil, "tool_calls": []map[string]interface{}{{
+				"id": "call_1", "type": "function", "function": map[string]interface{}{"name": "lookup", "arguments": "{"},
+			}}}
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"id": "chatcmpl-finish", "object": "chat.completion", "created": 0, "model": request.Model,
 			"choices": []map[string]interface{}{{
 				"index": 0, "finish_reason": finish,
-				"message": map[string]interface{}{"role": "assistant", "content": request.Model + " answer"},
+				"message": message,
 				"logprobs": map[string]interface{}{"content": []map[string]interface{}{{
 					"token": "answer", "logprob": -0.1, "bytes": []int{97},
 					"top_logprobs": []map[string]interface{}{{"token": "answer", "logprob": -0.1, "bytes": []int{97}}},

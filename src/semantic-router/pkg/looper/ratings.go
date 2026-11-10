@@ -304,11 +304,11 @@ func (l *RatingsLooper) formatRatingsStreamingResponse(responses []*ModelRespons
 		"model":   strings.Join(modelsUsed, ","),
 		"choices": func() []map[string]interface{} {
 			choices := make([]map[string]interface{}, len(responses))
-			for i := range responses {
+			for i, resp := range responses {
 				choices[i] = map[string]interface{}{
 					"index":         i,
 					"delta":         map[string]interface{}{},
-					"finish_reason": "stop",
+					"finish_reason": backendFinishReason(resp),
 				}
 			}
 			return choices

@@ -69,7 +69,7 @@ func buildSimulatedChatCompletionSSE(
 
 	finalReason := finishReason
 	if len(toolCalls) > 0 {
-		finalReason = "tool_calls"
+		finalReason = toolCallFinishReason(finishReason)
 	}
 	finalChoice := map[string]interface{}{
 		"index":         0,
