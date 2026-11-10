@@ -77,11 +77,17 @@ func (l *LlamaStackBackend) searchRequestBody(
 		body["search_mode"] = "hybrid"
 		body["ranking_options"] = map[string]interface{}{"ranker": "rrf"}
 	}
-	if fid, ok := filter["file_id"].(string); ok && fid != "" {
+	if fileIDs := filterFileIDs(filter); len(fileIDs) == 1 {
 		body["filters"] = map[string]interface{}{
 			"type":  "eq",
 			"key":   "file_id",
-			"value": fid,
+			"value": fileIDs[0],
+		}
+	} else if len(fileIDs) > 1 {
+		body["filters"] = map[string]interface{}{
+			"type":  "in",
+			"key":   "file_id",
+			"value": fileIDs,
 		}
 	}
 	return body

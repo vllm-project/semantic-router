@@ -74,6 +74,14 @@ func (c *RouterConfig) deploymentAnswers(name string) (questionTypes, modalities
 	return nil, nil
 }
 
+// DeploymentQuestionTypes are the question types of the model a deployment
+// serves, as far as the configuration tells (deploymentAnswers); nil is
+// unknown.
+func (c *RouterConfig) DeploymentQuestionTypes(name string) []string {
+	questionTypes, _ := c.deploymentAnswers(name)
+	return slices.Clone(questionTypes)
+}
+
 // catalogModel is the built-in decision model a model_runtime deployment
 // serves, when the catalog lists it.
 func (c *RouterConfig) catalogModel(name string) (DecisionCatalogModel, bool) {
@@ -153,9 +161,13 @@ func CheckSystemOneAnswerer(path, deployment string, rule SystemOneRule, questio
 // CheckApplicationAnswerer refuses an application rule its deployment cannot
 // answer, as CheckSystemOneAnswerer does a systemone rule; the hint names the
 // bindings of the rule's type. scope is the rule's recipe path
-// (RouterConfig.ScopePath of "").
-func CheckApplicationAnswerer(path, scope, deployment string, rule ApplicationRule, questionTypes, modalities []string) error {
+// (RouterConfig.ScopePath of ""). A span rule whose preset the model defines
+// (presets) asks that question and needs no span answers.
+func CheckApplicationAnswerer(path, scope, deployment string, rule ApplicationRule, questionTypes, presets, modalities []string) error {
 	bindings := fmt.Sprintf("rule deployment, %smodel_bindings.%s or global.model_catalog.bindings.%s", scope, rule.Type, rule.Type)
+	if slices.Contains(presets, spanPresets[rule.Type]) {
+		questionTypes = nil
+	}
 	return checkAnswerer(path, deployment, rule.Rule, questionTypes, modalities, rule.Type, bindings)
 }
 

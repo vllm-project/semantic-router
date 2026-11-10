@@ -339,7 +339,8 @@ func normalizeWorkflowToolCallFinishReason(completion map[string]interface{}) {
 		return
 	}
 	if toolCalls, ok := message["tool_calls"].([]interface{}); ok && len(toolCalls) > 0 {
-		choice["finish_reason"] = "tool_calls"
+		reason, _ := choice["finish_reason"].(string)
+		choice["finish_reason"] = toolCallFinishReason(reason)
 	}
 }
 

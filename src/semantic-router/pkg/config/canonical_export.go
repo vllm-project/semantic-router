@@ -42,10 +42,18 @@ func CanonicalStaticConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 	return canonical
 }
 
-// ModelCardsFromRouterConfig exports the model cards the providers.models[]
-// entries declare facts for, in entry order.
+// ModelCardsFromRouterConfig exports the facts the providers.models[] entries
+// state, each under its entry's name, in entry order. A catalog-backed entry's
+// facts are named after the entry, not its catalog card, so they merge back
+// onto it.
 func ModelCardsFromRouterConfig(cfg *RouterConfig) []RoutingModel {
-	return canonicalModelCards(canonicalProviderModelsFromRouterConfig(cfg))
+	var cards []RoutingModel
+	for _, model := range canonicalProviderModelsFromRouterConfig(cfg) {
+		if model.ModelFacts.declared() {
+			cards = append(cards, RoutingModel{Name: model.Name, ModelFacts: model.ModelFacts})
+		}
+	}
+	return cards
 }
 
 func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {

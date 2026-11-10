@@ -13,6 +13,6 @@ func (c *RouterConfig) ModelConsumerScope() *RouterConfig {
 		return scoped
 	}
 	view := *scoped
-	view.Signals, view.Projections, view.Decisions = Signals{}, Projections{}, nil
+	view.Signals, view.Projections, view.Decisions, view.DefaultPlugins = Signals{}, Projections{}, nil, nil
 	return &view
 }

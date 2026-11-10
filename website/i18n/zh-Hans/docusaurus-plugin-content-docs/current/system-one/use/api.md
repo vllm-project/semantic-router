@@ -35,7 +35,7 @@ curl -s localhost:8100/v1/systemone -H 'content-type: application/json' -d '{
 | --- | --- |
 | `POST /v1/systemone` | 回答一个请求。只要有一个问题无法回答，整个请求就失败 |
 | `POST /v1/decisions` | 模型运行时提供的同一调用形式：请求体相同，失败的问题在 200 响应中携带自己的错误 |
-| `GET /v1/models` | 列出运行时用来回答的模型及其模型卡；Router 或 Engine 前端在 `GET /v1/systemone/models` 列出其 System One 模型 |
+| `GET /v1/models` | 列出运行时用来回答的模型及其模型卡；Router 或 Engine 前端在 `GET /v1/systemone/models` 列出其 System One 模型，并给出其所服务的每个内置决策模型的 `question_types` |
 
 下面的两种形式属于 4.0.0 契约，运行时会在 `GET /health` 中以 `api_version` 报告该版本。Router 自己的公共 System One API 也接受这两种形式。
 

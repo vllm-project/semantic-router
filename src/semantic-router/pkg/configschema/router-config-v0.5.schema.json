@@ -2630,6 +2630,9 @@
     },
     "FastResponsePluginConfig": {
       "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
         "message": {
           "type": "string"
         }
@@ -5253,9 +5256,6 @@
         },
         "max_n": {
           "type": "integer"
-        },
-        "strip_unknown": {
-          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -5514,6 +5514,9 @@
     },
     "ResponseGuardPluginConfig": {
       "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
         "rules": {
           "items": {
             "$ref": "#/$defs/ResponseGuardRule"

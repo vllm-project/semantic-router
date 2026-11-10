@@ -245,7 +245,9 @@ func (ImagesCodec) DecodeResponse(body []byte, _ llmprotocol.Policy) (llmprotoco
 }
 
 // EncodeResponse renders a neutral response back to the images dialect,
-// serving clients that call /v1/images/generations through the Router.
+// serving clients that call /v1/images/generations through the Router. The
+// dialect has no failed image, so an image the model did not generate fails
+// the reply.
 func (ImagesCodec) EncodeResponse(response llmprotocol.Response, _ llmprotocol.Envelope, _ llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
 	data := make([]imagesDataWire, 0, len(response.Output))
 	for index := range response.Output {
@@ -253,11 +255,11 @@ func (ImagesCodec) EncodeResponse(response llmprotocol.Response, _ llmprotocol.E
 			if block.Kind != llmprotocol.ContentGeneratedImage || block.GeneratedImage == nil {
 				continue
 			}
-			if block.GeneratedImage.Result == nil {
-				data = append(data, imagesDataWire{})
-				continue
+			image := block.GeneratedImage
+			if image.Status == llmprotocol.ImageGenerationFailed || image.Result == nil || *image.Result == "" {
+				return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "image_generation_failed", "the model did not generate the image", nil)
 			}
-			data = append(data, imagesDataWire{B64JSON: *block.GeneratedImage.Result})
+			data = append(data, imagesDataWire{B64JSON: *image.Result})
 		}
 	}
 	if len(data) == 0 {
