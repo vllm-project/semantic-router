@@ -10,11 +10,10 @@ import (
 )
 
 // ImagesCodec is the DALL-E-compatible image-generation dialect
-// (/v1/images/generations) exposed by diffusion backends such as vLLM-Omni.
-// It is a sink dialect: it does not decode arbitrary chat traffic nor stream,
-// its only purpose is to express the hosted image_generation operation and to
-// decode the generated image back into the neutral GeneratedImage output item
-// so upstream images and client responses formats share one representation.
+// (/v1/images/generations): the API of diffusion backends such as vLLM-Omni,
+// and of the Router's Images API entry. It carries only the hosted
+// image_generation operation and the generated image, as the neutral
+// GeneratedImage output item, and never streams.
 type ImagesCodec struct{}
 
 func (ImagesCodec) Format() llmprotocol.WireFormat { return llmprotocol.OpenAIImagesV1 }
@@ -68,10 +67,11 @@ type imagesErrorWire struct {
 	Code    openAIErrorCode `json:"code"`
 }
 
-// DecodeRequest decodes a direct images-dialect client request into the
-// neutral request IR. A non-empty prompt becomes a user text message, and
-// every images request field maps onto the neutral image-generation options
-// so the conversion is lossless.
+// DecodeRequest decodes an Images API client request into the neutral
+// request IR. A non-empty prompt becomes a user text message, and the images
+// request fields map onto the neutral image-generation options. The request's
+// model is the model it calls, which routing resolves, not an image model for
+// the hosted operation.
 func (ImagesCodec) DecodeRequest(body []byte, _ llmprotocol.Policy) (llmprotocol.Request, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire imagesRequestWire
 	if err := json.Unmarshal(body, &wire); err != nil {
@@ -85,13 +85,13 @@ func (ImagesCodec) DecodeRequest(body []byte, _ llmprotocol.Policy) (llmprotocol
 	}
 	content := llmprotocol.Content{Kind: llmprotocol.ContentText, Text: wire.Prompt}
 	request := llmprotocol.Request{
-		Model: wire.Model,
+		Generation: 1,
+		Model:      wire.Model,
 		Messages: []llmprotocol.Message{{
 			Role:    llmprotocol.RoleUser,
 			Content: []llmprotocol.Content{content},
 		}},
 		ImageGeneration: &llmprotocol.ImageGenerationOptions{
-			Model:             wire.Model,
 			Quality:           wire.Quality,
 			Size:              wire.Size,
 			OutputFormat:      wire.OutputFormat,
@@ -263,7 +263,11 @@ func (ImagesCodec) EncodeResponse(response llmprotocol.Response, _ llmprotocol.E
 	if len(data) == 0 {
 		return nil, nil, unsupportedDownstreamTranslation(fmt.Errorf("images response contains no generated image"))
 	}
-	body, err := json.Marshal(imagesResponseWire{Created: time.Now().Unix(), Data: data})
+	created := time.Now().Unix()
+	if !response.CreatedAt.IsZero() {
+		created = response.CreatedAt.Unix()
+	}
+	body, err := json.Marshal(imagesResponseWire{Created: created, Data: data})
 	if err != nil {
 		return nil, nil, fmt.Errorf("encode images response: %w", err)
 	}

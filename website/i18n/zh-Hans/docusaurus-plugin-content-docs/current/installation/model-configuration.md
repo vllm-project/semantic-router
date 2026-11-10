@@ -10,7 +10,7 @@ translation:
 
 # 配置模型
 
-已配置的 Model 将稳定的 Router 名称连接到一个模型身份和一个或多个物理后端。在 `providers.models` 下配置 Model，然后从 `providers.defaults.model` 和 `routing.decisions[].modelRefs[].model` 引用其 `name`。
+已配置的 Model 将稳定的 Router 名称连接到一个模型身份和一个或多个物理后端。在 `providers.models` 下配置 Model，然后从 `providers.defaults.model` 和 `recipes[].decisions[].modelRefs[].model` 引用其 `name`。
 
 ## 理解模型标识符
 
@@ -40,8 +40,7 @@ translation:
 ## 从一个自定义模型开始
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   defaults:
     model: local-chat
@@ -53,11 +52,11 @@ providers:
           provider: vllm
           endpoint: host.docker.internal:8000
           protocol: http
-
-routing: {}
+recipes:
+  - name: default
 ```
 
-Router 会为 `local-chat` 创建稀疏的本地 Model Card。仅当路由需要上下文窗口、能力、标签或 LoRA 等元数据时，才添加匹配的 `routing.modelCards` 条目。在顶层 `evaluation.records[]` 下独立添加基准测量。
+Router 会为 `local-chat` 创建稀疏的本地 Model Card。仅当路由需要上下文窗口、能力、标签或 LoRA 等元数据时，才添加匹配的 `providers.models` 条目。在顶层 `evaluation.records[]` 下独立添加基准测量。
 
 ## 在分发前检查任务能力
 

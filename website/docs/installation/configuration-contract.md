@@ -100,7 +100,7 @@ configuration, send the authored YAML to `POST /api/v1/config/validate`:
 
 ```json
 {
-  "yaml": "version: v0.3\nrouting: {}\nglobal: {}\n"
+  "yaml": "version: v0.5\nrecipes:\n  - name: default\nglobal: {}\n"
 }
 ```
 
@@ -141,9 +141,9 @@ time. Kubernetes defers routing contracts until `IntelligentPool` and
 settings and validates routing references, recipe compatibility, and signal
 rules before activating the candidate. Deployment definitions are static;
 routing and recipe bindings are compiled only at the complete-config stage.
-PII and Prompt Guard backend settings, error policies, and window geometry are
-checked during static loading. Window provider and input-budget compatibility
-are checked for each recipe at the complete-config stage.
+Each recipe's signal rules are checked against the deployments they resolve to
+(question types, span capability, input modalities) at the complete-config
+stage.
 Invalid candidates report `ValidationFailed` on the CRDs and leave the active
 configuration in place.
 
@@ -199,7 +199,7 @@ make check
 ```
 
 The repository tracks exactly one full schema at
-`src/semantic-router/pkg/configschema/router-config-v0.3.schema.json`. The
+`src/semantic-router/pkg/configschema/router-config-v0.5.schema.json`. The
 generator also emits a small TypeScript import/typing adapter, but no second
 JSON copy. Packaging stages the canonical artifact into wheels and container
 images without writing generated files back into the worktree. CI fails when

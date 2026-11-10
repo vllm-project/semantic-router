@@ -10,6 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 func TestHandleCachingWithoutBackendSkipsIdentityButKeepsModelAndQuery(t *testing.T) {
@@ -24,7 +25,7 @@ func TestHandleCachingWithoutBackendSkipsIdentityButKeepsModelAndQuery(t *testin
 		},
 	}
 	cfg := &config.RouterConfig{}
-	cfg.Enabled = true
+	cfg.SemanticCache.InUse = true
 	cfg.Decisions = []config.Decision{decision}
 
 	request := testNeutralRequest("test-model", "What is 2+2?")
@@ -66,19 +67,19 @@ func TestHandleCachingWithoutBackendStillAppliesRequestControls(t *testing.T) {
 		ModelRefs: []config.ModelRef{{Model: "m"}},
 		Plugins: []config.DecisionPlugin{
 			{Type: config.DecisionPluginResponseCache, Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled":                true,
-				"scope":                  "global",
-				"allow_request_controls": true,
+				"enabled":          true,
+				"scope":            "global",
+				"request_controls": map[string]interface{}{"enabled": true},
 			})},
 		},
 	}
 	cfg := &config.RouterConfig{}
-	cfg.Enabled = true
+	cfg.SemanticCache.InUse = true
 	cfg.Decisions = []config.Decision{decision}
 	router := &OpenAIRouter{Config: cfg, Cache: cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: false})}
 	ctx := &RequestContext{
 		RequestID:           "cache-disabled-controls",
-		Headers:             map[string]string{defaultCacheControlHeader: "no-store"},
+		Headers:             map[string]string{headers.VSRCacheControl: "no-store"},
 		SemanticRequest:     testNeutralRequest("test-model", "What is 2+2?"),
 		TraceContext:        context.Background(),
 		VSRSelectedDecision: &decision,
@@ -98,13 +99,14 @@ func TestHandleCachingWithoutBackendStillSkipsPersonalizingDecisions(t *testing.
 		Name:      "memory-decision",
 		ModelRefs: []config.ModelRef{{Model: "m"}},
 		Plugins: []config.DecisionPlugin{
-			{Type: config.DecisionPluginMemory, Configuration: config.MustStructuredPayload(map[string]interface{}{
+			{Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(map[string]interface{}{
 				"enabled": true,
+				"sources": []interface{}{map[string]interface{}{"type": config.ContextSourceMemory}},
 			})},
 		},
 	}
 	cfg := &config.RouterConfig{}
-	cfg.Enabled = true
+	cfg.SemanticCache.InUse = true
 	cfg.Decisions = []config.Decision{decision}
 	router := &OpenAIRouter{Config: cfg, Cache: cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: false})}
 	ctx := &RequestContext{

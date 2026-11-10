@@ -72,7 +72,6 @@ func shippedToolOutputPolicy() Policy {
 		Mode:    ModeAuto,
 		Budget:  Budget{TargetTokens: 1000},
 		Targets: Targets{ToolOutputs: TargetPolicy{Mode: TargetExtractive, MinTokens: 2000, TargetTokens: 1000}},
-		Scoring: Scoring{Method: "bm25"},
 	}
 }
 

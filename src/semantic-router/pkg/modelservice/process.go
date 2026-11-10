@@ -72,7 +72,7 @@ func planProcesses(deployments map[string]config.ModelDeployment, command []stri
 			if len(deployment.Replicas) > 0 {
 				memberName += "\x00" + id
 			}
-			servedName := placement.ServedName
+			servedName := placement.Model
 			if servedName == "" {
 				servedName = name
 			}

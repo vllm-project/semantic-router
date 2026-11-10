@@ -86,30 +86,31 @@ flowchart TD
 决策级 Fusion：
 
 ```yaml
-routing:
-  decisions:
-    - name: deliberation
-      description: Compare candidate answers and synthesize one response.
-      priority: 100
-      output_contract: Preserve any explicit output format exactly.
-      modelRefs:
-        - model: qwen3-32b
-        - model: deepseek-worker
-      algorithm:
-        type: fusion
-        fusion:
-          model: qwen3-32b
-          analysis_models:
-            - qwen3-32b
-            - deepseek-worker
-          analysis_mode: separate
-          analysis_overrides:
-            - model: qwen3-32b
-              temperature: 0.15
-              max_completion_tokens: 512
-            - model: deepseek-worker
-              temperature: 0.2
-              max_completion_tokens: 384
+recipes:
+  - name: default
+    decisions:
+      - name: deliberation
+        description: Compare candidate answers and synthesize one response.
+        priority: 100
+        output_contract: Preserve any explicit output format exactly.
+        modelRefs:
+          - model: qwen3-32b
+          - model: deepseek-worker
+        algorithm:
+          type: fusion
+          fusion:
+            model: qwen3-32b
+            analysis_models:
+              - qwen3-32b
+              - deepseek-worker
+            analysis_mode: separate
+            analysis_overrides:
+              - model: qwen3-32b
+                temperature: 0.15
+                max_completion_tokens: 512
+              - model: deepseek-worker
+                temperature: 0.2
+                max_completion_tokens: 384
 ```
 
 `output_contract` 是决策范围的提示词文本。把它用于应同时作用于 Fusion、Flow 和 ReMoM 的基准或应用格式要求，而不是把任务特定提示词硬编码进算法。
@@ -120,6 +121,7 @@ routing:
 ```yaml
 algorithm:
   type: fusion
+  on_error: skip
   fusion:
     model: qwen3-32b
     analysis_models:
@@ -140,7 +142,6 @@ algorithm:
     temperature: 0.2
     include_analysis: true
     include_intermediate_responses: true
-    on_error: skip
     judge_prompt_version: fusion-v1
 ```
 
@@ -160,21 +161,24 @@ entrypoints:
 
 ```yaml
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/fusion, openrouter/fusion]
     recipe: fusion
 recipes:
+  - name: default
   - name: fusion
-    routing:
-      decisions:
-        - name: panel
-          priority: 1
-          rules: {operator: AND, conditions: []}
-          modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
-          algorithm:
-            type: fusion
-            fusion:
-              model: qwen3-32b
-              analysis_models: [qwen3-8b, qwen3-32b]
+    decisions:
+      - name: panel
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
+        algorithm:
+          type: fusion
+          fusion:
+            model: qwen3-32b
+            analysis_models: [qwen3-8b, qwen3-32b]
 ```
 
 公开入口名不能与后端模型冲突。Signals、裁判、面板、并发、预算、模板及错误策略
@@ -197,7 +201,7 @@ recipes:
 | `temperature` | float | 请求默认值 | 配方拥有的、应用到 Fusion 子请求的温度 |
 | `include_analysis` | bool | `true` | 配方拥有的、对可用结构化裁判分析的可见性；这不控制执行 |
 | `include_intermediate_responses` | bool | `true` | 配方拥有的、对原始面板响应的可见性 |
-| `on_error` | string | `skip` | 配方拥有的处理：在强制法定人数的同时 `skip` 单个失败或不可用的面板响应，或在第一个此类响应上 `fail` |
+| `algorithm.on_error` | string | `skip` | 与 `type` 并列，而不在此块中。配方拥有的处理：在强制法定人数的同时 `skip` 单个失败或不可用的面板响应，或在第一个此类响应上 `fail` |
 | `analysis_template` | string | 内置 | 配方拥有的单独分析提示，含 `{{original}}` 和 `{{responses}}`；在 `separate` 之外会被拒绝 |
 | `synthesis_template` | string | 内置 | 配方拥有的各模式终端提示，含 `{{original}}`、`{{responses}}` 和 `{{analysis}}`；在 `separate` 之外分析为空 |
 | `judge_prompt_version` | string | `fusion-v1` | 配方拥有的版本标记，会写入 Fusion 响应追踪 |
@@ -247,7 +251,7 @@ Fusion 用量会聚合完整面板成本和每次成功的裁判响应。上报�
 
 > 依据衡量的是忠实度/一致性，不是真值。在没有权威来源时，它可以下调支持最少的响应权重，但不能证明正确性。**硬丢弃**相互一致性最低的响应（`filter` 策略）在有争议的事实问题上会明显*损害*效果 — 三个模型可能一起自信地出错，而单独异议者是对的 — 因此默认是 `weight`。该默认背后的评测见 `bench/grounded_fusion/FINDINGS.md`。
 
-需要在 `global` 幻觉缓解下配置幻觉检测器（以及 `panel`/跨模型路径所需的 NLI 模型）。如果后端不可用，`on_error: skip` 会回退到普通 Fusion。
+依据评分询问决策模型的[幻觉](../../signal/application/hallucination)问题，需要支持 span 的部署。如果它不可用，`on_error: skip` 会回退到普通 Fusion。
 
 ```yaml
 algorithm:

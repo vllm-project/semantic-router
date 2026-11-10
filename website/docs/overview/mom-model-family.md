@@ -7,7 +7,7 @@ description: How virtual models turn a shared pool of independent models into st
 # Mixture of Models
 
 A **Mixture of Models (MoM)** presents independently deployed models as one
-virtual model. A recipe selects a model, cascade, panel, or bounded workflow for
+virtual model. A recipe selects a model, escalation, panel, or bounded workflow for
 each request. Your harness uses a stable name and retains its task loop and tools.
 
 ```mermaid
@@ -50,11 +50,12 @@ Most requests should take a direct path. Policy narrows the eligible set and an
 algorithm selects one backend by semantic fit, latency, relative cost, feedback,
 or a fixed order.
 
-### Cascade
+### Escalate
 
 Start with an efficient model, inspect a bounded confidence or verification
-signal, and escalate only when needed. Cascades trade extra worst-case latency
-for lower average cost.
+signal, and escalate only when needed, with the
+[`escalate`](../tutorials/algorithm/looper/escalate) algorithm. Escalation
+trades extra worst-case latency for lower average cost.
 
 ### Orchestrate several models
 
@@ -68,27 +69,29 @@ An entrypoint maps one or more public model names to an isolated recipe:
 
 ```yaml
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: ["acme/assistant-fast"]
     recipe: fast
-
 recipes:
+  - name: default
   - name: fast
-    routing:
-      strategy: priority
-      decisions:
-        - name: default-fast-route
-          description: Route eligible requests through the fast model pool.
-          priority: 10
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: local/small
-              use_reasoning: false
-            - model: local/vision
-              use_reasoning: false
-          algorithm:
-            type: static
+    strategy: priority
+    decisions:
+      - name: default-fast-route
+        description: Route eligible requests through the fast model pool.
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local/small
+            use_reasoning: false
+          - model: local/vision
+            use_reasoning: false
+        algorithm:
+          type: static
 ```
 
 Signals and decisions identify the task. Candidate requirements then check the
@@ -141,7 +144,7 @@ risky material, or refuse harmful assistance.
 Assign Vault's other decisions to backends that meet your privacy requirements;
 the recipe cannot establish their physical location or provider retention.
 
-Vault's prompt guard and PII judgments read the whole conversation up to the
+Vault's jailbreak and PII judgments read the whole conversation up to the
 decision model's scan budget, and its questions read the start of the latest
 message. An unanswered judgment or an input past the budget fails closed:
 Preview returns HTTP 503 with signal errors and no selected model. A larger

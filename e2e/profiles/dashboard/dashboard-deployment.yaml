@@ -87,10 +87,6 @@ spec:
               value: /app/config/config.yaml
             - name: DASHBOARD_RUNTIME_CONFIG_WRITABLE
               value: "true"
-            # ML pipeline disabled in E2E — ml-training-service image is not
-            # available in CI and the pipeline is not part of the dashboard contract.
-            - name: ML_PIPELINE_ENABLED
-              value: "false"
             # Keep auth enabled in E2E. The dashboard fails closed when the auth
             # store cannot be initialized, so the tests use this bootstrap admin
             # and a writable temporary SQLite store.

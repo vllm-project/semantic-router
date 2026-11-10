@@ -1070,7 +1070,7 @@ class Runtime:
     ) -> Prepared:
         """Validate a surface request and plan it for its model (runs off the event loop).
 
-        ``part`` marks one state of a decisions request with several (``states``).
+        ``part`` marks one entry of a decisions batch (``states``).
         """
         if surface not in SURFACES:
             raise RuntimeServiceError("invalid_request", f"unknown surface {surface!r}")
@@ -1211,8 +1211,8 @@ class Runtime:
         A group holds a model's tasks, whatever their deadlines: each job
         keeps its own. A lone request planned off the event loop runs
         on its planning thread when its model's scheduler is idle. A decisions
-        request with further ``states`` runs as one request per state, in its
-        model's group, and their answers join into its response.
+        batch (``states``) runs as one request per entry, in its model's
+        group, and their answers join into its response.
         """
         if timing is None:
             timing = ServerTiming()
@@ -1249,8 +1249,8 @@ class Runtime:
     ) -> list[tuple[int, dict[str, Any]]]:
         received = time.monotonic()
         parts: list[tuple[str, Any, bool]] = []
-        # Per request: where its parts start, and its states' names or the
-        # error it already has.
+        # Per request: where its parts start, and its batch entries' names or
+        # the error it already has.
         joins: list[tuple[int, list[str] | None, _Outcome | None]] = []
         for surface, sent in requests:
             body = sent
@@ -1280,7 +1280,7 @@ class Runtime:
                 joined.append(outcomes[start])
             else:
                 joined.append(
-                    join_states(outcomes[start : start + 1 + len(states)], states)
+                    join_states(outcomes[start : start + len(states)], states)
                 )
         return joined
 

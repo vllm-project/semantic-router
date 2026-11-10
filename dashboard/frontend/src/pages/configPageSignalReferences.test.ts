@@ -7,46 +7,35 @@ import {
 } from './configPageSignalReferences'
 
 describe('signal references', () => {
-  it('counts decision, projection, and composer references in one routing scope', () => {
+  it('counts decision and projection references in one routing scope', () => {
     const routing: RecipeRoutingConfig = {
       signals: {
-        complexity: [
-          {
-            name: 'difficulty',
-            threshold: 0.5,
-            hard: { candidates: [] },
-            easy: { candidates: [] },
-            composer: {
-              operator: 'AND',
-              conditions: [{ type: 'event', name: 'release' }],
-            },
-          },
-        ],
+        keywords: [{ name: 'release', operator: 'OR', keywords: ['release'] }],
       },
       projections: {
         scores: [
           {
-            name: 'event-score',
+            name: 'release-score',
             method: 'weighted_sum',
-            inputs: [{ type: 'event', name: 'release', weight: 1 }],
+            inputs: [{ type: 'keyword', name: 'release', weight: 1 }],
           },
         ],
       },
       decisions: [
         {
-          name: 'event-route',
+          name: 'release-route',
           description: '',
           priority: 1,
           rules: {
             operator: 'AND',
-            conditions: [{ type: 'event', name: 'release' }],
+            conditions: [{ type: 'keyword', name: 'release' }],
           },
           modelRefs: [],
         },
       ],
     }
 
-    expect(getSignalReferenceCountInRoutingProfile(routing, 'Event', 'release')).toBe(3)
+    expect(getSignalReferenceCountInRoutingProfile(routing, 'Keywords', 'release')).toBe(2)
   })
 
   it('keeps reference counts local to the selected recipe', () => {

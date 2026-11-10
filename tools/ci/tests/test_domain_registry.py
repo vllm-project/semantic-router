@@ -148,7 +148,7 @@ class DomainRegistryTests(unittest.TestCase):
         self,
     ) -> None:
         for path in (
-            "src/semantic-router/pkg/config/tool_selection_plugin.go",
+            "src/semantic-router/pkg/config/tools_plugin.go",
             "src/semantic-router/pkg/config/vela_defaults_test.go",
         ):
             with self.subTest(path=path):
@@ -161,7 +161,7 @@ class DomainRegistryTests(unittest.TestCase):
             "src/semantic-router/pkg/apiserver/route_config.go",
             "src/semantic-router/pkg/catalog/catalog.go",
             "src/semantic-router/pkg/config/canonical.go",
-            "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
+            "src/semantic-router/pkg/configschema/router-config-v0.5.schema.json",
             "dashboard/frontend/src/generated/routerConfigContract.ts",
             "dashboard/frontend/scripts/generate-decision-runtime-catalog.py",
             "dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json",
@@ -169,7 +169,7 @@ class DomainRegistryTests(unittest.TestCase):
             "src/model-runtime/vllm_srun/registry/tables/decision2.py",
             "src/model-runtime/vllm_srun/registry/tables/vela2.py",
             "src/model-runtime/vllm_srun/families/vela2/request.py",
-            "src/semantic-router/pkg/modelservice/decision_catalog.generated.json",
+            "src/semantic-router/pkg/config/decision_catalog.generated.json",
             "src/model-runtime/vllm_srun/registry/tables/common.py",
             "src/model-runtime/vllm_srun/systemone.py",
             "src/model-runtime/vllm_srun/families/decision1/family.py",
@@ -203,7 +203,7 @@ class DomainRegistryTests(unittest.TestCase):
             "config/recipes/vela-amd/config.yaml",
             "config/recipes/built-in/latest/mom-v1/config.yaml",
             "e2e/config/config.memory-user.yaml",
-            "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
+            "src/semantic-router/pkg/configschema/router-config-v0.5.schema.json",
         ):
             with self.subTest(path=path):
                 result = classify([path])
@@ -217,11 +217,11 @@ class DomainRegistryTests(unittest.TestCase):
         translated = "website/i18n/zh-Hans/docusaurus-plugin-content-docs/current"
         for path in (
             "website/docs/model-runtime/reference.md",
-            "website/docs/model-runtime/guides/pii.md",
-            "website/docs/tutorials/signal/learned/decision.md",
+            "website/docs/model-runtime/guides/embeddings.md",
+            "website/docs/tutorials/signal/systemone.md",
             f"{translated}/model-runtime/deploy.md",
-            f"{translated}/model-runtime/guides/decisions.md",
-            f"{translated}/tutorials/algorithm/selection/decision.md",
+            f"{translated}/model-runtime/guides/embeddings.md",
+            f"{translated}/tutorials/algorithm/selection/systemone.md",
         ):
             with self.subTest(path=path):
                 result = classify([path])
@@ -240,10 +240,8 @@ class DomainRegistryTests(unittest.TestCase):
         for path in (
             "src/semantic-router/pkg/config/registry.go",
             "src/semantic-router/pkg/config/canonical_defaults.go",
-            "src/semantic-router/pkg/config/canonical_operating_points.go",
+            "src/semantic-router/pkg/presets/calibration.go",
             "src/semantic-router/pkg/config/decision_model.go",
-            "src/semantic-router/pkg/classification/classifier_jailbreak_window_default.go",
-            "src/semantic-router/pkg/classification/classifier_pii_window_default.go",
         ):
             with self.subTest(path=path):
                 result = classify([path])
@@ -253,7 +251,7 @@ class DomainRegistryTests(unittest.TestCase):
     def test_default_signal_model_changes_select_recipes_and_signal_e2e(self) -> None:
         for path in (
             "src/semantic-router/pkg/config/canonical_defaults.go",
-            "src/semantic-router/pkg/config/canonical_operating_points.go",
+            "src/semantic-router/pkg/presets/calibration.go",
             "src/semantic-router/pkg/config/model_runtime_implicit.go",
             "src/semantic-router/pkg/config/registry.go",
             "src/model-runtime/vllm_srun/registry/releases.generated.json",
@@ -264,7 +262,6 @@ class DomainRegistryTests(unittest.TestCase):
                 for job in (
                     "recipe-conformance",
                     "e2e.envoy-ai-gateway",
-                    "e2e.vela-halu",
                 ):
                     self.assertIn(job, selected)
         self.assertNotIn(
@@ -292,23 +289,30 @@ class DomainRegistryTests(unittest.TestCase):
                 self.assertIn("published-model-tests", result.domains)
                 self.assertIn("platform.models-cpu", result.selected_jobs)
 
-    def test_skill_only_changes_keep_the_lightweight_gate(self) -> None:
+    def test_skill_changes_run_the_skill_checks_without_the_generated_contracts(
+        self,
+    ) -> None:
         domains = matching_domains(
             (
                 "tools/agent/skills/vllm-sr-agent-operations/references/configuration-loop.md",
                 "website/static/install/agent/vllm-sr/references/configuration-loop.md",
             )
         )
-        self.assertIn("make harness-check", commands_for_domains(domains, "checks"))
-        self.assertNotIn(
-            "make generated-contract-check", commands_for_domains(domains, "checks")
-        )
+        checks = commands_for_domains(domains, "checks")
+        # The mirror sync, the Router loading the skill's YAML, and the CLI
+        # parsing its command lines.
+        for command in (
+            "make harness-check",
+            "make test-semantic-router",
+            "make vllm-sr-test",
+        ):
+            self.assertIn(command, checks)
+        self.assertNotIn("make generated-contract-check", checks)
 
     def test_relocated_tools_retain_unit_check_ownership(self) -> None:
         cases = {
             "tools/dev/dsl/main.go": "make go-tools-test",
             "tools/models/classifier-operating-point/main.go": "make go-tools-test",
-            "tools/calibration/image-routing/main.go": "make go-tools-test",
             "bench/grounded_fusion/fusioneval/main.go": "make go-tools-test",
             "tools/calibration/tuning/engine.py": "make test-calibration",
             "tools/test/services/provider-mocker/provider_mocker/app.py": "make test-provider-mocker",

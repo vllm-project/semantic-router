@@ -8,16 +8,16 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
 func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cache.CacheBackend, string, error) {
 	semanticCacheCfg := cfg.SemanticCache
 	storeNeeded, semanticNeeded := cfg.ResponseCacheDemand()
+	embeddingDeployment, embeddingDimension, embeddingLayer := cfg.ResponseCacheEmbedding()
 	cacheConfig := cache.CacheConfig{
 		BackendType:         cache.CacheBackendType(semanticCacheCfg.BackendType),
 		Enabled:             storeNeeded,
-		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
+		SimilarityThreshold: config.ResponseCacheDefaultSimilarity(),
 		MaxEntries:          semanticCacheCfg.MaxEntries,
 		TTLSeconds:          semanticCacheCfg.TTLSeconds,
 		EvictionPolicy:      cache.EvictionPolicyType(semanticCacheCfg.EvictionPolicy),
@@ -25,7 +25,9 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 		Valkey:              semanticCacheCfg.Valkey,
 		Milvus:              semanticCacheCfg.Milvus,
 		Qdrant:              semanticCacheCfg.Qdrant,
-		EmbeddingModel:      detectSemanticCacheEmbeddingModel(cfg),
+		EmbeddingDeployment: embeddingDeployment,
+		EmbeddingDimension:  embeddingDimension,
+		EmbeddingLayer:      embeddingLayer,
 	}
 
 	if cacheConfig.BackendType == "" {
@@ -33,7 +35,7 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 	}
 
 	if semanticNeeded && len(sets) > 0 && sets[0] != nil {
-		provider, err := sets[0].Get(cacheConfig.EmbeddingModel, 0, 0)
+		provider, err := sets[0].Get(cacheConfig.EmbeddingDeployment, 0, 0)
 		if err != nil {
 			return nil, "", fmt.Errorf("semantic cache embedding: %w", err)
 		}
@@ -74,55 +76,6 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 	}
 
 	return semanticCache, identity, nil
-}
-
-func detectSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
-	return config.SemanticCacheEmbeddingModel(cfg)
-}
-
-func createToolsDatabase(cfg *config.RouterConfig, provider embedding.Provider) (*tools.ToolsDatabase, error) {
-	embeddingModels := cfg.EmbeddingModels
-	toolsThreshold := embeddingModels.MinSimilarityThreshold()
-	if cfg.Tools.SimilarityThreshold != nil {
-		toolsThreshold = *cfg.Tools.SimilarityThreshold
-	}
-	if !cfg.Tools.Enabled {
-		provider = nil
-	}
-
-	toolsDatabase := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
-		SimilarityThreshold: toolsThreshold,
-		Enabled:             cfg.Tools.Enabled,
-		ModelType:           embeddingModels.EmbeddingConfig.ModelType,
-		TargetDimension:     embeddingModels.EmbeddingConfig.TargetDimension,
-		Provider:            provider,
-	})
-
-	if toolsDatabase.IsEnabled() {
-		logging.ComponentEvent("extproc", "tools_database_initialized", map[string]interface{}{
-			"similarity_threshold": toolsThreshold,
-			"top_k":                cfg.Tools.TopK,
-		})
-	} else {
-		logging.ComponentEvent("extproc", "tools_database_disabled", map[string]interface{}{})
-	}
-
-	return toolsDatabase, nil
-}
-
-func toolsEmbeddingProvider(cfg *config.RouterConfig, sets ...*embedding.Set) (embedding.Provider, error) {
-	if len(sets) > 0 && sets[0] != nil {
-		return sets[0].Get("", cfg.EmbeddingConfig.TargetDimension, 0)
-	}
-
-	if cfg == nil || !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
-		return nil, nil
-	}
-	provider, err := embedding.NewProvider(cfg.EmbeddingModels)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create tools embedding provider: %w", err)
-	}
-	return provider, nil
 }
 
 func createResponseAPIFilter(cfg *config.RouterConfig) *ResponseAPIFilter {

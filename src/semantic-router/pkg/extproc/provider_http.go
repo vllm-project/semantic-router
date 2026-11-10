@@ -10,6 +10,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 )
 
 // splitProviderEndpoint parses a resolved provider endpoint into the absolute
@@ -65,15 +67,23 @@ func providerEndpointPath(profile *config.ProviderProfile, format llmprotocol.Wi
 }
 
 // configuredProviderAuthorizer uses only configured backend credentials.
-// Router-initiated preprocessing and shadow calls never forward client keys.
+// Router-own preprocessing, probes and shadow calls never forward client
+// keys, and a delegated backend refuses them: they have no user's credential.
 func configuredProviderAuthorizer(
 	cfg *config.RouterConfig,
 	profile *config.ProviderProfile,
 	model string,
+	call string,
 ) (func(context.Context, *http.Request) error, error) {
 	provider, providerAuth, err := resolveProviderAuth(profile)
 	if err != nil {
 		return nil, err
+	}
+	if profile.Delegated() {
+		logging.ComponentWarnEvent("extproc", "delegated_router_call_refused", map[string]interface{}{
+			"call": call, "model": model,
+		})
+		return nil, principal.ErrRouterCall
 	}
 	if cfg == nil {
 		return nil, nil
