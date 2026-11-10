@@ -19,7 +19,7 @@ support = importlib.import_module("router_calibration_support")
 report = importlib.import_module("router_calibration_report")
 
 EXPECTED = {
-    "reask:repeat": "reask_evaluation_failed",
+    "turn_relation:repeat": "systemone_scan_budget_exceeded",
     "projection:recovery": "projection_input_failed",
     "projection:retry": "projection_input_failed",
 }
@@ -93,7 +93,7 @@ class ExpectedSignalErrorsTest(unittest.TestCase):
         doc = self.document()
         group = doc["decisions"][0]
         group["expected_signal_errors"] = dict(EXPECTED)
-        override = {"embedding:similarity": "embedding_evaluation_failed"}
+        override = {"domain:similarity": "systemone_timeout"}
         group["variants"] += [
             {
                 "id": "replace",
@@ -131,13 +131,13 @@ class ExpectedSignalErrorsTest(unittest.TestCase):
             [],
             "ignore",
             {"": "failed"},
-            {"reask:repeat": ""},
-            {" reask:repeat": "failed"},
-            {"reask:repeat": "failed "},
-            {"reask:repeat": True},
-            {"reask:repeat": 1},
-            {"reask:repeat": None},
-            {"reask:repeat": ["failed"]},
+            {"turn_relation:repeat": ""},
+            {" turn_relation:repeat": "failed"},
+            {"turn_relation:repeat": "failed "},
+            {"turn_relation:repeat": True},
+            {"turn_relation:repeat": 1},
+            {"turn_relation:repeat": None},
+            {"turn_relation:repeat": ["failed"]},
         ]
         for raw in invalid:
             for target in ("decision", "variant"):
@@ -173,11 +173,15 @@ class ExpectedSignalErrorsTest(unittest.TestCase):
             ({}, False),
             (None, False),
             (
-                {key: code for key, code in EXPECTED.items() if key != "reask:repeat"},
+                {
+                    key: code
+                    for key, code in EXPECTED.items()
+                    if key != "turn_relation:repeat"
+                },
                 False,
             ),
-            ({**EXPECTED, "reask:repeat": "different_code"}, False),
-            ({**EXPECTED, "embedding:unrelated": "embedding_evaluation_failed"}, False),
+            ({**EXPECTED, "turn_relation:repeat": "different_code"}, False),
+            ({**EXPECTED, "domain:unrelated": "systemone_unavailable"}, False),
         ]
         for scope in ("policy", "deployment"):
             for actual, matched in cases:
@@ -214,8 +218,8 @@ class ExpectedSignalErrorsTest(unittest.TestCase):
             response = copy.deepcopy(valid)
             response["decision_result"][field] = value
             self.assertFalse(self.evaluate(response, probe)["matched"])
-        probe.expected_signal_values = {"reask:repeat": {"gte": 0}}
-        valid["signal_values"] = {"reask:repeat": 0.5}
+        probe.expected_signal_values = {"turn_relation:repeat": {"gte": 0}}
+        valid["signal_values"] = {"turn_relation:repeat": 0.5}
         result = self.evaluate(valid, probe)
         self.assertTrue(result["signal_errors_matched"])
         self.assertFalse(result["signal_values_matched"])
@@ -238,7 +242,7 @@ class ExpectedSignalErrorsTest(unittest.TestCase):
         summary = {"decision_id": "route", "matched": 0, "total": 1, "pass_rate": 0}
         rendered = "\n".join(report._render_decision_failures(summary, [result]))
         self.assertIn("signal errors", rendered)
-        self.assertIn("reask_evaluation_failed", rendered)
+        self.assertIn("systemone_scan_budget_exceeded", rendered)
         self.assertIn("observed `{}`", rendered)
 
 

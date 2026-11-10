@@ -213,6 +213,9 @@ def publication_tags(
     else:
         raise ValueError("PR artifacts cannot be published")
     if latest:
+        if mode != "release":
+            # latest_tags.py moves it once main's complete image set exists.
+            raise ValueError("only a release publishes latest with its images")
         tags.append("latest")
     return tags
 

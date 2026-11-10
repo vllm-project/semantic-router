@@ -17,7 +17,7 @@ import (
 
 // testRouterConfigYAML is a minimal canonical config with a single backed model.
 const testRouterConfigYAML = `
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -28,14 +28,13 @@ providers:
         - endpoint: 127.0.0.1:8000
           provider: vllm
           api_key: test-secret
-routing:
-  modelCards:
-    - name: known-model
-  decisions:
-    - name: default_route
-      priority: 1
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: known-model}]
+recipes:
+  - name: default
+    decisions:
+      - name: default_route
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: known-model}]
 `
 
 func newModelResolutionTestRouter(t *testing.T) (*OpenAIRouter, *config.RouterConfig) {
@@ -78,7 +77,7 @@ func selectedModelHeader(resp *ext_proc.ProcessingResponse) (string, bool) {
 		return "", false
 	}
 	for _, h := range body.GetResponse().GetHeaderMutation().GetSetHeaders() {
-		if h.GetHeader().GetKey() == headers.SelectedModel {
+		if h.GetHeader().GetKey() == headers.VSRRouteModel {
 			return string(h.GetHeader().GetRawValue()), true
 		}
 	}
@@ -111,7 +110,7 @@ func TestSpecifiedKnownModelRoutes(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, resp.GetImmediateResponse(), "known model should not be rejected")
 	model, ok := selectedModelHeader(resp)
-	require.True(t, ok, "known model should set x-selected-model header")
+	require.True(t, ok, "known model should set the route key")
 	assert.Equal(t, "known-model", model)
 }
 
@@ -142,11 +141,12 @@ func TestLooperEntrypointRoutingSetsSelectedDecisionName(t *testing.T) {
 	router, cfg := newModelResolutionTestRouter(t)
 	cfg.Looper.Endpoint = "http://127.0.0.1:0/v1/chat/completions" // unreachable; only ctx state before dispatch is under test
 	ctx := newModelResolutionTestContext(t)
+	threshold := 0.5
 	decision := &config.Decision{
 		Name: "looper_test_decision",
 		Algorithm: &config.AlgorithmConfig{
-			Type:       "confidence",
-			Confidence: &config.ConfidenceAlgorithmConfig{ConfidenceMethod: "hybrid", Threshold: 0.5},
+			Type:     "escalate",
+			Escalate: &config.EscalateAlgorithmConfig{Accept: &config.EscalateAccept{Confidence: &config.EscalateConfidence{Method: "hybrid", GTE: &threshold}}},
 		},
 		ModelRefs: []config.ModelRef{
 			{Model: "known-model"},

@@ -19,22 +19,19 @@ Router 询问的每个模型都在 `global.model_catalog.deployments` 下按名�
 
 | 层级 | 部署名称写在哪里 | 适用于 |
 | --- | --- | --- |
-| 规则 | 规则上的 `deployment:` | 自己提问的规则：`decision`、`classifiers`、`safety`（及其 `hazard` 部分）、`complexity`，以及决策选择器 `algorithm.decision` |
-| 信号类型 | `global.model_catalog.bindings.<type>`，或配方中的 `routing.model_bindings.<type>` | 规则是同一个共享回答之上的标签或阈值的信号类型：`domain`、`jailbreak`、`pii`、`fact_check`、`user_feedback`、`modality`、`hallucination`、`preference`、`reask` |
-| 默认 | `global.model_catalog.system.decision_model` | 上面两个层级未覆盖的所有问题类信号和选择器 |
+| 规则 | 规则上的 `deployment:` | 每条应用规则（`domains`、`fact_check`、`user_feedbacks`、`jailbreak`、`safety`、`pii`、`hallucination`、`refusal`、`turn_relation`、`complexity`、`modality`）、每条 `systemone` 规则，以及 System One 选择器 `algorithm.systemone` |
+| 信号类型 | `global.model_catalog.bindings.<type>`，或配方中的 `recipes[].model_bindings.<type>` | 未指定部署的应用信号类型规则：`domain`、`fact_check`、`user_feedback`、`jailbreak`、`safety`、`pii`、`hallucination`、`refusal`、`turn_relation`、`complexity`、`modality` |
+| 默认 | `global.model_catalog.system.decision_model` | 上面两个层级未覆盖的所有问题 |
 
-`recipes[].routing.model_bindings` 中的绑定只作用于该配方，并优先于同一信号类型的全局绑定。
+`recipes[].model_bindings` 中的绑定只作用于该配方，并优先于同一信号类型的全局绑定。
 
-Embedding、重排序和 hazard 头不提问。它们在使用的地方指定：
+Embedding 不提问，也不回答任何信号；它们只用于召回。它们在使用的地方指定：
 
 | 资源 | 在哪里指定 | 默认值 |
 | --- | --- | --- |
 | Embedding | `global.model_catalog.embeddings.default` | `vela-embedding` |
-| 多模态 embedding | `global.model_catalog.embeddings.multimodal` | `omni-nano` |
-| 重排序 | `rag` 插件中的 `rerank.deployment` | 无 |
-| Hazard 头 | 安全规则上的 `hazard.deployment` | `hazard` |
 
-有四个部署始终已声明，只有当某处解析到其中一个时 Router 才会启动它：`primary`（CPU 上的 `vllm-sr/vela3-fast`，默认决策模型）、`hazard`（Vela 1.0 Hazard）、`vela-embedding`（Vela 1.0 Embedding）和 `omni-nano`（Vela 1.0 Omni Nano）。要更改其中一个，声明一个同名部署即可。
+有两个部署始终已声明，只有当某处解析到其中一个时 Router 才会启动它：`primary`（CPU 上的 `vllm-sr/vela3-fast`，默认决策模型）和 `vela-embedding`（Vela 1.0 Embedding）。要更改其中一个，声明一个同名部署即可。
 
 ## S1. 全部默认：什么都不写 {#s1-all-defaults-nothing-written}
 
@@ -50,9 +47,7 @@ global:
 | 对象 | 解析到 |
 | --- | --- |
 | 每个问题类信号和选择器 | `primary`（按名称） |
-| Hazard 头 | `hazard` |
 | Embedding | `vela-embedding` |
-| 多模态 embedding | `omni-nano` |
 
 ## S2. 全部交给远程 System One 模型 {#s2-everything-on-a-remote-system-one-model}
 
@@ -71,11 +66,11 @@ global:
       decision_model: {deployment: d3-remote}
 ```
 
-- 每个内置问题类信号、自定义 decision 信号和选择器都询问 `d3-remote`。Router 在加载时检查该部署能回答配置所提的每种问题类型。
+- 每个内置问题类信号、自定义 `systemone` 信号和选择器都询问 `d3-remote`。Router 在加载时检查该部署能回答配置所提的每种问题类型。
 - 在一个请求阶段内，发给同一部署的所有问题合并为一次调用。API 报告失败的问题会单独再问一次。
-- 阈值来自回答的模型：它的模型卡，或你写的 `threshold`。没有校准阈值的远程模型使用 0.5，加载时报告 `uncalibrated_threshold` 警告。
-- PII 和幻觉检测需要片段。既不回答 span 问题、也没有 `pii`/`halu` 预设的模型只能以是/否回答它们，Router 在 `vsr_signal_span_verdict_fallbacks_total` 中记录每个这样的信号。以 API 的 `/models` 为该模型列出的能力为准，未列出时才用声明的 `capabilities`；声明的能力已经不含片段时，加载时报告 `span_fallback` 警告。masking 插件需要 PII 片段，因此会拒绝这样的部署。
-- Embedding、重排序和 hazard 头仍使用各自的本地部署。
+- 规则的默认 predicate 来自回答的模型：它的模型卡校准的阈值，或规则写的 `predicate`。没有校准阈值的模型（本地或远程）使用 0.5，加载时报告指明该规则的 `uncalibrated_preset` 警告。
+- PII 和幻觉检测规则需要片段。`pii` 或 `hallucination` 规则解析到的部署，若其声明的 `capabilities` 既不回答 span 问题、也没有 `pii`/`halu` 预设，则加载失败（`span_required`）。masking 插件同样需要 PII 片段，因此也会拒绝这样的部署。
+- Embedding 仍使用各自的本地部署。
 
 ## S3. 混合：PII 在本地，其余在远程 {#s3-mixed-pii-local-everything-else-remote}
 
@@ -95,9 +90,9 @@ global:
       pii: local-vela
 ```
 
-`pii` 解析到 `local-vela`；其他所有信号解析到 `d3-remote`。绑定的键是信号类型，与 `routing.signals` 中的命名一致；值是部署名称。
+`pii` 解析到 `local-vela`；其他所有信号解析到 `d3-remote`。绑定的键是信号类型，与 `recipes[].signals` 中的命名一致；值是部署名称。
 
-## S4. decision 信号和 domain 信号共用默认值，再各改一个 {#s4-a-decision-signal-and-the-domain-signal-share-the-default-then-one-of-each-is-changed}
+## S4. systemone 信号和 domain 信号共用默认值，再各改一个 {#s4-a-systemone-signal-and-the-domain-signal-share-the-default-then-one-of-each-is-changed}
 
 ```yaml title="s4-type-and-rule-overrides"
 global:
@@ -115,23 +110,24 @@ global:
         auth: {api_key_env: VSR_APP_KEY}
     system:
       decision_model: {deployment: kai}
-routing:                           # or recipes[].routing, which affects only that recipe
-  model_bindings:
-    domain: d3-remote              # signal type: every domain rule shares one answer
-  signals:
-    domains: [{name: math, description: Mathematics, mmlu_categories: [math]}]
-    decision:
-      - name: needs_reasoning      # no deployment: asks the default, kai
-        question: {type: noul, instructions: "Does answering need multi-step reasoning?"}
-      - name: support_team
-        deployment: d3-remote      # rule: only this question goes remote
-        question:
-          type: choice
-          instructions: Which team?
-          choices: [{key: billing}, {key: engineering}]
+recipes: # or recipes[], which affects only that recipe
+  - name: default
+    model_bindings:
+      domain: d3-remote # signal type: every domain rule shares one answer
+    signals:
+      domains: [{name: math, description: Mathematics, labels: [math]}]
+      systemone:
+        - name: needs_reasoning # no deployment: asks the default, kai
+          question: {type: noul, instructions: "Does answering need multi-step reasoning?"}
+        - name: support_team
+          deployment: d3-remote # rule: only this question goes remote
+          question:
+            type: choice
+            instructions: Which team?
+            choices: [{key: billing}, {key: engineering}]
 ```
 
-`domain` 解析到 `d3-remote`，`needs_reasoning` 解析到 `kai`，`support_team` 解析到 `d3-remote`。同样的内容写在 `recipes[].routing` 下时，只改变该配方：
+`domain` 解析到 `d3-remote`，`needs_reasoning` 解析到 `kai`，`support_team` 解析到 `d3-remote`。同样的内容写在 `recipes[]` 下时，只改变该配方：
 
 ```yaml title="s4-recipe-scope"
 global:
@@ -150,14 +146,17 @@ global:
     system:
       decision_model: {deployment: kai}
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - {model_names: [vllm-sr/support], recipe: support}
 recipes:
+  - name: default
   - name: support
-    routing:
-      model_bindings:
-        domain: d3-remote          # only the support recipe asks d3-remote about domains
-      signals:
-        domains: [{name: math, description: Mathematics, mmlu_categories: [math]}]
+    model_bindings:
+      domain: d3-remote # only the support recipe asks d3-remote about domains
+    signals:
+      domains: [{name: math, description: Mathematics, labels: [math]}]
 ```
 
 在 `support` 配方中，`domain` 解析到 `d3-remote`；在其他地方解析到 `kai`。
@@ -165,26 +164,27 @@ recipes:
 ## S5. 自己指定部署的规则 {#s5-rules-that-name-their-own-deployment}
 
 ```yaml title="s5-rule-level"
-routing:
-  signals:
-    classifiers:
-      - {name: risk, deployment: content-risk, labels: [low, high]}
-    safety:
-      - name: harmful
-        deployment: d3-remote
-        threshold: 0.5
-        hazard: {deployment: hazard, labels: [violence, weapons], categories: [violence], threshold: 0.6}
-  decisions:
-    - name: pick-model
-      modelRefs: [{model: general}, {model: small}]
-      algorithm: {type: decision, decision: {deployment: kai, instructions: Pick the cheapest capable model.}}
+recipes:
+  - name: default
+    signals:
+      domains:
+        - {name: math, labels: [math]}
+        - {name: law, labels: [law], deployment: kai}
+      safety:
+        - name: harmful
+          deployment: d3-remote
+          predicate: {gte: 0.5}
+    decisions:
+      - name: pick-model
+        modelRefs: [{model: general}, {model: small}]
+        algorithm: {type: systemone, systemone: {deployment: kai, instructions: Pick the cheapest capable model.}}
 ```
 
-`content-risk`、`d3-remote` 和 `kai` 是已声明的部署，这里分别是一个 `classify` 服务、一个 System One API 和一个 Decision 模型。`risk` 询问 `content-risk`，`harmful` 询问 `d3-remote`，它的 hazard 部分询问 `hazard`，`pick-model` 选择器询问 `kai`。
+`d3-remote` 和 `kai` 是已声明的部署，这里分别是一个 System One API 和一个 Decision 模型。`harmful` 询问 `d3-remote`，`law` 和 `pick-model` 选择器询问 `kai`，`math` 询问默认部署 `primary`。同一类型、同一部署上的规则仍共享一个问题。
 
 ## 远程模型和挂接的模型 {#remote-and-attached-models}
 
-连接块（`endpoint`、`model`、`auth`、`headers`、`timeout_ms`、`max_retries`、`tls`、`limits`）对每个远程服务和 Router 挂接的模型运行时都相同。[模型目录参考](model-catalog.md#examples)给出了远程 embedding 模型、远程重排序模型、远程分类器和 chat 评判模型、使用自有认证请求头的 System One 网关、挂接的运行时以及请求后端的示例。
+连接块（`endpoint`、`model`、`auth`、`headers`、`timeout_ms`、`max_retries`、`tls`、`limits`）对每个远程服务和 Router 挂接的模型运行时都相同。[模型目录参考](model-catalog.md#examples)给出了远程 embedding 模型、远程 jailbreak 防护、使用自有认证请求头的 System One 网关、挂接的运行时以及请求后端的示例。
 
 ## Router 在加载时检查什么 {#what-the-router-checks-at-load}
 
@@ -195,9 +195,9 @@ Router 在加载配置时检查每个名称和每一处对应关系；不会静�
 | 绑定或规则指向未声明的部署 | 该绑定或规则、未知名称以及已声明的名称 |
 | 部署无法回答分配给它的信号，例如 `bindings.pii: remote-embed`，或不提供 embedding 的 `embeddings.default` | 该信号、该部署以及它能回答什么 |
 | 绑定键不是信号类型，例如 `bindings.piii` | 该键以及最接近的信号类型 |
-| 在类型共享同一回答的规则上写 `deployment:`，例如 `domains[].deployment` | 该类型通过 `model_bindings.<type>` 绑定 |
-| 为规则各自提问的类型写绑定，例如 `bindings.classifier` | 部署写在每条规则上 |
+| 部署无法回答规则提出的问题，例如 `domains` 规则指向一个 `openai_embeddings` 部署 | 该规则、该部署以及能回答它的 provider |
 | 在配置中直接写密钥，例如 `auth.api_key` 或 `Authorization` 请求头 | 密钥来自 `api_key_env` 或 `api_key_file` |
-| systemone 部署不为 `pii` 或 `hallucination` 提供片段 | `span_fallback` 警告；需要这些片段的 masking 插件被拒绝 |
+| `pii` 或 `hallucination` 规则所在的部署不提供片段 | `span_required`；需要这些片段的 masking 插件同样被拒绝 |
+| 问题类型是其部署不回答的类型，例如 vela3-fast 上的 `score` 规则或评审 | 规则报 `question_type_unsupported`，并指出问题、部署及其能回答的类型；评审或选择器也会指出这些 |
 
-用早期形式写的配置仍可加载，每个字段报告一条 `deprecated_model_field` 警告。[迁移模型资源](model-resource-migration.md)将每种早期形式与本页的形式并列展示。
+Router 拒绝用早期形式写的配置，每个字段给出一行错误并指明 `vllm-sr config migrate`。[迁移模型资源](model-resource-migration.md)将每种早期形式与本页的形式并列展示。

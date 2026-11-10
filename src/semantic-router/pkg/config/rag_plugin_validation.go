@@ -2,36 +2,31 @@ package config
 
 import "fmt"
 
-// Validate validates the RAG plugin configuration.
-func (c *RAGPluginConfig) Validate() error {
-	if !c.Enabled {
-		return nil
-	}
-	if err := c.validateReranker(); err != nil {
-		return err
-	}
+// validateRAGSource checks a rag source's backend and its retrieval bounds.
+func validateRAGSource(c *ContextSource) error {
 	if c.Backend == "" {
-		return fmt.Errorf("RAG backend is required when enabled")
+		return fmt.Errorf("backend is required")
 	}
 	if err := validateRAGBackendConfig(c); err != nil {
 		return err
 	}
-	if err := validateRAGSimilarityThreshold(c.SimilarityThreshold); err != nil {
-		return err
+	if c.MaxContextLength != nil && *c.MaxContextLength < 0 {
+		// Zero is a supported explicit value: the injection path truncates a
+		// zero budget to the ellipsis marker, and issue #4327 keeps it valid.
+		return fmt.Errorf("max_context_length must not be negative, got %d", *c.MaxContextLength)
 	}
-	if err := validateRAGTopK(c.TopK); err != nil {
-		return err
+	if c.CacheTTLSeconds != nil && *c.CacheTTLSeconds < 1 {
+		return fmt.Errorf("cache_ttl_seconds must be at least 1, got %d", *c.CacheTTLSeconds)
 	}
-	if err := validateRAGMaxContextLength(c.MaxContextLength); err != nil {
-		return err
+	switch c.OnFailure {
+	case "", RAGOnFailureSkip, RAGOnFailureBlock, RAGOnFailureWarn:
+		return nil
+	default:
+		return fmt.Errorf("on_failure must be skip, block or warn, got %q", c.OnFailure)
 	}
-	if err := validateRAGInjectionMode(c.InjectionMode); err != nil {
-		return err
-	}
-	return validateRAGOnFailure(c.OnFailure)
 }
 
-func validateRAGBackendConfig(c *RAGPluginConfig) error {
+func validateRAGBackendConfig(c *ContextSource) error {
 	switch c.Backend {
 	case "milvus":
 		return validateMilvusRAGBackend(c)
@@ -46,13 +41,24 @@ func validateRAGBackendConfig(c *RAGPluginConfig) error {
 	case "hybrid":
 		return validateHybridRAGBackend(c)
 	case "vectorstore":
-		return nil
+		return validateVectorStoreRAGBackend(c)
 	default:
-		return fmt.Errorf("unknown RAG backend: %s", c.Backend)
+		return fmt.Errorf("unknown RAG backend %q", c.Backend)
 	}
 }
 
-func validateMilvusRAGBackend(c *RAGPluginConfig) error {
+func validateVectorStoreRAGBackend(c *ContextSource) error {
+	vectorStoreConfig, err := c.VectorStoreBackendConfig()
+	if err != nil {
+		return err
+	}
+	if vectorStoreConfig.VectorStoreID == "" {
+		return fmt.Errorf("backend_config.vector_store_id is required for the vectorstore backend")
+	}
+	return nil
+}
+
+func validateMilvusRAGBackend(c *ContextSource) error {
 	milvusConfig, err := c.MilvusBackendConfig()
 	if err != nil {
 		return err
@@ -63,7 +69,7 @@ func validateMilvusRAGBackend(c *RAGPluginConfig) error {
 	return nil
 }
 
-func validateQdrantRAGBackend(c *RAGPluginConfig) error {
+func validateQdrantRAGBackend(c *ContextSource) error {
 	qdrantConfig, err := c.QdrantBackendConfig()
 	if err != nil {
 		return err
@@ -74,7 +80,7 @@ func validateQdrantRAGBackend(c *RAGPluginConfig) error {
 	return nil
 }
 
-func validateExternalAPIRAGBackend(c *RAGPluginConfig) error {
+func validateExternalAPIRAGBackend(c *ContextSource) error {
 	apiConfig, err := c.ExternalAPIBackendConfig()
 	if err != nil {
 		return err
@@ -88,10 +94,13 @@ func validateExternalAPIRAGBackend(c *RAGPluginConfig) error {
 	if apiConfig.MaxResponseBytes < 0 {
 		return fmt.Errorf("external API max_response_bytes must be non-negative")
 	}
+	if apiConfig.Embedding != nil && !apiConfig.EmbedsQuery() {
+		return fmt.Errorf("embedding: request format %s searches without a query vector; remove embedding", apiConfig.RequestFormat)
+	}
 	return nil
 }
 
-func validateMCPRAGBackend(c *RAGPluginConfig) error {
+func validateMCPRAGBackend(c *ContextSource) error {
 	mcpConfig, err := c.MCPBackendConfig()
 	if err != nil {
 		return err
@@ -105,7 +114,7 @@ func validateMCPRAGBackend(c *RAGPluginConfig) error {
 	return fmt.Errorf("RAG backend %q is not available: the router has no MCP tool invoker", c.Backend)
 }
 
-func validateOpenAIRAGBackend(c *RAGPluginConfig) error {
+func validateOpenAIRAGBackend(c *ContextSource) error {
 	openaiConfig, err := c.OpenAIBackendConfig()
 	if err != nil {
 		return err
@@ -122,7 +131,7 @@ func validateOpenAIRAGBackend(c *RAGPluginConfig) error {
 	return nil
 }
 
-func validateHybridRAGBackend(c *RAGPluginConfig) error {
+func validateHybridRAGBackend(c *ContextSource) error {
 	hybridConfig, err := c.HybridBackendConfig()
 	if err != nil {
 		return err
@@ -134,44 +143,4 @@ func validateHybridRAGBackend(c *RAGPluginConfig) error {
 		return fmt.Errorf("RAG backend %q is not available: the router has no MCP tool invoker", "mcp")
 	}
 	return nil
-}
-
-func validateRAGSimilarityThreshold(threshold *float32) error {
-	if threshold == nil {
-		return nil
-	}
-	if *threshold < 0.0 || *threshold > 1.0 {
-		return fmt.Errorf("similarity threshold must be between 0.0 and 1.0, got %.2f", *threshold)
-	}
-	return nil
-}
-
-func validateRAGTopK(topK *int) error {
-	if topK == nil || *topK > 0 {
-		return nil
-	}
-	return fmt.Errorf("TopK must be greater than 0, got %d", *topK)
-}
-
-func validateRAGMaxContextLength(maxContextLength *int) error {
-	// Zero is a supported explicit value: the injection path truncates a zero
-	// budget to the ellipsis marker, and issue #4327 keeps it valid.
-	if maxContextLength == nil || *maxContextLength >= 0 {
-		return nil
-	}
-	return fmt.Errorf("max_context_length must not be negative, got %d", *maxContextLength)
-}
-
-func validateRAGInjectionMode(mode string) error {
-	if mode == "" || mode == "tool_role" || mode == "system_prompt" {
-		return nil
-	}
-	return fmt.Errorf("injection mode must be 'tool_role' or 'system_prompt', got %s", mode)
-}
-
-func validateRAGOnFailure(onFailure string) error {
-	if onFailure == "" || onFailure == "skip" || onFailure == "block" || onFailure == "warn" {
-		return nil
-	}
-	return fmt.Errorf("OnFailure must be 'skip', 'block', or 'warn', got %s", onFailure)
 }

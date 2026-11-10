@@ -1,5 +1,12 @@
 # Release note: one catalog for the models the Router asks
 
+:::note
+This note records an earlier release. Since v0.5 the decision model answers
+every signal, embeddings serve recall only, the `classify` and `rerank`
+providers are removed, and `openai_chat` serves only the memory query
+rewrite; see [Migrate to v0.5](../installation/migrate-to-v0-5).
+:::
+
 Every model the Router asks, the models behind its signals, embeddings and
 reranking, is now declared once, by name, under
 `global.model_catalog.deployments`. Everything that uses a model writes that
@@ -59,7 +66,7 @@ the remote System One model.
 
 - A `systemone` decision model now answers the built-in signals too. Before,
   they ran on a local `vela3-fast`. Their thresholds are 0.5 unless the
-  configuration writes them, and the load warns `uncalibrated_threshold`.
+  configuration writes them, and the load warns `uncalibrated_preset`.
 - A safety rule's hazard part without its own model uses the pre-declared
   `hazard` deployment (Vela 1.0 Hazard) under every decision model. Before, a
   configuration with such a part failed to load under a `systemone` decision
@@ -69,9 +76,9 @@ Everything else resolves to the same models as before.
 
 ## Earlier configurations
 
-Configurations written in the earlier forms still load and use the same
-models. The Router reports a `deprecated_model_field` warning for each earlier
-field, `vllm-sr config validate --config config.yaml` lists them, and
+The Router refuses a configuration written in the earlier forms, with a
+one-line error for each earlier field that names what replaces it.
+`vllm-sr config validate --config config.yaml` lists them, and
 `vllm-sr config migrate --config config.yaml` rewrites them in the new form.
 [Migrate model resources](../installation/model-resource-migration.md) shows
 each earlier form next to the one that replaces it.

@@ -105871,7 +105871,7 @@
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:a48a32971c27ade1a7ca05740ece70be8207031b5351df2974c3ed88c09dcbf1",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -105961,7 +105961,7 @@
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:a48a32971c27ade1a7ca05740ece70be8207031b5351df2974c3ed88c09dcbf1",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -106054,7 +106054,7 @@
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:a48a32971c27ade1a7ca05740ece70be8207031b5351df2974c3ed88c09dcbf1",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -106166,7 +106166,7 @@
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:a48a32971c27ade1a7ca05740ece70be8207031b5351df2974c3ed88c09dcbf1",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -106236,7 +106236,7 @@
         "private_deployment"
       ],
       "verification": {
-        "asset_sha256": "sha256:b17ac2b97827a108e72c45cd66339a3c255606fc9382112f03c8037be7778fcb",
+        "asset_sha256": "sha256:a48a32971c27ade1a7ca05740ece70be8207031b5351df2974c3ed88c09dcbf1",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -106314,6 +106314,27 @@
         }
       ],
       "wire_format": "openai.responses.v1"
+    },
+    {
+      "capabilities": [
+        "image_generation"
+      ],
+      "default_base_path": "/v1",
+      "display_name": "OpenAI Images",
+      "id": "openai/images@1",
+      "operations": [
+        {
+          "id": "create",
+          "method": "POST",
+          "path": "/v1/images/generations"
+        },
+        {
+          "id": "list_models",
+          "method": "GET",
+          "path": "/v1/models"
+        }
+      ],
+      "wire_format": "openai.images.v1"
     },
     {
       "capabilities": [
@@ -108509,14 +108530,17 @@
       },
       "protocols": [
         "openai/chat-completions@1",
-        "openai/responses@1"
+        "openai/responses@1",
+        "openai/images@1"
       ],
       "support_tier": "compatible",
       "supported_operations": [
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
-        "openai/responses@1#list_models"
+        "openai/responses@1#list_models",
+        "openai/images@1#create",
+        "openai/images@1#list_models"
       ]
     },
     {
@@ -108704,7 +108728,8 @@
       },
       "protocols": [
         "openai/chat-completions@1",
-        "openai/responses@1"
+        "openai/responses@1",
+        "openai/images@1"
       ],
       "reasoning_transport": "top_level_effort",
       "support_tier": "native",
@@ -108712,7 +108737,9 @@
         "openai/chat-completions@1#create",
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
-        "openai/responses@1#list_models"
+        "openai/responses@1#list_models",
+        "openai/images@1#create",
+        "openai/images@1#list_models"
       ]
     },
     {
@@ -111496,6 +111523,7 @@
       "protocols": [
         "openai/chat-completions@1",
         "openai/responses@1",
+        "openai/images@1",
         "anthropic/messages@1"
       ],
       "support_tier": "runtime",
@@ -111504,6 +111532,8 @@
         "openai/chat-completions@1#list_models",
         "openai/responses@1#create",
         "openai/responses@1#list_models",
+        "openai/images@1#create",
+        "openai/images@1#list_models",
         "anthropic/messages@1#create",
         "anthropic/messages@1#list_models"
       ]

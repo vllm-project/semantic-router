@@ -1,0 +1,25 @@
+# A structure rule on text_bytes counted the bytes of the current user turn.
+# It is a keywords rule now whose regex patterns, counted together, match each
+# character once per UTF-8 byte, with the rule's count predicate.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: long_current_turn
+          description: Current user turn is at least four thousand UTF-8 bytes.
+          operator: OR
+          method: regex
+          keywords: ['(?s).', '[^\x00-\x7F]', '[^\x00-\x{7FF}]', '[^\x00-\x{FFFF}]']
+          case_sensitive: true
+          count: {gte: 4000}
+    decisions:
+      - name: long
+        priority: 100
+        rules: {type: keyword, name: long_current_turn}
+        modelRefs: [{model: general}]

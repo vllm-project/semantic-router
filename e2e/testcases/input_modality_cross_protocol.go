@@ -156,8 +156,8 @@ func runInputModalityWireCase(ctx context.Context, session *fixtures.ServiceSess
 	if tc.path == "/v1/messages" {
 		request.Header.Set("anthropic-version", "2023-06-01")
 	}
-	// v0.4 demotes the matched-signal headers behind x-vsr-debug (#2205);
-	// opt in so the assertions can read x-vsr-matched-input-modality.
+	// The matched signals ride in the trace, behind x-vsr-debug;
+	// opt in so the assertions can read the trace's input_modality signals.
 	request.Header.Set("x-vsr-debug", "true")
 	response, err := session.HTTPClient(45 * time.Second).Do(request)
 	if err != nil {
@@ -178,5 +178,5 @@ func runInputModalityWireCase(ctx context.Context, session *fixtures.ServiceSess
 	if model := response.Header.Get("x-vsr-selected-model"); model != tc.wantModel {
 		return fmt.Errorf("selected model = %q, want %q", model, tc.wantModel)
 	}
-	return assertInputModalityHeader(response.Header.Get("x-vsr-matched-input-modality"), tc.wantMatched, tc.wantNotMatched)
+	return assertInputModalityHeader(matchedSignals(response.Header, "input_modality"), tc.wantMatched, tc.wantNotMatched)
 }

@@ -38,7 +38,7 @@ Flow 在配置的工作流内协调模型 worker。调用它的 Agent Harness �
 
 ## 配置
 
-将公开名字映射到下方的默认路由。若需隔离策略，请将 `routing` 块放入命名 recipe，并修改入口的 recipe 引用。
+将公开名字映射到下方的配方。若需与其他配方隔离，请为它声明独立的 recipe，并修改入口的 recipe 引用。
 
 ```yaml
 entrypoints:
@@ -59,67 +59,84 @@ global:
 配置一条动态 Flow 决策：
 
 ```yaml
-routing:
-  decisions:
-    - name: coding_flow
-      description: Coordinate coding work through planned worker steps.
-      priority: 100
-      output_contract: Preserve any explicit output format exactly.
-      modelRefs:
-        - model: openrouter/gemini-pro
-        - model: openrouter/deepseek
-        - model: qwen/qwen3.6-rocm
-      algorithm:
-        type: workflows
-        workflows:
-          mode: dynamic
-          planner:
-            model: qwen-coordinator
-            max_completion_tokens: 2048
-          max_steps: 6
-          max_parallel: 3
-          round_timeout_seconds: 90
-          min_successful_responses: 2
+recipes:
+  - name: default
+    decisions:
+      - name: coding_flow
+        description: Coordinate coding work through planned worker steps.
+        priority: 100
+        output_contract: Preserve any explicit output format exactly.
+        modelRefs:
+          - model: openrouter/gemini-pro
+          - model: openrouter/deepseek
+          - model: qwen/qwen3.6-rocm
+        algorithm:
+          type: workflows
           on_error: skip
+          workflows:
+            mode: dynamic
+            planner:
+              model: qwen-coordinator
+              max_completion_tokens: 2048
+            max_steps: 6
+            max_parallel: 3
+            round_timeout_seconds: 90
+            min_successful_responses: 2
 ```
 
-`output_contract` 是决策范围的提示词文本。把它用于应同时作用于静态 Flow、动态 Flow、Fusion 和 ReMoM 的基准或应用格式要求，而不是把任务特定提示词硬编码进算法。使用 `output_contract_spec` 做类型化的路由器可执行归一化和后处理，例如 choice 提取、终端动作 JSON 归一化或引用解引用。提取默认精确匹配 `content`；仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
+| 字段 | 用途 |
+| --- | --- |
+| `output_contract` | 决策范围的提示词文本：应同时作用于静态 Flow、动态 Flow、Fusion 和 ReMoM 的基准或应用格式要求，而不是硬编码进算法的任务特定提示词。 |
+| `output_contract_spec` | 由 Router 执行的类型化归一化和后处理，例如 choice 提取、终端动作 JSON 归一化或引用解引用。 |
 
-规划器模型生成控制计划。省略 `planner.model` 时，路由器按声明顺序选择首个满足完整规划请求要求的已分配 worker，
-包括 JSON 输出能力和实际输出、上下文预算。扫描过程不调用模型。
-显式指定的规划器保持原目标并接受相同阶段检查，失败时不会替换为其他模型；没有合格规划器时请求直接失败。
-显式规划器可以是 worker `modelRefs` 之外单独配置的辅助模型，但必须在 `providers.models[].backend_refs` 中有运营者分配的后端；否则配置无法加载。
-worker 调用始终限制在 `modelRefs` 内，执行器会拒绝包含范围外 worker 的计划。
-规划器选择不会降低已配置的不同成功 worker 最小数量。
+提取默认精确匹配 `content`。仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
+
+规划器模型生成控制计划：
+
+- **默认规划器。** 省略 `planner.model` 时，按声明顺序选择首个满足完整规划请求要求的已分配 worker，包括 JSON 输出以及输出和上下文预算。这一扫描不调用模型。
+- **显式规划器。** 显式指定的规划器保持原目标并接受相同的阶段检查，失败时绝不会替换为其他模型。它可以是 worker `modelRefs` 之外的辅助模型，但必须在 `providers.models[].backend_refs` 中有后端，否则配置无法加载。
+- **没有合格的规划器**时，请求失败关闭。
+- **worker 始终在 `modelRefs` 内。** 执行器会拒绝点名范围外 worker 的计划，规划器的选择也不会降低已配置的不同成功 worker 最小数量。
+
+设置 `final.model` 可以从 `modelRefs` 中选择一个 worker 生成最终回答，与规划器相互独立。它在两种模式下都有效：配置的 `final.model` 和 `final.prompt` 会覆盖生成计划中的对应字段。
+
+这样，快速的规划器可以组织工作，而更强的模型来综合回答。依赖这种分工之前，请确认规划器能稳定返回有效的 JSON。
+
+推理控制来自每个模型的[推理配置](../../../installation/model-reasoning.md)和决策中的引用。对于自定义模型，请先声明推理家族，再使用 `use_reasoning: false`；没有家族时，后端的推理行为会原样透传。
+
+:::warning 为整次运行留出预算
+规划、顺序执行的 worker 步骤和最终综合必须都在客户端和网关的超时之内；单轮超时不会延长网关的截止时间。请检查完整输出和 `finish_reason`，而不只是 HTTP 成功。
+:::
 
 静态模式使用显式角色计划。每个角色模型都必须在决策的 `modelRefs` 中。
 
 ```yaml
-routing:
-  decisions:
-    - name: static_flow
-      description: Coordinate a fixed sequence of worker roles.
-      priority: 100
-      modelRefs:
-        - model: qwen-worker
-        - model: deepseek-worker
-      algorithm:
-        type: workflows
-        workflows:
-          mode: static
-          roles:
-            - name: thinker
-              models: [qwen-worker]
-            - name: worker
-              models: [deepseek-worker]
-            - name: verifier
-              models: [qwen-worker]
-          final:
-            model: qwen-worker
-          max_steps: 3
-          max_parallel: 1
-          round_timeout_seconds: 90
+recipes:
+  - name: default
+    decisions:
+      - name: static_flow
+        description: Coordinate a fixed sequence of worker roles.
+        priority: 100
+        modelRefs:
+          - model: qwen-worker
+          - model: deepseek-worker
+        algorithm:
+          type: workflows
           on_error: skip
+          workflows:
+            mode: static
+            roles:
+              - name: thinker
+                models: [qwen-worker]
+              - name: worker
+                models: [deepseek-worker]
+              - name: verifier
+                models: [qwen-worker]
+            final:
+              model: qwen-worker
+            max_steps: 3
+            max_parallel: 1
+            round_timeout_seconds: 90
 ```
 
 ## 参数
@@ -143,7 +160,7 @@ routing:
 | `min_successful_responses` | int | 全部模型 | 达到该成功 worker 数后即可继续并行步骤 |
 | `temperature` | float | 请求默认值 | 规划器、worker 和合成调用的温度 |
 | `include_intermediate_responses` | bool | `true` | 在响应追踪中包含 Flow 计划和 worker 输出 |
-| `on_error` | string | `fail` | worker 出错时 `fail`，或在至少一个 worker 成功时 `skip` 失败的 worker |
+| `algorithm.on_error` | string | `fail` | 与 `type` 并列，而不在此块中：worker 出错时 `fail`，或在至少一个 worker 成功时 `skip` 失败的 worker |
 
 每个静态角色和每个规划器生成的步骤都必须包含至少 `min_successful_responses` 个模型。无法满足配置法定人数的计划会被拒绝，而不是以静默降低的法定人数运行。
 
@@ -159,7 +176,27 @@ Router Flow 为客户端保留普通的 OpenAI 兼容工具调用契约。像对
 4. 把这些工具结果路由回恰好请求它们的那个 worker 或最终智能体，而不重放无关 worker；
 5. 继续该智能体的工具循环，直到它产生内容，然后恢复剩余工作流。
 
-每个 worker 有自己的消息历史。后续步骤的 `access_list` 只暴露先前步骤或先前智能体的输出，不暴露另一个 worker 的原始工具调用或工具结果轨迹。省略 `access_list` 会暴露所有更早步骤的输出；设为 `[]` 则使该步骤与先前输出隔离。使用角色 id（例如 `solver`）可暴露该角色的全部输出，或使用智能体 id（例如 `solver:1:deepseek-worker`）只暴露并行角色中的一个 worker。启用 `include_intermediate_responses` 时，同一智能体 id 会作为 `flow.steps[].responses[].agent_id` 发出。
+每个 worker 有自己的消息历史。后续步骤的 `access_list` 只暴露先前步骤或智能体的输出，绝不暴露另一个 worker 的原始工具调用或工具结果轨迹：
+
+| `access_list` | 暴露 |
+| --- | --- |
+| 省略 | 所有更早步骤的输出 |
+| `[]` | 不暴露：该步骤与先前输出隔离 |
+| 角色 id，例如 `solver` | 该角色的全部输出 |
+| 智能体 id，例如 `solver:1:deepseek-worker` | 并行角色中的一个 worker |
+
+启用 `include_intermediate_responses` 时，同一智能体 id 会作为 `flow.steps[].responses[].agent_id` 出现。
+
+步骤 ID：
+
+- **唯一。** 步骤 ID 必须唯一，且不能与生成的智能体 ID 冲突；生成的默认 ID 和归一化后的静态角色 ID 遵循同样的规则。
+- **会被裁剪空白。** Router 在校验前裁剪步骤 ID，与 access list 条目和智能体 ID 的处理一致。
+- **在任何 worker 运行之前检查。** 有歧义的计划会被拒绝。在动态模式下，`on_error: skip` 会改用现有的回退计划。
+
+恢复持久化的工作流时，也会做同样的校验：
+
+- ID 冲突或存储的步骤身份已不匹配的暂停计划会被拒绝，且不会再调用模型。
+- 恢复时校验失败绝不会启动回退工作流，即使设置了 `on_error: skip`。请改用没有歧义的计划重新开始。
 
 本地单进程开发用 `memory` 即可。本地重启使用 `file`。多副本部署使用 `redis`，以便收到工具结果回合的任意路由器实例都能认领它。
 
@@ -178,3 +215,13 @@ Router Flow 有意保持面向用户的 API 很小。决策的 `modelRefs` 就�
 
 规划器和 worker 模型会按工作流计划收到请求派生内容。工具调用状态可以持久化到内存、文件或 Redis；请为这些内容选择合适的后端、TTL、认证和加密。完整示例见：
 [`config/fragments/algorithm/looper/workflows.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/workflows.yaml)。
+
+## 可选的追踪传输 {#optional-trace-transport}
+
+Router 生成的 `flow` 证据会保留在 OpenAI Chat Completions 的 JSON 和 SSE 响应中，包括算法支持的工具调用响应。追踪是可选的：如果加入它会超过完整响应的上限或单个 SSE 帧的上限，Router 会省略整个追踪，同时返回有效的回答。它不会截断追踪 JSON 或回答文本。
+
+OpenAI Responses 和 Anthropic Messages 响应会省略这个 Chat 专用的扩展。因目标协议不支持或因大小而丢弃它时，`x-vsr-warnings` 会报告动作 `dropped`、字段 `flow`，以及原因 `router_extension_unsupported_protocol` 或 `router_extension_size_limit`，即时的 Looper 响应也一样。
+
+必需的回答内容仍受正常的协议上限约束；放不下的回答会被拒绝。
+
+提供方的字段不会因为同名就获得 Router 的来源属性。Router 会把提供方内容与它的内部追踪数据分开校验。

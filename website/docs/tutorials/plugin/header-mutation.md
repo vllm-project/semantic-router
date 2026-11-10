@@ -22,7 +22,7 @@ Some routes need different downstream headers than the rest of the router. `head
 
 ## Configuration
 
-Add the plugin under `routing.decisions[].plugins`:
+Add the plugin under `recipes[].decisions[].plugins`:
 
 ```yaml
 plugins:
@@ -39,6 +39,12 @@ plugins:
 ```
 
 Header values are static configuration, not templates. Do not use untrusted
-request metadata to manufacture identity or authorization headers. See a
+request metadata to manufacture identity or authorization headers.
+
+The plugin cannot write a header the Router owns: any `x-vsr-` or `x-envoy-`
+header, and the credential and other internal headers of the
+[header registry](../../api/headers), `Authorization` among
+them. Each one fails at load with `reserved_header`. The retry and timeout
+headers Envoy reads belong to the decision's `reliability` block. See a
 complete example:
 [`config/fragments/plugin/header-mutation/tenant-routing.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/header-mutation/tenant-routing.yaml).

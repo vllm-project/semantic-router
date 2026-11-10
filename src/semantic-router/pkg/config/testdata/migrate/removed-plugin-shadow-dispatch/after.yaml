@@ -1,0 +1,27 @@
+# shadow_dispatch is the shadow block of the decision's router_replay plugin,
+# which keeps the shadow's outcome in the replay record.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+    - name: candidate
+      backend_refs: [{name: candidate, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: chat
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: router_replay
+            configuration:
+              enabled: true
+              capture_response_body: true
+              shadow:
+                model: candidate
+                sample_rate: 0.05
+                max_concurrency: 2
+                timeout_seconds: 30

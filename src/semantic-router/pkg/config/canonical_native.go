@@ -96,9 +96,6 @@ func validateNativeRecipe(cfg *RouterConfig, recipe RoutingRecipe, native, chat 
 		if err := validateNativeProfileSurfaces(recipe.Profile); err != nil {
 			return err
 		}
-		if err := validateNativeSignalBackends(cfg.ConfigForRecipe(&recipe), recipe.Profile); err != nil {
-			return err
-		}
 	}
 	if native && chat {
 		return fmt.Errorf("a native recipe cannot also be a Chat entrypoint; use isolated recipes")
@@ -106,7 +103,7 @@ func validateNativeRecipe(cfg *RouterConfig, recipe RoutingRecipe, native, chat 
 	for _, decision := range recipe.Profile.Decisions {
 		algorithm := decision.Algorithm
 		if native && !algorithm.IsNative() {
-			return fmt.Errorf("decision %q: System One requires cascade", decision.Name)
+			return fmt.Errorf("decision %q: System One requires an escalate algorithm with stages", decision.Name)
 		}
 		if !algorithm.IsNative() {
 			if err := validateNativeChatBoundary(cfg, decision); err != nil {
@@ -115,7 +112,7 @@ func validateNativeRecipe(cfg *RouterConfig, recipe RoutingRecipe, native, chat 
 			continue
 		}
 		if chat {
-			return fmt.Errorf("decision %q: native algorithms require an isolated native recipe", decision.Name)
+			return fmt.Errorf("decision %q: escalate stages run System One answers and require an isolated native recipe", decision.Name)
 		}
 		if err := validateNativeDecisionSurfaces(decision); err != nil {
 			return err
@@ -126,9 +123,9 @@ func validateNativeRecipe(cfg *RouterConfig, recipe RoutingRecipe, native, chat 
 		if err := validateNativeStageBindings(cfg, algorithm); err != nil {
 			return fmt.Errorf("decision %q: %w", decision.Name, err)
 		}
-		if algorithm.Quality.Type == "calibrated" {
-			if _, ok := cfg.Calibration(algorithm.Quality.Calibration); !ok {
-				return fmt.Errorf("decision %q: unknown evaluation calibration %q", decision.Name, algorithm.Quality.Calibration)
+		if quality := algorithm.NativeQuality(); quality.EffectiveType() == EscalateQualityCalibrated {
+			if _, ok := cfg.Calibration(quality.Calibration); !ok {
+				return fmt.Errorf("decision %q: unknown evaluation calibration %q", decision.Name, quality.Calibration)
 			}
 		}
 	}
@@ -136,17 +133,17 @@ func validateNativeRecipe(cfg *RouterConfig, recipe RoutingRecipe, native, chat 
 }
 
 func validateNativeStageBindings(cfg *RouterConfig, algorithm *AlgorithmConfig) error {
-	for _, stage := range algorithm.Stages {
+	for _, stage := range algorithm.NativeStages() {
 		model, ok := cfg.ModelConfig[stage.Model]
 		if !ok {
-			return fmt.Errorf("stage %q: model %q must name a provider alias", stage.Name, stage.Model)
+			return fmt.Errorf("stage %q: model %q must name a provider alias", stage.StageName(), stage.Model)
 		}
-		if stage.Kind == "native" {
+		if stage.StageKind() == EscalateStageNative {
 			if model.APIFormat != APIFormatSystemOne {
-				return fmt.Errorf("stage %q: native model %q requires api_format: systemone", stage.Name, stage.Model)
+				return fmt.Errorf("stage %q: native model %q requires api_format: systemone", stage.StageName(), stage.Model)
 			}
 		} else if model.APIFormat != APIFormatOpenAI {
-			return fmt.Errorf("stage %q: LLM model %q requires api_format: openai", stage.Name, stage.Model)
+			return fmt.Errorf("stage %q: LLM model %q requires api_format: openai", stage.StageName(), stage.Model)
 		}
 	}
 	return nil
@@ -167,12 +164,9 @@ func (c *RouterConfig) Calibration(name string) (CalibrationArtifact, bool) {
 // NativeStageModels returns the active stage candidate aliases in declaration
 // order. Disabled actions validate normally but never create runtime demand.
 func (a *AlgorithmConfig) NativeStageModels() []string {
-	if !a.IsNative() {
-		return nil
-	}
 	var result []string
 	seen := map[string]bool{}
-	for _, stage := range a.Stages {
+	for _, stage := range a.NativeStages() {
 		if !stage.IsEnabled() {
 			continue
 		}
@@ -201,9 +195,6 @@ func validateNativeChatBoundary(cfg *RouterConfig, decision Decision) error {
 		aliases = append(aliases, decision.Action.Destination)
 	}
 	if algorithm := decision.Algorithm; algorithm != nil {
-		if algorithm.Prompt != nil {
-			aliases = append(aliases, algorithm.Prompt.Model)
-		}
 		if algorithm.ReMoM != nil {
 			aliases = append(aliases, algorithm.ReMoM.SynthesisModel)
 		}
