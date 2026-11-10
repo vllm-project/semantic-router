@@ -83,10 +83,16 @@ plugins:
       max_tool_trace_steps: 100
 ```
 
-Body limits and structured-text limits count UTF-8 bytes. Excerpts end on
-complete characters, so they can be slightly shorter than the limit. A truncated
-raw body may no longer be complete JSON; check its truncation flag. Tool traces
-have separate limits from raw request and response bodies.
+How the limits count:
+
+- **UTF-8 bytes,** for bodies and structured text. Excerpts end on complete
+  characters, so they can be slightly shorter than the limit.
+- **A truncated raw body** may no longer be complete JSON; check its
+  truncation flag.
+- **Tool traces** have their own limits, separate from the request and
+  response bodies.
+
+How the layers combine:
 
 - **Opt out one decision** with `configuration: {enabled: false}`.
 - **Change the deployment-wide default** by setting `enabled: false` on the
@@ -109,14 +115,17 @@ so omit a field to inherit it.
 
 ### Keep personal data out of Replay
 
-Set `capture_personal_data: false` globally or on a decision's `router_replay`
-plugin. The record keeps routing evidence, model, signals and detected PII types,
-while personal-data requests omit request and response bodies, prompts, tool
-definitions and tool traces. The prompt is checked after routing, so requests
-never wait for it: unless a routing decision already read it with a PII signal,
-the record is written without the prompt, and the recipe's configured PII rules
-then read the latest user message alone. The prompt is added to the record once
-that read completes without finding personal data.
+Set `capture_personal_data: false` globally or on a decision's
+`router_replay` plugin:
+
+- **Kept:** routing evidence, the model, signals and the detected PII types.
+- **Omitted for requests with personal data:** request and response bodies,
+  prompts, tool definitions and tool traces.
+- **Requests never wait for the check.** Unless a routing decision already
+  read the prompt with a PII signal, the record is first written without it.
+  The recipe's configured PII rules then read the latest user message alone,
+  and the prompt is added to the record once that read finds no personal
+  data.
 
 When PII evidence is unavailable, the `pii` rule's model gives no answer, or
 the recipe has no `pii` rule, capture omits content conservatively. A PII signal is
@@ -149,24 +158,37 @@ plugins:
       max_tool_trace_bytes: 16384
 ```
 
-Each `client_tool_result` step then stores the result's text in `output`, with
-`content_redacted: false`. A captured request body keeps the tool results, up
-to `max_body_bytes`. `max_tool_trace_bytes` bounds each stored result and sets
-the step's `truncated` flag when it cuts one. With the default of `0`, results
-are stored whole, so set a limit: a large tool output makes the record larger,
-and a store can reject a record above its size limit.
+With it on:
 
-Tool results are raw client data, so `capture_tool_results: true` requires
-`capture_personal_data: true`. The Router refuses to load a configuration where
-the global defaults, or any decision's effective `router_replay` settings,
-combine `capture_tool_results: true` with `capture_personal_data: false`. A
-masking route never records its request trace or body. Principals without
-`replay.detail` still receive tool results redacted. Keep the option off in
-production unless the records are an intended audit store.
+- **Each `client_tool_result` step** stores the result's text in `output`,
+  with `content_redacted: false`.
+- **A captured request body** keeps the tool results, up to `max_body_bytes`.
+- **`max_tool_trace_bytes`** bounds each stored result, and sets the step's
+  `truncated` flag when it cuts one.
 
-Request bodies, responses, and tool traces can contain secrets or personal data.
-Capture only what you need and restrict access with `replay.read` and
-`replay.detail`. See the [Replay API and privacy controls](../../api/router#router-replay).
+:::tip Set a limit
+With the default of `0`, results are stored whole. A large tool output makes
+the record larger, and a store can reject a record above its size limit.
+:::
+
+Tool results are raw client data, so:
+
+- **`capture_tool_results: true` requires `capture_personal_data: true`.**
+  The Router refuses to load a configuration where the global defaults, or any
+  decision's effective `router_replay` settings, combine
+  `capture_tool_results: true` with `capture_personal_data: false`.
+- **A masking route** never records its request trace or body.
+- **Principals without `replay.detail`** still receive tool results redacted.
+
+Keep the option off in production unless the records are an intended audit
+store.
+
+:::caution
+Request bodies, responses and tool traces can contain secrets or personal
+data. Capture only what you need, and restrict access with `replay.read` and
+`replay.detail`. See the
+[Replay API and privacy controls](../../api/router#router-replay).
+:::
 
 ## Shadow
 
@@ -257,7 +279,11 @@ runs only on single-model provider dispatch.
 
 ### Fail-open behavior
 
-The request path does one non-blocking slot check and returns. Everything else runs in a bounded worker after the primary dispatch response has been built. A slow, unavailable, malformed, or overloaded shadow endpoint cannot change the primary response or its latency. Every shadow ends in exactly one result:
+The request path does one non-blocking slot check and returns; everything
+else runs in a bounded worker after the primary dispatch response has been
+built. A slow, unavailable, malformed or overloaded shadow endpoint can't
+change the primary response or its latency. Every shadow ends in exactly one
+result:
 
 | Result | Reasons |
 | --- | --- |
@@ -266,7 +292,13 @@ The request path does one non-blocking slot check and returns. Everything else r
 | `dropped` | `queue_full`, `queue_timeout`, `router_closing`, `same_as_primary`, `internal_request`, `request_unavailable` |
 | `sampled_out` | `sampled_out` |
 
-Results and reasons are exported as `sr_shadow_dispatch_total{decision,result,reason}`, with `sr_shadow_dispatch_latency_seconds`, `sr_shadow_dispatch_inflight`, and `sr_shadow_dispatch_queued`. Drops caused by resource bounds are reported through metrics and a structured `shadow_dispatch_dropped` event rather than a replay write, so an overloaded shadow lane cannot amplify load on the replay store.
+- **Metrics.** Results and reasons are exported as
+  `sr_shadow_dispatch_total{decision,result,reason}`, with
+  `sr_shadow_dispatch_latency_seconds`, `sr_shadow_dispatch_inflight` and
+  `sr_shadow_dispatch_queued`.
+- **Drops caused by resource bounds** are reported through metrics and a
+  structured `shadow_dispatch_dropped` event, not a replay write, so an
+  overloaded shadow lane can't add load to the replay store.
 
 ### Interpreting failures
 
@@ -284,44 +316,134 @@ A `failed` outcome does not always say something about the candidate model. Read
 
 ### Replay and audit capture
 
-Completed and failed shadows append one outcome to the primary request's replay record with `source: shadow_dispatch`, `target: model`, `target_ref: <shadow model>`, the verdict, and the reason. The outcome metadata carries primary and shadow request identity, primary and shadow model and backend, decision and recipe, sample rate, enqueue, start, and finish timestamps, queue wait and latency, attempts, status code, response size, stop reason, token counts, and a SHA-256 of the shadow text. Outcomes are append-only.
+Completed and failed shadows append one outcome to the primary request's
+replay record. Outcomes are append-only:
 
-Replay redaction applies to shadow outcomes the same way it applies to the rest of the record: viewers without content rights see the routing and timing fields but not `target_ref`, `reason`, or `metadata`. Keep `capture_response_body` off unless the replay store and its readers are cleared for prompt-level content. See the fragment:
+| Part | Holds |
+| --- | --- |
+| The outcome | `source: shadow_dispatch`, `target: model`, `target_ref: <shadow model>`, the verdict and the reason |
+| Its metadata | Primary and shadow request identity; primary and shadow model and backend; decision and recipe; sample rate; enqueue, start and finish timestamps; queue wait and latency; attempts; status code; response size; stop reason; token counts; a SHA-256 of the shadow text |
+
+Replay redaction applies to shadow outcomes as it does to the rest of the
+record: viewers without content rights see the routing and timing fields, but
+not `target_ref`, `reason` or `metadata`. Keep `capture_response_body` off
+unless the replay store and its readers are cleared for prompt-level content.
+See the fragment:
 [`config/fragments/plugin/router-replay/shadow.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/shadow.yaml).
 
 ### Export a comparison dataset
 
-Captured outcomes become a comparison dataset through `GET /api/v1/observability/replays/dataset`. The endpoint reads the records the usual replay filters select and answers with a versioned manifest of the primary and shadow arms for each input.
+Captured outcomes become a comparison dataset through
+`GET /api/v1/observability/replays/dataset`. The endpoint reads the records
+the usual replay filters select, and answers with a versioned manifest of the
+primary and shadow arms for each input.
 
-A manifest is identified by its own digest, so the export takes the split plan as part of the request: `seed` fixes split assignment and each repeated `split` is written as `name:weight`, for example `?seed=2026-q3&split=train:8&split=eval:2`. The same records under the same seed and splits rebuild the same manifest, including the split every example lands in, so adding later observations never moves an example that was already placed.
+A manifest is identified by its own digest, so the export takes the split plan
+as part of the request:
+
+- **`seed`** fixes the split assignment.
+- **Each repeated `split`** is written as `name:weight`, for example
+  `?seed=2026-q3&split=train:8&split=eval:2`.
+- **Reproducible.** The same records under the same seed and splits rebuild
+  the same manifest, including the split every example lands in, so later
+  observations never move an example that was already placed.
 
 ```bash
 curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
   "$ROUTER_MANAGEMENT_URL/api/v1/observability/replays/dataset?recipe=vault&seed=2026-q3&split=train:8&split=eval:2"
 ```
 
-The manifest carries identity, output digests, and lineage, never prompt or response text, so it can be published beside the numbers it supports. An observation enters whole or not at all: a request that failed, is unfinished, lost its input to truncation, or never recorded a digest is left out and counted under an exclusion reason, and `counts` reports what was kept and what was dropped. Because the manifest describes the whole selection it was built from, a selection larger than 5000 records is refused rather than exported as a page. Narrow the filters and export again.
+What the manifest holds:
 
-One recipe or one decision usually dominates live traffic, and a dataset built from it reads as a statement about the whole router when it is a statement about that decision. `balance_by` and `balance_max` cap how much one group may contribute, grouping by `recipe`, `decision` or `primary_model`. The rows a cap keeps follow the seed rather than the clock, so a balanced dataset is a sample of the traffic and not of when it arrived, and rows dropped for balance are counted under `balance_cap` like any other exclusion. Both parameters are given together; one alone is refused.
+- **No text.** It carries identity, output digests and lineage, never prompt
+  or response text, so it can be published beside the numbers it supports.
+- **Whole observations.** An observation enters whole or not at all: a request
+  that failed, is unfinished, lost its input to truncation or never recorded a
+  digest is left out, and counted under an exclusion reason. `counts` reports
+  what was kept and what was dropped.
+- **The whole selection.** A selection larger than 5000 records is refused,
+  not exported as a page. Narrow the filters and export again.
 
-The export needs `replay.read` and reads the same records the list API does. Body capture must be on for the decisions being compared, since an observation with no captured request is excluded as `request_body_missing`.
+One recipe or decision usually dominates live traffic, and a dataset built
+from it reads as a statement about the whole router when it's a statement
+about that decision. To balance it:
+
+- **`balance_by` and `balance_max`** cap how much one group may contribute,
+  grouping by `recipe`, `decision` or `primary_model`. Give both; one alone is
+  refused.
+- **The seed picks the rows a cap keeps,** not the clock, so a balanced
+  dataset samples the traffic, not its arrival time.
+- **Rows dropped for balance** are counted under `balance_cap`, like any other
+  exclusion.
+
+The export needs `replay.read`, and reads the same records the list API does.
+Body capture must be on for the decisions being compared, because an
+observation with no captured request is excluded as `request_body_missing`.
 
 ### Hand the comparison to a judge
 
-`GET /api/v1/observability/replays/dataset/judge-tasks` takes the same selection and split plan as the export, plus a `blinding_key`, and answers with pairwise tasks: one primary answer against one shadow answer, with the request each was given. Every pair appears twice with the sides swapped, so a judge that prefers whichever answer comes first shows up as disagreement between the two orders. Each side carries an opaque arm label that names neither the model nor which side is the primary, and the labels differ in every pair. Only the key maps a label back to a model, so keep it away from the judge. It may not equal the manifest seed, which is published.
+`GET /api/v1/observability/replays/dataset/judge-tasks` takes the same
+selection and split plan as the export, plus a `blinding_key`. It answers with
+pairwise tasks: one primary answer against one shadow answer, with the request
+each was given.
+
+- **Both orders.** Every pair appears twice with the sides swapped, so a judge
+  that prefers whichever answer comes first shows up as disagreement between
+  the two orders.
+- **Blind labels.** Each side carries an opaque arm label that names neither
+  the model nor which side is the primary, and the labels differ in every
+  pair.
+- **The key.** Only the `blinding_key` maps a label back to a model, so keep
+  it away from the judge. It may not equal the manifest seed, which is
+  published.
 
 ```bash
 curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
   "$ROUTER_MANAGEMENT_URL/api/v1/observability/replays/dataset/judge-tasks?recipe=vault&seed=2026-q3&split=train:8&split=eval:2&blinding_key=$JUDGE_KEY"
 ```
 
-A pair is built only when the request and both answers hash back to the digests in the manifest. A stored request names the model the router sent it to, so the input digest covers the request body without its top-level model field (`Model` in the recorded request, `model` in a client body), which is also the `input` a judge reads, and each task carries that `input_digest`. This changed input identity, deduplication and splits, so the manifest is `shadow-dataset.v2` and the tasks are `shadow-judge-tasks.v2`. A `shadow-dataset.v1` manifest is refused. The shadow text comes from the captured excerpt, so the shadow decision needs `capture_response_body` on and a `max_capture_bytes` large enough for whole answers. An excerpt that was cut, or a primary answer a response-stage plugin rewrote before it was stored, is left out and counted as `arm_text_digest_mismatch`, and a pair with no text at all as `arm_text_missing`. A request that does not match its digest is counted as `input_text_digest_mismatch`, and a missing one as `input_text_missing`. An answer that names its own model is marked `names_own_model`, since no label can blind a judge to that.
+A pair is built only when the request and both answers hash back to the
+digests in the manifest:
 
-The tasks carry prompt and answer text, so the route needs `replay.detail` and refuses a caller without it rather than redacting the tasks. The judge runs outside the router.
+- **The input digest** covers the request body without its top-level model
+  field (`Model` in the recorded request, `model` in a client body), because a
+  stored request names the model the Router sent it to. That body is also the
+  `input` a judge reads, and each task carries its `input_digest`.
+- **Versions.** The manifest is `shadow-dataset.v2` and the tasks are
+  `shadow-judge-tasks.v2`. A `shadow-dataset.v1` manifest is refused.
+- **Shadow text** comes from the captured excerpt, so the shadow decision
+  needs `capture_response_body` on, and a `max_capture_bytes` large enough for
+  whole answers.
+
+Pairs that are left out are counted by reason:
+
+| Reason | Cause |
+| --- | --- |
+| `arm_text_digest_mismatch` | An excerpt was cut, or a response-stage plugin rewrote the primary answer before it was stored. |
+| `arm_text_missing` | The pair has no text at all. |
+| `input_text_digest_mismatch` | The request doesn't match its digest. |
+| `input_text_missing` | The request is missing. |
+
+An answer that names its own model is marked `names_own_model`, because no
+label can blind a judge to that.
+
+The tasks carry prompt and answer text, so the route needs `replay.detail`,
+and refuses a caller without it rather than redacting the tasks. The judge
+runs outside the Router.
 
 ### Publish the dataset and its judgments
 
-`tools/calibration/shadow-dataset` publishes a manifest, and optionally the judgments a judge returned for it, into a storage directory. Any object store mounted as a filesystem works as that directory. The tool validates every input before it writes anything: the manifest has to match its own digest, the tasks have to be the ones the manifest and the blinding key produce from the text they carry, and the judgments have to answer those tasks with no field the judgment record does not define. The key is read for that check and never published.
+`tools/calibration/shadow-dataset` publishes a manifest, and optionally the
+judgments a judge returned for it, into a storage directory; any object store
+mounted as a filesystem works. The tool validates every input before it writes
+anything:
+
+- **The manifest** has to match its own digest.
+- **The tasks** have to be the ones the manifest and the blinding key produce
+  from the text they carry. The key is read for this check and never
+  published.
+- **The judgments** have to answer those tasks, with no field the judgment
+  record doesn't define.
 
 ```bash
 make run-shadow-dataset GO_TOOL_ARGS="--dest /mnt/shadow-datasets \
@@ -329,7 +451,24 @@ make run-shadow-dataset GO_TOOL_ARGS="--dest /mnt/shadow-datasets \
   --blinding-key $JUDGE_KEY"
 ```
 
-The manifest lands at `manifests/<digest>/<digest of the file>.json`, because the manifest digest leaves out the counts and two exports of the same examples can differ in what they excluded, and the judgment set lands at `judgments/<manifest digest>/<digest of the set>.json` beside a `.report.json` that counts outcomes, slot picks and how many pairs followed the slot rather than the answer. Every name comes from content, so publishing the same files twice changes nothing and a published name is never replaced with different bytes. The judge tasks are read to check the judgments against but never published, because they carry the prompt and both answers. Keep datasets out of this repository.
+| What | Where it lands |
+| --- | --- |
+| The manifest | `manifests/<digest>/<digest of the file>.json` |
+| The judgment set | `judgments/<manifest digest>/<digest of the set>.json` |
+| The judgment report | A `.report.json` beside the set |
+
+- **The manifest path** includes the file's own digest, because the manifest
+  digest leaves out the counts, and two exports of the same examples can
+  differ in what they excluded.
+- **The report** counts outcomes, slot picks, and how many pairs followed the
+  slot rather than the answer.
+- **Content-addressed.** Every name comes from content, so publishing the same
+  files twice changes nothing, and a published name is never replaced with
+  different bytes.
+- **Tasks stay private.** The judge tasks are read to check the judgments, but
+  never published, because they carry the prompt and both answers.
+
+Keep datasets out of this repository.
 
 ## Read the results
 
