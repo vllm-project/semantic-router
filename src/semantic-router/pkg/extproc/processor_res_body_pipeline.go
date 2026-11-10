@@ -171,7 +171,7 @@ func (r *OpenAIRouter) prepareResponsePolicy(
 	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
 	logResponseGuard(ctx, ctx.ResponseGuard)
 	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {
-		return &responsePolicyPlan{blocked: refused, refusal: ctx.ImmediateProtocolError}
+		return &responsePolicyPlan{blocked: r.encodeImmediateResponseForClient(refused, ctx), refusal: ctx.ImmediateProtocolError}
 	}
 	if rule := ctx.ResponseGuard.blocking(); rule != nil {
 		return &responsePolicyPlan{

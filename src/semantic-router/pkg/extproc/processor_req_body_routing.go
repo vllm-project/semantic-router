@@ -21,6 +21,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
@@ -564,7 +565,8 @@ func (r *OpenAIRouter) appendProviderCredential(
 // appendDelegatedCredential presents the request's delegated credential to a
 // delegated backend, replacing whatever the client sent under the auth
 // header. Static and per-user provider keys are not consulted: a request
-// without the credential fails before dispatch.
+// without the credential fails before dispatch. The credential is the call's
+// principal's, so a Looper hop's refusal is its client request's too.
 func (r *OpenAIRouter) appendDelegatedCredential(
 	state *routeHeaderState,
 	providerAuth modelcatalog.ProviderAuth,
@@ -581,8 +583,8 @@ func (r *OpenAIRouter) appendDelegatedCredential(
 		})
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
-	credential, ok := requestDelegatedCredential(ctx)
-	if !ok {
+	credential, err := principal.Delegated(ctx.TraceContext)
+	if err != nil {
 		logging.ComponentWarnEvent("extproc", "delegated_credential_missing", map[string]interface{}{
 			"request_id": ctx.RequestID, "model": model, "backend": backendName,
 		})

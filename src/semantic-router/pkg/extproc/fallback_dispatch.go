@@ -267,7 +267,7 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 		}
 	}
 
-	return nil
+	return r.encodeImmediateResponseForClient(r.delegatedCredentialRefusal(ctx), ctx)
 }
 
 // fallbackHaltStatus names why a chain stopped at a candidate that could not
@@ -278,6 +278,8 @@ func fallbackHaltStatus(err error) string {
 		return "total_deadline_exceeded"
 	case errors.Is(err, context.Canceled):
 		return "context_canceled"
+	case errors.Is(err, principal.ErrCredentialMissing):
+		return delegatedCredentialCode
 	default:
 		return "fallback_halted"
 	}
@@ -640,6 +642,13 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 	if err != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, err
 	}
+	if dispatch.profile.Delegated() {
+		// A candidate the request cannot pay for ends the chain before its
+		// call, and the request answers 401, as for the primary.
+		if _, err := principal.Delegated(ctx.TraceContext); err != nil {
+			return nil, fallback.EvaluationResult{CanFallback: false}, err
+		}
+	}
 
 	requestBase := ctx.FallbackRequest
 	requestAlreadyPrepared := requestBase != nil
@@ -837,10 +846,6 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 		return nil, 0, err
 	}
 	authorize, err := r.fallbackProviderAuthorizer(reqCtx, dispatch.profile, dispatch.effectiveBackendModel())
-	if errors.Is(err, principal.ErrCredentialMissing) {
-		// The attempt ends as the Router's own 401, before any upstream call.
-		return delegatedCredentialMissingBody, http.StatusUnauthorized, nil
-	}
 	if err != nil {
 		return nil, 0, err
 	}
