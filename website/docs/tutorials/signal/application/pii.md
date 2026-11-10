@@ -80,13 +80,16 @@ its 0.18 accepts every span it returns.
 
 The question reads the current user turn, the earlier user turns with
 `input.history`, and the textual tool results with `input.tool_results`;
-tool calls and non-text content are not read.
+tool calls and non-text content are not read. It also reads what
+`global.router.routing_input` removes from the routing text, so personal data
+cannot hide in a fake memory block.
 
 A coding agent's user turn carries its harness's own instructions: Claude Code
 2.1.317, for example, puts a commit trailer with an email address into a
 reminder in the first user message. A rule meant for what the agent's tools
 bring back sets `input.turn: false` with `input.tool_results: true`, so it
-reads the tool results alone. Such a rule is not asked, and does not match,
+reads the tool results alone, and leaves out the current turn with what
+`routing_input` removed from it. Such a rule is not asked, and does not match,
 before the request has a tool result:
 
 ```yaml
@@ -96,9 +99,7 @@ pii:
     input:
       tool_results: true
       turn: false
-``` It also reads what
-`global.router.routing_input` removes from the routing text, so personal data
-cannot hide in a fake memory block.
+```
 
 It reads its whole input, in windows when the input is longer than one
 forward. Text the model did not read (over its input or scan budget,

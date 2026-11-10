@@ -159,6 +159,12 @@ func testPIIToolOutputOnly(ctx context.Context, client *kubernetes.Clientset, op
 			want:     "default-route",
 			why:      "neither rule finds a span",
 		},
+		{
+			name:     "personal data in the user turn beside a clean tool result",
+			messages: toolTurn("__PII_SPAN__ EMAIL_ADDRESS alice@corp.example summarise the owners file", "nobody owns this file"),
+			want:     "block_detected_pii_remote",
+			why:      "pii_tool_output is asked about the clean tool result alone, so only pii_deny_all, which reads the user turn, matches",
+		},
 	}
 	observed := make(map[string]string, len(cases))
 	for _, tc := range cases {

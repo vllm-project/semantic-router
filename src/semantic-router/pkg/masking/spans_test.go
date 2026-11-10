@@ -365,3 +365,30 @@ func TestMaskText_ExistingPlaceholderNotMaskedAgain(t *testing.T) {
 		})
 	}
 }
+
+// Case: the exemption never lets real personal data through. A span that
+// reaches past a placeholder is masked, and a template without a letter
+// besides {index} exempts nothing, since its pattern would also match the
+// digits inside a phone number.
+func TestMaskText_PlaceholderExemptionDoesNotSkipRealValues(t *testing.T) {
+	text := `mail "[PERSON_0]"@example.com today`
+	start, end := byteRange(t, text, `"[PERSON_0]"@example.com`)
+	got, _, err := MaskText(text, []Span{{EntityType: "EMAIL_ADDRESS", Start: start, End: end, Confidence: 0.9}}, nil, NewAllocator(defaultCfg()))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "mail [EMAIL_ADDRESS_0] today"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+
+	text = "call 415-555-0134 now"
+	start, end = byteRange(t, text, "415-555-0134")
+	cfg := &config.MaskingPluginConfig{Placeholders: map[string]string{"PERSON": "{index}", "PHONE_NUMBER": "#{index}"}}
+	got, _, err = MaskText(text, []Span{{EntityType: "PHONE_NUMBER", Start: start, End: end, Confidence: 0.9}}, nil, NewAllocator(cfg))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "call #0 now"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}

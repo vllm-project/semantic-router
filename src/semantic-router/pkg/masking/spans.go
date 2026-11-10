@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -49,7 +50,10 @@ func NewAllocator(cfg *config.MaskingPluginConfig) *Allocator {
 }
 
 // placeholderPattern matches the placeholders cfg can produce: the default
-// [TYPE_n] shape and every configured template with {index} as digits.
+// [TYPE_n] shape and every configured template with {index} as digits. A
+// template with no letter besides {index}, such as "{index}" or "#{index}",
+// is left out: its pattern would also match digits inside a real phone
+// number or address.
 func placeholderPattern(cfg *config.MaskingPluginConfig) *regexp.Regexp {
 	alternatives := []string{`\[[A-Z][A-Z0-9_]*_\d+\]`}
 	if cfg != nil {
@@ -59,7 +63,8 @@ func placeholderPattern(cfg *config.MaskingPluginConfig) *regexp.Regexp {
 		}
 		sort.Strings(entityTypes)
 		for _, entityType := range entityTypes {
-			if template := cfg.Placeholders[entityType]; template != "" {
+			template := cfg.Placeholders[entityType]
+			if strings.IndexFunc(strings.ReplaceAll(template, config.MaskingPlaceholderIndexToken, ""), unicode.IsLetter) >= 0 {
 				alternatives = append(alternatives, strings.ReplaceAll(regexp.QuoteMeta(template),
 					regexp.QuoteMeta(config.MaskingPlaceholderIndexToken), `\d+`))
 			}
@@ -68,11 +73,12 @@ func placeholderPattern(cfg *config.MaskingPluginConfig) *regexp.Regexp {
 	return regexp.MustCompile(strings.Join(alternatives, "|"))
 }
 
-// dropPlaceholderSpans drops spans that touch a placeholder already in the
-// text. Agents echo placeholders back in later turns (a reply that starts
+// dropPlaceholderSpans drops spans that lie inside a placeholder already in
+// the text. Agents echo placeholders back in later turns (a reply that starts
 // "Hi [NAME_2],"), and a detector reading NAME_2 as a name would otherwise
 // mask it again into [[NAME_5]], so the model sees its own earlier output
-// change under it.
+// change under it. A span that reaches past a placeholder, such as an email
+// address whose local part is one, is still masked.
 func (a *Allocator) dropPlaceholderSpans(text string, spans []Span) []Span {
 	found := a.existing.FindAllStringIndex(text, -1)
 	if len(found) == 0 {
@@ -82,7 +88,7 @@ func (a *Allocator) dropPlaceholderSpans(text string, spans []Span) []Span {
 	for _, span := range spans {
 		inside := false
 		for _, loc := range found {
-			if span.Start < loc[1] && loc[0] < span.End {
+			if loc[0] <= span.Start && span.End <= loc[1] {
 				inside = true
 				break
 			}

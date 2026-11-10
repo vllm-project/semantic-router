@@ -88,7 +88,7 @@ This plugin only ever removes information going forward to the provider. It does
 
 If a response happens to echo a placeholder like `[EMAIL_ADDRESS_0]` back to the client, that placeholder is not decoded — the client sees exactly that string. Restoring placeholders in responses is an explicit non-goal, not a missing feature.
 
-An agent that keeps working with placeholders sends them back in its later requests, for example in a file it writes with `Hi [PERSON_0],`. Text already shaped like a placeholder this plugin produces, the default `[TYPE_n]` shape or a configured template with digits for `{index}`, is never masked again, even when the detector reads part of it as personal data. Without that, the agent would see its own earlier output turn into `[[PERSON_1]]` on the next turn and its edits would stop matching the file it wrote.
+An agent that keeps working with placeholders sends them back in its later requests, for example in a file it writes with `Hi [PERSON_0],`. A detected span that lies inside text shaped like a placeholder this plugin produces, the default `[TYPE_n]` shape or a configured template that has a letter besides `{index}`, with digits for `{index}`, is not masked again, even when the detector reads part of it as personal data. A span that reaches past it, such as an email address whose local part is a placeholder, is still masked, and a template such as `{index}` or `#{index}` is not recognized, since its digits could be part of a real phone number. Without that, the agent would see its own earlier output turn into `[[PERSON_1]]` on the next turn and its edits would stop matching the file it wrote.
 
 ## What is deliberately not masked
 
