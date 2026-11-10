@@ -266,8 +266,11 @@ func TestApplyRetentionTTLOverride(t *testing.T) {
 		t.Fatalf("no retention: got %d, want base %d", got, base)
 	}
 	ctx := &RequestContext{Retention: &config.DecisionRetention{TTLTurns: intPtr(2)}}
-	if got := applyRetentionTTLOverride(base, ctx); got != 2*retentionDefaultSecondsPerTurn {
-		t.Fatalf("ttl_turns override: got %d, want %d", got, 2*retentionDefaultSecondsPerTurn)
+	if got := applyRetentionTTLOverride(base, ctx); got != base {
+		t.Fatalf("ttl_turns longer than base: got %d, want base %d", got, base)
+	}
+	if got := applyRetentionTTLOverride(-1, ctx); got != 2*retentionDefaultSecondsPerTurn {
+		t.Fatalf("ttl_turns over the store default: got %d, want %d", got, 2*retentionDefaultSecondsPerTurn)
 	}
 }
 
@@ -287,6 +290,47 @@ func TestUpdateResponseCacheAppliesRetentionTTL(t *testing.T) {
 	}
 	if mockCache.lastTTLSeconds != 2*retentionDefaultSecondsPerTurn {
 		t.Fatalf("non-streaming ttl_turns override: got %d, want %d", mockCache.lastTTLSeconds, 2*retentionDefaultSecondsPerTurn)
+	}
+}
+
+// ttl_turns shortens a cache write's lifetime and never lengthens it: the
+// entry lives the least of the plugin's ttl_seconds, the caller's ttl and
+// ttl_turns, and a zero from the plugin or the caller still stores nothing.
+func TestUpdateResponseCacheRetentionTTLOnlyShortensTheLifetime(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		pluginTTL  *int
+		callerTTL  *int
+		wantStored bool
+		wantTTL    int
+	}{
+		{name: "caller ttl shorter than ttl_turns", pluginTTL: intPtr(60), callerTTL: intPtr(5), wantStored: true, wantTTL: 5},
+		{name: "plugin ttl shorter than ttl_turns", pluginTTL: intPtr(60), wantStored: true, wantTTL: 60},
+		{name: "ttl_turns shorter than the store default", wantStored: true, wantTTL: 10 * retentionDefaultSecondsPerTurn},
+		{name: "caller no-store", pluginTTL: intPtr(60), callerTTL: intPtr(0)},
+		{name: "plugin no-store", pluginTTL: intPtr(0)},
+		{name: "plugin no-store with a caller ttl", pluginTTL: intPtr(0), callerTTL: intPtr(5)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			decision := retentionCacheDecision("cache-decision", true)
+			if tt.pluginTTL != nil {
+				decision.Plugins[0].Configuration = config.MustStructuredPayload(map[string]interface{}{"enabled": true, "ttl_seconds": *tt.pluginTTL})
+			}
+			mockCache, router, selected := cacheRouterForDecision(decision)
+			ctx := withSelectedDecision(&RequestContext{
+				RequestID:            "req-retention-min-ttl",
+				RequestModel:         "test-model",
+				RequestQuery:         "hello",
+				SemanticRequest:      testNeutralRequest("test-model", "hello"),
+				CacheWriteTTLSeconds: tt.callerTTL,
+				Retention:            &config.DecisionRetention{TTLTurns: intPtr(10)},
+			}, selected)
+
+			router.updateResponseCache(ctx, []byte(`{"choices":[]}`))
+			if mockCache.addEntryCalled != tt.wantStored || mockCache.lastTTLSeconds != tt.wantTTL {
+				t.Fatalf("stored=%v ttl=%d, want stored=%v ttl=%d", mockCache.addEntryCalled, mockCache.lastTTLSeconds, tt.wantStored, tt.wantTTL)
+			}
+		})
 	}
 }
 

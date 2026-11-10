@@ -3315,6 +3315,42 @@ func TestFallbackWritesClientResponseToCache(t *testing.T) {
 	}
 }
 
+// A fallback candidate's answer is stored in the candidate's selected-model
+// partition: a later request the primary serves never replays it.
+func TestFallbackCachesTheAnswerInTheCandidatesPartition(t *testing.T) {
+	router, cfg := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+	mockCache := &mockStreamingCache{}
+	router.Cache = mockCache
+	cfg.SemanticCache = config.SemanticCache{InUse: true}
+	cfg.IntelligentRouting.Decisions = []config.Decision{{
+		Name:      "chat_fallback_decision",
+		ModelRefs: []config.ModelRef{{Model: "model-primary"}, {Model: "model-fallback-1"}},
+		Plugins: []config.DecisionPlugin{{
+			Type:          config.DecisionPluginResponseCache,
+			Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "mode": "semantic"}),
+		}},
+	}}
+	ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-1"})
+	withSelectedDecision(ctx, &cfg.IntelligentRouting.Decisions[0])
+	ctx.UpstreamStatusCode = 503
+	ctx.CacheQuery, ctx.CacheExactFingerprint, ctx.CacheSemanticSafe = "Explain quantum computing in one sentence", "test-fingerprint", true
+	ctx.CacheRequestModel, ctx.CacheSelectedModel = "vllm-sr/auto", "model-fallback-1"
+	candidatePartition := router.responseCacheService().ResolveIdentity(responseCacheIdentity(ctx, ctx.CacheRequestModel)).SemanticPartitionKey()
+	ctx.CacheSelectedModel = "model-primary"
+	ctx.CacheIdentity = responseCacheIdentity(ctx, ctx.CacheRequestModel)
+	router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
+		return []byte(`{"id":"chatcmpl-fallback-partition","object":"chat.completion","created":1,"model":"model-fallback-1",` +
+			`"choices":[{"index":0,"message":{"role":"assistant","content":"fallback answer"},"finish_reason":"stop"}]}`), http.StatusOK, nil
+	}
+
+	if resp := router.handleUpstreamTransportError([]byte("upstream 503"), ctx); resp.GetImmediateResponse() == nil {
+		t.Fatalf("expected ImmediateResponse from fallback, got: %#v", resp)
+	}
+	if !mockCache.addEntryCalled || mockCache.addEntryModel != candidatePartition {
+		t.Fatalf("fallback answer stored in partition %q, want the candidate's %q", mockCache.addEntryModel, candidatePartition)
+	}
+}
+
 func TestFallbackBlockedResponseNotCached(t *testing.T) {
 	server := newJailbreakDecider(0.95)
 	router, ctx := newResponseStageRouter(t, server, "", config.ResponseGuardBlock)

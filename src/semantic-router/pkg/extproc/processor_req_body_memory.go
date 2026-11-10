@@ -106,7 +106,7 @@ func (x *memoryIndex) Recall(ctx context.Context, query string, recall config.Ma
 	}
 	// Without a bound, the store recalls above its default_similarity_threshold.
 	if recall.MinSimilarity != nil {
-		options.Threshold = float32(*recall.MinSimilarity)
+		options.Threshold, options.ThresholdSet = float32(*recall.MinSimilarity), true
 	}
 	switch {
 	case x.source.HybridSearch:

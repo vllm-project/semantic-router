@@ -86,7 +86,7 @@ Choose one backend:
 | `external_api` | A service with a custom HTTP request contract | `endpoint`, `request_format` |
 | `mcp` | Rejected at startup until an MCP tool invoker exists | `server_name`, `tool_name` |
 | `openai` | OpenAI file search | `vector_store_id`, `api_key` |
-| `vectorstore` | The Router-managed vector-store service | `vector_store_id` |
+| `vectorstore` | The Router-managed vector-store service, with `global.stores.vector_store.enabled: true` | `vector_store_id` |
 | `hybrid` | A primary backend with an optional fallback | `primary`, plus backend-specific nested configuration |
 
 `hybrid.strategy` defaults to `sequential`: the fallback runs only after the
@@ -116,7 +116,8 @@ one counts as similarity 1.
 without the documents, `warn` also logs a warning, `block` refuses the request
 with `503`. A retrieval that finds nothing is not a failure. `cache_results`
 keeps the kept documents for `cache_ttl_seconds` (default 3600) per query,
-source and match block.
+source and match block; the unjudged documents a failed judge keeps under
+`on_error: skip` serve that request only and are not cached.
 
 Retrieved documents become provider-bound context. Apply collection-level
 access control and avoid mixing tenants in one unrestricted search scope.

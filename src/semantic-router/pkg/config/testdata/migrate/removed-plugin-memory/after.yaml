@@ -49,6 +49,7 @@ recipes:
 global:
   stores:
     memory: {}
+    vector_store: {enabled: true, backend_type: memory}
   plugins:
     - type: context
       configuration:

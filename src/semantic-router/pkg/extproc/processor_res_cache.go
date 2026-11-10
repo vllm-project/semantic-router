@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -62,6 +63,13 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 			span.SetAttributes(attribute.String(tracing.AttrCacheWriteSkippedReason, personalizedReason))
 		}
 		return
+	}
+
+	// A fallback candidate answered, so the answer belongs to the candidate's
+	// selected-model partition, not to the primary's the lookup used.
+	if ctx.ResponsePath == headers.ResponsePathFallback && ctx.CacheSelectedModel != ctx.VSRSelectedModel {
+		ctx.CacheSelectedModel = ctx.VSRSelectedModel
+		ctx.CacheIdentity = responseCacheIdentity(ctx, ctx.CacheRequestModel)
 	}
 
 	ttlSeconds := -1
