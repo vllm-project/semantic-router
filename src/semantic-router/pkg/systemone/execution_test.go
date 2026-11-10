@@ -97,12 +97,14 @@ func TestEscalateStagesWithoutQualityAcceptCompleteAnswers(t *testing.T) {
 	}
 }
 
-// A stage's rules cover every answer before it exits early: a score answer
-// that its choice-only rule does not cover moves on to the next stage.
+// Without a quality rule, a stage's rules cover every answer before it exits
+// early: a score answer that its choice-only rule does not cover moves on to
+// the next stage. Beside a quality rule that covers it, the stage's rule only
+// adds a condition.
 func TestEscalateStageGateRequiresRuleCoverage(t *testing.T) {
 	floor := gate(0)
 	floor.Native = append(floor.Native, config.NativeAcceptanceRule{QuestionType: "score", Field: "top_probability", NumericPredicate: floor.Native[0].NumericPredicate})
-	for _, quality := range []*config.EscalateQuality{nil, {Type: "uncalibrated", Accept: floor}} {
+	for quality, want := range map[*config.EscalateQuality]string{nil: "strong", {Type: "uncalibrated", Accept: floor}: "fast"} {
 		plan := cascadePlan()
 		plan.Escalate.Quality = quality
 		executor, err := NewExecutor(plan, nil)
@@ -116,8 +118,8 @@ func TestEscalateStageGateRequiresRuleCoverage(t *testing.T) {
 		result, err := executor.Execute(context.Background(), request, func(context.Context, string, json.RawMessage) (int, []byte, error) {
 			return 200, []byte(`{"model":"actual","answers":{"difficulty":{"type":"score","score":0.5,"confidence":0.01,"probabilities":{"0":0.5,"1":0.5}}}}`), nil
 		})
-		if err != nil || result.Stage != "strong" {
-			t.Fatalf("quality %t: stage = %q, error = %v, want the uncovered answer to escalate", quality != nil, result.Stage, err)
+		if err != nil || result.Stage != want {
+			t.Fatalf("quality %t: stage = %q, error = %v, want %q", quality != nil, result.Stage, err, want)
 		}
 	}
 }

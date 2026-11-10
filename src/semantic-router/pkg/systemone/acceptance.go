@@ -8,9 +8,9 @@ import (
 
 // acceptNative applies only operator-authored, uncalibrated predicates. A raw
 // model statistic is not a probability of correctness. Rules are conjunctive,
-// and a gate, a stage's or the whole bundle's, must cover every answer without
-// dropping failures.
-func acceptNative(observations []Observation, accept *config.EscalateAccept) bool {
+// and a gate that judges the whole bundle (the quality policy's, or a stage's
+// without one) must cover every answer without dropping failures.
+func acceptNative(observations []Observation, accept *config.EscalateAccept, whole bool) bool {
 	if accept == nil || len(accept.Native) == 0 || len(observations) == 0 {
 		return false
 	}
@@ -32,7 +32,7 @@ func acceptNative(observations []Observation, accept *config.EscalateAccept) boo
 		}
 	}
 	for i, observation := range observations {
-		if !observation.Valid || !covered[i] {
+		if !observation.Valid || (whole && !covered[i]) {
 			return false
 		}
 	}

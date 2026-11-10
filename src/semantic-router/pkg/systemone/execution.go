@@ -167,22 +167,25 @@ func (e *Executor) Execute(ctx context.Context, request *NativeRequest, invoke I
 
 // accept applies the stage's own rules, then the quality policy: the
 // calibration evidence, or the whole-bundle rules of an uncalibrated policy,
-// which a complete answer passes when there are none.
+// which a complete answer passes when there are none. Without either, the
+// stage's rules judge the whole bundle; beside one, they only add conditions.
 func (e *Executor) accept(request *NativeRequest, stage config.EscalateStage, candidate Candidate) (bool, error) {
 	if !complete(candidate.Observations) {
 		return false, nil
 	}
-	if stage.Accept != nil && !acceptNative(candidate.Observations, stage.Accept) {
+	quality := e.algorithm.NativeQuality()
+	calibrated := quality.EffectiveType() == config.EscalateQualityCalibrated
+	whole := !calibrated && (quality == nil || quality.Accept == nil)
+	if stage.Accept != nil && !acceptNative(candidate.Observations, stage.Accept, whole) {
 		return false, nil
 	}
-	quality := e.algorithm.NativeQuality()
-	if quality.EffectiveType() == config.EscalateQualityCalibrated {
+	if calibrated {
 		return e.quality(request, candidate)
 	}
 	if quality == nil || quality.Accept == nil {
 		return true, nil
 	}
-	return acceptNative(candidate.Observations, quality.Accept), nil
+	return acceptNative(candidate.Observations, quality.Accept, true), nil
 }
 
 func (e *Executor) invokeStage(ctx context.Context, request *NativeRequest, stage config.EscalateStage, candidates []Candidate, invoke Invoke) (candidate Candidate, invokeErr error) {
