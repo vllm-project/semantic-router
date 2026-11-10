@@ -18,8 +18,9 @@ import (
 
 // looperGuardRouter is the response-stage router whose keyword-selected
 // decision answers through Looper fusion, every hop answering unsafeAnswer,
-// and carries guard and the memory context plugin, for a Chat client.
-func looperGuardRouter(t *testing.T, guard config.ResponseGuardPluginConfig, stream bool) (*OpenAIRouter, *RequestContext, *llmprotocol.Request) {
+// and carries guard and the memory context plugin, for a Chat client; decider
+// answers the guard's signal.
+func looperGuardRouter(t *testing.T, guard config.ResponseGuardPluginConfig, stream bool, decider *responseStageDecider) (*OpenAIRouter, *RequestContext, *llmprotocol.Request) {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeFusionReplayCompletion(w, "judge", []map[string]interface{}{{"index": 0, "message": map[string]interface{}{"role": "assistant", "content": unsafeAnswer}, "finish_reason": "stop"}}, map[string]int64{"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3})
@@ -32,7 +33,7 @@ func looperGuardRouter(t *testing.T, guard config.ResponseGuardPluginConfig, str
 	decision := keywordDecision(responseStageRouteName, guardPlugin(guard), memoryTestPlugin())
 	decision.Algorithm = &config.AlgorithmConfig{Type: config.DecisionAlgorithmFusion, Fusion: &config.FusionAlgorithmConfig{Model: "judge", AnalysisModels: []string{"panel-a", "panel-b"}, AnalysisMode: config.FusionAnalysisModeNone}}
 	cfg.Decisions = []config.Decision{decision}
-	router, ctx := routerWithSelectedDecision(cfg, responseStageClassifier(t, cfg, newJailbreakDecider(0.95)), responseStageRouteName)
+	router, ctx := routerWithSelectedDecision(cfg, responseStageClassifier(t, cfg, decider), responseStageRouteName)
 	router.MemoryExtractor = memory.NewMemoryChunkStore(&noopMemoryStore{})
 	router.ReplayRecorder = routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
 	replayConfig := config.DefaultRouterReplayPluginConfig()
@@ -61,7 +62,7 @@ func TestResponseGuardReadsTheLooperAnswerBeforeTheClient(t *testing.T) {
 		{"annotate/stream", annotate, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			router, ctx, request := looperGuardRouter(t, tc.guard, tc.stream)
+			router, ctx, request := looperGuardRouter(t, tc.guard, tc.stream, newJailbreakDecider(0.95))
 
 			response, err := router.handleLooperExecution(ctx.TraceContext, request, ctx.VSRSelectedDecision, ctx)
 			if err == nil {
@@ -115,7 +116,7 @@ func TestResponseGuardReadsTheLooperAnswerBeforeTheClient(t *testing.T) {
 func TestLooperAnswerTheGuardRefusedIsNotRetained(t *testing.T) {
 	for _, stream := range []bool{false, true} {
 		t.Run(fmt.Sprintf("stream_%t", stream), func(t *testing.T) {
-			router, ctx, _ := looperGuardRouter(t, jailbreakGuard(config.ResponseGuardBlock, ""), stream)
+			router, ctx, _ := looperGuardRouter(t, jailbreakGuard(config.ResponseGuardBlock, ""), stream, newJailbreakDecider(0.95))
 			objectStore, err := responsestore.NewMemoryStore(responsestore.StoreConfig{Enabled: true})
 			if err != nil {
 				t.Fatalf("response store: %v", err)
@@ -141,6 +142,55 @@ func TestLooperAnswerTheGuardRefusedIsNotRetained(t *testing.T) {
 			}
 			if stored, err := objectStore.GetResponse(ctx.TraceContext, ctx.ResponseObjectState.GeneratedResponseID); err == nil {
 				t.Fatalf("stored response = %+v, want the refused answer not retained", stored)
+			}
+		})
+	}
+}
+
+// A Looper answer the policy refuses reaches the client as that refusal in
+// the client's protocol: the 401 of a missing delegated credential, in stream
+// form for a streaming client, and the guard's 403 as a Messages error.
+func TestLooperRefusalReachesTheClientInItsProtocol(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		decider *responseStageDecider
+		format  llmprotocol.WireFormat
+		stream  bool
+		status  int
+		message string
+	}{
+		{"delegated", newDelegatedDecider(), llmprotocol.OpenAIChatV1, false, 401, delegatedCredentialMessage},
+		{"delegated/stream", newDelegatedDecider(), llmprotocol.OpenAIChatV1, true, 200, delegatedCredentialMessage},
+		{"guard/messages", newJailbreakDecider(0.95), llmprotocol.AnthropicMessagesV1, false, 403, "jailbreak content detected"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router, ctx, request := looperGuardRouter(t, jailbreakGuard(config.ResponseGuardBlock, ""), tc.stream, tc.decider)
+			ctx.SourceFormat = tc.format
+
+			response, err := router.handleLooperExecution(ctx.TraceContext, request, ctx.VSRSelectedDecision, ctx)
+			if err == nil {
+				response, err = router.requestBodyReply(response, nil, ctx)
+			}
+			if err != nil {
+				t.Fatalf("Looper request: %v", err)
+			}
+
+			immediate := response.GetImmediateResponse()
+			client, status := string(immediate.GetBody()), int(immediate.GetStatus().GetCode())
+			if status != tc.status {
+				t.Fatalf("status = %d, want %d: %s", status, tc.status, client)
+			}
+			switch {
+			case tc.stream:
+				assertRefusedStream(t, tc.format, client, tc.message, unsafeAnswer)
+			case tc.format == llmprotocol.AnthropicMessagesV1:
+				if !strings.Contains(client, `"type":"error"`) || !strings.Contains(client, tc.message) || strings.Contains(client, unsafeAnswer) {
+					t.Fatalf("reply = %s, want a Messages error carrying %q and none of the answer", client, tc.message)
+				}
+			default:
+				if !strings.Contains(client, tc.message) || strings.Contains(client, unsafeAnswer) {
+					t.Fatalf("reply = %s, want the refusal carrying %q and none of the answer", client, tc.message)
+				}
 			}
 		})
 	}

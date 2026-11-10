@@ -176,8 +176,8 @@ func (r *OpenAIRouter) handleLooperExecution(
 }
 
 // releaseLooperAnswer is the reply the response policy leaves of a Looper
-// answer: the guard's refusal, in stream form for a streaming client, or the
-// answer with the guard's notes.
+// answer: the policy's refusal, in the client's protocol and in stream form
+// for a streaming client, or the answer with the guard's notes.
 func (r *OpenAIRouter) releaseLooperAnswer(
 	resp *looper.Response,
 	response *ext_proc.ProcessingResponse,
@@ -186,11 +186,16 @@ func (r *OpenAIRouter) releaseLooperAnswer(
 	reqCtx *RequestContext,
 ) *ext_proc.ProcessingResponse {
 	streaming := reqCtx.ExpectStreamingResponse
-	if rule := reqCtx.ResponseGuard.blocking(); rule != nil && streaming {
-		response.GetImmediateResponse().Body = r.encodeStreamRefusal(reqCtx, responseGuardRefusal(rule))
-		return response
-	}
 	if plan.blocked != nil {
+		// A refused answer is never kept, though a stream refuses it with a 200.
+		if state := reqCtx.ResponseObjectState; state != nil {
+			state.PersistenceAttempted = true
+		}
+		if streaming {
+			response.GetImmediateResponse().Body = r.encodeStreamRefusal(reqCtx, plan.refusal)
+			return response
+		}
+		reqCtx.ImmediateProtocolError, reqCtx.ImmediateResponseEncoded = plan.refusal, false
 		return plan.blocked
 	}
 	noted := plan.finalBody

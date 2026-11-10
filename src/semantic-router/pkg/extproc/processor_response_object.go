@@ -70,10 +70,8 @@ func (r *OpenAIRouter) persistResponseObject(ctx *RequestContext) {
 	}
 	// A decision can tighten the client's store preference. Like store:false,
 	// drop suppresses this turn's write without changing generation or lineage.
-	// An answer the guard refused is never kept, though a stream refuses it
-	// with a 200.
 	if !state.ShouldStore || retentionDropsResponseContent(ctx) || ctx.SemanticResponse.Error != nil ||
-		ctx.ResponseGuard.blocking() != nil || strings.TrimSpace(ctx.SemanticResponse.ID) == "" {
+		strings.TrimSpace(ctx.SemanticResponse.ID) == "" {
 		return
 	}
 
