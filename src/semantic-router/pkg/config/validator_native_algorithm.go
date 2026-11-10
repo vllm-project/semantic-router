@@ -40,39 +40,31 @@ func validateNativeArtifact(source, digest string) error {
 	return nil
 }
 
+// validateNativeAlgorithmConfig checks a System One escalation: its budget,
+// its stages over the decision's modelRefs, and its quality policy.
 func validateNativeAlgorithmConfig(name string, refs []ModelRef, algorithm *AlgorithmConfig) error {
-	if !algorithm.IsNative() {
-		if algorithm.Budget != nil || algorithm.Quality != nil || len(algorithm.Stages) > 0 {
-			return fmt.Errorf("decision %q: algorithm.budget, quality and stages require cascade", name)
-		}
-		return nil
-	}
 	if algorithm.Budget == nil {
-		return fmt.Errorf("decision %q: cascade requires an explicit algorithm.budget", name)
+		return fmt.Errorf("decision %q: a System One escalation requires an explicit algorithm.budget", name)
 	}
 	if algorithm.MinimumCandidates != 0 {
-		return fmt.Errorf("decision %q: cascade uses authored stages; minimum_candidates is unsupported", name)
+		return fmt.Errorf("decision %q: a System One escalation uses authored stages; minimum_candidates is unsupported", name)
 	}
 	if err := algorithm.Budget.Validate(); err != nil {
 		return fmt.Errorf("decision %q: %w", name, err)
 	}
-	if len(refs) == 0 || len(algorithm.Stages) == 0 {
-		return fmt.Errorf("decision %q: native algorithms require modelRefs and stages", name)
+	if len(refs) == 0 {
+		return fmt.Errorf("decision %q: a System One escalation requires modelRefs", name)
 	}
-	if algorithm.OnError != "" {
-		return fmt.Errorf("decision %q: native algorithms return unresolved on exhaustion; algorithm.on_error is unsupported", name)
+	if algorithm.OnError != "" && algorithm.OnError != EscalateOnErrorFail {
+		return fmt.Errorf("decision %q: a System One escalation returns unresolved when no stage accepts; algorithm.on_error must be %q", name, EscalateOnErrorFail)
 	}
-	if err := validateNativeQuality(algorithm.Quality); err != nil {
-		return fmt.Errorf("decision %q algorithm.quality: %w", name, err)
+	if err := validateNativeQuality(algorithm.Escalate.Quality); err != nil {
+		return fmt.Errorf("decision %q algorithm.escalate.quality: %w", name, err)
 	}
-	if err := validateNativeStages(name, refs, algorithm.Stages); err != nil {
-		return err
-	}
-
-	return nil
+	return validateNativeStages(name, refs, algorithm.Escalate.Stages)
 }
 
-func validateNativeStages(name string, refs []ModelRef, stages []CascadeStage) error {
+func validateNativeStages(name string, refs []ModelRef, stages []EscalateStage) error {
 	candidates := make(map[string]bool, len(refs))
 	for _, ref := range refs {
 		if ref.Model == "" || candidates[ref.Model] || ref.LoRAName != "" {
@@ -82,12 +74,13 @@ func validateNativeStages(name string, refs []ModelRef, stages []CascadeStage) e
 	}
 	names := make(map[string]bool, len(stages))
 	for index, stage := range stages {
-		path := fmt.Sprintf("decision %q algorithm.stages[%d]", name, index)
-		if stage.Name == "" || stage.Name == "abstain" || stage.Name != strings.TrimSpace(stage.Name) || names[stage.Name] {
-			return fmt.Errorf("%s.name must be distinct and non-empty without surrounding whitespace", path)
+		path := fmt.Sprintf("decision %q algorithm.escalate.stages[%d]", name, index)
+		stageName := stage.StageName()
+		if stageName == "" || stageName == "abstain" || stageName != strings.TrimSpace(stageName) || names[stageName] {
+			return fmt.Errorf("%s: stage names (the model unless set) must be distinct and non-empty without surrounding whitespace", path)
 		}
-		names[stage.Name] = true
-		if index == 0 && (stage.Kind != "native" || !stage.IsEnabled()) {
+		names[stageName] = true
+		if index == 0 && (stage.StageKind() != EscalateStageNative || !stage.IsEnabled()) {
 			return fmt.Errorf("%s: first stage must be enabled and native", path)
 		}
 		if err := validateNativeStage(stage, candidates); err != nil {
@@ -97,16 +90,16 @@ func validateNativeStages(name string, refs []ModelRef, stages []CascadeStage) e
 	return nil
 }
 
-func validateNativeStage(stage CascadeStage, candidates map[string]bool) error {
+func validateNativeStage(stage EscalateStage, candidates map[string]bool) error {
 	if !candidates[stage.Model] {
 		return fmt.Errorf("model %q is an undeclared modelRef", stage.Model)
 	}
-	switch stage.Kind {
-	case "native":
+	switch stage.StageKind() {
+	case EscalateStageNative:
 		if stage.Generation != nil || stage.Instructions != "" {
 			return fmt.Errorf("native stage cannot declare LLM generation or instructions")
 		}
-	case "judge":
+	case EscalateStageJudge:
 		if stage.Generation == nil || stage.Generation.MaxOutputTokens <= 0 {
 			return fmt.Errorf("LLM stage requires positive generation.max_output_tokens")
 		}
@@ -124,19 +117,22 @@ func validateNativeStage(stage CascadeStage, candidates map[string]bool) error {
 	return nil
 }
 
-func validateNativeQuality(quality *NativeQualityConfig) error {
-	if quality == nil {
-		return fmt.Errorf("an explicit quality policy is required")
-	}
-	switch quality.Type {
-	case "uncalibrated":
+func validateNativeQuality(quality *EscalateQuality) error {
+	switch quality.EffectiveType() {
+	case EscalateQualityUncalibrated:
+		if quality == nil {
+			return nil
+		}
 		if quality.Calibration != "" || quality.Loss != "" || quality.MaxRisk != nil {
 			return fmt.Errorf("uncalibrated acceptance cannot declare calibrated evidence or risk")
 		}
-		return validateNativeAcceptance(quality.Acceptance)
-	case "calibrated":
-		if quality.Acceptance != nil || strings.TrimSpace(quality.Calibration) == "" || quality.Loss != "bundle_error" || quality.MaxRisk == nil {
-			return fmt.Errorf("calibrated quality requires calibration, loss: bundle_error, and max_risk, without acceptance")
+		if quality.Accept == nil {
+			return nil
+		}
+		return validateNativeAcceptance(quality.Accept)
+	case EscalateQualityCalibrated:
+		if quality.Accept != nil || strings.TrimSpace(quality.Calibration) == "" || quality.Loss != "bundle_error" || quality.MaxRisk == nil {
+			return fmt.Errorf("calibrated quality requires calibration, loss: bundle_error, and max_risk, without accept")
 		}
 		risk := *quality.MaxRisk
 		if math.IsNaN(risk) || math.IsInf(risk, 0) || risk < 0 || risk > 1 {
@@ -148,31 +144,34 @@ func validateNativeQuality(quality *NativeQualityConfig) error {
 	return nil
 }
 
-func validateNativeAcceptance(acceptance *NativeAcceptance) error {
-	if acceptance == nil || len(acceptance.Rules) == 0 {
-		return fmt.Errorf("acceptance must contain at least one typed rule")
+func validateNativeAcceptance(accept *EscalateAccept) error {
+	if accept.Confidence != nil || accept.SystemOne != nil || accept.Refusal != nil {
+		return fmt.Errorf("accept: a System One answer is accepted by native rules; confidence, systemone and refusal accept Chat answers")
 	}
-	for index, rule := range acceptance.Rules {
+	if len(accept.Native) == 0 {
+		return fmt.Errorf("accept.native must contain at least one typed rule")
+	}
+	for index, rule := range accept.Native {
 		if rule.Question == "" && rule.QuestionType == "" {
-			return fmt.Errorf("rules[%d] must name a question or question_type", index)
+			return fmt.Errorf("accept.native[%d] must name a question or question_type", index)
 		}
 		switch rule.QuestionType {
 		case "", "choice", "score", "noul":
 		default:
-			return fmt.Errorf("rules[%d].question_type must be choice, score, or noul", index)
+			return fmt.Errorf("accept.native[%d].question_type must be choice, score, or noul", index)
 		}
 		if rule.Field != "confidence" && rule.Field != "top_probability" && rule.Field != "probability_margin" {
-			return fmt.Errorf("rules[%d].field must be confidence, top_probability, or probability_margin; score value is not confidence", index)
+			return fmt.Errorf("accept.native[%d].field must be confidence, top_probability, or probability_margin; score value is not confidence", index)
 		}
 		if rule.Field == "probability_margin" && rule.QuestionType != "" && rule.QuestionType != "noul" {
-			return fmt.Errorf("rules[%d]: probability_margin applies only to noul", index)
+			return fmt.Errorf("accept.native[%d]: probability_margin applies only to noul", index)
 		}
-		if err := validateNumericPredicateContract(&rule.Predicate); err != nil {
-			return fmt.Errorf("rules[%d].predicate: %w", index, err)
+		if err := validateNumericPredicateContract(&rule.NumericPredicate); err != nil {
+			return fmt.Errorf("accept.native[%d]: %w", index, err)
 		}
-		for _, bound := range []*float64{rule.Predicate.GT, rule.Predicate.GTE, rule.Predicate.LT, rule.Predicate.LTE} {
+		for _, bound := range []*float64{rule.GT, rule.GTE, rule.LT, rule.LTE} {
 			if bound != nil && (math.IsNaN(*bound) || math.IsInf(*bound, 0) || *bound < 0 || *bound > 1) {
-				return fmt.Errorf("rules[%d].predicate: probability bounds must be finite and in [0, 1]", index)
+				return fmt.Errorf("accept.native[%d]: probability bounds must be finite and in [0, 1]", index)
 			}
 		}
 	}

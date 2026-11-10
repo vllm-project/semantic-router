@@ -66,7 +66,7 @@ func systemOnePublicationYAML(models, extraModels, input string) string {
 	if input != "" {
 		body += "\n        " + input
 	}
-	return `version: v0.3
+	return `version: v0.5
 listeners:
   - name: public
     port: 8899
@@ -78,18 +78,18 @@ providers:
     - name: m
       backend_refs: [{endpoint: "127.0.0.1:8000", protocol: http}]
 ` + extraModels + `
-routing:
-  modelCards: [{name: m}]
-  decisions:
-    - name: d
-      priority: 1
-      rules: {operator: AND, conditions: [{type: keyword, name: k}]}
-      modelRefs: [{model: m}]
-  signals:
-    keywords:
-      - name: k
-        operator: OR
-        keywords: [hello]
+recipes:
+  - name: default
+    decisions:
+      - name: d
+        priority: 1
+        rules: {operator: AND, conditions: [{type: keyword, name: k}]}
+        modelRefs: [{model: m}]
+    signals:
+      keywords:
+        - name: k
+          operator: OR
+          keywords: [hello]
 global:
   model_catalog:
     deployments:
@@ -97,27 +97,27 @@ global:
         ` + body + "\n"
 }
 
-func TestTaskBindingKeepsATaskInputUntilPublishedOnSystemOne(t *testing.T) {
+func TestEmbeddingDeploymentKeepsItsInputUntilPublishedOnSystemOne(t *testing.T) {
 	for _, input := range []string{
 		"input: {max_tokens: 512, overflow: truncate}",
 		"input: {max_tokens: 32768, overflow: reject}",
 	} {
-		if _, err := ParseYAMLBytes([]byte(taskBindingYAML(input, false))); err != nil {
-			t.Fatalf("task binding %s: %v", input, err)
+		if _, err := ParseYAMLBytes([]byte(embeddingDeploymentYAML(input, false))); err != nil {
+			t.Fatalf("embedding deployment %s: %v", input, err)
 		}
-		_, err := ParseYAMLBytes([]byte(taskBindingYAML(input, true)))
+		_, err := ParseYAMLBytes([]byte(embeddingDeploymentYAML(input, true)))
 		if err == nil || !strings.Contains(err.Error(), "never truncate") {
 			t.Fatalf("system one %s: %v", input, err)
 		}
 	}
 }
 
-func taskBindingYAML(input string, publish bool) string {
+func embeddingDeploymentYAML(input string, publish bool) string {
 	listener := ""
 	if publish {
 		listener = "\n    systemone: {models: [encoder-public]}"
 	}
-	return `version: v0.3
+	return `version: v0.5
 listeners:
   - name: public
     port: 8899` + listener + `
@@ -126,25 +126,25 @@ providers:
   models:
     - name: m
       backend_refs: [{endpoint: "127.0.0.1:8000", protocol: http}]
-routing:
-  modelCards: [{name: m}]
-  signals:
-    domains: [{name: math, description: Math requests., mmlu_categories: [math]}]
-  decisions:
-    - name: d
-      priority: 1
-      rules: {operator: AND, conditions: [{type: domain, name: math}]}
-      modelRefs: [{model: m}]
+recipes:
+  - name: default
+    signals:
+      domains: [{name: math, description: Math requests., labels: [math]}]
+    decisions:
+      - name: d
+        priority: 1
+        rules: {operator: AND, conditions: [{type: domain, name: math}]}
+        modelRefs: [{model: m}]
 global:
   model_catalog:
     deployments:
       encoder:
         provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
         device: cpu
         public_name: encoder-public
         ` + input + `
-    bindings:
-      domain_classifier: {deployment: encoder, contract: label_distribution.v1}
+    embeddings:
+      default: {deployment: encoder}
 `
 }

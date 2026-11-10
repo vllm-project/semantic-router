@@ -15,64 +15,136 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from cli.algorithms import (  # noqa: E402
+    EXECUTOR_ALGORITHM_TYPES,
     AlgorithmConfig,
-    AutoMixSelectionConfig,
     FusionAlgorithmConfig,
-    HybridSelectionConfig,
     MultiFactorObjectiveConfig,
     MultiFactorSelectionConfig,
-    PromptSelectionConfig,
     QualityEvidenceConfig,
     RatingsAlgorithmConfig,
     ReMoMAlgorithmConfig,
-    RouterDCSelectionConfig,
     WorkflowFinalConfig,
     WorkflowPlannerConfig,
     WorkflowRoleConfig,
     WorkflowsAlgorithmConfig,
 )
+from cli.config_algorithm_forms import removed_algorithm_forms  # noqa: E402
+
+CHAT_ESCALATE = {"accept": {"confidence": {"method": "avg_logprob", "gte": 0.7}}}
 
 
 class TestAlgorithmConfigTypes:
     """Test algorithm type validation."""
 
-    def test_valid_looper_types(self):
-        """Test that looper algorithm types are accepted."""
-        looper_types = ["confidence", "ratings", "remom", "fusion", "workflows"]
-
-        for algo_type in looper_types:
+    def test_executor_types(self):
+        """The executors call several candidates and return one response."""
+        assert {
+            "escalate",
+            "fusion",
+            "remom",
+            "ratings",
+            "workflows",
+        } == EXECUTOR_ALGORITHM_TYPES
+        config = AlgorithmConfig(type="escalate", escalate=CHAT_ESCALATE)
+        assert config.escalate == CHAT_ESCALATE
+        for algo_type in ["ratings", "remom", "fusion", "workflows"]:
             config = AlgorithmConfig(type=algo_type)
             assert config.type == algo_type
 
-    def test_valid_selection_types(self):
-        """Test that selection algorithm types are accepted."""
-        selection_types = [
-            "static",
+    def test_selector_types(self):
+        """The selectors choose one candidate before calling it."""
+        for algo_type in ["static", "multi_factor", "random"]:
+            config = AlgorithmConfig(type=algo_type)
+            assert config.type == algo_type
+
+    @pytest.mark.parametrize(
+        "algo_type",
+        [
+            "confidence",
+            "cascade",
+            "prompt",
             "router_dc",
             "automix",
             "hybrid",
+            "latency_aware",
             "knn",
             "kmeans",
             "svm",
             "mlp",
-            "multi_factor",
-            "latency_aware",
-            "random",
-        ]
+        ],
+    )
+    def test_removed_types_point_to_migrate(self, algo_type):
+        document = {
+            "recipes": [
+                {
+                    "name": "default",
+                    "decisions": [{"name": "route", "algorithm": {"type": algo_type}}],
+                }
+            ]
+        }
+        (line,) = removed_algorithm_forms(document)
+        assert line.startswith(
+            "recipes[default].decisions[route].algorithm: removed_algorithm_type: "
+            f"algorithm type {algo_type} is removed; run `vllm-sr config migrate` ("
+        )
 
-        for algo_type in selection_types:
-            config = AlgorithmConfig(type=algo_type)
-            assert config.type == algo_type
+    def test_removed_types_are_not_extension_algorithms(self):
+        with pytest.raises(PydanticValidationError):
+            AlgorithmConfig(type="confidence", confidence={"threshold": 0.5})
 
-    def test_on_error_default(self):
-        """Test that on_error defaults to 'skip'."""
-        config = AlgorithmConfig(type="static")
-        assert config.on_error == "skip"
+    def test_executor_settings_have_no_default(self):
+        config = AlgorithmConfig(type="fusion")
+        assert config.on_error is None
+        assert config.budget is None
 
-    def test_on_error_fail(self):
-        """Test that on_error can be set to 'fail'."""
-        config = AlgorithmConfig(type="static", on_error="fail")
+    def test_executor_reads_shared_settings(self):
+        config = AlgorithmConfig(
+            type="ratings",
+            on_error="fail",
+            budget={"deadline": "30s", "max_calls": 2},
+        )
         assert config.on_error == "fail"
+        assert config.budget == {"deadline": "30s", "max_calls": 2}
+
+    @pytest.mark.parametrize(
+        "settings",
+        [{"on_error": "skip"}, {"budget": {"deadline": "30s", "max_calls": 2}}],
+    )
+    def test_selector_rejects_executor_settings(self, settings):
+        with pytest.raises(PydanticValidationError, match="apply to executors"):
+            AlgorithmConfig(type="static", **settings)
+
+    def test_escalate_block_is_required(self):
+        with pytest.raises(PydanticValidationError, match="requires escalate"):
+            AlgorithmConfig(type="escalate")
+
+    def test_escalate_block_is_checked_against_the_router_schema(self):
+        AlgorithmConfig(
+            type="escalate",
+            budget={"deadline": "3s", "max_calls": 2},
+            escalate={
+                "stages": [
+                    {
+                        "model": "kai",
+                        "accept": {
+                            "native": [
+                                {
+                                    "question_type": "choice",
+                                    "field": "top_probability",
+                                    "gte": 0.6,
+                                }
+                            ]
+                        },
+                    },
+                    {"model": "vega"},
+                ]
+            },
+        )
+        with pytest.raises(PydanticValidationError, match="EscalateAlgorithmConfig"):
+            AlgorithmConfig(
+                type="escalate",
+                escalate={"escalation_order": "size", **CHAT_ESCALATE},
+            )
 
     def test_minimum_candidates_must_be_positive(self):
         config = AlgorithmConfig(type="static", minimum_candidates=2)
@@ -91,132 +163,10 @@ class TestAlgorithmConfigTypes:
         assert "extensions" not in dumped
 
     def test_an_unknown_type_without_its_block_is_rejected(self):
-        with pytest.raises(PydanticValidationError, match="unsupported algorithm type"):
+        with pytest.raises(PydanticValidationError):
             AlgorithmConfig(type="custom_pick")
         with pytest.raises(PydanticValidationError):
             AlgorithmConfig.model_validate({"type": "static", "custom_pick": {}})
-
-
-class TestPromptSelectionConfig:
-    """Test prompt-driven selection configuration."""
-
-    def test_minimal_config(self):
-        prompt = PromptSelectionConfig(
-            model="router-small",
-            instructions="Choose the best candidate.",
-        )
-        config = AlgorithmConfig(type="prompt", prompt=prompt)
-        assert config.prompt.model == "router-small"
-        assert config.prompt.timeout_seconds is None
-        assert config.on_error == "fallback"
-
-    def test_zero_timeout_uses_runtime_default(self):
-        prompt = PromptSelectionConfig(
-            model="router-small",
-            instructions="Choose.",
-            timeout_seconds=0,
-        )
-        assert prompt.timeout_seconds == 0
-
-    def test_timeout_cannot_be_negative(self):
-        with pytest.raises(PydanticValidationError):
-            PromptSelectionConfig(
-                model="router-small",
-                instructions="Choose.",
-                timeout_seconds=-1,
-            )
-
-    def test_prompt_block_is_required(self):
-        with pytest.raises(PydanticValidationError):
-            AlgorithmConfig(type="prompt")
-
-    def test_prompt_rejects_unsupported_error_policy(self):
-        with pytest.raises(PydanticValidationError):
-            AlgorithmConfig(
-                type="prompt",
-                prompt=PromptSelectionConfig(
-                    model="router-small",
-                    instructions="Choose.",
-                ),
-                on_error="fail",
-            )
-
-
-class TestRouterDCSelectionConfig:
-    """Test RouterDC selection configuration."""
-
-    def test_default_values(self):
-        """Test RouterDC config default values."""
-        config = RouterDCSelectionConfig()
-        assert config.temperature == 0.07
-        assert config.dimension_size == 768
-        assert config.min_similarity == 0.3
-        assert config.use_query_contrastive is True
-        assert config.use_model_contrastive is True
-        assert config.use_capabilities is True
-
-    def test_temperature_validation(self):
-        """Test that temperature must be positive."""
-        with pytest.raises(PydanticValidationError):
-            RouterDCSelectionConfig(temperature=0.0)  # Must be > 0
-
-    def test_similarity_threshold(self):
-        """Test min_similarity range validation."""
-        config = RouterDCSelectionConfig(min_similarity=0.5)
-        assert config.min_similarity == 0.5
-
-        with pytest.raises(PydanticValidationError):
-            RouterDCSelectionConfig(min_similarity=1.5)  # Above 1.0
-
-
-class TestAutoMixSelectionConfig:
-    """Test AutoMix (POMDP) selection configuration."""
-
-    def test_default_values(self):
-        """Test AutoMix config default values."""
-        config = AutoMixSelectionConfig()
-        assert config.verification_threshold == 0.7
-        assert config.max_escalations == 2
-        assert config.cost_aware_routing is True
-        assert config.cost_quality_tradeoff == 0.3
-        assert config.discount_factor == 0.95
-
-    def test_verification_threshold_range(self):
-        """Test that verification threshold is within 0-1."""
-        config = AutoMixSelectionConfig(verification_threshold=0.9)
-        assert config.verification_threshold == 0.9
-
-        with pytest.raises(PydanticValidationError):
-            AutoMixSelectionConfig(verification_threshold=1.5)
-
-
-class TestHybridSelectionConfig:
-    """Test Hybrid selection configuration."""
-
-    def test_default_weights(self):
-        """Test Hybrid config default weights."""
-        config = HybridSelectionConfig()
-        assert config.experience_weight == 0.3
-        assert config.router_dc_weight == 0.3
-        assert config.automix_weight == 0.2
-        assert config.cost_weight == 0.2
-
-    def test_custom_weights(self):
-        """Test Hybrid config with custom weights."""
-        config = HybridSelectionConfig(
-            experience_weight=0.5,
-            router_dc_weight=0.3,
-            automix_weight=0.1,
-            cost_weight=0.1,
-        )
-        # Weights should sum to 1.0
-        total = (
-            config.experience_weight
-            + config.router_dc_weight
-            + config.automix_weight
-            + config.cost_weight
-        )
-        assert abs(total - 1.0) < 0.01
 
 
 class TestMultiFactorSelectionConfig:
@@ -270,7 +220,6 @@ class TestReMoMAlgorithmConfig:
         assert config.temperature == 1.0
         assert config.include_reasoning is False
         assert config.compaction_strategy == "full"
-        assert config.on_error == "skip"
 
     def test_missing_breadth_schedule(self):
         """Test that breadth_schedule cannot be empty."""
@@ -327,7 +276,6 @@ class TestFusionAlgorithmConfig:
         assert config.analysis_mode == "separate"
         assert config.include_analysis is True
         assert config.include_intermediate_responses is True
-        assert config.on_error == "skip"
         assert config.judge_prompt_version == "fusion-v1"
 
     def test_custom_panel_and_judge(self):
@@ -408,11 +356,9 @@ class TestFusionAlgorithmConfig:
         assert config.round_timeout_seconds == 90
         assert config.min_successful_responses == 2
 
-    def test_on_error_validation(self):
-        assert FusionAlgorithmConfig(on_error="fail").on_error == "fail"
-
+    def test_on_error_is_the_algorithms_setting(self):
         with pytest.raises(PydanticValidationError):
-            FusionAlgorithmConfig(on_error="ignore")
+            FusionAlgorithmConfig(on_error="fail")
 
     def test_grounding_defaults(self):
         config = FusionAlgorithmConfig(grounding={"enabled": True})
@@ -453,7 +399,7 @@ class TestAlgorithmConfigIntegration:
         """Test AlgorithmConfig with ratings looper config."""
         config = AlgorithmConfig(
             type="ratings",
-            ratings=RatingsAlgorithmConfig(max_concurrent=3, on_error="skip"),
+            ratings=RatingsAlgorithmConfig(max_concurrent=3),
         )
         assert config.type == "ratings"
         assert config.ratings.max_concurrent == 3
@@ -634,23 +580,3 @@ class TestAlgorithmConfigIntegration:
         assert config.type == "fusion"
         assert config.fusion.model == "judge-model"
         assert config.fusion.analysis_models == ["panel-a", "panel-b"]
-
-    def test_hybrid_algorithm_config(self):
-        """Test AlgorithmConfig with Hybrid selection and all weights."""
-        config = AlgorithmConfig(
-            type="hybrid",
-            hybrid=HybridSelectionConfig(
-                experience_weight=0.4,
-                router_dc_weight=0.3,
-                automix_weight=0.2,
-                cost_weight=0.1,
-            ),
-        )
-        assert config.type == "hybrid"
-        total = (
-            config.hybrid.experience_weight
-            + config.hybrid.router_dc_weight
-            + config.hybrid.automix_weight
-            + config.hybrid.cost_weight
-        )
-        assert abs(total - 1.0) < 0.01

@@ -12,23 +12,30 @@ import (
 )
 
 type configDocument struct {
-	Routing struct {
-		Decisions []struct {
-			Name string `yaml:"name"`
-		} `yaml:"decisions"`
-	} `yaml:"routing"`
 	Entrypoints []struct {
 		ModelNames []string `yaml:"model_names"`
 		Recipe     string   `yaml:"recipe"`
+		Default    bool     `yaml:"default"`
 	} `yaml:"entrypoints"`
 	Recipes []struct {
-		Name    string `yaml:"name"`
-		Routing struct {
-			Decisions []struct {
-				Name string `yaml:"name"`
-			} `yaml:"decisions"`
-		} `yaml:"routing"`
+		Name      string `yaml:"name"`
+		Decisions []struct {
+			Name string `yaml:"name"`
+		} `yaml:"decisions"`
 	} `yaml:"recipes"`
+}
+
+// defaultRecipe is the only recipe, or the recipe of the default entrypoint.
+func (config configDocument) defaultRecipe() routerconfig.RecipeName {
+	if len(config.Recipes) == 1 {
+		return routerconfig.RecipeName(config.Recipes[0].Name)
+	}
+	for _, entrypoint := range config.Entrypoints {
+		if entrypoint.Default {
+			return routerconfig.RecipeName(entrypoint.Recipe)
+		}
+	}
+	return routerconfig.DefaultRecipeName
 }
 
 type configProjection struct {
@@ -50,8 +57,9 @@ func projectConfig(data []byte) (configProjection, error) {
 	}
 	projection := configProjection{modelsByRecipe: map[string][]string{}}
 	resolved := &routerconfig.RouterConfig{}
+	resolved.UseDefaultRecipe(config.defaultRecipe())
 	for _, entrypoint := range config.Entrypoints {
-		resolved.Entrypoints = append(resolved.Entrypoints, routerconfig.EntrypointMapping{ModelNames: entrypoint.ModelNames, Recipe: routerconfig.RecipeName(entrypoint.Recipe)})
+		resolved.Entrypoints = append(resolved.Entrypoints, routerconfig.EntrypointMapping{ModelNames: entrypoint.ModelNames, Recipe: routerconfig.RecipeName(entrypoint.Recipe), Default: entrypoint.Default})
 	}
 	models := map[string]struct{}{}
 	for _, entrypoint := range resolved.EffectiveEntrypoints(routerconfig.ChatAPI) {
@@ -62,10 +70,10 @@ func projectConfig(data []byte) (configProjection, error) {
 		}
 		projection.modelsByRecipe[recipeName] = stableUnique(projection.modelsByRecipe[recipeName])
 	}
-	projection.defaultModels = projection.modelsByRecipe[string(routerconfig.DefaultRecipeName)]
-	counts := Counts{UnifiedModels: len(models), Recipes: len(config.Recipes), Decisions: len(config.Routing.Decisions)}
+	projection.defaultModels = projection.modelsByRecipe[string(config.defaultRecipe())]
+	counts := Counts{UnifiedModels: len(models), Recipes: len(config.Recipes)}
 	for _, recipe := range config.Recipes {
-		counts.Decisions += len(recipe.Routing.Decisions)
+		counts.Decisions += len(recipe.Decisions)
 	}
 	if counts.Recipes == 0 {
 		counts.Recipes = 1

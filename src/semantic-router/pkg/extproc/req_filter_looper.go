@@ -17,6 +17,7 @@ limitations under the License.
 package extproc
 
 import (
+	"bytes"
 	"context"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -49,7 +50,7 @@ func (r *OpenAIRouter) shouldUseLooper(decision *config.Decision) bool {
 	if decision.Algorithm == nil {
 		return false
 	}
-	if !config.IsLooperAlgorithmType(decision.Algorithm.Type) {
+	if !config.IsExecutorAlgorithmType(decision.Algorithm.Type) || decision.Algorithm.IsNative() {
 		return false
 	}
 
@@ -95,8 +96,8 @@ func (r *OpenAIRouter) logLooperConstructionFailure(decision *config.Decision, r
 }
 
 // looperModelClient is the client for the Router's own model calls outside a
-// request graph, such as a prompt selector's or a context recovery's: hops
-// served in process. It is nil when the router has nothing to send hops with.
+// request graph, such as a context recovery's: hops served in process. It is
+// nil when the router has nothing to send hops with.
 func (r *OpenAIRouter) looperModelClient() *looper.Client {
 	hops := r.looperHops()
 	if hops == nil {
@@ -121,7 +122,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 		defer r.WorkflowStateService.Release()
 	}
 	// Looper forwards the original tool-bearing request and never reaches
-	// handleToolSelection. The trusted-facts gate therefore runs inside Looper,
+	// applyToolsPlugin. The trusted-facts gate therefore runs inside Looper,
 	// per model attempt, at each attempt's own stage (see buildLooperRequest).
 	resp, errorResponse := r.runLooper(ctx, request, decision, reqCtx)
 	if errorResponse != nil {
@@ -130,9 +131,9 @@ func (r *OpenAIRouter) handleLooperExecution(
 
 	// The looper's final model must land on the request context before the
 	// response headers are built. Runtime model selection has already put a
-	// preliminary panel candidate in VSRSelectedModel, and appendLooperRoutingFacts
-	// prefers that value, so building headers first would advertise a panel model
-	// as the responder even when a fallback target produced the answer.
+	// preliminary panel candidate in VSRSelectedModel, which the public headers
+	// report, so building headers first would advertise a panel model as the
+	// responder even when a fallback target produced the answer.
 	reqCtx.RequestModel = resp.Model
 	reqCtx.VSRSelectedModel = resp.Model
 	reqCtx.VSRSelectionMethod = resp.AlgorithmType
@@ -164,14 +165,63 @@ func (r *OpenAIRouter) handleLooperExecution(
 			},
 		), nil
 	}
-	r.recordSuccessfulLooperExecution(
-		resp, request.Model, decision, reqCtx, semanticResponse, clientBody,
-	)
-	// Replay starts inside the recorder, so its ID only exists now. Attach it to
-	// the already-built immediate response, as the failure path does, otherwise a
-	// successful looper response omits the header for the record just created.
-	addRouterReplayHeaderToImmediateResponse(response, reqCtx.RouterReplayID)
-	return response, nil
+	// The response phase never sees a Looper answer, so the decision's
+	// response policy reads it here. Nothing has left yet: even a stream is
+	// rendered from the finished answer.
+	plan := r.prepareResponsePolicy(reqCtx, semanticResponse, clientBody)
+	// Replay keeps the reply the client receives, with its Looper fields and
+	// in stream form for a stream, not the noted answer the policy encoded.
+	reply := r.releaseLooperAnswer(resp, response, clientBody, plan, reqCtx)
+	plan.finalBody = reply.GetImmediateResponse().GetBody()
+	// Replay starts inside the recorder, so its ID only exists now; the reply
+	// boundary adds it to the already-built response.
+	r.recordSuccessfulLooperExecution(resp, request.Model, decision, reqCtx, plan)
+	return reply, nil
+}
+
+// releaseLooperAnswer is the reply the response policy leaves of a Looper
+// answer: the policy's refusal, in the client's protocol and in stream form
+// for a streaming client, or the answer with the guard's notes.
+func (r *OpenAIRouter) releaseLooperAnswer(
+	resp *looper.Response,
+	response *ext_proc.ProcessingResponse,
+	clientBody []byte,
+	plan *responsePolicyPlan,
+	reqCtx *RequestContext,
+) *ext_proc.ProcessingResponse {
+	streaming := reqCtx.ExpectStreamingResponse
+	if plan.blocked != nil {
+		// A refused answer is never kept, though a stream refuses it with a 200.
+		if state := reqCtx.ResponseObjectState; state != nil {
+			state.PersistenceAttempted = true
+		}
+		if streaming {
+			response.GetImmediateResponse().Body = r.encodeStreamRefusal(reqCtx, plan.refusal)
+			return response
+		}
+		reqCtx.ImmediateProtocolError, reqCtx.ImmediateResponseEncoded = plan.refusal, false
+		return plan.blocked
+	}
+	noted := plan.finalBody
+	if bytes.Equal(noted, clientBody) {
+		return response
+	}
+	if streaming {
+		if noted = r.encodeNotedStream(reqCtx); noted == nil {
+			return response
+		}
+	}
+	// The first render already reported each extension it dropped.
+	diagnostics := reqCtx.ProtocolDiagnostics
+	engine, err := r.protocolEngine()
+	if err == nil {
+		noted, err = finalizeLooperResponseExtensions(engine, noted, resp.RouterExtensions(), reqCtx, streaming)
+	}
+	reqCtx.ProtocolDiagnostics = diagnostics
+	if err == nil {
+		response.GetImmediateResponse().Body = noted
+	}
+	return response
 }
 
 // runLooper executes the decision's Looper algorithm as its built-in request
@@ -186,7 +236,7 @@ func (r *OpenAIRouter) runLooper(
 	for _, entrypoint := range r.Config.EffectiveEntrypoints(config.ChatAPI) {
 		runtimeConfig.EntrypointModels = append(runtimeConfig.EntrypointModels, entrypoint.ModelNames...)
 	}
-	program, err := looper.Template(&runtimeConfig, decision.Algorithm.Type, r.WorkflowStateService)
+	program, err := looper.Template(&runtimeConfig, decision.Algorithm.Type, decision.Algorithm.Budget, r.WorkflowStateService)
 	if err != nil {
 		return nil, r.looperConstructionFailed(decision, reqCtx, err)
 	}
@@ -249,7 +299,7 @@ func (r *OpenAIRouter) buildLooperRequest(
 					CandidateRequirements: r.candidateRequirements(reqCtx).Clone(),
 					PermittedModels:       looperPermittedModels(modelRefs, decision.Algorithm),
 					Grounding:             r.groundingForRecipe(reqCtx.Routing.RecipeName()),
-					BaseContextTokens:     reqCtx.VSRContextTokenCount,
+					BaseContextTokens:     contextTokensWithoutReserves(reqCtx, reqCtx.VSRContextTokenCount),
 					ModelRefs:             modelRefs,
 					ModelParams:           r.getModelParams(),
 					Algorithm:             decision.Algorithm,
@@ -259,6 +309,7 @@ func (r *OpenAIRouter) buildLooperRequest(
 					OutputContract:        decision.OutputContract,
 					OutputContractSpec:    decision.OutputContractSpec,
 					ToolStageGate:         r.looperToolStageGate(request, decision, reqCtx),
+					AnswerChecks:          r.escalateAnswerChecker(decision.Algorithm),
 				}
 				if params := decision.GetRequestParamsConfig(); params != nil && params.MaxTokensLimit != nil {
 					limit := *params.MaxTokensLimit
@@ -297,8 +348,7 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	originalModel string,
 	decision *config.Decision,
 	reqCtx *RequestContext,
-	semanticResponse *llmprotocol.Response,
-	clientBody []byte,
+	plan *responsePolicyPlan,
 ) {
 	// Protocol encoding succeeded and the immediate response is about to be
 	// returned to Envoy, so promote a ready fallback to its terminal disposition
@@ -323,17 +373,10 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	// Update router replay with success status (looper returns immediate response with 200)
 	r.updateRouterReplayStatus(reqCtx, 200, false)
 
-	// Attach response body to router replay record
-	r.attachRouterReplayResponse(reqCtx, clientBody, true)
-
-	// Memory auto_store: the normal response body pipeline (where
-	// scheduleResponseMemoryStore runs) is bypassed by ImmediateResponse.
-	// A buffered looper result is decoded once into the same neutral response
-	// contract used by direct inference. Streaming memory storage is deferred
-	// until a terminal semantic accumulator is available.
-	if semanticResponse != nil {
-		r.scheduleSemanticResponseMemoryStore(reqCtx, semanticResponse)
-	}
+	// The response body pipeline is bypassed by ImmediateResponse, so the
+	// response policy commits here, once Replay is open: Replay, memory and
+	// the Responses object keep only an answer the guard released.
+	plan.commit()
 }
 
 func (r *OpenAIRouter) updateLooperReplayUsage(ctx *RequestContext, usage looper.TokenUsage) {
@@ -362,7 +405,7 @@ func (r *OpenAIRouter) groundingForRecipe(recipe config.RecipeName) *looper.Grou
 		}
 		return classifier.GroundingBackends()
 	}
-	if recipe == "" || recipe == config.DefaultRecipeName {
+	if recipe == "" || r.Config.IsDefaultRecipe(recipe) {
 		return r.Classifier.GroundingBackends()
 	}
 	return nil

@@ -95,7 +95,7 @@ func TestReMoMCollectParallelResultsReturnsAfterQuorum(t *testing.T) {
 		3,
 		2,
 		results,
-		&config.ReMoMAlgorithmConfig{OnError: config.ReMoMOnErrorSkip},
+		config.ReMoMOnErrorSkip,
 	)
 
 	require.NoError(t, err)
@@ -125,7 +125,7 @@ func TestReMoMCollectParallelResultsCountsOnlyUsableReplies(t *testing.T) {
 		3,
 		2,
 		results,
-		&config.ReMoMAlgorithmConfig{OnError: config.ReMoMOnErrorSkip},
+		config.ReMoMOnErrorSkip,
 	)
 
 	require.NoError(t, err)
@@ -148,7 +148,7 @@ func TestReMoMCollectParallelResultsReturnsPartialOnTimeoutWhenSkippingErrors(t 
 		3,
 		2,
 		results,
-		&config.ReMoMAlgorithmConfig{OnError: config.ReMoMOnErrorSkip},
+		config.ReMoMOnErrorSkip,
 	)
 
 	require.Error(t, err)
@@ -186,7 +186,7 @@ func TestReMoMFinalRoundModelCallsFallsBackToDistribution(t *testing.T) {
 }
 
 func TestCanFallbackToPreviousReMoMRoundRequiresSkipAndPriorResponse(t *testing.T) {
-	cfg := &config.ReMoMAlgorithmConfig{OnError: config.ReMoMOnErrorSkip}
+	onError := config.ReMoMOnErrorSkip
 	rounds := []RoundResponse{{
 		Round: 1,
 		Responses: []IntermediateResp{{
@@ -195,10 +195,10 @@ func TestCanFallbackToPreviousReMoMRoundRequiresSkipAndPriorResponse(t *testing.
 		}},
 	}}
 
-	assert.True(t, canFallbackToPreviousReMoMRound(cfg, rounds))
-	assert.False(t, canFallbackToPreviousReMoMRound(&config.ReMoMAlgorithmConfig{OnError: config.ReMoMOnErrorFail}, rounds))
-	assert.False(t, canFallbackToPreviousReMoMRound(cfg, nil))
-	assert.False(t, canFallbackToPreviousReMoMRound(cfg, []RoundResponse{{Round: 1}}))
+	assert.True(t, canFallbackToPreviousReMoMRound(onError, rounds))
+	assert.False(t, canFallbackToPreviousReMoMRound(config.ReMoMOnErrorFail, rounds))
+	assert.False(t, canFallbackToPreviousReMoMRound(onError, nil))
+	assert.False(t, canFallbackToPreviousReMoMRound(onError, []RoundResponse{{Round: 1}}))
 }
 
 func TestReMoMInternalCallsAreNonStreamingAndUseCompletionLimit(t *testing.T) {
@@ -218,7 +218,6 @@ func TestReMoMInternalCallsAreNonStreamingAndUseCompletionLimit(t *testing.T) {
 		BreadthSchedule:     []int{1},
 		ModelDistribution:   remomDistributionFirstOnly,
 		MaxCompletionTokens: &completionLimit,
-		OnError:             config.ReMoMOnErrorSkip,
 	}, true, []config.ModelRef{{Model: "model-a"}})
 	request.OriginalRequest.MaxTokens = openai.Int(128)
 	request.OriginalRequest.MaxCompletionTokens = openai.Int(256)
@@ -268,7 +267,6 @@ func TestReMoMWithoutCompletionLimitPreservesRequestTokenField(t *testing.T) {
 	request := newReMoMTestRequest(&config.ReMoMAlgorithmConfig{
 		BreadthSchedule:   []int{1},
 		ModelDistribution: remomDistributionFirstOnly,
-		OnError:           config.ReMoMOnErrorSkip,
 	}, false, []config.ModelRef{{Model: "model-a"}})
 	request.OriginalRequest.MaxTokens = openai.Int(320)
 
@@ -306,7 +304,6 @@ func TestReMoMUsesReasoningOnlyReplyForSynthesisWithoutPublishingIt(t *testing.T
 			ModelDistribution:            remomDistributionRoundRobin,
 			SynthesisModel:               "model-final",
 			IncludeIntermediateResponses: false,
-			OnError:                      config.ReMoMOnErrorSkip,
 		}, false, []config.ModelRef{
 			{Model: "model-reasoning"},
 			{Model: "model-final"},
@@ -343,7 +340,6 @@ func TestReMoMUsageIncludesUnusableAttemptedReply(t *testing.T) {
 			SynthesisModel:               "model-final",
 			MinSuccessfulResponses:       1,
 			IncludeIntermediateResponses: false,
-			OnError:                      config.ReMoMOnErrorSkip,
 		}, false, []config.ModelRef{
 			{Model: "model-empty"},
 			{Model: "model-answer"},
@@ -373,7 +369,6 @@ func TestReMoMEmptyFinalFallsBackToBestPreviousOutput(t *testing.T) {
 			BreadthSchedule:   []int{2},
 			ModelDistribution: remomDistributionRoundRobin,
 			SynthesisModel:    "model-final",
-			OnError:           config.ReMoMOnErrorSkip,
 		}, false, []config.ModelRef{
 			{Model: "model-short"},
 			{Model: "model-detailed"},
@@ -408,7 +403,6 @@ func TestReMoMAllEmptyOutputsReturnError(t *testing.T) {
 		newReMoMTestRequest(&config.ReMoMAlgorithmConfig{
 			BreadthSchedule:   []int{1},
 			ModelDistribution: remomDistributionFirstOnly,
-			OnError:           config.ReMoMOnErrorSkip,
 		}, false, []config.ModelRef{{Model: "model-a"}}),
 	)
 
@@ -429,7 +423,6 @@ func TestReMoMReasoningOnlyOutputsReturnExplicitError(t *testing.T) {
 		newReMoMTestRequest(&config.ReMoMAlgorithmConfig{
 			BreadthSchedule:   []int{1},
 			ModelDistribution: remomDistributionFirstOnly,
-			OnError:           config.ReMoMOnErrorSkip,
 		}, false, []config.ModelRef{{Model: "model-a"}}),
 	)
 

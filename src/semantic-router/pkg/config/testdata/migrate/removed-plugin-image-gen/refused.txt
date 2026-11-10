@@ -1,0 +1,1 @@
+recipes[default].decisions[images].plugins[0]: removed_plugin_type: plugin image_gen was removed; it has no mechanical rewrite: an image model in providers.models (api_format: images, capabilities: [image_generation]) that the decision references, with output: {kind: image, action: generate}

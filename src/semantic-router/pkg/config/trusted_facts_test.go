@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestTrustedFactsValidate(t *testing.T) {
 	// Disabled/nil is a no-op (existing behavior unchanged).
@@ -71,59 +74,26 @@ func TestTrustedFactsValidate(t *testing.T) {
 }
 
 func TestToolsPluginTrustedFactsWiring(t *testing.T) {
-	// TrustedFacts nil preserves existing behavior.
-	base := &ToolsPluginConfig{Enabled: true, Mode: ToolsPluginModePassthrough}
-	if base.TrustedFactsEnabled() {
-		t.Fatalf("nil TrustedFacts should report disabled")
+	trusted := &TrustedFactsConfig{
+		Enabled:      true,
+		Enforcement:  TrustedEnforcementAuthoritative,
+		TrustSources: []string{TrustedSourceOperatorPolicy},
+		StageRoles:   []string{TrustedStageCandidate},
 	}
-	if err := base.Validate(); err != nil {
-		t.Fatalf("base without trusted facts should pass: %v", err)
+	if (&ToolsPluginConfig{Enabled: true, Policy: &ToolsPolicyConfig{}}).TrustedFactsEnabled() {
+		t.Fatalf("a policy without trusted facts reports them disabled")
 	}
-	// Enabled trusted facts flow through ToolsPluginConfig.Validate.
-	withTrusted := &ToolsPluginConfig{
-		Enabled: true,
-		Mode:    ToolsPluginModePassthrough,
-		TrustedFacts: &TrustedFactsConfig{
-			Enabled:      true,
-			TrustSources: []string{TrustedSourceOperatorPolicy},
-			StageRoles:   []string{TrustedStageFinal},
-		},
+	if !(&ToolsPluginConfig{Enabled: true, Policy: &ToolsPolicyConfig{TrustedFacts: trusted}}).TrustedFactsEnabled() {
+		t.Fatalf("an enabled plugin's trusted facts are enabled")
 	}
-	if !withTrusted.TrustedFactsEnabled() {
-		t.Fatalf("should report enabled")
+	// A disabled plugin applies no policy, so its trusted facts never engage
+	// the gate.
+	if (&ToolsPluginConfig{Policy: &ToolsPolicyConfig{TrustedFacts: trusted}}).TrustedFactsEnabled() {
+		t.Fatalf("a disabled plugin must report trusted facts disabled")
 	}
-	if err := withTrusted.Validate(); err != nil {
-		t.Fatalf("valid trusted facts should pass: %v", err)
-	}
-	withBad := &ToolsPluginConfig{
-		Enabled: true,
-		Mode:    ToolsPluginModePassthrough,
-		TrustedFacts: &TrustedFactsConfig{
-			Enabled:      true,
-			TrustSources: []string{"client-metadata"},
-			StageRoles:   []string{TrustedStageFinal},
-		},
-	}
-	if err := withBad.Validate(); err == nil {
-		t.Fatalf("untrusted source via ToolsPluginConfig should fail")
-	}
-	// Disabled parent plus enabled nested block must not engage the gate:
-	// Validate skips nested validation for a disabled parent, so enforcing
-	// there would apply policy that never passed startup validation.
-	parentDisabled := &ToolsPluginConfig{
-		Enabled: false,
-		Mode:    ToolsPluginModePassthrough,
-		TrustedFacts: &TrustedFactsConfig{
-			Enabled:      true,
-			Enforcement:  TrustedEnforcementAuthoritative,
-			TrustSources: []string{TrustedSourceOperatorPolicy},
-			StageRoles:   []string{TrustedStageCandidate},
-		},
-	}
-	if parentDisabled.TrustedFactsEnabled() {
-		t.Fatalf("disabled parent must report trusted facts disabled")
-	}
-	if err := parentDisabled.Validate(); err != nil {
-		t.Fatalf("disabled parent should skip validation: %v", err)
+	bad := *trusted
+	bad.TrustSources = []string{"client-metadata"}
+	if err := (&ToolsPolicyConfig{TrustedFacts: &bad}).validate("policy"); err == nil || !strings.HasPrefix(err.Error(), "policy.trusted_facts: ") {
+		t.Fatalf("an untrusted source fails the policy: %v", err)
 	}
 }

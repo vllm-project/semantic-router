@@ -41,14 +41,17 @@ translation:
 
 ## 配置 {#configuration}
 
-使用现有服务配置启用路由回放：
+用 `global.plugins` 中的 `router_replay` 插件启用路由回放，服务配置负责它的存储：
 
 ```yaml
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: postgres
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ```
 
 此示例使用 Postgres 做持久化。默认 `memory` 后端会在配置重载或重启时丢失记录，即使重载没有重启路由器进程也一样。调优配方时，使用持久化存储可让会话轨迹继续在 API 和 Dashboard 中查看。

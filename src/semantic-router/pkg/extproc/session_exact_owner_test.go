@@ -124,6 +124,6 @@ func excludedExactOwnerFixture(t *testing.T, scope, boundary string) (*OpenAIRou
 		SessionID: key, SelectedModel: owner.Model, SelectedCandidate: &owner,
 		DecisionName: decision.Name, TurnIndex: 2, Timestamp: time.Now(),
 	})
-	input := router.buildSelectionContext(decision.ModelRefs, decision.Name, "continue", decision.Algorithm, "", nil, ctx)
+	input := router.buildSelectionContext(decision.ModelRefs, decision.Name, "continue", "", nil, ctx)
 	return router, decision, ctx, input, key
 }
