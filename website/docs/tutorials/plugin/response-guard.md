@@ -115,7 +115,9 @@ receives one of:
   `details`;
 - the refusal a buffered answer's 403 carries, as the protocol's stream
   error: a Chat `error` chunk, a Responses `response.failed` event or a
-  Messages `error` event.
+  Messages `error` event. When a deployment the guard asks takes the
+  delegated credential and the request carries none, a buffered answer is
+  refused with `401`, and the stream error carries that refusal instead.
 
 Behind Envoy the Router asks for the response body buffered for these
 requests only; standalone, it buffers the body itself. The cost is time to

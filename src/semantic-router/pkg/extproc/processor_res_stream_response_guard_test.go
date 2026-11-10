@@ -292,6 +292,36 @@ func TestBufferedAnswerIsBlockedOrPassedInEveryProtocol(t *testing.T) {
 	}
 }
 
+// The guard's decision model refused its call for want of the request's
+// delegated credential, so a buffered answer is answered 401. A held stream
+// receives that refusal in its protocol's streaming form, and none of the
+// answer.
+func TestHeldStreamRefusesAnAnswerWithoutTheDelegatedCredential(t *testing.T) {
+	for _, format := range guardProtocols {
+		t.Run(string(format), func(t *testing.T) {
+			router, ctx := newResponseStageRouter(t, newDelegatedDecider(), "", config.ResponseGuardBlock)
+			streamingClient(ctx, format)
+			ctx.SemanticRequest.Stream, ctx.ExpectStreamingResponse = false, false
+			body := []byte(strings.ReplaceAll(string(extProcResponseFixture(format)), "hello", benignAnswer))
+
+			answerHeaders(t, router, ctx, "application/json")
+			buffered, replies := answerBody(t, router, ctx, [][]byte{body})
+
+			if replies[0].GetImmediateResponse().GetStatus().GetCode() != 401 || strings.Contains(buffered, benignAnswer) {
+				t.Fatalf("buffered reply = %v, want 401 and none of the answer", replies[0])
+			}
+
+			router, ctx = newResponseStageRouter(t, newDelegatedDecider(), "", config.ResponseGuardBlock)
+			streamingClient(ctx, format)
+
+			answerHeaders(t, router, ctx, "text/event-stream")
+			client, _ := answerBody(t, router, ctx, whole(streamOf(format, benignAnswer)))
+
+			assertRefusedStream(t, format, client, delegatedCredentialMessage, benignAnswer)
+		})
+	}
+}
+
 // A gateway that ignores the Router's BUFFERED mode streams the body anyway;
 // the Router holds every part itself, so the client still receives nothing
 // before the guard has read the whole answer.
