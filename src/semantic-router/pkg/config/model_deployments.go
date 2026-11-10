@@ -169,7 +169,7 @@ func (d ModelDeployment) validate() error {
 // validateRecipeBindings checks each binding a recipe writes: it names a
 // declared deployment that answers its application signal.
 func validateRecipeBindings(recipe RecipeName, scoped *RouterConfig) error {
-	bindings := scoped.recipeBindings()
+	bindings := scoped.RecipeBindings()
 	for _, key := range sortedModelKeys(bindings) {
 		if err := validateModelBinding(scoped, key, bindings[key]); err != nil {
 			return fmt.Errorf("recipes[%s].model_bindings.%s: %w", recipe, key, err)

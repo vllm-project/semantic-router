@@ -140,6 +140,24 @@ describe('embedding models config support', () => {
     expect(saved.embeddings).not.toHaveProperty('__deployments')
   })
 
+  it('keeps the auth fields it does not edit, such as a delegated credential', () => {
+    const view = embeddingModelsView(
+      { default: { deployment: 'bge' } },
+      {
+        bge: {
+          provider: 'openai_embeddings',
+          endpoint: 'https://embedding.example.com/v1',
+          model: 'BAAI/bge-m3',
+          auth: { credential: 'delegated', header: 'Authorization' },
+        },
+      },
+    )
+    const saved = save(embeddingModelsEditData(view))
+
+    // The save is a merge patch: a null removes only the key the card edits.
+    expect(saved.deployments?.bge.auth).toEqual({ api_key_env: null })
+  })
+
   it('switches back to local inference and keeps the remote deployment for reuse', () => {
     const remote = save({
       ...embeddingModelsEditData(localCatalog),

@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestModelBindingsRoundTripAcrossRecipes(t *testing.T) {
@@ -56,5 +58,50 @@ func TestModelBindingsRejectInvalidDSLShape(t *testing.T) {
 		if _, errs := Compile(source); len(errs) == 0 {
 			t.Errorf("invalid binding accepted: %s", source)
 		}
+	}
+}
+
+// Global bindings belong to global.model_catalog, which the DSL leaves to the
+// base config: a round trip must not turn them into recipe content.
+func TestGlobalModelBindingsStayGlobalThroughDSLRoundTrip(t *testing.T) {
+	base := []byte(`version: v0.5
+global:
+  model_catalog:
+    deployments:
+      guard: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu}
+    bindings:
+      jailbreak: {deployment: guard}
+recipes:
+  - name: main
+    decisions:
+      - name: catch_all
+        priority: 1
+`)
+	original, err := config.ParseYAMLBytes(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err := DecompileConfig(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled, errs := Compile(text)
+	if len(errs) > 0 {
+		t.Fatalf("%v\n%s", errs, text)
+	}
+	mergedBytes, err := MergeRoutingIntoBase(compiled, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged, err := config.ParseYAMLBytes(mergedBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var recipes []config.RecipeName
+	for _, recipe := range merged.Recipes {
+		recipes = append(recipes, recipe.Name)
+	}
+	if !reflect.DeepEqual(recipes, []config.RecipeName{"main"}) || len(merged.Entrypoints) != len(original.Entrypoints) {
+		t.Fatalf("recipes %v and entrypoints %+v after the round trip:\n%s", recipes, merged.Entrypoints, text)
 	}
 }

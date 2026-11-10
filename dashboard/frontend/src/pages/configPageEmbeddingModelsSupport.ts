@@ -103,12 +103,14 @@ function remoteEmbeddingDeployment(endpoint: Record<string, unknown>): Record<st
   const retries = positiveNumber(endpoint.max_retries)
   const maxResponseBytes = positiveNumber(endpoint.max_response_bytes)
   const dimensions = positiveNumber(endpoint.dimensions)
-  // A null removes the field from a deployment saved before.
+  // A null removes the field from a deployment saved before. The card edits
+  // only api_key_env, so the merge keeps the auth fields it does not show,
+  // such as credential: delegated.
   return {
     provider: REMOTE_PROVIDER,
     endpoint: trimmedString(endpoint.base_url).replace(/\/+$/, ''),
     model: trimmedString(endpoint.model),
-    auth: apiKeyEnv ? { api_key_env: apiKeyEnv } : null,
+    auth: { api_key_env: apiKeyEnv || null },
     timeout_ms: timeout === undefined ? null : Math.round(timeout * 1000),
     max_retries: retries ?? null,
     limits: maxResponseBytes === undefined ? null : { max_response_bytes: maxResponseBytes },
