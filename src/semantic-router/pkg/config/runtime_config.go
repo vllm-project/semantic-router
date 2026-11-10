@@ -233,14 +233,15 @@ type MemoryConfig struct {
 	Qdrant         *MemoryQdrantConfig     `yaml:"qdrant,omitempty"`
 	RedisCache     *MemoryRedisCacheConfig `yaml:"redis_cache,omitempty"`
 	// Embedding names the deployment memories are embedded with.
-	Embedding                  *EmbeddingBinding       `yaml:"embedding,omitempty"`
-	DefaultRetrievalLimit      int                     `yaml:"default_retrieval_limit"`
-	DefaultSimilarityThreshold float32                 `yaml:"default_similarity_threshold,omitempty"`
-	HybridSearch               bool                    `yaml:"hybrid_search,omitempty"`
-	HybridMode                 string                  `yaml:"hybrid_mode,omitempty"`
-	AdaptiveThreshold          bool                    `yaml:"adaptive_threshold,omitempty"`
-	Reflection                 MemoryReflectionConfig  `yaml:"reflection,omitempty"`
-	Persistence                MemoryPersistenceConfig `yaml:"persistence,omitempty"`
+	Embedding                  *EmbeddingBinding         `yaml:"embedding,omitempty"`
+	DefaultRetrievalLimit      int                       `yaml:"default_retrieval_limit"`
+	DefaultSimilarityThreshold float32                   `yaml:"default_similarity_threshold,omitempty"`
+	HybridSearch               bool                      `yaml:"hybrid_search,omitempty"`
+	HybridMode                 string                    `yaml:"hybrid_mode,omitempty"`
+	AdaptiveThreshold          bool                      `yaml:"adaptive_threshold,omitempty"`
+	Reflection                 MemoryReflectionConfig    `yaml:"reflection,omitempty"`
+	Persistence                MemoryPersistenceConfig   `yaml:"persistence,omitempty"`
+	Consolidation              MemoryConsolidationConfig `yaml:"consolidation,omitempty"`
 	// QueryRewrite names the openai_chat deployment that rewrites a query
 	// with its conversation before memory search.
 	QueryRewrite *MemoryQueryRewriteConfig `yaml:"query_rewrite,omitempty"`
@@ -258,6 +259,16 @@ type MemoryPersistenceConfig struct {
 	Concurrency          int `yaml:"concurrency,omitempty"`
 	Queue                int `yaml:"queue,omitempty"`
 	ShutdownGraceSeconds int `yaml:"shutdown_grace_seconds,omitempty"`
+}
+
+// MemoryConsolidationConfig bounds optional post-write memory consolidation.
+// Zero values stay off. When Enabled is true, a zero cooldown, timeout, or
+// concurrency uses the runner defaults.
+type MemoryConsolidationConfig struct {
+	Enabled         bool `yaml:"enabled,omitempty"`
+	CooldownSeconds int  `yaml:"cooldown_seconds,omitempty"`
+	TimeoutSeconds  int  `yaml:"timeout_seconds,omitempty"`
+	Concurrency     int  `yaml:"concurrency,omitempty"`
 }
 
 // MemoryRedisCacheConfig configures an optional Redis hot cache in front of Milvus retrieval.

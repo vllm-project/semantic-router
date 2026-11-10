@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	glideoptions "github.com/valkey-io/valkey-glide/go/v2/options"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 )
@@ -95,8 +97,9 @@ func valkeyAtomicStoreResult(result any, memoryID string) error {
 // ---------------------------------------------------------------------------
 
 // recordRetrievalBatch updates LastAccessed and AccessCount for each retrieved memory in the background.
-// Uses targeted HINCRBY + HSET instead of full read-modify-write for efficiency.
-// The user-facing behavior matches the Milvus backend (access_count incremented, timestamps updated).
+// Uses a targeted Valkey script instead of full read-modify-write for efficiency.
+// Reads update access metadata only; they must not change UpdatedAt because that
+// timestamp is the write-version used by atomic consolidation.
 func (v *ValkeyStore) recordRetrievalBatch(ids []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -107,61 +110,26 @@ func (v *ValkeyStore) recordRetrievalBatch(ids []string) {
 	}
 }
 
-// valkeyAtomicRecordRetrievalScript conditionally increments access_count and updates
-// updated_at only if the memory hash key already exists. If the memory was deleted
-// (e.g. via Forget) before or during background access tracking, the script returns
-// "missing" without recreating the key or leaving partial/orphan records.
-const valkeyAtomicRecordRetrievalScript = `
-if redis.call("EXISTS", KEYS[1]) == 0 then
-	return "missing"
-end
-
-redis.call("HINCRBY", KEYS[1], "access_count", 1)
-redis.call("HSET", KEYS[1], "updated_at", ARGV[1])
-return "updated"
-`
-
-func valkeyBuildAtomicRecordRetrievalCommand(key string, nowUnix string) []string {
-	return []string{"EVAL", valkeyAtomicRecordRetrievalScript, "1", key, nowUnix}
-}
-
-func valkeyAtomicRecordRetrievalResult(result any, memoryID string) error {
-	var response string
-	switch value := result.(type) {
-	case string:
-		response = value
-	case []byte:
-		response = string(value)
-	default:
-		return fmt.Errorf("unexpected atomic Valkey record retrieval response type %T for memory id=%s", result, memoryID)
-	}
-
-	switch response {
-	case "updated", "missing":
-		return nil
-	default:
-		return fmt.Errorf("unexpected atomic Valkey record retrieval response %q for memory id=%s", response, memoryID)
-	}
-}
-
-// recordRetrieval updates LastAccessed and AccessCount for a single memory (reinforcement: S += 1, t = 0).
-//
-// The authoritative access_count and updated_at live as top-level HASH fields and are updated
-// atomically via an EVAL script only if the hash key exists. If the memory was deleted (e.g. via Forget)
-// before or during background access tracking, the script safely returns "missing" to avoid resurrecting
-// deleted memories as orphan records with partial fields.
+// recordRetrieval updates LastAccessed and AccessCount for a live memory
+// (reinforcement: S += 1, t = 0). The ID check and metadata writes execute in
+// one script so queued tracking cannot recreate a hash that consolidation or
+// Forget has deleted. UpdatedAt changes only on Store and Update, so it
+// remains a write-version for atomic consolidation.
 func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 	key := v.hashKey(id)
-	now := time.Now()
-	nowUnix := strconv.FormatInt(now.UnixMilli(), 10)
+	nowUnixMilli := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	scriptOptions := glideoptions.NewScriptOptions().
+		WithKeys([]string{key}).
+		WithArgs([]string{id, nowUnixMilli})
 
-	command := valkeyBuildAtomicRecordRetrievalCommand(key, nowUnix)
-	result, err := v.client.CustomCommand(ctx, command)
+	// HINCRBY is not idempotent. Retrying after a lost reply applies the
+	// increment twice, so each retrieval records access at most once.
+	_, err := v.client.InvokeScriptWithOptions(ctx, *valkeyTrackRetrievalScript(), *scriptOptions)
 	if err != nil {
-		return fmt.Errorf("atomic access tracking failed for memory id=%s: %w", id, err)
+		return fmt.Errorf("record retrieval metadata failed: %w", err)
 	}
 
-	return valkeyAtomicRecordRetrievalResult(result, id)
+	return nil
 }
 
 // ---------------------------------------------------------------------------
@@ -207,25 +175,12 @@ func (v *ValkeyStore) parseSearchCandidates(result any, defaultUserID string) []
 	var candidates []*RetrieveResult
 
 	for _, fieldsMap := range docs {
-		id := fmt.Sprint(fieldsMap["id"])
-		content := fmt.Sprint(fieldsMap["content"])
-		memType := fmt.Sprint(fieldsMap["memory_type"])
-
-		if id == "" || id == "<nil>" || content == "" || content == "<nil>" {
+		mem := valkeyFieldsMapToMemory(fieldsMap)
+		if mem.ID == "" || mem.Content == "" {
 			continue
 		}
 
 		score := valkeyParseScoreFromMap(fieldsMap, "vector_distance", v.metricType)
-
-		mem := &Memory{
-			ID:      id,
-			Content: content,
-			Type:    MemoryType(memType),
-		}
-
-		if metadataStr, ok := fieldsMap["metadata"].(string); ok {
-			valkeyParseMetadata(mem, metadataStr)
-		}
 
 		if mem.UserID == "" {
 			mem.UserID = defaultUserID
@@ -446,15 +401,14 @@ func valkeyParseScoreFromMap(fields map[string]interface{}, key string, metricTy
 
 // valkeyBuildHashFields builds the HSET field map for storing a memory in Valkey.
 func valkeyBuildHashFields(memory *Memory, embedding []float32) (map[string]string, error) {
-	// access_count is stored as a top-level HASH field only (updated atomically via HINCRBY).
-	// It is intentionally excluded from the metadata JSON blob to prevent concurrent
-	// recordRetrieval goroutines from overwriting each other's incremented counts.
+	// Access metadata is stored in top-level HASH fields. access_count is
+	// intentionally excluded from metadata JSON to prevent concurrent
+	// recordRetrieval goroutines from overwriting incremented counts.
 	metadata := map[string]interface{}{
-		"user_id":       memory.UserID,
-		"project_id":    memory.ProjectID,
-		"source":        memory.Source,
-		"importance":    memory.Importance,
-		"last_accessed": memory.LastAccessed.Unix(),
+		"user_id":    memory.UserID,
+		"project_id": memory.ProjectID,
+		"source":     memory.Source,
+		"importance": memory.Importance,
 	}
 	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
@@ -464,19 +418,33 @@ func valkeyBuildHashFields(memory *Memory, embedding []float32) (map[string]stri
 	projectID, source := normalizedMemoryScopeFields(memory)
 
 	return map[string]string{
-		"id":           memory.ID,
-		"user_id":      memory.UserID,
-		"project_id":   projectID,
-		"memory_type":  string(memory.Type),
-		"content":      memory.Content,
-		"source":       source,
-		"metadata":     string(metadataJSON),
-		"embedding":    string(valkeyFloat32ToBytes(embedding)),
-		"created_at":   strconv.FormatInt(memory.CreatedAt.UnixMilli(), 10),
-		"updated_at":   strconv.FormatInt(memory.UpdatedAt.UnixMilli(), 10),
-		"access_count": strconv.Itoa(memory.AccessCount),
-		"importance":   strconv.FormatFloat(float64(memory.Importance), 'f', -1, 32),
+		"id":            memory.ID,
+		"user_id":       memory.UserID,
+		"project_id":    projectID,
+		"memory_type":   string(memory.Type),
+		"content":       memory.Content,
+		"source":        source,
+		"metadata":      string(metadataJSON),
+		"embedding":     string(valkeyFloat32ToBytes(embedding)),
+		"created_at":    strconv.FormatInt(memory.CreatedAt.UnixMilli(), 10),
+		"updated_at":    strconv.FormatInt(memory.UpdatedAt.UnixMilli(), 10),
+		"last_accessed": strconv.FormatInt(memory.LastAccessed.UnixMilli(), 10),
+		"access_count":  strconv.Itoa(memory.AccessCount),
+		"importance":    strconv.FormatFloat(float64(memory.Importance), 'f', -1, 32),
 	}, nil
+}
+
+// valkeyBuildUpdateHashFields omits access metadata so a content update cannot
+// overwrite a retrieval that increments it concurrently. Store and atomic
+// consolidation use valkeyBuildHashFields to initialize those fields instead.
+func valkeyBuildUpdateHashFields(memory *Memory) (map[string]string, error) {
+	fields, err := valkeyBuildHashFields(memory, memory.Embedding)
+	if err != nil {
+		return nil, err
+	}
+	delete(fields, "access_count")
+	delete(fields, "last_accessed")
+	return fields, nil
 }
 
 // valkeyValidateRetrieveOpts checks required fields on RetrieveOptions.
@@ -562,11 +530,17 @@ func valkeyFieldsToMemory(fields map[string]string) *Memory {
 
 	valkeyParseMetadata(mem, fields["metadata"])
 
-	// access_count is authoritative in the top-level HASH field (updated atomically
-	// via HINCRBY). Override whatever valkeyParseMetadata may have set.
+	// access_count and last_accessed are authoritative in top-level HASH fields,
+	// so they can be updated without rewriting metadata JSON. Override the legacy
+	// metadata values when a top-level value exists.
 	if acStr := fields["access_count"]; acStr != "" {
 		if ac, err := strconv.Atoi(acStr); err == nil {
 			mem.AccessCount = ac
+		}
+	}
+	if lastAccessedStr := fields["last_accessed"]; lastAccessedStr != "" {
+		if ts, err := strconv.ParseInt(lastAccessedStr, 10, 64); err == nil {
+			mem.LastAccessed = time.UnixMilli(ts)
 		}
 	}
 
@@ -591,16 +565,10 @@ func valkeyFieldsToMemory(fields map[string]string) *Memory {
 func valkeyFieldsMapToMemory(fields map[string]interface{}) *Memory {
 	mem := &Memory{}
 
-	if id, ok := fields["id"].(string); ok {
-		mem.ID = id
-	}
-	if content, ok := fields["content"].(string); ok {
-		mem.Content = content
-	}
-	if userID, ok := fields["user_id"].(string); ok {
-		mem.UserID = userID
-	}
-	if memType, ok := fields["memory_type"].(string); ok {
+	mem.ID = valkeySearchStringField(fields, "id")
+	mem.Content = valkeySearchContentField(fields)
+	mem.UserID = valkeySearchStringField(fields, "user_id")
+	if memType := valkeySearchStringField(fields, "memory_type"); memType != "" {
 		mem.Type = MemoryType(memType)
 	}
 
@@ -608,16 +576,89 @@ func valkeyFieldsMapToMemory(fields map[string]interface{}) *Memory {
 		valkeyParseMetadata(mem, metadataStr)
 	}
 
-	if createdAtStr, ok := fields["created_at"].(string); ok && createdAtStr != "" {
-		if ts, err := strconv.ParseInt(createdAtStr, 10, 64); err == nil {
-			mem.CreatedAt = time.UnixMilli(ts)
-		}
+	if ts, ok := valkeySearchMillisField(fields, "created_at"); ok {
+		mem.CreatedAt = time.UnixMilli(ts)
 	}
-	if updatedAtStr, ok := fields["updated_at"].(string); ok && updatedAtStr != "" {
-		if ts, err := strconv.ParseInt(updatedAtStr, 10, 64); err == nil {
-			mem.UpdatedAt = time.UnixMilli(ts)
-		}
+	if ts, ok := valkeySearchMillisField(fields, "updated_at"); ok {
+		mem.UpdatedAt = time.UnixMilli(ts)
+	}
+	if ts, ok := valkeySearchMillisField(fields, "last_accessed"); ok {
+		mem.LastAccessed = time.UnixMilli(ts)
+	}
+	if accessCount, ok := valkeySearchIntField(fields, "access_count"); ok {
+		mem.AccessCount = accessCount
 	}
 
 	return mem
+}
+
+func valkeySearchStringField(fields map[string]interface{}, key string) string {
+	raw, ok := fields[key]
+	if !ok || raw == nil {
+		return ""
+	}
+	value := strings.TrimSpace(fmt.Sprint(raw))
+	if value == "" || value == "<nil>" {
+		return ""
+	}
+	return value
+}
+
+// valkeySearchContentField keeps the stored text, including leading and
+// trailing whitespace. Identifier fields are trimmed; content is not.
+func valkeySearchContentField(fields map[string]interface{}) string {
+	raw, ok := fields["content"]
+	if !ok || raw == nil {
+		return ""
+	}
+	switch val := raw.(type) {
+	case string:
+		return val
+	case []byte:
+		return string(val)
+	default:
+		return fmt.Sprint(val)
+	}
+}
+
+func valkeySearchMillisField(fields map[string]interface{}, key string) (int64, bool) {
+	return valkeySearchInt64Field(fields, key)
+}
+
+func valkeySearchIntField(fields map[string]interface{}, key string) (int, bool) {
+	value, ok := valkeySearchInt64Field(fields, key)
+	if !ok {
+		return 0, false
+	}
+	return int(value), true
+}
+
+func valkeySearchInt64Field(fields map[string]interface{}, key string) (int64, bool) {
+	raw, ok := fields[key]
+	if !ok || raw == nil {
+		return 0, false
+	}
+	switch val := raw.(type) {
+	case int:
+		return int64(val), true
+	case int64:
+		return val, true
+	case float64:
+		if math.IsNaN(val) || math.IsInf(val, 0) {
+			return 0, false
+		}
+		return int64(val), true
+	case string:
+		if val == "" {
+			return 0, false
+		}
+		parsed, err := strconv.ParseInt(val, 10, 64)
+		return parsed, err == nil
+	case []byte:
+		parsed, err := strconv.ParseInt(string(val), 10, 64)
+		return parsed, err == nil
+	default:
+		parsed, err := strconv.ParseInt(strings.TrimSpace(fmt.Sprint(val)), 10, 64)
+		return parsed, err == nil
+	}
 }
