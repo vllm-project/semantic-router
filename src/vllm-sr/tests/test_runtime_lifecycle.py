@@ -122,7 +122,9 @@ def test_runtime_summary_is_clean_human_stdout(capsys):
 
 def test_runtime_example_retains_automatic_model_for_default_routing(capsys):
     runtime_lifecycle._print_curl_example(
-        [{"port": 8899}], resolve_runtime_stack(), {"routing": {"decisions": []}}
+        [{"port": 8899}],
+        resolve_runtime_stack(),
+        {"recipes": [{"name": "default", "decisions": []}]},
     )
     assert '"model": "vllm-sr/auto"' in capsys.readouterr().out
 

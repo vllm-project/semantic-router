@@ -7,7 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// validateContextContracts checks routing.signals.context bands.
+// validateContextContracts checks a recipe's signals.context bands.
 //
 // Errors: empty or duplicate names, a rule with neither limit, unparsable or
 // negative values, and min_tokens > max_tokens. min_tokens == max_tokens is a
@@ -18,7 +18,8 @@ import (
 // what a request can match: a gap leaves counts with no context signal, and an
 // overlap reports every matching rule in configuration order. A band that
 // fully contains another is a common intentional layout and is logged at info.
-func validateContextContracts(cfg *RouterConfig) error {
+func validateContextContracts(cfg *RouterConfig) (err error) {
+	defer func() { err = cfg.inRecipe(err) }()
 	if cfg == nil || len(cfg.ContextRules) == 0 {
 		return nil
 	}
@@ -39,16 +40,16 @@ func collectContextBands(rules []ContextRule) ([]NamedContextBand, error) {
 	for index, rule := range rules {
 		name := strings.TrimSpace(rule.Name)
 		if name == "" {
-			return nil, fmt.Errorf("routing.signals.context[%d]: name cannot be empty", index)
+			return nil, fmt.Errorf("signals.context[%d]: name cannot be empty", index)
 		}
 		if _, exists := seen[name]; exists {
-			return nil, fmt.Errorf("routing.signals.context[%q]: duplicate rule name", name)
+			return nil, fmt.Errorf("signals.context[%q]: duplicate rule name", name)
 		}
 		seen[name] = struct{}{}
 
 		bounds, err := rule.Bounds()
 		if err != nil {
-			return nil, fmt.Errorf("routing.signals.context[%q]: %w", name, err)
+			return nil, fmt.Errorf("signals.context[%q]: %w", name, err)
 		}
 		bands = append(bands, NamedContextBand{Name: name, Bounds: bounds})
 	}
@@ -62,19 +63,19 @@ func logContextBandIssues(bands []NamedContextBand) {
 	for _, overlap := range overlaps {
 		if overlap.Contains {
 			logging.Infof(
-				"routing.signals.context: rule %q %s contains %q %s; requests in the inner band match both and are reported in configuration order",
+				"signals.context: rule %q %s contains %q %s; requests in the inner band match both and are reported in configuration order",
 				overlap.Outer.Name, overlap.Outer.Bounds, overlap.Inner.Name, overlap.Inner.Bounds,
 			)
 			continue
 		}
 		logging.Warnf(
-			"routing.signals.context: rules %q %s and %q %s overlap; requests in the shared range match both and are reported in configuration order",
+			"signals.context: rules %q %s and %q %s overlap; requests in the shared range match both and are reported in configuration order",
 			overlap.Outer.Name, overlap.Outer.Bounds, overlap.Inner.Name, overlap.Inner.Bounds,
 		)
 	}
 	for _, gap := range gaps {
 		logging.Warnf(
-			"routing.signals.context: no rule covers token counts %d to %d (before %q); requests in that range match no context signal",
+			"signals.context: no rule covers token counts %d to %d (before %q); requests in that range match no context signal",
 			gap.From, gap.To, gap.Before.Name,
 		)
 	}
@@ -94,8 +95,8 @@ func logContextBandCoverage(bands []NamedContextBand) {
 	}
 	switch {
 	case unbounded > 1:
-		logging.Warnf("routing.signals.context: %d rules have no max_tokens; each matches every request at or above its min_tokens", unbounded)
+		logging.Warnf("signals.context: %d rules have no max_tokens; each matches every request at or above its min_tokens", unbounded)
 	case unbounded == 0:
-		logging.Infof("routing.signals.context: no rule is open-ended; requests above %d tokens match no context signal (omit max_tokens on the last band to catch overflow)", coveredTo)
+		logging.Infof("signals.context: no rule is open-ended; requests above %d tokens match no context signal (omit max_tokens on the last band to catch overflow)", coveredTo)
 	}
 }

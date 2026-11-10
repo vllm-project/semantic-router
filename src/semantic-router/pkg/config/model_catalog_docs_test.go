@@ -1,9 +1,9 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -14,8 +14,9 @@ import (
 // The examples on the model catalog pages are the configurations these tests
 // load. Each titled YAML block, merged onto testdata/model_catalog_docs/base.yaml
 // when it is a fragment, must load and resolve as its expectation below
-// says; each migration pair must resolve the earlier form to the same
-// deployments as the new one; the zh-Hans pages carry the same blocks.
+// says; the earlier form of each migration pair must be refused, and migrate
+// must rewrite it to resolve as the new one; the zh-Hans pages carry the same
+// blocks.
 
 const modelCatalogDocsBase = "testdata/model_catalog_docs/base.yaml"
 
@@ -28,32 +29,30 @@ var modelCatalogDocPages = []string{
 var titledYAMLBlock = regexp.MustCompile("(?ms)^```ya?ml title=\"([^\"]+)\"\\n(.*?)^```")
 
 // allSignals are the signal types every expectation that names "*" means.
-var allSignals = []string{"domain", "jailbreak", "pii", "fact_check", "user_feedback", "hallucination", "preference", "complexity.probe", "classifier.probe", "safety.probe"}
+var allSignals = []string{
+	"domain", "fact_check", "user_feedback", "jailbreak", "safety", "pii", "hallucination", "refusal", "turn_relation", "complexity", "modality",
+}
 
-// docExampleResolutions is what each documented example resolves to: a
-// signal type, rule (classifier.<rule>, safety.<rule>, safety.<rule>.hazard,
-// complexity.<rule>, decision.<rule>), selector.<decision>, embedding,
-// multimodal or rerank, optionally prefixed with recipe:<name>/, to the
-// deployment that answers it. "*" sets every signal in allSignals.
+// docExampleResolutions is what each documented example resolves to: an
+// application signal type, a rule (<type>.<rule>, systemone.<rule>),
+// selector.<decision>, embedding or multimodal, optionally prefixed with
+// recipe:<name>/, to the deployment that answers it. "*" sets every
+// signal in allSignals.
 var docExampleResolutions = map[string]map[string]string{
-	"s1-defaults": {"*": "primary", "safety.probe.hazard": "hazard", "embedding": "vela-embedding", "multimodal": "omni-nano"},
-	"s2-remote-systemone": {
-		"*": "d3-remote", "safety.probe.hazard": "hazard", "embedding": "vela-embedding", "multimodal": "omni-nano",
-	},
-	"s3-mixed": {"*": "d3-remote", "pii": "local-vela", "safety.probe.hazard": "hazard"},
+	"s1-defaults":         {"*": "primary", "embedding": "vela-embedding"},
+	"s2-remote-systemone": {"*": "d3-remote", "embedding": "vela-embedding"},
+	"s3-mixed":            {"*": "d3-remote", "pii": "local-vela"},
 	"s4-type-and-rule-overrides": {
-		"*": "kai", "domain": "d3-remote", "decision.needs_reasoning": "kai", "decision.support_team": "d3-remote",
+		"*": "kai", "domain": "d3-remote", "systemone.needs_reasoning": "kai", "systemone.support_team": "d3-remote",
 	},
 	"s4-recipe-scope": {"*": "kai", "recipe:support/domain": "d3-remote", "recipe:support/pii": "kai"},
 	"s5-rule-level": {
-		"classifier.risk": "content-risk", "safety.harmful": "d3-remote", "safety.harmful.hazard": "hazard",
-		"selector.pick-model": "kai", "domain": "primary",
+		"domain.math": "primary", "domain.law": "kai", "safety.harmful": "d3-remote", "selector.pick-model": "kai", "domain": "primary",
 	},
-	"field-reference":      {"*": "primary", "pii": "primary", "embedding": "vela-embedding", "multimodal": "omni-nano"},
+	"field-reference":      {"*": "primary", "pii": "primary", "embedding": "vela-embedding"},
 	"r1-remote-embedding":  {"embedding": "remote-embed", "*": "primary"},
-	"r2-attached-reranker": {"rerank": "document-ranker"},
-	"r3-classify-and-chat": {"jailbreak": "guard", "classifier.tool-risk": "chat-judge", "domain": "primary"},
-	"r4-systemone-gateway": {"*": "d3-gateway", "safety.probe.hazard": "hazard"},
+	"r3-remote-judge":      {"jailbreak": "d3-judge", "hallucination": "d3-judge", "domain": "primary"},
+	"r4-systemone-gateway": {"*": "d3-gateway"},
 	"r5-attached-runtime":  {"*": "decision-kai"},
 	"r6-request-backends":  {"*": "primary"},
 }
@@ -108,8 +107,8 @@ func mergeYAML(base, overlay map[string]interface{}) map[string]interface{} {
 	return merged
 }
 
-// loadDocExample loads an example, merged onto the base.
-func loadDocExample(t *testing.T, example docExample) (*RouterConfig, error) {
+// catalogExampleDocument is an example merged onto the base.
+func catalogExampleDocument(t *testing.T, example docExample) []byte {
 	t.Helper()
 	var base, overlay map[string]interface{}
 	data, err := os.ReadFile(modelCatalogDocsBase)
@@ -120,13 +119,19 @@ func loadDocExample(t *testing.T, example docExample) (*RouterConfig, error) {
 		t.Fatal(err)
 	}
 	if err = yaml.Unmarshal([]byte(example.text), &overlay); err != nil {
-		return nil, fmt.Errorf("%s: not YAML: %w", example.title, err)
+		t.Fatalf("%s: not YAML: %v", example.title, err)
 	}
 	encoded, err := yaml.Marshal(mergeYAML(base, overlay))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return ParseYAMLBytesWithoutEnvExpansion(encoded)
+	return encoded
+}
+
+// loadDocExample loads an example, merged onto the base.
+func loadDocExample(t *testing.T, example docExample) (*RouterConfig, error) {
+	t.Helper()
+	return ParseYAMLBytesWithoutEnvExpansion(catalogExampleDocument(t, example))
 }
 
 // resolveDocKey is the deployment a documented key resolves to.
@@ -142,38 +147,33 @@ func resolveDocKey(cfg *RouterConfig, key string) string {
 	}
 	switch {
 	case key == "embedding":
-		if resolved, ok, err := scoped.ResolveTask("embedding"); ok && err == nil {
-			return resolved.Name
+		return scoped.EmbeddingDeployment
+	case strings.HasPrefix(key, "systemone."):
+		for _, rule := range scoped.SystemOneRules {
+			if "systemone."+rule.Name == key {
+				return scoped.SystemOneRuleDeployment(rule)
+			}
 		}
-		name, _, err := scoped.EmbeddingModelDeployment(scoped.primaryEmbeddingModel())
-		if err != nil {
-			return "error: " + err.Error()
-		}
+		return "no rule " + key
+	case knownBindingKey(key):
+		name, _ := scoped.ApplicationTypeDeployment(key)
 		return name
-	case key == "multimodal":
-		name, _, err := scoped.EmbeddingModelDeployment("multimodal")
-		if err != nil {
-			return "error: " + err.Error()
-		}
-		return name
-	case key == "rerank":
-		key = RAGRerankerConsumer
-	case strings.HasPrefix(key, "decision."):
-		for _, rule := range scoped.DecisionRules {
-			if "decision."+rule.Name == key {
-				return scoped.DecisionQuestionDeployment(rule)
+	case strings.Contains(key, ".") && knownBindingKey(strings.SplitN(key, ".", 2)[0]):
+		for _, rule := range scoped.ApplicationRules() {
+			if rule.Type+"."+rule.Rule.Name == key {
+				return scoped.deploymentOrDecisionModel(rule.Rule.Deployment)
 			}
 		}
 		return "no rule " + key
 	case strings.HasPrefix(key, "selector."):
 		for _, decision := range scoped.Decisions {
-			if "selector."+decision.Name == key && decision.Algorithm != nil && decision.Algorithm.Decision != nil {
-				return scoped.DecisionSelectorDeployment(*decision.Algorithm.Decision)
+			if "selector."+decision.Name == key && decision.Algorithm != nil && decision.Algorithm.SystemOne != nil {
+				return scoped.SystemOneSelectorDeployment(*decision.Algorithm.SystemOne)
 			}
 		}
 		return "no selector " + key
 	}
-	resolved, ok, err := scoped.ResolveTask(BindingConsumer(key))
+	resolved, ok, err := scoped.ResolveTask(key)
 	switch {
 	case err != nil:
 		return "error: " + err.Error()
@@ -212,9 +212,6 @@ func TestModelCatalogDocExamplesResolveAsDocumented(t *testing.T) {
 				t.Fatalf("%s: example %q does not load: %v", example.page, example.title, err)
 			}
 			codes := warningCodes(cfg)
-			if codes[warningDeprecatedModelField] > 0 {
-				t.Errorf("example %q writes deprecated fields: %+v", example.title, Warnings(cfg))
-			}
 			for _, code := range docExampleWarnings[example.title] {
 				if codes[code] == 0 {
 					t.Errorf("example %q reports no %s warning: %+v", example.title, code, Warnings(cfg))
@@ -259,7 +256,7 @@ func effectiveDeployments(cfg *RouterConfig, keys []string) map[string]string {
 	effective := map[string]string{}
 	for _, key := range keys {
 		name := resolveDocKey(cfg, key)
-		if consumer := BindingConsumer(key); !moduleSwitchedOn(cfg, consumer) || name == "none" {
+		if name == "none" {
 			effective[key] = "no model"
 			continue
 		}
@@ -273,38 +270,10 @@ func effectiveDeployments(cfg *RouterConfig, keys []string) map[string]string {
 	return effective
 }
 
-// moduleSwitchedOn reports whether a module that has its own switch is on.
-func moduleSwitchedOn(cfg *RouterConfig, consumer string) bool {
-	switch consumer {
-	case "domain_classifier":
-		return cfg.CategoryModel.Active()
-	case "pii_classifier":
-		return cfg.PIIModel.Active()
-	}
-	return true
-}
-
-func ruleKeys(cfg *RouterConfig) []string {
-	var keys []string
-	for _, rule := range cfg.ClassifierRules {
-		keys = append(keys, "classifier."+rule.Name)
-	}
-	for _, rule := range cfg.SafetyRules {
-		keys = append(keys, "safety."+rule.Name)
-		if rule.Hazard != nil {
-			keys = append(keys, "safety."+rule.Name+".hazard")
-		}
-	}
-	for _, rule := range cfg.ComplexityRules {
-		keys = append(keys, "complexity."+rule.Name)
-	}
-	for _, rule := range cfg.DecisionRules {
-		keys = append(keys, "decision."+rule.Name)
-	}
-	return keys
-}
-
-func TestModelResourceMigrationPairsResolveToTheSameDeployments(t *testing.T) {
+// The earlier form of each pair fails to load with a removed form's line, and
+// what migrate writes for it resolves to the same deployments as the new
+// form.
+func TestModelResourceMigrationPairsMigrateToTheNewForm(t *testing.T) {
 	examples := map[string]docExample{}
 	for _, example := range readDocExamples(t, filepath.Join(docsRoot(), "docs", "installation", "model-resource-migration.md")) {
 		examples[example.title] = example
@@ -325,21 +294,23 @@ func TestModelResourceMigrationPairsResolveToTheSameDeployments(t *testing.T) {
 		}
 		pairs++
 		t.Run(name, func(t *testing.T) {
-			old, err := loadDocExample(t, before)
+			document := catalogExampleDocument(t, before)
+			if _, err := ParseYAMLBytesWithoutEnvExpansion(document); err == nil || !strings.Contains(err.Error(), "run `vllm-sr config migrate`") {
+				t.Fatalf("the earlier form loads, or fails without a migrate hint: %v", err)
+			}
+			migrated, _, err := MigrateConfig(document)
 			if err != nil {
-				t.Fatalf("the earlier form no longer loads: %v", err)
+				t.Fatalf("migrate: %v", err)
+			}
+			old, err := ParseYAMLBytesWithoutEnvExpansion(migrated)
+			if err != nil {
+				t.Fatalf("the migrated form does not load: %v", err)
 			}
 			current, err := loadDocExample(t, after)
 			if err != nil {
 				t.Fatalf("the new form does not load: %v", err)
 			}
-			if warningCodes(old)[warningDeprecatedModelField] == 0 {
-				t.Errorf("the earlier form loads without a deprecated_model_field warning")
-			}
-			if warnings := warningCodes(current)[warningDeprecatedModelField]; warnings > 0 {
-				t.Errorf("the new form writes %d deprecated fields: %+v", warnings, Warnings(current))
-			}
-			keys := append([]string{"domain", "jailbreak", "pii", "fact_check", "user_feedback", "hallucination", "preference", "embedding", "multimodal", "rerank"}, ruleKeys(old)...)
+			keys := append([]string{"domain", "jailbreak", "pii", "fact_check", "user_feedback", "hallucination", "embedding"}, ruleKeys(old)...)
 			keys = append(keys, ruleKeys(current)...)
 			was, now := effectiveDeployments(old, keys), effectiveDeployments(current, keys)
 			for _, key := range sortedStringKeys(was) {
@@ -351,6 +322,43 @@ func TestModelResourceMigrationPairsResolveToTheSameDeployments(t *testing.T) {
 	}
 	if pairs == 0 {
 		t.Fatal("the migration page has no before/after pairs")
+	}
+}
+
+// The model runtime's migration page shows what `vllm-sr config migrate`
+// writes for its legacy.yaml, in both languages.
+func TestModelRuntimeMigrationExampleIsWhatConfigMigrateWrites(t *testing.T) {
+	page := filepath.Join("model-runtime", "deploy", "migrate.md")
+	for _, path := range []string{
+		filepath.Join(docsRoot(), "docs", page),
+		filepath.Join(docsRoot(), "i18n", "zh-Hans", "docusaurus-plugin-content-docs", "current", page),
+	} {
+		examples := map[string]docExample{}
+		for _, example := range readDocExamples(t, path) {
+			examples[example.title] = example
+		}
+		legacy, documented := examples["legacy.yaml"], examples["legacy.migrated.yaml"]
+		if legacy.text == "" || documented.text == "" {
+			t.Errorf("%s has no legacy.yaml and legacy.migrated.yaml blocks", path)
+			continue
+		}
+		if _, err := ParseYAMLBytesWithoutEnvExpansion([]byte(legacy.text)); err == nil || !strings.Contains(err.Error(), "run `vllm-sr config migrate`") {
+			t.Errorf("%s: legacy.yaml loads, or fails without a migrate hint: %v", path, err)
+		}
+		migrated, _, err := MigrateConfig([]byte(legacy.text))
+		if err != nil {
+			t.Fatalf("%s: migrate: %v", path, err)
+		}
+		var got, want interface{}
+		if err := yaml.Unmarshal(migrated, &got); err != nil {
+			t.Fatal(err)
+		}
+		if err := yaml.Unmarshal([]byte(documented.text), &want); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: legacy.migrated.yaml is not what config migrate writes:\n%s", path, migrated)
+		}
 	}
 }
 
@@ -372,4 +380,15 @@ func TestModelCatalogDocExamplesMatchTheirTranslations(t *testing.T) {
 			}
 		}
 	}
+}
+
+func ruleKeys(cfg *RouterConfig) []string {
+	var keys []string
+	for _, rule := range cfg.SystemOneRules {
+		keys = append(keys, "systemone."+rule.Name)
+	}
+	for _, rule := range cfg.ApplicationRules() {
+		keys = append(keys, rule.Type+"."+rule.Rule.Name)
+	}
+	return keys
 }

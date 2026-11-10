@@ -1,0 +1,18 @@
+plugin:
+  type: context
+  configuration:
+    enabled: true
+    sources:
+      - type: rag
+        backend: qdrant
+        backend_config:
+          collection: docs
+          reuse_cache_connection: true
+          content_field: content
+        # Recall widely by embedding, then let the decision model judge relevance.
+        match:
+          recall: {method: embedding, top_k: 20, min_similarity: 0.3}
+          judge: {preset: relevance, top_k: 5, min_score: 0.5}
+        on_failure: warn
+    injection:
+      mode: tool_role

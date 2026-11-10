@@ -140,11 +140,16 @@ def _capture_serve(monkeypatch, tmp_path):
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "routing": {"decisions": [{"name": "default", "priority": 1}]},
+                "recipes": [
+                    {
+                        "name": "default",
+                        "decisions": [{"name": "default", "priority": 1}],
+                    }
+                ],
             },
             sort_keys=False,
         )

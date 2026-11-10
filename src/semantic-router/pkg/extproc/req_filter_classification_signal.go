@@ -58,7 +58,6 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 			ToolChoiceNone:            history.toolChoiceNone,
 			AssistantToolCallCount:    history.assistantToolCallCount,
 			ToolResultCount:           history.toolResultCount,
-			ImageContentCount:         history.imageContentCount,
 			LastMessageRole:           history.lastMessageRole,
 			LastMessageToolResult:     history.lastMessageToolResult,
 			LastMessageFlowToolResult: history.lastMessageFlowToolResult,
@@ -73,7 +72,11 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 			ContextTextBytes:       history.contextTextBytes,
 			ContextEquivalentBytes: history.contextEquivalentBytes,
 			ContextHasNonText:      history.contextHasNonText,
+			ContextReserveTokens:   history.contextReserveTokens,
 			InputModality:          history.inputModality,
+			Turns:                  append([]classification.ConversationTurn(nil), history.turns...),
+			Images:                 append([]string(nil), history.userImages...),
+			Videos:                 append([]string(nil), history.userVideos...),
 		},
 	}
 
@@ -91,26 +94,30 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 		input.allMessagesText = history.currentUserMessage
 	}
 
-	if input.evaluationText == "" {
-		return input
-	}
-
-	input.compressedText, input.skipCompressionSignals, input.compression = r.compressSignalEvaluationText(input.evaluationText)
 	return input
 }
 
-func (r *OpenAIRouter) compressSignalEvaluationText(evaluationText string) (string, map[string]bool, promptCompressionRun) {
+// compressSignalEvaluationInput compresses the text the signals read by the
+// request's compress.signals, which nil leaves whole.
+func compressSignalEvaluationInput(input *signalEvaluationInput, signals *config.PromptCompressionConfig) {
+	if input.evaluationText == "" {
+		return
+	}
+	input.compressedText, input.skipCompressionSignals, input.compression = compressSignalEvaluationText(input.evaluationText, signals)
+}
+
+func compressSignalEvaluationText(evaluationText string, signals *config.PromptCompressionConfig) (string, map[string]bool, promptCompressionRun) {
 	compressedText := evaluationText
 	var skipCompressionSignals map[string]bool
 
-	if !r.Config.PromptCompression.Enabled || r.Config.PromptCompression.MaxTokens <= 0 {
+	if signals == nil || !signals.Enabled || signals.MaxTokens <= 0 {
 		return compressedText, skipCompressionSignals, promptCompressionRun{outcome: metrics.PromptCompressionSkippedDisabled}
 	}
 
-	cfg := buildCompressionConfig(r.Config.PromptCompression)
+	cfg := buildCompressionConfig(*signals)
 	origTokens := promptcompression.CountTokensApprox(evaluationText)
-	if r.Config.PromptCompression.MinLength > 0 && len(evaluationText) <= r.Config.PromptCompression.MinLength {
-		logging.Infof("[PromptCompression] Skipped: %d chars <= min_length threshold %d", len(evaluationText), r.Config.PromptCompression.MinLength)
+	if signals.MinLength > 0 && len(evaluationText) <= signals.MinLength {
+		logging.Infof("[PromptCompression] Skipped: %d chars <= min_length threshold %d", len(evaluationText), signals.MinLength)
 		return compressedText, skipCompressionSignals, promptCompressionRun{outcome: metrics.PromptCompressionSkippedMinLength}
 	}
 	if origTokens <= cfg.MaxTokens {
@@ -122,35 +129,28 @@ func (r *OpenAIRouter) compressSignalEvaluationText(evaluationText string) (stri
 	run := promptCompressionRun{outcome: metrics.PromptCompressionCompressed, elapsed: time.Since(started)}
 	logging.Infof("[PromptCompression] Compressed evaluationText: %d -> %d tokens (ratio=%.2f, kept %d sentences)",
 		result.OriginalTokens, result.CompressedTokens, result.Ratio, len(result.KeptIndices))
-	return result.Compressed, r.Config.PromptCompression.SkipSignalsSet(), run
+	return result.Compressed, signals.SkipSignalsSet(), run
 }
 
 func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals *classification.SignalResults) {
 	ctx.VSRMatchedKeywords = signals.MatchedKeywordRules
-	ctx.VSRMatchedEmbeddings = signals.MatchedEmbeddingRules
-	ctx.VSRMatchedDomains = signals.MatchedDomainRules
-	ctx.VSRMatchedFactCheck = signals.MatchedFactCheckRules
-	ctx.VSRMatchedUserFeedback = signals.MatchedUserFeedbackRules
-	ctx.VSRMatchedReask = signals.MatchedReaskRules
-	ctx.VSRMatchedPreference = signals.MatchedPreferenceRules
+	ctx.VSRMatchedDomains = signals.ReportedMatches(config.SignalTypeDomain)
+	ctx.VSRMatchedFactCheck = signals.ReportedMatches(config.SignalTypeFactCheck)
+	ctx.VSRMatchedUserFeedback = signals.ReportedMatches(config.SignalTypeUserFeedback)
+	ctx.VSRMatchedTurnRelation = signals.ReportedMatches(config.SignalTypeTurnRelation)
 	ctx.VSRMatchedLanguage = signals.MatchedLanguageRules
-	ctx.VSRMatchedAction = signals.MatchedActionRules
 	ctx.VSRMatchedContext = signals.MatchedContextRules
 	ctx.VSRContextTokenCount = signals.TokenCount
-	ctx.VSRMatchedStructure = signals.MatchedStructureRules
-	ctx.VSRMatchedComplexity = signals.MatchedComplexityRules
-	ctx.VSRMatchedModality = signals.MatchedModalityRules
+	ctx.VSRMatchedComplexity = signals.ReportedMatches(config.SignalTypeComplexity)
+	ctx.VSRMatchedModality = signals.ReportedMatches(config.SignalTypeModality)
 	ctx.VSRMatchedAuthz = signals.MatchedAuthzRules
-	ctx.VSRMatchedJailbreak = signals.MatchedJailbreakRules
-	ctx.VSRMatchedSafety = signals.MatchedSafetyRules
-	ctx.VSRMatchedPII = signals.MatchedPIIRules
-	ctx.VSRMatchedKB = signals.MatchedKBRules
+	ctx.VSRMatchedJailbreak = signals.ReportedMatches(config.SignalTypeJailbreak)
+	ctx.VSRMatchedSafety = signals.ReportedMatches(config.SignalTypeSafety)
+	ctx.VSRMatchedPII = signals.ReportedMatches(config.SignalTypePII)
 	ctx.VSRMatchedConversation = signals.MatchedConversationRules
-	ctx.VSRMatchedEvent = signals.MatchedEventRules
 	ctx.VSRMatchedMetadata = signals.MatchedMetadataRules
-	ctx.VSRMatchedClassifier = signals.MatchedClassifierRules
 	ctx.VSRMatchedInputModality = signals.MatchedInputModalityRules
-	ctx.VSRMatchedDecisionModel = signals.MatchedDecisionRules
+	ctx.VSRMatchedDecisionModel = signals.ReportedMatches(config.SignalTypeSystemOne)
 	ctx.VSRMatchedProjection = signals.MatchedProjectionRules
 	ctx.VSRProjectionScores = cloneReplayFloat64Map(signals.ProjectionScores)
 	ctx.VSRSignalConfidences = cloneReplayFloat64Map(signals.SignalConfidences)
@@ -158,13 +158,13 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRSignalErrors = cloneReplayStringMap(signals.SignalErrors)
 	ctx.VSRSignalErrorMatches = cloneReplayBoolMap(signals.SignalErrorMatches)
 	ctx.VSRProjectionTrace = cloneProjectionTraceForReplay(signals.ProjectionTrace)
+	ctx.RoutedSignals = signals.Matches()
 
 	if signals.JailbreakDetected || signals.JailbreakScoreAvailable {
 		ctx.JailbreakDetected = signals.JailbreakDetected
 		ctx.JailbreakType = signals.JailbreakType
 		ctx.JailbreakConfidence = signals.JailbreakConfidence
 		ctx.JailbreakScoreAvailable = signals.JailbreakScoreAvailable
-		ctx.JailbreakDecision = signals.JailbreakDecision
 	}
 	ctx.PIIContentVerified = signals.PIIContentVerified
 	ctx.PIIEvidence = append([]classification.PrivacyEvidence(nil), signals.PIIEvidence...)
@@ -174,7 +174,6 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	}
 
 	r.setFactCheckFromSignals(ctx, signals.MatchedFactCheckRules)
-	r.setModalityFromSignals(ctx, signals.MatchedModalityRules)
 }
 
 func cloneProjectionTraceForReplay(t *projectiontrace.Trace) *projectiontrace.Trace {
@@ -230,28 +229,22 @@ func cloneReplayBoolMap(values map[string]bool) map[string]bool {
 func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules := []string{}
 	allMatchedRules = append(allMatchedRules, signals.MatchedKeywordRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedEmbeddingRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedDomainRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedFactCheckRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedUserFeedbackRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedReaskRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedPreferenceRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedTurnRelationRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedLanguageRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedContextRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedStructureRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedComplexityRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedAuthzRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedJailbreakRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedSafetyRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPIIRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedKBRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedConversationRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedEventRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedMetadataRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedClassifierRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedInputModalityRules...)
-	allMatchedRules = append(allMatchedRules, signals.MatchedDecisionRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedSystemOneRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedProjectionRules...)
 	return allMatchedRules
 }

@@ -58,11 +58,11 @@ func testWorkflowAmbiguousIdentityPolicy(t *testing.T, secondID, policy string) 
 	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
 		OriginalRequest: workflowTestRequest(),
 		ModelRefs:       []config.ModelRef{{Model: "worker"}, {Model: "final"}},
-		Algorithm: &config.AlgorithmConfig{Type: "workflows", Workflows: &config.WorkflowsAlgorithmConfig{
+		Algorithm: &config.AlgorithmConfig{Type: "workflows", OnError: policy, Workflows: &config.WorkflowsAlgorithmConfig{
 			Mode:     config.WorkflowModeDynamic,
 			Planner:  config.WorkflowPlannerConfig{Model: "planner"},
 			Final:    config.WorkflowFinalConfig{Model: "final"},
-			MaxSteps: 3, MaxParallel: 1, OnError: policy,
+			MaxSteps: 3, MaxParallel: 1,
 		}},
 		DecisionName: "identity-test",
 	})

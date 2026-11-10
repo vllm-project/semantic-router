@@ -1,0 +1,51 @@
+# The Router has no MCP tool invoker, so an enabled RAG source on the mcp
+# backend retrieves nothing. Migrate drops it, and a rag plugin on it before
+# any of the plugin's other forms, and drops the mcp fallback of a hybrid
+# source, which keeps its primary. A disabled plugin's source stays as written.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    plugins:
+      - type: context
+        configuration:
+          enabled: true
+          sources:
+            - type: rag
+              backend: hybrid
+              backend_config:
+                primary: milvus
+                primary_config: {collection: docs}
+    decisions:
+      - name: docs
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: milvus
+                  backend_config: {collection: docs}
+      - name: tool_docs
+        priority: 90
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+      - name: parked
+        priority: 80
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+        plugins:
+          - type: context
+            configuration:
+              enabled: false
+              sources:
+                - type: rag
+                  backend: mcp
+                  backend_config: {server_name: docs-server, tool_name: retrieve_docs}

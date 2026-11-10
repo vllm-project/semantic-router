@@ -76,7 +76,7 @@ Connect a **local runtime**, a separate **vLLM-SR Engine**, or a compatible **ex
 
 For a protected listener, add `-H "Authorization: Bearer $SYSTEMONE_API_KEY"`. Try the route in Dashboard's **System One → Decision Playground**, then see which model answered in **Decision Monitoring**.
 
-**[Build your first Auto route →](/docs/next/tutorials/algorithm/native/cascade)**
+**[Build your first Auto route →](/docs/tutorials/algorithm/looper/escalate#on-system-one)**
 
 ## Verify the result
 
@@ -89,7 +89,7 @@ The [evidence download](/img/blog/system-one-auto/evidence.zip) includes saved a
 
 **Uncertainty and calibration.** Of the 106 upgrades, 41 rescued Kai errors and three introduced errors where Kai had been right. The calibration target was 70% Kai coverage; the public suite achieved 54.11%, illustrating that coverage changes with the workload.
 
-Auto's gain over Kai has paired 95% interval **[11.34, 21.72] percentage points**; its gap below Vega has interval **[2.59, 8.89]**. The gate threshold, **0.6059704079536342**, was frozen using a separate 192-source calibration set before this evaluation. For Noul it checks `max(p, 1-p)`, so a confident “no” can exit early. The [complete YAML](/docs/next/tutorials/algorithm/native/cascade#define-the-cascade) reproduces this operating point; it is not a universal default.
+Auto's gain over Kai has paired 95% interval **[11.34, 21.72] percentage points**; its gap below Vega has interval **[2.59, 8.89]**. The gate threshold, **0.6059704079536342**, was frozen using a separate 192-source calibration set before this evaluation. For Noul it checks `max(p, 1-p)`, so a confident “no” can exit early. The [complete YAML](/docs/tutorials/algorithm/looper/escalate#define-the-stages) reproduces this operating point; it is not a universal default.
 
 **Requests.** The controlled collector uses the pinned upstream TypeSafe request mapping, adds `require_full_input: true` to each question and requests `options.return_meta`. The stock upstream CLI does not add those options. Three seeded, sequential passes compare direct Kai, direct Vega and Auto: 2,079 timed frontend requests plus nine separate typed warmups. There are no retries or discarded outliers. All measured requests succeeded and retained complete-input and runtime-identity evidence. Quality uses only pass 0; later passes check timing and determinism, not additional independent quality samples.
 

@@ -843,9 +843,9 @@ class SurfaceRequest:
 
     ``body`` is the JSON body; the runtime has checked its top-level fields
     and parsed the generic options (deadline, return_meta). The family
-    validates everything else in ``plan_surface``. ``part`` marks one state
-    of a decisions request with several (``states``): only the whole request
-    is refused when none of its questions is valid.
+    validates everything else in ``plan_surface``. ``part`` marks one entry
+    of a decisions batch (``states``): only the whole batch is refused when
+    none of its questions is valid.
     """
 
     surface: str

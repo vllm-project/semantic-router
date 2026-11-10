@@ -167,7 +167,7 @@ Catalog adoption is additive within the existing v0.3 hierarchy:
   physical backends even when it supplies the legacy default listener for an
   empty listener list.
 - A catalog-backed model materializes its card and reasoning family
-  automatically. An intentional `routing.modelCards` override uses the
+  automatically. An intentional `providers.models` override uses the
   canonical `catalog` value as its `name`.
 - A custom vLLM, SGLang, private, or newly released model omits `catalog`. It
   can remain a minimal binding or supply a handwritten Model Card, custom

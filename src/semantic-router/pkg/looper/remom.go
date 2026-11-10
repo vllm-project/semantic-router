@@ -51,7 +51,6 @@ func getDefaultReMoMConfig() *config.ReMoMAlgorithmConfig {
 		IncludeReasoning:             false,
 		CompactionStrategy:           "full",
 		CompactionTokens:             1000,
-		OnError:                      "skip",
 		ShuffleSeed:                  42,
 		IncludeIntermediateResponses: true,
 	}
@@ -143,9 +142,9 @@ func collectRemomParallelResults(
 	numCalls int,
 	minSuccessful int,
 	results <-chan remomParallelResult,
-	cfg *config.ReMoMAlgorithmConfig,
+	onError string,
 ) ([]*ModelResponse, error) {
-	collector := newRemomResultCollector(numCalls, minSuccessful, cfg)
+	collector := newRemomResultCollector(numCalls, minSuccessful, onError)
 
 	for completed := 0; completed < numCalls; completed++ {
 		select {
@@ -170,12 +169,20 @@ type remomResultCollector struct {
 	errs          []error
 }
 
-func newRemomResultCollector(numCalls int, minSuccessful int, cfg *config.ReMoMAlgorithmConfig) *remomResultCollector {
+func newRemomResultCollector(numCalls int, minSuccessful int, onError string) *remomResultCollector {
 	return &remomResultCollector{
 		numCalls:      numCalls,
 		minSuccessful: minSuccessful,
-		onError:       cfg.OnError,
+		onError:       onError,
 	}
+}
+
+// remomOnError is the decision's on_error: skip unless set.
+func remomOnError(req *Request) string {
+	if req.Algorithm != nil && req.Algorithm.OnError != "" {
+		return req.Algorithm.OnError
+	}
+	return config.ReMoMOnErrorSkip
 }
 
 func (c *remomResultCollector) handleResult(res remomParallelResult) ([]*ModelResponse, error, bool) {
@@ -257,6 +264,9 @@ type IntermediateResp struct {
 	// bytes-per-token ratio as CompactedContent; it is not part of the
 	// published intermediate-response payload.
 	Usage TokenUsage `json:"-"`
+	// FinishReason is the backend finish_reason, served with the response
+	// when it is the final one.
+	FinishReason string `json:"-"`
 }
 
 // Default synthesis templates
@@ -403,7 +413,7 @@ func (l *ReMoMLooper) runReMoMSchedule(
 		totalIterations += len(roundExecution.attemptedResponses)
 		trackReMoMModelsUsed(modelsUsed, roundExecution.attemptedResponses)
 		if err != nil {
-			if canFallbackToPreviousReMoMRound(cfg, allRoundResponses) {
+			if canFallbackToPreviousReMoMRound(remomOnError(req), allRoundResponses) {
 				logging.Warnf("[ReMoM] Round %d failed; using previous round responses as fallback: %v", roundIdx+1, err)
 				break
 			}
@@ -423,8 +433,8 @@ func (l *ReMoMLooper) runReMoMSchedule(
 	}, nil
 }
 
-func canFallbackToPreviousReMoMRound(cfg *config.ReMoMAlgorithmConfig, allRoundResponses []RoundResponse) bool {
-	if cfg.OnError == config.ReMoMOnErrorFail || len(allRoundResponses) == 0 {
+func canFallbackToPreviousReMoMRound(onError string, allRoundResponses []RoundResponse) bool {
+	if onError == config.ReMoMOnErrorFail || len(allRoundResponses) == 0 {
 		return false
 	}
 	lastRound := allRoundResponses[len(allRoundResponses)-1]
@@ -488,7 +498,7 @@ func (l *ReMoMLooper) executeReMoMRound(
 	responses, err := l.executeParallelCalls(ctx, req, cfg, modelCalls, currentMessages)
 	execution.attemptedResponses = responses
 	if err != nil {
-		if cfg.OnError == "fail" {
+		if remomOnError(req) == config.ReMoMOnErrorFail {
 			return execution, fmt.Errorf("round %d failed: %w", roundIdx+1, err)
 		}
 		logging.Warnf("[ReMoM] Round %d had errors but continuing (on_error=skip)", roundIdx+1)
@@ -544,6 +554,7 @@ func (l *ReMoMLooper) buildReMoMRoundResponse(
 			CompactedContent: l.compactResponse(cfg, synthesisText, bytesPerToken),
 			TokenCount:       estimateTokens(synthesisText, bytesPerToken),
 			Usage:            resp.Usage,
+			FinishReason:     backendFinishReason(resp),
 		})
 	}
 	return roundResp
@@ -582,7 +593,7 @@ func (l *ReMoMLooper) executeParallelCalls(
 		}(i, call)
 	}
 
-	return collectRemomParallelResults(roundCtx, numCalls, minSuccessful, results, cfg)
+	return collectRemomParallelResults(roundCtx, numCalls, minSuccessful, results, remomOnError(req))
 }
 
 // buildSynthesisPrompt builds the synthesis prompt using template
