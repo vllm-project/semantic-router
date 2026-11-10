@@ -1,3 +1,4 @@
+import re
 from typing import get_args
 
 import pytest
@@ -31,7 +32,9 @@ def test_pii_input_can_leave_the_user_turn_out_only_with_something_else_to_read(
     rule = PIIRule(name="tool-output", input={"tool_results": True, "turn": False})
 
     assert rule.model_dump(exclude_none=True)["input"]["turn"] is False
-    with pytest.raises(ValueError, match="input.history or input.tool_results"):
+    with pytest.raises(
+        ValueError, match=re.escape("input.history or input.tool_results")
+    ):
         PIIRule(name="nothing", input={"turn": False})
 
 
