@@ -87,7 +87,7 @@ global:
 | `input` | The deployment's input budget: `max_tokens`, and `overflow` (`reject`, `truncate` or `window`) |
 | `replicas` | Workers of one logical deployment: each a `device`, or an `endpoint` and `model` of a worker started elsewhere |
 | `public_name` | The deployment's name on the inference API |
-| `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context`, `max_model_len` | Engine arguments; see [engine arguments](../model-runtime/engine-args.md) |
+| `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context`, `max_model_len` | Engine arguments; see [engine arguments](../model-runtime/deploy/engine-args.md) |
 
 ### Connection block
 

@@ -8,7 +8,7 @@ sidebar_label: Restricted Networks
 Semantic Router may need network access for three different reasons:
 
 1. the container runtime pulls Router, Dashboard and supporting images (plus Envoy for `--gateway extproc`);
-2. the Router downloads classifier or embedding artifacts; and
+2. the model runtime downloads the decision and embedding model artifacts; and
 3. routed requests call your configured model providers.
 
 Identify which layer is failing before changing mirrors or proxy settings. A

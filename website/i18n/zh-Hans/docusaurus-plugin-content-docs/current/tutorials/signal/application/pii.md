@@ -10,7 +10,7 @@ translation:
 
 ## 概述 {#overview}
 
-`pii` 定位请求中的个人数据，并给出每个 span 的确切字符。它提出 `pii` [预设](../../../system-one/reference#preset-catalog)问题，即基于 11 个[个人数据标签](../../../system-one/reference#personal-data-labels)的 span 问题，并读取完整输入。当模型找到规则计入的标签的 span 时，规则匹配；[`masking`](../../plugin/masking) 插件用占位符替换同样的 span。
+`pii` 定位请求中的个人数据，并给出每个 span 的确切字符。它提出 `pii` [预设](../../../system-one/reference/presets#preset-catalog)问题，即基于 11 个[个人数据标签](../../../system-one/reference/presets#personal-data-labels)的 span 问题，并读取完整输入。当模型找到规则计入的标签的 span 时，规则匹配；[`masking`](../../plugin/masking) 插件用占位符替换同样的 span。
 
 ## 主要优势 {#key-advantages}
 
@@ -103,7 +103,7 @@ recipes:
 
 ### 回答问题的模型 {#the-model-that-answers}
 
-除非 `pii` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有 PII 规则；见[选择部署](../../../system-one/deployments)。该问题需要 span：解析到不支持 span 的部署（例如 d3 模型）的规则会以 `span_required` 加载失败。vela3-fast（默认）、Vela 3.0 的 d3 规格和 Vela 2.0 用它们自己的 PII 问题回答，并与该请求针对同一文本的其他问题放在同一次调用中。
+除非 `pii` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有 PII 规则；见[选择部署](../../../system-one/deploy/deployments)。该问题需要 span：解析到不支持 span 的部署（例如 d3 模型）的规则会以 `span_required` 加载失败。vela3-fast（默认）、Vela 3.0 的 d3 规格和 Vela 2.0 用它们自己的 PII 问题回答，并与该请求针对同一文本的其他问题放在同一次调用中。
 
 ```yaml
 global:

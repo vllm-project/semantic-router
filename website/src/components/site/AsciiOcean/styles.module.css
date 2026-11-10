@@ -1,0 +1,34 @@
+/* Adapted from stackedlol/ascii-sharks (MIT); see LICENSE in this folder. */
+
+/* Geist Mono SemiBold (SIL Open Font License 1.1, /fonts/geist-mono/OFL.txt), subset to printable ASCII and Latin-1.
+ * At 13 KB the build emits it as its own hashed file, fetched only where a canvas asks for it; under 10 KB webpack
+ * would inline it into the site-wide stylesheet. Its own family name, so a full Geist Mono can't collide with it. */
+@font-face {
+  font-family: 'AsciiOcean Geist Mono';
+  src: url('/fonts/geist-mono/GeistMono-SemiBold-latin1.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0020-007E, U+00A0-00FF;
+}
+
+/* The canvas fills its box and shows its palette's ground before the first frame, so mounting moves and flashes
+ * nothing. The glyphs come from this font-family. */
+.ocean {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+  font-family: 'AsciiOcean Geist Mono', ui-monospace, Menlo, monospace;
+}
+
+.paper,
+.auto {
+  background: linear-gradient(180deg, #fcfbf8 0%, #faf8f3 50%, #f8f4ec 82%, #f6f1e7 100%);
+}
+
+.night,
+:global(html[data-theme='dark']) .auto {
+  background: #000;
+}
