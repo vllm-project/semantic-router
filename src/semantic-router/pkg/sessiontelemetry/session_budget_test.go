@@ -186,3 +186,36 @@ func TestHydrationKeepsOpenReservations(t *testing.T) {
 	mustExceed(t, "s", 301, 1000)
 	mustReserve(t, "s", 300, 1000)
 }
+
+func TestEvictionSkipsSessionsWithReservations(t *testing.T) {
+	resetSessionBudget(t)
+	orig := maxRouterSessions
+	maxRouterSessions = 2
+	t.Cleanup(func() { maxRouterSessions = orig })
+	base := time.Now()
+	reserveAt := func(session string, at time.Time) {
+		t.Helper()
+		if _, err := ReserveSessionTokens(SessionReservationParams{
+			SessionID: session, Tokens: 600, Limit: 1000, Timestamp: at,
+		}); err != nil {
+			t.Fatalf("reserve %s: %v", session, err)
+		}
+	}
+
+	reserveAt("held", base)
+	RecordSessionDecision(SessionDecisionParams{SessionID: "idle", SelectedModel: "m", Timestamp: base.Add(time.Second)})
+	reserveAt("new", base.Add(2*time.Second))
+
+	if _, err := ReserveSessionTokens(SessionReservationParams{
+		SessionID: "held", Tokens: 401, Limit: 1000, Timestamp: base.Add(3 * time.Second),
+	}); !errors.Is(err, ErrSessionBudgetExceeded) {
+		t.Fatalf("held lost its reservation to eviction: got %v", err)
+	}
+	if _, ok := PeekRouterSessionSnapshot("idle", base.Add(3*time.Second)); ok {
+		t.Fatal("idle should have been evicted instead of held")
+	}
+	reserveAt("third", base.Add(4*time.Second))
+	if got := routerSessionCount(); got != 3 {
+		t.Fatalf("got %d sessions, want 3: the cap gives way only to sessions with reservations", got)
+	}
+}
