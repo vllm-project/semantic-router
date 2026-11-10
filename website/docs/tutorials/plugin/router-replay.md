@@ -5,8 +5,8 @@
 Use Router Replay to inspect requests in Dashboard Insights: the selected route,
 model, token usage, response, and tool trajectory. Configure storage in
 `global.services.router_replay`, and the switch and capture defaults in a
-`router_replay` plugin in `global.plugins`; use a decision's `router_replay`
-plugin to override only the capture fields that differ.
+`router_replay` plugin in `global.plugins`; use a recipe's or a decision's
+`router_replay` plugin to override only the capture fields that differ.
 
 ## What Problem Does It Solve?
 
@@ -53,12 +53,19 @@ global:
 ```
 
 Without a `router_replay` plugin, Replay stays disabled. The plugin in
-`global.plugins` holds the shared capture defaults, and a decision's plugin
-overrides them field by field. Capture defaults are
-request and response bodies enabled, personal data enabled, tool results
-redacted, 10,000 records, 4,096 bytes per body, no per-field tool-trace byte
-limit, and 100 tool steps.
-Storage, retention and asynchronous writes are global service settings.
+`global.plugins` holds the shared capture defaults; a recipe's plugin
+overrides them, and a decision's plugin overrides its recipe's, field by
+field. Storage, retention and asynchronous writes are global service settings.
+
+| Capture setting | Default |
+| --- | --- |
+| Request and response bodies | captured |
+| Personal data | captured |
+| Tool results | redacted |
+| `max_records` | 10,000 |
+| `max_body_bytes` | 4,096 bytes per body |
+| `max_tool_trace_bytes` | no per-field limit |
+| `max_tool_trace_steps` | 100 |
 
 ### Limit capture on a decision
 
@@ -81,21 +88,24 @@ complete characters, so they can be slightly shorter than the limit. A truncated
 raw body may no longer be complete JSON; check its truncation flag. Tool traces
 have separate limits from raw request and response bodies.
 
-To opt one decision out of capture, use `configuration: {enabled: false}`.
-To change the deployment-wide default, set `enabled: false` on the
-`router_replay` plugin in `global.plugins`, or leave that plugin out; a
-decision can still opt in.
+- **Opt out one decision** with `configuration: {enabled: false}`.
+- **Change the deployment-wide default** by setting `enabled: false` on the
+  `router_replay` plugin in `global.plugins`, or leaving that plugin out. A
+  recipe or decision can still opt in.
+- **Omitted fields inherit** from the layer below. An explicit `false` is an
+  override, and `max_tool_trace_bytes: 0` or `max_tool_trace_steps: 0`
+  removes that limit.
+- **Before a decision is selected,** a rejected request uses its recipe's
+  capture defaults; a decision's override applies once it is selected.
 
-Every omitted plugin field inherits its global capture default. Explicit
-`false` remains an override, and `max_tool_trace_bytes: 0` or
-`max_tool_trace_steps: 0` removes that limit. There is no recipe-level Replay
-policy. Requests rejected before a decision is selected use the global defaults;
-a decision override applies after that decision is selected. These settings do
-not change provider-side retention or delete existing records.
+These settings don't change provider-side retention or delete existing
+records.
 
-The existing recorder fallbacks still apply to explicit `max_body_bytes: 0`
-(4,096 bytes) and `max_records: 0` (200 records for the memory store). These zeros
-override an inherited value; omit a field when you want to inherit it.
+:::note Zero values
+Explicit `max_body_bytes: 0` falls back to 4,096 bytes, and `max_records: 0`
+to 200 records for the memory store. These zeros override an inherited value,
+so omit a field to inherit it.
+:::
 
 ### Keep personal data out of Replay
 
@@ -160,18 +170,49 @@ Capture only what you need and restrict access with `replay.read` and
 
 ## Shadow
 
-The `shadow` block sends a bounded, sampled copy of the decision's approved request to a secondary model, and the replay record keeps its outcome, without changing or delaying the primary response. It runs while the decision records replays. It replaces the `shadow_dispatch` plugin, which `vllm-sr config migrate` rewrites into this block.
+The `shadow` block sends a bounded, sampled copy of the decision's approved
+request to a candidate model, and keeps the outcome on the replay record. The
+primary response is never changed or delayed, and the shadow runs only while
+the decision records replays.
 
-Promoting a new model into a routing recipe needs evidence from production-shaped requests. Offline evaluation misses real prompt distributions, and gray release exposes users to an unproven model. Shadow dispatch fills the step in between: the primary model still answers every request, while a copy of the same finalized request is sent to the candidate in the background. The shadow result is stored as an immutable outcome on the request's replay record, so operators can correlate primary and shadow observations later without exposing protected content.
+Promoting a model needs evidence from production-shaped requests: offline
+evaluation misses real prompts, and a gray release exposes users to an
+unproven model. A shadow fills the gap. The primary model still answers every
+request, and the candidate's result is stored as an immutable outcome you can
+compare later.
 
-The shadow copy starts from the same approved neutral request the primary dispatch was built from, after every request plugin has run. It is then rendered for the shadow model through the same encode and provider-adaptation steps a primary dispatch uses, so reasoning controls follow the shadow model's family, not the primary's. It is addressed the way the primary dispatch would address that backend, including a provider profile's `chat_path` and an Azure OpenAI `api_version` query. It is always sent non-streaming. Only the W3C `traceparent` and `tracestate` headers are propagated; client headers are not, and that includes `baggage`, which the tracing propagator extracts from the client and which may carry anything the client chose to attach. Decision header mutations run for the primary backend and stay there unless `forward_headers` names them, so an operator opts in per header and a custom credential the router cannot recognise is never copied by default. Known credential carriers and whichever header the primary or shadow provider profile resolves as its credential header (`auth.header`) are dropped even when listed. Only the router's own static credentials for the shadow model's backend are used, so a primary credential can never cross into the shadow backend. The shadow call is sent only to the configured backend address: a redirect answer is never followed, so neither the prompt nor the shadow credential can be forwarded to an origin the configuration does not name.
+What the shadow copy carries:
+
+- **The approved request.** It starts from the same request the primary
+  dispatch was built from, after every request plugin has run.
+- **The shadow model's own encoding.** It is rendered through the same encode
+  and provider-adaptation steps, so reasoning controls follow the shadow
+  model's family. It is addressed like the primary would address that backend,
+  including a profile's `chat_path` and an Azure OpenAI `api_version` query.
+- **No streaming.** It is always sent non-streaming.
+- **Trace headers only.** Only the W3C `traceparent` and `tracestate` headers
+  are propagated. Client headers, `baggage` included, are not.
+- **No primary credentials.** Decision header mutations stay on the primary
+  path unless `forward_headers` names them. Known credential carriers and
+  each profile's `auth.header` are dropped even when listed, and only the
+  Router's own static credentials for the shadow backend are used.
+- **No redirects.** The call goes only to the configured backend address; a
+  redirect answer is never followed.
+
+Use a shadow when:
 
 - a candidate model should be evaluated on live traffic before gray release
 - the primary response must stay identical whether the shadow succeeds, fails, or times out
 - resource use for the observation must be explicit and bounded per route
 - replay or audit tooling needs to join primary and shadow observations by request identity
 
-Do not use it to influence the live request, to grade output quality, or to build a training set. The shadow records outcomes only.
+Do not use it to influence the live request, to grade output quality, or to
+build a training set. The shadow records outcomes only.
+
+:::note
+The `shadow` block replaces the `shadow_dispatch` plugin;
+`vllm-sr config migrate` rewrites one into the other.
+:::
 
 ### Configure the shadow
 
@@ -208,7 +249,11 @@ plugins:
 | `tls_skip_verify` | `false` | Skip certificate verification for an https shadow backend signed by an internal CA. This setting applies only to the shadow HTTP client; it does not configure primary backend transport. |
 | `forward_headers` | `[]` | Decision `header_mutation` names the shadow copy may carry, matched case-insensitively. Nothing else a decision sets for the primary backend is forwarded, so a custom credential such as `X-Internal-Token` stays on the primary path. Known credential carriers (`Authorization`, `Proxy-Authorization`, `Cookie`, `x-api-key`, `api-key`, `x-goog-api-key`, the `x-user-*-key` headers) are rejected at config load and dropped at run time even if listed. |
 
-A shadow is skipped, with a metric but no outcome, when the request is sampled out or when the primary dispatch already selected the shadow model. Decisions that execute through the looper (ratings, confidence, fusion, ReMoM, workflows) reject a shadow at config load, because the shadow hook runs only on single-model provider dispatch.
+A shadow is skipped, with a metric but no outcome, when the request is
+sampled out or when the primary dispatch already selected the shadow model. A
+decision whose algorithm is an executor (`escalate`, `fusion`, `remom`,
+`ratings` or `workflows`) rejects a shadow at config load, because the shadow
+runs only on single-model provider dispatch.
 
 ### Fail-open behavior
 
@@ -293,26 +338,18 @@ Open **Insights** in the Dashboard, or use the
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
 not invoices. Missing prices and usage remain unknown.
 
-Every record carries `route_diagnostics.decision_ranking`: the strategy
-selection ran under, the tier the winning decision came from, whether that pool
-ranked by confidence and which decision stopped it, and the key that separated
-the winner from the decision behind it, which is recorded as `runner_up`, with
-a `reason` stating the values compared. A replayed request therefore explains
-its route the same way the eval API does.
+Each record's `route_diagnostics` explains the route:
 
-Detail responses can also include `route_diagnostics.prepared_dispatch`, a
-versioned receipt for the exact primary provider-bound body prepared for primary dispatch
-after protocol encoding and provider adaptation. It records the wire format,
-SHA-256 digest, and encoded byte length without retaining another copy of the
-body. Internal Looper calls and response-time fallback attempts are not part of
-this single-dispatch receipt. Because the digest is content-derived, responses
-without `replay.detail` omit the field.
+| Field | Holds |
+| --- | --- |
+| `decision_ranking` | Every record: the strategy, the winner's tier, whether the pool ranked by confidence and which decision stopped it, the `runner_up` with the key that separated them, and a `reason` with the values compared. It matches the eval API's report. |
+| `prepared_dispatch` | Detail responses only: a versioned receipt for the exact provider-bound body of the primary dispatch, with its wire format, SHA-256 digest and byte length, but no copy of the body. Executor calls and fallback attempts are not part of it. |
+| `looper` | Executor requests that keep an execution trace, such as `escalate`: bounded attempts, token and cost accounting, timings, disposition reasons and the final attempt. |
 
-Confidence Looper requests also include `route_diagnostics.looper`: bounded
-attempts, token and cost accounting, timings, disposition reasons, and the final
-attempt. This diagnostic object excludes prompts, tool arguments, credentials,
-and raw errors. Attempt details require replay-detail permission, and any
-truncation is marked.
+- `prepared_dispatch` is derived from content, so responses without
+  `replay.detail` omit it.
+- `looper` excludes prompts, tool arguments, credentials and raw errors. Its
+  attempt details need `replay.detail`, and any truncation is marked.
 
 For a complete decision fragment, see
 [`config/fragments/plugin/router-replay/debug.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/debug.yaml).

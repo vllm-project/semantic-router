@@ -12,7 +12,7 @@ translation:
 
 `router_replay` 是一个路由局部插件，用于覆盖单条路由的回放/调试采集。
 
-`global.services.router_replay` 定义共享存储和保留策略；`global.plugins` 中的 `router_replay` 插件定义启用状态和采集默认值。decision 的 `router_replay` 插件只覆盖明确填写的采集字段；省略的字段继承全局默认值。回放不设置配方级默认值。详见[回放 API 和隐私控制](../../api/router#router-replay)。
+`global.services.router_replay` 定义共享存储和保留策略；`global.plugins` 中的 `router_replay` 插件定义启用状态和采集默认值。配方或 decision 的 `router_replay` 插件只覆盖明确填写的采集字段；省略的字段从下一层继承。详见[回放 API 和隐私控制](../../api/router#router-replay)。
 
 全部五个内置 MoM 配方（包括 Vault）默认启用 PostgreSQL 回放。`vllm-sr serve` 会管理 PostgreSQL 及持久卷。通用的 `memory` 存储会在配置重载或路由器重启时丢失记录；其他部署方式可在[共享回放服务](../learning/memory-and-replay#configuration)中配置 PostgreSQL 或 Redis。
 
@@ -54,7 +54,7 @@ global:
         max_tool_trace_steps: 100
 ```
 
-没有 `router_replay` 插件时回放保持关闭。`global.plugins` 中的插件提供共享采集默认值，决策的插件会逐字段覆盖它们。内置采集默认值为：请求和响应正文开启、个人数据采集开启、最多 10,000 条记录、每个正文 4,096 字节、工具轨迹单字段字节数不限、最多 100 个工具步骤。存储、保留时间和异步写入属于全局服务设置。
+没有 `router_replay` 插件时回放保持关闭。`global.plugins` 中的插件提供共享采集默认值；配方的插件覆盖它们，决策的插件再逐字段覆盖所属配方的设置。内置采集默认值为：请求和响应正文开启、个人数据采集开启、最多 10,000 条记录、每个正文 4,096 字节、工具轨迹单字段字节数不限、最多 100 个工具步骤。存储、保留时间和异步写入属于全局服务设置。
 
 ### decision 覆盖
 
@@ -128,13 +128,13 @@ plugins:
 - `max_concurrency`、`max_queue_depth`、`timeout_seconds`、`max_response_bytes`、`max_retries` 限定资源；超出队列的调用以 `queue_full` 丢弃。
 - `capture_response_body` 默认关闭，只保存大小、token 数和 SHA-256；打开后在结果中保存不超过 `max_capture_bytes` 的摘录。
 - `forward_headers` 只转发列出的 decision `header_mutation` 头；已知的凭据头不能列出。
-- 经 looper 执行的算法（ratings、confidence、fusion、ReMoM、workflows）在加载时拒绝 `shadow`。
+- 算法为执行器（`escalate`、`fusion`、`remom`、`ratings` 或 `workflows`）的决策在加载时拒绝 `shadow`，因为影子请求只在单模型的提供方派发上运行。
 
 影子结果以 `source: shadow_dispatch` 追加到主请求的 replay 记录，指标为 `sr_shadow_dispatch_total`、`sr_shadow_dispatch_latency_seconds` 等。
 
 ## Looper 诊断 {#looper-diagnostics}
 
-Confidence Looper 记录包含版本化的 `route_diagnostics.looper` 对象。它包含有界的 attempt 元数据、token 和成本记账、延迟、处置原因码、tracing 启用时的 OpenTelemetry trace ID，以及 `final_attempt_ordinal`。Attempt 详情会从对查看者脱敏的响应中省略，仍可供具有回放-detail 权限的主体使用。
+保留执行轨迹的执行器请求（例如 `escalate`）包含版本化的 `route_diagnostics.looper` 对象。它包含有界的 attempt 元数据、token 和成本记账、延迟、处置原因码、tracing 启用时的 OpenTelemetry trace ID，以及 `final_attempt_ordinal`。Attempt 详情会从对查看者脱敏的响应中省略，仍可供具有回放-detail 权限的主体使用。
 
 Looper 诊断永不包含提示词、响应、隐藏推理、工具参数、端点 URL、凭据或原始错误。Attempt 数量和编码大小有上限；截断是显式的，被丢弃的 token 用量仍会计入。
 

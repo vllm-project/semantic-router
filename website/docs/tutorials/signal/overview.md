@@ -162,14 +162,15 @@ global:
           end: '</recalled-memories>'
 ```
 
-- OpenClaw 2026.10.4 and later end every turn, including tool-result turns,
-  with a separate user message that holds only runtime metadata. Without the
-  skip pattern, every request routes on that metadata.
-- OpenClaw memory plugins prepend recalled memories to the user's prompt on
-  every turn: memory-lancedb-pro wraps them in `<relevant-memories>`, mem0's
-  plugin in `<relevant-memories>` or `<recalled-memories>`. Stripping the blocks
-  keeps them from drowning out the question and spares the decision model from
-  reading them.
+- **Runtime-context turns.** OpenClaw 2026.10.4 and later end every turn,
+  including tool-result turns, with a separate user message that holds only
+  runtime metadata. Without the skip pattern, every request routes on that
+  metadata.
+- **Recalled memories.** OpenClaw memory plugins prepend recalled memories to
+  the prompt on every turn: memory-lancedb-pro in `<relevant-memories>`, and
+  mem0's plugin in `<relevant-memories>` or `<recalled-memories>`. Stripping
+  them keeps the question in focus and spares the decision model from reading
+  them.
 
 The routing text is the last user message that is not skipped and still has
 text after stripping. It takes the place of the last user message for:
@@ -185,16 +186,17 @@ text after stripping. It takes the place of the last user message for:
 - Replay's prompt;
 - the routing preview, classify and eval APIs.
 
-A skipped message is not counted as a user turn, so a runtime-context turn
-after a tool result leaves the request a tool-loop turn, and user-feedback and
-turn-relation signals do not fire on it. The request sent to the model is
+A skipped message is not counted as a user turn. A runtime-context turn after
+a tool result therefore leaves the request a tool-loop turn, and user-feedback
+and turn-relation signals do not fire on it. The request sent to the model is
 unchanged, and context-length estimates still count all of it.
 
+:::warning Safety signals still read everything
 Jailbreak, PII and safety signals keep reading skipped messages and stripped
-blocks along with the routing text, and tool-result checks are unaffected, so
-a client cannot hide content from them inside a fake memory block or a fake
-runtime-context turn. Every other signal, keyword rules included, reads only
-the routing text.
+blocks, and tool-result checks are unaffected. A client cannot hide content
+from them in a fake memory block or runtime-context turn. Every other signal,
+keyword rules included, reads only the routing text.
+:::
 
 - Patterns use Go RE2 syntax and match anywhere in the text unless anchored with
   `^` and `$`. A pattern that matches empty text is rejected when the config
@@ -222,6 +224,14 @@ caller `global.router.headers.debug` allows; a `response_guard` adds its codes,
 such as `hallucination`, to `x-vsr-warnings`. See
 [VSR routing headers](../../api/headers).
 
+:::note What a signal reads
+Depending on its type, a signal reads request text, conversation history,
+images, caller metadata or trusted identity. A model-judged signal sends what
+it reads to the deployment that answers it;
+[what leaves the host](../../system-one/deploy/deployments#what-leaves-the-host)
+lists the parts each one sends.
+:::
+
 ## Next Steps
 
 - Read [System One](../../system-one/overview) for how the decision model
@@ -230,8 +240,3 @@ such as `hallucination`, to `x-vsr-warnings`. See
   weighted score aggregation or named routing bands.
 - Start from [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)
   for the exhaustive public contract.
-
-Signals can read request text, conversation history, images, caller metadata
-or trusted identity depending on the type. Model-judged signals send what they
-read to the deployment that answers them; [what leaves the host](../../system-one/deploy/deployments#what-leaves-the-host)
-lists the parts each one sends.

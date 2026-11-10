@@ -1,7 +1,7 @@
 ---
 is_mtpe: false
 translation:
-  source_commit: "118fb72eb67a0e7193697e350d7b494dc016631e"
+  source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
   source_file: "docs/tutorials/signal/overview.md"
   outdated: false
 ---
@@ -149,8 +149,8 @@ global:
           end: '</recalled-memories>'
 ```
 
-- OpenClaw 2026.10.4 及更高版本在每个轮次（包括工具结果轮次）的末尾附加一条只包含运行时元数据的独立用户消息。没有跳过模式时，每个请求都会按这些元数据路由。
-- OpenClaw 的记忆插件会在每个轮次把召回的记忆加到用户提示前面：memory-lancedb-pro 用 `<relevant-memories>` 包裹，mem0 的插件用 `<relevant-memories>` 或 `<recalled-memories>` 包裹。剥离这些块可以避免它们淹没问题，也让决策模型不必读取它们。
+- **运行时上下文轮次。** OpenClaw 2026.10.4 及更高版本在每个轮次（包括工具结果轮次）的末尾附加一条只包含运行时元数据的独立用户消息。没有跳过模式时，每个请求都会按这些元数据路由。
+- **召回的记忆。** OpenClaw 的记忆插件会在每个轮次把召回的记忆加到提示前面：memory-lancedb-pro 用 `<relevant-memories>` 包裹，mem0 的插件用 `<relevant-memories>` 或 `<recalled-memories>` 包裹。剥离它们可以让问题保持清晰，也让决策模型不必读取它们。
 
 路由文本是最后一条未被跳过、且剥离后仍有文本的用户消息。在以下场景中，它取代最后一条用户消息：
 
@@ -164,9 +164,11 @@ global:
 - Replay 的提示；
 - 路由预览、classify 和 eval API。
 
-被跳过的消息不计为用户轮次，所以工具结果之后的运行时上下文轮次仍使请求保持为工具循环轮次，用户反馈和轮次关系信号也不会在其上触发。发给模型的请求保持不变，上下文长度估算仍会计入全部内容。
+被跳过的消息不计为用户轮次。因此，工具结果之后的运行时上下文轮次仍使请求保持为工具循环轮次，用户反馈和轮次关系信号也不会在其上触发。发给模型的请求保持不变，上下文长度估算仍会计入全部内容。
 
-越狱、PII 和安全信号会继续读取被跳过的消息和被剥离的块以及路由文本，工具结果检查也不受影响，因此客户端无法把内容藏在伪造的记忆块或伪造的运行时上下文轮次里躲过它们。其他所有信号（包括关键词规则）只读取路由文本。
+:::warning 安全类信号仍会读取全部内容
+越狱、PII 和安全信号会继续读取被跳过的消息和被剥离的块，工具结果检查也不受影响。客户端无法把内容藏在伪造的记忆块或运行时上下文轮次里躲过它们。其他所有信号（包括关键词规则）只读取路由文本。
+:::
 
 - 模式使用 Go RE2 语法，除非用 `^` 和 `$` 锚定，否则可在文本任意位置匹配。能匹配空文本的模式会在加载配置时被拒绝。
 - 只有内容全部为文本的消息才能被跳过。同时包含图片、音频或工具结果的消息总是参与路由。
@@ -179,10 +181,12 @@ global:
 
 `POST /api/v1/routing/preview` 针对一个请求评估活动配方的每个信号，报告匹配的规则和决策，而不调用模型。在经过路由的响应上，`x-vsr-trace` 的 `signals` 成员以 `type:name` 列出匹配的规则，例如 `domain:math` 或 `pii:contact`，只发给 `global.router.headers.debug` 允许的调用方；`response_guard` 会把它的代码（例如 `hallucination`）加入 `x-vsr-warnings`。见 [VSR 路由头部](../../api/headers)。
 
+:::note 信号读取什么
+根据类型不同，信号读取请求文本、对话历史、图片、调用方元数据或可信身份。由模型判断的信号会把读取的内容发给回答它的部署；[哪些数据会离开本机](../../system-one/deploy/deployments#what-leaves-the-host)列出了每个信号发送的部分。
+:::
+
 ## 后续步骤 {#next-steps}
 
 - 阅读 [System One](../../system-one/overview)，了解决策模型如何回答每个由模型判断的信号，以及每个信号由哪个部署回答。
 - 需要分区、加权得分聚合或命名路由区间时，阅读[投影](../projection/overview)。
 - 从 [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml) 开始了解完整的公开契约。
-
-根据类型不同，信号可以读取请求文本、对话历史、图片、调用方元数据或可信身份。由模型判断的信号会把读取的内容发给回答它们的部署；[哪些数据会离开本机](../../system-one/deploy/deployments#what-leaves-the-host)列出了每个信号发送的部分。
