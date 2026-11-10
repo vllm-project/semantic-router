@@ -79,10 +79,7 @@ func cacheScopeUserID(ctx *RequestContext) string {
 }
 
 func responseCacheScope(ctx *RequestContext) string {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
-		return "global"
-	}
-	plugin := ctx.VSRSelectedDecision.GetResponseCacheConfig()
+	plugin := requestResponseCache(ctx)
 	if plugin == nil {
 		return "global"
 	}

@@ -66,8 +66,6 @@ type ProjectionScoreDeclJSON struct {
 type ProjectionScoreInputJSON struct {
 	SignalType  string  `json:"signalType"`
 	SignalName  string  `json:"signalName"`
-	KB          string  `json:"kb,omitempty"`
-	Metric      string  `json:"metric,omitempty"`
 	Weight      float64 `json:"weight"`
 	ValueSource string  `json:"valueSource,omitempty"`
 	Match       float64 `json:"match,omitempty"`
@@ -131,24 +129,26 @@ type RouteDeclJSON struct {
 	Models      []*ModelRefJSON  `json:"models"`
 	Algorithm   *AlgoSpecJSON    `json:"algorithm,omitempty"`
 	Plugins     []*PluginRefJSON `json:"plugins"`
-	Emits       []*EmitDeclJSON  `json:"emits,omitempty"`
+	Retention   *RetentionJSON   `json:"retention,omitempty"`
+	Output      *OutputJSON      `json:"output,omitempty"`
 	Pos         Position         `json:"pos"`
 }
 
-// EmitDeclJSON is the JSON form of an EMIT directive on a route.
-type EmitDeclJSON struct {
-	Kind      string                  `json:"kind"`
-	Retention *RetentionDirectiveJSON `json:"retention,omitempty"`
-	Pos       Position                `json:"pos"`
+// OutputJSON is the JSON form of a route's OUTPUT block.
+type OutputJSON struct {
+	Kind   []string `json:"kind,omitempty"`
+	Action string   `json:"action,omitempty"`
+	Pos    Position `json:"pos"`
 }
 
-// RetentionDirectiveJSON is the JSON form of RetentionDirective. All fields
+// RetentionJSON is the JSON form of a route's RETENTION block. All fields
 // are tri-state pointers to preserve "unset" vs explicit zero.
-type RetentionDirectiveJSON struct {
-	Drop                  *bool `json:"drop,omitempty"`
-	TTLTurns              *int  `json:"ttl_turns,omitempty"`
-	KeepCurrentModel      *bool `json:"keep_current_model,omitempty"`
-	PreferPrefixRetention *bool `json:"prefer_prefix_retention,omitempty"`
+type RetentionJSON struct {
+	Drop                  *bool    `json:"drop,omitempty"`
+	TTLTurns              *int     `json:"ttl_turns,omitempty"`
+	KeepCurrentModel      *bool    `json:"keep_current_model,omitempty"`
+	PreferPrefixRetention *bool    `json:"prefer_prefix_retention,omitempty"`
+	Pos                   Position `json:"pos"`
 }
 
 // ModelDeclJSON is the JSON form of ModelDecl.
@@ -321,8 +321,6 @@ func appendProjectionScoreDecls(result *ProgramJSON, scores []*ProjectionScoreDe
 			scoreJSON.Inputs = append(scoreJSON.Inputs, &ProjectionScoreInputJSON{
 				SignalType:  input.SignalType,
 				SignalName:  input.SignalName,
-				KB:          input.KB,
-				Metric:      input.Metric,
 				Weight:      input.Weight,
 				ValueSource: input.ValueSource,
 				Match:       input.Match,
@@ -446,35 +444,19 @@ func routeDeclToJSON(r *RouteDecl) *RouteDeclJSON {
 		}
 		rj.Plugins = append(rj.Plugins, pj)
 	}
-	for _, e := range r.Emits {
-		rj.Emits = append(rj.Emits, emitDeclToJSON(e))
-	}
-	return rj
-}
-
-func emitDeclToJSON(e *EmitDecl) *EmitDeclJSON {
-	if e == nil {
-		return nil
-	}
-	out := &EmitDeclJSON{
-		Kind: e.Kind,
-		Pos:  e.Pos,
-	}
-	if e.Retention != nil {
-		out.Retention = &RetentionDirectiveJSON{
-			Drop:                  clonePtrBoolDSL(e.Retention.Drop),
-			TTLTurns:              clonePtrIntDSL(e.Retention.TTLTurns),
-			KeepCurrentModel:      clonePtrBoolDSL(e.Retention.KeepCurrentModel),
-			PreferPrefixRetention: clonePtrBoolDSL(e.Retention.PreferPrefixRetention),
+	if retention := r.Retention; retention != nil {
+		rj.Retention = &RetentionJSON{
+			Drop:                  clonePtrBool(retention.Drop),
+			TTLTurns:              clonePtrInt(retention.TTLTurns),
+			KeepCurrentModel:      clonePtrBool(retention.KeepCurrentModel),
+			PreferPrefixRetention: clonePtrBool(retention.PreferPrefixRetention),
+			Pos:                   retention.Pos,
 		}
 	}
-	return out
-}
-
-// MarshalProgramJSON marshals a Program to JSON bytes.
-func MarshalProgramJSON(prog *Program) ([]byte, error) {
-	pj := ProgramToJSON(prog)
-	return json.Marshal(pj)
+	if output := r.Output; output != nil {
+		rj.Output = &OutputJSON{Kind: append([]string(nil), output.Kind...), Action: output.Action, Pos: output.Pos}
+	}
+	return rj
 }
 
 func (o JSONObject) MarshalJSON() ([]byte, error) {

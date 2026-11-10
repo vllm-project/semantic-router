@@ -1,5 +1,5 @@
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -19,64 +19,58 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    modelCards:
-      - name: general-expert
-    signals:
-      structure:
-        - name: many_questions
-          description: Prompts that contain many explicit questions.
-          feature:
-            type: count
-            source:
-              type: regex
-              pattern: '[?？]'
-          predicate:
-            gte: 4
-        - name: numbered_steps
-          description: Prompts that contain numbered list items such as "1. ..."
-          feature:
-            type: exists
-            source:
-              type: regex
-              pattern: '(?m)^\s*\d+\.\s+'
-    decisions:
-      - name: many_questions_routing
-        description: Route requests whose structure signal matches many_questions.
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: structure
-              name: many_questions
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: numbered_steps_routing
-        description: Route requests whose structure signal matches numbered_steps.
-        priority: 90
-        rules:
-          operator: AND
-          conditions:
-            - type: structure
-              name: numbered_steps
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: default-route
-        description: Fallback route for requests matching no structure rule.
-        priority: 10
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
+  recipes:
+    - name: default
+      signals:
+        keywords:
+          - name: many_questions
+            description: Prompts that contain many explicit questions.
+            operator: OR
+            method: regex
+            keywords: ['[?？]']
+            count:
+              gte: 4
+          - name: numbered_steps
+            description: Prompts that contain numbered list items such as "1. ..."
+            operator: OR
+            method: regex
+            keywords: ['(?m)^\s*\d+\.\s+']
+      decisions:
+        - name: many_questions_routing
+          description: Route requests with four or more explicit questions.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: many_questions
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: numbered_steps_routing
+          description: Route requests that contain numbered steps.
+          priority: 90
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: numbered_steps
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: default-route
+          description: Fallback route for requests matching no request-shape rule.
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
   global:
     router:
       strategy: priority
-    model_catalog:
-      kbs: []
+    model_catalog: {}
     services:
       response_api:
         enabled: true
@@ -87,8 +81,8 @@ config:
 resources:
   # 2Gi OOMKills the router on a CI runner: it restarts, never becomes ready,
   # and the helm wait burns its full 60m timeout. Mirrors the same limits
-  # category-remote-backend/local-classifier-backend/long-context-routing
-  # settled on for the same reason.
+  # long-context-routing and conversation-routing settled on for the same
+  # reason.
   limits:
     memory: 6Gi
     cpu: "2"

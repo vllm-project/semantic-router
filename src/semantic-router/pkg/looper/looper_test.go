@@ -49,7 +49,7 @@ func TestFactoryConstructsAllSupportedAlgorithms(t *testing.T) {
 		algorithmType string
 		wantType      reflect.Type
 	}{
-		{config.DecisionAlgorithmConfidence, reflect.TypeOf((*ConfidenceLooper)(nil))},
+		{config.DecisionAlgorithmEscalate, reflect.TypeOf((*EscalateLooper)(nil))},
 		{config.DecisionAlgorithmFusion, reflect.TypeOf((*FusionLooper)(nil))},
 		{config.DecisionAlgorithmRatings, reflect.TypeOf((*RatingsLooper)(nil))},
 		{config.DecisionAlgorithmReMoM, reflect.TypeOf((*ReMoMLooper)(nil))},
@@ -76,7 +76,7 @@ func TestFactoryRegistryMatchesConfigCatalog(t *testing.T) {
 		got = append(got, algorithmType)
 	}
 	sort.Strings(got)
-	want := config.SupportedLooperAlgorithmTypes()
+	want := config.SupportedExecutorAlgorithmTypes()
 
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Looper constructors = %v, config catalog = %v", got, want)
@@ -86,7 +86,7 @@ func TestFactoryRegistryMatchesConfigCatalog(t *testing.T) {
 func TestFactoryWithClientSharesClientAcrossAlgorithms(t *testing.T) {
 	connector := &closeTrackingModelConnector{}
 	client := &Client{connector: connector}
-	for _, algorithmType := range config.SupportedLooperAlgorithmTypes() {
+	for _, algorithmType := range config.SupportedExecutorAlgorithmTypes() {
 		constructed, err := FactoryWithClient(&config.LooperConfig{}, algorithmType, client)
 		if err != nil {
 			t.Fatalf("FactoryWithClient(%q) returned error: %v", algorithmType, err)
@@ -145,7 +145,7 @@ func TestFactoryRejectsInvalidConnectorConfig(t *testing.T) {
 
 func baseLooperClient(constructed Looper) *Client {
 	switch typed := constructed.(type) {
-	case *ConfidenceLooper:
+	case *EscalateLooper:
 		return typed.client
 	case *FusionLooper:
 		return typed.client

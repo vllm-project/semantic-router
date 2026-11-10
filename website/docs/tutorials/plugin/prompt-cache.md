@@ -35,7 +35,7 @@ selected model does not speak the Anthropic Messages wire format.
 
 ## Configuration
 
-Add the plugin under `routing.decisions[].plugins`:
+Add the plugin under `recipes[].decisions[].plugins`:
 
 ```yaml
 plugins:
@@ -84,9 +84,8 @@ never changes the neutral request that routing and other plugins evaluate.
 Each evaluation records `llm_plugin_execution_total` with
 `plugin_type=prompt_cache` and a `status` of `inserted`, `preserved`,
 `skipped`, or `rejected`. With `x-vsr-debug: true` on the request, the same
-outcome appears inline as `x-vsr-prompt-cache-action`,
-`x-vsr-prompt-cache-reason`, `x-vsr-prompt-cache-inserted`, and
-`x-vsr-prompt-cache-preserved`; see
+outcome appears in the `prompt_cache` member of `x-vsr-trace`, with its
+`reason` and its `inserted` and `preserved` marker counts; see
 [VSR routing headers](../../troubleshooting/vsr-headers).
 No Router Replay persistence is part of this plugin.
 

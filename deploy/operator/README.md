@@ -55,7 +55,7 @@ model paths before applying one.
 | `vllm.ai_v1alpha1_semanticrouter_route.yaml` | OpenShift Route creation. |
 | `vllm.ai_v1alpha1_semanticrouter_{redis,valkey,milvus,qdrant}_cache.yaml` | External response-cache backend configuration. |
 | `vllm.ai_v1alpha1_semanticrouter_hybrid_cache.yaml` | In-memory HNSW with persistent cache storage. |
-| `vllm.ai_v1alpha1_semanticrouter_mmbert.yaml` | mmBERT embedding configuration. |
+| `vllm.ai_v1alpha1_semanticrouter_embedding.yaml` | Response cache embedding view. |
 | `vllm.ai_v1alpha1_semanticrouter_complexity.yaml` | Complexity signals and conditional routing. |
 
 For example:

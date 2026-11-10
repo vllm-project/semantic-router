@@ -58,8 +58,8 @@ def verify_resources(wheel: Path, sdist: Path) -> None:
         )
     )
     generated = {
-        "cli/config_schema/router-config-v0.3.schema.json": ROOT
-        / "src/semantic-router/pkg/configschema/router-config-v0.3.schema.json",
+        "cli/config_schema/router-config-v0.5.schema.json": ROOT
+        / "src/semantic-router/pkg/configschema/router-config-v0.5.schema.json",
         "cli/config_schema/releases.generated.json": ROOT
         / "src/model-runtime/vllm_srun/registry/releases.generated.json",
     }

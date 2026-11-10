@@ -30,7 +30,7 @@ translation:
 
 ## 配置
 
-在 `routing.decisions[].plugins` 下添加打包的插件条目：
+在 `recipes[].decisions[].plugins` 下添加打包的插件条目：
 
 ```yaml
 plugins:
@@ -44,14 +44,16 @@ plugins:
       add:
         - name: X-Safety-Profile
           value: standard
-  - type: response_jailbreak
+  - type: response_guard
     configuration:
-      enabled: true
-      threshold: 0.8
-      action: header
+      rules:
+        - when:
+            type: jailbreak
+            name: unsafe_completion
+          action: annotate
 ```
 
-这是组合示例，不是 `content_safety` 插件类型。`system_prompt` 添加请求侧指引，`header_mutation` 添加策略标签，`response_jailbreak` 评估生成的响应。该包不会运行请求侧内容分类器，请求头也不是内容安全的证明。请校准响应筛查，并判断仅处理请求头是否足够。
+这是组合示例，不是 `content_safety` 插件类型。`system_prompt` 添加请求侧指引，`header_mutation` 添加策略标签，[`response_guard`](./response-guard) 在以 `stage: response` 声明的越狱规则 `unsafe_completion` 标记生成的响应时对其进行标注。该包不会运行请求侧内容分类器，请求头也不是内容安全的证明。请校准该规则的 `predicate`，并判断标注是否足够，还是应由规则拦截。
 
 完整包见：
 [`config/fragments/plugin/content-safety/hybrid.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/content-safety/hybrid.yaml)。

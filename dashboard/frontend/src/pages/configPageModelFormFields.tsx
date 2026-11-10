@@ -8,6 +8,7 @@ import {
   ModelCapabilitiesEditor,
   ModelExternalIdsEditor,
   ModelLorasEditor,
+  ModelModalitiesEditor,
   ModelPricingEditor,
   ModelReliabilityEditor,
   ModelTagsEditor,
@@ -22,6 +23,26 @@ export function getModelStructuredFormFields(): FieldConfig[] {
       description: 'Capabilities exposed to model selection and routing policies.',
       customRender: (value, onChange) => (
         <ModelCapabilitiesEditor value={value} onChange={onChange} />
+      ),
+    },
+    {
+      name: 'input_modalities',
+      label: 'Input Modalities',
+      type: 'custom',
+      description:
+        'Media the model reads (text, image, audio, video), stored under providers.models[].modalities.input.',
+      customRender: (value, onChange) => (
+        <ModelModalitiesEditor value={value} onChange={onChange} />
+      ),
+    },
+    {
+      name: 'output_modalities',
+      label: 'Output Modalities',
+      type: 'custom',
+      description:
+        "Media the model writes, stored under providers.models[].modalities.output; a decision's output contract needs them.",
+      customRender: (value, onChange) => (
+        <ModelModalitiesEditor value={value} onChange={onChange} />
       ),
     },
     {

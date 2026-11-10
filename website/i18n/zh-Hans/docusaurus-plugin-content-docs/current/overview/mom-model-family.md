@@ -11,7 +11,7 @@ translation:
 
 # 多模型混合
 
-**Mixture of Models（MoM）** 将独立部署的模型呈现为一个虚拟模型。配方为每次请求选择模型、级联、评审组或有界工作流。Harness 使用稳定的模型名，保留自己的任务循环与工具。
+**Mixture of Models（MoM）** 将独立部署的模型呈现为一个虚拟模型。配方为每次请求选择模型、逐级升级、评审组或有界工作流。Harness 使用稳定的模型名，保留自己的任务循环与工具。
 
 ```mermaid
 flowchart LR
@@ -44,9 +44,9 @@ Router 系统模型支撑决策过程。判断模型 deployment 也可以通过 
 
 大多数请求应走直达路径。策略缩小合格集合，算法再按语义匹配、延迟、相对成本、反馈或固定顺序选出一个后端。
 
-### 级联
+### 逐级升级
 
-先用高效模型，检查有界的置信度或校验信号，只在需要时升级。级联用更高的最坏延迟换更低的平均成本。
+先用高效模型，检查有界的置信度或校验信号，只在需要时用 [`escalate`](../tutorials/algorithm/looper/escalate) 算法升级。逐级升级用更高的最坏延迟换更低的平均成本。
 
 ### 编排多个模型
 
@@ -58,27 +58,29 @@ Router 系统模型支撑决策过程。判断模型 deployment 也可以通过 
 
 ```yaml
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: ["acme/assistant-fast"]
     recipe: fast
-
 recipes:
+  - name: default
   - name: fast
-    routing:
-      strategy: priority
-      decisions:
-        - name: default-fast-route
-          description: Route eligible requests through the fast model pool.
-          priority: 10
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: local/small
-              use_reasoning: false
-            - model: local/vision
-              use_reasoning: false
-          algorithm:
-            type: static
+    strategy: priority
+    decisions:
+      - name: default-fast-route
+        description: Route eligible requests through the fast model pool.
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local/small
+            use_reasoning: false
+          - model: local/vision
+            use_reasoning: false
+        algorithm:
+          type: static
 ```
 
 信号与决策识别任务，候选条件再检查已分配模型的能力和上下文容量。部署位置与数据处理边界由运维人员负责。请求发往后端前，公开模型名会解析为选中的提供方模型。
@@ -101,7 +103,7 @@ Balance 就是 Decision Balance 策略。它用一次调用让路由器的决策
 
 Vault 的每条路径都禁用客户端工具、记忆、响应缓存和新的 Responses 对象写入。回放采集单独配置且默认开启，详见 [Router Replay](../tutorials/plugin/router-replay)。`guard` 会直接拦截检测到的提示攻击。个人标识、机密材料、伤害风险和个人建议请求会选择 `sensitive`，让已批准的模型提供负责任的帮助、解释风险材料，或拒绝有害协助。其他决策也需要分配满足隐私要求的后端；配方无法保证后端的物理位置或提供方的数据保留行为。
 
-Vault 的提示攻击与 PII 判断会在决策模型的扫描预算内读取整段对话，其具名问题读取最新消息的开头。判断未得到回答或输入超出预算时会拒绝请求：Preview 返回 HTTP 503、信号错误，且不选择模型。更大的后端上下文窗口不会增加该预算。
+Vault 的越狱与 PII 判断会在决策模型的扫描预算内读取整段对话，其具名问题读取最新消息的开头。判断未得到回答或输入超出预算时会拒绝请求：Preview 返回 HTTP 503、信号错误，且不选择模型。更大的后端上下文窗口不会增加该预算。
 
 启动或恢复服务：
 

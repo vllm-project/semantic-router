@@ -10,7 +10,6 @@ from cli.durations import parse_duration
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 
-NATIVE_ALGORITHMS = {"cascade"}
 _UNAVAILABLE_NATIVE_CONTEXT = {
     "authz",
     "metadata",
@@ -18,14 +17,15 @@ _UNAVAILABLE_NATIVE_CONTEXT = {
     "reask",
     "user_feedback",
     "input_modality",
-    "kb",
-    "kb_metric",
 }
 
 
 def _is_native(decision) -> bool:
+    algorithm = decision.algorithm
     return (
-        decision.algorithm is not None and decision.algorithm.type in NATIVE_ALGORITHMS
+        algorithm is not None
+        and algorithm.type == "escalate"
+        and bool((algorithm.escalate or {}).get("stages"))
     )
 
 
@@ -67,14 +67,14 @@ def validate_native_execution(config: UserConfig) -> list[ValidationError]:
     }
     chat_recipes = {
         entry.recipe for entry in config.entrypoints if entry.api != "systemone"
-    } | {"default"}
+    } | {config.default_recipe.name}
     calibrations = (
         {item["name"] for item in config.evaluation.calibrations}
         if config.evaluation
         else set()
     )
     for name, profile in iter_routing_profiles(config):
-        field = "routing" if name == "default" else f"recipes.{name}.routing"
+        field = f"recipes.{name}"
         if name in native_recipes and name in chat_recipes:
             errors.append(
                 ValidationError(
@@ -89,7 +89,10 @@ def validate_native_execution(config: UserConfig) -> list[ValidationError]:
             if not _is_native(decision):
                 if name in native_recipes:
                     errors.append(
-                        ValidationError("System One requires cascade", field=path)
+                        ValidationError(
+                            "System One requires an escalate algorithm with stages",
+                            field=path,
+                        )
                     )
                 if any(ref.model in native for ref in decision.modelRefs):
                     errors.append(
@@ -102,7 +105,7 @@ def validate_native_execution(config: UserConfig) -> list[ValidationError]:
             if name in chat_recipes:
                 errors.append(
                     ValidationError(
-                        "native algorithms require an isolated System One recipe",
+                        "escalate stages run System One answers and require an isolated System One recipe",
                         field=path,
                     )
                 )
@@ -145,7 +148,7 @@ def _native_profile_errors(config, profile, field):
     if enabled:
         errors.append(
             ValidationError(
-                "native execution uses stages and algorithm.budget; Chat routing.fallback must be disabled",
+                "native execution uses stages and algorithm.budget; Chat fallback must be disabled",
                 field=field + ".fallback",
             )
         )
@@ -157,7 +160,6 @@ def _native_profile_errors(config, profile, field):
     references.extend(
         item.type for score in profile.projections.scores or [] for item in score.inputs
     )
-    errors.extend(_native_signal_backend_errors(config, set(references), field))
     for kind in references:
         if (kind or "").strip().lower() in _UNAVAILABLE_NATIVE_CONTEXT:
             errors.append(
@@ -167,19 +169,6 @@ def _native_profile_errors(config, profile, field):
                 )
             )
     return errors
-
-
-def _native_signal_backend_errors(config, references, field):
-    catalog = (config.global_ or {}).get("model_catalog") or {}
-    classifier = (catalog.get("modules") or {}).get("classifier") or {}
-    if "domain" in references and (classifier.get("mcp") or {}).get("enabled"):
-        return [
-            ValidationError(
-                "native domain signals do not support the MCP classifier; use a model deployment binding",
-                field=field,
-            )
-        ]
-    return []
 
 
 def _native_decision_errors(decision, models, calibrations, path):
@@ -192,6 +181,13 @@ def _native_decision_errors(decision, models, calibrations, path):
     except ValueError as error:
         errors.append(
             ValidationError(str(error), field=path + ".algorithm.budget.deadline")
+        )
+    if algorithm.on_error not in (None, "", "fail"):
+        errors.append(
+            ValidationError(
+                "System One escalate fails when no stage is accepted; on_error must be fail",
+                field=path + ".algorithm.on_error",
+            )
         )
     if any(
         ref.weight not in (None, 0)
@@ -218,28 +214,36 @@ def _native_decision_errors(decision, models, calibrations, path):
                 field=path + ".modelRefs",
             )
         )
+    errors.extend(
+        _native_stage_errors(algorithm.escalate["stages"], models, refs, path)
+    )
+    errors.extend(
+        _native_quality_errors(algorithm.escalate.get("quality"), calibrations, path)
+    )
+    return errors
+
+
+def _native_stage_errors(stages, models, refs, path):
+    errors = []
     names = set()
-    for index, stage in enumerate(algorithm.stages or []):
-        field = path + f".algorithm.stages.{index}"
-        if (
-            not stage["name"].strip()
-            or stage["name"] == "abstain"
-            or stage["name"] in names
-            or stage["name"] != stage["name"].strip()
-        ):
+    for index, stage in enumerate(stages):
+        field = path + f".algorithm.escalate.stages.{index}"
+        name = stage.get("name") or stage["model"]
+        kind = stage.get("kind") or "native"
+        if name == "abstain" or name in names or name != name.strip():
             errors.append(
                 ValidationError(
                     "stage names must be distinct and non-empty without surrounding spaces",
                     field=field,
                 )
             )
-        names.add(stage["name"])
-        if index == 0 and (stage["kind"] != "native" or not stage.get("enabled", True)):
+        names.add(name)
+        if index == 0 and (kind != "native" or not stage.get("enabled", True)):
             errors.append(
                 ValidationError("first stage must be enabled and native", field=field)
             )
         model = models.get(stage["model"])
-        expected = "systemone" if stage["kind"] == "native" else "openai"
+        expected = "systemone" if kind == "native" else "openai"
         if stage["model"] not in refs or model is None:
             errors.append(
                 ValidationError(
@@ -250,15 +254,13 @@ def _native_decision_errors(decision, models, calibrations, path):
             errors.append(
                 ValidationError(f"stage requires api_format: {expected}", field=field)
             )
-        if stage["kind"] == "judge" and not stage.get("generation"):
+        if kind == "judge" and not stage.get("generation"):
             errors.append(
                 ValidationError(
                     "judge requires generation.max_output_tokens", field=field
                 )
             )
-        if stage["kind"] == "native" and (
-            stage.get("generation") or stage.get("instructions")
-        ):
+        if kind == "native" and (stage.get("generation") or stage.get("instructions")):
             errors.append(
                 ValidationError(
                     "native stage cannot declare LLM generation or instructions",
@@ -271,27 +273,32 @@ def _native_decision_errors(decision, models, calibrations, path):
                     raise ValueError("stage timeout must be positive")
             except ValueError as error:
                 errors.append(ValidationError(str(error), field=field))
-    quality = algorithm.quality
-    if quality["type"] == "calibrated":
+    return errors
+
+
+def _native_quality_errors(quality, calibrations, path):
+    field = path + ".algorithm.escalate.quality"
+    if quality is None:
+        return []
+    if quality.get("type") == "calibrated":
         if (
             quality.get("calibration") not in calibrations
             or quality.get("loss") != "bundle_error"
             or "max_risk" not in quality
-            or quality.get("acceptance") is not None
+            or quality.get("accept") is not None
         ):
-            errors.append(
+            return [
                 ValidationError(
-                    "calibrated quality requires a declared calibration, loss: bundle_error and max_risk without acceptance",
-                    field=path + ".algorithm.quality",
+                    "calibrated quality requires a declared calibration, loss: bundle_error and max_risk without accept",
+                    field=field,
                 )
-            )
-    elif not quality.get("acceptance") or any(
-        key in quality for key in ("calibration", "loss", "max_risk")
-    ):
-        errors.append(
+            ]
+        return []
+    if any(key in quality for key in ("calibration", "loss", "max_risk")):
+        return [
             ValidationError(
-                "uncalibrated quality requires acceptance without calibration, loss or max_risk",
-                field=path + ".algorithm.quality",
+                "uncalibrated quality cannot declare calibration, loss or max_risk",
+                field=field,
             )
-        )
-    return errors
+        ]
+    return []

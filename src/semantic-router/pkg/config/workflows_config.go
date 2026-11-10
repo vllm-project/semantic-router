@@ -46,7 +46,6 @@ type WorkflowsAlgorithmConfig struct {
 	MinSuccessfulResponses       int                   `yaml:"min_successful_responses,omitempty" json:"min_successful_responses,omitempty"`
 	Temperature                  *float64              `yaml:"temperature,omitempty" json:"temperature,omitempty"`
 	IncludeIntermediateResponses *bool                 `yaml:"include_intermediate_responses,omitempty" json:"include_intermediate_responses,omitempty"`
-	OnError                      string                `yaml:"on_error,omitempty" json:"on_error,omitempty"`
 }
 
 type WorkflowRoleConfig struct {
@@ -70,7 +69,7 @@ type WorkflowPlannerConfig struct {
 
 type WorkflowStateRuntimeConfig struct {
 	StoreBackend string                   `yaml:"store_backend,omitempty" json:"store_backend,omitempty"`
-	TTLSeconds   int                      `yaml:"ttl_seconds,omitempty" json:"ttl_seconds,omitempty"`
+	TTLSeconds   int                      `yaml:"ttl_seconds" json:"ttl_seconds"`
 	File         WorkflowStateFileConfig  `yaml:"file,omitempty" json:"file,omitempty"`
 	Redis        WorkflowStateRedisConfig `yaml:"redis,omitempty" json:"redis,omitempty"`
 }
@@ -155,7 +154,7 @@ func ValidateWorkflowsAlgorithmConfig(cfg *WorkflowsAlgorithmConfig) error {
 	if cfg.Temperature != nil && *cfg.Temperature < 0 {
 		return fmt.Errorf("temperature must be >= 0 when set")
 	}
-	return validateWorkflowOnError(cfg.OnError)
+	return nil
 }
 
 func validateWorkflowModeAndPlan(cfg *WorkflowsAlgorithmConfig) error {
@@ -254,16 +253,4 @@ func validateWorkflowRoleConfig(index int, role WorkflowRoleConfig) error {
 
 func (c WorkflowFinalConfig) IsZero() bool {
 	return strings.TrimSpace(c.Model) == "" && strings.TrimSpace(c.Prompt) == ""
-}
-
-func validateWorkflowOnError(onError string) error {
-	if strings.TrimSpace(onError) == "" {
-		return nil
-	}
-	switch onError {
-	case WorkflowOnErrorSkip, WorkflowOnErrorFail:
-		return nil
-	default:
-		return fmt.Errorf("on_error must be one of %q or %q, got %q", WorkflowOnErrorSkip, WorkflowOnErrorFail, onError)
-	}
 }

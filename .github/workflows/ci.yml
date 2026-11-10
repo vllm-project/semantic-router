@@ -6,7 +6,7 @@ on:
       verification:
         description: Verification ID from tools/ci/verification_catalog.yaml (or e2e.PROFILE) to run on the selected branch or tag.
         type: string
-        default: platform.image-calibration-cpu
+        default: platform.models-cpu
         required: true
   workflow_call:
     inputs:

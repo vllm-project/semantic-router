@@ -45,9 +45,10 @@ standalone 前端会移除不受信任的身份和代理控制标头。请分别
 request_headers_to_remove:
   - x-authz-user-id
   - x-authz-user-groups
+  - x-vsr-delegated-credential
 ```
 
-不要将 Router 管理、指标、ExtProc 或支撑存储端口作为公共推理端点暴露。在受信任边界终止客户端身份验证，并仅允许该组件提供身份标头。
+不要将 Router 管理、指标、ExtProc 或支撑存储端口作为公共推理端点暴露。在受信任边界终止客户端身份验证，并仅允许该组件提供身份标头和下文所述的委托凭据。
 
 相关控制面板权限包括：
 
@@ -74,6 +75,50 @@ api_key: ${MODEL_API_KEY}
 对于 `vllm-sr serve --target kubernetes`，CLI 将敏感环境值放入限定到命名空间和 Helm release 的不可变 Secret revision。Helm values 和 Deployment 按名称引用 Secret；它们不包含凭据值。失败的升级会保持先前的工作负载和 Secret 处于活动状态。仅在不再被引用后，才移除 release 拥有的旧 revision。
 
 现有的 chart 原生 Secret 引用（例如控制面板 JWT Secret）仍是外部对象，不会被复制到 CLI 管理的 Secret。对每个手动管理的 Secret 使用相同的命名空间和 release 所有权纪律。
+
+### 把用户的凭据委托给上游 {#delegate-the-users-credential-to-an-upstream}
+
+当 Router 位于进行身份验证的部署层之后，而某个上游自行按用户授权（例如为每个用户签发虚拟密钥的 LiteLLM、one-api 或类似中转，或按用户计量的决策模型 API）时，可以让身份验证器把它为该用户签发的凭据交给 Router，并把该上游的 auth 设为 `credential: delegated`。向部署层验证客户端身份的凭据和发给上游的凭据是两个独立的信任对象：Router 从不转发客户端原始的 `Authorization` 标头。
+
+```yaml
+global:
+  services:
+    authz:
+      delegated_credential:
+        enabled: true
+        header: x-vsr-delegated-credential   # 默认值；由身份验证器设置
+  model_catalog:
+    deployments:
+      team-decisions:
+        provider: systemone
+        endpoint: https://decisions.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth:
+          credential: delegated              # 决策模型部署
+providers:
+  models:
+    - name: gpt-4o
+      provider_model_id: gpt-4o
+      api_format: openai
+      backend_refs:
+        - name: litellm
+          endpoint: https://litellm.internal/v1
+          provider: openai-compatible
+          auth:
+            credential: delegated            # 提供方后端
+```
+
+Router 调用的每个上游都使用同一种形状的 `auth` 块：提供方后端、决策模型或远程 embedding 部署、`escalate` 阶段的评审模型以及 `api_format: systemone` 目标都一样。它的模式是静态密钥（`auth.api_key_env` 或 `auth.api_key_file`，或后端的 `api_key`），其调用以 Router 的身份进行；`credential: delegated`，其调用携带发起请求的用户的凭据；或者两者都不设，不发送凭据。
+
+该约定默认关闭。启用后：
+
+- 委托凭据和身份标头一样，是身份验证的输出。随附的 Envoy 配置（`vllm-sr serve --gateway extproc` 和 `deploy/local/envoy.yaml`）在 ext_proc 之前的过滤器中移除客户端提供的副本；`vllm-sr` 模板也会移除自定义的 `header`，`deploy/local/envoy.yaml` 只列出默认名称。两者都不运行身份验证器，因此签发该凭据的部署要把身份验证器放在该过滤器之后、ext_proc 之前，`delegated-credential` E2E 配置就是这样做的。自定义网关配置也必须如此：`request_headers_to_remove` 只在 ext_proc 之后生效。standalone listener 会从 Chat 和 System One 请求中一并丢弃该标头，除非设置了 `identity.trust_headers`。只有请求同时携带已认证用户（`global.services.authz.identity.user_id_header`）时，Router 才保留该值。
+- `header` 必须是专用标头。配置会拒绝携带客户端凭据的标头（`Authorization`、`api-key`、`x-api-key` 等）或身份标头。
+- Router 在每个分支上都会从每个上游请求中移除该标头，并在日志中脱敏。它是 Router 从身份验证器读取、而不是丢弃的唯一 `x-vsr-*` 请求标头，标头注册表把它记为内部密钥：任何响应、`x-vsr-trace` 成员、Router Replay 记录和缓存键都不会携带它。只有 auth 为 `credential: delegated` 的上游会收到该值，它放在该上游的认证标头中并带上其前缀（OpenAI 兼容后端或 System One API 为 `Authorization: Bearer <credential>`），替换客户端在该标头中发送的内容。客户端的其他凭据标头会被移除，因此在 `x-api-key` 上认证的后端不会同时收到客户端的 `Authorization`。
+- 主体是调用的属性。为客户端请求发起的调用携带该请求的凭据：主分发、回退尝试、Looper 跳转、System One 决策模型调用、`escalate` 评审、`api_format: systemone` 目标、响应检查和召回 embedding。请求没有携带凭据时，Router 在调用之前返回 `401`。Router 代表自己发起的调用（探测、模型列表读取、`router_replay.shadow` 副本、自动输出的 render、存储构建、管理诊断）从不携带它，委托上游会拒绝这些调用。
+- 配置会拒绝：同时设置静态密钥的委托上游，共享密钥因此永远不会悄悄顶替；未启用约定的委托上游；只有 Router 自身调用能到达的委托上游，或 Router 自身调用必须到达的委托上游（向量存储写入、记忆存储、`model_runtime` 端点的健康检查和准备、`router_replay.shadow`、自动输出）；未声明 `capabilities.dimensions` 的委托 `openai_embeddings` 部署；以及同一集群中的委托后端和静态后端。
+- 用某个用户的凭据得到的答案只会返回给该用户。只要有上游是委托的，每个 `response_cache` 都保持默认的 `scope: user`，Router 也不会为其他请求保留委托部署的决策模型答案或 embedding。Router 从不把两个客户端请求放进同一个上游调用，因此批量的 System One 调用只携带一个请求的问题和该请求的凭据。
+- 调用方归属以及租户、配额、预算或支出策略都由上游负责。
 
 ### 隔离 sr-bench 凭据
 
@@ -180,6 +225,17 @@ docker run --rm -v <volume>:/v:ro alpine ls /v
 - 在存储不可用时测试行为。
 
 配方 Model Card 描述每个维护中配方的签入回放和缓存行为。部署指南见[数据与存储](storage-overview)。
+
+## 复核决策模型读取的内容 {#review-what-the-decision-model-reads}
+
+每个路由判断都是向决策模型提出的问题，所以问题解析到的模型会看到该问题读取的请求部分：
+
+- **默认在本地。** 什么都不配置时，每个问题都询问本地的 `primary` 部署，个人数据规则也在那里运行。绑定或规则的 `deployment` 会把问题移到别处；决策模型在远程时，请显式绑定 `pii` 和 `hallucination`。
+- **远程模型会收到它评判的内容。** `systemone` 部署会收到其问题读取的状态部分：请求、之前的轮次、工具结果、模型的答案、候选，以及图片问题中的图片。[哪些数据会离开本机](../system-one/deployments#what-leaves-the-host)按信号列出了这些部分。远程嵌入提供方会收到它要嵌入的文本。
+- **防护可以失败开放或失败关闭。** 模型没有给出答案的 `jailbreak` 或 `pii` 规则不匹配，除非设置了 `on_unknown: match`；模型没能读到的文本按攻击或个人数据计入。
+- **遮蔽覆盖最终请求。** `masking` 插件替换发往提供方的请求中每个文本位置的个人数据，包括检索到的文档和工具结果；拿不到 span 时以失败关闭。
+- **Router 自有的请求头受保护。** `header_mutation` 不能写入 Router 自有的请求头或路由键，客户端发送的内部请求头会被丢弃，调试细节只发给 `global.router.headers.debug` 允许的调用方。
+- **授权是一个信号。** `role_bindings` 条件根据网关声明的身份，决定谁可以到达哪些路由和工具；只有设置了 `identity.trust_headers: true` 时，才信任客户端发送的身份请求头。
 
 ## 限制容器运行时访问 {#limit-container-runtime-access}
 

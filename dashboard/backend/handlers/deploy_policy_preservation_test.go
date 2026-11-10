@@ -13,33 +13,30 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
 )
 
-type adaptationsRouting struct {
-	Decisions []struct {
-		Name        string                                 `yaml:"name"`
-		Adaptations routerconfig.DecisionAdaptationsConfig `yaml:"adaptations"`
-	} `yaml:"decisions"`
-}
-
-// decisionAdaptations maps each decision, as name or recipe/name, to its adaptations.
+// decisionAdaptations maps each decision to its adaptations: a decision of the
+// default recipe by its name, any other as recipe/name.
 func decisionAdaptations(t *testing.T, raw []byte) map[string]routerconfig.DecisionAdaptationsConfig {
 	t.Helper()
 	var doc struct {
-		Routing adaptationsRouting `yaml:"routing"`
 		Recipes []struct {
-			Name    string             `yaml:"name"`
-			Routing adaptationsRouting `yaml:"routing"`
+			Name      string `yaml:"name"`
+			Decisions []struct {
+				Name        string                                 `yaml:"name"`
+				Adaptations routerconfig.DecisionAdaptationsConfig `yaml:"adaptations"`
+			} `yaml:"decisions"`
 		} `yaml:"recipes"`
 	}
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
 		t.Fatalf("decode decisions: %v", err)
 	}
 	found := map[string]routerconfig.DecisionAdaptationsConfig{}
-	for _, decision := range doc.Routing.Decisions {
-		found[decision.Name] = decision.Adaptations
-	}
 	for _, recipe := range doc.Recipes {
-		for _, decision := range recipe.Routing.Decisions {
-			found[recipe.Name+"/"+decision.Name] = decision.Adaptations
+		for _, decision := range recipe.Decisions {
+			key := recipe.Name + "/" + decision.Name
+			if recipe.Name == string(routerconfig.DefaultRecipeName) {
+				key = decision.Name
+			}
+			found[key] = decision.Adaptations
 		}
 	}
 	return found
@@ -66,55 +63,58 @@ func assertDecisionAdaptations(t *testing.T, merged []byte, want map[string]rout
 }
 
 func TestMergeDeployPayloadKeepsBaseDecisionAdaptations(t *testing.T) {
-	base := `routing:
-  decisions:
-    - name: hard_policy
-      priority: 10
-      adaptations:
-        mode: bypass
-    - name: plain
-      priority: 5
-recipes:
+	base := `recipes:
+  - name: default
+    decisions:
+      - name: hard_policy
+        priority: 10
+        adaptations:
+          mode: bypass
+      - name: plain
+        priority: 5
   - name: alpha
-    routing:
-      decisions:
-        - name: shared
-          priority: 1
-          adaptations: {mode: observe}
+    decisions:
+      - name: shared
+        priority: 1
+        adaptations: {mode: observe}
   - name: beta
-    routing:
-      decisions:
-        - name: shared
-          priority: 1
-          adaptations:
-            adaptation: {candidate_set: decision}
+    decisions:
+      - name: shared
+        priority: 1
+        adaptations:
+          adaptation: {candidate_set: decision}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	// A compiled DSL fragment never carries adaptations.
-	fragment := `routing:
-  decisions:
-    - name: hard_policy
-      priority: 20
-    - name: plain
-      priority: 5
-    - name: added
-      priority: 1
-recipes:
+	fragment := `recipes:
+  - name: default
+    decisions:
+      - name: hard_policy
+        priority: 20
+      - name: plain
+        priority: 5
+      - name: added
+        priority: 1
   - name: alpha
-    routing:
-      decisions:
-        - name: shared
-          priority: 2
+    decisions:
+      - name: shared
+        priority: 2
   - name: beta
-    routing:
-      decisions:
-        - name: shared
-          priority: 1
-          adaptations: {mode: apply}
+    decisions:
+      - name: shared
+        priority: 1
+        adaptations: {mode: apply}
   - name: gamma
-    routing:
-      decisions:
-        - name: shared
-          priority: 1
+    decisions:
+      - name: shared
+        priority: 1
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	want := map[string]routerconfig.DecisionAdaptationsConfig{
 		"hard_policy":  {Mode: routerconfig.DecisionAdaptationModeBypass},

@@ -24,7 +24,7 @@ are synthetic; no model server or inference request is needed for this task.
 The second decision makes accidental replacement of the decision list visible.
 
 ```yaml
-version: v0.3
+version: v0.5
 listeners:
   - name: example-http
     address: 127.0.0.1
@@ -50,19 +50,20 @@ providers:
           protocol: http
           provider: vllm
           weight: 100
-routing:
-  strategy: priority
-  decisions:
-    - name: default-route
-      description: Generated during setup to route all requests to the default model.
-      priority: 100
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: general-model, use_reasoning: false}]
-    - name: specialist-route
-      description: Preserve this unrelated decision.
-      priority: 50
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: specialist-model, use_reasoning: false}]
+recipes:
+  - name: default
+    strategy: priority
+    decisions:
+      - name: default-route
+        description: Generated during setup to route all requests to the default model.
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general-model, use_reasoning: false}]
+      - name: specialist-route
+        description: Preserve this unrelated decision.
+        priority: 50
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: specialist-model, use_reasoning: false}]
 ```
 
 For a running disposable stack, proceed only if its canonical config has these
@@ -87,7 +88,7 @@ request() {
 request "$ROUTER_ORIGIN/ready" > ready.json
 request "$ROUTER_ORIGIN/api/v1?capability=config" > discovery.json
 request "$ROUTER_ORIGIN/openapi.json?path=/api/v1/config/plan&method=POST" > plan-contract.json
-request "$ROUTER_ORIGIN/api/v1/config/schema?view=section&path=routing.decisions" > decision-schema.json
+request "$ROUTER_ORIGIN/api/v1/config/schema?view=section&path=recipes.decisions" > decision-schema.json
 request "$ROUTER_ORIGIN/api/v1/config/hash" > before-hash.json
 request "$ROUTER_ORIGIN/api/v1/config/versions" > before-versions.json
 request -D baseline.headers "$ROUTER_ORIGIN/api/v1/config" > baseline.json
@@ -115,7 +116,10 @@ hashes = [identity.get(k) for k in (
 assert all(hashes) and len(set(hashes)) == 1
 assert identity["activation_status"] == "active"
 baseline = load("baseline.json")
-decisions = baseline["routing"]["decisions"]
+recipes = [i for i, r in enumerate(baseline["recipes"]) if r["name"] == "default"]
+assert len(recipes) == 1
+recipe = recipes[0]
+decisions = baseline["recipes"][recipe]["decisions"]
 assert len(decisions) >= 2
 matches = [i for i, d in enumerate(decisions) if d["name"] == "default-route"]
 assert len(matches) == 1
@@ -124,7 +128,7 @@ old = "Generated during setup to route all requests to the default model."
 new = "General requests use the default model"
 assert decisions[index]["description"] == old
 candidate = copy.deepcopy(baseline)
-candidate["routing"]["decisions"][index]["description"] = new
+candidate["recipes"][recipe]["decisions"][index]["description"] = new
 baseline_text = json.dumps(baseline, indent=2, sort_keys=True) + "\n"
 candidate_text = json.dumps(candidate, indent=2, sort_keys=True) + "\n"
 Path("candidate.json").write_text(candidate_text)
@@ -230,15 +234,16 @@ This walkthrough does not emit a structured pass/fail/unknown result.
 
 An agent may instead discover `GET /api/v1/config/recipes/default` and
 `POST /api/v1/config/recipes/validate`. For the same description-only task,
-construct the request as `{"name": "default", "routing": <complete routing block>}`,
-keeping every other decision and field. Omit read-view metadata such as
-`entrypoint_source`, `source` and `deletable`.
+construct the request as `{"name": "default", "profile": <complete profile>}`
+from the recipe's read view, keeping every other decision and field. Omit
+read-view metadata such as `entrypoint_source`, `default` and `deletable`.
 
-The default recipe's read view includes a synthesized recipe-level description.
-A nonempty recipe-level `description` is rejected on mutation; omit it. Named
-recipes can set their recipe-level description. This restriction does not apply
-to decision descriptions within `routing`. An explicitly supplied `entrypoints`
-field can change entrypoint bindings: omitting it preserves them for this task.
+A recipe mutation replaces the whole recipe. `profile` holds its routing fields
+and is refused if it carries `name` or `description`; a recipe-level
+`description` goes beside `profile`, so copy it from the read view when the
+recipe has one, or the mutation drops it. Decision descriptions stay within
+`profile`. An explicitly supplied `entrypoints` field can change entrypoint
+bindings: omitting it preserves them for this task.
 
 Recipe validation applies the requested recipe mutation to the current persisted
 configuration in memory, then validates the resulting complete configuration

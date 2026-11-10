@@ -16,7 +16,7 @@ while retaining its task loop and tools.
 | --- | --- | --- |
 | A coding or research call needs a different model capability. | Match request signals to a specialist lane and filter candidates by declared capabilities and context capacity. | Choose the next task step and execute any returned tool calls. |
 | A tool-using session continues across turns. | When session protection is configured, preserve an eligible model owner through active tool loops or nonportable provider state. | Supply the conversation and stable session identity; manage tool results and task state. |
-| A selected inference call benefits from verification. | Run a configured, bounded cascade, panel, or multi-model workflow. | Decide how to use the returned answer in the larger task. |
+| A selected inference call benefits from verification. | Run a configured, bounded escalation, panel, or multi-model workflow. | Decide how to use the returned answer in the larger task. |
 | Sensitive work needs an approved execution path. | Apply explicit eligibility and data-handling policy over configured local or remote backends. | Enforce the same boundary in tools, task storage, and other external services. |
 
 Start with the [agent harness guide](../installation/agent-harness) and

@@ -79,7 +79,7 @@ JSON Schema 校验尽早捕获结构错误。在应用配置之前，将编写�
 
 ```json
 {
-  "yaml": "version: v0.3\nrouting: {}\nglobal: {}\n"
+  "yaml": "version: v0.5\nrecipes:\n  - name: default\nglobal: {}\n"
 }
 ```
 
@@ -109,7 +109,7 @@ JSON Schema 校验尽早捕获结构错误。在应用配置之前，将编写�
 
 当目标 Router 的 schema 可用时，Agent 绝不应该从示例推断字段，或发送未知键。
 
-## 添加或更改字段
+## 添加或更改字段 {#add-or-change-a-field}
 
 对于稳态字段，更新其 Go 类型、YAML 标签和源注释。仅当存在在结构上强制时才添加 `jsonschema:"required"`；默认值和跨字段要求仍属于语义校验。对于带判别器的路由表面，同时更新匹配的 Go 注册表。注册表覆盖会对照反射的 Go 字段检查，因此如果只在一侧添加信号、投影或 algorithm 载荷，生成会失败。
 
@@ -121,6 +121,6 @@ make config-schema-check
 make check
 ```
 
-仓库恰好跟踪一份完整 schema，位于 `src/semantic-router/pkg/configschema/router-config-v0.3.schema.json`。生成器还会发出一个小型 TypeScript 导入/类型适配器，但没有第二份 JSON 副本。打包会将 canonical 产物暂存到 wheel 和容器镜像中，而不会把生成文件写回工作树。当 canonical 产物或适配器过期时，CI 会失败。
+仓库恰好跟踪一份完整 schema，位于 `src/semantic-router/pkg/configschema/router-config-v0.5.schema.json`。生成器还会发出一个小型 TypeScript 导入/类型适配器，但没有第二份 JSON 副本。打包会将 canonical 产物暂存到 wheel 和容器镜像中，而不会把生成文件写回工作树。当 canonical 产物或适配器过期时，CI 会失败。
 
 `setup.mode` 是仅用于引导的控制面板控制平面元数据，因此 Router schema 不会发布它。控制面板在激活时移除它；活动 Router 文档和对 `/api/v1/config/validate` 的调用不得包含它。

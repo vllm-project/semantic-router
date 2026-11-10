@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/yaml.v3"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/utils/ptr"
 
@@ -21,86 +20,8 @@ func TestBuildCanonicalConfigAppliesOperatorDefaults(t *testing.T) {
 			Config: vllmv1alpha1.ConfigSpec{
 				Strategy:        "priority",
 				ReasoningEffort: "high",
-				Tools: &vllmv1alpha1.ToolsConfig{
-					Enabled:             true,
-					TopK:                7,
-					SimilarityThreshold: "0.4",
-					ToolsDBPath:         "/config/tools.json",
-					FallbackToEmpty:     true,
-				},
-				PromptGuard: &vllmv1alpha1.PromptGuardConfig{
-					Enabled: true,
-					Backend: &vllmv1alpha1.RemoteClassifierBackendConfig{
-						Protocol: "http_classify", Contract: "label_distribution.v1", Model: "guardrail-service",
-					},
-					ModelID:        "guardrail-model",
-					Threshold:      "0.6",
-					PositiveLabels: []string{"jailbreak", "INJECTION"},
-					OnError:        "block",
-				},
-				Classifier: &vllmv1alpha1.ClassifierConfig{
-					CategoryModel: &vllmv1alpha1.CategoryModelConfig{
-						ModelID:             "domain-classifier",
-						Threshold:           "0.6",
-						UseCPU:              true,
-						CategoryMappingPath: "/config/domain.yaml",
-					},
-					PIIModel: &vllmv1alpha1.PIIModelConfig{
-						ModelID:        "pii-classifier",
-						Threshold:      "0.7",
-						PIIMappingPath: "/config/pii.yaml",
-						Backend: &vllmv1alpha1.RemoteClassifierBackendConfig{
-							Protocol:   "http_classify",
-							Contract:   "token_spans.v1",
-							Model:      "pii-spans",
-							DeadlineMs: ptr.To(3000),
-						},
-						OnError: "block",
-					},
-				},
 				ComplexityRules: []vllmv1alpha1.ComplexityRulesConfig{
-					{
-						Name:      "code",
-						Threshold: "0.55",
-						Hard:      &vllmv1alpha1.ComplexityCandidates{Candidates: []string{"debug a race"}},
-						Easy:      &vllmv1alpha1.ComplexityCandidates{Candidates: []string{"say hello"}},
-						Composer: &vllmv1alpha1.RuleComposition{
-							Operator: "AND",
-							Conditions: []vllmv1alpha1.CompositionCondition{
-								{Type: "domain", Name: "engineering"},
-							},
-						},
-					},
-					{
-						// A remote rule carries boundaries in the model's own
-						// units and no candidates at all; a negative cut point
-						// must survive the string-to-number conversion.
-						Name:      "remote",
-						HardAbove: "0.85",
-						EasyBelow: "-0.25",
-					},
-				},
-				ComplexityModel: &vllmv1alpha1.ComplexityModelConfig{
-					Backend: &vllmv1alpha1.RemoteClassifierBackendConfig{
-						Protocol:   "http_classify",
-						Contract:   "score.v1",
-						Model:      "difficulty-scorer",
-						DeadlineMs: ptr.To(2500),
-					},
-				},
-				ExternalModels: []vllmv1alpha1.ExternalModelConfig{
-					{
-						Name:      "pii-spans",
-						ModelRole: "classification",
-						ModelName: "pii-spans-v1",
-						Endpoint:  vllmv1alpha1.ExternalModelEndpoint{Address: "pii-spans.default.svc", Port: 8080, Protocol: "http"},
-					},
-					{
-						Name:      "difficulty-scorer",
-						ModelRole: "classification",
-						ModelName: "difficulty-v1",
-						Endpoint:  vllmv1alpha1.ExternalModelEndpoint{Address: "difficulty.default.svc", Port: 8080},
-					},
+					{Name: "code", Description: "Code difficulty"},
 				},
 			},
 		},
@@ -112,92 +33,7 @@ func TestBuildCanonicalConfigAppliesOperatorDefaults(t *testing.T) {
 	}
 
 	assertOperatorRouterProviderConfig(t, canonical)
-	assertOperatorToolsConfig(t, canonical.Global.Integrations.Tools)
-	assertOperatorClassifierConfig(t, canonical.Global.ModelCatalog.Modules.Classifier)
-	assertOperatorComplexityConfig(t, canonical.Routing.Signals.Complexity)
-	assertOperatorComplexityModel(t, canonical.Global.ModelCatalog.Modules.Complexity)
-	assertOperatorPromptGuardConfig(t, canonical.Global.ModelCatalog.Modules.PromptGuard)
-	assertOperatorExternalModels(t, canonical.Global.ModelCatalog.External)
-}
-
-// The CRD's external_models block must land on global.model_catalog.external
-// with the router's own field names; backend blocks resolve against it.
-func assertOperatorExternalModels(t *testing.T, external []routerconfig.ExternalModelConfig) {
-	t.Helper()
-	if len(external) != 2 {
-		t.Fatalf("external models were not carried onto the canonical config: %#v", external)
-	}
-	pii := external[0]
-	if pii.Name != "pii-spans" || pii.ModelRole != "classification" || pii.ModelName != "pii-spans-v1" {
-		t.Fatalf("unexpected external model: %#v", pii)
-	}
-	if pii.ModelEndpoint.Address != "pii-spans.default.svc" || pii.ModelEndpoint.Port != 8080 || pii.ModelEndpoint.Protocol != "http" {
-		t.Fatalf("external model endpoint did not survive conversion: %#v", pii.ModelEndpoint)
-	}
-}
-
-// The regression asked for on #3498: a CR that points classifier.pii at a
-// remote token_spans.v1 service must produce YAML the router parses, with the
-// backend's model resolving against the external catalog and the PII mapping
-// path intact. Before external_models existed on the CRD the generated config
-// had no catalog entry and the router rejected it at load.
-func TestOperatorPIIBackendResolvesInGeneratedRouterConfig(t *testing.T) {
-	r := &SemanticRouterReconciler{}
-	sr := &vllmv1alpha1.SemanticRouter{
-		Spec: vllmv1alpha1.SemanticRouterSpec{
-			Config: vllmv1alpha1.ConfigSpec{
-				Classifier: &vllmv1alpha1.ClassifierConfig{
-					PIIModel: &vllmv1alpha1.PIIModelConfig{
-						PIIMappingPath: "/config/pii.yaml",
-						Backend: &vllmv1alpha1.RemoteClassifierBackendConfig{
-							Protocol:   "http_classify",
-							Contract:   "token_spans.v1",
-							Model:      "pii-spans",
-							DeadlineMs: ptr.To(1500),
-						},
-						OnError: "block",
-					},
-				},
-				ExternalModels: []vllmv1alpha1.ExternalModelConfig{{
-					Name:      "pii-spans",
-					ModelRole: "classification",
-					ModelName: "pii-spans-v1",
-					Endpoint:  vllmv1alpha1.ExternalModelEndpoint{Address: "pii-spans.default.svc", Port: 8080, Protocol: "http"},
-				}},
-			},
-		},
-	}
-
-	canonical, err := r.buildCanonicalConfig(context.Background(), sr)
-	if err != nil {
-		t.Fatalf("buildCanonicalConfig failed: %v", err)
-	}
-	data, err := yaml.Marshal(canonical)
-	if err != nil {
-		t.Fatalf("marshal generated config: %v", err)
-	}
-	cfg, err := routerconfig.ParseYAMLBytes(data)
-	if err != nil {
-		t.Fatalf("router rejects the operator-generated config: %v\n%s", err, data)
-	}
-	backend, ok, err := cfg.ResolveTask("pii_classifier")
-	if err != nil || !ok || backend.Deployment.Provider != routerconfig.ClassifyProvider ||
-		backend.Deployment.Endpoint != "http://pii-spans.default.svc:8080" || backend.Deployment.Model != "pii-spans-v1" || backend.Deployment.TimeoutMs != 1500 {
-		t.Fatalf("PII backend did not reach the parsed router config: %+v (%v)", backend, err)
-	}
-	if err := routerconfig.ValidatePIIModelBackend(cfg); err != nil {
-		t.Fatalf("PII backend does not resolve in the parsed router config: %v", err)
-	}
-	if cfg.PIIMappingPath != "/config/pii.yaml" {
-		t.Fatalf("PII mapping path was lost; the token_spans adapter requires it: %q", cfg.PIIMappingPath)
-	}
-	pii := cfg.PIIModel
-	if pii.OnError != routerconfig.OnErrorBlock {
-		t.Fatalf("on_error did not survive the operator path: %q", pii.OnError)
-	}
-	if len(cfg.ExternalModels) != 1 || cfg.ExternalModels[0].ModelName != "pii-spans-v1" {
-		t.Fatalf("external catalog did not reach the parsed router config: %#v", cfg.ExternalModels)
-	}
+	assertOperatorComplexityConfig(t, defaultRecipe(canonical).Signals.Complexity)
 }
 
 func TestOperatorResponseCacheConfigNormalizesLegacyAndRejectsConflict(t *testing.T) {
@@ -220,7 +56,7 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 	sr := &vllmv1alpha1.SemanticRouter{
 		Spec: vllmv1alpha1.SemanticRouterSpec{
 			Config: vllmv1alpha1.ConfigSpec{
-				Routing: rawCanonicalRoutingJSON(t, `{
+				Recipes: rawCanonicalRoutingJSON(t, `[{"name": "default",
 					"signals": {
 						"conversation": [
 							{
@@ -232,12 +68,11 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 								"predicate": {"gte": 1}
 							}
 						],
-						"events": [
+						"keywords": [
 							{
 								"name": "critical_payment_event",
-								"event_types": ["payment_failed"],
-								"severities": ["critical"],
-								"temporal": true
+								"operator": "AND",
+								"keywords": ["payment_failed", "critical"]
 							}
 						]
 					},
@@ -247,7 +82,7 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 								"name": "session_risk_score",
 								"method": "weighted_sum",
 								"inputs": [
-									{"type": "event", "name": "critical_payment_event", "weight": 1.0, "value_source": "binary"}
+									{"type": "keyword", "name": "critical_payment_event", "weight": 1.0, "value_source": "binary"}
 								]
 							}
 						],
@@ -269,7 +104,7 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 								"operator": "AND",
 								"conditions": [
 									{"type": "conversation", "name": "active_tool_use"},
-									{"type": "event", "name": "critical_payment_event"},
+									{"type": "keyword", "name": "critical_payment_event"},
 									{"type": "projection", "name": "risk_high"}
 								]
 							},
@@ -278,17 +113,14 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 								{"model": "deep-model"}
 							],
 							"algorithm": {
-								"type": "hybrid",
-								"hybrid": {
-									"experience_weight": 0.4,
-									"router_dc_weight": 0.4,
-									"automix_weight": 0.2,
-									"normalize_scores": true
+								"type": "multi_factor",
+								"multi_factor": {
+									"weights": {"quality": 0.6, "cost": 0.4}
 								}
 							}
 						}
 					]
-				}`),
+				}]`),
 			},
 		},
 	}
@@ -298,7 +130,7 @@ func TestBuildCanonicalConfigAppliesCanonicalRoutingOverride(t *testing.T) {
 		t.Fatalf("buildCanonicalConfig failed: %v", err)
 	}
 
-	assertCanonicalV03RoutingConfig(t, canonical)
+	assertCanonicalDefaultRecipe(t, canonical)
 }
 
 func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
@@ -308,12 +140,12 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 			Config: vllmv1alpha1.ConfigSpec{
 				Decisions: []vllmv1alpha1.DecisionConfig{
 					{
-						Name: "hybrid-route",
+						Name: "weighted-route",
 						Rules: vllmv1alpha1.RuleCombinationConfig{
 							Operator:  "AND",
 							OnUnknown: "fail_request",
 							Conditions: []vllmv1alpha1.RuleConditionConfig{
-								{Type: "event", Name: "critical_payment_event"},
+								{Type: "keyword", Name: "critical_payment_event"},
 							},
 						},
 						ModelRefs: []vllmv1alpha1.ModelRefConfig{
@@ -321,12 +153,9 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 							{Model: "deep-model"},
 						},
 						Algorithm: rawCanonicalRoutingJSON(t, `{
-							"type": "hybrid",
-							"hybrid": {
-								"experience_weight": 0.4,
-								"router_dc_weight": 0.4,
-								"automix_weight": 0.2,
-								"normalize_scores": true
+							"type": "multi_factor",
+							"multi_factor": {
+								"weights": {"quality": 0.6, "cost": 0.4}
 							}
 						}`),
 					},
@@ -340,21 +169,21 @@ func TestBuildCanonicalConfigPreservesDecisionAlgorithm(t *testing.T) {
 		t.Fatalf("buildCanonicalConfig failed: %v", err)
 	}
 
-	if len(canonical.Routing.Decisions) != 1 {
-		t.Fatalf("expected one decision, got %#v", canonical.Routing.Decisions)
+	if len(defaultRecipe(canonical).Decisions) != 1 {
+		t.Fatalf("expected one decision, got %#v", defaultRecipe(canonical).Decisions)
 	}
-	algorithm := canonical.Routing.Decisions[0].Algorithm
-	if algorithm == nil || algorithm.Type != "hybrid" || algorithm.Hybrid == nil {
-		t.Fatalf("expected hybrid algorithm to survive typed decision conversion, got %#v", algorithm)
+	algorithm := defaultRecipe(canonical).Decisions[0].Algorithm
+	if algorithm == nil || algorithm.Type != "multi_factor" || algorithm.MultiFactor == nil || algorithm.MultiFactor.Weights == nil {
+		t.Fatalf("expected multi_factor algorithm to survive typed decision conversion, got %#v", algorithm)
 	}
-	if algorithm.Hybrid.ExperienceWeight != 0.4 || !algorithm.Hybrid.NormalizeScores {
-		t.Fatalf("expected hybrid fields to survive typed decision conversion, got %#v", algorithm.Hybrid)
+	if algorithm.MultiFactor.Weights.Quality != 0.6 || algorithm.MultiFactor.Weights.Cost != 0.4 {
+		t.Fatalf("expected multi_factor weights to survive typed decision conversion, got %#v", algorithm.MultiFactor)
 	}
-	if canonical.Routing.Decisions[0].Rules.Conditions[0].Type != "event" {
-		t.Fatalf("expected event condition to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
+	if defaultRecipe(canonical).Decisions[0].Rules.Conditions[0].Type != "keyword" {
+		t.Fatalf("expected keyword condition to survive typed decision conversion, got %#v", defaultRecipe(canonical).Decisions[0].Rules)
 	}
-	if canonical.Routing.Decisions[0].Rules.OnUnknown != "fail_request" {
-		t.Fatalf("expected on_unknown to survive typed decision conversion, got %#v", canonical.Routing.Decisions[0].Rules)
+	if defaultRecipe(canonical).Decisions[0].Rules.OnUnknown != "fail_request" {
+		t.Fatalf("expected on_unknown to survive typed decision conversion, got %#v", defaultRecipe(canonical).Decisions[0].Rules)
 	}
 }
 
@@ -387,10 +216,10 @@ func TestBuildCanonicalConfigCarriesDecisionReliabilityAndFallback(t *testing.T)
 	if err != nil {
 		t.Fatalf("buildCanonicalConfig failed: %v", err)
 	}
-	if len(canonical.Routing.Decisions) != 1 {
-		t.Fatalf("expected one decision, got %#v", canonical.Routing.Decisions)
+	if len(defaultRecipe(canonical).Decisions) != 1 {
+		t.Fatalf("expected one decision, got %#v", defaultRecipe(canonical).Decisions)
 	}
-	decision := canonical.Routing.Decisions[0]
+	decision := defaultRecipe(canonical).Decisions[0]
 	reliability := decision.Reliability
 	if reliability == nil || reliability.TotalTimeout != "600s" || reliability.PerTryTimeout != "300s" ||
 		reliability.RetryCount == nil || *reliability.RetryCount != 1 || reliability.RetryOn != "reset" ||
@@ -402,6 +231,77 @@ func TestBuildCanonicalConfigCarriesDecisionReliabilityAndFallback(t *testing.T)
 		fallback.TotalTimeout != 900*time.Second || fallback.PerAttemptTimeout != 450*time.Second ||
 		len(fallback.RetryableStatusCodes) != 2 {
 		t.Fatalf("decision fallback = %#v, want the CR's block", fallback)
+	}
+}
+
+func TestConfigRoutingIsRefusedWithItsReplacement(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	global := routerconfig.DefaultCanonicalGlobal()
+	canonical := &routerconfig.CanonicalConfig{Global: &global}
+	err := r.applyOperatorRouting(canonical, vllmv1alpha1.ConfigSpec{Routing: rawCanonicalRoutingJSON(t, `{"decisions":[]}`)})
+	if err == nil || !strings.Contains(err.Error(), "config.routing is removed") || !strings.Contains(err.Error(), "config.recipes") {
+		t.Fatalf("config.routing was not refused with its replacement: %v", err)
+	}
+}
+
+// Several recipes publish their entrypoints, and config.models states facts
+// on the provider models of the same name.
+func TestConfigRecipesEntrypointsAndModelFacts(t *testing.T) {
+	global := routerconfig.DefaultCanonicalGlobal()
+	canonical := &routerconfig.CanonicalConfig{Global: &global, Providers: routerconfig.CanonicalProviders{
+		Models: []routerconfig.CanonicalProviderModel{{Name: "local"}},
+	}}
+	if err := applyOperatorRecipes(canonical, configRoutingSpec{
+		recipes:     rawCanonicalRoutingJSON(t, `[{"name":"default","strategy":"priority"},{"name":"private","decisions":[]}]`),
+		entrypoints: rawCanonicalRoutingJSON(t, `[{"model_names":["vllm-sr/auto"],"recipe":"default","default":true},{"model_names":["acme/private"],"recipe":"private"}]`),
+		models:      rawCanonicalRoutingJSON(t, `[{"name":"local","capabilities":["chat"],"context_window_size":32768}]`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(canonical.Recipes) != 2 || defaultRecipe(canonical).Strategy != "priority" || canonical.Recipes[1].Name != "private" {
+		t.Fatalf("recipes = %+v", canonical.Recipes)
+	}
+	if len(canonical.Entrypoints) != 2 || !canonical.Entrypoints[0].Default {
+		t.Fatalf("entrypoints = %+v", canonical.Entrypoints)
+	}
+	if facts := canonical.Providers.Models[0].ModelFacts; facts.ContextWindowSize != 32768 || len(facts.Capabilities) != 1 {
+		t.Fatalf("model facts = %+v", facts)
+	}
+	err := applyOperatorRecipes(canonical, configRoutingSpec{models: rawCanonicalRoutingJSON(t, `[{"name":"local","backend_refs":[{"endpoint":"x:1"}]}]`)})
+	if err == nil || !strings.Contains(err.Error(), "its transport comes from vllmEndpoints") {
+		t.Fatalf("config.models accepted a transport: %v", err)
+	}
+}
+
+func TestBuildCanonicalConfigCarriesDecisionOutput(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	sr := &vllmv1alpha1.SemanticRouter{
+		Spec: vllmv1alpha1.SemanticRouterSpec{
+			Config: vllmv1alpha1.ConfigSpec{
+				Decisions: []vllmv1alpha1.DecisionConfig{{
+					Name: "image",
+					Rules: vllmv1alpha1.RuleCombinationConfig{
+						Operator:   "AND",
+						Conditions: []vllmv1alpha1.RuleConditionConfig{{Type: "modality", Name: "wants_image"}},
+					},
+					ModelRefs: []vllmv1alpha1.ModelRefConfig{{Model: "painter"}},
+					Output:    rawCanonicalRoutingJSON(t, `{"kind":["text","image"],"action":"generate"}`),
+				}},
+			},
+		},
+	}
+
+	canonical, err := r.buildCanonicalConfig(context.Background(), sr)
+	if err != nil {
+		t.Fatalf("buildCanonicalConfig failed: %v", err)
+	}
+	decisions := defaultRecipe(canonical).Decisions
+	if len(decisions) != 1 {
+		t.Fatalf("expected one decision, got %#v", decisions)
+	}
+	output := decisions[0].Output
+	if output == nil || output.String() != "[text, image]" || output.EffectiveAction() != "generate" {
+		t.Fatalf("decision output = %#v, want the CR's contract", output)
 	}
 }
 
@@ -422,13 +322,13 @@ func assertOperatorRouterProviderConfig(t *testing.T, canonical *routerconfig.Ca
 	}
 }
 
-func assertCanonicalV03RoutingConfig(t *testing.T, canonical *routerconfig.CanonicalConfig) {
+func assertCanonicalDefaultRecipe(t *testing.T, canonical *routerconfig.CanonicalConfig) {
 	t.Helper()
 
-	assertCanonicalConversationSignal(t, canonical.Routing.Signals.Conversation)
-	assertCanonicalEventSignal(t, canonical.Routing.Signals.EventRules)
-	assertCanonicalProjectionConfig(t, canonical.Routing.Projections)
-	assertCanonicalAgenticWorkflowDecision(t, canonical.Routing.Decisions)
+	assertCanonicalConversationSignal(t, defaultRecipe(canonical).Signals.Conversation)
+	assertCanonicalKeywordSignal(t, defaultRecipe(canonical).Signals.Keywords)
+	assertCanonicalProjectionConfig(t, defaultRecipe(canonical).Projections)
+	assertCanonicalAgenticWorkflowDecision(t, defaultRecipe(canonical).Decisions)
 }
 
 func assertCanonicalConversationSignal(t *testing.T, signals []routerconfig.ConversationRule) {
@@ -446,15 +346,16 @@ func assertCanonicalConversationSignal(t *testing.T, signals []routerconfig.Conv
 	}
 }
 
-func assertCanonicalEventSignal(t *testing.T, signals []routerconfig.EventRule) {
+func assertCanonicalKeywordSignal(t *testing.T, signals []routerconfig.KeywordRule) {
 	t.Helper()
 
 	if len(signals) != 1 {
-		t.Fatalf("expected one event signal, got %#v", signals)
+		t.Fatalf("expected one keyword signal, got %#v", signals)
 	}
-	event := signals[0]
-	if event.Name != "critical_payment_event" || len(event.EventTypes) != 1 || event.EventTypes[0] != "payment_failed" {
-		t.Fatalf("unexpected event signal: %#v", event)
+	keyword := signals[0]
+	if keyword.Name != "critical_payment_event" || keyword.Operator != "AND" ||
+		len(keyword.Keywords) != 2 || keyword.Keywords[0] != "payment_failed" {
+		t.Fatalf("unexpected keyword signal: %#v", keyword)
 	}
 }
 
@@ -480,165 +381,60 @@ func assertCanonicalAgenticWorkflowDecision(t *testing.T, decisions []routerconf
 		t.Fatalf("unexpected decision rules: %#v", decision.Rules)
 	}
 	if decision.Rules.Conditions[0].Type != "conversation" ||
-		decision.Rules.Conditions[1].Type != "event" ||
+		decision.Rules.Conditions[1].Type != "keyword" ||
 		decision.Rules.Conditions[2].Type != "projection" {
 		t.Fatalf("unexpected decision condition types: %#v", decision.Rules.Conditions)
 	}
-	if decision.Algorithm == nil || decision.Algorithm.Type != "hybrid" || decision.Algorithm.Hybrid == nil {
-		t.Fatalf("expected hybrid algorithm, got %#v", decision.Algorithm)
+	if decision.Algorithm == nil || decision.Algorithm.Type != "multi_factor" || decision.Algorithm.MultiFactor == nil || decision.Algorithm.MultiFactor.Weights == nil {
+		t.Fatalf("expected multi_factor algorithm, got %#v", decision.Algorithm)
 	}
-	if decision.Algorithm.Hybrid.ExperienceWeight != 0.4 || !decision.Algorithm.Hybrid.NormalizeScores {
-		t.Fatalf("expected hybrid fields, got %#v", decision.Algorithm.Hybrid)
-	}
-}
-
-func assertOperatorToolsConfig(t *testing.T, tools routerconfig.ToolsConfig) {
-	t.Helper()
-
-	if tools.TopK != 7 || tools.ToolsDBPath != "/config/tools.json" || !tools.FallbackToEmpty {
-		t.Fatalf("unexpected tools config: %#v", tools)
-	}
-	if tools.SimilarityThreshold == nil || *tools.SimilarityThreshold < 0.399 || *tools.SimilarityThreshold > 0.401 {
-		t.Fatalf("unexpected tools threshold: %#v", tools.SimilarityThreshold)
-	}
-}
-
-func assertOperatorClassifierConfig(t *testing.T, classifier routerconfig.CanonicalClassifierModule) {
-	t.Helper()
-
-	if classifier.Domain.ModelID != "domain-classifier" || classifier.Domain.CategoryMappingPath != "/config/domain.yaml" {
-		t.Fatalf("unexpected domain classifier: %#v", classifier.Domain)
-	}
-	if classifier.PII.ModelID != "pii-classifier" || classifier.PII.PIIMappingPath != "/config/pii.yaml" {
-		t.Fatalf("unexpected PII classifier: %#v", classifier.PII)
-	}
-	// The remote PII backend and its failure policy must reach the runtime
-	// config with the router's own field names (#2922); the router's
-	// ValidatePIIModelBackend, not the operator, then decides whether it resolves.
-	piiBackend := classifier.PII.Backend
-	if piiBackend == nil {
-		t.Fatalf("PII backend was not carried onto the canonical config: %#v", classifier.PII)
-	}
-	if piiBackend.Protocol != "http_classify" || piiBackend.Contract != "token_spans.v1" || piiBackend.Model != "pii-spans" {
-		t.Fatalf("unexpected PII backend: %#v", piiBackend)
-	}
-	if piiBackend.DeadlineMs == nil || *piiBackend.DeadlineMs != 3000 {
-		t.Fatalf("PII backend deadline_ms did not survive conversion: %#v", piiBackend.DeadlineMs)
-	}
-	if !classifier.PII.IsBlock() {
-		t.Fatalf("PII on_error did not survive conversion: %q", classifier.PII.OnError)
-	}
-}
-
-func assertOperatorPromptGuardConfig(t *testing.T, promptGuard routerconfig.CanonicalPromptGuardModule) {
-	t.Helper()
-
-	// Regression for the operator CRD gap where PromptGuardConfig had no way
-	// to express `backend`/`positive_labels`, so the pluggable jailbreak
-	// backend (#2759) was unreachable via the Kubernetes Operator path.
-	if promptGuard.Backend == nil || promptGuard.Backend.Protocol != "http_classify" || promptGuard.Backend.Contract != "label_distribution.v1" || promptGuard.Backend.Model != "guardrail-service" {
-		t.Fatalf("unexpected prompt guard backend: %#v", promptGuard.Backend)
-	}
-	// Same gap class, for on_error (#2918): without the field on the CRD type
-	// the API server prunes it and an operator-managed deployment silently
-	// fails open, which is the exact failure on_error: block exists to stop.
-	if promptGuard.OnError != routerconfig.OnErrorBlock {
-		t.Fatalf("unexpected prompt guard on_error: %q", promptGuard.OnError)
-	}
-	if !promptGuard.IsBlock() {
-		t.Fatalf("expected IsBlock() to be true for on_error: %q", promptGuard.OnError)
-	}
-	if promptGuard.ModelID != "guardrail-model" {
-		t.Fatalf("unexpected prompt guard model_id: %q", promptGuard.ModelID)
-	}
-	if len(promptGuard.PositiveLabels) != 2 || promptGuard.PositiveLabels[0] != "jailbreak" || promptGuard.PositiveLabels[1] != "INJECTION" {
-		t.Fatalf("unexpected prompt guard positive_labels: %#v", promptGuard.PositiveLabels)
+	if decision.Algorithm.MultiFactor.Weights.Quality != 0.6 || decision.Algorithm.MultiFactor.Weights.Cost != 0.4 {
+		t.Fatalf("expected multi_factor weights, got %#v", decision.Algorithm.MultiFactor)
 	}
 }
 
 func assertOperatorComplexityConfig(t *testing.T, rules []routerconfig.ComplexityRule) {
 	t.Helper()
 
-	if len(rules) != 2 {
-		t.Fatalf("expected two complexity rules, got %#v", rules)
-	}
-	rule := rules[0]
-	if rule.Name != "code" || rule.Threshold < 0.549 || rule.Threshold > 0.551 {
-		t.Fatalf("unexpected complexity rule: %#v", rule)
-	}
-	// The operator decodes through yaml.v3, so presence has to be recorded
-	// there as it is on the Router's own yaml.v2 loader.
-	if !rule.ThresholdSet {
-		t.Fatalf("a threshold written on the CRD must be recorded as present: %#v", rule)
-	}
-	if rule.Composer == nil || rule.Composer.Operator != "AND" || len(rule.Composer.Conditions) != 1 {
-		t.Fatalf("unexpected complexity composer: %#v", rule.Composer)
-	}
-	condition := rule.Composer.Conditions[0]
-	if condition.Type != "domain" || condition.Name != "engineering" {
-		t.Fatalf("unexpected composer condition: %#v", condition)
-	}
-
-	remote := rules[1]
-	if remote.Name != "remote" || remote.Threshold != 0 {
-		t.Fatalf("unexpected remote rule: %#v", remote)
-	}
-	// A pair rule with no threshold on the CRD must not arrive at the Router
-	// with one recorded as written, or the Router would refuse it for stating
-	// both. The Router's own marshal test guards the ConfigMap document.
-	if remote.ThresholdSet {
-		t.Fatalf("threshold must stay unwritten for a pair rule: %#v", remote)
-	}
-	// The same rule is marshalled into the ConfigMap through yaml.v3, and
-	// must not grow a threshold: 0 there that the Router would then refuse.
-	out, err := yaml.Marshal(remote)
-	if err != nil {
-		t.Fatalf("marshal remote rule: %v", err)
-	}
-	if strings.Contains(string(out), "threshold") {
-		t.Fatalf("a pair rule must not be written back with a threshold:\n%s", out)
-	}
-	if remote.HardAbove == nil || *remote.HardAbove != 0.85 {
-		t.Fatalf("hard_above did not survive conversion: %#v", remote.HardAbove)
-	}
-	if remote.EasyBelow == nil || *remote.EasyBelow != -0.25 {
-		t.Fatalf("a negative easy_below did not survive conversion: %#v", remote.EasyBelow)
-	}
-	if remote.HardBelow != nil || remote.EasyAbove != nil {
-		t.Fatalf("unset boundary fields must stay nil: %#v", remote)
-	}
-	if len(remote.Hard.Candidates) != 0 || len(remote.Easy.Candidates) != 0 {
-		t.Fatalf("a remote rule must not grow candidates: %#v", remote)
+	if len(rules) != 1 || rules[0].Name != "code" || rules[0].Description != "Code difficulty" {
+		t.Fatalf("unexpected complexity rules: %#v", rules)
 	}
 }
 
-// The ConfigMap is written through yaml.v3. A written zero has to come out
-// there too, or the Router would accept a pair the CRD refused.
-func TestOperatorComplexityRuleWrittenZeroThresholdIsSerialised(t *testing.T) {
-	hardAbove, easyBelow := 0.85, 0.60
-	rule := routerconfig.ComplexityRule{
-		Name:         "r",
-		ThresholdSet: true,
-		HardAbove:    &hardAbove,
-		EasyBelow:    &easyBelow,
+func TestOperatorRefusesTheRemovedEmbeddingFields(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	canonical := &routerconfig.CanonicalConfig{Global: &routerconfig.CanonicalGlobal{}}
+	spec := vllmv1alpha1.ConfigSpec{EmbeddingModels: &apiextensionsv1.JSON{Raw: []byte(`{"mmbert_model_path":"models/x"}`)}}
+	if err := r.applyOperatorModelCatalog(canonical, spec); err == nil || !strings.Contains(err.Error(), "config.embedding_models is removed") {
+		t.Fatalf("embedding_models: %v", err)
 	}
+	for field, spec := range map[string]vllmv1alpha1.ConfigSpec{
+		"config.response_cache": {ResponseCache: &vllmv1alpha1.SemanticCacheConfig{EmbeddingModel: "qwen3"}},
+		"config.semantic_cache": {SemanticCache: &vllmv1alpha1.SemanticCacheConfig{EmbeddingModel: "qwen3"}},
+	} {
+		if _, err := operatorResponseCacheConfig(spec); err == nil || !strings.Contains(err.Error(), field+".embedding_model is removed") {
+			t.Fatalf("%s: %v", field, err)
+		}
+	}
+}
 
-	out, err := yaml.Marshal(rule)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
+// The modules and fields only the removed classifiers read are refused, not
+// dropped, so a resource that writes them learns why.
+func TestOperatorRefusesTheRemovedClassifierFields(t *testing.T) {
+	r := &SemanticRouterReconciler{}
+	block := func(raw string) *apiextensionsv1.JSON { return &apiextensionsv1.JSON{Raw: []byte(raw)} }
+	for field, spec := range map[string]vllmv1alpha1.ConfigSpec{
+		"config.prompt_guard":     {PromptGuard: block(`{"threshold":"0.6"}`)},
+		"config.classifier":       {Classifier: block(`{"pii_model":{"threshold":"0.3"}}`)},
+		"config.complexity_model": {ComplexityModel: block(`{}`)},
+		"config.external_models":  {ExternalModels: block(`[{"name":"rewriter","model_role":"memory_rewrite"}]`)},
+	} {
+		canonical := &routerconfig.CanonicalConfig{Global: &routerconfig.CanonicalGlobal{}}
+		if err := r.applyOperatorModelCatalog(canonical, spec); err == nil || !strings.Contains(err.Error(), field+" is removed") {
+			t.Fatalf("%s: %v", field, err)
+		}
 	}
-	if !strings.Contains(string(out), "threshold: 0") {
-		t.Fatalf("a written zero must be serialised through yaml.v3, got:\n%s", out)
-	}
-
-	var reloaded routerconfig.ComplexityRule
-	if err := yaml.Unmarshal(out, &reloaded); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if !reloaded.ThresholdSet {
-		t.Fatal("presence must survive a yaml.v3 round trip")
-	}
-	if _, err := reloaded.EffectiveBoundaries(); err == nil {
-		t.Fatal("expected the reloaded rule to be refused for stating both")
+	if _, err := r.convertComplexityRules([]vllmv1alpha1.ComplexityRulesConfig{{Name: "code", Threshold: "0.5"}}); err == nil || !strings.Contains(err.Error(), "no longer scores example banks") {
+		t.Fatalf("a complexity threshold: %v", err)
 	}
 }

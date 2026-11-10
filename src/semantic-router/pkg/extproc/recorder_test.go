@@ -36,13 +36,11 @@ func replayRoutingRecordMetadataTestContext() *RequestContext {
 			Priority: 120,
 		},
 		VSRMatchedKeywords:     []string{"math_keyword"},
-		VSRMatchedModality:     []string{"AR"},
+		VSRMatchedModality:     []string{"image_out"},
 		VSRMatchedAuthz:        []string{"premium_tier"},
 		VSRMatchedJailbreak:    []string{"jailbreak_detector"},
 		VSRMatchedPII:          []string{"email_block"},
-		VSRMatchedKB:           []string{"privacy_kb"},
 		VSRMatchedConversation: []string{"multi_turn_user"},
-		VSRMatchedEvent:        []string{"critical_payment_event"},
 		VSRMatchedProjection:   []string{"balance_reasoning"},
 		VSRProjectionScores: map[string]float64{
 			"reasoning_pressure": 0.73,
@@ -296,31 +294,6 @@ func TestBuildReplayRoutingRecordUsesBaselineSessionAction(t *testing.T) {
 	}
 }
 
-func assertReplayMatchedSignals(t *testing.T, record routerreplay.RoutingRecord) {
-	t.Helper()
-	if !reflect.DeepEqual(record.Signals.Modality, []string{"AR"}) {
-		t.Fatalf("unexpected modality signals: %#v", record.Signals.Modality)
-	}
-	if !reflect.DeepEqual(record.Signals.Authz, []string{"premium_tier"}) {
-		t.Fatalf("unexpected authz signals: %#v", record.Signals.Authz)
-	}
-	if !reflect.DeepEqual(record.Signals.Jailbreak, []string{"jailbreak_detector"}) {
-		t.Fatalf("unexpected jailbreak signals: %#v", record.Signals.Jailbreak)
-	}
-	if !reflect.DeepEqual(record.Signals.PII, []string{"email_block"}) {
-		t.Fatalf("unexpected pii signals: %#v", record.Signals.PII)
-	}
-	if !reflect.DeepEqual(record.Signals.KB, []string{"privacy_kb"}) {
-		t.Fatalf("unexpected kb signals: %#v", record.Signals.KB)
-	}
-	if !reflect.DeepEqual(record.Signals.Conversation, []string{"multi_turn_user"}) {
-		t.Fatalf("unexpected conversation signals: %#v", record.Signals.Conversation)
-	}
-	if !reflect.DeepEqual(record.Signals.Event, []string{"critical_payment_event"}) {
-		t.Fatalf("unexpected event signals: %#v", record.Signals.Event)
-	}
-}
-
 func TestBuildReplayRoutingRecord_CacheSimilarityAndContextTokenCount(t *testing.T) {
 	ctx := &RequestContext{
 		RequestID:            "req-cache-ctx",
@@ -355,5 +328,24 @@ func TestBuildReplayRoutingRecord_ResponseAPIChainFields(t *testing.T) {
 	if record.ConversationID != "conv-chain" || record.PreviousResponseID != "resp_prev_1" {
 		t.Fatalf("unexpected response API persistence: conversation_id=%q previous_response_id=%q",
 			record.ConversationID, record.PreviousResponseID)
+	}
+}
+
+func assertReplayMatchedSignals(t *testing.T, record routerreplay.RoutingRecord) {
+	t.Helper()
+	if !reflect.DeepEqual(record.Signals.Modality, []string{"image_out"}) {
+		t.Fatalf("unexpected modality signals: %#v", record.Signals.Modality)
+	}
+	if !reflect.DeepEqual(record.Signals.Authz, []string{"premium_tier"}) {
+		t.Fatalf("unexpected authz signals: %#v", record.Signals.Authz)
+	}
+	if !reflect.DeepEqual(record.Signals.Jailbreak, []string{"jailbreak_detector"}) {
+		t.Fatalf("unexpected jailbreak signals: %#v", record.Signals.Jailbreak)
+	}
+	if !reflect.DeepEqual(record.Signals.PII, []string{"email_block"}) {
+		t.Fatalf("unexpected pii signals: %#v", record.Signals.PII)
+	}
+	if !reflect.DeepEqual(record.Signals.Conversation, []string{"multi_turn_user"}) {
+		t.Fatalf("unexpected conversation signals: %#v", record.Signals.Conversation)
 	}
 }

@@ -40,6 +40,14 @@ type RequestFacts struct {
 	// InputModality carries structural input-modality presence counts for the
 	// input_modality signal family.
 	InputModality InputModalityFacts
+
+	// Turns are the user and assistant turns before the current user turn,
+	// and Images and Videos the inline (base64 data URL) media parts of the
+	// current user turn; systemone rules read them as their input asks.
+	// Remote media are never fetched.
+	Turns  []ConversationTurn
+	Images []string
+	Videos []string
 }
 
 // InputModalityFacts counts content parts per input modality across the
