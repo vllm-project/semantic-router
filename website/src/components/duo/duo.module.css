@@ -1,0 +1,284 @@
+/* System Duo's controls and small parts (style.css, hero.css), shared by the homepage's sections. */
+
+.btnPrimary,
+.btnAlt {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  height: 56px;
+  border: 0;
+  border-radius: 999px;
+  font: 500 17px/1 var(--sans);
+  letter-spacing: -0.012em;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.3s var(--ease), background-color 0.2s, box-shadow 0.25s;
+}
+
+.btnPrimary {
+  min-width: 15.5rem;
+  padding: 0 32px;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  box-shadow: 0 10px 30px rgba(22, 24, 29, 0.22);
+}
+
+.btnPrimary:hover,
+.btnPrimary:focus-visible {
+  background: var(--btn-bg-hover);
+  color: var(--btn-fg);
+  text-decoration: none;
+  box-shadow: 0 12px 34px rgba(22, 24, 29, 0.28);
+}
+
+.btnAlt {
+  padding: 0 28px 0 22px;
+  background: var(--btn-alt-bg);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--hair-2), 0 6px 20px rgba(40, 32, 20, 0.06);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.btnAlt:hover,
+.btnAlt:focus-visible {
+  background: var(--surface-hi);
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: inset 0 0 0 1px var(--hair-2), 0 10px 26px rgba(40, 32, 20, 0.1);
+}
+
+.btnPrimary:active,
+.btnAlt:active {
+  transform: scale(0.98);
+}
+
+.btnIcon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.more::after {
+  content: '\203A';
+  font-size: 1.3em;
+  line-height: 1;
+  transform: translateY(-1px);
+  transition: transform 0.3s var(--ease);
+}
+
+.more:hover,
+.more:focus-visible {
+  color: var(--ember-text);
+  text-decoration: none;
+}
+
+.more:hover::after,
+.more:focus-visible::after {
+  transform: translate(2px, -1px);
+}
+
+/* Ink code with a caption bar. */
+.codeblock {
+  overflow: hidden;
+  border-radius: var(--r-s);
+  background: var(--code-bg);
+}
+
+.codeCap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 8px 8px 8px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #a3a7b0;
+  font: 500 12px/1.4 var(--mono);
+}
+
+.codeblock pre {
+  margin: 0;
+  padding: 16px 20px;
+  overflow-x: auto;
+  border-radius: 0;
+  background: transparent;
+  color: #d9dbe0;
+  font: 400 12.8px/1.66 var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-width: thin;
+}
+
+.codeblock pre code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+}
+
+.copy {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ececf1;
+  font: 500 12.5px/1 var(--sans);
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.25s var(--ease);
+}
+
+.copy:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.copy:active {
+  transform: scale(0.94);
+}
+
+.copy svg {
+  width: 14px;
+  height: 14px;
+}
+
+.copyDone {
+  box-shadow: inset 0 0 0 1px rgba(126, 226, 168, 0.5);
+}
+
+.copyDone svg {
+  color: #7ee2a8;
+}
+
+/* Pills on paper: chips with an icon or a mark. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  color: var(--ink);
+  font: 500 13.5px/1 var(--sans);
+}
+
+.marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.marks li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px 5px 7px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.marks svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+/* The status line: a surface pill of square-dotted items. */
+.live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 28px;
+  margin-top: clamp(28px, 3.4vw, 40px);
+  padding: 16px 24px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.liveItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-2);
+  font-size: 14.5px;
+}
+
+.liveItem b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.liveDot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--ember);
+}
+
+.sysDot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--ember);
+}
+
+.sysDot.sysDotSky {
+  background: var(--sky);
+}
+
+@media (max-width: 760px) {
+  .live {
+    border-radius: var(--r-lg);
+  }
+}
+
+@media (max-width: 600px) {
+  .btnPrimary,
+  .btnAlt {
+    min-width: 15rem;
+    height: 54px;
+  }
+}

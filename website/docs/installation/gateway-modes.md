@@ -72,17 +72,20 @@ See the [release note](../release-notes/standalone-mode).
         key_file: certs/tls.key
   ```
 
-- **The edge's trust boundary:** client-sent identity headers (`x-authz-*`, and
-  the names `global.services.authz.identity` sets), unless the listener trusts
-  them (see [Identity headers](#identity-headers)), and the proxy-control
-  headers only a trusted proxy may set never reach routing or a backend. Those are
-  `x-envoy-internal` and Envoy's retry, timeout and tracing controls, such as
-  `x-envoy-max-retries`, `x-envoy-retry-on` and `x-envoy-upstream-rq-timeout-ms`.
-  Envoy-based layers behind the Router (sidecars, gateways in front of model
-  servers) obey them from a caller they trust, which the Router is, so a client
-  could otherwise set retries and timeouts there; the Router's reliability
-  policy stays the one retry and timeout authority. The list is the one Envoy
-  strips from external requests, and it stays that narrow.
+- **The edge's trust boundary:** two kinds of client-sent headers never reach
+  routing or a backend:
+  - identity headers (`x-authz-*`, and the names
+    `global.services.authz.identity` sets), unless the listener trusts them
+    (see [Identity headers](#identity-headers));
+  - proxy-control headers only a trusted proxy may set: `x-envoy-internal` and
+    Envoy's retry, timeout and tracing controls, such as
+    `x-envoy-max-retries`, `x-envoy-retry-on` and
+    `x-envoy-upstream-rq-timeout-ms`. The list is the one Envoy strips from
+    external requests.
+
+  Envoy-based layers behind the Router, such as sidecars or gateways in front
+  of model servers, obey those controls from the Router. Stripping them keeps
+  the Router's reliability policy the one retry and timeout authority.
 - **Probes:** `GET /health` answers while the process runs, and `GET /ready` once
   the routing core can take traffic. Prometheus metrics stay on the Router's
   metrics port (9190).
@@ -151,8 +154,9 @@ listeners:
 - `trust_headers` keeps the `x-authz-*` headers (`x-authz-user-id`,
   `x-authz-user-groups`, `x-authz-team-id`, `x-authz-tenant-id`) and the names
   `global.services.authz.identity` sets. A standalone Router also keeps the
-  `global.services.authz.gateway_credential` header; the `--gateway extproc`
-  listener removes a client's copy of it either way.
+  `global.services.authz.delegated_credential` header, for Chat and System One
+  requests alike; the `--gateway extproc` listener removes a client's copy of
+  it either way.
 - `trusted_peers` (CIDRs) keeps them only when the connection's peer address is
   in one of the networks; the Router never reads `X-Forwarded-For` for this.
   Empty, every peer of a trusting listener is trusted. Only standalone mode
@@ -164,10 +168,9 @@ listeners:
 - No identity header reaches a model provider, in either mode: the Router and
   the generated Envoy listener remove them from every upstream request.
 
-Memory, router replay and the per-user selection algorithms (`gmtrouter`,
-`rl_driven`) record the user of each request. Without a trusting listener they
-still load and treat every request as anonymous, and the Router logs one
-warning at startup that names them.
+Memory and router replay record the user of each request. Without a trusting
+listener they still load and treat every request as anonymous, and the Router
+logs one warning at startup that names them.
 
 ### What needs `extproc`
 
@@ -180,14 +183,22 @@ Router refuses it at startup and on reload when no listener sets
 - a rate limit rule that matches `user` or `group`;
 - `global.services.authz.providers`, which resolve per-user API keys.
 
-Turn on `identity.trust_headers` on a listener behind an authenticating proxy,
-or serve them with `--gateway extproc` behind a gateway that authenticates
-clients and removes the identity headers they send. With the Envoy listener the
-CLI generates, which authenticates no one, that again means
-`identity.trust_headers` behind an authenticating proxy; otherwise every request
-is anonymous, and a role binding refuses the requests it evaluates. Token-bucket rate limiting, mTLS,
-JWT or OIDC, and advanced route matching are planned for standalone mode; until
-then they need Envoy as well.
+Two setups provide one:
+
+- **Standalone:** set `identity.trust_headers` on a listener behind an
+  authenticating proxy.
+- **`--gateway extproc`:** run behind a gateway that authenticates clients and
+  removes the identity headers they send. The Envoy listener the CLI generates
+  authenticates no one, so it too needs `identity.trust_headers` behind an
+  authenticating proxy.
+
+Otherwise every request is anonymous, and a role binding refuses the requests
+it evaluates.
+
+:::note
+Token-bucket rate limiting, mTLS, JWT or OIDC, and advanced route matching are
+planned for standalone mode. Until then they need Envoy.
+:::
 
 ## Targets and platforms
 
@@ -218,13 +229,13 @@ or GPU compute. `--platform rocm` and `--platform cuda` fail there with a clear
 message. GPU support through the host is tracked in
 [#4636](https://github.com/vllm-project/semantic-router/issues/4636).
 
-- **Comfortable on the CPU:** the 307M Vela task models (domain, PII, jailbreak
-  and safety guards, embeddings, reranking), Vela Omni Nano, and the
+- **Comfortable on the CPU:** vela3-fast, the default decision model (about
+  7 GB once loaded), the 307M Vela embedding model, Vela Omni Nano, and the
   Decision 2.0 Kai-0.6B and Eos-0.8B decision models.
 - **Larger models:** a model needs about 4 bytes per parameter on the CPU, so a
   2B decision model needs about 8 GB. Raise the memory of Docker's VM (Docker
   Desktop: Settings, Resources) above what the config's models need, or pick a
-  smaller model. See [Choose a model](../model-runtime/choose-a-model).
+  smaller model. See [Choose a model](../model-runtime/get-started/choose-a-model).
 
 ## Options of `vllm-sr serve`
 

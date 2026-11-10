@@ -18,7 +18,7 @@ spec:
         value: /
       headers:
       - type: Exact
-        name: x-selected-model
+        name: x-vsr-route-model
         value: llama3-8b
     timeouts:
       request: 300s

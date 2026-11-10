@@ -107,8 +107,13 @@ func applyReplayPrivacyEvidence(ctx *RequestContext, record *routerreplay.Routin
 	}
 }
 
-func (r *OpenAIRouter) effectiveReplayConfigForRequest(_ *RequestContext, decision *config.Decision) *config.RouterReplayPluginConfig {
-	return r.Config.EffectiveRouterReplayConfig(decision)
+// effectiveReplayConfigForRequest is the replay policy of the request's
+// decision, or, for a request that matched none, of its recipe's defaults.
+func (r *OpenAIRouter) effectiveReplayConfigForRequest(ctx *RequestContext, decision *config.Decision) *config.RouterReplayPluginConfig {
+	if decision != nil {
+		return config.RouterReplayPolicyOf(decision.Plugins)
+	}
+	return config.RouterReplayPolicyOf(requestPlugins(r.Config, ctx))
 }
 
 // Startup has recipe-qualified decision references but no request context.

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import os
 import pwd
 import sys
@@ -219,6 +220,26 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         help="wait before the first reload of a model that failed to load, doubling up to 300 s (default: %(default)s)",
     )
     parser.add_argument(
+        "--forward-timeout-seconds",
+        type=float,
+        default=SERVE_DEFAULTS.forward_timeout_seconds,
+        help=(
+            "a forward running longer makes GET /health/live and GET /health answer 503 "
+            "until it returns, so a liveness probe restarts a hung worker; 0 turns this "
+            "watchdog off (default: %(default)s)"
+        ),
+    )
+    parser.add_argument(
+        "--shutdown-grace-seconds",
+        type=float,
+        default=SERVE_DEFAULTS.shutdown_grace_seconds,
+        help=(
+            "on SIGTERM, how long the server waits for requests and forwards in flight; "
+            "it then exits even while a forward runs, logging what it abandoned "
+            "(default: %(default)s)"
+        ),
+    )
+    parser.add_argument(
         "--result-cache-entries",
         type=int,
         default=SERVE_DEFAULTS.result_cache_entries,
@@ -317,6 +338,12 @@ def config_from_args(args: argparse.Namespace) -> ServeConfig:
     models = _models(args, engine_args)
     if args.media_workers is not None and args.media_workers < 0:
         raise SystemExit("--media-workers must be a non-negative integer")
+    for flag in ("forward_timeout_seconds", "shutdown_grace_seconds"):
+        value = getattr(args, flag)
+        if not math.isfinite(value) or value < 0:
+            raise SystemExit(
+                f"--{flag.replace('_', '-')} must be a non-negative number of seconds"
+            )
     return ServeConfig(
         models=models,
         host=args.host,
@@ -339,6 +366,8 @@ def config_from_args(args: argparse.Namespace) -> ServeConfig:
         log_level=args.log_level,
         autotune_cache=args.autotune_cache,
         media_workers=args.media_workers,
+        forward_timeout_seconds=args.forward_timeout_seconds,
+        shutdown_grace_seconds=args.shutdown_grace_seconds,
     )
 
 

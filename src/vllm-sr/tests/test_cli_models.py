@@ -29,38 +29,48 @@ def _decision(**overrides):
 
 def test_keyword_signal_include_history_parses_and_defaults_off():
     config = UserConfig(
-        version="0.3",
-        routing={
-            "signals": {
-                "keywords": [
-                    {
-                        "name": "local_only_markers",
-                        "operator": "OR",
-                        "keywords": ["local model only"],
-                        "include_history": True,
-                    },
-                    {"name": "urgent", "operator": "OR", "keywords": ["urgent"]},
-                ]
-            },
-            "decisions": [_decision()],
-        },
+        version="v0.5",
+        recipes=[
+            {
+                "name": "default",
+                "signals": {
+                    "keywords": [
+                        {
+                            "name": "local_only_markers",
+                            "operator": "OR",
+                            "keywords": ["local model only"],
+                            "include_history": True,
+                        },
+                        {"name": "urgent", "operator": "OR", "keywords": ["urgent"]},
+                    ]
+                },
+                "decisions": [_decision()],
+            }
+        ],
     )
 
-    opted_in, default = config.routing.signals.keywords
+    opted_in, default = config.default_recipe.signals.keywords
     assert opted_in.include_history is True
     assert default.include_history is False
 
 
 def test_decision_without_description_parses():
-    config = UserConfig(version="0.3", routing={"decisions": [_decision()]})
+    config = UserConfig(
+        version="v0.5", recipes=[{"name": "default", "decisions": [_decision()]}]
+    )
 
     assert config.decisions[0].description is None
 
 
 def test_decision_with_description_still_parses():
     config = UserConfig(
-        version="0.3",
-        routing={"decisions": [_decision(description="Routes vision requests.")]},
+        version="v0.5",
+        recipes=[
+            {
+                "name": "default",
+                "decisions": [_decision(description="Routes vision requests.")],
+            }
+        ],
     )
 
     assert config.decisions[0].description == "Routes vision requests."
@@ -69,12 +79,15 @@ def test_decision_with_description_still_parses():
 def test_decision_route_action_requires_jailbreak_condition():
     with pytest.raises(ValueError, match="jailbreak condition"):
         UserConfig(
-            version="0.3",
-            routing={
-                "decisions": [
-                    _decision(action={"type": "route", "destination": "safe-model"})
-                ]
-            },
+            version="v0.5",
+            recipes=[
+                {
+                    "name": "default",
+                    "decisions": [
+                        _decision(action={"type": "route", "destination": "safe-model"})
+                    ],
+                }
+            ],
         )
 
 
@@ -86,7 +99,9 @@ def test_decision_route_action_with_jailbreak_condition_parses():
         },
         action={"type": "route", "destination": "safe-model"},
     )
-    config = UserConfig(version="0.3", routing={"decisions": [decision]})
+    config = UserConfig(
+        version="v0.5", recipes=[{"name": "default", "decisions": [decision]}]
+    )
 
     assert config.decisions[0].action.destination == "safe-model"
 
@@ -96,7 +111,9 @@ def test_decision_route_action_accepts_root_leaf_jailbreak_rule():
         rules={"type": "jailbreak", "name": "prompt_injection"},
         action={"type": "route", "destination": "safe-model"},
     )
-    config = UserConfig(version="0.3", routing={"decisions": [decision]})
+    config = UserConfig(
+        version="v0.5", recipes=[{"name": "default", "decisions": [decision]}]
+    )
 
     assert config.decisions[0].action.destination == "safe-model"
     assert config.decisions[0].rules.conditions[0].type == "jailbreak"
@@ -115,7 +132,9 @@ def test_decision_route_action_accepts_nested_jailbreak_rule():
         },
         action={"type": "route", "destination": "safe-model"},
     )
-    config = UserConfig(version="0.3", routing={"decisions": [decision]})
+    config = UserConfig(
+        version="v0.5", recipes=[{"name": "default", "decisions": [decision]}]
+    )
 
     assert config.decisions[0].action.destination == "safe-model"
 
@@ -123,12 +142,15 @@ def test_decision_route_action_accepts_nested_jailbreak_rule():
 def test_decision_route_action_rejects_unknown_type():
     with pytest.raises(ValueError):
         _ = UserConfig(
-            version="0.3",
-            routing={
-                "decisions": [
-                    _decision(action={"type": "block", "destination": "safe-model"})
-                ]
-            },
+            version="v0.5",
+            recipes=[
+                {
+                    "name": "default",
+                    "decisions": [
+                        _decision(action={"type": "block", "destination": "safe-model"})
+                    ],
+                }
+            ],
         )
 
 
@@ -138,7 +160,7 @@ def test_rules_reject_on_unknown_with_condition_on_error():
         "on_unknown": "no_match",
         "conditions": [
             {
-                "type": "classifier",
+                "type": "systemone",
                 "name": "risk",
                 "label": "RISKY",
                 "predicate": {"gte": 0.5},
@@ -247,7 +269,8 @@ def test_custom_evaluation_and_model_evidence_round_trip():
                     }
                 ],
             },
-            "routing": {"modelCards": [{"name": "acme-model"}]},
+            "recipes": [{"name": "default"}],
+            "providers": {"models": [{"name": "acme-model"}]},
         }
     )
 

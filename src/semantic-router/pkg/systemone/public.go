@@ -15,7 +15,9 @@ import (
 	"time"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 )
 
 // RequestLimit bounds one native request body. Requests may carry images and
@@ -146,7 +148,7 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			publicSystemOneError(w, http.StatusNotFound, "systemone_routing_disabled")
 			return
 		}
-		if r.Header.Get(BackendRequestHeader) != "" {
+		if r.Header.Get(headers.VSRSystemOneBackend) != "" {
 			remoteAlias := config.IsSystemOneBackend(model) && config.ModelConfig[model].Deployment == ""
 			if routed || remoteAlias {
 				publicSystemOneError(w, http.StatusConflict, "systemone_nested_routing")
@@ -168,6 +170,14 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			defer cancel()
 		}
 		code, response, err := invoke(ctx, target, body)
+		if errors.Is(err, principal.ErrCredentialMissing) {
+			publicSystemOneErrorMessage(w, http.StatusUnauthorized, delegatedCredentialMissingCode, delegatedCredentialMissingMessage)
+			return
+		}
+		if errors.Is(err, principal.ErrRouterCall) {
+			publicSystemOneErrorMessage(w, http.StatusForbidden, "delegated_router_call_refused", principal.ErrRouterCall.Error())
+			return
+		}
 		var budgetErr *BudgetExhaustedError
 		if routed && errors.As(err, &budgetErr) {
 			status := code
@@ -233,6 +243,8 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 }
 
 // publishedModels are the listener's System One models that can be served now.
+// A deployment's model lists the question types the configuration knows it
+// answers, which a systemone deployment naming this API reads.
 func publishedModels(config *routerconfig.RouterConfig, listener *routerconfig.Listener) []map[string]any {
 	models := make([]map[string]any, 0, len(listener.SystemOne.Models))
 	for _, id := range listener.SystemOne.Models {
@@ -240,9 +252,14 @@ func publishedModels(config *routerconfig.RouterConfig, listener *routerconfig.L
 		if routed && !config.RoutingEnabled() {
 			continue
 		}
-		_, _, err := config.ResolveSystemOneDeployment(id)
-		if routed || config.IsSystemOneBackend(id) || err == nil {
-			models = append(models, map[string]any{"id": id, "object": "model", "api": "systemone", "routing": routed})
+		name, _, err := config.ResolveSystemOneDeployment(id)
+		forwarded := routed || config.IsSystemOneBackend(id)
+		if forwarded || err == nil {
+			model := map[string]any{"id": id, "object": "model", "api": "systemone", "routing": routed}
+			if questionTypes := config.DeploymentQuestionTypes(name); !forwarded && questionTypes != nil {
+				model["question_types"] = questionTypes
+			}
+			models = append(models, model)
 		}
 	}
 	return models

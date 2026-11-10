@@ -128,23 +128,24 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-Route policy lives in `routing.decisions[]`. For example, this decision
+Route policy lives in `recipes[].decisions[]`. For example, this decision
 fragment defines a final static fallback; merge it into a complete config that
-declares `local-model` under `providers.models` and `routing.modelCards`:
+declares `local-model` under `providers.models` and `providers.models`:
 
 ```yaml
-routing:
-  decisions:
-    - name: local-fallback
-      description: Handle requests that did not match an earlier decision.
-      priority: 0
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: local-model
-      algorithm:
-        type: static
+recipes:
+  - name: default
+    decisions:
+      - name: local-fallback
+        description: Handle requests that did not match an earlier decision.
+        priority: 0
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local-model
+        algorithm:
+          type: static
 ```
 
 `vllm-sr init` was removed in v0.3. For older files, use the explicit
