@@ -544,10 +544,10 @@ class SelectionTests(unittest.TestCase):
             performance_base("0.4.0", ["v0.3.0"]),
             "12597be5ffae2319d856f230d61ca26248eb9b3b",
         )
-        # v0.4.0 predates the model runtime; #4707 runs the current harness.
+        # v0.4.0 predates the model runtime; #5886 runs the current harness.
         self.assertEqual(
             performance_base("0.5.0", ["v0.3.0", "v0.4.0"]),
-            "abae8ff99df2fdab372f0fb6d032b305907b9f44",
+            "4952ca055d0f99adf746b67aa61cfb7223d0739b",
         )
 
     def test_later_cycles_compare_with_a_release_that_has_the_model_runtime(self):

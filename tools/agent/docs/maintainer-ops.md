@@ -161,10 +161,12 @@ make perf-check PERF_BASE_REF="$(python3 tools/ci/ci_plan.py performance-base --
 ```
 
 The base is the previous release unless `PERFORMANCE_BASES` in
-`tools/ci/ci_plan.py` declares one for the cycle. 0.5.0 declares `abae8ff99`
-(#4707): v0.4.0 predates the model runtime, so the harness could only record a
-reset against it, while #4707 pinned the classify benchmarks to the Vela 1.0
-specialists and its own Production Benchmarks job passed with that harness.
+`tools/ci/ci_plan.py` declares one for the cycle. 0.5.0 declares `4952ca055`
+(#5886): v0.4.0 predates the model runtime and every earlier `main` commit
+predates the decision model's preset questions, so the harness could only
+record a reset against them, while #5886 answers the classify benchmarks'
+signals with the decision model and its own Production Benchmarks job passed
+with that harness.
 From 0.5.0 on, the previous release has the model runtime. When a
 cycle's previous release can't run the current harness, declare a reviewed
 `main` commit whose Production Benchmarks job passed with it before the
