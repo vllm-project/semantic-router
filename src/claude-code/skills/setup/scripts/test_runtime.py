@@ -179,6 +179,7 @@ class HostedRuntimeTest(unittest.TestCase):
             out = runtime.health("https://sr.example/v1/decisions")
         self.assertTrue(out["ready"])
         self.assertEqual(out["model"], "vllm-sr/vela3-flash")
+        self.assertEqual(out["modelIds"], ["vllm-sr/vela3-flash"])
 
     def test_a_404_health_without_models_is_not_ready(self):
         def urlopen(request, timeout):

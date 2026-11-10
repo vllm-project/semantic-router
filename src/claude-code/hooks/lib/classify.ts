@@ -145,6 +145,16 @@ async function markReachable($: EngineInterface) {
 const baseOf = (url: string) => url.replace(/\/v1\/decisions\/?$/, '').replace(/\/$/, '')
 export const healthUrlOf = (url: string) => `${baseOf(url)}/health`
 export const modelsUrlOf = (url: string) => `${baseOf(url)}/v1/models`
+// A `/v1/models` answer that lists at least one model, as the setup script's health check requires.
+const listsModels = (response: { ok: boolean; text: string }) => {
+  if (!response.ok) return false
+  try {
+    const data = (JSON.parse(response.text) as { data?: unknown }).data
+    return Array.isArray(data) && data.length > 0
+  } catch {
+    return false
+  }
+}
 
 // Offline from now: requests are skipped for a minute at a time, and a toast says so once.
 async function markOffline($: EngineInterface, runtime: Runtime) {
@@ -162,7 +172,7 @@ export async function checkRuntime($: EngineInterface, runtime: Runtime) {
     $.http.fetch(healthUrlOf(runtime.url), { headers: headersOf(runtime) }).then(
       response =>
         response.ok ||
-        (response.status === 404 && $.http.fetch(modelsUrlOf(runtime.url), { headers: headersOf(runtime) }).then(models => models.ok, () => false)),
+        (response.status === 404 && $.http.fetch(modelsUrlOf(runtime.url), { headers: headersOf(runtime) }).then(listsModels, () => false)),
       () => false,
     ),
     $.clock.sleep(HEALTH_TIMEOUT_MS).then(() => false),

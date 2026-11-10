@@ -100,6 +100,7 @@ def health(url: str, token: str | None = None, timeout: float = 3.0) -> dict:
         out["health"] == {"error": "HTTP 404"} and bool(models)
     )
     out["model"] = models[0].get("id") if models else out["health"].get("model")
+    out["modelIds"] = [m.get("id") for m in models or [] if isinstance(m, dict)]
     # vllm-srun names the device the model runs on in /v1/models; older builds leave it out.
     out["device"] = (
         (models[0].get("device") or models[0].get("accelerator")) if models else None
@@ -342,7 +343,13 @@ def main(argv: list[str]) -> int:
         print(
             json.dumps(out, indent=2)
             if args.json
-            else f"{'ready' if out['ready'] else 'NOT ready'} · {url} · model {out['model']} · health {out['healthMs']} ms"
+            else f"{'ready' if out['ready'] else 'NOT ready'} · {url} · "
+            + (
+                f"models {', '.join(out['modelIds'])} (name one with --model)"
+                if len(out.get("modelIds", [])) > 1
+                else f"model {out['model']}"
+            )
+            + f" · health {out['healthMs']} ms"
             + ("" if out["ready"] else f" · {out['health']}")
         )
         return 0 if out["ready"] else 1
