@@ -33,18 +33,14 @@ def test_recorded_references_are_for_the_pinned_revisions() -> None:
         assert recorded[model.repo_id]["revision"] == model.revision, model.repo_id
 
 
-def test_every_size_has_rocm_references_for_the_golden_request() -> None:
+def test_every_size_has_a_rocm_reference_for_the_golden_request() -> None:
     for model in builtin.all_models("vela3_d3"):
-        for device_class in ("rocm", "rocm:gfx942"):
-            answers = model.golden_answers.get(device_class)
-            assert answers, (model.repo_id, device_class)
-            assert set(answers) == set(GOLDEN_QUESTIONS), model.repo_id
-            assert all(well_formed(a) for a in answers.values()), model.repo_id
-            for qid, criteria in CHOICES.items():
-                assert set(answers[qid]["probabilities"]) == criteria, (
-                    model.repo_id,
-                    qid,
-                )
+        answers = model.golden_answers.get("rocm")
+        assert answers, model.repo_id
+        assert set(answers) == set(GOLDEN_QUESTIONS), model.repo_id
+        assert all(well_formed(a) for a in answers.values()), model.repo_id
+        for qid, criteria in CHOICES.items():
+            assert set(answers[qid]["probabilities"]) == criteria, (model.repo_id, qid)
 
 
 def test_the_golden_request_answers_and_its_span_question_takes_the_pii_label_set(
