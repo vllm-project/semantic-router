@@ -15,6 +15,228 @@ const siteSocialTitle
   = 'Intelligence Beyond Any One Model | vLLM Semantic Router'
 const siteSocialPreviewImageUrl = `${siteUrl}/${SITE_SOCIAL_PREVIEW_IMAGE}`
 
+// Docs pages that moved, as paths under /docs. Until the current docs became
+// the default version, they were served under /docs/next and the v0.4 docs
+// under /docs, so each old path redirects from both.
+const movedDocs: { from: string[], to: string }[] = [
+  {
+    from: [
+      'tutorials/signal/learned/classifier',
+      'tutorials/signal/learned/preference',
+      'tutorials/signal/learned/kb',
+      'tutorials/signal/learned/embedding',
+      'tutorials/signal/learned/embedding-design-principles',
+      'tutorials/signal/learned/decision',
+      'tutorials/signal/learned/systemone',
+      'tutorials/signal/heuristic/action',
+    ],
+    to: 'tutorials/signal/systemone',
+  },
+  {
+    from: [
+      'tutorials/signal/learned/reask',
+      'tutorials/signal/heuristic/topic-continuity',
+    ],
+    to: 'tutorials/signal/application/turn-relation',
+  },
+  // The application signals moved from signal/learned to
+  // signal/application.
+  ...[
+    'complexity',
+    'domain',
+    'fact-check',
+    'hallucination',
+    'jailbreak',
+    'modality',
+    'pii',
+    'refusal',
+    'safety',
+    'turn-relation',
+    'user-feedback',
+  ].map(signal => ({
+    from: [`tutorials/signal/learned/${signal}`],
+    to: `tutorials/signal/application/${signal}`,
+  })),
+  {
+    from: ['tutorials/signal/heuristic/modality'],
+    to: 'tutorials/signal/application/modality',
+  },
+  // Pages folded into the System One chapter and the signal pages.
+  {
+    from: ['model-runtime/guides/decisions'],
+    to: 'system-one/overview',
+  },
+  {
+    from: ['model-runtime/guides/classify'],
+    to: 'tutorials/signal/overview',
+  },
+  {
+    from: ['model-runtime/guides/pii'],
+    to: 'tutorials/signal/application/pii',
+  },
+  {
+    from: ['model-runtime/guides/hallucination'],
+    to: 'tutorials/signal/application/hallucination',
+  },
+  {
+    from: ['tutorials/global/vela-models'],
+    to: 'system-one/deployments',
+  },
+  // Removed algorithms: the migration guide lists each rewrite.
+  {
+    from: [
+      'tutorials/algorithm/looper/confidence',
+      'tutorials/algorithm/native/cascade',
+    ],
+    to: 'tutorials/algorithm/looper/escalate',
+  },
+  {
+    from: [
+      'tutorials/algorithm/selection/automix',
+      'tutorials/algorithm/selection/hybrid',
+    ],
+    to: 'tutorials/algorithm/selection/multi-factor',
+  },
+  {
+    from: [
+      'tutorials/algorithm/selection/prompt',
+      'tutorials/algorithm/selection/router-dc',
+      'tutorials/algorithm/selection/knn',
+      'tutorials/algorithm/selection/kmeans',
+      'tutorials/algorithm/selection/svm',
+      'tutorials/algorithm/selection/mlp',
+      'tutorials/algorithm/selection/decision',
+      'training/ml-model-selection',
+    ],
+    to: 'tutorials/algorithm/selection/systemone',
+  },
+  {
+    from: [
+      'training/classifier-models',
+      'training/mmbert-safety-classifier',
+      'training/multimodal-embeddings',
+      'training/model-catalog',
+    ],
+    to: 'training/training-overview',
+  },
+  {
+    from: [
+      'installation/native-backends',
+      'installation/runtime/engines-and-hardware',
+    ],
+    to: 'model-runtime/overview',
+  },
+  {
+    from: [
+      'installation/runtime/in-process',
+      'installation/runtime/models-and-bindings',
+    ],
+    to: 'model-runtime/deploy',
+  },
+  {
+    from: ['installation/runtime/openvino'],
+    to: 'model-runtime/migrate',
+  },
+  {
+    from: [
+      'installation/runtime/safety',
+      'tutorials/global/safety-models-and-policy',
+      'model-runtime/guides/safety',
+    ],
+    to: 'tutorials/signal/application/safety',
+  },
+  {
+    from: [
+      'tutorials/plugin/rag',
+      'tutorials/plugin/memory',
+      'tutorials/plugin/context-compression',
+      'model-runtime/guides/rerank',
+    ],
+    to: 'tutorials/plugin/context',
+  },
+  {
+    from: ['tutorials/plugin/shadow-dispatch'],
+    to: 'tutorials/plugin/router-replay',
+  },
+  {
+    from: ['tutorials/plugin/tool-selection'],
+    to: 'tutorials/plugin/tools',
+  },
+  {
+    from: [
+      'tutorials/plugin/hallucination',
+      'tutorials/plugin/response-jailbreak',
+    ],
+    to: 'tutorials/plugin/response-guard',
+  },
+  {
+    from: ['tutorials/plugin/semantic-cache'],
+    to: 'tutorials/plugin/response-cache',
+  },
+  {
+    from: [
+      'installation/runtime/embeddings',
+      'tutorials/global/remote-embeddings',
+    ],
+    to: 'model-runtime/guides/embeddings',
+  },
+  {
+    from: ['installation/runtime/lifecycle-diagnostics'],
+    to: 'model-runtime/troubleshooting',
+  },
+  {
+    from: ['model-runtime/profiles'],
+    to: 'model-runtime/engine-args',
+  },
+  {
+    from: [
+      'tutorials/signal/heuristic/event',
+      'tutorials/signal/heuristic/structure',
+    ],
+    to: 'tutorials/signal/heuristic/keyword',
+  },
+  {
+    from: ['installation/kubernetes'],
+    to: 'installation/k8s/ai-gateway',
+  },
+  {
+    from: [
+      'cli/overview',
+      'cli/commands-reference',
+    ],
+    to: 'installation/',
+  },
+  {
+    from: ['installation/models-and-recipes'],
+    to: 'tutorials/global/models-entrypoints-serving',
+  },
+  {
+    from: ['cli/troubleshooting'],
+    to: 'troubleshooting/common-errors',
+  },
+  {
+    from: ['tutorials/signal/projections'],
+    to: 'tutorials/projection/overview',
+  },
+  {
+    from: ['overview/collective-intelligence'],
+    to: 'overview/mom-model-family',
+  },
+]
+
+// Pages the current docs dropped without a replacement. The v0.4 docs still
+// have them, so their old paths under /docs lead there.
+const releasedOnlyDocs = [
+  'fleet-sim/getting-started',
+  'fleet-sim/guide',
+  'fleet-sim/overview',
+  'fleet-sim/power-model',
+  'fleet-sim/related-work',
+  'fleet-sim/sim-algorithms',
+  'fleet-sim/use-cases',
+  'tutorials/algorithm/selection/gmtrouter',
+]
+
 const config: Config = {
   title: 'vLLM Semantic Router',
   tagline: 'An open, programmable decision layer for models and compute.',
@@ -68,15 +290,15 @@ const config: Config = {
         // English tokenizer cannot split it. "zh" pulls in @node-rs/jieba, a
         // native module that ships prebuilt binaries.
         language: ['en', 'zh'],
-        // v1 scope: index the default docs version only (v0.4, the stable
-        // release), per the decision on #2737.
-        // To make archived versions searchable later, drop this and add
-        // searchContextByPaths: ['docs', 'docs/next', 'docs/v0.3', 'docs/v0.2', 'docs/v0.1']
+        // v1 scope: index the default docs version only (the latest docs, from
+        // main), per the decision on #2737.
+        // To make the released versions searchable later, drop this and add
+        // searchContextByPaths: ['docs', 'docs/v0.4', 'docs/v0.3', 'docs/v0.2', 'docs/v0.1']
         // so results stay scoped to the version the reader is on.
         // NOTE: ignoreFiles matches the route *without* a leading slash (the
         // plugin strips baseUrl, which is "/" here, off the front) and without
         // the base URL itself, so the pattern must not anchor on "/".
-        ignoreFiles: [/^docs\/(v\d+\.\d+|next)\//],
+        ignoreFiles: [/^docs\/v\d+\.\d+\//],
         // styling is handled in a later phase
       },
     ],
@@ -90,16 +312,17 @@ const config: Config = {
           beforeDefaultRemarkPlugins: [[remarkMath, {}]],
           beforeDefaultRehypePlugins: [[rehypeKatex, {}]],
           sidebarPath: './sidebars.ts',
-          lastVersion: 'v0.4',
+          lastVersion: 'current',
           versions: {
             'current': {
-              label: 'Latest (unreleased)',
-              path: 'next',
+              label: 'Latest (main)',
+              path: '',
+              banner: 'none',
               badge: true,
             },
             'v0.4': {
               label: 'v0.4',
-              path: '',
+              path: 'v0.4',
               badge: true,
             },
             'v0.3': {
@@ -167,213 +390,26 @@ const config: Config = {
             to: '/blog/vela-models',
           },
           {
-            from: [
-              '/docs/next/tutorials/signal/learned/classifier',
-              '/docs/next/tutorials/signal/learned/preference',
-              '/docs/next/tutorials/signal/learned/kb',
-              '/docs/next/tutorials/signal/learned/embedding',
-              '/docs/next/tutorials/signal/learned/decision',
-              '/docs/next/tutorials/signal/learned/systemone',
-              '/docs/next/tutorials/signal/heuristic/action',
-            ],
-            to: '/docs/next/tutorials/signal/systemone',
-          },
-          {
-            from: [
-              '/docs/next/tutorials/signal/learned/reask',
-              '/docs/next/tutorials/signal/heuristic/topic-continuity',
-            ],
-            to: '/docs/next/tutorials/signal/application/turn-relation',
-          },
-          // The application signals moved from signal/learned to
-          // signal/application.
-          ...[
-            'complexity',
-            'domain',
-            'fact-check',
-            'hallucination',
-            'jailbreak',
-            'modality',
-            'pii',
-            'refusal',
-            'safety',
-            'turn-relation',
-            'user-feedback',
-          ].map(signal => ({
-            from: `/docs/next/tutorials/signal/learned/${signal}`,
-            to: `/docs/next/tutorials/signal/application/${signal}`,
-          })),
-          // Pages folded into the System One chapter and the signal pages.
-          {
-            from: '/docs/next/model-runtime/guides/decisions',
-            to: '/docs/next/system-one/overview',
-          },
-          {
-            from: '/docs/next/model-runtime/guides/classify',
-            to: '/docs/next/tutorials/signal/overview',
-          },
-          {
-            from: '/docs/next/model-runtime/guides/pii',
-            to: '/docs/next/tutorials/signal/application/pii',
-          },
-          {
-            from: '/docs/next/model-runtime/guides/hallucination',
-            to: '/docs/next/tutorials/signal/application/hallucination',
-          },
-          {
-            from: '/docs/next/tutorials/global/vela-models',
-            to: '/docs/next/system-one/deployments',
-          },
-          // Removed algorithms: the migration guide lists each rewrite.
-          {
-            from: [
-              '/docs/next/tutorials/algorithm/looper/confidence',
-              '/docs/next/tutorials/algorithm/native/cascade',
-            ],
-            to: '/docs/next/tutorials/algorithm/looper/escalate',
-          },
-          {
-            from: [
-              '/docs/next/tutorials/algorithm/selection/automix',
-              '/docs/next/tutorials/algorithm/selection/hybrid',
-            ],
-            to: '/docs/next/tutorials/algorithm/selection/multi-factor',
-          },
-          {
-            from: [
-              '/docs/next/tutorials/algorithm/selection/prompt',
-              '/docs/next/tutorials/algorithm/selection/router-dc',
-              '/docs/next/tutorials/algorithm/selection/knn',
-              '/docs/next/tutorials/algorithm/selection/kmeans',
-              '/docs/next/tutorials/algorithm/selection/svm',
-              '/docs/next/tutorials/algorithm/selection/mlp',
-              '/docs/next/training/ml-model-selection',
-            ],
-            to: '/docs/next/tutorials/algorithm/selection/systemone',
-          },
-          {
-            from: [
-              '/docs/next/training/classifier-models',
-              '/docs/next/training/mmbert-safety-classifier',
-              '/docs/next/training/multimodal-embeddings',
-              '/docs/next/training/model-catalog',
-            ],
-            to: '/docs/next/training/training-overview',
-          },
-          // The model-runtime section exists only in the unreleased (next)
-          // docs, and several of these source paths are live v0.4 pages at
-          // the root, so these redirects are scoped to /docs/next instead of
-          // shadowing the stable pages or pointing at a missing root target.
-          {
-            from: [
-              '/docs/next/installation/native-backends',
-              '/docs/next/installation/runtime/engines-and-hardware',
-            ],
-            to: '/docs/next/model-runtime/overview',
-          },
-          {
-            from: [
-              '/docs/next/installation/runtime/in-process',
-              '/docs/next/installation/runtime/models-and-bindings',
-            ],
-            to: '/docs/next/model-runtime/deploy',
-          },
-          {
-            from: '/docs/next/installation/runtime/openvino',
-            to: '/docs/next/model-runtime/migrate',
-          },
-          {
-            from: [
-              '/docs/next/installation/runtime/safety',
-              '/docs/next/tutorials/global/safety-models-and-policy',
-              '/docs/next/model-runtime/guides/safety',
-            ],
-            to: '/docs/next/tutorials/signal/application/safety',
-          },
-          {
-            from: [
-              '/docs/next/tutorials/plugin/rag',
-              '/docs/next/tutorials/plugin/memory',
-              '/docs/next/tutorials/plugin/context-compression',
-              '/docs/next/model-runtime/guides/rerank',
-            ],
-            to: '/docs/next/tutorials/plugin/context',
-          },
-          {
-            from: '/docs/next/tutorials/plugin/shadow-dispatch',
-            to: '/docs/next/tutorials/plugin/router-replay',
-          },
-          {
-            from: [
-              '/docs/next/installation/runtime/embeddings',
-              '/docs/next/tutorials/global/remote-embeddings',
-            ],
-            to: '/docs/next/model-runtime/guides/embeddings',
-          },
-          {
-            from: '/docs/next/installation/runtime/lifecycle-diagnostics',
-            to: '/docs/next/model-runtime/troubleshooting',
-          },
-          {
-            from: '/docs/next/model-runtime/profiles',
-            to: '/docs/next/model-runtime/engine-args',
-          },
-          {
-            from: [
-              '/docs/next/tutorials/signal/heuristic/event',
-              '/docs/next/tutorials/signal/heuristic/structure',
-            ],
-            to: '/docs/next/tutorials/signal/heuristic/keyword',
-          },
-          {
-            from: '/docs/next/tutorials/algorithm/selection/decision',
-            to: '/docs/next/tutorials/algorithm/selection/systemone',
-          },
-          {
-            from: '/docs/installation/kubernetes',
-            to: '/docs/installation/k8s/ai-gateway',
-          },
-          {
-            from: '/docs/cli/overview',
-            to: '/docs/installation/',
-          },
-          {
-            from: '/docs/cli/commands-reference',
-            to: '/docs/installation/',
-          },
-          {
-            from: '/docs/installation/models-and-recipes',
-            to: '/docs/tutorials/global/models-entrypoints-serving',
-          },
-          {
-            from: '/docs/cli/troubleshooting',
-            to: '/docs/troubleshooting/common-errors',
-          },
-          {
-            from: '/docs/tutorials/signal/projections',
-            to: '/docs/tutorials/projection/overview',
-          },
-          {
-            from: '/docs/tutorials/signal/heuristic/modality',
-            to: '/docs/tutorials/signal/learned/modality',
-          },
-          {
-            from: '/docs/tutorials/plugin/semantic-cache',
-            to: '/docs/tutorials/plugin/response-cache',
-          },
-          {
-            from: '/docs/tutorials/signal/learned/embedding-design-principles',
-            to: '/docs/tutorials/signal/learned/embedding',
-          },
-          {
-            from: '/docs/overview/collective-intelligence',
-            to: '/docs/overview/mom-model-family',
-          },
-          {
             from: '/blog/multi-objective-mom-on-amd-developer-cloud',
             to: '/docs/overview/mom-model-family',
           },
+          ...movedDocs.map(({ from, to }) => ({
+            from: from.flatMap(path => [`/docs/${path}`, `/docs/next/${path}`]),
+            to: `/docs/${to}`,
+          })),
+          ...releasedOnlyDocs.map(path => ({
+            from: `/docs/${path}`,
+            to: `/docs/v0.4/${path}`,
+          })),
         ],
+        // Every current page was served under /docs/next until the current
+        // docs became the default version.
+        createRedirects(existingPath: string) {
+          if (existingPath.startsWith('/docs/') && !/^\/docs\/v\d+\.\d+(\/|$)/.test(existingPath)) {
+            return existingPath.replace('/docs/', '/docs/next/')
+          }
+          return undefined
+        },
       },
     ],
   ],

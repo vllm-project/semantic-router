@@ -235,7 +235,7 @@ curl -sS http://localhost:8801/v1/systemone \
   }'
 ```
 
-响应的 `routing` 字段报告所选模型、阶段以及算法的物理模型调用次数（包括重试）。带有 `systemone_unresolved` 的 `503` 表示没有完整答案通过所配置的规则；它并不表示被省略的答案为假。响应字段和错误约定见 [Router API（英文）](https://vllm-sr.ai/docs/next/api/router#route-a-system-one-request)。
+响应的 `routing` 字段报告所选模型、阶段以及算法的物理模型调用次数（包括重试）。带有 `systemone_unresolved` 的 `503` 表示没有完整答案通过所配置的规则；它并不表示被省略的答案为假。响应字段和错误约定见 [Router API（英文）](https://vllm-sr.ai/docs/api/router#route-a-system-one-request)。
 
 在 Dashboard 中，打开 **System One → Decision Playground**，然后在 **Automatic routes** 下选择 `vllm-sr/auto`。加载配方支持的示例或输入自己的问题，然后选择 **Run**。Dashboard 使用你已登录的管理权限，因此无需粘贴公开 API 密钥。**Decision Monitoring** 显示阶段结果、请求速率和延迟。这些描述的是实时执行；要衡量准确率，请另行评估带标签的请求。
 
@@ -256,7 +256,7 @@ curl -sS http://localhost:8801/v1/systemone \
 | 字段 | 含义 |
 | --- | --- |
 | `top_probability` | 原生答案分布中的最大概率；对于 `noul`，为 `max(p, 1-p)` |
-| `confidence` | 原生模型报告的置信度（如果有）：System One 为 Choice 和 Score 发布的统计量（见 [Decisions](https://vllm-sr.ai/docs/next/model-runtime/reference#decisions)）；自运行时约定 3.2.0 起其取值与早期版本不同，请重新检查阈值 |
+| `confidence` | 原生模型报告的置信度（如果有）：System One 为 Choice 和 Score 发布的统计量（见 [Decisions](https://vllm-sr.ai/docs/model-runtime/reference#decisions)）；自运行时约定 3.2.0 起其取值与早期版本不同，请重新检查阈值 |
 | `probability_margin` | 对于 `noul`，为 `2 × abs(p - 0.5)`；无论是有把握的真还是有把握的假，差值都很大 |
 
 规则用 `gt`、`gte`、`lt` 或 `lte` 约束其字段，取值在 `[0, 1]` 内。规则可以指定 `question_type`、具名的 `question` 或两者，并可选地指定具名的 `state`。所有必需的答案都需要规则覆盖。阶段本地的 `accept` 规则会增加一个条件；它不能放宽算法的通用质量规则。
