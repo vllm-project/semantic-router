@@ -167,17 +167,16 @@ func (r *OpenAIRouter) addSemanticSystemPromptIfConfigured(
 	model string,
 	ctx *RequestContext,
 ) (bool, error) {
-	if request == nil || decisionName == "" || ctx == nil || ctx.VSRSelectedDecision == nil {
+	if request == nil || ctx == nil {
 		return false, nil
 	}
-	decision := ctx.VSRSelectedDecision
-	promptConfig := decision.GetSystemPromptConfig()
-	if promptConfig == nil || promptConfig.SystemPrompt == "" || !decision.IsSystemPromptEnabled() {
+	promptConfig := config.SystemPromptPluginOf(requestPlugins(r.Config, ctx))
+	if promptConfig == nil || promptConfig.SystemPrompt == "" || !promptConfig.IsEnabled() {
 		return false, nil
 	}
 	start := time.Now()
 	_, span := tracing.StartPluginSpan(ctx.TraceContext, "system_prompt", decisionName)
-	mode := decision.GetSystemPromptMode()
+	mode := promptConfig.EffectiveMode()
 	routerContext := contextPromptBlocks(ctx, request, mode)
 	injected := llmprotocol.SetSystemInstruction(request, promptConfig.SystemPrompt, mode)
 	if len(routerContext) > 0 {
@@ -211,15 +210,14 @@ func contextPromptBlocks(ctx *RequestContext, request *llmprotocol.Request, mode
 }
 
 func (r *OpenAIRouter) applySemanticRequestParams(
-	decision *config.Decision,
+	params *config.RequestParamsPluginConfig,
 	request *llmprotocol.Request,
-	routingScope config.RecipeName,
+	decisionKey string,
 ) (bool, error) {
-	if decision == nil || request == nil || decision.GetRequestParamsConfig() == nil {
+	if params == nil || request == nil {
 		return false, nil
 	}
-	result, err := pluginruntime.ApplyRequestParams(request, decision.GetRequestParamsConfig())
-	decisionKey := config.RoutingDecisionKey(routingScope, decision.Name)
+	result, err := pluginruntime.ApplyRequestParams(request, params)
 	for _, field := range result.Blocked {
 		metrics.RecordBlockedParam(decisionKey, field)
 	}

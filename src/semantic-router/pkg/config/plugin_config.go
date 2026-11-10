@@ -84,7 +84,14 @@ func (c *ResponseCachePluginConfig) EffectiveRequestControls() ResponseCacheRequ
 
 // FastResponsePluginConfig represents configuration for fast_response plugin.
 type FastResponsePluginConfig struct {
+	// Enabled false turns off the fast_response a decision inherits.
+	Enabled *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	Message string `json:"message" yaml:"message"`
+}
+
+// IsEnabled reports whether the fast_response runs: unless enabled is false.
+func (c *FastResponsePluginConfig) IsEnabled() bool {
+	return c != nil && (c.Enabled == nil || *c.Enabled)
 }
 
 // RequestParamsPluginConfig represents configuration for request_params plugin.
@@ -261,14 +268,24 @@ func (d *Decision) GetResponseCacheConfig() *ResponseCachePluginConfig {
 
 // GetSystemPromptConfig returns the system_prompt plugin configuration.
 func (d *Decision) GetSystemPromptConfig() *SystemPromptPluginConfig {
-	result := &SystemPromptPluginConfig{}
-	return decodeDecisionPlugin(d, "system_prompt", result)
+	return SystemPromptPluginOf(d.Plugins)
+}
+
+// SystemPromptPluginOf is the system_prompt plugin among a request's
+// plugins, nil without one.
+func SystemPromptPluginOf(plugins []DecisionPlugin) *SystemPromptPluginConfig {
+	return decodePlugin(plugins, DecisionPluginSystemPrompt, &SystemPromptPluginConfig{})
 }
 
 // GetHeaderMutationConfig returns the header_mutation plugin configuration.
 func (d *Decision) GetHeaderMutationConfig() *HeaderMutationPluginConfig {
-	result := &HeaderMutationPluginConfig{}
-	return decodeDecisionPlugin(d, "header_mutation", result)
+	return HeaderMutationPluginOf(d.Plugins)
+}
+
+// HeaderMutationPluginOf is the header_mutation plugin among a request's
+// plugins, nil without one.
+func HeaderMutationPluginOf(plugins []DecisionPlugin) *HeaderMutationPluginConfig {
+	return decodePlugin(plugins, DecisionPluginHeaderMutation, &HeaderMutationPluginConfig{})
 }
 
 // GetRouterReplayConfig returns the router_replay plugin configuration.
@@ -279,14 +296,28 @@ func (d *Decision) GetRouterReplayConfig() *RouterReplayPluginConfig {
 
 // GetFastResponseConfig returns the fast_response plugin configuration.
 func (d *Decision) GetFastResponseConfig() *FastResponsePluginConfig {
-	result := &FastResponsePluginConfig{}
-	return decodeDecisionPlugin(d, "fast_response", result)
+	return FastResponsePluginOf(d.Plugins)
+}
+
+// FastResponsePluginOf is the fast_response plugin among a request's plugins,
+// nil without one or when disabled.
+func FastResponsePluginOf(plugins []DecisionPlugin) *FastResponsePluginConfig {
+	plugin := decodePlugin(plugins, DecisionPluginFastResponse, &FastResponsePluginConfig{})
+	if !plugin.IsEnabled() {
+		return nil
+	}
+	return plugin
 }
 
 // GetRequestParamsConfig returns the request_params plugin configuration.
 func (d *Decision) GetRequestParamsConfig() *RequestParamsPluginConfig {
-	result := &RequestParamsPluginConfig{}
-	return decodeDecisionPlugin(d, "request_params", result)
+	return RequestParamsPluginOf(d.Plugins)
+}
+
+// RequestParamsPluginOf is the request_params plugin among a request's
+// plugins, nil without one.
+func RequestParamsPluginOf(plugins []DecisionPlugin) *RequestParamsPluginConfig {
+	return decodePlugin(plugins, DecisionPluginRequestParams, &RequestParamsPluginConfig{})
 }
 
 func decodeDecisionPlugin[T any](d *Decision, pluginType string, result *T) *T {

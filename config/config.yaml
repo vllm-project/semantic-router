@@ -1376,6 +1376,7 @@ recipes:
         plugins:
           - type: fast_response
             configuration:
+              enabled: true
               message: The primary model is saturated, so a lightweight response was returned immediately.
           - type: request_params
             configuration:
@@ -1449,6 +1450,7 @@ recipes:
         plugins:
           - type: response_guard
             configuration:
+              enabled: true
               rules:
                 - when:
                     type: jailbreak

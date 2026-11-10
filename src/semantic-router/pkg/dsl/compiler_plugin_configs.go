@@ -230,6 +230,9 @@ func (c *Compiler) compileRouterReplayPluginConfig(fields map[string]Value) (int
 
 func (c *Compiler) compileFastResponsePluginConfig(fields map[string]Value) config.FastResponsePluginConfig {
 	cfg := config.FastResponsePluginConfig{}
+	if v, ok := getBoolField(fields, "enabled"); ok {
+		cfg.Enabled = &v
+	}
 	if v, ok := getStringField(fields, "message"); ok {
 		cfg.Message = v
 	}

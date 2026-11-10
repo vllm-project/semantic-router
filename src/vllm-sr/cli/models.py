@@ -849,9 +849,19 @@ class PromptCachePluginConfig(BaseModel):
 
 
 class FastResponsePluginConfig(BaseModel):
-    """Configuration for fast_response plugin."""
+    """Configuration for fast_response plugin.
 
-    message: str
+    enabled: false turns off the fast_response a decision inherits.
+    """
+
+    enabled: bool = True
+    message: Optional[str] = None
+
+    @model_validator(mode="after")
+    def message_when_enabled(self):
+        if self.enabled and self.message is None:
+            raise ValueError("message is required")
+        return self
 
 
 class RequestParamsPluginConfig(BaseModel):
@@ -889,12 +899,20 @@ class ResponseGuardPluginConfig(BaseModel):
 
     Each rule reads named signals over the answer (and the request); a rule
     whose response-stage signal could not be read takes on_unknown.
+    enabled: false turns off the guard a decision inherits.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    rules: List[ResponseGuardRule] = Field(min_length=1)
+    enabled: bool = True
+    rules: List[ResponseGuardRule] = Field(default_factory=list)
     on_unknown: Optional[ResponseGuardAction] = None
+
+    @model_validator(mode="after")
+    def rules_when_enabled(self):
+        if self.enabled and not self.rules:
+            raise ValueError("rules: at least one rule is required")
+        return self
 
 
 class ToolsPolicyConfig(BaseModel):

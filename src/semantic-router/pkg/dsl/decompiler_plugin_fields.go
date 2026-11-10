@@ -65,6 +65,9 @@ func pluginFieldsFastResponse(p *config.DecisionPlugin) map[string]Value {
 	if !ok {
 		return fields
 	}
+	if cfg.Enabled != nil {
+		fields["enabled"] = BoolValue{V: *cfg.Enabled}
+	}
 	if cfg.Message != "" {
 		fields["message"] = StringValue{V: cfg.Message}
 	}

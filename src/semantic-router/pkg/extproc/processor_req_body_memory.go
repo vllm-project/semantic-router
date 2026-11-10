@@ -274,11 +274,7 @@ func (r *OpenAIRouter) getUserIDFromContext(ctx *RequestContext) string {
 
 // handleFastResponse returns an immediate response for the fast_response plugin.
 func (r *OpenAIRouter) handleFastResponse(ctx *RequestContext, decisionName string) *ext_proc.ProcessingResponse {
-	if ctx.VSRSelectedDecision == nil {
-		return nil
-	}
-
-	fastCfg := ctx.VSRSelectedDecision.GetFastResponseConfig()
+	fastCfg := config.FastResponsePluginOf(requestPlugins(r.Config, ctx))
 	if fastCfg == nil {
 		return nil
 	}

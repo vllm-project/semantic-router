@@ -175,7 +175,7 @@ func buildOpenAIRouterSharingSignals(cfg *config.RouterConfig, pool *binding.Poo
 	return router, nil
 }
 
-// validateStickyToolSelectionPhaseSupport rejects any decision that enables
+// validateStickyToolSelectionPhaseSupport rejects any plugins that enable
 // tools.select.sticky.enabled through Phase 2 (#4517): no
 // production request path consumes ResolveStickyToolIdentity or the
 // sessiontools store yet, so accepting sticky.enabled: true here would
@@ -189,20 +189,14 @@ func buildOpenAIRouterSharingSignals(cfg *config.RouterConfig, pool *binding.Poo
 // to buildOpenAIRouterFromConfig, e.g. from the Kubernetes reconciler path)
 // and this must fail closed regardless of which one produced cfg.
 func validateStickyToolSelectionPhaseSupport(cfg *config.RouterConfig) error {
-	if cfg == nil {
+	if cfg == nil || !stickyToolSelectionEnabled(cfg) {
 		return nil
 	}
-	for _, decision := range cfg.AllRoutingDecisions() {
-		if !stickyToolSelectionEnabled(&decision) {
-			continue
-		}
-		return config.ErrToolSelectionStickyUnsupported
-	}
-	return nil
+	return config.ErrToolSelectionStickyUnsupported
 }
 
 // validateStickyToolSelectionSecret requires USER_SCOPE_NAMESPACE_SECRET
-// whenever any decision enables tools.select.sticky.enabled (issue #3347,
+// whenever any plugins enable tools.select.sticky.enabled (issue #3347,
 // PL-0042 section 2.4). Retained as a construction-time guard for once
 // Phase 3 (#4519) lifts validateStickyToolSelectionPhaseSupport's rejection above —
 // sticky.enabled: true cannot reach this check today, since the
@@ -218,23 +212,21 @@ func validateStickyToolSelectionPhaseSupport(cfg *config.RouterConfig) error {
 // selection for any request, silently. Fail at construction time instead,
 // with an actionable error.
 func validateStickyToolSelectionSecret(cfg *config.RouterConfig) error {
-	if cfg == nil || cache.UserScopeSecretConfigured() {
+	if cfg == nil || cache.UserScopeSecretConfigured() || !stickyToolSelectionEnabled(cfg) {
 		return nil
 	}
-	for _, decision := range cfg.AllRoutingDecisions() {
-		if !stickyToolSelectionEnabled(&decision) {
-			continue
-		}
-		return fmt.Errorf("USER_SCOPE_NAMESPACE_SECRET is required when tools.select.sticky selection is enabled")
-	}
-	return nil
+	return fmt.Errorf("USER_SCOPE_NAMESPACE_SECRET is required when tools.select.sticky selection is enabled")
 }
 
-// stickyToolSelectionEnabled reports whether a decision's tools selection
-// turns sticky selection on.
-func stickyToolSelectionEnabled(decision *config.Decision) bool {
-	plugin := decision.GetToolsConfig()
-	return plugin != nil && plugin.Select != nil && plugin.Select.Sticky != nil && plugin.Select.Sticky.Enabled
+// stickyToolSelectionEnabled reports whether the tools selection of any
+// request, a decision's or the default plugins', turns sticky selection on.
+func stickyToolSelectionEnabled(cfg *config.RouterConfig) bool {
+	enabled := false
+	cfg.VisitEveryPlugins(func(plugins []config.DecisionPlugin) {
+		plugin := config.ToolsPluginOf(plugins)
+		enabled = enabled || plugin != nil && plugin.Select != nil && plugin.Select.Sticky != nil && plugin.Select.Sticky.Enabled
+	})
+	return enabled
 }
 
 func validateResponseCacheScopeSecret(cfg *config.RouterConfig) error {
