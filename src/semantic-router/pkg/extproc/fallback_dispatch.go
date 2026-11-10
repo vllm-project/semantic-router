@@ -24,6 +24,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
@@ -507,8 +508,12 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		r.settleFallbackCandidateUsage(ctx, attemptDuration)
 		policyPlan.commit()
 		metrics.RecordModelRouting(primaryModel, candidateModel)
-		r.updateRouterReplayStatus(ctx, blockedStatus, false)
 		candidateSucceeded = true
+		if isStreaming {
+			r.updateRouterReplayStatus(ctx, http.StatusOK, true)
+			return r.streamedFallbackRefusal(ctx), evalResult, nil
+		}
+		r.updateRouterReplayStatus(ctx, blockedStatus, false)
 		return policyPlan.blocked, evalResult, nil
 	}
 	finalBody := policyPlan.finalBody
@@ -700,7 +705,7 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		return nil, fallback.EvaluationResult{CanFallback: true}, engineErr
 	}
 
-	projected, projectionDiagnostics, projectionErr := r.projectAnthropicRequestForBackendWithDiagnostics(*reqCopy, dispatch.logicalModel, dispatch.targetFormat)
+	projected, projectionDiagnostics, projectionErr := r.projectRequestForBackendWithDiagnostics(*reqCopy, dispatch.effectiveBackendModel(), dispatch.targetFormat)
 	if projectionErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
 	}
@@ -771,6 +776,25 @@ func (r *OpenAIRouter) fallbackProviderAuthorizer(
 	if err != nil {
 		return nil, err
 	}
+	if profile.Delegated() {
+		// The same contract as primary dispatch: only the request's delegated
+		// credential, and the attempt fails before the call without it.
+		credential, ok := requestDelegatedCredential(reqCtx)
+		if !ok {
+			return nil, principal.ErrCredentialMissing
+		}
+		if providerAuth.Strategy == "none" || providerAuth.Header == "" {
+			return nil, fmt.Errorf("delegated backend has no auth header to carry the credential")
+		}
+		return func(_ context.Context, request *http.Request) error {
+			value := credential
+			if providerAuth.Prefix != "" {
+				value = providerAuth.Prefix + " " + credential
+			}
+			request.Header.Set(providerAuth.Header, value)
+			return nil
+		}, nil
+	}
 	if providerAuth.Strategy == "none" {
 		return nil, nil
 	}
@@ -813,6 +837,10 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 		return nil, 0, err
 	}
 	authorize, err := r.fallbackProviderAuthorizer(reqCtx, dispatch.profile, dispatch.effectiveBackendModel())
+	if errors.Is(err, principal.ErrCredentialMissing) {
+		// The attempt ends as the Router's own 401, before any upstream call.
+		return delegatedCredentialMissingBody, http.StatusUnauthorized, nil
+	}
 	if err != nil {
 		return nil, 0, err
 	}
@@ -869,9 +897,9 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 }
 
 // buildFallbackImmediateResponse constructs the terminal HTTP 200 response. It
-// carries the final routing facts of any routed response, as the native
-// gateway's fallback answer does through the response phases, with the
-// number of attempts it took.
+// carries the public set of any routed response, as the native gateway's
+// fallback answer does through the response phases; the trace counts the
+// attempts it took.
 func (r *OpenAIRouter) buildFallbackImmediateResponse(
 	responseBody []byte,
 	contentType string,
@@ -884,15 +912,8 @@ func (r *OpenAIRouter) buildFallbackImmediateResponse(
 	builder := newResponseHeaderMutationBuilder()
 	builder.addString("content-type", contentType)
 	builder.addKeystone(ctx)
-	addFinalDecisionHeaders(builder, ctx)
-	if ctx != nil && !ctx.SkipProcessing && !ctx.LooperRequest && !ctx.VSRCacheHit && ctx.SemanticRequest != nil {
-		sampling := ctx.SemanticRequest.Sampling
-		if sampling.AutomaticOutput && sampling.AutomaticInputTokens != nil && sampling.MaxOutputTokens != nil &&
-			*sampling.AutomaticInputTokens > 0 && *sampling.MaxOutputTokens > 0 {
-			builder.addString(headers.VSREffectiveInputTokens, strconv.FormatInt(*sampling.AutomaticInputTokens, 10))
-			builder.addString(headers.VSREffectiveMaxOutputTokens, strconv.FormatInt(*sampling.MaxOutputTokens, 10))
-		}
-	}
+	builder.addPublicRoutingHeaders(ctx)
+	builder.addWarnings(ctx)
 	setHeaders := builder.setHeaders
 	if len(extraHeaders) > 0 {
 		setHeaders = append(setHeaders, extraHeaders...)
@@ -1058,25 +1079,7 @@ func (r *OpenAIRouter) rollbackFallbackContext(
 	ctx.RequestCostPriced = false
 	ctx.RequestCost = 0
 	ctx.RequestCostCurrency = ""
-	ctx.HallucinationDetected = false
-	ctx.HallucinationConfidence = 0
-	ctx.HallucinationScoreAvailable = false
-	ctx.HallucinationScoreKind = ""
-	ctx.HallucinationSpans = nil
-	ctx.EnhancedHallucinationInfo = nil
-	ctx.UnverifiedFactualResponse = false
-	ctx.ResponseJailbreakDetected = false
-	ctx.ResponseJailbreakType = ""
-	ctx.ResponseJailbreakDecision = nil
-	ctx.ResponseJailbreakConfidence = 0
-	ctx.ResponseJailbreakScoreAvailable = false
-	ctx.VSRMatchedResponseJailbreak = nil
-	ctx.VSRResponseJailbreakType = ""
-	ctx.VSRResponseJailbreakRisk = 0
-	ctx.VSRResponseJailbreakScoreAvailable = false
-	ctx.VSRResponseJailbreakDecision = nil
-	ctx.VSRMatchedHallucination = nil
-	ctx.VSRHallucinationEvidence = nil
+	ctx.ResponseGuard = nil
 	ctx.PrimaryOutputDigest = ""
 	ctx.PrimaryOutputChars = 0
 	r.updateRouterReplayStatus(ctx, primaryStatusCode, wasStreaming)

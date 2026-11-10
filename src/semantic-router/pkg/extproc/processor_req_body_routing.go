@@ -525,6 +525,15 @@ func (r *OpenAIRouter) appendProviderCredential(
 		})
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
 	}
+	// No upstream receives the authenticator's delegated credential header; a
+	// delegated backend receives its value under the provider auth header.
+	state.removeHeaders = append(state.removeHeaders, r.delegatedCredentialHeadersForRemoval()...)
+	if refused := r.delegatedCredentialRefusal(ctx); refused != nil {
+		return refused
+	}
+	if state.profile.Delegated() {
+		return r.appendDelegatedCredential(state, providerAuth, model, backendName, ctx)
+	}
 	if providerAuth.Strategy == "none" {
 		if r.CredentialResolver != nil {
 			state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
@@ -548,6 +557,49 @@ func (r *OpenAIRouter) appendProviderCredential(
 	value := accessKey
 	if providerAuth.Prefix != "" {
 		value = providerAuth.Prefix + " " + accessKey
+	}
+	state.setHeaders = append(state.setHeaders, overwriteRequestHeader(providerAuth.Header, value))
+	return nil
+}
+
+// appendDelegatedCredential presents the request's delegated credential to a
+// delegated backend, replacing whatever the client sent under the auth
+// header. Static and per-user provider keys are not consulted: a request
+// without the credential fails before dispatch.
+func (r *OpenAIRouter) appendDelegatedCredential(
+	state *routeHeaderState,
+	providerAuth modelcatalog.ProviderAuth,
+	model string,
+	backendName string,
+	ctx *RequestContext,
+) *ext_proc.ProcessingResponse {
+	if r.CredentialResolver != nil {
+		state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
+	}
+	if providerAuth.Strategy == "none" || providerAuth.Header == "" {
+		logging.ComponentErrorEvent("extproc", "delegated_auth_header_missing", map[string]interface{}{
+			"request_id": ctx.RequestID, "model": model, "backend": backendName,
+		})
+		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
+	}
+	credential, ok := requestDelegatedCredential(ctx)
+	if !ok {
+		logging.ComponentWarnEvent("extproc", "delegated_credential_missing", map[string]interface{}{
+			"request_id": ctx.RequestID, "model": model, "backend": backendName,
+		})
+		return r.delegatedCredentialMissing(ctx)
+	}
+	// The backend receives the delegated credential and no other: a client's
+	// own Authorization or key header does not travel beside it when the
+	// backend authenticates on a different header.
+	for _, name := range config.CredentialCarrierHeaders() {
+		if !strings.EqualFold(name, providerAuth.Header) {
+			state.removeHeaders = append(state.removeHeaders, name)
+		}
+	}
+	value := credential
+	if providerAuth.Prefix != "" {
+		value = providerAuth.Prefix + " " + credential
 	}
 	state.setHeaders = append(state.setHeaders, overwriteRequestHeader(providerAuth.Header, value))
 	return nil
@@ -590,7 +642,7 @@ func appendRoutingHeaders(headersOut *[]*core.HeaderValueOption, model string) {
 		return
 	}
 	*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
-		Key: headers.SelectedModel, RawValue: []byte(model),
+		Key: headers.VSRRouteModel, RawValue: []byte(model),
 	}})
 }
 

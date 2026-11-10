@@ -103,6 +103,8 @@ func TestNativeGatewayServesTheParityCorpus(t *testing.T) {
 var routingFailureCodes = map[string]string{
 	"unknown-model":          "model_not_found",
 	"unpublished-flow-model": "model_not_found",
+	"images-api-text-route":  "image_route_required",
+	"images-api-no-decision": "image_route_required",
 }
 
 func assertRoutingFailureCode(t *testing.T, response *parity.Message, code string) {

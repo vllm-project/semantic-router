@@ -1,0 +1,1 @@
+recipes[default].decisions[docs].plugins[0]: invalid_value: an enabled RAG source on backend mcp is removed: the Router has no MCP tool invoker; run `vllm-sr config migrate` (nothing: migrate drops the source, or a hybrid's mcp fallback; serve the retrieval over HTTP and read it with backend: external_api)

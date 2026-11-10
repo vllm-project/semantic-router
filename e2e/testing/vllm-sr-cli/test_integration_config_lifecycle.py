@@ -12,8 +12,10 @@ validation from the stack's image, and prints the warnings the Router logs
 import json
 import os
 import unittest
+from pathlib import Path
 
 import yaml
+from cli.pending_activation import ORIGIN_CLI, read_pending_activation
 from cli_test_base import CLITestBase
 from mock_upstream import PROVIDER_MOCKER_PORT, MockUpstreamMixin
 from serve_session import ServeSessionMixin
@@ -56,7 +58,7 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
     def _write_config(self, mock_container: str) -> None:
         self.write_minimal_canonical_config(
             provider="openai",
-            base_url=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
+            endpoint=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
         )
 
     def test_status_uses_the_active_management_port(self):
@@ -90,8 +92,8 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
                 document["listeners"][0]["port"] = 8890
 
             self._edit_config(move_listener)
-            # config apply recognizes the default local endpoint. A custom
-            # --endpoint follows its remote workflow and cannot save locally.
+            # Keep this status regression on the default local apply path;
+            # the custom-endpoint workflow has its own lifecycle coverage.
             saved = self._cli_json(
                 "config",
                 "apply",
@@ -115,6 +117,86 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
             self.run_cli(["stop"], timeout=120)
         self.print_test_result(True, "status followed the running management port")
 
+    def test_apply_to_custom_management_endpoint_saves_pending_restart(self):
+        self.print_test_header(
+            "config apply through a custom management endpoint",
+            "Local pending changes survive explicit endpoints and later config edits",
+        )
+        mock_container = f"{self.runtime_stack.stack_name}-custom-apply-upstream"
+        self._write_config(mock_container)
+
+        def set_management_port(document, port):
+            management = (
+                document.setdefault("global", {})
+                .setdefault("services", {})
+                .setdefault("management_api", {})
+            )
+            management["bind_address"] = "0.0.0.0"
+            management["port"] = port
+
+        def move_listeners(document):
+            set_management_port(document, 8082)
+            document["listeners"][0]["port"] = 8890
+
+        def endpoint(port):
+            host_port = self.runtime_stack.host_port(
+                port, name="management API host port"
+            )
+            return f"http://127.0.0.1:{host_port}"
+
+        self._edit_config(lambda document: set_management_port(document, 8081))
+        try:
+            self._serve()
+            running_endpoint = endpoint(8081)
+            self._edit_config(move_listeners)
+
+            # The second apply still targets the bound port after the first
+            # one has saved a future port into the mounted runtime config.
+            for attempt in range(2):
+                if attempt:
+                    self._edit_config(
+                        lambda document: document["listeners"][0].update(port=8891)
+                    )
+                apply_endpoint = running_endpoint + ("/api/v1" if attempt else "")
+                saved = self._cli_json(
+                    "config",
+                    "apply",
+                    "--config",
+                    "config.yaml",
+                    "--endpoint",
+                    apply_endpoint,
+                )
+                self.assertEqual(saved["status"], "restart_required", saved)
+                self.assertFalse(saved["applied"], saved)
+                self.assertTrue(os.path.isfile(saved["saved"]), saved)
+                active = self._cli_json(
+                    "config", "get", "--format", "json", "--endpoint", running_endpoint
+                )["config"]
+                # Config reads can expose the saved candidate. The successful
+                # request proves the old endpoint still serves while it is pending.
+                self.assertIsInstance(active, dict)
+                code, status, stderr = self.run_cli(["status"], timeout=60)
+                self.assertEqual(code, 0, f"{status}\n{stderr}")
+                self.assertRegex(status, r"Router\s+Running")
+                pending = read_pending_activation(Path(saved["saved"]))
+                self.assertIsNotNone(pending, saved)
+                self.assertEqual(pending.reason, "restart")
+                self.assertEqual(pending.origin, ORIGIN_CLI)
+
+            self._serve()
+            active = self._cli_json(
+                "config", "get", "--format", "json", "--endpoint", endpoint(8082)
+            )["config"]
+            self.assertEqual(
+                active["global"]["services"]["management_api"]["port"], 8082
+            )
+            self.assertEqual(active["listeners"][0]["port"], 8891)
+        finally:
+            self.run_cli(["stop"], timeout=120)
+        self.print_test_result(
+            True, "custom endpoint saved and activated local changes"
+        )
+
     def test_apply_then_serve_keeps_the_management_api(self):
         self.print_test_header(
             "config apply, then serve",
@@ -128,7 +210,7 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
                 self._send_mock_chat_completion(mock_container)
 
                 def describe(document):
-                    document["routing"]["decisions"][0]["description"] = "Applied"
+                    document["recipes"][0]["decisions"][0]["description"] = "Applied"
 
                 self._edit_config(describe)
                 applied = self._cli_json("config", "apply", "--config", "config.yaml")
@@ -142,7 +224,7 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
                 self._cli_json("config", "versions")
                 active = self._cli_json("config", "get", "--format", "json")["config"]
                 self.assertEqual(
-                    active["routing"]["decisions"][0]["description"], "Applied"
+                    active["recipes"][0]["decisions"][0]["description"], "Applied"
                 )
                 self._send_mock_chat_completion(mock_container)
         finally:
@@ -202,47 +284,70 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
         )
         self.write_minimal_canonical_config()
 
-        def image_generation(condition):
+        # Only the Router knows the headers it owns and which models have a
+        # calibrated threshold, so both verdicts below are the Router's.
+        def guarded(header):
             def edit(document):
-                routing = document["routing"]
+                document["global"] = {
+                    "model_catalog": {
+                        "deployments": {
+                            "custom-judge": {
+                                "provider": "model_runtime",
+                                "artifact": "acme/custom-judge",
+                                "revision": "0123456789abcdef0123456789abcdef01234567",
+                            }
+                        }
+                    }
+                }
+                routing = document["recipes"][0]
                 routing["signals"] = {
-                    "modality": [
-                        {"name": "AR", "description": "Text requests."},
-                        {"name": "BOTH", "description": "Text and image requests."},
-                    ]
+                    "jailbreak": [{"name": "attack", "deployment": "custom-judge"}]
                 }
                 routing["decisions"].insert(
                     0,
                     {
-                        "name": "image-gen",
-                        "description": "Image generation",
+                        "name": "guarded",
+                        "description": "Requests that attack the assistant",
                         "priority": 200,
                         "rules": {
                             "operator": "AND",
-                            "conditions": [{"type": "modality", "name": condition}],
+                            "conditions": [{"type": "jailbreak", "name": "attack"}],
                         },
                         "modelRefs": [{"model": "test-model", "use_reasoning": False}],
+                        "plugins": [
+                            {
+                                "type": "header_mutation",
+                                "configuration": {
+                                    "add": [{"name": header, "value": "guarded"}]
+                                },
+                            }
+                        ],
                     },
                 )
 
             return edit
 
-        self._edit_config(image_generation("BOTH"))
+        self._edit_config(guarded("Authorization"))
         code, stdout, stderr = self.run_cli(
             ["config", "validate", "--config", "config.yaml"], timeout=240
         )
         self.assertEqual(code, 1, f"{stdout}\n{stderr}")
-        self.assertIn('uses modality condition "BOTH"', stderr)
+        self.assertIn(
+            "Authorization is owned by the Router or Envoy", " ".join(stderr.split())
+        )
         self.assertNotIn("Configuration is valid", stdout)
 
         self.write_minimal_canonical_config()
-        self._edit_config(image_generation("AR"))
+        self._edit_config(guarded("X-Guarded"))
         code, stdout, stderr = self.run_cli(
             ["config", "validate", "--config", "config.yaml"], timeout=240
         )
         self.assertEqual(code, 0, f"{stdout}\n{stderr}")
         self.assertIn("Checked by the Router in", stdout)
-        self.assertIn("the modality signal never matches", stderr)
+        self.assertIn(
+            "has no calibrated threshold for the jailbreak preset",
+            " ".join(stderr.split()),
+        )
         self.print_test_result(True, "validate gave the Router's verdict and warnings")
 
 

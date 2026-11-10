@@ -18,30 +18,6 @@ func DecisionPluginSchemaSamples() map[string]interface{} {
 	return samples
 }
 
-func validateDecisionPluginPayload(
-	decisionName string,
-	index int,
-	plugin DecisionPlugin,
-) error {
-	_, err := DecodeDecisionPluginAt(PluginAt{Decision: decisionName, Index: index, Type: plugin.Type}, plugin)
-	return err
-}
-
-func validateMaskingPlugin(decisionName string, index int, pluginType string, typed *MaskingPluginConfig) error {
-	scope := fmt.Sprintf("decision %q plugins[%d] (%s)", decisionName, index, pluginType)
-	if typed.Threshold < 0 || typed.Threshold > 1 {
-		return fmt.Errorf("%s: threshold must be between 0 and 1", scope)
-	}
-	for entityType, template := range typed.Placeholders {
-		// Without {index} two distinct values collapse onto one placeholder,
-		// which the issue's determinism criterion forbids (#3566).
-		if !strings.Contains(template, MaskingPlaceholderIndexToken) {
-			return fmt.Errorf("%s: placeholder for %q must contain %s", scope, entityType, MaskingPlaceholderIndexToken)
-		}
-	}
-	return nil
-}
-
 func validateResponseCachePlugin(
 	decisionName string,
 	index int,
@@ -50,11 +26,7 @@ func validateResponseCachePlugin(
 ) error {
 	scope := fmt.Sprintf("decision %q plugins[%d] (%s)", decisionName, index, pluginType)
 	checks := []func() error{
-		func() error { return validateResponseCacheCompatibilityFields(typed, scope) },
 		func() error { return validateCacheMode(typed.Mode, scope) },
-		func() error {
-			return validateCacheThreshold(typed.EffectiveSimilarityThreshold(), scope)
-		},
 		func() error { return validateResponseCacheScopeAndTTL(typed, scope) },
 		func() error { return validateResponseCacheControls(typed.EffectiveRequestControls(), scope) },
 		func() error { return validateResponseCachePersonalization(typed.Personalized, scope) },
@@ -63,20 +35,6 @@ func validateResponseCachePlugin(
 		if err := check(); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func validateResponseCacheCompatibilityFields(
-	typed *ResponseCachePluginConfig,
-	scope string,
-) error {
-	if typed.Semantic != nil && typed.SimilarityThreshold != nil {
-		return fmt.Errorf("%s: semantic.similarity_threshold conflicts with deprecated similarity_threshold", scope)
-	}
-	if typed.RequestControls != nil &&
-		(typed.AllowRequestControls || strings.TrimSpace(typed.ControlHeader) != "") {
-		return fmt.Errorf("%s: request_controls conflicts with deprecated request-control fields", scope)
 	}
 	return nil
 }
@@ -140,195 +98,4 @@ func validateFastResponsePlugin(
 		index,
 		pluginType,
 	)
-}
-
-func validateResponseJailbreakPlugin(
-	decisionName string,
-	index int,
-	pluginType string,
-	typed *ResponseJailbreakPluginConfig,
-) error {
-	if typed.Threshold < 0 || typed.Threshold > 1 {
-		return fmt.Errorf(
-			"decision %q plugins[%d] (%s): threshold must be between 0 and 1",
-			decisionName,
-			index,
-			pluginType,
-		)
-	}
-	switch typed.Action {
-	case "", "header", "block", "none":
-		return nil
-	default:
-		return fmt.Errorf(
-			"decision %q plugins[%d] (%s): action must be header, block, or none",
-			decisionName,
-			index,
-			pluginType,
-		)
-	}
-}
-
-func validateContextCompressionPlugin(
-	decisionName string,
-	index int,
-	pluginType string,
-	typed *ContextCompressionPluginConfig,
-) error {
-	scope := fmt.Sprintf("decision %q plugins[%d] (%s)", decisionName, index, pluginType)
-	checks := []func() error{
-		func() error { return validateContextCompressionMode(typed, scope) },
-		func() error { return validateContextCompressionBudget(typed, scope) },
-		func() error { return validateContextCompressionTargets(typed, scope) },
-		func() error { return validateContextCompressionScoring(typed, scope) },
-		func() error { return validateContextCompressionRecovery(typed, scope) },
-		func() error { return validateContextCompressionControls(typed, scope) },
-	}
-	for _, check := range checks {
-		if err := check(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func ValidateContextCompressionPluginConfig(
-	typed *ContextCompressionPluginConfig,
-) error {
-	if typed == nil {
-		return fmt.Errorf("context_compression configuration is required")
-	}
-	return validateContextCompressionPlugin(
-		"preview",
-		0,
-		DecisionPluginContextCompression,
-		typed,
-	)
-}
-
-func validateContextCompressionBudget(
-	typed *ContextCompressionPluginConfig,
-	scope string,
-) error {
-	if typed.Budget == nil {
-		return nil
-	}
-	trigger := typed.Budget.TriggerTokens
-	target := typed.Budget.TargetTokens
-	if trigger != nil && target != nil &&
-		!trigger.Auto && !target.Auto &&
-		trigger.Value > 0 && target.Value >= trigger.Value {
-		return fmt.Errorf("%s: budget.target_tokens must be less than budget.trigger_tokens", scope)
-	}
-	return nil
-}
-
-func validateContextCompressionMode(
-	typed *ContextCompressionPluginConfig,
-	scope string,
-) error {
-	switch typed.EffectiveMode() {
-	case ContextCompressionModeAuto, ContextCompressionModeAlways:
-	default:
-		return fmt.Errorf("%s: mode must be auto or always", scope)
-	}
-	switch typed.EffectiveFailureMode() {
-	case ContextCompressionFailureOpen, ContextCompressionFailureClosed:
-		return nil
-	default:
-		return fmt.Errorf("%s: failure_mode must be fail_open or fail_closed", scope)
-	}
-}
-
-func validateContextCompressionTargets(
-	typed *ContextCompressionPluginConfig,
-	scope string,
-) error {
-	if typed.Targets != nil {
-		mode := strings.TrimSpace(typed.Targets.CurrentUser.Mode)
-		if mode != "" && mode != ContextCompressionTargetPreserve && mode != ContextCompressionTargetTruncate {
-			return fmt.Errorf("%s: current_user.mode must be preserve or truncate", scope)
-		}
-	}
-	targets := []ContextCompressionTargetConfig{typed.EffectiveToolOutputTarget()}
-	if typed.Targets != nil {
-		targets = append(targets, typed.Targets.History, typed.Targets.RAG, typed.Targets.Memory)
-	}
-	for _, target := range targets {
-		switch typed.EffectiveTargetMode(target) {
-		case ContextCompressionTargetPreserve,
-			ContextCompressionTargetExtractive,
-			ContextCompressionTargetRecoverable:
-		default:
-			return fmt.Errorf("%s: target mode must be preserve, extractive, or recoverable", scope)
-		}
-		if target.MinTokens < 0 || target.TargetTokens < 0 {
-			return fmt.Errorf("%s: target token thresholds cannot be negative", scope)
-		}
-		if target.MinTokens > 0 &&
-			target.TargetTokens > 0 &&
-			target.TargetTokens >= target.MinTokens {
-			return fmt.Errorf("%s: target_tokens must be less than min_tokens", scope)
-		}
-	}
-	return nil
-}
-
-func validateContextCompressionScoring(
-	typed *ContextCompressionPluginConfig,
-	scope string,
-) error {
-	scoring := typed.EffectiveScoring()
-	switch scoring.Method {
-	case ContextCompressionScoringBM25:
-		return nil
-	case ContextCompressionScoringEmbedding, ContextCompressionScoringHybrid:
-		if strings.TrimSpace(scoring.EmbeddingModelRef) == "" {
-			return fmt.Errorf("%s: scoring.embedding_model_ref is required for %s", scope, scoring.Method)
-		}
-		return nil
-	default:
-		return fmt.Errorf("%s: scoring.method must be bm25, embedding, or hybrid", scope)
-	}
-}
-
-func validateContextCompressionRecovery(
-	typed *ContextCompressionPluginConfig,
-	scope string,
-) error {
-	if typed.Recovery == nil || !typed.Recovery.Enabled {
-		return nil
-	}
-	switch strings.TrimSpace(typed.Recovery.Store) {
-	case "redis", "valkey", "response_cache":
-	default:
-		return fmt.Errorf("%s: recovery.store must be redis, valkey, or response_cache", scope)
-	}
-	if typed.Recovery.TTLSeconds < 0 ||
-		typed.Recovery.MaxBytesPerRequest < 0 ||
-		typed.Recovery.MaxTotalBytes < 0 ||
-		typed.Recovery.MaxRetrievals < 0 {
-		return fmt.Errorf("%s: recovery limits cannot be negative", scope)
-	}
-	return nil
-}
-
-func validateContextCompressionControls(
-	typed *ContextCompressionPluginConfig,
-	scope string,
-) error {
-	if typed.RequestControls == nil {
-		return nil
-	}
-	if typed.RequestControls.MaxTargetTokens < 0 {
-		return fmt.Errorf("%s: request_controls.max_target_tokens cannot be negative", scope)
-	}
-	for _, directive := range typed.RequestControls.Allowed {
-		switch strings.TrimSpace(directive) {
-		case "bypass", "target":
-		default:
-			return fmt.Errorf("%s: unsupported request control %q", scope, directive)
-		}
-	}
-	return nil
 }

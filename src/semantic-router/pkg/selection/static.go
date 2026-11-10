@@ -164,13 +164,6 @@ func (s *StaticSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	}, nil
 }
 
-// UpdateFeedback does nothing for static selector (no learning)
-func (s *StaticSelector) UpdateFeedback(ctx context.Context, feedback *Feedback) error {
-	// Static selector doesn't learn from feedback
-	logging.Debugf("[StaticSelector] Ignoring feedback (static selector does not learn)")
-	return nil
-}
-
 // getModelNames extracts model names from ModelRef slice
 func getModelNames(models []config.ModelRef) []string {
 	names := make([]string, len(models))

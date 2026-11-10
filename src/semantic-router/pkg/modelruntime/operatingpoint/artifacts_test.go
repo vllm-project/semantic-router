@@ -9,12 +9,13 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func digest(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }
-func fixtureSpec(t *testing.T, mutate func(map[string]any, map[string]any)) config.ResolvedModelBinding {
+
+// fixtureArtifact writes a scores-head package with its operating point and
+// returns its directory.
+func fixtureArtifact(t *testing.T, mutate func(map[string]any, map[string]any)) string {
 	t.Helper()
 	root := t.TempDir()
 	d := exampleDefinition()
@@ -35,12 +36,12 @@ func fixtureSpec(t *testing.T, mutate func(map[string]any, map[string]any)) conf
 			t.Fatal(err)
 		}
 	}
-	return config.ResolvedModelBinding{Recipe: "one", Name: "classifier.risk", Binding: config.ModelBinding{Contract: config.RemoteClassifierContractLabelScores, Adapter: "modernbert", OperatingPoint: &config.OperatingPointReference{Path: "point.json", SHA256: digest(policy)}}, Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Artifact: root, Device: "cpu", Input: config.ModelInputBudget{MaxTokens: 10, Overflow: "reject"}}}
+	return root
 }
 
 func TestExportPreservesScorePolicyAndRejectsChangedWeights(t *testing.T) {
-	spec := fixtureSpec(t, nil)
-	source, err := os.ReadFile(filepath.Join(spec.Deployment.Artifact, "point.json"))
+	artifact := fixtureArtifact(t, nil)
+	source, err := os.ReadFile(filepath.Join(artifact, "point.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +57,7 @@ func TestExportPreservesScorePolicyAndRejectsChangedWeights(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := BindArtifact(context.Background(), source, spec.Deployment.Artifact)
+	got, err := BindArtifact(context.Background(), source, artifact)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,17 +80,16 @@ func TestExportPreservesScorePolicyAndRejectsChangedWeights(t *testing.T) {
 			t.Fatalf("score policy field %s changed", key)
 		}
 	}
-	spec.Binding.OperatingPoint.SHA256 = digest(got)
-	if err = os.WriteFile(filepath.Join(spec.Deployment.Artifact, "point.json"), got, 0o600); err != nil {
+	if err = os.WriteFile(filepath.Join(artifact, "point.json"), got, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = Decode(got, digest(got)); err != nil {
 		t.Fatal("export is not a readable operating point", err)
 	}
-	if err = os.WriteFile(filepath.Join(spec.Deployment.Artifact, "model.safetensors"), []byte("different checkpoint"), 0o600); err != nil {
+	if err = os.WriteFile(filepath.Join(artifact, "model.safetensors"), []byte("different checkpoint"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = BindArtifact(context.Background(), source, spec.Deployment.Artifact); err == nil {
+	if _, err = BindArtifact(context.Background(), source, artifact); err == nil {
 		t.Fatal("writer silently rebound thresholds to different weights")
 	}
 }

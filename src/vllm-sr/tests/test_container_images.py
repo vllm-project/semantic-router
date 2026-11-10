@@ -139,6 +139,55 @@ def test_get_runtime_images_prefers_service_specific_env_overrides(monkeypatch):
     ]
 
 
+@pytest.mark.parametrize(
+    ("options", "environment"),
+    [
+        ({}, {}),
+        ({"platform": "rocm"}, {}),
+        ({"image": "custom:dev"}, {"VLLM_SR_ROUTER_IMAGE": "ignored:dev"}),
+        ({"image": VLLM_SR_CONTAINER_IMAGE_DEFAULT, "platform": "cuda"}, {}),
+        ({"image": "base:dev", "router_image": "router:dev"}, {}),
+        ({}, {"VLLM_SR_IMAGE": "pinned:dev", "VLLM_SR_ROUTER_IMAGE": "router:dev"}),
+        ({}, {"VLLM_SR_IMAGE": "pinned:dev", "VLLM_SR_PLATFORM": "rocm"}),
+    ],
+)
+def test_the_router_image_serve_checks_with_is_the_one_it_starts(
+    monkeypatch, options, environment
+):
+    ensured = []
+    monkeypatch.setattr(
+        container_images,
+        "_ensure_image_available",
+        lambda image, pull_policy: ensured.append((image, pull_policy)),
+    )
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+
+    started = container_images.get_runtime_images(pull_policy="never", **options)
+    ensured.clear()
+    checked = container_images.get_router_image(pull_policy="never", **options)
+
+    assert checked == started["router"]
+    assert ensured == [(checked, "never")]
+
+
+def test_always_pulls_an_image_once_per_command(monkeypatch):
+    pulled = []
+    monkeypatch.setattr(container_images, "_PULLED_IMAGES", set())
+    monkeypatch.setattr(container_images, "container_image_exists", lambda _: True)
+    monkeypatch.setattr(
+        container_images,
+        "container_pull_image",
+        lambda image: pulled.append(image) or True,
+    )
+
+    container_images.get_router_image(image="router:new", pull_policy="always")
+    container_images.get_runtime_images(image="router:new", pull_policy="always")
+
+    assert pulled.count("router:new") == 1
+    assert len(pulled) == len(set(pulled))
+
+
 def test_minimal_runtime_keeps_candidate_router_separate_from_prepared_envoy(
     monkeypatch,
 ):

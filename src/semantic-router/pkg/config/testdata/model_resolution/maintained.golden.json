@@ -1,134 +1,119 @@
 {
   "config/config.yaml": {
     "signals": {
-      "default/classifier.content-risk": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Hazard@5dd25f2cc3c98f338e6a79b667662d60f936a28d cpu replicas=0",
-      "default/classifier.generic-safety-score": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Safety@6e70e725a5f4d86da10f5be5e4dfd1da0358bb85 cpu replicas=0",
-      "default/classifier.remote-safety-score": "remote http://sequence-classifier:8080",
-      "default/classifier.support-intent": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
-      "default/classifier.tool-risk": "remote https://openai-proxy:443 gpt-4.1-mini",
-      "default/decision.difficulty": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
-      "default/decision.needs_reasoning": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
-      "default/decision.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
-      "default/decision.support_team": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
-      "default/domain": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/complexity.deep_synthesis": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/complexity.needs_reasoning": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
       "default/embedding": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
-      "default/fact_check": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
-      "default/hallucination": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
-      "default/jailbreak": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
-      "default/modality": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
-      "default/pii": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
-      "default/rag.reranker": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf cpu replicas=0",
-      "default/user_feedback": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
+      "default/fact_check.needs_fact_check": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/fact_check.no_fact_check_needed": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/hallucination.ungrounded_claims": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/jailbreak.prompt_injection": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/jailbreak.unsafe_completion": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/modality.AR": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/modality.BOTH": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/modality.DIFFUSION": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/pii.business_contact_pii": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/pii.restricted_pii": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/refusal.declined": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/safety.unsafe-answer": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/safety.unsafe-content": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/safety.unsafe-privacy": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/systemone.account_management": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/systemone.chart_request": "systemone https://gateway.example.com/Unified/v1/systemone vllm-sr/d3-ultra",
+      "default/systemone.clinical_query_intent": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/systemone.content-risk": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/systemone.difficulty": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/systemone.generic-safety-score": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/systemone.needs_reasoning": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/systemone.preference": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/systemone.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/systemone.support-intent": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/systemone.support_team": "systemone https://systemone.example.com/v1/systemone vllm-sr/d3-ultra",
+      "default/systemone.support_topics": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/systemone.technical_support": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/systemone.tool-risk": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/systemone.unsupported_claims": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/turn_relation.likely_dissatisfied": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/turn_relation.persistently_dissatisfied": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/turn_relation.topic_boundary": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/user_feedback.need_clarification": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/user_feedback.wrong_answer": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "privacy-first/complexity.private_escalation": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
       "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Hazard@5dd25f2cc3c98f338e6a79b667662d60f936a28d cpu replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf cpu replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Safety@6e70e725a5f4d86da10f5be5e4dfd1da0358bb85 cpu replicas=0",
+      "model_runtime vllm-sr/Vela-1.0-Omni-Nano@2ff2d66385dbdd661a560ec3e8bcb45a0527d92e cpu replicas=0",
       "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
     ]
   },
-  "config/fragments/algorithm/native/cascade.yaml": {
-    "error": "recipes[native-cascade]: decision \"kai-to-vega\": stage \"fast\": model \"kai\" must name a provider alias"
+  "config/fragments/algorithm/looper/escalate.yaml": {
+    "error": "recipes[native-escalate]: decision \"kai-to-vega\": stage \"fast\": model \"kai\" must name a provider alias"
   },
-  "config/fragments/algorithm/selection/decision.yaml": {
+  "config/fragments/algorithm/selection/systemone.yaml": {
     "started": [
       "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0"
     ]
   },
-  "config/fragments/algorithm/selection/prompt.yaml": {
-    "error": "routing recipe \"default\": decision 'prompt-selected-route', algorithm.prompt.model \"qwen3-8b\" is not declared in routing.modelCards"
-  },
   "config/fragments/decision/and/urgent-business.yaml": {
-    "error": "routing recipe \"default\": routing.decisions[\"urgent_business_route\"]: signal keyword(\"urgent_keywords\") is not declared in this recipe"
+    "error": "recipes[default]: removed_field: domain conditions no longer declare the domains they name; run `vllm-sr config migrate` (signals.domains with one rule per domain the conditions name)"
   },
   "config/fragments/decision/composite/priority-safe-escalation.yaml": {
-    "error": "routing recipe \"default\": routing.decisions[\"priority_safe_escalation_route\"]: signal keyword(\"urgent_keywords\") is not declared in this recipe"
+    "error": "recipes[default]: removed_field: domain conditions no longer declare the domains they name; run `vllm-sr config migrate` (signals.domains with one rule per domain the conditions name)"
   },
   "config/fragments/decision/not/exclude-jailbreak.yaml": {
-    "error": "routing recipe \"default\": routing.decisions[\"safe_only_route\"]: signal jailbreak(\"prompt_injection\") is not declared in this recipe"
+    "error": "recipes[default].decisions[\"safe_only_route\"]: signal jailbreak(\"prompt_injection\") is not declared in this recipe"
   },
   "config/fragments/decision/or/business-or-law.yaml": {
-    "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    ]
+    "error": "recipes[default]: removed_field: domain conditions no longer declare the domains they name; run `vllm-sr config migrate` (signals.domains with one rule per domain the conditions name)"
   },
   "config/fragments/decision/single/domain-business.yaml": {
-    "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    ]
+    "error": "recipes[default]: removed_field: domain conditions no longer declare the domains they name; run `vllm-sr config migrate` (signals.domains with one rule per domain the conditions name)"
   },
   "config/fragments/decision/single/domain-computer-science.yaml": {
-    "error": "routing recipe \"default\": decision 'computer-science-route', model 'qwen3-32b': lora_name \"computer-science-expert\" specified but model \"qwen3-32b\" is not declared in routing.modelCards"
+    "error": "recipes[default]: removed_field: domain conditions no longer declare the domains they name; run `vllm-sr config migrate` (signals.domains with one rule per domain the conditions name)"
   },
-  "config/fragments/signal/action/coding-actions.yaml": {},
   "config/fragments/signal/authz/rbac.yaml": {},
-  "config/fragments/signal/classifier/label-score.yaml": {},
-  "config/fragments/signal/classifier/sequence-label-score.yaml": {},
   "config/fragments/signal/complexity/escalation.yaml": {
     "signals": {
-      "default/embedding": "none"
+      "default/complexity.needs_reasoning": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     }
   },
   "config/fragments/signal/context/long-context.yaml": {},
   "config/fragments/signal/conversation/agentic-shape.yaml": {},
-  "config/fragments/signal/decision/decision-model.yaml": {
+  "config/fragments/signal/domain/mmlu.yaml": {
     "signals": {
-      "default/decision.difficulty": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
-      "default/decision.needs_reasoning": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
-      "default/decision.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0"
-    ]
-  },
-  "config/fragments/signal/decision/vela2-labels-spans.yaml": {
-    "signals": {
-      "default/decision.order_numbers": "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0",
-      "default/decision.support_topics": "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0"
-    ]
-  },
-  "config/fragments/signal/decision/vela3-labels-spans.yaml": {
-    "signals": {
-      "default/decision.instruction_attack": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
-      "default/decision.needs_account_access": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
-      "default/decision.order_numbers": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
-    ]
-  },
-  "config/fragments/signal/domain/mmlu.yaml": {},
-  "config/fragments/signal/embedding/image-routing.yaml": {
-    "error": "routing recipe \"default\": invalid embedding rule configuration:\n  - embedding rule \"identifier_document_imagery\" declares query_modality=image, which requires global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal or an explicit embedding binding with that capability. Remove the rule, set query_modality to text, or change model_type to multimodal (current model_type=\"mmbert\")\n  - embedding rule \"code_or_terminal_imagery\" image candidates require model_type=multimodal or an explicit embedding binding with image capability\n  - embedding rule \"code_or_terminal_imagery\" declares query_modality=image, which requires global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal or an explicit embedding binding with that capability. Remove the rule, set query_modality to text, or change model_type to multimodal (current model_type=\"mmbert\")\n  - embedding rule \"ambient_office_imagery\" declares query_modality=image, which requires global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal or an explicit embedding binding with that capability. Remove the rule, set query_modality to text, or change model_type to multimodal (current model_type=\"mmbert\")"
-  },
-  "config/fragments/signal/embedding/support.yaml": {
-    "signals": {
-      "default/embedding": "none"
+      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     }
   },
-  "config/fragments/signal/event/payment-critical.yaml": {},
   "config/fragments/signal/fact-check/needs-verification.yaml": {
     "signals": {
-      "default/fact_check": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    ]
+      "default/fact_check.needs_fact_check": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/fact_check.no_fact_check_needed": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    }
   },
   "config/fragments/signal/hallucination/grounded-answer.yaml": {
     "signals": {
-      "default/hallucination": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/hallucination.ungrounded_claims": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
@@ -137,240 +122,367 @@
   "config/fragments/signal/input-modality/vision-routing.yaml": {},
   "config/fragments/signal/jailbreak/patterns.yaml": {
     "signals": {
-      "default/embedding": "none"
+      "default/jailbreak.prompt_injection": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     }
   },
   "config/fragments/signal/jailbreak/response.yaml": {
     "signals": {
-      "default/jailbreak": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/jailbreak.unsafe_completion": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ]
   },
-  "config/fragments/signal/kb/privacy.yaml": {
-    "signals": {
-      "default/embedding": "none"
-    }
-  },
   "config/fragments/signal/keyword/nlp.yaml": {},
+  "config/fragments/signal/keyword/payment-critical.yaml": {},
   "config/fragments/signal/keyword/regex.yaml": {},
+  "config/fragments/signal/keyword/request-shape.yaml": {},
   "config/fragments/signal/language/multilingual.yaml": {},
   "config/fragments/signal/metadata/routing-hints.yaml": {},
-  "config/fragments/signal/modality/multimodal.yaml": {},
-  "config/fragments/signal/pii/strict.yaml": {},
-  "config/fragments/signal/preference/power-user.yaml": {
+  "config/fragments/signal/modality/multimodal.yaml": {
     "signals": {
-      "default/embedding": "none"
+      "default/modality.AR": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/modality.BOTH": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/modality.DIFFUSION": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     }
   },
-  "config/fragments/signal/reask/dissatisfaction.yaml": {
+  "config/fragments/signal/pii/strict.yaml": {
     "signals": {
-      "default/embedding": "none"
+      "default/pii.restricted_pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     }
+  },
+  "config/fragments/signal/refusal/refusal.yaml": {
+    "signals": {
+      "default/refusal.declined": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
   },
   "config/fragments/signal/safety/content-safety.yaml": {
     "signals": {
-      "default/safety.unsafe-content": "remote http://safety-binary:8080",
-      "default/safety.unsafe-privacy": "remote http://safety-binary:8080",
-      "default/safety.unsafe-privacy.hazard": "remote http://safety-hazard:8080"
+      "default/safety.unsafe-content": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/safety.unsafe-hazard": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     }
   },
-  "config/fragments/signal/structure/request-shape.yaml": {},
-  "config/fragments/signal/topic-continuity/topic-boundary.yaml": {},
-  "config/fragments/signal/user-feedback/escalation.yaml": {
+  "config/fragments/signal/systemone/coding-actions.yaml": {
     "signals": {
-      "default/user_feedback": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/systemone.action": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ]
   },
+  "config/fragments/signal/systemone/decision-model.yaml": {
+    "signals": {
+      "default/systemone.difficulty": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/systemone.needs_reasoning": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0",
+      "default/systemone.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 auto replicas=0"
+    ]
+  },
+  "config/fragments/signal/systemone/preference.yaml": {
+    "signals": {
+      "default/systemone.preference": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "config/fragments/signal/systemone/vela2-labels-spans.yaml": {
+    "signals": {
+      "default/pii.personal_data": "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0",
+      "default/systemone.order_numbers": "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0",
+      "default/systemone.support_topics": "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-2.0-0.3B@ cpu replicas=0"
+    ]
+  },
+  "config/fragments/signal/systemone/vela3-labels-spans.yaml": {
+    "signals": {
+      "default/pii.personal_data": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/systemone.instruction_attack": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/systemone.needs_account_access": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0",
+      "default/systemone.order_numbers": "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@ cpu replicas=0"
+    ]
+  },
+  "config/fragments/signal/turn-relation/reask.yaml": {
+    "signals": {
+      "default/turn_relation.likely_dissatisfied": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/turn_relation.persistently_dissatisfied": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    }
+  },
+  "config/fragments/signal/turn-relation/topic-boundary.yaml": {
+    "signals": {
+      "default/turn_relation.topic_boundary": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    }
+  },
+  "config/fragments/signal/user-feedback/escalation.yaml": {
+    "signals": {
+      "default/user_feedback.need_clarification": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/user_feedback.wrong_answer": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    }
+  },
   "config/recipes/accuracy/config.yaml": {
     "signals": {
-      "default/decision.accuracy_difficulty": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.accuracy_mode": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+      "default/systemone.accuracy_difficulty": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.accuracy_mode": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     ]
   },
   "config/recipes/accuracy/metadata.yaml": {
-    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+    "error": "config file must use the canonical v0.5 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags"
   },
   "config/recipes/agent/config.yaml": {
     "signals": {
-      "default/decision.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.difficulty": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.domain": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+      "default/systemone.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.difficulty": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.domain": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     ]
   },
   "config/recipes/agent/metadata.yaml": {
-    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+    "error": "config file must use the canonical v0.5 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags"
   },
   "config/recipes/balance/config.yaml": {
     "signals": {
-      "default/decision.clarify": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.correction": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.task": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+      "default/systemone.clarify": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.correction": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.task": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     ]
   },
   "config/recipes/balance/metadata.yaml": {
-    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+    "error": "config file must use the canonical v0.5 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags"
   },
   "config/recipes/built-in/latest/catalog.yaml": {
-    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: assets, benchmarks, catalog_version, channel, compatibility, defaults, evaluations, index_results, indices, models, protocols, reasoning_families, release, schema_version; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+    "error": "reasoning_families: removed_section: top-level reasoning_families belongs to the layout before config v0.3; run `vllm-sr config migrate` (its place in the v0.5 layout)"
   },
   "config/recipes/built-in/latest/mom-v1/config.yaml": {
+    "signals": {
+      "balance/systemone.correction": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balance/systemone.difficulty": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balance/systemone.needs": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balance/systemone.precise_facts": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balance/systemone.task": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balance/systemone.tool_use": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balance/user_feedback.wrong_answer": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+    },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     ]
   },
   "config/recipes/built-in/latest/mom-v1/metadata.yaml": {
-    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+    "error": "config file must use the canonical v0.5 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags"
   },
   "config/recipes/built-in/v0.4/catalog.yaml": {
-    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: assets, benchmarks, catalog_version, channel, compatibility, defaults, evaluations, index_results, indices, models, protocols, reasoning_families, release, schema_version; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+    "error": "reasoning_families: removed_section: top-level reasoning_families belongs to the layout before config v0.3; run `vllm-sr config migrate` (its place in the v0.5 layout)"
   },
   "config/recipes/built-in/v0.4/mom-v1/config.yaml": {
-    "error": "config contains unknown fields: unknown field \"data_policy\" in recipes[4].routing"
+    "error": "version: invalid_value: config schema v0.3 is removed; run `vllm-sr config migrate` (version: v0.5)"
   },
   "config/recipes/built-in/v0.4/mom-v1/metadata.yaml": {
-    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+    "error": "config file must use the canonical v0.5 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags"
   },
   "config/recipes/feedback/config.yaml": {
     "signals": {
-      "default/decision.clarify": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.code": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.sources": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.wrong": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/embedding": "none"
+      "default/systemone.clarify": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.code": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.sources": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.wrong": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/turn_relation.persistently_dissatisfied": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     ]
   },
   "config/recipes/feedback/metadata.yaml": {
-    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+    "error": "config file must use the canonical v0.5 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags"
   },
   "config/recipes/knowledge/config.yaml": {
     "signals": {
-      "default/decision.knowledge_subject": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+      "default/systemone.knowledge_subject": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     ]
   },
   "config/recipes/knowledge/metadata.yaml": {
-    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+    "error": "config file must use the canonical v0.5 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags"
   },
   "config/recipes/multi-objective/config.yaml": {
     "signals": {
-      "accuracy-first/decision.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "accuracy-first/decision.mode": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "accuracy-first/decision.quoted": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "accuracy-first/decision.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "accuracy-first/decision.workflow": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "balanced/decision.correction": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "balanced/decision.deliberate": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "balanced/decision.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "balanced/embedding": "none",
-      "cost-first/decision.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "privacy-first/decision.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "privacy-first/decision.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "privacy-first/decision.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "speed-first/decision.heavy": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+      "accuracy-first/systemone.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "accuracy-first/systemone.mode": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "accuracy-first/systemone.quoted": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "accuracy-first/systemone.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "accuracy-first/systemone.workflow": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balanced/systemone.correction": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balanced/systemone.deliberate": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balanced/systemone.verification": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "balanced/turn_relation.unified_balance_reask": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "cost-first/systemone.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "privacy-first/systemone.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "privacy-first/systemone.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "privacy-first/systemone.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "speed-first/systemone.heavy": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     ]
   },
   "config/recipes/multi-objective/metadata.yaml": {
-    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+    "error": "config file must use the canonical v0.5 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags"
   },
   "config/recipes/privacy/config.yaml": {
     "signals": {
-      "default/decision.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
-      "default/decision.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
+      "default/systemone.attack": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.confidential": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.depth": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0",
+      "default/systemone.personal_data": "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Vela-2.0-0.8B@ auto replicas=0"
     ]
   },
   "config/recipes/privacy/metadata.yaml": {
-    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+    "error": "config file must use the canonical v0.5 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags"
   },
   "config/recipes/vela-amd/config.yaml": {
     "signals": {
-      "default/classifier.content-risk": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Hazard@5dd25f2cc3c98f338e6a79b667662d60f936a28d rocm:0 replicas=0",
-      "default/domain": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Domain@f6354f54adcf38770f635ad903be2b00577f6c11 rocm:0 replicas=0",
-      "default/embedding": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 rocm:0 replicas=0",
-      "default/fact_check": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-FactCheck@99ede1aba1563e59e416f744d25b3f6b7e9d8274 rocm:0 replicas=0",
-      "default/jailbreak": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Guard@087f9e401012df839c83717b746967ac7aebfa3e rocm:0 replicas=0",
-      "default/modality": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Modality@5384b8997e3cbb79ca3a670e869577f4e4f4997e rocm:0 replicas=0",
-      "default/pii": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-PII@6d3300c4bd7975f30a664503f6c725cf1fbbad48 rocm:0 replicas=0",
-      "default/rag.reranker": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf rocm:0 replicas=0",
-      "default/safety.unsafe-content": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Safety@6e70e725a5f4d86da10f5be5e4dfd1da0358bb85 rocm:0 replicas=0",
-      "default/user_feedback": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Feedback@47434a7fd7c245c0c7c17564a000b3c56ccfec41 rocm:0 replicas=0"
+      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/fact_check.needs_fact_check": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/fact_check.no_fact_check_needed": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/jailbreak.prompt-attack": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/modality.AR": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/modality.BOTH": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/modality.DIFFUSION": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/pii.sensitive": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/safety.unsafe-content": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/systemone.content-risk": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/systemone.semantic-code": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/user_feedback.need_clarification": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/user_feedback.satisfied": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/user_feedback.want_different": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0",
+      "default/user_feedback.wrong_answer": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0"
     },
     "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Domain@f6354f54adcf38770f635ad903be2b00577f6c11 rocm:0 replicas=0",
       "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 rocm:0 replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-FactCheck@99ede1aba1563e59e416f744d25b3f6b7e9d8274 rocm:0 replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Feedback@47434a7fd7c245c0c7c17564a000b3c56ccfec41 rocm:0 replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Guard@087f9e401012df839c83717b746967ac7aebfa3e rocm:0 replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Hazard@5dd25f2cc3c98f338e6a79b667662d60f936a28d rocm:0 replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Modality@5384b8997e3cbb79ca3a670e869577f4e4f4997e rocm:0 replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-PII@6d3300c4bd7975f30a664503f6c725cf1fbbad48 rocm:0 replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Reranker@a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf rocm:0 replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Safety@6e70e725a5f4d86da10f5be5e4dfd1da0358bb85 rocm:0 replicas=0"
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 rocm:0 replicas=0"
     ]
   },
   "config/recipes/vela-amd/metadata.yaml": {
-    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+    "error": "config file must use the canonical v0.5 hierarchy; unexpected top-level keys: authors, description, id, license, links, name, schema_version, tags"
   },
-  "config/runtime/vector-store/valkey.yaml": {},
+  "config/runtime/vector-store/valkey.yaml": {
+    "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0"
+    ]
+  },
   "deploy/helm/semantic-router/Chart.yaml": {
-    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: apiVersion, appVersion, dependencies, description, home, icon, keywords, maintainers, name, sources, type; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+    "error": "config file must use the canonical v0.5 hierarchy; unexpected top-level keys: apiVersion, appVersion, dependencies, description, home, icon, keywords, maintainers, name, sources, type"
   },
-  "deploy/helm/semantic-router/values.yaml": {},
+  "deploy/helm/semantic-router/values.yaml": {
+    "signals": {
+      "default/domain.general": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    }
+  },
   "deploy/kubernetes/agentgateway/semantic-router-values/values.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ]
   },
   "deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ]
   },
   "deploy/kubernetes/aibrix/semantic-router-values/values.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ]
   },
   "deploy/kubernetes/dynamo/helm-chart/Chart.yaml": {
-    "error": "config file must use the canonical v0.3 hierarchy; unexpected top-level keys: annotations, apiVersion, appVersion, dependencies, description, home, keywords, maintainers, name, sources, type; run `vllm-sr config migrate --config old-config.yaml` or rewrite the file to canonical v0.3"
+    "error": "config file must use the canonical v0.5 hierarchy; unexpected top-level keys: annotations, apiVersion, appVersion, dependencies, description, home, keywords, maintainers, name, sources, type"
   },
   "deploy/kubernetes/dynamo/helm-chart/examples/values-multi-model.yaml": {
     "error": "config contains unknown fields: unknown field \"backendFramework\" in global; unknown field \"frontend\" in top level; unknown field \"logLevel\" in global; unknown field \"namespace\" in global; unknown field \"workers\" in top level"
@@ -383,15 +495,42 @@
   },
   "deploy/kubernetes/dynamo/semantic-router-values/values.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ]
   },
   "deploy/kubernetes/istio/config.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
@@ -399,7 +538,20 @@
   },
   "deploy/kubernetes/istio/semantic-router-values/values.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
@@ -407,13 +559,46 @@
   },
   "deploy/kubernetes/llm-d/semantic-router-values/values.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ]
   },
-  "deploy/kubernetes/observability/dashboard/config.yaml": {},
+  "deploy/kubernetes/observability/dashboard/config.yaml": {
+    "signals": {
+      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0"
+    ]
+  },
   "e2e/config/authz-profile-c-static-only.yaml": {
     "error": "compile effective model registry: providers[0] requires base_url or endpoints because provider \"vllm\" has no default"
   },
@@ -429,7 +614,20 @@
   "e2e/config/config.authz-rbac.yaml": {},
   "e2e/config/config.e2e.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
@@ -437,9 +635,10 @@
   },
   "e2e/config/config.hallucination.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/fact_check": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/hallucination": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.general": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/fact_check.needs_fact_check": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/fact_check.no_fact_check_needed": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/hallucination.ungrounded_claims": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
@@ -447,32 +646,56 @@
   },
   "e2e/config/config.memory-user-redis-enabled.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.general": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ]
   },
-  "e2e/config/config.memory-user-valkey.yaml": {},
-  "e2e/config/config.memory-user.yaml": {},
+  "e2e/config/config.memory-user-valkey.yaml": {
+    "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0"
+    ]
+  },
+  "e2e/config/config.memory-user.yaml": {
+    "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0"
+    ]
+  },
   "e2e/config/config.modality-routing.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.text_generation": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/modality.wants_image": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/modality.wants_text": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ]
   },
-  "e2e/config/config.multi-endpoint.yaml": {},
-  "e2e/config/config.multi-provider.yaml": {},
+  "e2e/config/config.multi-endpoint.yaml": {
+    "signals": {
+      "default/domain.code": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.general": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    }
+  },
+  "e2e/config/config.multi-provider.yaml": {
+    "signals": {
+      "default/domain.code": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.general": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    }
+  },
   "e2e/config/config.remote-embedding-smoke.yaml": {
     "signals": {
-      "default/embedding": "openai_embeddings https://api.openai.com/v1 text-embedding-3-small"
-    }
+      "default/systemone.billing_support": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
   },
   "e2e/config/config.response-api-redis.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
@@ -480,7 +703,7 @@
   },
   "e2e/config/config.response-api.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
@@ -488,7 +711,7 @@
   },
   "e2e/config/config.testing.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
@@ -496,77 +719,99 @@
   },
   "e2e/profiles/ai-gateway/values.yaml": {
     "signals": {
-      "default/classifier.llm_toxicity": "remote http://mock-sequence-classifier.default.svc.cluster.local:8000 e2e-llm-classifier",
-      "default/classifier.remote_toxicity": "remote http://mock-sequence-classifier.default.svc.cluster.local:8000",
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/embedding": "none",
-      "default/jailbreak": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-domain/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "e2e-pii-precedence/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/jailbreak.jailbreak_standard": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/pii.pii_deny_all": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/turn_relation.repeated_billing_question": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "e2e-domain/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-domain/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "e2e-pii-precedence/pii.pii_deny_all": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     },
     "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ]
   },
-  "e2e/profiles/authz-rbac/values.yaml": {},
-  "e2e/profiles/category-remote-backend/values.yaml": {
+  "e2e/profiles/authz-rbac/values.yaml": {
     "signals": {
-      "default/domain": "remote http://mock-category-classifier.default.svc.cluster.local:8000 category-service"
-    }
-  },
-  "e2e/profiles/complexity-remote-backend/values.yaml": {
-    "signals": {
-      "default/complexity.extreme": "remote http://mock-difficulty-scorer.default.svc.cluster.local:8000 difficulty-service",
-      "default/complexity.needs_reasoning": "remote http://mock-difficulty-scorer.default.svc.cluster.local:8000 difficulty-service"
+      "default/domain.code": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.general": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     }
   },
   "e2e/profiles/complexity-routing/values.yaml": {
     "signals": {
-      "default/embedding": "none"
+      "default/complexity.task_difficulty": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
   "e2e/profiles/conversation-routing/values.yaml": {},
+  "e2e/profiles/delegated-credential/values.yaml": {
+    "signals": {
+      "default/systemone.delegated_check": "systemone http://delegated-gateway.delegated-credential-system.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
+    }
+  },
   "e2e/profiles/dynamic-config/values.yaml": {},
   "e2e/profiles/hallucination/values.yaml": {
     "signals": {
-      "default/fact_check": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/hallucination": "remote http://mock-hallucination-detector.default.svc.cluster.local:8000 KRLabsOrg/lettucedect-v2-qwen-2b"
+      "default/fact_check.needs_fact_check": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/fact_check.no_fact_check_needed": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/hallucination.ungrounded_claims": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ]
+  },
+  "e2e/profiles/image-routing/values.yaml": {
+    "signals": {
+      "default/modality.wants_image": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/modality.wants_text_image": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/systemone.photo_kind": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
+    }
   },
   "e2e/profiles/jailbreak-onerror/values.yaml": {
     "signals": {
-      "default/jailbreak": "remote http://127.0.0.1:1 unreachable-guardrail"
+      "default/jailbreak.guardrail_unreachable": "systemone http://127.0.0.1:1/v1/systemone unreachable-guardrail"
     }
-  },
-  "e2e/profiles/local-classifier-backend/values.yaml": {
-    "signals": {
-      "default/classifier.local_jailbreak_score": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Guard@087f9e401012df839c83717b746967ac7aebfa3e cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Guard@087f9e401012df839c83717b746967ac7aebfa3e cpu replicas=0"
-    ]
   },
   "e2e/profiles/long-context-routing/values.yaml": {},
   "e2e/profiles/looper/values.yaml": {},
-  "e2e/profiles/masking/values.yaml": {},
-  "e2e/profiles/ml-model-selection/values.yaml": {
+  "e2e/profiles/masking/values.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    ]
+      "masking/pii.personal_data": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
+    }
   },
   "e2e/profiles/model-runtime-real/values.yaml": {
     "signals": {
-      "default/decision.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 cpu replicas=0",
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/jailbreak": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/jailbreak.prompt_attack": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/pii.personal_data": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/systemone.request_kind": "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 cpu replicas=0",
@@ -575,10 +820,10 @@
   },
   "e2e/profiles/model-runtime-vela3/values.yaml": {
     "signals": {
-      "default/decision.account_access": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/decision.order_numbers": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/jailbreak": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/jailbreak.prompt_attack": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/pii.personal_data": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/systemone.account_access": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/systemone.order_numbers": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
@@ -586,52 +831,40 @@
   },
   "e2e/profiles/model-runtime/values.yaml": {
     "signals": {
-      "default/classifier.user_reaction": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 feedback-a",
-      "default/decision.answered": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
-      "default/decision.attached_answered": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 decision-a",
-      "default/decision.names": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
-      "default/decision.offline": "model_runtime http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100 decision-offline",
-      "default/decision.request_kind": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
-      "default/decision.topics": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
-      "default/domain": "model_runtime /tmp/vsr-fixtures/domain@ cpu replicas=0",
-      "default/jailbreak": "model_runtime /tmp/vsr-fixtures/guard@ cpu replicas=0",
-      "default/modality": "model_runtime /tmp/vsr-fixtures/modality@ cpu replicas=0",
-      "default/pii": "model_runtime /tmp/vsr-fixtures/pii@ cpu replicas=0",
-      "default/rag.reranker": "model_runtime /tmp/vsr-fixtures/reranker@ cpu replicas=0"
+      "default/systemone.answered": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
+      "default/systemone.attached_answered": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 decision-a",
+      "default/systemone.names": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
+      "default/systemone.offline": "model_runtime http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100 decision-offline",
+      "default/systemone.request_kind": "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
+      "default/systemone.topics": "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a"
     },
     "started": [
       "model_runtime /tmp/vsr-fixtures/decision@ cpu replicas=0",
-      "model_runtime /tmp/vsr-fixtures/domain@ cpu replicas=0",
       "model_runtime /tmp/vsr-fixtures/embedding@ auto replicas=0",
-      "model_runtime /tmp/vsr-fixtures/guard@ cpu replicas=0",
-      "model_runtime /tmp/vsr-fixtures/modality@ cpu replicas=0",
-      "model_runtime /tmp/vsr-fixtures/pii@ cpu replicas=0",
-      "model_runtime /tmp/vsr-fixtures/reranker@ cpu replicas=0",
       "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 decision-a",
-      "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 feedback-a",
       "model_runtime http://model-runtime-attached.vllm-semantic-router-system.svc.cluster.local:8100 vela2-a",
       "model_runtime http://model-runtime-offline.vllm-semantic-router-system.svc.cluster.local:8100 decision-offline"
     ]
   },
   "e2e/profiles/multi-endpoint/values.yaml": {
     "signals": {
-      "default/jailbreak": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    ]
-  },
-  "e2e/profiles/multimodal-routing/values.yaml": {},
-  "e2e/profiles/pii-remote-backend/values.yaml": {
-    "signals": {
-      "default/pii": "remote http://mock-pii-spans.default.svc.cluster.local:8000 pii-spans-service"
+      "default/domain.code": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.general": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/jailbreak.jailbreak_dev": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/jailbreak.jailbreak_prod": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/pii.pii_dev": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/pii.pii_prod": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
-  "e2e/profiles/preference-external-routing/values.yaml": {},
+  "e2e/profiles/pii-remote-backend/values.yaml": {
+    "signals": {
+      "default/pii.pii_deny_all": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
+    }
+  },
   "e2e/profiles/preference-routing/values.yaml": {
     "signals": {
-      "default/embedding": "none"
+      "default/systemone.preference": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
   "e2e/profiles/production-stack/prometheus-config.yaml": {
@@ -639,11 +872,25 @@
   },
   "e2e/profiles/production-stack/values.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/jailbreak": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
-      "default/pii": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0"
+      "default/domain.biology": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0",
+      "default/jailbreak.jailbreak_standard": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/pii.pii_deny_all": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     },
     "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
       "model_runtime vllm-sr/Vela-2.0-0.3B@a3209a50dc3ebd7e3b7520440d8fba666000f4c4 cpu replicas=0"
     ]
   },
@@ -651,7 +898,7 @@
   "e2e/profiles/provider-protocols/values.yaml": {},
   "e2e/profiles/rag-hybrid-search/values.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
@@ -659,87 +906,107 @@
   },
   "e2e/profiles/remote-embedding/values.yaml": {
     "signals": {
-      "default/embedding": "openai_embeddings http://mock-embedding.default.svc.cluster.local:8000/v1 e2e-remote-embedding"
+      "default/systemone.billing_support": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
-  "e2e/profiles/response-api-redis-cluster/values.yaml": {},
-  "e2e/profiles/response-api-redis/values.yaml": {},
-  "e2e/profiles/response-api/values.yaml": {
+  "e2e/profiles/response-api-redis-cluster/values.yaml": {
     "signals": {
-      "default/embedding": "none"
-    }
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/response-api-redis/values.yaml": {
+    "signals": {
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    },
+    "started": [
+      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+    ]
+  },
+  "e2e/profiles/response-api/values.yaml": {
+    "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0"
+    ]
   },
   "e2e/profiles/response-jailbreak/values.yaml": {
     "signals": {
-      "default/jailbreak": "remote http://provider-mocker.default.svc.cluster.local:8000 mock-guardrail"
+      "default/jailbreak.unsafe_completion": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
   "e2e/profiles/route-action/values.yaml": {
     "signals": {
-      "default/jailbreak": "remote http://127.0.0.1:1 unreachable-guardrail"
+      "default/jailbreak.prompt_attack": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
   "e2e/profiles/router-replay/values.yaml": {},
   "e2e/profiles/routing-strategies/config-with-embedding.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/embedding": "none"
+      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/systemone.ai": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/systemone.data_science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/systemone.programming": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     },
     "started": [
-      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    ]
-  },
-  "e2e/profiles/routing-strategies/values-mcp.yaml": {
-    "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
-    },
-    "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ]
   },
   "e2e/profiles/routing-strategies/values.yaml": {
     "signals": {
-      "default/domain": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.biology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.chemistry": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.code_keywords": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.computer science": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.economics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.engineering": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.health": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.history": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.law": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.math": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.philosophy": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.physics": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.psychology": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/jailbreak.jailbreak_standard": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/pii.pii_deny_all": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     },
     "started": [
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0",
       "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
     ]
   },
   "e2e/profiles/streaming/values.yaml": {
     "signals": {
-      "default/jailbreak": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
-      "default/pii": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "default/domain.business": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.code_keywords": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/domain.other": "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0",
+      "default/jailbreak.jailbreak_standard": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/pii.pii_deny_all": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     },
     "started": [
-      "model_runtime vllm-sr/vela3-fast@7cbefd4b92b57234bd0ffb9872451e81abcdac79 cpu replicas=0"
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0"
     ]
   },
   "e2e/profiles/structure-routing/values.yaml": {},
-  "e2e/profiles/vectorstore-registry/values.yaml": {},
-  "e2e/profiles/vela-halu/values.yaml": {
-    "signals": {
-      "default/hallucination": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Halu@ca87531211e414ac21c641b2faa8b8e21619de8f cpu replicas=0"
-    },
+  "e2e/profiles/vectorstore-registry/values.yaml": {
     "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Halu@ca87531211e414ac21c641b2faa8b8e21619de8f cpu replicas=0"
-    ]
-  },
-  "e2e/profiles/vela-omni/values.yaml": {
-    "signals": {
-      "mini/embedding": "model_runtime vllm-sr/Vela-1.0-Omni-Mini@801bae3ad28df6891408f0e0441c676b30e132e3 cpu replicas=0",
-      "nano/embedding": "model_runtime vllm-sr/Vela-1.0-Omni-Nano@2ff2d66385dbdd661a560ec3e8bcb45a0527d92e cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/Vela-1.0-Omni-Mini@801bae3ad28df6891408f0e0441c676b30e132e3 cpu replicas=0",
-      "model_runtime vllm-sr/Vela-1.0-Omni-Nano@2ff2d66385dbdd661a560ec3e8bcb45a0527d92e cpu replicas=0"
-    ]
-  },
-  "e2e/profiles/vela-shield/values.yaml": {
-    "signals": {
-      "default/safety.unsafe-content": "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Shield@a981a99eeb05a2859b88b5cee9af4352897ec4ec cpu replicas=0"
-    },
-    "started": [
-      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Shield@a981a99eeb05a2859b88b5cee9af4352897ec4ec cpu replicas=0"
+      "model_runtime vllm-sr/Vela-1.0-Encoder-307M-Embedding@1e57cebf5a7b7fec6e6973f05bbca97c5cca4436 cpu replicas=0"
     ]
   }
 }

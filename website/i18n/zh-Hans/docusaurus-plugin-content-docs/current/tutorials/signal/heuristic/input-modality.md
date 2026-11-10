@@ -22,7 +22,7 @@ translation:
 
 ## 解决什么问题？ {#what-problem-does-it-solve}
 
-常见拓扑是：任何包含图像的请求走向视觉能力模型，纯文本请求继续走正常语义路由。在该信号出现前，图像是否存在只能通过 `conversation` 信号的 `image_content` 源到达，既难发现又只覆盖图像。`input_modality` 直接命名这一概念，并覆盖全部四种模态。
+常见拓扑是：任何包含图像的请求走向视觉能力模型，纯文本请求继续走正常语义路由。`input_modality` 直接命名请求携带的内容，并覆盖全部四种模态。
 
 注意 `NOT image_input` 并不等于「仅文本」：没有图像的请求仍可能是仅音频或空请求。将 `text` 模态规则与媒体规则的否定组合，才能精确表达仅文本。
 
@@ -33,27 +33,27 @@ translation:
 ## 配置 {#configuration}
 
 ```yaml
-routing:
-  signals:
-    input_modality:
-      - name: image_input
-        description: Request contains at least one image content part.
-        modality: image
-      - name: audio_input
-        description: Request contains at least one audio content part.
-        modality: audio
-
-  decisions:
-    - name: vision-request
-      description: Send image-bearing requests to the vision pool.
-      priority: 1000
-      rules:
-        operator: AND
-        conditions:
-          - type: input_modality
-            name: image_input
-      modelRefs:
-        - model: vision-model
+recipes:
+  - name: default
+    signals:
+      input_modality:
+        - name: image_input
+          description: Request contains at least one image content part.
+          modality: image
+        - name: audio_input
+          description: Request contains at least one audio content part.
+          modality: audio
+    decisions:
+      - name: vision-request
+        description: Send image-bearing requests to the vision pool.
+        priority: 1000
+        rules:
+          operator: AND
+          conditions:
+            - type: input_modality
+              name: image_input
+        modelRefs:
+          - model: vision-model
 ```
 
 `modality` 必须是 `text`、`image`、`audio` 或 `video` 之一。规则名必须唯一且已去空白。
@@ -71,10 +71,9 @@ routing:
 
 ## 可观测性 {#observability}
 
-匹配规则暴露在 `x-vsr-matched-input-modality` 响应头、classify/eval 响应的 `input_modality` 字段、router-回放记录，以及标准的每信号 Prometheus 指标（`llm_signal_match_total{signal_type="input_modality"}`）中。
+匹配规则以 `input_modality:<name>` 暴露在 `x-vsr-trace` 的 `signals` 成员、classify/eval 响应的 `input_modality` 字段、router-回放记录，以及标准的每信号 Prometheus 指标（`llm_signal_match_total{signal_type="input_modality"}`）中。
 
 ## 相关信号 {#related-signals}
 
-- [`modality`](../learned/modality.md) — 预期输出模态（`AR`、`DIFFUSION`、`BOTH`）。
-- 带 `query_modality: image` 的 [`embedding`](../learned/embedding.md) — 图像内容的语义分类。
-- [`conversation`](conversation.md) — 请求形态事实；其 `image_content` 源仍受支持，并共享同一底层图像计数。
+- [`modality`](../application/modality.md) — 预期输出模态（`text`、`image`、`text_image`）。
+- [`conversation`](conversation.md) — 请求形态事实，例如消息数量、工具定义与工具循环。

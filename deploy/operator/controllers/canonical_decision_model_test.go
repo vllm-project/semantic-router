@@ -15,6 +15,7 @@ import (
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
 // routerConfigOf writes the ConfigMap document of a resource and loads it as
@@ -68,94 +69,32 @@ func writtenKeys(tree interface{}, path string, keys ...string) []string {
 	return found
 }
 
-// builtInSignals are the module consumers the decision model answers when no
-// binding names a deployment for them.
-var builtInSignals = []string{
-	"prompt_guard", "domain_classifier", "pii_classifier", "fact_check_classifier",
-	"feedback_detector", "hallucination_detector", "modality_detector",
-}
-
-// answeredSignals are the built-in signals that ask a model: a modality
-// detector whose method runs no classifier asks none.
-func answeredSignals(cfg *routerconfig.RouterConfig) []string {
-	signals := make([]string, 0, len(builtInSignals))
-	for _, consumer := range builtInSignals {
-		if _, _, classifies := cfg.ModalityClassifierModel(); consumer == "modality_detector" && !classifies {
-			continue
-		}
-		signals = append(signals, consumer)
-	}
-	return signals
-}
-
-func moduleThresholds(cfg *routerconfig.RouterConfig) routerconfig.ModuleThresholds {
-	return routerconfig.ModuleThresholds{
-		PromptGuard: cfg.PromptGuard.Threshold,
-		Domain:      cfg.CategoryModel.Threshold,
-		PII:         cfg.PIIModel.Threshold,
-		FactCheck:   cfg.HallucinationMitigation.FactCheckModel.Threshold,
-		Feedback:    cfg.FeedbackDetector.Threshold,
-	}
-}
+// applicationSignals are application signal types the decision model answers
+// when no binding names a deployment for them.
+var applicationSignals = []string{routerconfig.SignalTypeJailbreak, routerconfig.SignalTypePII, routerconfig.SignalTypeHallucination}
 
 var onlyTheDecisionModel = map[string]interface{}{"decision_model": map[string]interface{}{"deployment": "primary"}}
 
-func TestTheDecisionModelReachesEveryModuleWithItsThresholds(t *testing.T) {
+func TestTheDecisionModelAnswersEveryApplicationSignal(t *testing.T) {
 	document, cfg := routerConfigOf(t, decisionDeploymentSpec(t, "primary", "vllm-sr/Vela-2.0-9B"))
-	if system := modelCatalogOf(t, document)["system"]; !reflect.DeepEqual(system, onlyTheDecisionModel) {
-		t.Fatalf("the ConfigMap must name the decision model and pin no module, got %v", system)
-	}
-	for _, consumer := range answeredSignals(cfg) {
-		resolved, ok, err := cfg.ResolveTask(consumer)
-		if err != nil || !ok || resolved.Name != "primary" || resolved.Source != routerconfig.ResolvedByDecisionModel {
-			t.Fatalf("%s must follow the decision model, got %+v (%v)", consumer, resolved, err)
-		}
-	}
-	if want := routerconfig.ModuleThresholdsOf(routerconfig.Vela2Model9B); moduleThresholds(cfg) != want {
-		t.Fatalf("modules the resource leaves at defaults take the 9B's thresholds %+v, got %+v", want, moduleThresholds(cfg))
-	}
-}
-
-func TestTheOperatorWritesOnlyTheThresholdsTheResourceSets(t *testing.T) {
-	document, cfg := routerConfigOf(t, vllmv1alpha1.ConfigSpec{
-		PromptGuard: &vllmv1alpha1.PromptGuardConfig{Enabled: true, Threshold: "0.6", UseCPU: true},
-		Classifier:  &vllmv1alpha1.ClassifierConfig{PIIModel: &vllmv1alpha1.PIIModelConfig{Threshold: "0.3", UseCPU: true}},
-	})
 	catalog := modelCatalogOf(t, document)
 	if !reflect.DeepEqual(catalog["system"], onlyTheDecisionModel) {
-		t.Fatalf("the ConfigMap writes no system line but the decision model, got %v", catalog["system"])
+		t.Fatalf("the ConfigMap must name the decision model and pin no module, got %v", catalog["system"])
 	}
-	written := writtenKeys(catalog["modules"], "modules", "threshold", "model_id", "model_ref", "model_path")
-	if want := []string{"modules.classifier.pii.threshold", "modules.prompt_guard.threshold"}; !reflect.DeepEqual(written, want) {
-		t.Fatalf("the ConfigMap writes %v, want only the resource's %v", written, want)
+	if written := writtenKeys(catalog["modules"], "modules", "threshold", "model_id", "model_ref", "model_path"); len(written) != 0 {
+		t.Fatalf("the ConfigMap pins module models or thresholds: %v", written)
 	}
-	vela3 := routerconfig.ModuleThresholdsOf(routerconfig.Vela3SignalModel)
-	if cfg.PromptGuard.Threshold != 0.6 || cfg.PIIModel.Threshold != 0.3 || cfg.CategoryModel.Threshold != vela3.Domain {
-		t.Fatalf("the resource's thresholds stay and the others follow vela3-fast, got %+v", moduleThresholds(cfg))
+	for _, signalType := range applicationSignals {
+		if deployment, source := cfg.ApplicationTypeDeployment(signalType); deployment != "primary" || source != "default" {
+			t.Fatalf("%s rules must follow the decision model, got %q (%s)", signalType, deployment, source)
+		}
 	}
-}
-
-func TestAGuardTheResourceSetsKeepsItsModelAndThreshold(t *testing.T) {
-	_, cfg := routerConfigOf(t, vllmv1alpha1.ConfigSpec{
-		DecisionModel:    &vllmv1alpha1.DecisionModelBinding{Deployment: "primary"},
-		ModelDeployments: rawCanonicalRoutingJSON(t, `{"primary":{"provider":"model_runtime","artifact":"vllm-sr/Vela-2.0-0.8B"}}`),
-		PromptGuard:      &vllmv1alpha1.PromptGuardConfig{Enabled: true, ModelID: "models/Vela-1.0-Encoder-307M-Guard", Threshold: "0.6", UseCPU: true},
-	})
-	guard, ok, err := cfg.ResolveTask("prompt_guard")
-	if err != nil || !ok || guard.Deployment.Artifact != routerconfig.GetModelByPath("models/Vela-1.0-Encoder-307M-Guard").RepoID || cfg.PromptGuard.Threshold != 0.6 {
-		t.Fatalf("an explicit guard stays, got %+v at %v (%v)", guard, cfg.PromptGuard.Threshold, err)
-	}
-	if domain, _, _ := cfg.ResolveTask("domain_classifier"); domain.Name != "primary" {
-		t.Fatalf("the other modules follow the decision model, got %+v", domain)
-	}
-	_, cfg = routerConfigOf(t, vllmv1alpha1.ConfigSpec{
-		DecisionModel:    &vllmv1alpha1.DecisionModelBinding{Deployment: "primary"},
-		ModelDeployments: rawCanonicalRoutingJSON(t, `{"primary":{"provider":"model_runtime","artifact":"vllm-sr/Vela-2.0-0.8B"}}`),
-		PromptGuard:      &vllmv1alpha1.PromptGuardConfig{Enabled: true, UseCPU: true},
-	})
-	guard, _, _ = cfg.ResolveTask("prompt_guard")
-	if guard.Name != "primary" || cfg.PromptGuard.Threshold != routerconfig.ModuleThresholdsOf(routerconfig.Vela2Model08B).PromptGuard {
-		t.Fatalf("a guard without model or threshold follows the decision model, got %+v at %v", guard, cfg.PromptGuard.Threshold)
+	// A rule without a predicate takes the threshold calibrated on the 9B.
+	for signalType, preset := range map[string]string{routerconfig.SignalTypeJailbreak: presets.Jailbreak, routerconfig.SignalTypePII: presets.PII} {
+		want, calibrated := presets.Threshold("vllm-sr/Vela-2.0-9B", preset, presets.StageRequest)
+		if got := cfg.PresetThreshold(signalType, preset); !calibrated || got != want {
+			t.Fatalf("%s rules take %v, want the 9B's calibrated %v", signalType, got, want)
+		}
 	}
 }
 
@@ -188,23 +127,18 @@ func TestASystemOneDecisionModelAnswersEveryBuiltInSignal(t *testing.T) {
 	if !cfg.RemoteDecisionModel() {
 		t.Fatalf("the Router does not run the systemone decision model: %q", cfg.DecisionModel)
 	}
-	for _, consumer := range answeredSignals(cfg) {
-		resolved, ok, err := cfg.ResolveTask(consumer)
-		if err != nil || !ok || resolved.Name != "d3-remote" || !resolved.Deployment.IsSystemOne() || resolved.Source != routerconfig.ResolvedByDecisionModel {
-			t.Fatalf("%s must follow the systemone decision model, got %+v (%v)", consumer, resolved, err)
+	for _, signalType := range applicationSignals {
+		if deployment, source := cfg.ApplicationTypeDeployment(signalType); deployment != "d3-remote" || source != "default" {
+			t.Fatalf("%s rules must follow the systemone decision model, got %q (%s)", signalType, deployment, source)
 		}
 	}
-	remote, calibrated := routerconfig.ThresholdsOfDeployment("d3-remote", cfg.ModelDeployments["d3-remote"])
-	if calibrated || moduleThresholds(cfg) != remote {
-		t.Fatalf("modules on the remote model take its thresholds %+v, not vela3-fast's; got %+v", remote, moduleThresholds(cfg))
+	// A remote model has no calibration here, so rules take the neutral
+	// threshold rather than vela3-fast's.
+	if got := cfg.PresetThreshold(routerconfig.SignalTypeJailbreak, presets.Jailbreak); got != presets.NeutralThreshold {
+		t.Fatalf("jailbreak rules on the remote model take %v, want %v", got, presets.NeutralThreshold)
 	}
 	if key, err := cfg.ModelDeployments["d3-remote"].Auth.Key(); err != nil || key != "operator-test-key" {
 		t.Fatalf("auth.api_key_env does not read the Pod environment: %v", err)
-	}
-	for _, warning := range routerconfig.Warnings(cfg) {
-		if warning.Code == "deprecated_model_field" {
-			t.Errorf("the operator writes a deprecated model field: %+v", warning)
-		}
 	}
 }
 
@@ -254,14 +188,18 @@ func TestModelBindingsReachTheGlobalCatalog(t *testing.T) {
 	if bindings, want := modelCatalogOf(t, document)["bindings"], map[string]interface{}{"pii": "local-vela", "jailbreak": "local-vela"}; !reflect.DeepEqual(bindings, want) {
 		t.Fatalf("global.model_catalog.bindings = %v, want %v", bindings, want)
 	}
-	for consumer, want := range map[string]string{"pii_classifier": "local-vela", "prompt_guard": "local-vela", "domain_classifier": "d3-remote"} {
-		if resolved, _, err := cfg.ResolveTask(consumer); err != nil || resolved.Name != want {
-			t.Fatalf("%s resolves to %q (%v), want %q", consumer, resolved.Name, err, want)
-		}
+	if domain, _ := cfg.ApplicationTypeDeployment(routerconfig.SignalTypeDomain); domain != "d3-remote" {
+		t.Fatalf("domain rules ask %q, want the decision model d3-remote", domain)
 	}
-	vela3 := routerconfig.ModuleThresholdsOf(routerconfig.Vela3SignalModel)
-	if cfg.PIIModel.Threshold != vela3.PII || cfg.PromptGuard.Threshold != vela3.PromptGuard {
-		t.Fatalf("a bound module takes the thresholds of the deployment that answers it, got %+v", moduleThresholds(cfg))
+	for signalType, preset := range map[string]string{routerconfig.SignalTypePII: presets.PII, routerconfig.SignalTypeJailbreak: presets.Jailbreak} {
+		if deployment, source := cfg.ApplicationTypeDeployment(signalType); deployment != "local-vela" || source != "global" {
+			t.Fatalf("%s rules ask %q (%s), want the bound local-vela", signalType, deployment, source)
+		}
+		// A bound type takes the thresholds of the deployment that answers it.
+		want, _ := presets.Threshold(routerconfig.GetModelByPath(routerconfig.Vela3SignalModel).RepoID, preset, presets.StageRequest)
+		if got := cfg.PresetThreshold(signalType, preset); got != want {
+			t.Fatalf("%s rules take %v, want vela3-fast's %v", signalType, got, want)
+		}
 	}
 }
 

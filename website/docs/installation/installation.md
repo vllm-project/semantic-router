@@ -45,7 +45,7 @@ upgrade instructions are separate from this `main` quickstart.
 | Host | You need |
 | --- | --- |
 | Every host | Linux, macOS or WSL2; Docker (Linux can use Podman instead); Python 3.10 or newer; about 5 GB of free disk for the images, plus 1–1.5 GB for each built-in model your routes use |
-| CPU | Nothing else. The `vllm-sr` image runs every built-in model on the CPU; plan about 1.3 GB of memory for each 307M task model your routes use |
+| CPU | Nothing else. The `vllm-sr` image runs the built-in models on the CPU. The default decision model, vela3-fast, holds about 7 GB of memory once loaded, so give the Router about 12 GiB; the 307M embedding model adds about 1.3 GB when a recall feature uses it |
 | AMD Instinct MI300X or MI325X | The ROCm driver on the host, Docker access to `/dev/kfd` and `/dev/dri`, and `--platform rocm`. Its `vllm-sr-rocm` image is a 6.5 GB download and takes about 20 GB of disk |
 | NVIDIA | The NVIDIA Container Toolkit and `--platform cuda`. CUDA is validated (H200, A100, Tesla T4 records). Fused kernels without bit-exact evidence stay off the exact profile |
 
@@ -140,8 +140,9 @@ curl -s -D - http://localhost:8899/v1/chat/completions \
 
 `vllm-sr/auto` lets the Router choose. The response headers say what it chose:
 `x-vsr-selected-decision` names the route and `x-vsr-selected-model` the
-model; with `x-vsr-debug: true`, the `x-vsr-matched-*` headers list the
-signals that matched. See [Router headers](../troubleshooting/vsr-headers).
+model; with `x-vsr-debug: true`, and when `global.router.headers.debug` allows
+the caller, the `signals` member of `x-vsr-trace` lists the signals that
+matched. See [Router headers](../troubleshooting/vsr-headers).
 
 ## Operate the stack
 

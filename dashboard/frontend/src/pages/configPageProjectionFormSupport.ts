@@ -55,8 +55,6 @@ export function normalizeProjectionInputs(value: unknown): ProjectionScoreInput[
   return value.filter(isRecord).map((entry) => ({
     type: optionalString(entry.type) || '',
     name: optionalString(entry.name),
-    kb: optionalString(entry.kb),
-    metric: optionalString(entry.metric),
     weight: typeof entry.weight === 'number' ? entry.weight : Number.NaN,
     value_source: optionalString(entry.value_source),
     match: optionalNumber(entry.match),
@@ -69,15 +67,7 @@ export function projectionInputErrors(input: ProjectionScoreInput): string[] {
   if (!input.type.trim()) errors.push('Input type is required.')
   else if (!supportedProjectionInputTypes.has(input.type))
     errors.push('Input type is not supported.')
-  if (input.type === 'kb_metric') {
-    if (!input.kb?.trim()) errors.push('Knowledge base is required for kb_metric inputs.')
-    if (!input.metric?.trim()) errors.push('Metric is required for kb_metric inputs.')
-    if (input.value_source && input.value_source !== 'score') {
-      errors.push('Knowledge-base metrics support score values only.')
-    }
-  } else if (!input.name?.trim()) {
-    errors.push('Signal or projection name is required.')
-  }
+  if (!input.name?.trim()) errors.push('Signal or projection name is required.')
   if (!Number.isFinite(input.weight)) errors.push('Weight must be a number.')
   if (
     input.type === 'projection' &&
@@ -88,7 +78,6 @@ export function projectionInputErrors(input: ProjectionScoreInput): string[] {
   }
   if (
     input.type !== 'projection' &&
-    input.type !== 'kb_metric' &&
     input.value_source &&
     !['binary', 'confidence', 'raw'].includes(input.value_source)
   ) {

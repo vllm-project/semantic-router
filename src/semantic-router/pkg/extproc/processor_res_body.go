@@ -73,12 +73,12 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 }
 
 func contextRecoveryFailClosed(ctx *RequestContext) bool {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+	if ctx == nil {
 		return false
 	}
-	plugin := ctx.VSRSelectedDecision.GetContextCompressionConfig()
+	plugin := contextCompression(ctx.VSRSelectedDecision)
 	return plugin != nil &&
-		plugin.EffectiveFailureMode() == config.ContextCompressionFailureClosed
+		plugin.Compress.EffectiveFailureMode() == config.ContextCompressionFailureClosed
 }
 
 func buildResponseBodyContinueResponse(

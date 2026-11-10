@@ -20,17 +20,13 @@ const (
 	DecisionModelVela2_4B     = "Vela-2.0-4B"
 	DecisionModelVela2_9B     = "Vela-2.0-9B"
 	DecisionModelVela1        = "Vela-1.0"
-	vela1HazardModel          = "models/Vela-1.0-Encoder-307M-Hazard"
-	vela1ModalityModel        = "models/Vela-1.0-Encoder-307M-Modality"
 )
 
-// DecisionModelSpec is a projection of the selected deployment for existing
-// module consumers. It is not a catalog of allowed model families.
+// DecisionModelSpec is a projection of the selected deployment: its name and
+// the model it serves. It is not a catalog of allowed model families.
 type DecisionModelSpec struct {
-	Name     string
-	Model    string
-	System   CanonicalSystemModels
-	Modality string
+	Name  string
+	Model string
 }
 
 func decisionModelSpec(name string, deployment ModelDeployment) DecisionModelSpec {
@@ -45,29 +41,7 @@ func decisionModelSpec(name string, deployment ModelDeployment) DecisionModelSpe
 			}
 		}
 	}
-	return DecisionModelSpec{Name: name, Model: model, Modality: model, System: CanonicalSystemModels{
-		Safety: model, Hazard: vela1HazardModel, PromptGuard: model, DomainClassifier: model,
-		PIIClassifier: model, FactCheckClassifier: model, HallucinationDetector: model, FeedbackDetector: model,
-	}}
-}
-
-// systemLine is one built-in module's line under global.model_catalog.system:
-// key, the consumer it bound, and its value.
-type systemLine struct {
-	key      string
-	consumer string
-	value    func(*CanonicalSystemModels) *string
-}
-
-var systemLines = []systemLine{
-	{"safety", bindingKeySafety, func(s *CanonicalSystemModels) *string { return &s.Safety }},
-	{"hazard", bindingKeyHazard, func(s *CanonicalSystemModels) *string { return &s.Hazard }},
-	{"prompt_guard", "prompt_guard", func(s *CanonicalSystemModels) *string { return &s.PromptGuard }},
-	{"domain_classifier", "domain_classifier", func(s *CanonicalSystemModels) *string { return &s.DomainClassifier }},
-	{"pii_classifier", "pii_classifier", func(s *CanonicalSystemModels) *string { return &s.PIIClassifier }},
-	{"fact_check_classifier", "fact_check_classifier", func(s *CanonicalSystemModels) *string { return &s.FactCheckClassifier }},
-	{"hallucination_detector", "hallucination_detector", func(s *CanonicalSystemModels) *string { return &s.HallucinationDetector }},
-	{"feedback_detector", "feedback_detector", func(s *CanonicalSystemModels) *string { return &s.FeedbackDetector }},
+	return DecisionModelSpec{Name: name, Model: model}
 }
 
 // validateDecisionModel checks system.decision_model: it names a declared
@@ -155,15 +129,32 @@ func (c *RouterConfig) DecisionModelDeployment() (name string, deployment ModelD
 
 // DecisionQuestionDeployment returns the deployment a decision question asks:
 // its own, or the decision model's shared deployment when it names none.
-func (c *RouterConfig) DecisionQuestionDeployment(rule DecisionSignalRule) string {
+func (c *RouterConfig) SystemOneRuleDeployment(rule SystemOneRule) string {
 	return c.deploymentOrDecisionModel(rule.Deployment)
 }
 
 // DecisionSelectorDeployment returns the deployment a decision selector asks:
 // its own, or the decision model's shared deployment when it names none, so
 // the model that answered the request's signals also chooses its model.
-func (c *RouterConfig) DecisionSelectorDeployment(selector DecisionSelectionConfig) string {
+func (c *RouterConfig) SystemOneSelectorDeployment(selector SystemOneSelectionConfig) string {
 	return c.deploymentOrDecisionModel(selector.Deployment)
+}
+
+// EscalateCheckDeployment returns the deployment a Chat escalation asks
+// about its answers: the answer check's own, or the decision model's shared
+// deployment, which also answers the refusal check.
+func (c *RouterConfig) EscalateCheckDeployment(accept *EscalateAccept) string {
+	if accept != nil && accept.SystemOne != nil {
+		return c.deploymentOrDecisionModel(accept.SystemOne.Deployment)
+	}
+	return c.deploymentOrDecisionModel("")
+}
+
+// EscalateChecksAnswers reports whether an algorithm is a Chat escalation
+// whose answers a System One model judges: by answer_check or refusal.
+func (a *AlgorithmConfig) EscalateChecksAnswers() bool {
+	return a != nil && a.Type == DecisionAlgorithmEscalate && a.Escalate != nil && a.Escalate.Accept != nil &&
+		(a.Escalate.Accept.SystemOne != nil || a.Escalate.Accept.Refusal != nil)
 }
 
 // deploymentOrDecisionModel returns the named deployment, or the decision

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 func TestApplyRequestCacheControlsClampsAuthorizedFreshness(t *testing.T) {
@@ -23,7 +24,7 @@ func TestApplyRequestCacheControlsClampsAuthorizedFreshness(t *testing.T) {
 	}
 	ctx := &RequestContext{
 		Headers: map[string]string{
-			defaultCacheControlHeader: "max-age=10, ttl=120, no-store",
+			headers.VSRCacheControl: "max-age=10, ttl=120, no-store",
 		},
 		VSRSelectedDecision: decision,
 	}

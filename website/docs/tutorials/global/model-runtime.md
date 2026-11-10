@@ -2,10 +2,10 @@
 
 ## Overview
 
-The model runtime runs every model the router uses: the classifiers behind
-signals such as domain, PII and jailbreak, the embedding models behind the
-semantic cache, memory and RAG, the reranker, the hallucination detector and
-decision models. Managed deployments use independent workers behind the same
+The model runtime runs every model the router uses: the decision model behind
+every System One question (signals such as domain, PII and jailbreak, the
+`systemone` selector, the response guard and the `match` judges), and the
+embedding model behind the recall of the response cache, memory and RAG. Managed deployments use independent workers behind the same
 model-service API. The Router starts and supervises those workers, or attaches
 to a runtime you run yourself.
 

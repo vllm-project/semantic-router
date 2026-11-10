@@ -129,7 +129,7 @@ def png_data_url(width, height, seed):
 
 def engine_config():
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [
             {
                 "name": "main",
@@ -154,16 +154,19 @@ def engine_config():
                 }
             ]
         },
-        "routing": {
-            "decisions": [
-                {
-                    "name": "saved",
-                    "priority": 1,
-                    "rules": {"operator": "AND", "conditions": []},
-                    "modelRefs": [{"model": "answer"}],
-                }
-            ]
-        },
+        "recipes": [
+            {
+                "name": "default",
+                "decisions": [
+                    {
+                        "name": "saved",
+                        "priority": 1,
+                        "rules": {"operator": "AND", "conditions": []},
+                        "modelRefs": [{"model": "answer"}],
+                    }
+                ],
+            }
+        ],
         "global": {
             "router": {"enabled": False},
             "model_catalog": {

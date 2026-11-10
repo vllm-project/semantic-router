@@ -10,6 +10,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
@@ -59,15 +60,6 @@ func reliabilityDuration(value string) *time.Duration {
 	}
 	return &d
 }
-
-// The per-request headers Envoy's router reads after ext_proc's mutations.
-const (
-	envoyRouteTimeoutHeader         = "x-envoy-upstream-rq-timeout-ms"
-	envoyPerTryTimeoutHeader        = "x-envoy-upstream-rq-per-try-timeout-ms"
-	envoyMaxRetriesHeader           = "x-envoy-max-retries"
-	envoyRetryOnHeader              = "x-envoy-retry-on"
-	envoyRetriableStatusCodesHeader = "x-envoy-retriable-status-codes"
-)
 
 // addEnvoyReliabilityHeaders asks Envoy's router to apply the matched
 // decision's override to this request. It runs only where the Router answers
@@ -130,7 +122,7 @@ func (r *OpenAIRouter) appendReliabilityHeaders(headersOut *[]*core.HeaderValueO
 				}
 				*headersOut = append(*headersOut, &core.HeaderValueOption{
 					Header: &core.HeaderValue{
-						Key:      envoyRouteTimeoutHeader,
+						Key:      headers.EnvoyUpstreamRqTimeoutMs,
 						RawValue: []byte(strconv.FormatInt(timeoutMs, 10)),
 					},
 					AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
@@ -161,31 +153,31 @@ func envoyReliabilityHeaders(r *routing.Reliability, routeRetries bool) []*core.
 		if *r.TotalTimeout > 0 {
 			timeoutMs = int64((*r.TotalTimeout + time.Millisecond - 1) / time.Millisecond)
 		}
-		set(envoyRouteTimeoutHeader, strconv.FormatInt(timeoutMs, 10))
+		set(headers.EnvoyUpstreamRqTimeoutMs, strconv.FormatInt(timeoutMs, 10))
 	}
 	if r.PerTryTimeout != nil {
 		timeoutMs := r.PerTryTimeout.Milliseconds()
 		if *r.PerTryTimeout > 0 {
 			timeoutMs = int64((*r.PerTryTimeout + time.Millisecond - 1) / time.Millisecond)
 		}
-		set(envoyPerTryTimeoutHeader, strconv.FormatInt(timeoutMs, 10))
+		set(headers.EnvoyUpstreamRqPerTryTimeoutMs, strconv.FormatInt(timeoutMs, 10))
 	}
 	if r.RetryCount != nil {
-		set(envoyMaxRetriesHeader, strconv.Itoa(*r.RetryCount))
+		set(headers.EnvoyMaxRetries, strconv.Itoa(*r.RetryCount))
 	}
 	retryOn := r.RetryOn
 	if len(retryOn) == 0 && !routeRetries && (r.RetryCount != nil || len(r.RetriableStatusCodes) > 0) {
 		retryOn = []string{config.DefaultProviderRetryOn}
 	}
 	if len(retryOn) > 0 {
-		set(envoyRetryOnHeader, strings.Join(retryOn, ","))
+		set(headers.EnvoyRetryOn, strings.Join(retryOn, ","))
 	}
 	if len(r.RetriableStatusCodes) > 0 {
 		codes := make([]string, len(r.RetriableStatusCodes))
 		for i, code := range r.RetriableStatusCodes {
 			codes[i] = strconv.Itoa(code)
 		}
-		set(envoyRetriableStatusCodesHeader, strings.Join(codes, ","))
+		set(headers.EnvoyRetriableStatusCodes, strings.Join(codes, ","))
 	}
 	return out
 }

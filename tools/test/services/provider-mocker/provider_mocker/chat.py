@@ -45,40 +45,6 @@ CUSTOM_TOOL_KIND_STREAM_MARKERS = {
 }
 
 
-def is_hallucination_detection_request(req: ChatRequest) -> bool:
-    if not req.response_format or req.response_format.get("type") != "json_schema":
-        return False
-    schema = req.response_format.get("json_schema", {})
-    return schema.get("name") == "hallucination_detection"
-
-
-def extract_answer_under_review(req: ChatRequest) -> str:
-    for m in req.messages:
-        if (
-            m.role == "user"
-            and isinstance(m.content, str)
-            and "Answer to verify:\n" in m.content
-        ):
-            return m.content.split("Answer to verify:\n")[-1]
-    return ""
-
-
-def build_hallucination_detection_content(req: ChatRequest) -> str:
-    answer = extract_answer_under_review(req)
-    flagged_text = answer[:80] if answer else "mocked hallucination"
-    return json.dumps(
-        {
-            "hallucinated_spans": [
-                {
-                    "text": flagged_text,
-                    "category": "unsupported_addition",
-                    "subcategory": "claim",
-                }
-            ]
-        }
-    )
-
-
 _chat_control = workflow_chat.ChatControlHelpers(
     chat_contains=chat_contains,
     chat_has_tool_result=chat_has_tool_result,
@@ -220,8 +186,6 @@ async def chat_completions(request: Request):
         if shadow_response is not None:
             return shadow_response
         content = f"Hello from {req.model}."
-    elif is_hallucination_detection_request(req):
-        content = build_hallucination_detection_content(req)
     else:
         content = build_chat_content(req)
     usage = build_chat_usage(req, content)

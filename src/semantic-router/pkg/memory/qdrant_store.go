@@ -63,7 +63,7 @@ func NewQdrantStore(opts QdrantStoreOptions) (*QdrantStore, error) {
 		collectionName = "agentic_memory"
 	}
 
-	embCfg := EmbeddingConfig{Model: EmbeddingModelMMBERT}
+	embCfg := defaultEmbeddingConfig()
 	if opts.EmbeddingConfig != nil {
 		embCfg = *opts.EmbeddingConfig
 	}
@@ -93,7 +93,7 @@ func NewQdrantStore(opts QdrantStoreOptions) (*QdrantStore, error) {
 
 	logging.ComponentEvent("memory", "qdrant_store_initialized", map[string]interface{}{
 		"collection": collectionName,
-		"embedding":  embCfg.Model,
+		"embedding":  embCfg.Deployment,
 	})
 	return s, nil
 }
