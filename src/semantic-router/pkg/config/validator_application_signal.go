@@ -104,5 +104,8 @@ func validateApplicationLeaf(cfg *RouterConfig, decisionName string, node *RuleN
 	if slices.Contains(rule.Rule.IgnoreLabels, node.Label) {
 		return fmt.Errorf("decision '%s': %s condition %q names label %q, which the rule's ignore_labels never count", decisionName, signalType, node.Name, node.Label)
 	}
+	if rule.Rule.Question.Type != SystemOneQuestionChoice && !slices.Contains(rule.Rule.CountedLabels(), node.Label) {
+		return fmt.Errorf("decision '%s': %s condition %q names label %q, which is not one of the rule's labels (%s)", decisionName, signalType, node.Name, node.Label, strings.Join(rule.Rule.Labels, ", "))
+	}
 	return nil
 }
