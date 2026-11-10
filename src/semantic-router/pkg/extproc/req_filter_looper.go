@@ -169,10 +169,14 @@ func (r *OpenAIRouter) handleLooperExecution(
 	// response policy reads it here. Nothing has left yet: even a stream is
 	// rendered from the finished answer.
 	plan := r.prepareResponsePolicy(reqCtx, semanticResponse, clientBody)
+	// Replay keeps the reply the client receives, with its Looper fields and
+	// in stream form for a stream, not the noted answer the policy encoded.
+	reply := r.releaseLooperAnswer(resp, response, clientBody, plan, reqCtx)
+	plan.finalBody = reply.GetImmediateResponse().GetBody()
 	// Replay starts inside the recorder, so its ID only exists now; the reply
 	// boundary adds it to the already-built response.
 	r.recordSuccessfulLooperExecution(resp, request.Model, decision, reqCtx, plan)
-	return r.releaseLooperAnswer(resp, response, clientBody, plan, reqCtx), nil
+	return reply, nil
 }
 
 // releaseLooperAnswer is the reply the response policy leaves of a Looper

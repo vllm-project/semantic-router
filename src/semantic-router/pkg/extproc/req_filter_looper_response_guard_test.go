@@ -111,6 +111,35 @@ func TestResponseGuardReadsTheLooperAnswerBeforeTheClient(t *testing.T) {
 	}
 }
 
+// Router Replay keeps the Looper answer the client received: with the guard's
+// note, the fusion evidence, and in stream form for a streaming client.
+func TestRouterReplayKeepsTheNotedLooperAnswerTheClientReceived(t *testing.T) {
+	annotate := jailbreakGuard(config.ResponseGuardAnnotate, "")
+	annotate.Rules[0].Details = true
+	for _, stream := range []bool{false, true} {
+		t.Run(fmt.Sprintf("stream_%t", stream), func(t *testing.T) {
+			router, ctx, request := looperGuardRouter(t, annotate, stream, newJailbreakDecider(0.95))
+
+			response, err := router.handleLooperExecution(ctx.TraceContext, request, ctx.VSRSelectedDecision, ctx)
+			if err == nil {
+				response, err = router.requestBodyReply(response, nil, ctx)
+			}
+			if err != nil {
+				t.Fatalf("Looper request: %v", err)
+			}
+
+			client := string(response.GetImmediateResponse().GetBody())
+			if !strings.Contains(client, "[Safety Warning]") || !strings.Contains(client, `"fusion":`) {
+				t.Fatalf("reply = %s, want the answer with the guard's note and its fusion evidence", client)
+			}
+			record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
+			if !ok || record.ResponseBody != client {
+				t.Fatalf("replay response body = %s, want the client's reply %s", record.ResponseBody, client)
+			}
+		})
+	}
+}
+
 // A Responses answer the guard refused is not retained for a later
 // previous_response_id or GET, though a refused stream answers 200.
 func TestLooperAnswerTheGuardRefusedIsNotRetained(t *testing.T) {
