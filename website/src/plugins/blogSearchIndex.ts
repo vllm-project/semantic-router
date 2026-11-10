@@ -24,6 +24,8 @@ export interface BlogSearchIndexEntry {
   image?: string
   readingTime?: number
   tags: string[]
+  /** Set by `featured: true` in a post's front matter; the blog index pins it. */
+  featured?: boolean
 }
 
 export interface BlogSearchIndex {
@@ -44,7 +46,10 @@ interface LoadedBlogPost {
     readingTime?: unknown
     unlisted?: unknown
     tags?: unknown
-    frontMatter?: { image?: unknown }
+    frontMatter?: {
+      image?: unknown
+      featured?: unknown
+    }
   }
 }
 
@@ -104,6 +109,7 @@ function toIndexEntry(post: LoadedBlogPost): BlogSearchIndexEntry | undefined {
     image: asString(metadata.frontMatter?.image),
     readingTime: typeof metadata.readingTime === 'number' ? metadata.readingTime : undefined,
     tags: toTagLabels(metadata.tags),
+    ...(metadata.frontMatter?.featured === true ? { featured: true } : {}),
   }
 }
 

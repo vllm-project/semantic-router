@@ -154,15 +154,15 @@ recipes:
 | `jailbreak` 的 `threshold`、`direction`、`include_history` | `predicate`、`stage`、`input.history`；`method: contrastive` 的阈值界定的是相似度之差而不是概率，migrate 会提示重新拟合 |
 | `jailbreak` 的 `method`、`jailbreak_patterns`、`benign_patterns` | 已移除：决策模型直接读取请求。需要确定性的硬拦截时，把这些模式写成一条 [`keywords`](../tutorials/signal/heuristic/keyword) 规则，并由一个拦截决策读取它 |
 | `on_error: block` 下的 `jailbreak` 和 `pii` 规则 | 规则上的 `on_unknown: match` |
-| `safety` 的 `threshold`、`labels`、`unsafe_labels`、`model` | `predicate`；`labels` 指定[危害类别](../system-one/reference#harm-categories)；`deployment` |
-| `safety` 的 `hazard` | 它的 `categories` 对应的[危害类别](../system-one/reference#harm-categories)写进规则的 `labels`，`hazard.threshold` 成为 `predicate`；不安全判定的 `threshold` 没有对应项，类别都对应不上的规则保留不安全判定（migrate 会说明这两点） |
+| `safety` 的 `threshold`、`labels`、`unsafe_labels`、`model` | `predicate`；`labels` 指定[危害类别](../system-one/reference/presets#harm-categories)；`deployment` |
+| `safety` 的 `hazard` | 它的 `categories` 对应的[危害类别](../system-one/reference/presets#harm-categories)写进规则的 `labels`，`hazard.threshold` 成为 `predicate`；不安全判定的 `threshold` 没有对应项，类别都对应不上的规则保留不安全判定（migrate 会说明这两点） |
 | `pii` 的 `threshold`、`pii_types_allowed`、`include_history`、`source: tool_result` | `predicate`、`ignore_labels`、`input.history`、`input.tool_results` |
 | 名为 `no_fact_check_needed` 且没有 labels 的 `fact_check` 规则 | `labels: [NO_FACT_CHECK_NEEDED]` 加一个 predicate |
 | 没有 `labels`、以名称决定选项的 `user_feedbacks` 和 `modality` 规则 | 把选项写进 `labels`；若有条件以 `label` 指定该规则的某个选项，或有分数输入写成 `<rule>:<label>`，该规则是按 v0.5 写的，保持原样 |
 | `reasks`、`topic_continuity` | 带 `labels` 的 `turn_relation`；`lookback_turns` 大于 1 的 reask 规则要求的连续重问没有对应项，`input.previous_turns` 最多为 32，migrate 会说明这两点 |
 | `complexity` 的示例库和阈值；`name: difficulty:hard` 条件 | `complexity`；`{name: difficulty, label: hard}` |
 | `modality` 名称 `AR`、`DIFFUSION`、`BOTH`；关键词回退 | `labels` `text`、`image`、`text_image`；回退变为一条 `keywords` 规则（需检查） |
-| `classifiers`、`preferences`、文本 `embeddings` 规则 | [`systemone` 问题](../system-one/custom-questions#questions-that-replace-removed-signals) |
+| `classifiers`、`preferences`、文本 `embeddings` 规则 | [`systemone` 问题](../system-one/use/custom-questions#questions-that-replace-removed-signals) |
 | 带文本锚点的图片 `embeddings` 规则 | 带 `input.image` 的 `systemone` 问题 |
 | `kb` 规则、`kb` 条件和 `kb_metric` 分数输入 | 删除：`kb` 规则永远不会匹配，所以 migrate 会删除需要它的决策、它在 `OR` 中的那一项以及基于它的分数输入；每条规则的说明会给出替代它的、覆盖其标签的 `systemone` `set` 问题 |
 | 图片锚点和音频 `embeddings` 规则 | 没有改写：编写一个 `systemone` 问题（错误信息会说明） |
@@ -404,7 +404,7 @@ providers:
 | 部署上的 `question_types` | `capabilities.question_types` |
 | 部署或副本上的 `served_name` | `model` |
 | `provider: classify` 或 `http` 的部署 | 删除：没有任何信号询问分类服务 |
-| `provider: candle`、`ort` 或 `openvino` | `provider: model_runtime`，保留其设备，并使用其工件的 Hub 仓库；`precision`、`profile` 等引擎字段见[迁移到模型运行时](../model-runtime/migrate) |
+| `provider: candle`、`ort` 或 `openvino` | `provider: model_runtime`，保留其设备，并使用其工件的 Hub 仓库；`precision`、`profile` 等引擎字段见[迁移到模型运行时](../model-runtime/deploy/migrate) |
 | `global.model_catalog.external[]` | 已移除；`memory_rewrite` 模型改为一个由 `global.stores.memory.query_rewrite` 指定的 `openai_chat` 部署，它的访问密钥改为环境变量 |
 | 后端的 `base_url`、`api_key_env`、`auth_header`、`auth_prefix`、`extra_headers` | `endpoint`（完整 URL）、`auth: {header, prefix, api_key_env}`、`headers` |
 | `global.router.auto_model_names`、`auto_model_name` | 默认配方的一个入口，使用上一版本所服务的名称：`auto_model_names`，否则为 `vllm-sr/auto`、`auto` 和 `auto_model_name`；文件自己写了默认配方的入口时，新入口放在它旁边，原入口的名称保持不变 |
@@ -495,7 +495,7 @@ providers:
 | `x-vsr-selected-modality` | trace 的 `modality` 成员 |
 | `x-session-id`、`x-claude-code-session-id` | `x-vsr-session-id`；`global.router.headers.session_id_headers` 让其他名称继续被接受 |
 
-[VSR 路由头部](../troubleshooting/vsr-headers)页面列出了公开集合和每个 trace 成员。
+[VSR 路由头部](../api/headers)页面列出了公开集合和每个 trace 成员。
 
 ## 4. 校验并启动 {#4-validate-and-start}
 
@@ -512,7 +512,7 @@ vllm-sr serve --config config.migrated.yaml
 - **RAG 相关性和工具选择由决策模型评判**，语义缓存命中由它的 `same_request` 问题确认。
 - **嵌入模型只在召回功能需要时才启动**，Router 的嵌入 API 已移除。
 - **每个评审都有 `max_candidates` 上限**；更多的候选会被截断，绝不报错。
-- **System One 批量调用只使用 `states` 形式**，Router 需要契约 4.0.0 的模型运行时；见[批量请求](../system-one/api#the-batch-request)。
+- **System One 批量调用只使用 `states` 形式**，Router 需要契约 4.0.0 的模型运行时；见[批量请求](../system-one/use/api#the-batch-request)。
 - **图片决策声明 `output` 契约**，它指定的每个模型都声明所需的能力。`POST /v1/images/generations` 只会到达这样的决策；其他请求会得到 `image_route_required`。
 - **响应头是一组公开的头**，调试细节放在一个 `x-vsr-trace` 头中；[发布说明](../release-notes/decision-model-first-class#headers)把每个旧响应头映射到它的替代者。
 - **Looper 算法的名称会回落到默认模型。** 请求的名称若列在某个 Looper 算法的 `model_names` 中，而该算法的决策都不匹配，请求会转到默认模型，而不再失败。

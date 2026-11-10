@@ -6,7 +6,7 @@
 
 <p>
   <a href="https://vllm-sr.ai">Documentation</a> |
-  <a href="https://app.vllm-sr.ai/playground">Playground</a> |
+  <a href="https://app.vllm-sr.ai/">System Duo</a> |
   <a href="https://vllm-sr.ai/blog/">Blog</a> |
   <a href="https://vllm-sr.ai/publications/">Publications</a> |
   <a href="https://huggingface.co/vllm-sr">Hugging Face</a> |
@@ -56,20 +56,9 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable
 
 For pip, uv, or agent-driven installation, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
-### Connect your agent harness
+### Try it online
 
-Point your harness at the Router's inference endpoint. Use a public model ID such as `vllm-sr/auto`.
-
-Follow **[Connect an agent harness](https://vllm-sr.ai/docs/next/installation/agent-harness/)** for setup and compatibility.
-
-### Online playground
-
-Try the online playground at <https://app.vllm-sr.ai/playground>.
-
-Credentials:
-
-- Username: `love@vllm-sr.ai`
-- Password: `vllm-sr-read`
+Try [System Duo](https://app.vllm-sr.ai/#try): pick an example and it runs live in your browser, with a free key on first run.
 
 ## Latest News
 
@@ -146,6 +135,9 @@ An open ecosystem spanning research, infrastructure, and enterprise adoption.
 
 <div align="center">
   <a href="https://vllm-sr.ai/#ecosystem">
-    <img src="website/static/img/ecosystem/ecosystem.webp" alt="vLLM Semantic Router's growing ecosystem: AMD, Hugging Face, Microsoft, Intel, NVIDIA, Red Hat, IBM, Liquid, DaoCloud, Delta, MBZUAI, McGill, KR Labs, University of Chicago, UC Berkeley, UMass Boston, University of Illinois Chicago, National Taiwan University, New York University, UBS, AI21, Bayer, Dell, and Nutanix." width="100%"/>
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="website/static/img/ecosystem/ecosystem-dark-theme.png">
+      <img src="website/static/img/ecosystem/ecosystem-light-theme.png" alt="vLLM Semantic Router's growing ecosystem: AMD, Hugging Face, Microsoft, Intel, NVIDIA, Red Hat, IBM, Liquid, DaoCloud, Delta, MBZUAI, McGill, KR Labs, University of Chicago, UC Berkeley, UMass Boston, University of Illinois Chicago, National Taiwan University, New York University, UBS, AI21, Bayer, Dell, and Nutanix." width="100%"/>
+    </picture>
   </a>
 </div>

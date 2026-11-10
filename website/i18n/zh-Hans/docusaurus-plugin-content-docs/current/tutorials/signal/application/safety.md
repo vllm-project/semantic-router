@@ -10,7 +10,7 @@ translation:
 
 ## 概述 {#overview}
 
-`safety` 检测请求或模型答案中的有害内容，可选地按指定的危害类别检测。没有 `labels` 的规则提出 `harm` [预设](../../../system-one/reference#preset-catalog)问题：“Is this request harmful?”，选项为 `safe` 和 `unsafe`。带 `labels` 的规则询问 34 个[危害类别](../../../system-one/reference#harm-categories)中哪些适用，并匹配它列出的类别。
+`safety` 检测请求或模型答案中的有害内容，可选地按指定的危害类别检测。没有 `labels` 的规则提出 `harm` [预设](../../../system-one/reference/presets#preset-catalog)问题：“Is this request harmful?”，选项为 `safe` 和 `unsafe`。带 `labels` 的规则询问 34 个[危害类别](../../../system-one/reference/presets#harm-categories)中哪些适用，并匹配它列出的类别。
 
 ## 主要优势 {#key-advantages}
 
@@ -70,7 +70,7 @@ recipes:
 
 ### 危害类别 {#harm-categories}
 
-这些类别是 vela3-fast 训练时使用的 21 个 AEGIS 2.0 类别和 13 个 MLCommons 危害代码；[参考](../../../system-one/reference#harm-categories)列出了全部类别。vela3-fast 用一个训练过的 set 问题回答全部 34 个类别。其他模型在同一次调用中零样本回答同样的标签，每个类别一个是/否问题。提到某个话题并不自动等于有害；请用你自己的数据测量你依赖的类别。
+这些类别是 vela3-fast 训练时使用的 21 个 AEGIS 2.0 类别和 13 个 MLCommons 危害代码；[参考](../../../system-one/reference/presets#harm-categories)列出了全部类别。vela3-fast 用一个训练过的 set 问题回答全部 34 个类别。其他模型在同一次调用中零样本回答同样的标签，每个类别一个是/否问题。提到某个话题并不自动等于有害；请用你自己的数据测量你依赖的类别。
 
 ### 在响应阶段 {#at-the-response-stage}
 
@@ -78,6 +78,6 @@ recipes:
 
 ### 回答问题的模型 {#the-model-that-answers}
 
-除非 `safety` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有安全规则；见[选择部署](../../../system-one/deployments)。vela3-fast、Vela 3.0 的 d3 规格和 Vela 2.0 有安全/不安全问题的训练形式。
+除非 `safety` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有安全规则；见[选择部署](../../../system-one/deploy/deployments)。vela3-fast、Vela 3.0 的 d3 规格和 Vela 2.0 有安全/不安全问题的训练形式。
 
 完整示例见 [`config/fragments/signal/safety/content-safety.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/safety/content-safety.yaml)。

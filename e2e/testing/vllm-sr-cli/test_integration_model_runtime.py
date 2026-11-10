@@ -23,9 +23,10 @@ from runtime_http import write_fixture
 from serve_session import ServeSessionMixin
 
 QUICKSTART = (
-    Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
+    Path(__file__).resolve().parents[3]
+    / "website/docs/model-runtime/get-started/quickstart.md"
 )
-YAML_BLOCK = re.compile(r"^```yaml\n(.*?)^```", re.M | re.S)
+YAML_BLOCK = re.compile(r"^```yaml[^\n]*\n(.*?)^```", re.M | re.S)
 PACKAGE = "decision-fixture"
 # The Router mounts the models directory next to config.yaml here.
 CONTAINER_MODELS_DIR = "/app/models"

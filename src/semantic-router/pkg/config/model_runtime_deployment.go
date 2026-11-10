@@ -207,6 +207,9 @@ func (d ModelDeployment) validateModelRuntime() error {
 	if err := d.validateReplicas(); err != nil {
 		return err
 	}
+	if err := d.validateOutlierDetection(); err != nil {
+		return err
+	}
 	if err := d.validateAttachedConnection(); err != nil {
 		return err
 	}
