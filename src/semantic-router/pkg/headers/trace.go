@@ -43,11 +43,11 @@ const (
 
 // TraceMember records one member of x-vsr-trace.
 type TraceMember struct {
-	Key string
+	Key string `json:"key"`
 	// Owner is the feature that reports the member.
-	Owner string
+	Owner string `json:"owner"`
 	// Doc says what the member carries, in one sentence.
-	Doc string
+	Doc string `json:"doc"`
 }
 
 // TraceMembers lists the members of x-vsr-trace, highest priority first.
