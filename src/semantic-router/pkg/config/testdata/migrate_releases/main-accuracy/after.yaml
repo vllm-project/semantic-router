@@ -340,6 +340,173 @@ recipes:
               opus48-worker: Long-horizon agentic work and large code changes
               gemini31-worker: Broad reasoning, mathematics and everyday coding
             timeout_ms: 30000
+  - name: default-fusion
+    description: The fusion decisions of recipe default
+    signals:
+      context:
+        - name: accuracy_long_context
+          min_tokens: 16K
+          max_tokens: 1M
+          description: Long inputs stay on one capable worker to avoid multiplying context cost across a fan-out workflow.
+      systemone:
+        - name: accuracy_mode
+          description: The way of working the request asks for.
+          question:
+            type: choice
+            instructions: Which way of working does this request ask for?
+            choices:
+              - key: direct
+                description: A single direct answer, explanation or summary, including when the user asks not to split the work, compare options or use several models
+              - key: workstreams
+                description: An investigation or plan with several workstreams, such as research, diagnosis or evidence gathering
+              - key: independent_review
+                description: Independent opinions, a debate or an adversarial review that ends in a verdict
+        - name: accuracy_difficulty
+          description: How much reasoning a strong expert needs, from 0 (none) to 4 (research level).
+          question:
+            type: score
+            instructions: How much reasoning does a strong expert need to answer this request well?
+            levels:
+              - Answer immediately, with no thinking
+              - A little thought, one or two simple steps
+              - Multi-step reasoning or a careful check
+              - Deep expert reasoning on a hard problem
+              - Research-level work on an open or frontier problem
+          predicate:
+            gte: 1.5
+      input_modality:
+        - name: accuracy_has_images
+          description: Request contains at least one image content part.
+          modality: image
+    decisions:
+      - name: accuracy_deliberation
+        description: 'Independent opinions or a verdict (accuracy_mode: independent_review) that need multi-step reasoning (accuracy_difficulty 1.5 or more) get independent frontier perspectives.'
+        priority: 90
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: accuracy_mode
+              label: independent_review
+              predicate:
+                gte: 0.6
+            - type: systemone
+              name: accuracy_difficulty
+            - operator: NOT
+              conditions:
+                - type: systemone
+                  name: accuracy_mode
+                  label: workstreams
+                  predicate:
+                    gte: 0.6
+        modelRefs:
+          - model: opus48-worker
+            use_reasoning: true
+            reasoning_effort: medium
+          - model: gemini31-worker
+            use_reasoning: true
+            reasoning_effort: medium
+          - model: gpt55-worker
+            use_reasoning: true
+            reasoning_effort: medium
+          - model: qwen-coordinator
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: qwen-coordinator
+            analysis_models:
+              - opus48-worker
+              - gemini31-worker
+              - gpt55-worker
+            max_concurrent: 3
+            min_successful_responses: 2
+            include_analysis: true
+            include_intermediate_responses: true
+          on_error: skip
+  - name: default-flow
+    description: The workflows decisions of recipe default
+    signals:
+      context:
+        - name: accuracy_long_context
+          min_tokens: 16K
+          max_tokens: 1M
+          description: Long inputs stay on one capable worker to avoid multiplying context cost across a fan-out workflow.
+      systemone:
+        - name: accuracy_mode
+          description: The way of working the request asks for.
+          question:
+            type: choice
+            instructions: Which way of working does this request ask for?
+            choices:
+              - key: direct
+                description: A single direct answer, explanation or summary, including when the user asks not to split the work, compare options or use several models
+              - key: workstreams
+                description: An investigation or plan with several workstreams, such as research, diagnosis or evidence gathering
+              - key: independent_review
+                description: Independent opinions, a debate or an adversarial review that ends in a verdict
+        - name: accuracy_difficulty
+          description: How much reasoning a strong expert needs, from 0 (none) to 4 (research level).
+          question:
+            type: score
+            instructions: How much reasoning does a strong expert need to answer this request well?
+            levels:
+              - Answer immediately, with no thinking
+              - A little thought, one or two simple steps
+              - Multi-step reasoning or a careful check
+              - Deep expert reasoning on a hard problem
+              - Research-level work on an open or frontier problem
+          predicate:
+            gte: 1.5
+      input_modality:
+        - name: accuracy_has_images
+          description: Request contains at least one image content part.
+          modality: image
+    decisions:
+      - name: accuracy_workflow
+        description: 'Several workstreams (accuracy_mode: workstreams) that need multi-step reasoning (accuracy_difficulty 1.5 or more) run as a bounded parallel workflow.'
+        priority: 100
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: accuracy_mode
+              label: workstreams
+              predicate:
+                gte: 0.6
+            - type: systemone
+              name: accuracy_difficulty
+        modelRefs:
+          - model: opus48-worker
+            use_reasoning: true
+            reasoning_effort: medium
+          - model: gemini31-worker
+            use_reasoning: true
+            reasoning_effort: medium
+          - model: gpt55-worker
+            use_reasoning: true
+            reasoning_effort: medium
+        algorithm:
+          type: workflows
+          workflows:
+            mode: dynamic
+            template: micro_agent
+            planner:
+              model: gpt55-worker
+              max_completion_tokens: 2048
+            max_steps: 4
+            max_parallel: 3
+            min_successful_responses: 2
+            max_completion_tokens: 8192
+            include_intermediate_responses: true
+          on_error: skip
 entrypoints:
-  - model_names: ["vllm-sr/auto"]
+  - model_names: [vllm-sr/auto, auto, MoM]
     recipe: default
+    default: true
+  - model_names: [vllm-sr/fusion]
+    recipe: default-fusion
+  - model_names: [vllm-sr/flow]
+    recipe: default-flow

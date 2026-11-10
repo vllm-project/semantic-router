@@ -28,6 +28,8 @@ var structureForms = []ConfigForm{
 		Migrate: func(m *Migration, at FormMatch) error {
 			m.Set(at.Parent, "version", Scalar(CanonicalConfigVersion))
 			noteDecisionlessCache(m, at.Root)
+			keepDefaultAutoModelNames(m, at.Root)
+			keepLooperModelNames(m, at.Root)
 			return nil
 		},
 	},

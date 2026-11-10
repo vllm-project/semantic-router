@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"net"
 	"slices"
 	"strings"
@@ -41,6 +42,7 @@ var previousReleaseForms = []ConfigForm{
 		Whole: true,
 		Migrate: func(m *Migration, at FormMatch) error {
 			m.Set(at.Parent, "version", Scalar(CanonicalConfigVersion))
+			keepDefaultAutoModelNames(m, at.Root)
 			return nil
 		},
 	},
@@ -209,6 +211,7 @@ func inPreviousRelease(migrate func(*Migration, FormMatch) error) func(*Migratio
 	return func(m *Migration, at FormMatch) error {
 		if mappingValue(at.Root, "version") == nil {
 			insertSection(at.Root, "version", Scalar(CanonicalConfigVersion))
+			keepDefaultAutoModelNames(m, at.Root)
 		}
 		return migrate(m, at)
 	}
@@ -857,6 +860,21 @@ func previousAutoModelNames(router *yaml.Node) []string {
 	return kept
 }
 
+// keepDefaultAutoModelNames writes, for a document of an earlier layout that
+// names no auto model name, the names the previous release served it under,
+// vllm-sr/auto, auto and MoM (releases before v0.4 served auto and MoM), as
+// its auto_model_names, which the auto model name form then rewrites.
+func keepDefaultAutoModelNames(m *Migration, root *yaml.Node) {
+	for _, key := range []string{"auto_model_names", "auto_model_name"} {
+		if len(matchPattern(root, []string{"**", key})) > 0 {
+			return
+		}
+	}
+	names := previousAutoModelNames(nil)
+	setNode(ensureMapping(ensureSection(root, "global"), "router"), "auto_model_names", stringSequence(names...))
+	m.Changed("global.router.auto_model_names", "no auto model names are written: the default routing served "+strings.Join(names, ", ")+" (releases before v0.4 served auto and MoM), and migrate keeps them")
+}
+
 // looperModelNameForms are the model names a Looper algorithm served, which
 // entrypoints replaced. Migrate rewrites them after every other form, so the
 // recipe it writes for them copies the default recipe as migrated.
@@ -886,6 +904,28 @@ var looperAlgorithms = map[string]struct{ decisions, builtin string }{
 
 func looperAlgorithm(at FormMatch) string {
 	return strings.TrimSuffix(strings.TrimPrefix(at.Path, "global.integrations.looper."), ".model_names")
+}
+
+// keepLooperModelNames writes, for each Looper algorithm that a decision of a
+// v0.3 document's default routing runs and that names no model names, the
+// built-in name the previous release served it under as its model names,
+// which the Looper model name form then rewrites.
+func keepLooperModelNames(m *Migration, root *yaml.Node) {
+	routing := resolveAlias(mappingValue(root, "routing"))
+	if routing == nil {
+		routing = resolveAlias(mappingValue(recipeNamed(root, string(DefaultRecipeName)), "routing"))
+	}
+	for _, algorithm := range slices.Sorted(maps.Keys(looperAlgorithms)) {
+		looper := looperAlgorithms[algorithm]
+		runs := slices.ContainsFunc(sequenceAt(routing, "decisions"), func(decision *yaml.Node) bool {
+			return scalarAt(resolveAlias(mappingValue(resolveAlias(decision), "algorithm")), "type") == looper.decisions
+		})
+		if !runs || mappingValue(mappingAt(root, "global", "integrations", "looper", algorithm), "model_names") != nil {
+			continue
+		}
+		setNode(ensureMapping(ensureSection(root, "global"), "integrations", "looper", algorithm), "model_names", stringSequence(looper.builtin))
+		m.Changed("global.integrations.looper."+algorithm+".model_names", fmt.Sprintf("no %s model names are written: the previous release served %s, and migrate keeps it", algorithm, looper.builtin))
+	}
 }
 
 // migrateLooperModelNames keeps what the model names of a Looper algorithm
@@ -1034,7 +1074,8 @@ func detachedCopy(node *yaml.Node) *yaml.Node {
 // auto model names, as the previous release read them. They become the
 // model_names of the entrypoint migrate added for the built-in name, or of a
 // new entrypoint of the default recipe: beside one the document wrote, whose
-// names stay its own, or in front of the others.
+// names stay its own, or in front of the others. A name another entrypoint
+// serves already stays that entrypoint's.
 func migrateAutoModelNames(m *Migration, at FormMatch) error {
 	if mappingValue(at.Parent, "auto_model_names") == nil && mappingValue(at.Parent, "auto_model_name") == nil {
 		return nil
@@ -1046,6 +1087,7 @@ func migrateAutoModelNames(m *Migration, at FormMatch) error {
 	if len(names) == 0 {
 		return nil
 	}
+	served := chatEntrypointNames(m.Root())
 	sequence := resolveAlias(mappingValue(m.Root(), "entrypoints"))
 	for i, entrypoint := range sequenceItems(sequence) {
 		entrypoint = resolveAlias(entrypoint)
@@ -1054,10 +1096,9 @@ func migrateAutoModelNames(m *Migration, at FormMatch) error {
 		}
 		written := stringItems(mappingValue(entrypoint, "model_names"))
 		if slices.Equal(written, []string{DefaultEntrypointModel}) {
-			m.Set(entrypoint, "model_names", stringSequence(names...))
+			m.Set(entrypoint, "model_names", stringSequence(slices.DeleteFunc(names, func(name string) bool { return served[name] && name != DefaultEntrypointModel })...))
 			return nil
 		}
-		served := chatEntrypointNames(m.Root())
 		names = slices.DeleteFunc(names, func(name string) bool { return served[name] })
 		if len(names) > 0 {
 			beside := mappingNode("model_names", stringSequence(names...), "recipe", string(DefaultRecipeName))
@@ -1065,6 +1106,13 @@ func migrateAutoModelNames(m *Migration, at FormMatch) error {
 			m.Changed("entrypoints", fmt.Sprintf("the auto model names %s are an entrypoint of the default recipe beside the document's own, %s", strings.Join(names, ", "), strings.Join(written, ", ")))
 		}
 		return nil
+	}
+	if names = slices.DeleteFunc(names, func(name string) bool { return served[name] }); len(names) == 0 {
+		return nil
+	}
+	if len(sequenceAt(m.Root(), "recipes")) == 0 {
+		m.Set(m.Root(), "recipes", sequenceOf(mappingNode("name", string(DefaultRecipeName))))
+		m.Changed("recipes["+string(DefaultRecipeName)+"]", "the document has no routing; an empty default recipe serves the auto model names, with the default model as before")
 	}
 	entrypoint := mappingNode("model_names", stringSequence(names...), "recipe", string(DefaultRecipeName))
 	marked := slices.ContainsFunc(sequenceAt(m.Root(), "entrypoints"), func(e *yaml.Node) bool { return scalarAt(resolveAlias(e), "default") == "true" })
