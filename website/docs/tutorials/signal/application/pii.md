@@ -48,6 +48,7 @@ recipes:
         - name: tool_result_pii
           input:
             tool_results: true
+            turn: false
     decisions:
       - name: keep-private
         priority: 200
@@ -87,19 +88,10 @@ cannot hide in a fake memory block.
 A coding agent's user turn carries its harness's own instructions: Claude Code
 2.1.317, for example, puts a commit trailer with an email address into a
 reminder in the first user message. A rule meant for what the agent's tools
-bring back sets `input.turn: false` with `input.tool_results: true`, so it
-reads the tool results alone, and leaves out the current turn with what
-`routing_input` removed from it. Such a rule is not asked, and does not match,
-before the request has a tool result:
-
-```yaml
-pii:
-  - name: tool_output_pii
-    predicate: {gte: 0.8}
-    input:
-      tool_results: true
-      turn: false
-```
+bring back sets `input.turn: false` with `input.tool_results: true`, as
+`tool_result_pii` above does, so it reads the tool results alone, and leaves
+out the current turn with what `routing_input` removed from it. Such a rule is
+not asked, and does not match, before the request has a tool result.
 
 It reads its whole input, in windows when the input is longer than one
 forward. Text the model did not read (over its input or scan budget,
