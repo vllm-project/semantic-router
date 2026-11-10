@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
@@ -38,18 +39,25 @@ const (
 // responseStageDecider is the decision model of the response-stage tests: it
 // answers the jailbreak preset with the attack probability and the
 // hallucination preset with the unsupported spans it finds in the answer, or
-// fails every call when fail is set. It counts its calls.
+// fails every call when fail is set. A delegated one refuses a call made for
+// a request without a delegated credential. It counts its calls.
 type responseStageDecider struct {
 	jailbreak float32
 	spans     []string
 	fail      bool
+	delegated bool
 	calls     atomic.Int32
 }
 
-func (d *responseStageDecider) Decide(_ context.Context, _ string, request modelservice.Request) (modelservice.Response, error) {
+func (d *responseStageDecider) Decide(ctx context.Context, _ string, request modelservice.Request) (modelservice.Response, error) {
 	d.calls.Add(1)
 	if d.fail {
 		return modelservice.Response{}, modelservice.ErrUnavailable
+	}
+	if d.delegated {
+		if _, err := principal.Delegated(ctx); err != nil {
+			return modelservice.Response{}, err
+		}
 	}
 	answers := map[string]modelservice.Answer{}
 	for _, question := range request.Questions {
@@ -91,6 +99,12 @@ func newCountingJailbreakDecider(jailbreak float32) (*responseStageDecider, *ato
 // newFailingDecider is a decision model whose every call fails.
 func newFailingDecider() *responseStageDecider {
 	return &responseStageDecider{fail: true}
+}
+
+// newDelegatedDecider is a decision model whose deployment takes the
+// requesting user's delegated credential.
+func newDelegatedDecider() *responseStageDecider {
+	return &responseStageDecider{delegated: true}
 }
 
 // newHallucinationDecider is a decision model that finds the given
@@ -194,7 +208,8 @@ func matchedJailbreakGuardRun(t *testing.T) *responseGuardRun {
 func routerWithSelectedDecision(cfg *config.RouterConfig, classifier *classification.Classifier, decision string) (*OpenAIRouter, *RequestContext) {
 	router := &OpenAIRouter{Config: cfg, Classifier: classifier}
 	ctx := &RequestContext{
-		TraceContext:            context.Background(),
+		// The client request carries no delegated credential.
+		TraceContext:            principal.ForRequest(context.Background(), ""),
 		Headers:                 map[string]string{},
 		VSRSelectedDecision:     &cfg.Decisions[0],
 		VSRSelectedDecisionName: decision,
