@@ -375,6 +375,45 @@ recipes:
 	}
 }
 
+// A decision without its own effort sends providers.defaults.reasoning_effort
+// wherever the family lists it, so the Provider binding must allow it too.
+func TestGPT6AstraChatChecksTheDefaultEffortItWouldSend(t *testing.T) {
+	configForDefault := func(effort string) []byte {
+		return []byte(fmt.Sprintf(`
+version: v0.5
+providers:
+  defaults:
+    reasoning_effort: %s
+  models:
+    - name: astra
+      catalog: openai/gpt-6-astra
+      backend_refs:
+        - name: primary
+          provider: openai
+recipes:
+  - name: default
+    decisions:
+      - name: astra_default
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: astra
+            use_reasoning: true
+`, effort))
+	}
+
+	if _, err := ParseYAMLBytes(configForDefault("xhigh")); err != nil {
+		t.Fatalf("default effort the Chat binding allows was refused: %v", err)
+	}
+	_, err := ParseYAMLBytes(configForDefault("max"))
+	want := `modelRefs[0] (astra) via providers.defaults.reasoning_effort: reasoning_effort "max" is not supported by provider "openai"`
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("error = %v, want one containing %q", err, want)
+	}
+}
+
 func TestGPT6AstraCatalogRejectsDisabledReasoning(t *testing.T) {
 	_, err := ParseYAMLBytes([]byte(`
 version: v0.5
