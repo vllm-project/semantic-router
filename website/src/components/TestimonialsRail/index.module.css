@@ -55,7 +55,9 @@
   text-transform: uppercase;
 }
 
-.statement {
+/* Every voice's statement is a paragraph; quotes add their marks with an inner <q>. It names .slide too, so it outranks
+ * the homepage's paragraph rule (html[data-route-kind='home'] p). */
+.slide .statement {
   flex: 1;
   margin: 0;
   color: var(--ink);
@@ -64,7 +66,7 @@
   text-wrap: pretty;
 }
 
-q.statement {
+.statement q {
   quotes: '“' '”' '‘' '’';
 }
 
@@ -243,7 +245,7 @@ q.statement {
   white-space: nowrap;
 }
 
-:global(html[lang='zh-Hans']) .statement {
+:global(html[lang='zh-Hans']) .slide .statement {
   font-size: clamp(22px, 2.4vw, 32px);
   letter-spacing: 0;
   line-height: 1.5;
