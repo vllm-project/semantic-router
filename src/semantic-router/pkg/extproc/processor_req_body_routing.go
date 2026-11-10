@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -545,6 +546,7 @@ func (r *OpenAIRouter) appendProviderCredential(
 		if r.CredentialResolver != nil {
 			state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 		}
+		removeClientCredentials(state, providerAuth.Header, false)
 		return nil
 	}
 	if r.CredentialResolver == nil {
@@ -559,14 +561,32 @@ func (r *OpenAIRouter) appendProviderCredential(
 		return r.createErrorResponse(401, "Authentication failed. Check your API key configuration.")
 	}
 	if accessKey == "" {
+		removeClientCredentials(state, providerAuth.Header, false)
 		return nil
 	}
+	removeClientCredentials(state, providerAuth.Header, true)
 	value := accessKey
 	if providerAuth.Prefix != "" {
 		value = providerAuth.Prefix + " " + accessKey
 	}
 	state.setHeaders = append(state.setHeaders, overwriteRequestHeader(providerAuth.Header, value))
 	return nil
+}
+
+// removeClientCredentials keeps a client's own credentials from a provider the
+// Router configures: the request carries only what the upstream's auth sets,
+// under authHeader when sets is true.
+func removeClientCredentials(state *routeHeaderState, authHeader string, sets bool) {
+	names := headers.ProviderCredentials()
+	if header := strings.ToLower(strings.TrimSpace(authHeader)); header != "" && !slices.Contains(names, header) {
+		names = append(names, header)
+	}
+	for _, name := range names {
+		if (sets && strings.EqualFold(name, authHeader)) || slices.Contains(state.removeHeaders, name) {
+			continue
+		}
+		state.removeHeaders = append(state.removeHeaders, name)
+	}
 }
 
 // appendDelegatedCredential presents the request's delegated credential to a
@@ -605,6 +625,7 @@ func (r *OpenAIRouter) appendDelegatedCredential(
 			state.removeHeaders = append(state.removeHeaders, name)
 		}
 	}
+	removeClientCredentials(state, providerAuth.Header, true)
 	value := credential
 	if providerAuth.Prefix != "" {
 		value = providerAuth.Prefix + " " + credential

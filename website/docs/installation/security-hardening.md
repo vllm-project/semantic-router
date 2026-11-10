@@ -150,6 +150,12 @@ has one of three modes:
 | Delegated | `credential: delegated` | the requesting user's credential |
 | None | neither | no credential |
 
+Whatever the mode, a call carries no other credential: a client's own
+`Authorization`, `api-key`, `x-api-key`, `x-goog-api-key`,
+`api-subscription-key` or `Ocp-Apim-Subscription-Key` header never reaches the
+upstream. A model declared without backends behind an external gateway
+(`listeners: []`) keeps them for that gateway.
+
 The delegated contract is disabled by default. Once it's enabled, the rules
 below apply.
 

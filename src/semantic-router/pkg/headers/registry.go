@@ -116,6 +116,19 @@ func KeptFromProviders() []string {
 	return names
 }
 
+// ProviderCredentials are the credential headers a provider request carries
+// only as the Router sets them from the upstream's auth. A client's copy of
+// each is removed before the Router dispatches to a provider it configures.
+func ProviderCredentials() []string {
+	var names []string
+	for _, header := range registry {
+		if header.Owner == "credentials" {
+			names = append(names, header.Name)
+		}
+	}
+	return names
+}
+
 // DroppedFromClients are the Router's own headers no client may supply:
 // every registered x-vsr- header that is not a control header, the route
 // key, the internal authentication and the KV hints among them. The Router
