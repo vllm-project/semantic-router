@@ -88,4 +88,4 @@ vllm-sr serve --config config.yaml
 
 ## 配置 Router 任务使用的模型
 
-对于 Router 内部使用的分类器、安全检查和嵌入，从 [Router Runtime](../model-runtime/get-started/overview.md) 开始。它覆盖进程内和外部模型、其配置以及运维。
+对于 Router 自己使用的决策模型和嵌入模型，从[模型运行时](model-runtime/get-started/overview.md)开始。它介绍本地和远程模型、它们的配置以及运维。

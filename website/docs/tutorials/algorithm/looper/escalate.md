@@ -256,7 +256,7 @@ configure the full serving path appropriately for longer requests.
 #### Try the route
 
 Combine the model, listener, entrypoint and recipe snippets in a configuration
-file with `version: v0.3`, connect the Vega Engine endpoint, and start the Router:
+file with `version: v0.5`, connect the Vega Engine endpoint, and start the Router:
 
 ```bash
 vllm-sr serve --config config.yaml
@@ -302,9 +302,9 @@ accuracy.
 
 #### Add routing signals
 
-Native signals inspect the complete task document, including its states and questions. The request does not supply a Chat conversation or trusted identity envelope. References to `authz`, `metadata`, `conversation`, `reask`, `user_feedback` and `input_modality` therefore fail configuration validation, including through projections. KB signals are also unavailable in native recipes.
+Native signals inspect the complete task document, including its states and questions. The request carries no Chat conversation or trusted identity, so references to `authz`, `metadata`, `conversation`, `turn_relation`, `user_feedback` and `input_modality` fail configuration validation, including through projections.
 
-Preference signals must use a native decision task deployment. Explicit contrastive or external preference adapters and MCP domain classifiers are unavailable in native recipes until they share the request lifecycle. Supported model-backed signals retain their own transport timeouts inside the shared request deadline and call ledger.
+Supported model-backed signals keep their own transport timeouts inside the shared request deadline and call ledger.
 
 The recipe's `strategy` still chooses among matching decisions. Native execution uses its explicit stages and budget rather than Chat fallback, candidate requirements, decision reliability, output contracts or adaptation controls. Keep Chat fallback disabled for this native recipe. `modelRefs` declares aliases only; stage order determines selection, so Chat reasoning controls and model weights are rejected. Provider-level retry and timeout settings still apply to remote exchanges.
 

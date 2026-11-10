@@ -103,6 +103,6 @@ x-conversation-id: harness-demo-conversation
 信号、决策和算法定义哪些模型可用，以及如何执行。
 
 [Agent Routing 配方](https://github.com/vllm-project/semantic-router/tree/main/config/recipes/agent)
-可作为本地、专家和前沿模型路径的起点。使用前请检查模型绑定、分类器要求和回放保留
+可作为本地、专家和前沿模型路径的起点。使用前请检查模型绑定、决策模型问题和回放保留
 策略；仓库中的配置会记录请求和响应数据。采用策略变更前，使用
 [配方评估工作流](../benchmarking/agent-evaluation-loop)测试代表性任务。

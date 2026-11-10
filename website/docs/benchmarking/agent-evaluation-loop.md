@@ -59,7 +59,7 @@ broad. Topic alone does not establish difficulty, and FactCheck predicts a need
 for checking rather than verifying a claim.
 
 Review how unknown signals affect every decision, especially conditions using
-`NOT`. A failed classifier should not turn into evidence for a cheaper route.
+`NOT`. A failed signal should not turn into evidence for a cheaper route.
 Compare easy and hard signal scores before changing thresholds. Strong overlap
 calls for better task examples or a better model; sending every uncertain request
 to reasoning increases usage without establishing better discrimination.
@@ -110,7 +110,8 @@ Recombining saved signal values can help isolate a rule change, but it is not
 a new Preview result. First reproduce the baseline decisions and heuristic
 matches exactly, then test the candidate with real requests.
 
-Preview runs configured classifiers and embeddings without backend generation.
+Preview evaluates the configured signals, decision-model questions included,
+without backend generation.
 Check the matched signals, projection results, decision, algorithm, selection
 status, and errors. Preserve the full messages and tool fields for multi-turn
 cases; use the discovered Preview HTTP schema when the CLI cannot express a
@@ -156,7 +157,7 @@ With one candidate, the test verifies delivery but cannot measure a choice betwe
 models.
 
 Measure cold startup separately from warm median and p95 latency. Compare route
-quality, answer quality, classifier work, backend calls, token use, and cost.
+quality, answer quality, decision-model work, backend calls, token use, and cost.
 For multi-model algorithms, verify that the intended distinct workers and final
 stage actually ran.
 

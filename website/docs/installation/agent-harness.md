@@ -170,8 +170,8 @@ models are eligible and how they run.
 
 The [Agent Routing recipe](https://github.com/vllm-project/semantic-router/tree/main/config/recipes/agent)
 is a starting point for local, specialist, and frontier model lanes. Review its
-model bindings, classifier requirements, and replay retention before using it;
-its checked-in configuration records request and response data. Use the
+model bindings, decision-model questions, and replay retention before using
+it; its checked-in configuration records request and response data. Use the
 [recipe evaluation workflow](../benchmarking/agent-evaluation-loop) to test
 representative tasks before adopting a policy change.
 

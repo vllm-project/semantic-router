@@ -375,6 +375,6 @@ Model Card identities, and backend-pool compatibility before startup.
 
 ## Configure models used by Router tasks
 
-For classifiers, safety checks, and embeddings used inside the Router, start
-with [Router Runtime](../model-runtime/get-started/overview.md). It covers in-process and external
-models, their configuration, and operations.
+For the decision and embedding models the Router uses itself, start with the
+[model runtime](model-runtime/get-started/overview.md). It covers local and remote models,
+their configuration, and operations.

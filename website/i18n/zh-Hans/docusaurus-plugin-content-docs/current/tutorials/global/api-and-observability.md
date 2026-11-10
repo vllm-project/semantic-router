@@ -46,7 +46,7 @@ translation:
 POST /api/v1/config/validate
 Content-Type: application/json
 
-{"yaml":"version: v0.3\n..."}
+{"yaml":"version: v0.5\n..."}
 ```
 
 成功响应包含 `valid: true` 以及规范化后的规范 YAML。校验使用与 `PATCH /api/v1/config` 和 `PUT /api/v1/config` 相同的解析器和语义检查，但会原样保留 `${ENV_VAR}` 引用，而不是读取进程密钥。该端点需要 `config.read`；不意味着可以查看明文密钥。

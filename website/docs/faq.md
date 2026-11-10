@@ -62,7 +62,7 @@ selected model path.
 
 ## How do we measure routing accuracy and business value?
 
-Classifier accuracy is not the number that decides this. The question is whether a routing recipe **keeps answer quality while reducing cost and latency** against a strong single-model baseline — and that claim needs paired evidence, not a before-and-after anecdote.
+Signal accuracy is not the number that decides this. The question is whether a routing recipe **keeps answer quality while reducing cost and latency** against a strong single-model baseline — and that claim needs paired evidence, not a before-and-after anecdote.
 
 The repository's answer is **sr-bench**: freeze the cases, grader versions, request parameters and prices; run the strongest single model and the current mixture on the same aggregate; then read quality together with `100 × (1 − candidate cost / baseline cost)`. Two disciplines keep the number honest:
 

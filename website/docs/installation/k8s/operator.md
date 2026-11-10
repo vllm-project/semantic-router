@@ -147,8 +147,7 @@ spec:
 `spec.config.routing` is removed; a resource that sets it is refused.
 
 The remaining `spec.config` fields are Operator adapters for shared Router
-settings such as response cache, classifiers, tools, observability, and
-reasoning families. They are translated into canonical `global` and provider
+settings such as the response cache, reasoning effort, API and observability. They are translated into canonical `global` and provider
 sections. Consult the CRD reference rather than copying fields from a local
 `config.yaml` into arbitrary CR paths.
 

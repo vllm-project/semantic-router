@@ -207,7 +207,7 @@ Router 在接受响应之前会校验每个必需的答案。缺失的答案、�
 
 #### 试用路由 {#try-the-route}
 
-把模型、监听器、入口和配方片段合并到一个 `version: v0.3` 的配置文件中，连接 Vega Engine 端点，然后启动 Router：
+把模型、监听器、入口和配方片段合并到一个 `version: v0.5` 的配置文件中，连接 Vega Engine 端点，然后启动 Router：
 
 ```bash
 vllm-sr serve --config config.yaml
@@ -241,9 +241,9 @@ curl -sS http://localhost:8801/v1/systemone \
 
 #### 添加路由信号 {#add-routing-signals}
 
-原生信号检查完整的任务文档，包括其状态和问题。请求不提供 Chat 对话或受信任的身份信封。因此，引用 `authz`、`metadata`、`conversation`、`reask`、`user_feedback` 和 `input_modality`（包括通过投影引用）会导致配置校验失败。原生配方中也不能使用 KB 信号。
+原生信号检查完整的任务文档，包括其状态和问题。请求不携带 Chat 对话或受信任的身份，因此引用 `authz`、`metadata`、`conversation`、`turn_relation`、`user_feedback` 和 `input_modality`（包括通过投影引用）会导致配置校验失败。
 
-偏好信号必须使用原生决策任务部署。在它们共享请求生命周期之前，显式对比式或外部偏好适配器以及 MCP 领域分类器在原生配方中不可用。受支持的依赖模型的信号在共享的请求截止时间和调用账本之内保留各自的传输超时。
+受支持的依赖模型的信号在共享的请求截止时间和调用账本之内保留各自的传输超时。
 
 配方的 `strategy` 仍在匹配的决策之间进行选择。原生执行使用其显式阶段和预算，而不是 Chat 回退、候选要求、决策可靠性、输出约定或自适应控制。请为该原生配方关闭 Chat 回退。`modelRefs` 只声明别名；选择由阶段顺序决定，因此 Chat 推理控制和模型权重会被拒绝。提供商级别的重试和超时设置仍适用于远程交换。
 

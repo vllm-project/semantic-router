@@ -15,7 +15,7 @@ translation:
 1. Semantic Router 在哪里运行；以及
 2. 模型后端在哪里运行。
 
-Chat 提供方模型运行在同一主机、集群或托管 API 的可达端点后，vLLM-SR 不负责创建这些生成后端。它自己的判断、分类、embedding 和重排序模型由受管或附加的[模型运行时部署](../model-runtime/deploy/connect-the-router)提供。如果只需要判断服务、不需要 Chat 后端，可使用 [Engine 模式](../model-runtime/get-started/quickstart.md)。
+Chat 提供方模型运行在同一主机、集群或托管 API 的可达端点后，vLLM-SR 不负责创建这些生成后端。它自己的决策模型和嵌入模型由受管或挂接的[模型运行时部署](../model-runtime/deploy/connect-the-router)提供。如果只需要判断服务、不需要 Chat 后端，可使用 [Engine 模式](../model-runtime/get-started/quickstart.md)。
 
 ## 选择 Router 拓扑
 
@@ -43,7 +43,7 @@ Chat 提供方模型运行在同一主机、集群或托管 API 的可达端点�
 | 希望在 NVIDIA 上服务模型，或加速 Router 侧模型 | [NVIDIA CUDA](nvidia-cuda) |
 | Kubernetes 平台拥有模型部署和副本 | [推理平台](k8s/inference-platforms) |
 
-硬件是叠加层，而不是单独的 Router 拓扑。GPU 支持的模型服务器可以连接到 Docker 或 Kubernetes 的 Router 部署。除非测量表明本地嵌入或分类器能从 GPU 加速中受益，否则将 Router 保留在 CPU 上。
+硬件是叠加层，而不是单独的 Router 拓扑。GPU 支持的模型服务器可以连接到 Docker 或 Kubernetes 的 Router 部署。除非测量表明它的决策模型或嵌入能从 GPU 加速中受益，否则将 Router 保留在 CPU 上。
 
 在通过 Router 发送流量之前，先直接测试模型端点。已配置的 URL 并不能证明后端实现了所选线协议，或支持配方的上下文、模态和工具要求。
 

@@ -39,7 +39,7 @@ it:
 POST /api/v1/config/validate
 Content-Type: application/json
 
-{"yaml":"version: v0.3\n..."}
+{"yaml":"version: v0.5\n..."}
 ```
 
 Successful responses include `valid: true` and the normalized canonical YAML.
