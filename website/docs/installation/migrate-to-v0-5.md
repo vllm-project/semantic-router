@@ -359,6 +359,7 @@ global:
 | A bare `embeddings.default: <name>` | `embeddings.default: {deployment: <name>}` |
 | Embedding model keywords (`mmbert`, `qwen3`, ...) and the deployments they implied | Deployment names: `global.model_catalog.embeddings.default`, or a store's `embedding` block |
 | `embeddings.semantic`, `model_bindings.embedding` | `embeddings.default` |
+| An embedding model of an earlier release in `embeddings.semantic`, such as `models/mmbert-embed-32k-2d-matryoshka` | Its Vela 1.0 replacement, Vela Embedding: on the CPU the pre-declared `vela-embedding`. Re-embed what was indexed with the earlier model (migrate notes it) |
 | `embeddings.multimodal` | Removed: embeddings serve text recall; a decision about an image asks a `systemone` question with `input.image` |
 | `global.services.api.embeddings` and the Router's embeddings and similarity endpoints | Removed: the embedding deployment starts when a recall feature uses it |
 | A remote embedding's width and inputs | `capabilities.dimensions` and `capabilities.modalities` on its `openai_embeddings` deployment |

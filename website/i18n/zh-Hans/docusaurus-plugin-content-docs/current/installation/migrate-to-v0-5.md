@@ -325,6 +325,7 @@ global:
 | 只写名称的 `embeddings.default: <name>` | `embeddings.default: {deployment: <name>}` |
 | 嵌入模型关键词（`mmbert`、`qwen3` 等）以及它们隐含的部署 | 部署名称：`global.model_catalog.embeddings.default`，或存储的 `embedding` 块 |
 | `embeddings.semantic`、`model_bindings.embedding` | `embeddings.default` |
+| `embeddings.semantic` 中早期版本的嵌入模型，例如 `models/mmbert-embed-32k-2d-matryoshka` | 它的 Vela 1.0 替代模型 Vela Embedding：在 CPU 上即预先声明的 `vela-embedding`。用早期模型建立的索引需要重新嵌入（migrate 会给出提示） |
 | `embeddings.multimodal` | 已移除：嵌入只用于文本召回；关于图片的决策向 `systemone` 提出带 `input.image` 的问题 |
 | `global.services.api.embeddings` 以及 Router 的嵌入和相似度端点 | 已移除：召回功能用到嵌入部署时它才启动 |
 | 远程嵌入的向量宽度和输入 | 它的 `openai_embeddings` 部署上的 `capabilities.dimensions` 和 `capabilities.modalities` |

@@ -1071,7 +1071,8 @@
               "messages[].role",
               "content.file",
               "tools.defer_loading",
-              "reasoning.signature"
+              "reasoning.signature",
+              "store"
             ]
           },
           "type": "array"
