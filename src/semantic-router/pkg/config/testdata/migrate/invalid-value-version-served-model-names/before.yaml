@@ -1,6 +1,7 @@
-# A name a v0.3 document served by default that an entrypoint of the
-# document serves already stays that entrypoint's: here MoM, which the
-# private recipe serves. The default recipe keeps vllm-sr/auto and auto.
+# A v0.3 document whose entrypoint names a name v0.4 served by default, here
+# MoM, could not load on v0.4, which refused it as an entrypoint name. It was
+# written for main between v0.4 and v0.5, which served only its entrypoints
+# and vllm-sr/auto, and migrate adds no name.
 version: v0.3
 providers:
   defaults: {model: general}

@@ -928,6 +928,21 @@ func keepLooperModelNames(m *Migration, root *yaml.Node) {
 	}
 }
 
+// servedOnlyEntrypoints reports whether a v0.3 document was written for main
+// between v0.4 and v0.5, which refused auto and Looper model names and served
+// only its entrypoints: an entrypoint names a name v0.4 served by default,
+// which v0.4 refused as an entrypoint name.
+func servedOnlyEntrypoints(root *yaml.Node) bool {
+	reserved := previousAutoModelNames(mappingAt(root, "global", "router"))
+	for algorithm, looper := range looperAlgorithms {
+		if mappingValue(mappingAt(root, "global", "integrations", "looper", algorithm), "model_names") == nil {
+			reserved = append(reserved, looper.builtin)
+		}
+	}
+	served := chatEntrypointNames(root)
+	return slices.ContainsFunc(reserved, func(name string) bool { return served[name] })
+}
+
 // migrateLooperModelNames keeps what the model names of a Looper algorithm
 // did: a request for one ran the default recipe with only its decisions of
 // that algorithm. The names become an entrypoint of a recipe migrate writes,
@@ -1080,7 +1095,7 @@ func migrateAutoModelNames(m *Migration, at FormMatch) error {
 	if mappingValue(at.Parent, "auto_model_names") == nil && mappingValue(at.Parent, "auto_model_name") == nil {
 		return nil
 	}
-	names := previousAutoModelNames(at.Parent)
+	names := dropConfiguredModelNames(m, at, previousAutoModelNames(at.Parent))
 	m.Delete(at.Parent, "auto_model_names")
 	m.Delete(at.Parent, "auto_model_name")
 	deleteEmpty(m.Root(), "global", "router")
@@ -1124,4 +1139,26 @@ func migrateAutoModelNames(m *Migration, at FormMatch) error {
 	sequence = ensureSequence(m.Root(), "entrypoints")
 	sequence.Content = append([]*yaml.Node{entrypoint}, sequence.Content...)
 	return nil
+}
+
+// dropConfiguredModelNames drops from the auto model names migrate wrote for
+// a document that names none, which keepDefaultAutoModelNames notes at their
+// path, each name a configured model takes: an entrypoint name must be new,
+// and a request for the name reaches that model. A provider field it cannot
+// read leaves the name to the load of the migrated document, which refuses it.
+func dropConfiguredModelNames(m *Migration, at FormMatch, names []string) []string {
+	if !slices.ContainsFunc(m.notes, func(note ConfigWarning) bool { return note.Field == at.Path }) {
+		return names
+	}
+	var configured CanonicalConfig
+	if providers := resolveAlias(mappingValue(m.Root(), "providers")); providers != nil {
+		_ = providers.Decode(&configured.Providers)
+	}
+	return slices.DeleteFunc(names, func(name string) bool {
+		meaning := configuredEntrypointNameConflict(&configured, name)
+		if meaning != "" {
+			m.Changed(at.Path, fmt.Sprintf("the auto model name %s is dropped: it is already %s, which a request for it reaches", name, meaning))
+		}
+		return meaning != ""
+	})
 }

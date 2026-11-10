@@ -406,7 +406,7 @@ providers:
 | `provider: candle`、`ort` 或 `openvino` | `provider: model_runtime`，保留其设备，并使用其工件的 Hub 仓库；`precision`、`profile` 等引擎字段见[迁移到模型运行时](../model-runtime/migrate) |
 | `global.model_catalog.external[]` | 已移除；`memory_rewrite` 模型改为一个由 `global.stores.memory.query_rewrite` 指定的 `openai_chat` 部署，它的访问密钥改为环境变量 |
 | 后端的 `base_url`、`api_key_env`、`auth_header`、`auth_prefix`、`extra_headers` | `endpoint`（完整 URL）、`auth: {header, prefix, api_key_env}`、`headers` |
-| `global.router.auto_model_names`、`auto_model_name` | 默认配方的一个入口，使用上一版本所服务的名称：`auto_model_names`，否则为 `vllm-sr/auto`、`auto` 和 `auto_model_name`（未设置时为 `MoM`），因此两者都没写的早期版本文件会得到 `vllm-sr/auto`、`auto` 和 `MoM`；文件自己写了默认配方的入口时，新入口放在它旁边，原入口的名称保持不变，另一个入口已服务的名称也仍归该入口 |
+| `global.router.auto_model_names`、`auto_model_name` | 默认配方的一个入口，使用上一版本所服务的名称：`auto_model_names`，否则为 `vllm-sr/auto`、`auto` 和 `auto_model_name`（未设置时为 `MoM`），因此两者都没写的早期版本文件会得到 `vllm-sr/auto`、`auto` 和 `MoM`，但已被某个配置模型占用的名称除外，对它的请求现在会到达该模型；文件自己写了默认配方的入口时，新入口放在它旁边，原入口的名称保持不变，另一个入口已服务的名称也仍归该入口 |
 | `global.router.include_config_models_in_list` | `global.router.list_backend_models` |
 | `global.integrations.looper.endpoint` | 已移除：Router 在进程内发起 Looper 的模型调用 |
 | `global.integrations.looper.<algorithm>.model_names` | 使用这些名称的入口，指向迁移写出的配方：默认配方中只保留运行该算法的决策 |
@@ -414,7 +414,7 @@ providers:
 
 后端内联的 `api_key` 仍可加载，但不能与 `auth.api_key_env` 同时使用。[迁移模型资源](./model-resource-migration)完整展示了每种写法。
 
-Looper 算法的 `model_names` 让 `model` 为其中某个名称的请求只经过默认配方中运行该算法的决策（`flow` 对应 `workflows` 决策）。迁移保留了这一行为：为每个列表写出一个以默认配方和算法命名的配方，它是默认配方的副本，只保留这些决策；再写出一个使用这些名称、指向该配方的入口。多出一个配方后，默认配方的入口会标记为 `default: true`。唯一的变化是：这些决策都不匹配的请求，现在与其他入口一样转到默认模型，以前则会失败。没有任何决策运行过的名称从未服务过请求，迁移会将其删除。v0.3 文件若没有为默认配方的决策所运行的某个算法列出名称，则该算法服务的是其内置名称 `vllm-sr/remom`、`vllm-sr/fusion` 或 `vllm-sr/flow`，迁移以同样的方式写出该名称。
+Looper 算法的 `model_names` 让 `model` 为其中某个名称的请求只经过默认配方中运行该算法的决策（`flow` 对应 `workflows` 决策）。迁移保留了这一行为：为每个列表写出一个以默认配方和算法命名的配方，它是默认配方的副本，只保留这些决策；再写出一个使用这些名称、指向该配方的入口。多出一个配方后，默认配方的入口会标记为 `default: true`。唯一的变化是：这些决策都不匹配的请求，现在与其他入口一样转到默认模型，以前则会失败。没有任何决策运行过的名称从未服务过请求，迁移会将其删除。v0.3 文件若没有为默认配方的决策所运行的某个算法列出名称，则该算法服务的是其内置名称 `vllm-sr/remom`、`vllm-sr/fusion` 或 `vllm-sr/flow`，迁移以同样的方式写出该名称。v0.3 文件的入口若使用了 v0.4 默认服务的名称，例如 `vllm-sr/auto`、`MoM` 或 `vllm-sr/fusion`，则它是为 v0.4 与 v0.5 之间的 main 编写的：v0.4 拒绝这些入口名称，而 main 只服务入口，因此迁移不会为它写出其他名称。
 
 ```yaml removed
 global:
@@ -436,7 +436,8 @@ recipes:
     description: The fusion decisions of recipe default
     # 默认配方的信号与设置，只保留其 fusion 决策
 entrypoints:
-  - model_names: [vllm-sr/auto]
+  # 自动模型名称，这里的文件没有写出任何名称
+  - model_names: [vllm-sr/auto, auto, MoM]
     recipe: default
     default: true
   - model_names: [vllm-sr/fusion]

@@ -123,7 +123,10 @@ func TestMigratedModelNamesReachTheirRecipes(t *testing.T) {
 // model name is written (releases before v0.4 served auto and MoM, and v0.5
 // serves the default recipe as vllm-sr/auto), and a Looper algorithm's
 // built-in name for its decisions when it names no model names. The names an
-// entrypoint serves already stay its own.
+// entrypoint serves already stay its own, and a configured model's name
+// reaches that model. A v0.3 document whose entrypoints name one of those
+// names, which v0.4 refused, was written for main, which served only its
+// entrypoints, and serves them alone.
 func TestMigrateKeepsTheModelNamesAReleaseServed(t *testing.T) {
 	auto := map[string]string{"vllm-sr/auto": "default", "auto": "default", "MoM": "default"}
 	for before, want := range map[string]map[string]string{
@@ -141,9 +144,10 @@ func TestMigrateKeepsTheModelNamesAReleaseServed(t *testing.T) {
 		"testdata/migrate/invalid-value-version-default-model-names/before.yaml": {
 			"vllm-sr/auto": "default", "auto": "default", "MoM": "default", "vllm-sr/fusion": "default-fusion",
 		},
-		"testdata/migrate/invalid-value-version-served-model-names/before.yaml": {
-			"vllm-sr/auto": "default", "auto": "default", "MoM": "private",
-		},
+		"testdata/migrate/invalid-value-version-served-model-names/before.yaml":     {"vllm-sr/auto": "default", "MoM": "private"},
+		"testdata/migrate/invalid-value-version-configured-model-names/before.yaml": {"vllm-sr/auto": "default"},
+		"testdata/migrate_releases/main-accuracy/before.yaml":                       {"vllm-sr/auto": "default"},
+		"testdata/migrate_releases/main-feedback/before.yaml":                       {"vllm-sr/auto": "default"},
 	} {
 		migrated, _, err := MigrateConfig(readGolden(t, before))
 		if err != nil {
