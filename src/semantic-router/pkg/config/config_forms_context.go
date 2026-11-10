@@ -352,6 +352,7 @@ func migrateMCPRAG(m *Migration, at FormMatch) error {
 	}
 	if len(sources.Content) == 0 {
 		m.Delete(configuration, "sources")
+		keepGlobalMemoryOff(m, at, configuration)
 	}
 	return nil
 }

@@ -103,3 +103,23 @@ func TestMigrateKeepsWhetherADecisionRetrievesMemory(t *testing.T) {
 		}
 	}
 }
+
+// A decision whose only source was an mcp RAG source, which migrate drops,
+// still does not retrieve the memory it would inherit.
+func TestMigrateKeepsMemoryOffWhenItDropsTheOnlyMCPSource(t *testing.T) {
+	mcp := `{type: context, configuration: {enabled: true, sources: [{type: rag, backend: mcp, backend_config: {server_name: docs-server, tool_name: retrieve_docs}}], compress: {mode: auto}}}`
+	global := `{stores: {memory: {backend: milvus, milvus: {address: "127.0.0.1:19530"}}}, plugins: [{type: context, configuration: {enabled: true, sources: [{type: memory}]}}]}`
+	doc := strings.NewReplacer("PLUGINS", mcp, "GLOBAL", global, "RECIPE", "[]").Replace(contextFormsDoc)
+	migrated, _, err := MigrateConfig([]byte(doc))
+	if err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	cfg, err := ParseYAMLBytes(migrated)
+	if err != nil {
+		t.Fatalf("load: %v\n%s", err, migrated)
+	}
+	context := cfg.ContextPlugin(cfg.GetDecisionByName("assistant"))
+	if context.Source(ContextSourceMemory) != nil || !context.Compress.CompressesRequest() {
+		t.Fatalf("context = %+v, want compression and no memory\n%s", context, migrated)
+	}
+}
