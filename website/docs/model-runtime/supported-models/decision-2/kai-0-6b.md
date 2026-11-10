@@ -2,7 +2,7 @@
 title: "Decision-2.0-Kai-0.6B"
 sidebar_label: "Kai-0.6B"
 sidebar_position: 2
-description: "The smallest Decision 2.0 model: fast, simple routing questions, and the default choice to start with."
+description: "The smallest Decision 2.0 model, for fast, simple routing questions: the size to try first in this family."
 custom_edit_url: null
 ---
 
@@ -13,7 +13,7 @@ import TabItem from '@theme/TabItem'
 
 # Decision-2.0-Kai-0.6B
 
-The smallest Decision 2.0 model: fast, simple routing questions, and the default choice to start with. Two questions take about 0.2 s on 16 CPU cores.
+The smallest Decision 2.0 model, for fast, simple routing questions: the size to try first in this family. Two questions take about 0.2 s on 16 CPU cores.
 
 | Property | Value |
 | --- | --- |

@@ -13,8 +13,8 @@ translation:
 
 Decision 3.0（d3）零样本回答你关于文本、图像和视频的 `choice`、`noul` 和 `score` 问题。一个请求中的每个问题看到的是同样的图像和视频。这个家族运行在 GPU 上，不返回 span。
 
-```bash title="Start the smallest size on an AMD Instinct MI325X"
-vllm-sr serve vllm-sr/d3-lite --engine --platform rocm
+```bash title="Start the smallest size on an AMD GPU"
+vllm-sr serve vllm-sr/d3-edge -e --platform rocm
 ```
 
 ## 规格 {#sizes}

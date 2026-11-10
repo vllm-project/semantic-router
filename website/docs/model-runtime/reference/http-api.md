@@ -197,7 +197,7 @@ vector space, so you can keep vectors of different settings apart.
 {
   "tasks": [
     {"id": "domain", "classify": {"model": "vela-domain", "input": ["What is 2 + 2?"]}},
-    {"id": "kind", "decisions": {"model": "decision-kai", "state": "What is 2 + 2?",
+    {"id": "kind", "decisions": {"model": "decision-edge", "state": "What is 2 + 2?",
       "questions": {"math": {"type": "noul", "instructions": "Is this a math question?"}}}}
   ],
   "options": {"deadline_ms": 80}

@@ -34,7 +34,7 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev --no-launch
 
 ## 2. 运行模型 {#2-serve-a-model}
 
-启动 Decision 2.0 Kai，最小的决策模型。决策模型回答你用自然语言写的问题。
+启动 Decision 2.0 Kai-0.6B，一个能在 CPU 上运行的小型决策模型。决策模型回答你用自然语言写的问题。
 
 <Tabs groupId="platform">
 <TabItem value="cpu" label="CPU" default>
@@ -80,7 +80,7 @@ curl -s localhost:8899/v1/systemone/models
 ```
 
 :::tip 更大的模型和多模态模型
-Decision 3.0 模型还能回答关于图像和视频的问题。在 AMD Instinct MI325X 上用 `vllm-sr serve vllm-sr/d3-lite --engine --platform rocm` 启动一个，并按[Router 与 Engine 模式](https://github.com/vllm-project/semantic-router/blob/main/src/vllm-sr/INSTANCE_MODES.md#ask-about-images-and-videos)中的说明发送图像和视频。`vllm-sr/d3-turbo` 对每个输入只读取一次就回答它的所有问题，还能在图像和视频中定位物体（[Box 和 track 问题](https://github.com/vllm-project/semantic-router/blob/main/src/vllm-sr/INSTANCE_MODES.md#find-things-in-images-and-videos)）；`vllm-sr/d3-ultra` 会把文本请求的问题列表放在其状态之前读取。[支持的模型](../supported-models/overview.md)列出了每个模型。
+Decision 3.0 模型还能回答关于图像和视频的问题。在 AMD GPU 上用 `vllm-sr serve vllm-sr/d3-edge -e --platform rocm` 启动最小的 d3-edge，并按[Router 与 Engine 模式](https://github.com/vllm-project/semantic-router/blob/main/src/vllm-sr/INSTANCE_MODES.md#ask-about-images-and-videos)中的说明发送图像和视频。`vllm-sr/d3-turbo` 对每个输入只读取一次就回答它的所有问题，还能在图像和视频中定位物体（[Box 和 track 问题](https://github.com/vllm-project/semantic-router/blob/main/src/vllm-sr/INSTANCE_MODES.md#find-things-in-images-and-videos)）；`vllm-sr/d3-ultra` 会把文本请求的问题列表放在其状态之前读取。[支持的模型](../supported-models/overview.md)列出了每个模型。
 :::
 
 <details>
@@ -88,7 +88,7 @@ Decision 3.0 模型还能回答关于图像和视频的问题。在 AMD Instinct
 
 - 没有 `--config`，且工作目录中也没有 `config.yaml` 时，Engine 模式把每个模型的配置、状态和下载内容保存在 `~/.local/state/vllm-sr/engine/<model>`。
 - 初始的 Engine 配置在默认监听器上发布所选模型。已有的配置会保留其显式的 `listeners[].systemone.models` 允许列表和 API 密钥；以另一种模式重启或选择模型都不会扩大它。
-- 每次不带 `--engine` 启动都使用 Router 模式；仅指定 MODEL 不会选择 Engine 模式。不带参数的 `vllm-sr serve` 保留已配置的默认判断部署，在新配置中则初始化 Vela 2.0 0.3B。
+- 每次不带 `--engine` 启动都使用 Router 模式；仅指定 MODEL 不会选择 Engine 模式。不带参数的 `vllm-sr serve` 保留已配置的默认判断部署，在新配置中则初始化 Vela 3.0 vela3-fast。
 
 </details>
 

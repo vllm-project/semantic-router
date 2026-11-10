@@ -35,7 +35,7 @@ configuration has loaded. Until then `/ready` returns `503` and
 `vllm-sr serve` keeps waiting, printing what the router waits for:
 
 ```text
-Waiting for Router-managed model deployments, 0 of 1 ready: decision-kai (vllm-sr/Decision-2.0-Kai-0.6B) loading
+Waiting for Router-managed model deployments, 0 of 1 ready: decision-edge (vllm-sr/d3-edge) loading
 ```
 
 `/startup-status` reports `phase: loading_model_deployments` and lists each

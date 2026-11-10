@@ -39,8 +39,8 @@ answers are the ones the models were released with
 
 ## 2. Serve a model
 
-Start Decision 2.0 Kai, the smallest decision model. A decision model answers
-questions you write in plain language.
+Start Decision 2.0 Kai-0.6B, a small decision model that runs on a CPU. A
+decision model answers questions you write in plain language.
 
 <Tabs groupId="platform">
 <TabItem value="cpu" label="CPU" default>
@@ -91,10 +91,10 @@ curl -s localhost:8899/v1/systemone/models
 ```
 
 :::tip Larger and multimodal models
-Decision 3.0 models also answer questions about images and videos. On an AMD
-Instinct MI325X, start one with
-`vllm-sr serve vllm-sr/d3-lite --engine --platform rocm`, and send images and
-videos as described in
+Decision 3.0 models also answer questions about images and videos. Start the
+smallest, d3-edge, on an AMD GPU with
+`vllm-sr serve vllm-sr/d3-edge -e --platform rocm`, and send images and videos
+as described in
 [Router and Engine modes](https://github.com/vllm-project/semantic-router/blob/main/src/vllm-sr/INSTANCE_MODES.md#ask-about-images-and-videos).
 `vllm-sr/d3-turbo` reads each input once for all of its questions and also
 finds things in images and videos
@@ -115,7 +115,7 @@ state. [Supported models](../supported-models/overview.md) lists every model.
   mode or selecting a model never broadens it.
 - Every start without `--engine` uses Router mode; MODEL alone does not select
   Engine mode. Bare `vllm-sr serve` preserves the configured default judgment
-  deployment, or initializes Vela 2.0 0.3B in a new configuration.
+  deployment, or initializes Vela 3.0 vela3-fast in a new configuration.
 
 </details>
 

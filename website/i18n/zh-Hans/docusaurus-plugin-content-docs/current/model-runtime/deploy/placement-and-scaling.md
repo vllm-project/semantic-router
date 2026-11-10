@@ -15,7 +15,7 @@ translation:
 一个逻辑部署可以作为一个或多个独立的**副本**运行，每个副本都是自己的 worker 进程，并持有自己的一份权重。用副本在更多 GPU 上增加计算能力；用 CPU 线程数确定 CPU 上 worker 的规模。
 
 ```bash title="Two workers of the default deployment on two GPUs"
-vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
+vllm-sr serve vllm-sr/d3-edge -e --platform rocm -dp 2 --device-ids 0,1
 ```
 
 ![按部署分派副本，以及模型 worker 内部的接口](/img/architecture/system-one/03-serving-engine-and-workers.svg)
@@ -26,9 +26,9 @@ vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
 
 ```bash
 # Two workers on one explicitly selected host GPU.
-vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0
+vllm-sr serve vllm-sr/d3-edge -e --platform rocm -dp 2 --device-ids 0
 # Two workers across two host GPUs.
-vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
+vllm-sr serve vllm-sr/d3-edge -e --platform rocm -dp 2 --device-ids 0,1
 ```
 
 - 没有设备 ID 时，新的 GPU 放置使用前 N 块可用 GPU，容量不足时拒绝；它不会悄悄把所有 worker 放到同一块卡上。已有的放置按其声明的顺序调整规模。
@@ -44,7 +44,7 @@ global:
     deployments:
       primary:
         provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-4B
+        artifact: vllm-sr/d3-edge
         replicas:
           - device: rocm:0
           - device: rocm:1

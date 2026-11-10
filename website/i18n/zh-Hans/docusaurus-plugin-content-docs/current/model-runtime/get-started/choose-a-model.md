@@ -72,7 +72,7 @@ Decision 1.0、2.0 和 3.0 不回答 span 问题。当其中一个作为默认�
 决策模型是回答 Router 判断任务以及没有被任何绑定或规则分配给其他部署的 [`systemone` 问题](../../tutorials/signal/systemone.md)的部署。部署只需声明一次，然后引用其确切的键。没有覆盖时，内置默认值是 vela3-fast。
 
 ```bash title="Pass a model to change the default deployment"
-vllm-sr serve vllm-sr/Vela-2.0-4B --platform rocm
+vllm-sr serve vllm-sr/vela3-lite --platform rocm
 ```
 
 ```yaml title="The same change in config.yaml"
@@ -81,7 +81,7 @@ global:
     deployments:
       primary:
         provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-4B
+        artifact: vllm-sr/vela3-lite
         device: rocm:0
     system:
       decision_model:

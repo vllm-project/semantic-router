@@ -75,9 +75,9 @@ router 托管的模型，在部署上设这些字段：
 global:
   model_catalog:
     deployments:
-      decision-lux:
+      decision-edge:
         provider: model_runtime
-        artifact: vllm-sr/Decision-2.0-Lux-9B
+        artifact: vllm-sr/d3-edge
         device: rocm:0
         max_num_seqs: 256
         batch_window_ms: 1.0
@@ -86,7 +86,7 @@ global:
 `vllm-sr serve` 把它们设在默认部署上，`vllm-srun serve` 则把它们作为参数，作用于它服务的每个模型（[models 文件](../reference/commands#models-file)里的条目可以各自设置）：
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Lux-9B --engine --platform rocm --device-ids 0 --max-num-seqs 256
+vllm-sr serve vllm-sr/d3-edge -e --platform rocm --device-ids 0 --max-num-seqs 256
 vllm-srun serve vllm-sr/Vela-2.0-0.3B --device cpu --batch-window-ms 0
 ```
 

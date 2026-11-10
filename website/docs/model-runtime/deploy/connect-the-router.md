@@ -23,9 +23,9 @@ wherever its workers run.
 global:
   model_catalog:
     deployments:
-      decision-kai:
+      decision-edge:
         provider: model_runtime
-        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        artifact: vllm-sr/d3-edge
         device: auto
 ```
 
@@ -41,9 +41,9 @@ global:
     deployments:
       decision-shared:
         provider: model_runtime
-        artifact: vllm-sr/Decision-2.0-Lux-9B
+        artifact: vllm-sr/d3-edge
         endpoint: http://decision-runtime.example.com:8100
-        model: Decision-2.0-Lux-9B
+        model: d3-edge
 ```
 
 With `endpoint`, the Router attaches to a runtime it does not start, restart or
@@ -68,7 +68,7 @@ resources. Router and Engine are two capabilities of the same frontend:
 - **Router** additionally runs signals, decisions, algorithms and Chat routing.
 
 ```bash
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
+vllm-sr serve vllm-sr/d3-edge -e
 vllm-sr serve --config config.yaml
 ```
 
@@ -117,9 +117,9 @@ global:
         input:
           max_tokens: 512
           overflow: reject
-      decision-kai:
+      decision-edge:
         provider: model_runtime
-        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        artifact: vllm-sr/d3-edge
         device: auto
 ```
 
@@ -174,23 +174,23 @@ unchecked task. See [readiness](./readiness-and-monitoring.md#when-a-model-is-no
 Start a runtime anywhere the Router can reach, then point a deployment at it:
 
 ```bash title="On the runtime host"
-vllm-srun serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --host 0.0.0.0 --port 8100
+vllm-srun serve vllm-sr/d3-edge --device rocm:0 --host 0.0.0.0 --port 8100
 ```
 
 ```yaml title="config.yaml"
 global:
   model_catalog:
     deployments:
-      gpu-lux:
+      gpu-edge:
         provider: model_runtime
-        artifact: vllm-sr/Decision-2.0-Lux-9B
+        artifact: vllm-sr/d3-edge
         endpoint: http://gpu-runtime.example.com:8100
-        model: Decision-2.0-Lux-9B
+        model: d3-edge
 ```
 
 - `model` is the ID the runtime lists in `GET /v1/models`. A runtime lists a
   published model under its repository name without the organization, here
-  `Decision-2.0-Lux-9B`, unless `--served-model-name` gives it another one.
+  `d3-edge`, unless `--served-model-name` gives it another one.
   Without `model` the Router asks for the deployment name, and a name the
   runtime does not serve leaves the deployment unavailable.
 - `endpoint` takes `http://host:port`, `https://host:port` or a Unix socket,
@@ -218,7 +218,7 @@ To share GPU models between several Routers in a cluster, see
 
 ## Publish a native API
 
-With a `primary` deployment of `vllm-sr/Vela-2.0-4B`, add an explicit grant to
+With a `primary` deployment of `vllm-sr/vela3-fast`, add an explicit grant to
 a standalone listener so clients can ask it questions directly:
 
 ```yaml title="config.yaml"
@@ -227,13 +227,13 @@ listeners:
     address: 0.0.0.0
     port: 8899
     systemone:
-      models: [vllm-sr/Vela-2.0-4B]
+      models: [vllm-sr/vela3-fast]
 global:
   model_catalog:
     deployments:
       primary:
         provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-4B
+        artifact: vllm-sr/vela3-fast
 ```
 
 - Use `GET /v1/systemone/models` to discover published native models, then send

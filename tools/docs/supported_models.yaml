@@ -90,8 +90,8 @@ models:
   vllm-sr/Decision-2.0-Kai-0.6B:
     page: kai-0-6b
     summary: >-
-      The smallest Decision 2.0 model: fast, simple routing questions, and the
-      default choice to start with. Two questions take about 0.2 s on 16 CPU
+      The smallest Decision 2.0 model, for fast, simple routing questions: the
+      size to try first in this family. Two questions take about 0.2 s on 16 CPU
       cores.
     records: [rocm-mi325x-parity.md, rocm-mi325x-batching.md, cuda-decision2-performance.md]
   vllm-sr/Decision-2.0-Eos-0.8B:

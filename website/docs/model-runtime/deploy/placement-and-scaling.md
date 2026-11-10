@@ -12,7 +12,7 @@ own worker process with its own copy of the weights. Use replicas to add
 compute capacity on more GPUs; use CPU threads to size a worker on the CPU.
 
 ```bash title="Two workers of the default deployment on two GPUs"
-vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
+vllm-sr serve vllm-sr/d3-edge -e --platform rocm -dp 2 --device-ids 0,1
 ```
 
 ![Per-deployment replica dispatch and the interfaces inside a model worker](/img/architecture/system-one/03-serving-engine-and-workers.svg)
@@ -24,9 +24,9 @@ arguments are separate from placement:
 
 ```bash
 # Two workers on one explicitly selected host GPU.
-vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0
+vllm-sr serve vllm-sr/d3-edge -e --platform rocm -dp 2 --device-ids 0
 # Two workers across two host GPUs.
-vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
+vllm-sr serve vllm-sr/d3-edge -e --platform rocm -dp 2 --device-ids 0,1
 ```
 
 - Without device IDs, a new GPU placement uses the first N available GPUs and
@@ -45,7 +45,7 @@ global:
     deployments:
       primary:
         provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-4B
+        artifact: vllm-sr/d3-edge
         replicas:
           - device: rocm:0
           - device: rocm:1

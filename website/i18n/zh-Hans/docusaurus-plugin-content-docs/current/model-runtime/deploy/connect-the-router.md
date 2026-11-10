@@ -24,9 +24,9 @@ import TabItem from '@theme/TabItem'
 global:
   model_catalog:
     deployments:
-      decision-kai:
+      decision-edge:
         provider: model_runtime
-        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        artifact: vllm-sr/d3-edge
         device: auto
 ```
 
@@ -41,9 +41,9 @@ global:
     deployments:
       decision-shared:
         provider: model_runtime
-        artifact: vllm-sr/Decision-2.0-Lux-9B
+        artifact: vllm-sr/d3-edge
         endpoint: http://decision-runtime.example.com:8100
-        model: Decision-2.0-Lux-9B
+        model: d3-edge
 ```
 
 有 `endpoint` 时，Router 附加到一个它不负责启动、重启或停止的运行时；参见[附加你自己运行的运行时](#attach-to-a-runtime-you-run)。
@@ -63,7 +63,7 @@ global:
 - **Router** 还会运行信号、决策、算法和 Chat 路由。
 
 ```bash
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
+vllm-sr serve vllm-sr/d3-edge -e
 vllm-sr serve --config config.yaml
 ```
 
@@ -99,9 +99,9 @@ global:
         input:
           max_tokens: 512
           overflow: reject
-      decision-kai:
+      decision-edge:
         provider: model_runtime
-        artifact: vllm-sr/Decision-2.0-Kai-0.6B
+        artifact: vllm-sr/d3-edge
         device: auto
 ```
 
@@ -145,21 +145,21 @@ Router 会依据模型的描述检查绑定：head、标签、维度、问题类
 在 Router 能访问到的任何地方启动一个运行时，然后让部署指向它：
 
 ```bash title="On the runtime host"
-vllm-srun serve vllm-sr/Decision-2.0-Lux-9B --device rocm:0 --host 0.0.0.0 --port 8100
+vllm-srun serve vllm-sr/d3-edge --device rocm:0 --host 0.0.0.0 --port 8100
 ```
 
 ```yaml title="config.yaml"
 global:
   model_catalog:
     deployments:
-      gpu-lux:
+      gpu-edge:
         provider: model_runtime
-        artifact: vllm-sr/Decision-2.0-Lux-9B
+        artifact: vllm-sr/d3-edge
         endpoint: http://gpu-runtime.example.com:8100
-        model: Decision-2.0-Lux-9B
+        model: d3-edge
 ```
 
-- `model` 是运行时在 `GET /v1/models` 中列出的 ID。运行时以去掉组织名的仓库名列出已发布的模型，这里是 `Decision-2.0-Lux-9B`，除非 `--served-model-name` 为它指定了另一个名称。没有 `model` 时，Router 请求的是部署名称；运行时不提供的名称会让部署不可用。
+- `model` 是运行时在 `GET /v1/models` 中列出的 ID。运行时以去掉组织名的仓库名列出已发布的模型，这里是 `d3-edge`，除非 `--served-model-name` 为它指定了另一个名称。没有 `model` 时，Router 请求的是部署名称；运行时不提供的名称会让部署不可用。
 - `endpoint` 接受 `http://host:port`、`https://host:port` 或 Unix 套接字 `unix:///path/to/runtime.sock`。
 - Router 不会启动、重启或停止附加的运行时；它检查其健康状况，在它宕机期间把它视为不可用。
 - 附加的运行时应与 Router 来自同一个发行版。Router 只接受恰好提供其契约版本的运行时，其他版本会被报告为 `incompatible`，原因中包含两个版本。
@@ -174,7 +174,7 @@ global:
 
 ## 发布原生 API {#publish-a-native-api}
 
-对于 `vllm-sr/Vela-2.0-4B` 的 `primary` 部署，在独立的监听器上添加显式授权，让客户端可以直接向它提问：
+对于 `vllm-sr/vela3-fast` 的 `primary` 部署，在独立的监听器上添加显式授权，让客户端可以直接向它提问：
 
 ```yaml title="config.yaml"
 listeners:
@@ -182,13 +182,13 @@ listeners:
     address: 0.0.0.0
     port: 8899
     systemone:
-      models: [vllm-sr/Vela-2.0-4B]
+      models: [vllm-sr/vela3-fast]
 global:
   model_catalog:
     deployments:
       primary:
         provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-4B
+        artifact: vllm-sr/vela3-fast
 ```
 
 - 用 `GET /v1/systemone/models` 发现已发布的原生模型，然后用那个 `model` ID 发送 `POST /v1/systemone` 或 `POST /v1/decisions`。

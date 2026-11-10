@@ -17,7 +17,7 @@ every option of both, and the models file a worker can read.
 Use Engine mode for native System One serving without Chat backends:
 
 ```bash
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
+vllm-sr serve vllm-sr/d3-edge -e
 ```
 
 | Option | Default | Meaning |
@@ -116,8 +116,8 @@ models:
   - model: vllm-sr/Vela-1.0-Encoder-307M-Domain
     name: vela-domain
     device: cpu
-  - model: vllm-sr/Decision-2.0-Kai-0.6B
-    name: decision-kai
+  - model: vllm-sr/d3-edge
+    name: decision-edge
     device: auto
     enable_shared_context: false
 ```

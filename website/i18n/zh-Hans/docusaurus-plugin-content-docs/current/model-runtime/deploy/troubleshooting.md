@@ -36,7 +36,7 @@ curl -s localhost:9190/metrics | grep '^vsr_model_runtime'
 `vllm-sr serve` 会一直等待，并打印路由器还在等待什么：
 
 ```text
-Waiting for Router-managed model deployments, 0 of 1 ready: decision-kai (vllm-sr/Decision-2.0-Kai-0.6B) loading
+Waiting for Router-managed model deployments, 0 of 1 ready: decision-edge (vllm-sr/d3-edge) loading
 ```
 
 `/startup-status` 报告 `phase: loading_model_deployments`，并在 `model_deployments` 中列出每个

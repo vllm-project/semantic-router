@@ -121,7 +121,7 @@ or rule gives another deployment. Declare the deployment once, then name its
 exact key. Without an override, the built-in default is vela3-fast.
 
 ```bash title="Pass a model to change the default deployment"
-vllm-sr serve vllm-sr/Vela-2.0-4B --platform rocm
+vllm-sr serve vllm-sr/vela3-lite --platform rocm
 ```
 
 ```yaml title="The same change in config.yaml"
@@ -130,7 +130,7 @@ global:
     deployments:
       primary:
         provider: model_runtime
-        artifact: vllm-sr/Vela-2.0-4B
+        artifact: vllm-sr/vela3-lite
         device: rocm:0
     system:
       decision_model:

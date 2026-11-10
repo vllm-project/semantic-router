@@ -83,8 +83,8 @@ models:
   - model: vllm-sr/Vela-1.0-Encoder-307M-Domain
     name: vela-domain
     device: cpu
-  - model: vllm-sr/Decision-2.0-Kai-0.6B
-    name: decision-kai
+  - model: vllm-sr/d3-edge
+    name: decision-edge
     device: auto
     enable_shared_context: false
 ```

@@ -10,8 +10,8 @@ Decision 3.0 (d3) answers your own `choice`, `noul` and `score` questions about
 text, images and video, zero-shot. Every question in a request sees the same
 images and videos. The family runs on a GPU and returns no spans.
 
-```bash title="Start the smallest size on an AMD Instinct MI325X"
-vllm-sr serve vllm-sr/d3-lite --engine --platform rocm
+```bash title="Start the smallest size on an AMD GPU"
+vllm-sr serve vllm-sr/d3-edge -e --platform rocm
 ```
 
 ## Sizes

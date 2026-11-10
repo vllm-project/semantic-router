@@ -64,7 +64,7 @@ spec:
         - name: runtime
           image: ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest
           command: ["vllm-srun"]
-          args: ["serve", "vllm-sr/Decision-2.0-Lux-9B", "--device", "rocm:0", "--host", "0.0.0.0", "--port", "8100"]
+          args: ["serve", "vllm-sr/d3-edge", "--device", "rocm:0", "--host", "0.0.0.0", "--port", "8100"]
           resources:
             limits: {amd.com/gpu: 1}
           ports:

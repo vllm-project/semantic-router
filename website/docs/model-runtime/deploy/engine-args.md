@@ -16,9 +16,9 @@ keeps the runtime's default.
 global:
   model_catalog:
     deployments:
-      decision-lux:
+      decision-edge:
         provider: model_runtime
-        artifact: vllm-sr/Decision-2.0-Lux-9B
+        artifact: vllm-sr/d3-edge
         device: rocm:0
         max_num_seqs: 256
         batch_window_ms: 1.0
@@ -242,7 +242,7 @@ and `vllm-srun serve` takes them as flags for every model it serves (a
 [models file](../reference/commands.md#models-file) entry can set its own):
 
 ```bash
-vllm-sr serve vllm-sr/Decision-2.0-Lux-9B --engine --platform rocm --device-ids 0 --max-num-seqs 256
+vllm-sr serve vllm-sr/d3-edge -e --platform rocm --device-ids 0 --max-num-seqs 256
 vllm-srun serve vllm-sr/Vela-2.0-0.3B --device cpu --batch-window-ms 0
 ```
 

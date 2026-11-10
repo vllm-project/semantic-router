@@ -263,7 +263,7 @@ def test_models_file_example_loads_with_the_runtime_loader(tmp_path):
 
     models = _runtime_config_module().load_models_file(path)
 
-    assert [model.name for model in models] == ["vela-domain", "decision-kai"]
+    assert [model.name for model in models] == ["vela-domain", "decision-edge"]
 
 
 OPENAPI_URI = "urn:vllm-srun:openapi"
