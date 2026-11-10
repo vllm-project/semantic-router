@@ -3,7 +3,7 @@ is_mtpe: false
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/algorithm/looper/fusion.md"
-  outdated: false
+  outdated: true
 ---
 
 # 融合
@@ -113,8 +113,12 @@ recipes:
                 max_completion_tokens: 384
 ```
 
-`output_contract` 是决策范围的提示词文本。把它用于应同时作用于 Fusion、Flow 和 ReMoM 的基准或应用格式要求，而不是把任务特定提示词硬编码进算法。
-使用 `output_contract_spec` 做类型化的路由器可执行归一化和后处理，例如 choice 提取、终端动作 JSON 归一化或引用解引用。提取默认精确匹配 `content`；仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
+| 字段 | 用途 |
+| --- | --- |
+| `output_contract` | 决策范围的提示词文本：应同时作用于 Fusion、Flow 和 ReMoM 的基准或应用格式要求，而不是硬编码进算法的任务特定提示词。 |
+| `output_contract_spec` | 由 Router 执行的类型化归一化和后处理，例如 choice 提取、终端动作 JSON 归一化或引用解引用。 |
+
+提取默认精确匹配 `content`。仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
 
 最小算法配置：
 
@@ -219,16 +223,23 @@ recipes:
 
 内置提示词和阶段边界是刻意区分的：
 
-- `separate` 要求紧凑的结构化 JSON，且不使用工具。分析传输失败会被记录，最终合成仍从面板继续。当启用 `include_analysis` 时，解析失败可以作为原始 `parse_failed` 追踪证据出现。最终合成仍是终端的，并可以使用请求工具。
-- `one_call` 不产生结构化分析产物。它的单个终端提示要求裁判比较面板、解决矛盾，并在一次调用中合成客户端答案。失败是终端的。
-- `none` 不产生结构化分析产物。它的单个终端提示要求裁判直接从面板合成，不要求单独或合并的分析。失败是终端的。
+| 模式 | 分析 | 终端步骤 | 失败时 |
+| --- | --- | --- | --- |
+| `separate` | 紧凑的结构化 JSON，不使用工具 | 最终合成，可以使用请求工具 | 分析传输失败会被记录，合成仍从面板继续；启用 `include_analysis` 时，解析失败可以作为 `parse_failed` 追踪证据出现。 |
+| `one_call` | 无 | 一个提示要求裁判比较面板、解决矛盾并合成回答 | 终止 |
+| `none` | 无 | 一个提示要求裁判直接从面板合成 | 终止 |
 
 对每种模式，`synthesis_template` 都会替换完整的内置终端提示。在 `one_call` 和 `none` 中，`{{analysis}}` 渲染为空字符串。配置校验会拒绝这些模式下的非空 `analysis_template`，而不是静默忽略。
 
 Fusion 用量会聚合完整面板成本和每次成功的裁判响应。上报的迭代次数是配置的面板尝试次数，加上 `separate` 的两次裁判调用，或加上 `one_call` 和 `none` 的一次裁判调用。
 
-有效的 `analysis_mode` 记录在 Fusion 内部追踪中，由 `looper.Response.IntermediateResponses` 携带。仅有模式值并不会在公开响应中增加顶层 `fusion` 成员。公开追踪信封保持现有谓词：仅当启用了分析或中间响应、某个面板模型失败，或存在依据证据时才发出。公开模式追踪传输仍推迟到
-[issue #3378](https://github.com/vllm-project/semantic-router/issues/3378)。
+有效的 `analysis_mode` 记录在 Fusion 内部追踪中，由 `looper.Response.IntermediateResponses` 携带。仅有模式值不会在公开响应中增加顶层 `fusion` 成员，它只在以下情况出现：
+
+- 启用了分析或中间响应；
+- 某个面板模型失败；或
+- 存在依据证据。
+
+公开的模式追踪传输在 [issue #3378](https://github.com/vllm-project/semantic-router/issues/3378) 中跟踪。
 
 ## 依据感知合成
 
@@ -249,7 +260,9 @@ Fusion 用量会聚合完整面板成本和每次成功的裁判响应。上报�
 可用响应法定人数在依据处理之前，对原始面板检查。
 如果 `filter` 策略随后移除了响应，Fusion 不会对缩减后的裁判输入再做第二次法定人数检查。
 
-> 依据衡量的是忠实度/一致性，不是真值。在没有权威来源时，它可以下调支持最少的响应权重，但不能证明正确性。**硬丢弃**相互一致性最低的响应（`filter` 策略）在有争议的事实问题上会明显*损害*效果 — 三个模型可能一起自信地出错，而单独异议者是对的 — 因此默认是 `weight`。该默认背后的评测见 `bench/grounded_fusion/FINDINGS.md`。
+:::warning 依据衡量的是一致性，不是真值
+在没有权威来源时，它可以下调支持最少的响应的权重，但不能证明正确性。硬丢弃一致性最低的响应（`filter` 策略）在有争议的事实问题上会明显损害效果：三个模型可能一起自信地出错，而唯一的异议者是对的。因此默认是 `weight`；评测见 `bench/grounded_fusion/FINDINGS.md`。
+:::
 
 依据评分询问决策模型的[幻觉](../../signal/application/hallucination)问题，需要支持 span 的部署。如果它不可用，`on_error: skip` 会回退到普通 Fusion。
 

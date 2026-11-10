@@ -3,14 +3,14 @@ is_mtpe: false
 title: 配置
 description: 理解 canonical v0.5 YAML 文档，以及 providers、配方、entrypoints、服务和密钥应放在哪里。
 translation:
-  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
+  source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
   source_file: "docs/installation/configuration.md"
-  outdated: true
+  outdated: false
 ---
 
-# 配置
+# 配置 {#configuration}
 
-Semantic Router 在 CLI、控制面板、Helm 和 Operator 之间使用同一份 canonical YAML 文档。顶层结构为：
+Semantic Router 在 CLI、Dashboard、Helm 和 Operator 之间使用同一份 canonical YAML 文档。顶层结构为：
 
 ```yaml
 version:
@@ -22,46 +22,70 @@ entrypoints:
 global:
 ```
 
-大多数部署从 `version`、`listeners`、`providers` 和一个配方开始。只有一个配方的文档不需要 `entrypoints`：该配方服务 `vllm-sr/auto`。多个配方需要 `entrypoints`，且恰好一个 chat entrypoint 标记 `default: true`。仅当共享服务、默认插件或运行时行为与内置默认值不同时，才添加 `global` 设置。
+- **从小处开始。** 大多数部署从 `version`、`listeners`、`providers` 和一个配方开始。
+- **一个配方不需要入口。** 它服务 `vllm-sr/auto`。多个配方需要 `entrypoints`，且恰好一个 chat 入口标记 `default: true`。
+- **只在需要时添加 `global`：** 用于共享服务、默认插件，或与内置默认值不同的运行时行为。
 
-## 各节的职责
+## 各节的职责 {#what-belongs-where}
 
 | 节 | 拥有 |
 | --- | --- |
 | `version` | Canonical schema 版本。使用 `v0.5`。 |
-| `listeners` | 公共 Router 监听器：地址、端口、空闲超时、可选的客户端 API key、可选的 Chat 模型允许列表（`models`，为空时接受所有模型）、独立的原生 System One 权限（`systemone.models`，省略时不发布原生模型），以及在 standalone 模式下由 Router 提供的可选单向 TLS（`tls.cert_file`、`tls.key_file`）；以及 listener 信任的身份来源（`identity.trust_headers`、`identity.trusted_peers`，默认不信任任何来源），由 Router 在 standalone 模式下遵循。 |
+| `listeners` | 公共 Router listener：地址、端口、超时、客户端 API key、模型允许列表、TLS 和信任的身份来源。见 [Listener](#listeners)。 |
 | `providers` | 逻辑 provider 模型：后端端点、定价、默认值，以及路由读取的模型事实（`capabilities`、`modalities`、上下文窗口、LoRA 适配器）。 |
-| `evaluation` | 可选的运维人员拥有的基准定义、带版本的索引 DAG，以及与模型关联的记录。 |
+| `evaluation` | 可选的、由运维人员维护的基准定义、带版本的索引 DAG，以及与模型关联的记录。 |
 | `recipes` | 隔离的路由配置：每个配方的信号、投影、决策、strategy、fallback、候选要求、模型绑定和默认插件。 |
-| `entrypoints` | 映射到配方的公共虚拟模型名；有多个配方时，恰好一个 chat entrypoint 是默认的。 |
-| `global` | Router 服务、存储、集成、可观测性、学习、每个请求运行的默认插件（`global.plugins`），以及 Router 询问的模型（`global.model_catalog`；见[模型目录参考](model-catalog.md)）。 |
+| `entrypoints` | 映射到配方的公共虚拟模型名；有多个配方时，恰好一个 chat 入口是默认入口。 |
+| `global` | Router 服务、存储、集成、可观测性、学习、每个请求运行的默认插件（`global.plugins`），以及 Router 询问的模型（`global.model_catalog`）。 |
 
 保持这些边界清晰：
 
 - 信号检测事实；
 - 投影组合证据；
 - 决策定义资格和路由策略；
-- algorithm 选择或协调候选模型；
-- 插件在路由特定钩点添加行为；以及
-- provider 将逻辑模型名称绑定到推理端点。
+- 算法选择或协调候选模型；
+- 插件在路由特定的钩子处添加行为；以及
+- provider 把逻辑模型名绑定到推理端点。
 
-Provider 定价放在每个具体模型旁边，位于 `providers.models[].pricing`。它接受可选的大写三字母 `currency`，以及非负的 `prompt_per_1m`、`completion_per_1m`、`cached_input_per_1m` 和 `cache_write_per_1m` 费率。路由读取的模型事实放在同一条目上。
+[路由流水线](../overview/signal-driven-decisions)解释了这一设计；**能力**下的各页面分别介绍每个信号、投影、决策、算法、插件和全局块。
 
-评估测量属于 `evaluation.records[]`，并通过 `model` 引用 canonical Model Card 身份。内置基准 ID 可以直接使用；在 `evaluation` 下的记录旁边定义新的基准语义和索引。参见[自定义评估](../benchmarking/custom-evaluations)。
+### Listener {#listeners}
 
-使用[协议兼容性](protocol-compatibility)选择模型的后端 `api_format`。然后在 Docker、Helm、Operator 和控制面板工作流之间移动其绑定之前，参见[后端目标兼容性](backend-target-compatibility)。目标矩阵区分 canonical 透传与 Kubernetes 发现，并记录每个表面保留哪些 URL、路径、权重和 provider 字段。
+| 字段 | 含义 | 默认值 |
+| --- | --- | --- |
+| `timeout` | 整个调用的时长，包括流式响应；它同时限制停滞的流。`0s` 取消这两个限制。若只想取消某个模型的调用时长限制，请为该模型设置 `total_timeout: 0s`。 | `300s` |
+| `api_keys` | listener 要求的客户端 API key。 | 无 |
+| `models` | listener 接受的对话模型。 | 空：全部接受 |
+| `systemone.models` | listener 发布的原生 System One 模型，与 `models` 相互独立。 | 无 |
+| `systemone.max_deadline_ms` | System One 请求等待模型的最长时间。 | 10 分钟 |
+| `tls.cert_file`、`tls.key_file` | 单向 TLS。 | 关闭 |
+| `identity.trust_headers`、`identity.trusted_peers` | listener 在 standalone 模式下信任的身份来源。 | 无 |
 
-Router 范围的调试表面默认关闭。`global.services.observability.profiling` 提供 Go `pprof` 端点，并且仅在显式启用时提供；然后它绑定 `127.0.0.1:6060`，因此除非显式更改 `bind`，否则 profile 永远不会到达可路由接口。该开关在启动时读取一次，因此更改它需要重启 Router。参见 [API 与可观测性](../tutorials/global/api-and-observability)。
+### Provider 与模型事实 {#providers-and-model-facts}
 
-Router 询问的模型（回答信号的决策模型和召回所用的嵌入模型）是 `global.model_catalog.deployments` 下的部署。默认由决策模型在[模型运行时](model-runtime/overview.md)中回答每个问题类信号。绑定（`global.model_catalog.bindings.<signal>`，或配方的 `recipes[].model_bindings.<signal>`）或规则自身的 `deployment` 可以指定其他部署，例如更大的本地模型或远程 System One API。[为信号选择模型](choose-a-model-for-a-signal.md)说明这条规则，[模型目录参考](model-catalog.md)列出部署的全部字段。早期的 `variant`、`use_modernbert` 和 `use_mmbert_32k` 选择器已移除；`vllm-sr config migrate` 会删除它们。
+- **事实。** 路由读取的模型事实放在模型的 `providers.models[]` 条目上。
+- **定价。** `providers.models[].pricing` 接受可选的大写三字母 `currency`，以及非负的 `prompt_per_1m`、`completion_per_1m`、`cached_input_per_1m` 和 `cache_write_per_1m` 费率。
+- **后端格式。** [协议兼容性](protocol-compatibility)帮助你选择后端的 `api_format`。在 Docker、Helm、Operator 和 Dashboard 之间迁移绑定之前，请查看[后端目标兼容性](backend-target-compatibility)。
 
-`pii` 规则读取当前用户轮次；`input.history: true` 加上更早的用户轮次，`input.tool_results: true` 加上请求的文本工具结果。Router 使用中立的协议表示，因此同一条规则适用于受支持的 chat、responses 和 messages 线格式。规则需要能回答 span 问题的部署，否则配置加载失败并报告 `span_required`；默认决策模型 vela3-fast 返回 span。规则的模型没有给出答案时，由它的 `on_unknown` 决定：`no_match`（默认）或 `match`。模型无法读取的文本计为个人数据。
+### Router 自己的模型 {#the-routers-own-models}
 
-`complexity` 规则询问决策模型回答好这个请求有多难：`easy`、`medium` 或 `hard`；条件用 `label` 指定它路由的级别，例如 `{type: complexity, name: difficulty, label: hard}`。
+回答信号的决策模型和召回使用的嵌入模型，都是 `global.model_catalog.deployments` 下的部署。它们在[模型运行时](../model-runtime/get-started/overview.md)中运行，或指向远程 API。
 
-[路由流水线](../overview/signal-driven-decisions)解释该设计。**能力**下的能力页面记录每个信号、投影、决策、算法、插件和全局块。
+- **一个默认值。** 除非另有指定，决策模型回答每一个由模型判断的信号。
+- **覆盖顺序，越具体越优先：** 规则自己的 `deployment`，然后是 `recipes[].model_bindings.<type>`，再然后是 `global.model_catalog.bindings.<type>`。
+- **上限。** 远程部署的 `limits.max_request_bytes` 和 `limits.max_response_bytes` 限制与它的一次交换。
 
-## 能力目录
+[为信号选择模型](choose-a-model-for-a-signal.md)说明这条规则，[模型目录参考](model-catalog.md)列出部署的全部字段。
+
+### 评估记录 {#evaluation-records}
+
+测量数据放在 `evaluation.records[]` 中，并通过 `model` 引用 canonical Model Card 身份。内置基准 ID 可以直接使用；新的基准和索引在记录旁边定义。见[自定义评估](../benchmarking/custom-evaluations)。
+
+:::note 调试接口默认关闭
+`global.services.observability.profiling` 只在启用时提供 Go `pprof` 端点，除非修改 `bind`，否则只监听 `127.0.0.1:6060`。Router 只在启动时读取一次该设置，因此修改后需要重启。见 [API 与可观测性](../tutorials/global/api-and-observability)。
+:::
+
+## 能力目录 {#capability-catalog}
 
 使用此目录选择可复用的构建块，然后打开其指南了解配置细节。清单来自 `config/fragments/`；每一行目标来自匹配指南的 **概览**。文档构建会重新生成此块，如果签入的目录已漂移则会失败。
 
@@ -120,6 +144,8 @@ Router 询问的模型（回答信号的决策模型和召回所用的嵌入模�
 | `context` — 路由插件 | `context` 是组装请求上下文的插件。 | [`config/fragments/plugin/context/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/context/) | [指南](../tutorials/plugin/context) |
 | `fast-response` — 路由插件 | `fast_response` 是立即返回确定性回退消息的路由局部插件。 | [`config/fragments/plugin/fast-response/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/fast-response/) | [指南](../tutorials/plugin/fast-response) |
 | `header-mutation` — 路由插件 | `header_mutation` 是添加、更新或删除下游标头的路由局部插件。 | [`config/fragments/plugin/header-mutation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/header-mutation/) | [指南](../tutorials/plugin/header-mutation) |
+| `masking` — 路由插件 | `masking` 是一个路由局部插件：在请求编码并发往模型提供方之前，检测发往提供方的请求中的个人数据（邮箱、电话号码、姓名及其他配置的实体类型），并把每处替换为确定性的占位符，例如 `[EMAIL_ADDRESS_0]`。 | [`config/fragments/plugin/masking/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/masking/) | [指南](../tutorials/plugin/masking) |
+| `prompt-cache` — 路由插件 | `prompt_cache` 是在匹配的路由上插入 Anthropic prompt-cache 断点的路由局部插件。 | [`config/fragments/plugin/prompt-cache/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/prompt-cache/) | [指南](../tutorials/plugin/prompt-cache) |
 | `request-params` — 路由插件 | `request_params` 是在转发到后端之前校验并裁剪 OpenAI Chat Completions 请求正文的路由局部插件。 | [`config/fragments/plugin/request-params/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/request-params/) | [指南](../tutorials/plugin/request-params) |
 | `response-cache` — 路由插件 | `response_cache` 是复用精确或语义兼容的先前响应的路由局部插件。 | [`config/fragments/plugin/response-cache/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/response-cache/) | [指南](../tutorials/plugin/response-cache) |
 | `response-guard` — 路由插件 | `response_guard` 是一个路由局部插件，按它所检查的信号拦截或标注模型的回答。 | [`config/fragments/plugin/response-guard/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/response-guard/) | [指南](../tutorials/plugin/response-guard) |
@@ -129,7 +155,7 @@ Router 询问的模型（回答信号的决策模型和召回所用的嵌入模�
 
 <!-- END GENERATED CONFIGURATION CATALOG -->
 
-## 最小示例
+## 最小示例 {#minimal-example}
 
 ```yaml
 version: v0.5
@@ -176,7 +202,7 @@ global:
         enabled: true
 ```
 
-### 模型配置
+### 模型配置 {#model-configuration}
 
 模型可以从内置目录继承身份和推理，或在本地定义私有模型。此目录支持的示例让所选 Provider 映射提供原生模型 ID、协议、推理传输和请求路径：
 
@@ -193,13 +219,17 @@ providers:
           auth: {api_key_env: OPENAI_API_KEY}
 ```
 
-`name` 仍是本地 Router 别名。私有或新发布的模型省略 `catalog`，并可选择在该别名下定义 Model Card 和推理契约。从[配置模型](model-configuration)开始，然后使用[模型配置模式](model-configuration-patterns)比较目录、自定义、推理、Provider 和副本组合。[模型与 provider Day-0 指南](../community/model-provider-day-0-support.md)面向向仓库目录添加可复用支持的贡献者。
+`name` 仍是本地 Router 别名。私有或新发布的模型省略 `catalog`，并可以在该别名下定义自己的 Model Card 和推理契约。
 
-设置了 `rules.on_unknown` 时，失败或迟到的信号在评估完整布尔树期间保持为 `Unknown`，由 `no_match`、`match` 或 `fail_request` 解析未确定的终端结果。没有设置时，失败信号的条件不匹配；`systemone` 条件可以设置自己的 `on_error`（`match` 或 `no_match`）。
+- [配置模型](model-configuration)是起点。
+- [模型配置模式](model-configuration-patterns)比较目录、自定义、推理、provider 和副本组合。
+- [模型与 provider Day-0 指南](../community/model-provider-day-0-support.md)面向向仓库目录添加支持的贡献者。
 
-入口点的请求进入其配方；`vllm-sr/auto`（除非默认入口点使用其他名称）进入默认配方。具体的 provider 模型名称是直接透传请求，并绕过配方信号、决策、路由插件、缓存、学习和会话路由。
+:::tip 信号失败时
+默认情况下，失败或迟到的信号所对应的条件不匹配。在决策上设置 `rules.on_unknown` 可以改变这一行为；见[决策](../tutorials/decision/overview)。
+:::
 
-## 校验并启动服务
+## 校验并启动服务 {#validate-and-serve}
 
 ```bash
 vllm-sr config validate --config config.yaml
@@ -208,9 +238,11 @@ vllm-sr serve --config config.yaml
 
 校验会在 Router 启动之前捕获 schema 错误、未解析的引用、不兼容的配方边界、无效的 provider 绑定，以及不支持的插件或算法设置。
 
-对于可移植的无模型配方，将 `recipes[].decisions[].algorithm.minimum_candidates` 设置为保留该决策预期行为的最小池。空的内置资产仍然有效，而其具体分配不满足已声明基数的已发布入口会被拒绝。
+:::tip 可移植的配方
+对于不带模型共享的配方，请把 `recipes[].decisions[].algorithm.minimum_candidates` 设为该决策所需的最小模型池。空配方仍然有效；发布入口时，如果分配的模型数量不足，发布会失败。
+:::
 
-## 环境引用和密钥
+## 环境引用和密钥 {#environment-references-and-secrets}
 
 将凭据保留在 YAML 文件之外：
 
@@ -218,18 +250,22 @@ vllm-sr serve --config config.yaml
 api_key: ${MODEL_API_KEY}
 ```
 
-支持的字符串替换为：
+| 形式 | 展开为 |
+| --- | --- |
+| `${VAR}`、`$VAR` | `VAR` 的值 |
+| `${VAR:-default}` | `VAR` 未设置或为空时取 `default` |
+| `${VAR-default}` | `VAR` 未设置时取 `default` |
+| `$$` | 字面的 `$` |
 
-- `${VAR}` 和 `$VAR`；
-- 当 `VAR` 未设置或为空时使用 `${VAR:-default}`；
-- 当 `VAR` 未设置时使用 `${VAR-default}`；以及
-- `$$` 表示字面 `$`。
+- 自定义配方必须用 `--recipe-env NAME` 显式授权它需要的主机变量。
+- 在 Kubernetes 上，把敏感值放入 Secret，而不是 ConfigMap 或 Helm values。见[安全加固](security-hardening)。
 
-对于自定义配方，用 `--recipe-env NAME` 显式授权所需的主机变量。Kubernetes 部署将敏感环境值放入 Secret，而不是 ConfigMap 或 Helm values。参见[安全加固](security-hardening)。
+## 入口与配方 {#entrypoints-and-recipes}
 
-## 入口点和配方
+- **一个配方：** 不需要入口。该配方就是默认配方，并以 `vllm-sr/auto` 发布。
+- **多个配方：** `entrypoints` 映射它们的公共模型名，且恰好一个 chat 入口标记 `default: true`。只有当某个入口命名了 `vllm-sr/auto` 时，它才会被发布。
 
-只有一个配方的文档不需要入口点：该配方就是默认配方，并以 `vllm-sr/auto` 发布。有多个配方时，`entrypoints` 映射它们的公共模型名，且恰好一个 chat 入口点标记 `default: true`；其配方就是默认配方，只有当某个入口点命名 `vllm-sr/auto` 时才会发布它。`MoM` 不再具有隐式特殊含义。
+名字没有隐含含义：名为 `MoM` 的配方只是一个名字。
 
 ```yaml
 recipes:
@@ -245,29 +281,39 @@ entrypoints:
     recipe: private
 ```
 
-入口点将一个或多个公共模型别名映射到配方。配方拥有其信号、投影、决策、算法、插件、缓存、回放、学习和路由状态。Providers、存储和模型目录中的部署可以共享，而不允许策略状态跨越配方边界。
+| 字段 | 含义 |
+| --- | --- |
+| `entrypoints[].model_names` | 公共模型别名。 |
+| `entrypoints[].recipe` | 这些别名进入的配方。 |
+| `entrypoints[].default` | 标记默认的 chat 入口。 |
+| `recipes[]` | 一个配方的策略：信号、投影、决策、算法、插件、缓存、学习和路由状态。 |
 
-在远程部署上设置 `limits.max_response_bytes`，以限制一次上游响应。
+Provider、存储和模型目录中的部署可以共享，而不会让策略状态跨越配方边界。具体的 provider 模型名会跳过配方：它绕过信号、决策、插件、缓存、学习和会话路由。
 
-在 schema 中，`entrypoints[].model_names` 列出公共别名，`entrypoints[].recipe` 选择配方，`entrypoints[].default` 标记默认入口点，每个 `recipes[]` 条目包含该配方的策略。
+## 默认值与覆盖 {#defaults-and-overrides}
 
-## 默认值与覆盖
+默认值位于 `global`；配方覆盖它们，决策再覆盖所属配方：
 
-默认值位于 `global`，由配方或决策覆盖：
+| 设置 | 默认值所在 | 覆盖者 |
+| --- | --- | --- |
+| Strategy 和 fallback | `global.router.strategy`、`global.router.fallback` | 每个配方的 `strategy` 和 `fallback`；决策的 fallback |
+| 插件 | `global.plugins` | 配方的 `plugins`，然后是决策的 `plugins` |
+| 回答信号的部署 | `global.model_catalog.bindings` | 配方的 `model_bindings`，然后是规则的 `deployment` |
 
-- `global.router.strategy` 和 `global.router.fallback` 是共享默认值。每个配方根据它们解析自己的 `strategy` 和 `fallback`，配方之间互不继承。决策的 fallback 覆盖其配方的 fallback。`fallback: {enabled: false}` 这样的部分覆盖保留其余默认值。运行时的内置 strategy 默认值为 `priority`。
-- `global.plugins` 是每个请求的默认插件。配方的 `plugins` 覆盖它们，决策的 `plugins` 再覆盖配方的。插件按类型逐字段分层：映射逐键合并，其他值（列表、标量）替换下层的值。没有匹配决策的请求运行其配方分层后的默认插件；请求具体模型时运行 `global.plugins`。
-- `global.model_catalog.bindings` 指定每个信号族询问的部署。配方的 `model_bindings` 覆盖它们，规则自己的 `deployment` 覆盖两者。
+- **配方之间互不继承。** 每个配方都根据 `global` 解析自己的设置。
+- **部分覆盖。** `fallback: {enabled: false}` 保留其余 fallback 默认值。运行时的 strategy 默认值为 `priority`。
+- **插件按类型逐字段合并。** 映射逐键合并；列表或标量会替换下层的值。
+- **未匹配的请求。** 没有匹配决策的请求运行其配方分层后的插件；请求具体模型时运行 `global.plugins`。
+- **模型事实。** `capabilities`、`modalities`、`context_window_size`、`max_output_tokens` 和 `loras` 放在模型的 `providers.models[]` 条目上。
 
-路由读取的模型事实，例如 `capabilities`、`modalities`、`context_window_size`、`max_output_tokens` 和 `loras`，放在模型的 `providers.models[]` 条目上。
+如果没有决策匹配，配方使用 `providers.defaults.model`。虚拟入口名永远不会到达后端。
 
-如果没有决策匹配，配方使用 `providers.defaults.model`。虚拟入口点名称永远不会到达后端。
+- [模型、入口与服务](../tutorials/global/models-entrypoints-serving)介绍内置虚拟模型、CLI 服务、后端绑定、分叉、打包和迁移。
+- [虚拟模型](../tutorials/global/entrypoints-and-recipes)提供完整的 schema。
 
-内置虚拟模型、CLI 服务、后端绑定、分叉、打包和迁移见[模型、入口点与服务](../tutorials/global/models-entrypoints-serving)。完整 schema 见[虚拟模型](../tutorials/global/entrypoints-and-recipes)。
+### 配方候选要求 {#recipe-candidate-requirements}
 
-### 配方候选约束
-
-可在配方上声明以下可选候选约束：
+可在配方上声明以下可选候选要求：
 
 ```yaml
 candidate_requirements:
@@ -275,14 +321,18 @@ candidate_requirements:
   context: known_limits
 ```
 
-`capabilities: declared` 要求模型显式声明请求所需的任务能力，包括工具和图像输入，并且提供方协议兼容。
-`context: known_limits` 将估算的输入需求与有效输出预留相加，再检查模型声明的限制。
-请求必须提供输出上限，或者 decision 配置正整数 `request_params.default_max_tokens`。
-默认值仅在调用方未指定时生效，之后仍按现有 `max_tokens_limit` 限制。模型的最大输出容量不是请求默认值。
-缺少必要模型事实或有效输出上限的候选不可选。
-输入计数仍是估算，尤其是多模态内容，因此不保证精确的提供方 token 容量。省略某个字段会保留该维度原有的兼容行为。
+| 要求 | 候选在以下情况下合格 |
+| --- | --- |
+| `capabilities: declared` | 它声明支持请求的任务（包括工具和图像输入），并且提供方协议兼容。 |
+| `context: known_limits` | 估算的输入加上输出预留不超过它声明的上限。只有在去掉估算中为结构化数据和媒体预留的余量后仍放不下时，请求才会被拒绝。 |
 
-例如，decision 可通过现有插件提供输出上限：
+省略某个字段会保留该维度默认的兼容行为。
+
+- **必须有输出上限。** 请求要么自己设置上限，要么由决策把 `request_params.default_max_tokens` 设为正整数或 `auto`。该默认值只在调用方未设置上限时生效，`max_tokens_limit` 仍会限制它。
+- **缺少事实会使候选不合格**，缺少输出上限也一样。模型的最大输出从不用作请求默认值。
+- **输入是估算的**，多模态内容尤其如此。这不是对提供方 token 容量的精确保证。
+
+例如，决策可以通过现有插件提供输出上限：
 
 ```yaml
 plugins:
@@ -292,36 +342,68 @@ plugins:
       max_tokens_limit: 8192
 ```
 
-多因素选择的 `latency_metric: ttft` 比较首 token 延迟，`tpot` 比较每个输出 token 的耗时。
-省略时保留原有的 TPOT 优先、TTFT 后备行为。如果质量是准入下限，可配合明确的质量证据和字典序目标使用。
+若希望在调用方未设置上限时使用每个模型可用的输出容量：
 
-使用 `vllm-sr config schema --section recipes.candidate_requirements` 查看当前契约。DSL 的 `ROUTING` 块支持相同对象，Kubernetes CRD 导出为每个配方保留它。
+```yaml
+algorithm:
+  type: multi_factor
+  multi_factor:
+    expected_output_tokens: 4096
+plugins:
+  - type: request_params
+    configuration:
+      default_max_tokens: auto
+```
 
-### 回放采集默认值与 decision 覆盖
+使用 `auto` 时，Router 请每个候选的后端渲染完整的提供方请求（不生成回答），并在请求最终改动后再检查一次。随后它根据真实的输入长度分配 `min(max_output_tokens, context_window - input_tokens)`。
 
-`global.services.router_replay` 管理共享存储和保留时间。启用状态和采集默认值是 `global.plugins` 中的 `router_replay` 插件；配方或 decision 的 `router_replay` 插件只覆盖它填写的字段，省略字段时继承。`enabled: false` 关闭该配方或 decision 的采集，`enabled: true` 可在默认关闭时单独开启。没有 `data_policy`。
+:::warning `auto` 需要支持渲染的 vLLM 后端
 
-在 `global.plugins` 或 decision 插件中设置 `capture_personal_data: false`，可保留路由证据，同时在检测到 PII 或状态未知时省略内容。未配置检测器时保守地省略内容，不会阻止启动。尚未选中 decision 的被拒绝请求使用其配方的采集默认值。这些设置不控制其他存储或模型提供方的留存。
+- 显式的 `vllm` provider、每个模型一个后端、OpenAI Chat 格式，以及声明的上下文和输出上限；
+- 后端的 `/v1/chat/completions/render` API，需在支持它的 vLLM 版本上用 `vllm serve --enable-scale-out` 启用；
+- 仅支持文本和工具请求：不支持多模态输入、提供方截断、LoRA、Looper 或影子派发。
 
-完整示例见 [Router Replay](../tutorials/plugin/router-replay)，或运行 `vllm-sr config schema --section global.services.router_replay` 查看契约。
+后端上限小于声明值属于配置错误。渲染 API 不可用或无效时，会明确报错。
+:::
 
-## 配置工作流
+- **调用方的上限优先。** 调用方显式设置的上限保持原有行为，不需要渲染调用；`max_tokens_limit` 仍会限制预算。
+- **`expected_output_tokens` 是成本预测，不是上限。** `multi_factor` 与 `auto` 一起使用时需要它，其值受调用方上限或每个候选的容量约束。没有它时，其他请求沿用通常的成本计算。
+- **溢出。** 能放下的请求绝不会因为长度估算而被截断。如果所有兼容候选都溢出，Router 会应用一次已配置的上下文压缩，再用后端检查结果；没有压缩策略时，溢出仍是错误。
+- **Preview。** 它报告 `execution_required`，因为它没有完整的提供方请求。
 
-canonical 文档可以通过多个界面编写或应用：
+对于 `multi_factor`，`latency_metric: ttft` 比较首 token 延迟，`tpot` 比较每个输出 token 的耗时；见 [Multi Factor](../tutorials/algorithm/selection/multi-factor)。
 
-- 本地 CLI 和 YAML；
-- 控制面板设置和可视化路由工具；
-- Helm 或 `vllm-sr serve --target k8s`；
-- Kubernetes Operator；以及
-- 路由 DSL。
+用 `vllm-sr config schema --section recipes.candidate_requirements` 查看当前契约。DSL 的 `ROUTING` 块支持同样的对象，Kubernetes CRD 也为每个配方保留它。
 
-[配置工作流](configuration-workflows)解释哪个界面拥有文档的哪一部分，以及如何避免相互竞争的事实来源。[配置契约](configuration-contract)描述生成的机器可读 schema、Router 发现和校验 API，以及工具和 Agent 的安全编写循环。[配置管理](configuration-management)说明运行中的 Router 如何激活变更、被拒绝的变更如何报告，以及如何列出和回滚版本。
+### 回放采集默认值与决策覆盖 {#replay-capture-defaults-and-decision-overrides}
 
-## 参考来源
+| 位置 | 设置什么 |
+| --- | --- |
+| `global.services.router_replay` | 共享存储和保留时间。 |
+| `global.plugins` 中的 `router_replay` 插件 | 是否开启采集，以及采集默认值。 |
+| 配方或决策的 `router_replay` 插件 | 只覆盖它设置的字段。`enabled: false` 在该处关闭采集；默认关闭时，`enabled: true` 可单独开启。 |
+
+- **个人数据。** `capture_personal_data: false` 保留路由证据，但在检测到 PII 或状态未知时省略内容。没有 PII 检测器时，内容会被省略，而不是阻止启动。
+- **工具结果**保持脱敏，除非设置 `capture_tool_results: true`，而它要求 `capture_personal_data: true`。
+- **被拒绝的请求**如果还没有选中决策，使用其配方的采集默认值。
+
+这些设置不控制其他存储或后端的数据保留。全部字段见 [Router Replay](../tutorials/plugin/router-replay)，或运行 `vllm-sr config schema --section global.services.router_replay`。
+
+## 配置工作流 {#configuration-workflows}
+
+Canonical 文档可以通过本地 CLI 和 YAML、Dashboard、Helm 或 `vllm-sr serve --target k8s`、Kubernetes Operator，或路由 DSL 编写和应用。
+
+| 页面 | 内容 |
+| --- | --- |
+| [配置工作流](configuration-workflows) | 哪个界面负责文档的哪一部分，以及如何避免相互竞争的事实来源。 |
+| [配置契约](configuration-contract) | 生成的 schema、Router 的发现与校验 API，以及工具和 Agent 的安全编写循环。 |
+| [配置管理](configuration-management) | 变更如何在运行中的 Router 上生效、拒绝如何报告，以及如何回滚。 |
+
+## 参考来源 {#reference-sources}
 
 - [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml) 是详尽的 canonical 示例。
 - [`config/fragments/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments) 包含可复用的信号、决策、算法和插件片段。
-- [Providers 与路由教程](../tutorials/global/overview)描述共享运行时配置。
+- [Providers 与路由教程](./global-settings)描述共享运行时配置。
 - [统一配置契约 v0.3](../proposals/unified-config-contract-v0-3) 记录 v0.5 结构所基于的设计。
 - [配置契约](configuration-contract) 是当前 Router 构建的实时发现和校验契约。
 

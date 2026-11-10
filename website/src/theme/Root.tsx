@@ -39,10 +39,6 @@ function resolveRouteState(pathname: string): { pageKey: string, routeKind: stri
     return { pageKey: 'white-paper', routeKind: 'page' }
   }
 
-  if (normalized.startsWith('/decision-paper')) {
-    return { pageKey: 'decision-paper', routeKind: 'page' }
-  }
-
   if (normalized.startsWith('/community')) {
     return { pageKey: 'community', routeKind: 'page' }
   }
