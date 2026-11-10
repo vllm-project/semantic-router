@@ -30,17 +30,25 @@ def test_recorded_references_are_for_the_pinned_revisions() -> None:
     path = REGISTRY_DIR / "golden_answers_vela3_d3.json"
     recorded = json.loads(path.read_text(encoding="utf-8"))
     for model in builtin.all_models("vela3_d3"):
-        assert recorded[model.repo_id]["revision"] == model.revision, model.repo_id
+        entry = recorded[model.repo_id]
+        assert entry["revision"] == model.revision, model.repo_id
+        # tools/golden_answers.py keeps a baseline only at the PyTorch it names.
+        assert set(entry["torch"]) == set(entry["answers"]), model.repo_id
 
 
 def test_every_size_has_a_rocm_reference_for_the_golden_request() -> None:
+    """The recorder keeps the device class's baseline, and a hardware entry only while it differs."""
     for model in builtin.all_models("vela3_d3"):
-        answers = model.golden_answers.get("rocm")
-        assert answers, model.repo_id
-        assert set(answers) == set(GOLDEN_QUESTIONS), model.repo_id
-        assert all(well_formed(a) for a in answers.values()), model.repo_id
-        for qid, criteria in CHOICE_CRITERIA.items():
-            assert set(answers[qid]["probabilities"]) == criteria, (model.repo_id, qid)
+        assert model.golden_answers.get("rocm"), model.repo_id
+        for key, answers in model.golden_answers.items():
+            assert set(answers) == set(GOLDEN_QUESTIONS), (model.repo_id, key)
+            assert all(well_formed(a) for a in answers.values()), (model.repo_id, key)
+            for qid, criteria in CHOICE_CRITERIA.items():
+                assert set(answers[qid]["probabilities"]) == criteria, (
+                    model.repo_id,
+                    key,
+                    qid,
+                )
 
 
 def test_the_golden_request_answers_and_its_span_question_takes_the_pii_label_set(

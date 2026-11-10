@@ -4,8 +4,9 @@ Entries pin a revision, the SHA-256 of every file the family loads (the
 adapters, the span heads, the configs, the router questions and the label
 definition cache), the expected identity (which covers the base), the loaded
 parameters (the base's and every text adapter and head) and the Decision 3.0
-base each package's ``vela3_config.json`` pins (``base``). The repositories are
-public; the pins are the revisions the records measured.
+base each package's ``vela3_config.json`` pins (``base``); references live in
+``registry/golden_answers_vela3_d3.json``. The repositories are public; the
+pins are the revisions the records measured.
 """
 
 from __future__ import annotations
