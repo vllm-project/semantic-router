@@ -84,7 +84,7 @@ entrypoints:
 ## Claude Code and Codex CLI
 
 Claude Code on a Claude subscription runs Anthropic's models, and the
-[vSR plugin](https://github.com/vllm-project/semantic-router/tree/main/src/claude-code)
+[vSR plugin](https://github.com/vllm-project/semantic-router/tree/main/src/agent-harness/claude-code)
 adds guard, shield, redact and check to it without a gateway. Route Claude Code
 or Codex CLI through the Router when your own models or provider keys should
 answer: the Router then chooses the model for every call, the main
@@ -204,7 +204,7 @@ before. When the plugin's decision runtime does not answer, its tally says
 fixed rules, which still hold, and an app set to wait until done, which withholds
 the output or holds the command instead. A `SKIPPED` row says what one check
 left unchecked. Both are explained in the
-[plugin README](https://github.com/vllm-project/semantic-router/tree/main/src/claude-code#what-you-see).
+[plugin README](https://github.com/vllm-project/semantic-router/tree/main/src/agent-harness/claude-code#what-you-see).
 
 ### Settings by hand
 
