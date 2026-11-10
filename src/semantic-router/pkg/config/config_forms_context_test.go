@@ -123,3 +123,30 @@ func TestMigrateKeepsMemoryOffWhenItDropsTheOnlyMCPSource(t *testing.T) {
 		t.Fatalf("context = %+v, want compression and no memory\n%s", context, migrated)
 	}
 }
+
+// A decision that migrate gives a context plugin of its own lists the memory
+// source it inherited as its recipe wrote it: its sources replace the
+// inherited ones, so a bare memory source would drop the recall bounds and
+// write memories the inherited source did not.
+func TestMigrateKeepsTheInheritedMemorySourceSettings(t *testing.T) {
+	global := `{stores: {memory: {auto_store: true, backend: milvus, milvus: {address: "127.0.0.1:19530"}}, vector_store: {enabled: true, backend_type: memory}}}`
+	recipe := `[{type: context, configuration: {enabled: true, sources: [{type: memory, match: {recall: {top_k: 9, min_similarity: 0.6}}, store: {auto: false}}]}}]`
+	for _, other := range []string{"rag", "compression"} {
+		t.Run(other, func(t *testing.T) {
+			doc := strings.NewReplacer("PLUGINS", contextFormsPlugins[other], "GLOBAL", global, "RECIPE", recipe).Replace(contextFormsDoc)
+			migrated, _, err := MigrateConfig([]byte(doc))
+			if err != nil {
+				t.Fatalf("migrate: %v", err)
+			}
+			cfg, err := ParseYAMLBytes(migrated)
+			if err != nil {
+				t.Fatalf("load: %v\n%s", err, migrated)
+			}
+			memory := cfg.ContextPlugin(cfg.GetDecisionByName("assistant")).Source(ContextSourceMemory)
+			if memory == nil || memory.Match == nil || memory.Match.Recall == nil || memory.Match.Recall.TopK != 9 ||
+				memory.AutoStore() == nil || *memory.AutoStore() {
+				t.Fatalf("memory source = %+v, want the recipe's top_k 9 and store.auto false\n%s", memory, migrated)
+			}
+		})
+	}
+}

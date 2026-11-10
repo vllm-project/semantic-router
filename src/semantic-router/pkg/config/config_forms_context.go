@@ -478,8 +478,8 @@ func contextConfiguration(m *Migration, at FormMatch) (*yaml.Node, error) {
 		return configuration, nil
 	}
 	configuration := mappingNode("enabled", boolNode(true))
-	if decisionContext(at).Source(ContextSourceMemory) != nil && pluginOfType(at.Parent, "memory") == nil {
-		m.Set(configuration, "sources", &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq", Content: []*yaml.Node{mappingNode("type", Scalar(ContextSourceMemory))}})
+	if source := inheritedMemorySource(at); source != nil && pluginOfType(at.Parent, "memory") == nil {
+		m.Set(configuration, "sources", sequenceOf(source))
 		m.Changed(at.Path, "the global memory now reaches this decision through its context plugin's memory source")
 	}
 	m.Set(at.Node, "type", Scalar(DecisionPluginContext))
@@ -513,6 +513,33 @@ func decisionContext(at FormMatch) *ContextPluginConfig {
 		}
 	}
 	return ContextPluginOf(plugins)
+}
+
+// inheritedMemorySource is a copy of the memory source a decision without a
+// context plugin of its own inherits, as its layer writes it, nil without
+// one. The sources of the highest layer that lists them replace those below,
+// so a source the decision writes in their place keeps their match, store
+// and other settings; the memory store's switch lists a bare one.
+func inheritedMemorySource(at FormMatch) *yaml.Node {
+	if decisionContext(at).Source(ContextSourceMemory) == nil {
+		return nil
+	}
+	for _, plugins := range []*yaml.Node{mappingValue(at.Above(4), "plugins"), mappingValue(mappingAt(at.Root, "global"), "plugins")} {
+		configuration := resolveAlias(mappingValue(pluginOfType(plugins, DecisionPluginContext), "configuration"))
+		sources := resolveAlias(mappingValue(configuration, "sources"))
+		if sources == nil {
+			continue
+		}
+		for _, source := range sequenceItems(sources) {
+			if source = resolveAlias(source); scalarAt(source, "type") == ContextSourceMemory {
+				copied := cloneNode(source)
+				copied.Anchor, copied.HeadComment, copied.LineComment, copied.FootComment = "", "", "", ""
+				return copied
+			}
+		}
+		return nil
+	}
+	return mappingNode("type", Scalar(ContextSourceMemory))
 }
 
 // keepGlobalMemoryOff writes sources: [] in the configuration of a decision's
