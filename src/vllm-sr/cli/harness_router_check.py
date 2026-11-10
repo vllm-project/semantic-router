@@ -6,7 +6,6 @@ gateway can serve other clients too.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -17,6 +16,10 @@ CLAUDE_HEADERS = {
     "agent": "x-claude-code-agent-id",
 }
 CODEX_HEADERS = {"session": "session-id", "agent": "thread-id"}
+MAYBE_ANTHROPIC = (
+    " (if a model it can pick is served over Anthropic Messages;"
+    " its api_format is not set here)"
+)
 PROBE_TOOL = {
     "name": "get_time",
     "description": "Return the current time.",
@@ -121,29 +124,30 @@ def _claude_findings(router: dict) -> list[RouterFinding | None]:
 def _codex_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
     formats = _model_formats(doc)
     findings: list[RouterFinding | None] = []
-    maybe = ""
+    # each decision that can pick an anthropic model, with a hint when none of its
+    # models says so and one leaves api_format to its backend bindings
     to_anthropic = []
     for decision in _decisions(doc):
-        refs = [
-            ref.get("model")
+        kinds = {
+            formats.get(ref.get("model"), "")
             for ref in decision.get("modelRefs") or []
             if isinstance(ref, dict)
-        ]
-        kinds = {formats.get(ref, "") for ref in refs}
-        if "anthropic" in kinds or "" in kinds:
-            to_anthropic.append(decision)
-            if "anthropic" not in kinds:
-                maybe = " (if a model it can pick is served over Anthropic Messages; its api_format is not set here)"
+        }
+        if "anthropic" in kinds:
+            to_anthropic.append((decision, ""))
+        elif "" in kinds:
+            to_anthropic.append((decision, MAYBE_ANTHROPIC))
     if to_anthropic:
+        known = any(not maybe for _, maybe in to_anthropic)
         findings.append(
             _lossy_finding(
                 router,
                 "reasoning.signature",
                 "reasoning.signature, or a stream from an anthropic backend ends in lossy_translation"
-                " where its thinking block closes" + maybe,
+                " where its thinking block closes" + ("" if known else MAYBE_ANTHROPIC),
             )
         )
-    for decision in to_anthropic:
+    for decision, maybe in to_anthropic:
         if not _sets_default_max_tokens(decision):
             findings.append(
                 RouterFinding(
@@ -278,19 +282,4 @@ def probe_gateway(
         model=response.headers.get("x-vsr-selected-model", ""),
         detail=called,
         warnings=warnings,
-    )
-
-
-def probe_runtime_health(
-    runtime_url: str, token: str, timeout: float = 10
-) -> ProbeResult:
-    """The vSR plugin's decision runtime, at the /health it checks when a session starts."""
-    base = re.sub(r"/v1/decisions/?$", "", runtime_url.rstrip("/"))
-    headers = {"authorization": f"Bearer {token}"} if token else {}
-    try:
-        response = requests.get(base + "/health", headers=headers, timeout=timeout)
-    except requests.RequestException as exc:
-        return ProbeResult(False, detail=str(exc))
-    return ProbeResult(
-        response.ok, detail=f"{base}/health: HTTP {response.status_code}"
     )

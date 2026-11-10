@@ -116,19 +116,20 @@ The command shows the changes and asks before writing them:
 - Claude Code: the `env` block of `~/.claude/settings.json` (or
   `$CLAUDE_CONFIG_DIR/settings.json`; `--scope project` writes
   `.claude/settings.local.json`). The other settings stay as they are. The
-  file holds the key when one is set, so only you can read it afterwards.
-- Codex: a `vllm-sr` provider in `~/.codex/config.toml` and a
-  `~/.codex/vllm-sr.config.toml` profile that selects it and turns off hosted
-  web search, which the Router does not serve.
+  file holds the key when one is set, so only you can read it afterwards. In a
+  git repository, `--scope project` adds the file and the command's undo record
+  to `.git/info/exclude` when git would otherwise track them.
+- Codex: the `~/.codex/vllm-sr.config.toml` profile, which holds a `vllm-sr`
+  provider, selects it and turns off hosted web search, which the Router does
+  not serve. `~/.codex/config.toml` is not touched.
 
 It then checks the Router configuration given with `--config` and prints the
 settings below that are missing, without changing it, and sends one tool call
 in the harness's protocol: `System Two: ok` names the model that answered and
-whether it called the tool. With the vSR plugin installed it also reports
-whether the plugin's decision runtime answers (`System One: ok` or `offline`).
-`--dry-run` prints the plan and writes nothing. `--undo` puts back what each
-key held before the first run, leaves alone a key changed since, and keeps
-everything else in the files.
+whether it called the tool. With the vSR plugin installed it warns while the
+plugin's router app is on. `--dry-run` prints the plan and writes nothing.
+`--undo` puts back what each key, or the Codex profile, held before the first
+run, leaves alone what changed since, and keeps everything else in the files.
 
 ### Router settings for Claude Code
 
@@ -223,23 +224,20 @@ The command writes these. Claude Code reads them from its settings:
 }
 ```
 
-Codex reads the provider from `~/.codex/config.toml`:
-
-```toml
-[model_providers.vllm-sr]
-name = "vLLM Semantic Router"
-base_url = "http://localhost:8899/v1"
-wire_api = "responses"
-env_key = "VLLM_SR_API_KEY"
-```
-
-and the profile from `~/.codex/vllm-sr.config.toml`, whose keys come before any
-table:
+Codex reads the profile from `~/.codex/vllm-sr.config.toml`, which
+`codex --profile vllm-sr` layers over `~/.codex/config.toml`, and the provider
+can live in the same file:
 
 ```toml
 model = "vllm-sr/auto"
 model_provider = "vllm-sr"
 web_search = "disabled"
+
+[model_providers.vllm-sr]
+name = "vLLM Semantic Router"
+base_url = "http://localhost:8899/v1"
+wire_api = "responses"
+env_key = "VLLM_SR_API_KEY"
 ```
 
 Codex does not know `vllm-sr/auto`, so it warns that it uses fallback model
