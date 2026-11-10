@@ -39,11 +39,30 @@ class Health:
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def set(self, state: str, reason: str | None = None) -> None:
+        self.exchange(state, reason)
+
+    def exchange(self, state: str, reason: str | None = None) -> tuple[str, str | None]:
+        """Set the state; the state and reason it replaced."""
         if state not in STATES:
             raise ValueError(f"unknown runtime state {state!r}")
         with self._lock:
+            replaced = self.state, self.reason
             self.state = state
             self.reason = reason
+        return replaced
+
+    def set_if(
+        self, expected: tuple[str, str | None], state: str, reason: str | None = None
+    ) -> bool:
+        """Set the state only while it is still ``expected`` (state, reason); whether it did."""
+        if state not in STATES:
+            raise ValueError(f"unknown runtime state {state!r}")
+        with self._lock:
+            if (self.state, self.reason) != expected:
+                return False
+            self.state = state
+            self.reason = reason
+        return True
 
     @property
     def ready(self) -> bool:

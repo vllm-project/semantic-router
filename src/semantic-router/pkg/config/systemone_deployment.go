@@ -120,8 +120,8 @@ func (a *DeploymentAuth) Key() (string, error) {
 }
 
 func (d ModelDeployment) validateSystemOne() error {
-	if d.Artifact != "" || d.Revision != "" || d.Device != "" || d.HasEngineArgs() || len(d.Replicas) != 0 || d.PublicName != "" {
-		return fmt.Errorf("a systemone deployment takes a connection block (endpoint, model, auth, headers, timeout_ms, max_retries, tls, limits) and capabilities; artifact, revision, device, engine arguments, replicas and public_name belong to model_runtime")
+	if d.Artifact != "" || d.Revision != "" || d.Device != "" || d.HasEngineArgs() || len(d.Replicas) != 0 || d.OutlierDetection != nil || d.PublicName != "" {
+		return fmt.Errorf("a systemone deployment takes a connection block (endpoint, model, auth, headers, timeout_ms, max_retries, tls, limits) and capabilities; artifact, revision, device, engine arguments, replicas, outlier_detection and public_name belong to model_runtime")
 	}
 	if d.Input.MaxTokens != 0 || (d.Input.Overflow != "" && d.Input.Overflow != "reject") {
 		return fmt.Errorf("a systemone deployment takes no input budget: its API reads one bounded input")

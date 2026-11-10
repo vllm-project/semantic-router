@@ -56,12 +56,6 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable
 
 For pip, uv, or agent-driven installation, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
-### Connect your agent harness
-
-Point your harness at the Router's inference endpoint. Use a public model ID such as `vllm-sr/auto`.
-
-Follow **[Connect an agent harness](https://vllm-sr.ai/docs/installation/agent-harness/)** for setup and compatibility.
-
 ### Try it online
 
 Try [System Duo](https://app.vllm-sr.ai/#try): pick an example and it runs live in your browser, with a free key on first run.
