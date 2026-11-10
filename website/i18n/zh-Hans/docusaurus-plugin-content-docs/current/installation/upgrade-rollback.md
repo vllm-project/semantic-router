@@ -19,7 +19,7 @@ translation:
 |---------|-------------|------------|----------|
 | **Versioned** | `v0.4.0` / `0.4.0` | 仅带标签的发行 | 生产发行标识符；在需要不可变时验证并固定 digest |
 | **Nightly** | `nightly-YYYYMMDD` | 带日期戳的构建 | 预发行测试 |
-| **Latest** | `latest` | `main` 上受影响的镜像变更 + 发行 | 仅用于开发 |
+| **Latest** | `latest` | 每次合并到 `main` + 发行 | 仅用于开发 |
 
 :::tip 建议
 在生产中使用 **versioned** 发行，然后记录已解析的产物 digest。标签是可读的发行标识符；只有经过验证的 digest 才是不可变引用。已发布的发行见 [GitHub Releases 页面](https://github.com/vllm-project/semantic-router/releases)。

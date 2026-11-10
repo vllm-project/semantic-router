@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: Qualify and publish the complete development CLI and commit-addressed images.
+        description: Run the full CPU qualification, then publish the development CLI and commit-addressed images. Every push to main already publishes them after its automatic checks.
         type: boolean
         default: false
   push:
@@ -33,7 +33,10 @@ jobs:
       security-events: write
     with:
       profile: main
-      publish: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish }}
+      # Every push to the upstream main publishes its commit; a publication
+      # dispatch runs the full CPU qualification first.
+      publish: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' && github.repository == 'vllm-project/semantic-router' || github.event_name == 'workflow_dispatch' && inputs.publish) }}
+      full: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish }}
     secrets: inherit
 
   images:
@@ -50,8 +53,44 @@ jobs:
     with:
       mode: main
       images: ${{ needs.ci.outputs.publish_images }}
-      publish_latest: true
     secrets: inherit
+
+  latest:
+    name: Move latest Forward
+    # Only a complete image set moves latest. A group keeps one waiting job and
+    # cancels the others; a cancelled move only leaves latest to a later run.
+    needs: [ci, images]
+    if: >-
+      !cancelled() && needs.ci.result == 'success'
+      && needs.images.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: main-latest
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Commits only: the move compares this commit with newer ones on main.
+          fetch-depth: 0
+          filter: tree:0
+      - name: Install image promotion tool
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+      - name: Log in to GitHub Container Registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | skopeo login --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+      - name: Move latest to this commit unless a newer one holds it
+        env:
+          IMAGES: ${{ needs.ci.outputs.publish_images }}
+        run: |
+          python3 tools/ci/latest_tags.py --images "$IMAGES" --source "$GITHUB_SHA" \
+            --main origin/main --registry "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
 
   helm:
     name: Publish Helm Chart
@@ -70,7 +109,8 @@ jobs:
 
   pypi:
     name: Publish Development CLI
-    # The package defaults to this commit's images, which must exist first.
+    # The package defaults to this commit's images, not latest, so it waits
+    # for their publication only.
     needs: [ci, images]
     if: >-
       !cancelled() && needs.ci.result == 'success'
