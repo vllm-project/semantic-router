@@ -43,7 +43,7 @@ class RawSignalValueTest(unittest.TestCase):
                     "expected_decision": "route",
                     "expected_algorithm": "static",
                     "expected_signal_values": {
-                        "embedding:information": {"gte": -1, "lte": 1}
+                        "domain:information": {"gte": -1, "lte": 1}
                     },
                     "variants": [{"id": "sample", "query": "Describe a neutral item."}],
                 }
@@ -64,7 +64,7 @@ class RawSignalValueTest(unittest.TestCase):
             "recommended_models": ["worker"],
             "selection_status": "selected",
             "selection_method": "static",
-            "signal_values": {"embedding:information": 0.3},
+            "signal_values": {"domain:information": 0.3},
             "decision_result": {
                 "algorithm": "static",
                 "matched_signals": {},
@@ -87,29 +87,25 @@ class RawSignalValueTest(unittest.TestCase):
             {
                 "id": "override",
                 "query": "Another item.",
-                "expected_signal_values": {"structure:size": {"gte": 2}},
+                "expected_signal_values": {"keyword:size": {"gte": 2}},
             },
             {"id": "empty", "query": "A third item.", "expected_signal_values": {}},
         ]
         _, probes = self.load(doc)
         self.assertEqual(
             probes[0].expected_signal_values,
-            {"embedding:information": {"gte": -1, "lte": 1}},
+            {"domain:information": {"gte": -1, "lte": 1}},
         )
-        self.assertEqual(
-            probes[1].expected_signal_values, {"structure:size": {"gte": 2}}
-        )
+        self.assertEqual(probes[1].expected_signal_values, {"keyword:size": {"gte": 2}})
         self.assertEqual(probes[2].expected_signal_values, {})
         for index, probe in enumerate(probes):
             self.assertEqual(
                 evaluation._build_request_payload(probe),
                 {"text": doc["decisions"][0]["variants"][index]["query"]},
             )
-        probes[0].expected_signal_values["embedding:information"]["gte"] = 0
+        probes[0].expected_signal_values["domain:information"]["gte"] = 0
         self.assertEqual(
-            doc["decisions"][0]["expected_signal_values"]["embedding:information"][
-                "gte"
-            ],
+            doc["decisions"][0]["expected_signal_values"]["domain:information"]["gte"],
             -1,
         )
 
@@ -117,15 +113,15 @@ class RawSignalValueTest(unittest.TestCase):
         invalid = [
             None,
             [],
-            {"embedding:information": {}},
-            {"embedding:information": {"gt": 0}},
-            {"embedding:information": {"gte": True}},
-            {"embedding:information": {"gte": "0"}},
-            {"embedding:information": {"gte": None, "lte": 1}},
-            {"embedding:information": {"gte": float("nan")}},
-            {"embedding:information": {"lte": float("inf")}},
-            {"embedding:information": {"gte": 2, "lte": 1}},
-            {"embedding:": {"gte": 0}},
+            {"domain:information": {}},
+            {"domain:information": {"gt": 0}},
+            {"domain:information": {"gte": True}},
+            {"domain:information": {"gte": "0"}},
+            {"domain:information": {"gte": None, "lte": 1}},
+            {"domain:information": {"gte": float("nan")}},
+            {"domain:information": {"lte": float("inf")}},
+            {"domain:information": {"gte": 2, "lte": 1}},
+            {"domain:": {"gte": 0}},
         ]
         for raw in invalid:
             for target in ("group", "variant"):
@@ -142,12 +138,12 @@ class RawSignalValueTest(unittest.TestCase):
         self.assertTrue(self.evaluate(response)["matched"])
         _, probes = self.load(self.document())
         probe = probes[0]
-        probe.expected_signals = (("embeddings", "information"),)
+        probe.expected_signals = (("domains", "information"),)
         self.assertFalse(self.evaluate(response, probe)["matched"])
         probe.expected_signals = ()
-        probe.forbidden_signals = (("embeddings", "information"),)
+        probe.forbidden_signals = (("domains", "information"),)
         self.assertTrue(self.evaluate(response, probe)["matched"])
-        response["decision_result"]["matched_signals"] = {"embeddings": ["information"]}
+        response["decision_result"]["matched_signals"] = {"domains": ["information"]}
         self.assertFalse(self.evaluate(response, probe)["matched"])
 
     def test_missing_invalid_range_and_errors_fail_both_scopes(self):
@@ -155,7 +151,7 @@ class RawSignalValueTest(unittest.TestCase):
             for scope in ("policy", "deployment"):
                 with self.subTest(value=value, scope=scope):
                     response = self.response()
-                    response["signal_values"]["embedding:information"] = value
+                    response["signal_values"]["domain:information"] = value
                     result = self.evaluate(response, scope=scope)
                     self.assertFalse(result["matched"])
                     self.assertFalse(result["signal_values_matched"])
@@ -167,21 +163,19 @@ class RawSignalValueTest(unittest.TestCase):
             "nested mock values cannot replace the canonical top-level field",
         )
         response = self.response()
-        response["signal_errors"] = {"embedding:information": "evaluation_failed"}
+        response["signal_errors"] = {"domain:information": "evaluation_failed"}
         result = self.evaluate(response)
         self.assertFalse(result["signal_values_matched"])
-        self.assertEqual(
-            result["observed_signal_values"], {"embedding:information": 0.3}
-        )
+        self.assertEqual(result["observed_signal_values"], {"domain:information": 0.3})
         summary = {"decision_id": "route", "matched": 0, "total": 1, "pass_rate": 0}
         rendered = "\n".join(report._render_decision_failures(summary, [result]))
         self.assertIn("signal values", rendered)
-        self.assertIn("embedding:information", rendered)
+        self.assertIn("domain:information", rendered)
 
-    def test_error_parent_and_complexity_verdict_invalidate_raw_value(self):
+    def test_a_rule_error_invalidates_its_label_values(self):
         for key, error in (
-            ("classifier:risk:label", "classifier:risk"),
-            ("complexity:depth:margin", "complexity:depth:hard"),
+            ("safety:risk:violent", "safety:risk"),
+            ("complexity:depth:hard", "complexity:depth"),
         ):
             self.assertFalse(
                 values.compare_signal_values(
@@ -192,33 +186,29 @@ class RawSignalValueTest(unittest.TestCase):
     def test_http_failure_keeps_raw_diagnostic_without_acceptance(self):
         _, probes = self.load(self.document())
         payload = self.response()
-        payload["signal_errors"] = {"embedding:information": "failed"}
+        payload["signal_errors"] = {"domain:information": "failed"}
         exc = evaluation.ProbeRequestError("HTTP 503", 503, payload)
         result = support.failed_probe_result(probes[0], exc)
         self.assertFalse(result["matched"])
         self.assertFalse(result["signal_values_matched"])
-        self.assertEqual(
-            result["observed_signal_values"], {"embedding:information": 0.3}
-        )
+        self.assertEqual(result["observed_signal_values"], {"domain:information": 0.3})
         self.assertIs(result["raw_response"], payload)
 
     def test_top_level_values_are_authoritative_when_nested_values_conflict(self):
         response = self.response()
-        response["decision_result"]["signal_values"] = {"embedding:information": 2}
+        response["decision_result"]["signal_values"] = {"domain:information": 2}
         self.assertTrue(self.evaluate(response)["signal_values_matched"])
-        response["signal_values"]["embedding:information"] = 2
-        response["decision_result"]["signal_values"]["embedding:information"] = 0.3
+        response["signal_values"]["domain:information"] = 2
+        response["decision_result"]["signal_values"]["domain:information"] = 0.3
         self.assertFalse(self.evaluate(response)["signal_values_matched"])
 
-    def test_complexity_errors_stay_with_the_complete_rule_name(self):
+    def test_errors_stay_with_the_rule_they_name(self):
         for key, error, related in (
-            ("complexity:depth", "complexity:other:hard", False),
-            ("complexity:depth", "complexity:depth:hard", True),
-            ("complexity:depth:margin", "complexity:other:hard", False),
-            ("complexity:literal:part:margin", "complexity:literal:other:hard", False),
-            ("complexity:literal:part:margin", "complexity:literal:part:hard", True),
-            ("complexity:literal:hard:margin", "complexity:literal:hard", False),
-            ("complexity:literal:hard:margin", "complexity:literal:hard:easy", True),
+            ("complexity:depth", "complexity:other", False),
+            ("complexity:depth", "complexity:depth", True),
+            ("complexity:depth:hard", "complexity:other", False),
+            ("complexity:depth:hard", "complexity:depth", True),
+            ("complexity:depth:hard", "complexity:depth:easy", False),
         ):
             with self.subTest(key=key, error=error):
                 result = values.compare_signal_values(
@@ -229,7 +219,7 @@ class RawSignalValueTest(unittest.TestCase):
     def test_static_coverage_resolves_current_recipe_and_literal_rule_names(self):
         doc, probes = self.load(self.document())
         profile = {
-            "signals": {"embeddings": [{"name": "information"}]},
+            "signals": {"domains": [{"name": "information"}]},
             "decisions": [{"name": "route", "algorithm": {"type": "static"}}],
         }
         kwargs = {
@@ -240,36 +230,36 @@ class RawSignalValueTest(unittest.TestCase):
             "policy": doc["coverage"],
         }
         result = coverage.collect_coverage(**kwargs)
-        self.assertEqual(result["signals"]["asserted"], ["embeddings:information"])
+        self.assertEqual(result["signals"]["asserted"], ["domains:information"])
         self.assertTrue(result["passed"])
         conformance._validate_probe_signals(
-            Path("probes.yaml"), probes[0], {"embeddings": {"information"}}
+            Path("probes.yaml"), probes[0], {"domains": {"information"}}
         )
         other = copy.deepcopy(probes[0])
-        other.expected_signal_values = {"embedding:missing": {"gte": 0}}
+        other.expected_signal_values = {"domain:missing": {"gte": 0}}
         with self.assertRaisesRegex(ValueError, "unknown signal rule"):
             coverage.collect_coverage(**{**kwargs, "probes": [other]})
         with self.assertRaisesRegex(ValueError, "unknown signal rule"):
             conformance._validate_probe_signals(
-                Path("probes.yaml"), other, {"embeddings": {"information"}}
+                Path("probes.yaml"), other, {"domains": {"information"}}
             )
         with self.assertRaisesRegex(ValueError, "unknown signal rule"):
             coverage.collect_coverage(**{**kwargs, "profiles": {"foreign": profile}})
         self.assertEqual(
             values.signal_value_reference(
-                "embedding:literal:colon", {"embeddings": {"literal:colon"}}
+                "keyword:literal:colon", {"keywords": {"literal:colon"}}
             ),
-            ("embeddings", "literal:colon"),
+            ("keywords", "literal:colon"),
         )
         self.assertEqual(
             values.signal_value_reference(
-                "complexity:depth:margin", {"complexity": {"depth"}}
+                "complexity:depth:hard", {"complexity": {"depth"}}
             ),
             ("complexity", "depth"),
         )
         with self.assertRaises(ValueError):
             values.signal_value_reference(
-                "embedding:information:invented", {"embeddings": {"information"}}
+                "keyword:size:invented", {"keywords": {"size"}}
             )
 
 

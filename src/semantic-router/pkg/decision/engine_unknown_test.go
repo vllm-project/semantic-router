@@ -10,7 +10,7 @@ import (
 
 func TestUnknownTruthTable(t *testing.T) {
 	unknown := config.RuleNode{
-		Type:      config.SignalTypeClassifier,
+		Type:      config.SignalTypeSystemOne,
 		Name:      "risk",
 		Label:     "RISKY",
 		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
@@ -30,9 +30,9 @@ func TestUnknownTruthTable(t *testing.T) {
 	}
 	signals := &SignalMatches{
 		KeywordRules: []string{"present"},
-		SignalErrors: map[string]string{"classifier:risk": "timeout"},
+		SignalErrors: map[string]string{"systemone:risk": "timeout"},
 	}
-	engine := NewDecisionEngine(nil, nil, nil, nil, config.RoutingStrategyPriority)
+	engine := NewDecisionEngine(nil, config.RoutingStrategyPriority)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			evaluation, _ := engine.evalNode(test.rule, signals, config.RuleOnUnknownNoMatch, false)
@@ -59,7 +59,7 @@ func TestUnknownOrTrueMatchesResolvedBranch(t *testing.T) {
 		SignalErrors:       map[string]string{"jailbreak:guard": "unavailable"},
 		SignalErrorMatches: map[string]bool{"jailbreak:guard": true},
 	}
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
+	engine := NewDecisionEngine([]config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
 	result, err := engine.EvaluateDecisionsWithSignals(signals)
 	if err != nil || result == nil {
 		t.Fatalf("result = %#v, error = %v", result, err)
@@ -79,17 +79,17 @@ func TestUnknownOrTrueMatchesResolvedBranch(t *testing.T) {
 	}
 }
 
-func TestUnknownKeepsLegacyClassifierOnError(t *testing.T) {
+func TestUnknownKeepsSystemOneOnError(t *testing.T) {
 	rule := config.RuleNode{
-		Type:      config.SignalTypeClassifier,
+		Type:      config.SignalTypeSystemOne,
 		Name:      "risk",
 		Label:     "RISKY",
 		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
 		OnError:   "match",
 	}
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
+	engine := NewDecisionEngine([]config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
-		SignalErrors: map[string]string{"classifier:risk": "timeout"},
+		SignalErrors: map[string]string{"systemone:risk": "timeout"},
 	})
 	if err != nil || result == nil {
 		t.Fatalf("result = %#v, error = %v", result, err)
@@ -98,7 +98,7 @@ func TestUnknownKeepsLegacyClassifierOnError(t *testing.T) {
 
 func TestUnknownKeepsLegacyPromptGuardResult(t *testing.T) {
 	rule := config.RuleNode{Type: config.SignalTypeJailbreak, Name: "guard"}
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
+	engine := NewDecisionEngine([]config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
 		JailbreakRules:     []string{"guard"},
 		SignalErrors:       map[string]string{"jailbreak:guard": "unavailable"},
@@ -111,13 +111,13 @@ func TestUnknownKeepsLegacyPromptGuardResult(t *testing.T) {
 
 func TestOnUnknownPolicies(t *testing.T) {
 	rule := config.RuleNode{
-		Type:      config.SignalTypeClassifier,
+		Type:      config.SignalTypeSystemOne,
 		Name:      "risk",
 		Label:     "RISKY",
 		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
 		OnError:   "match",
 	}
-	signals := &SignalMatches{SignalErrors: map[string]string{"classifier:risk": "timeout"}}
+	signals := &SignalMatches{SignalErrors: map[string]string{"systemone:risk": "timeout"}}
 	tests := []struct {
 		name      string
 		policy    config.UnknownPolicy
@@ -132,7 +132,7 @@ func TestOnUnknownPolicies(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			rule.OnUnknown = test.policy
-			engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
+			engine := NewDecisionEngine([]config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
 			result, diagnostics, err := engine.EvaluateDecisionsWithDiagnostics(signals)
 			if (err != nil) != test.wantError {
 				t.Fatalf("error = %v, wantError %v", err, test.wantError)
@@ -149,15 +149,15 @@ func TestOnUnknownPolicies(t *testing.T) {
 
 func TestUnknownLegacyTraceShowsResolvedLeaf(t *testing.T) {
 	rule := config.RuleNode{
-		Type:      config.SignalTypeClassifier,
+		Type:      config.SignalTypeSystemOne,
 		Name:      "risk",
 		Label:     "RISKY",
 		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
 		OnError:   "match",
 	}
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
+	engine := NewDecisionEngine([]config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
 	result, traces, diagnostics, err := engine.EvaluateDecisionsWithTraceAndDiagnostics(&SignalMatches{
-		SignalErrors: map[string]string{"classifier:risk": "timeout"},
+		SignalErrors: map[string]string{"systemone:risk": "timeout"},
 	})
 	if err != nil || result == nil {
 		t.Fatalf("result = %#v, error = %v", result, err)
@@ -175,20 +175,21 @@ func TestUnknownLegacyTraceShowsResolvedLeaf(t *testing.T) {
 
 func TestFailRequestEvaluatesAllDecisions(t *testing.T) {
 	unresolved := config.RuleNode{
-		Type:      config.SignalTypeClassifier,
+		Type:      config.SignalTypeSystemOne,
 		Name:      "risk",
 		Label:     "RISKY",
 		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
 		OnUnknown: config.RuleOnUnknownFailRequest,
 	}
 	matching := config.RuleNode{Type: config.SignalTypeKeyword, Name: "present"}
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{
+	engine := NewDecisionEngine([]config.Decision{
 		{Name: "guarded", Rules: unresolved},
 		{Name: "route", Rules: matching},
 	}, config.RoutingStrategyPriority)
+
 	result, traces, _, err := engine.EvaluateDecisionsWithTraceAndDiagnostics(&SignalMatches{
 		KeywordRules: []string{"present"},
-		SignalErrors: map[string]string{"classifier:risk": "timeout"},
+		SignalErrors: map[string]string{"systemone:risk": "timeout"},
 	})
 	if !errors.Is(err, ErrDecisionUnresolved) || result != nil {
 		t.Fatalf("result = %#v, error = %v", result, err)
@@ -200,7 +201,7 @@ func TestFailRequestEvaluatesAllDecisions(t *testing.T) {
 
 func TestFailRequestOverridesHigherPriorityMatch(t *testing.T) {
 	guarded := config.Decision{Name: "guarded", Priority: 1, Rules: config.RuleNode{
-		Type:      config.SignalTypeClassifier,
+		Type:      config.SignalTypeSystemOne,
 		Name:      "risk",
 		Label:     "RISKY",
 		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
@@ -211,14 +212,14 @@ func TestFailRequestOverridesHigherPriorityMatch(t *testing.T) {
 	}}
 	signals := &SignalMatches{
 		KeywordRules: []string{"present"},
-		SignalErrors: map[string]string{"classifier:risk": "timeout"},
+		SignalErrors: map[string]string{"systemone:risk": "timeout"},
 	}
 	for name, decisions := range map[string][]config.Decision{
 		"guarded first": {guarded, good},
 		"good first":    {good, guarded},
 	} {
 		t.Run(name, func(t *testing.T) {
-			engine := NewDecisionEngine(nil, nil, nil, decisions, config.RoutingStrategyPriority)
+			engine := NewDecisionEngine(decisions, config.RoutingStrategyPriority)
 			result, err := engine.EvaluateDecisionsWithSignals(signals)
 			if !errors.Is(err, ErrDecisionUnresolved) || result != nil {
 				t.Fatalf("result = %#v, error = %v", result, err)
@@ -234,7 +235,7 @@ func TestFailRequestOverridesHigherPriorityMatch(t *testing.T) {
 func TestDecisionUnresolvedErrorDescribesUnknownEvidence(t *testing.T) {
 	for _, reason := range []string{"user_feedback_uncertain", "user_feedback_evaluation_failed"} {
 		t.Run(reason, func(t *testing.T) {
-			engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{
+			engine := NewDecisionEngine([]config.Decision{{
 				Name: "guarded",
 				Rules: config.RuleNode{
 					Type:      config.SignalTypeUserFeedback,
@@ -242,6 +243,7 @@ func TestDecisionUnresolvedErrorDescribesUnknownEvidence(t *testing.T) {
 					OnUnknown: config.RuleOnUnknownFailRequest,
 				},
 			}}, config.RoutingStrategyPriority)
+
 			result, traces, _, err := engine.EvaluateDecisionsWithTraceAndDiagnostics(&SignalMatches{
 				SignalErrors: map[string]string{"user_feedback:wrong_answer": reason},
 			})
@@ -265,15 +267,15 @@ func TestDecisionUnresolvedErrorDescribesUnknownEvidence(t *testing.T) {
 
 func TestUnknownTraceRecordsErrorAndPolicy(t *testing.T) {
 	rule := config.RuleNode{
-		Type:      config.SignalTypeClassifier,
+		Type:      config.SignalTypeSystemOne,
 		Name:      "risk",
 		Label:     "RISKY",
 		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
 		OnUnknown: config.RuleOnUnknownNoMatch,
 	}
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
+	engine := NewDecisionEngine([]config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
 	_, traces, diagnostics, err := engine.EvaluateDecisionsWithTraceAndDiagnostics(&SignalMatches{
-		SignalErrors: map[string]string{"classifier:risk": "timeout"},
+		SignalErrors: map[string]string{"systemone:risk": "timeout"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -291,7 +293,7 @@ func TestUnknownTraceRecordsErrorAndPolicy(t *testing.T) {
 
 func TestOnErrorResolvedBranchNeverOutranksRealMatch(t *testing.T) {
 	failed := config.RuleNode{
-		Type:      config.SignalTypeClassifier,
+		Type:      config.SignalTypeSystemOne,
 		Name:      "risk",
 		Label:     "RISKY",
 		Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
@@ -303,7 +305,7 @@ func TestOnErrorResolvedBranchNeverOutranksRealMatch(t *testing.T) {
 	signals := &SignalMatches{
 		KeywordRules:      []string{"present", "other"},
 		SignalConfidences: map[string]float64{"keyword:present": 0.6, "keyword:other": 0.5},
-		SignalErrors:      map[string]string{"classifier:risk": "timeout"},
+		SignalErrors:      map[string]string{"systemone:risk": "timeout"},
 	}
 	for name, rule := range map[string]config.RuleNode{
 		"not": {Operator: "OR", Conditions: []config.RuleNode{
@@ -316,7 +318,7 @@ func TestOnErrorResolvedBranchNeverOutranksRealMatch(t *testing.T) {
 		}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
+			engine := NewDecisionEngine([]config.Decision{{Name: "route", Rules: rule}}, config.RoutingStrategyPriority)
 			result, err := engine.EvaluateDecisionsWithSignals(signals)
 			if err != nil || result == nil {
 				t.Fatalf("result = %#v, error = %v", result, err)
@@ -329,19 +331,19 @@ func TestOnErrorResolvedBranchNeverOutranksRealMatch(t *testing.T) {
 }
 
 func TestOperatingPointLabelMatchesKeepUnknownAndLegacyErrorPolicy(t *testing.T) {
-	node := config.RuleNode{Type: config.SignalTypeClassifier, Name: "risk", Label: "unsafe"}
+	node := config.RuleNode{Type: config.SignalTypeSystemOne, Name: "risk", Label: "unsafe"}
 	for _, policy := range []config.UnknownPolicy{config.RuleOnUnknownNoMatch, config.RuleOnUnknownMatch, config.RuleOnUnknownFailRequest} {
 		node.OnUnknown = policy
-		engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: node}}, config.RoutingStrategyPriority)
-		result, diagnostics, err := engine.EvaluateDecisionsWithDiagnostics(&SignalMatches{SignalErrors: map[string]string{"classifier:risk": "failed"}})
+		engine := NewDecisionEngine([]config.Decision{{Name: "route", Rules: node}}, config.RoutingStrategyPriority)
+		result, diagnostics, err := engine.EvaluateDecisionsWithDiagnostics(&SignalMatches{SignalErrors: map[string]string{"systemone:risk": "failed"}})
 		if (err != nil) != (policy == config.RuleOnUnknownFailRequest) || (result != nil) != (policy == config.RuleOnUnknownMatch) || diagnostics.AppliedUnknownPolicies["route"] != string(policy) {
 			t.Fatalf("policy %s result=%+v diagnostics=%+v error=%v", policy, result, diagnostics, err)
 		}
 	}
 	node.OnUnknown = ""
 	node.OnError = "match"
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{Name: "route", Rules: node}}, config.RoutingStrategyPriority)
-	if result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{SignalErrors: map[string]string{"classifier:risk": "failed"}}); err != nil || result == nil {
+	engine := NewDecisionEngine([]config.Decision{{Name: "route", Rules: node}}, config.RoutingStrategyPriority)
+	if result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{SignalErrors: map[string]string{"systemone:risk": "failed"}}); err != nil || result == nil {
 		t.Fatalf("legacy on_error lost: %+v %v", result, err)
 	}
 }

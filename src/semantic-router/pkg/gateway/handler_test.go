@@ -342,7 +342,7 @@ func TestHandlerWritesTheFallbackChainsAnswerAsIs(t *testing.T) {
 func TestHandlerForwardsTheCallAndRunsResponsePhases(t *testing.T) {
 	p := &fakeProcessor{effects: map[routing.Phase][]*routing.Effect{
 		routing.PhaseRequestBody: {{
-			Header:          &routing.HeaderMutation{Set: []routing.HeaderOption{set("x-selected-model", "model-a"), set(":path", "/v1/messages"), set("content-length", "4")}},
+			Header:          &routing.HeaderMutation{Set: []routing.HeaderOption{set("x-vsr-route-model", "model-a"), set(":path", "/v1/messages"), set("content-length", "4")}},
 			Body:            &routing.BodyMutation{Body: []byte("next")},
 			ClearRouteCache: true,
 		}},
@@ -353,7 +353,7 @@ func TestHandlerForwardsTheCallAndRunsResponsePhases(t *testing.T) {
 	rec := httptest.NewRecorder()
 	newTestHandler(t, p, u).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader("ping")))
 	call := u.got[0]
-	if call.RouteKey != "model-a" || call.Path != "/v1/messages" || string(call.Body) != "next" || call.Header.Get("X-Selected-Model") != "model-a" {
+	if call.RouteKey != "model-a" || call.Path != "/v1/messages" || string(call.Body) != "next" || call.Header.Get("X-Vsr-Route-Model") != "model-a" {
 		t.Fatalf("upstream call = %+v", call)
 	}
 	if _, pseudo := call.Header[":path"]; pseudo {

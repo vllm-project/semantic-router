@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -18,11 +19,13 @@ import (
 )
 
 // fakeSystemOneAPI is a System One API that answers every choice question
-// "a", about the request's own state and each of its states. It fails a call
-// that asks failing as a whole on that question, or every call with status.
+// "a", of a standard request or of each entry of a batch, and refuses a body
+// that mixes the two forms. It fails a call that asks failing as a whole on
+// that question, or every call with status.
 type fakeSystemOneAPI struct {
 	mu      sync.Mutex
 	calls   []systemOneCall
+	batches []bool
 	failing string
 	status  int
 	listing string
@@ -51,7 +54,7 @@ func (f *fakeSystemOneAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		Model     string                     `json:"model"`
-		State     string                     `json:"state"`
+		State     *string                    `json:"state"`
 		Questions map[string]json.RawMessage `json:"questions"`
 		States    map[string]struct {
 			State     string                     `json:"state"`
@@ -62,12 +65,22 @@ func (f *fakeSystemOneAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	call := systemOneCall{body.State: sortedIDs(body.Questions)}
+	batch := body.States != nil
+	if batch && (body.State != nil || body.Questions != nil) || !batch && body.State == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"code":"invalid_request","message":"a request is a standard request or a batch, not both"}}`))
+		return
+	}
+	call := systemOneCall{}
+	if !batch {
+		call[*body.State] = sortedIDs(body.Questions)
+	}
 	for _, state := range body.States {
 		call[state.State] = sortedIDs(state.Questions)
 	}
 	f.mu.Lock()
 	f.calls = append(f.calls, call)
+	f.batches = append(f.batches, batch)
 	f.mu.Unlock()
 	if f.status != 0 {
 		w.WriteHeader(f.status)
@@ -88,8 +101,10 @@ func (f *fakeSystemOneAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return answered
 	}
-	response := map[string]any{"model": body.Model, "answers": answers(body.Questions), "usage": map[string]int{"input_tokens": 3}}
-	if len(body.States) > 0 {
+	response := map[string]any{"model": body.Model, "usage": map[string]int{"input_tokens": 3 * len(call)}}
+	if !batch {
+		response["answers"] = answers(body.Questions)
+	} else {
 		states := make(map[string]any, len(body.States))
 		for name, state := range body.States {
 			states[name] = map[string]any{"model": body.Model, "answers": answers(state.Questions), "usage": map[string]int{"input_tokens": 3}}
@@ -103,6 +118,13 @@ func (f *fakeSystemOneAPI) answered() []systemOneCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return slices.Clone(f.calls)
+}
+
+// forms is whether each call was a batch.
+func (f *fakeSystemOneAPI) forms() []bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.batches)
 }
 
 func sortedIDs(questions map[string]json.RawMessage) []string {
@@ -156,8 +178,8 @@ func TestARemoteDeploymentAnswersAStagesQuestionsInOneCall(t *testing.T) {
 	}
 	calls := api.answered()
 	want := systemOneCall{"the request": {"domain_classifier:domain", "support_team"}, "a tool result": {"pii_classifier:pii"}}
-	if len(calls) != 1 || !equalCall(calls[0], want) {
-		t.Fatalf("calls %v, want one call %v", calls, want)
+	if len(calls) != 1 || !equalCall(calls[0], want) || !slices.Equal(api.forms(), []bool{true}) {
+		t.Fatalf("calls %v (batch %v), want one batch %v", calls, api.forms(), want)
 	}
 	for index, id := range []string{"support_team", "domain_classifier:domain", "pii_classifier:pii"} {
 		if answer := responses[index].Answers[id]; len(responses[index].Answers) != 1 || answer.Choice != "a" || answer.Error != "" {
@@ -169,6 +191,29 @@ func TestARemoteDeploymentAnswersAStagesQuestionsInOneCall(t *testing.T) {
 	}
 	if got := testutil.ToFloat64(stageDecisionCalls.WithLabelValues("hosted-stage", "later")) - later; got != 0 {
 		t.Fatalf("later-round calls %v, want 0", got)
+	}
+}
+
+// The stage's questions about every text it reads go to the deployment in
+// one batch, however many texts there are.
+func TestARemoteStageAsksAllItsStatesInOneBatch(t *testing.T) {
+	api := &fakeSystemOneAPI{}
+	remote := fakeRemote(t, "hosted-batch", api, config.ModelDeployment{})
+	askers := make([]asker, 20)
+	want := systemOneCall{}
+	for index := range askers {
+		text := fmt.Sprintf("candidate %d", index)
+		want[text] = []string{"match:relevance"}
+		askers[index] = asker{deployments: []string{"hosted-batch"}, ask: func(ctx context.Context) error {
+			_, err := remote.Decide(ctx, "hosted-batch", Request{State: text, Questions: []Question{choiceQuestion("match:relevance")}})
+			return err
+		}}
+	}
+	if _, errs := runStage(DefaultBundleWindow, askers...); errors.Join(errs...) != nil {
+		t.Fatal(errors.Join(errs...))
+	}
+	if calls := api.answered(); len(calls) != 1 || !equalCall(calls[0], want) || !slices.Equal(api.forms(), []bool{true}) {
+		t.Fatalf("calls %v (batch %v), want one batch with an entry per text", calls, api.forms())
 	}
 }
 
@@ -199,42 +244,57 @@ func TestARemoteCallFailedOnOneQuestionAsksTheRestOnceMore(t *testing.T) {
 		t.Fatalf("bad: %+v, want unknown with the API's question error", answer)
 	}
 	calls := api.answered()
-	if len(calls) != 2 || !equalCall(calls[1], systemOneCall{"x": {"good"}}) {
-		t.Fatalf("calls %v, want the call and one more without bad", calls)
+	if len(calls) != 2 || !equalCall(calls[1], systemOneCall{"x": {"good"}}) || !slices.Equal(api.forms(), []bool{false, false}) {
+		t.Fatalf("calls %v (batch %v), want the standard request and one more without bad", calls, api.forms())
 	}
 	if got := testutil.ToFloat64(systemOneRetries.WithLabelValues("hosted-retry")) - retries; got != 1 {
 		t.Fatalf("retries %v, want 1", got)
 	}
 }
 
-func TestARetryAsksAnotherStateWhenTheRequestsOwnAskedOnlyTheFailedQuestion(t *testing.T) {
-	api := &fakeSystemOneAPI{failing: "bad"}
-	remote := fakeRemote(t, "hosted-promote", api, config.ModelDeployment{})
-	responses := make([]Response, 2)
-	_, errs := runStage(DefaultBundleWindow,
-		asker{deployments: []string{"hosted-promote"}, ask: func(ctx context.Context) error {
-			var err error
-			responses[0], err = remote.Decide(ctx, "hosted-promote", Request{State: "text-1", Questions: []Question{choiceQuestion("bad")}})
-			return err
-		}},
-		asker{deployments: []string{"hosted-promote"}, delay: 20 * time.Millisecond, ask: func(ctx context.Context) error {
-			var err error
-			responses[1], err = remote.Decide(ctx, "hosted-promote", Request{State: "text-2", Questions: []Question{choiceQuestion("good")}})
-			return err
-		}},
-	)
-	if err := errors.Join(errs...); err != nil {
-		t.Fatal(err)
-	}
-	calls := api.answered()
-	if len(calls) != 2 || !equalCall(calls[0], systemOneCall{"text-1": {"bad"}, "text-2": {"good"}}) || !equalCall(calls[1], systemOneCall{"text-2": {"good"}}) {
-		t.Fatalf("calls %v, want one stage call and a retry about text-2 alone", calls)
-	}
-	if answer := responses[0].Answers["bad"]; answer.Error != "invalid_question" {
-		t.Fatalf("bad: %+v, want unknown", answer)
-	}
-	if answer := responses[1].Answers["good"]; answer.Choice != "a" || answer.Error != "" {
-		t.Fatalf("good: %+v, want answered", answer)
+// A retry asks only about the states with questions left: a batch about
+// several, a standard request about one.
+func TestARetryAsksOnlyTheStatesWithOtherQuestions(t *testing.T) {
+	for name, tc := range map[string]struct {
+		texts   []string
+		retried systemOneCall
+		forms   []bool
+	}{
+		"one state left":  {[]string{"text-1", "text-2"}, systemOneCall{"text-2": {"good"}}, []bool{true, false}},
+		"two states left": {[]string{"text-1", "text-2", "text-3"}, systemOneCall{"text-2": {"good"}, "text-3": {"good"}}, []bool{true, true}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			api := &fakeSystemOneAPI{failing: "bad"}
+			remote := fakeRemote(t, "hosted-retry-states", api, config.ModelDeployment{})
+			responses := make([]Response, len(tc.texts))
+			askers := make([]asker, len(tc.texts))
+			for index, text := range tc.texts {
+				question := choiceQuestion("good")
+				if index == 0 {
+					question = choiceQuestion("bad")
+				}
+				askers[index] = asker{deployments: []string{"hosted-retry-states"}, ask: func(ctx context.Context) error {
+					var err error
+					responses[index], err = remote.Decide(ctx, "hosted-retry-states", Request{State: text, Questions: []Question{question}})
+					return err
+				}}
+			}
+			if _, errs := runStage(DefaultBundleWindow, askers...); errors.Join(errs...) != nil {
+				t.Fatal(errors.Join(errs...))
+			}
+			calls := api.answered()
+			if len(calls) != 2 || !slices.Equal(api.forms(), tc.forms) || !equalCall(calls[1], tc.retried) {
+				t.Fatalf("calls %v (batch %v), want the stage's call and a retry about %v", calls, api.forms(), tc.retried)
+			}
+			if answer := responses[0].Answers["bad"]; answer.Error != "invalid_question" {
+				t.Fatalf("bad: %+v, want unknown", answer)
+			}
+			for _, response := range responses[1:] {
+				if answer := response.Answers["good"]; answer.Choice != "a" || answer.Error != "" {
+					t.Fatalf("good: %+v, want answered", answer)
+				}
+			}
+		})
 	}
 }
 

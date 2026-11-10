@@ -1,118 +1,150 @@
 package controllers
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
+	"gopkg.in/yaml.v3"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-type canonicalRoutingOverrideFields struct {
-	candidateRequirements bool
-	modelBindings         bool
-	modelCards            bool
-	signals               bool
-	projections           bool
-	decisions             bool
-}
-
-func canonicalRoutingFromKubernetesJSON(raw *apiextensionsv1.JSON) (routerconfig.CanonicalRouting, canonicalRoutingOverrideFields, error) {
-	var routing routerconfig.CanonicalRouting
-	var fields canonicalRoutingOverrideFields
-
+// decodeCanonicalList decodes a pass-through list of canonical objects, and
+// for each the keys it sets.
+func decodeCanonicalList[T any](raw *apiextensionsv1.JSON) ([]T, []map[string]bool, error) {
 	if raw == nil || len(raw.Raw) == 0 {
-		return routing, fields, nil
+		return nil, nil, nil
 	}
-
-	var object map[string]interface{}
-	if err := json.Unmarshal(raw.Raw, &object); err != nil {
-		return routing, fields, err
+	var objects []map[string]interface{}
+	if err := json.Unmarshal(raw.Raw, &objects); err != nil {
+		return nil, nil, fmt.Errorf("must be a list of objects: %w", err)
 	}
-	if object == nil {
-		return routing, fields, nil
-	}
-
-	for key := range object {
-		switch key {
-		case "candidate_requirements":
-			fields.candidateRequirements = true
-		case "model_bindings":
-			fields.modelBindings = true
-		case "modelCards":
-			fields.modelCards = true
-		case "signals":
-			fields.signals = true
-		case "projections":
-			fields.projections = true
-		case "decisions":
-			fields.decisions = true
-		}
-	}
-
-	decoded, err := decodeCanonicalModelObject[routerconfig.CanonicalRouting](raw)
+	data, err := yaml.Marshal(objects)
 	if err != nil {
-		return routing, fields, err
+		return nil, nil, err
 	}
-	routing = decoded
-	if fields.candidateRequirements {
-		payload, err := json.Marshal(object["candidate_requirements"])
-		if err != nil {
-			return routing, fields, err
-		}
-		policy, err := decodeCanonicalModelObject[routerconfig.CandidateRequirements](&apiextensionsv1.JSON{Raw: payload})
-		if err != nil {
-			return routing, fields, fmt.Errorf("candidate_requirements: %w", err)
-		}
-		if err := policy.Validate(); err != nil {
-			return routing, fields, err
-		}
-		routing.CandidateRequirements = &policy
+	var items []T
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&items); err != nil {
+		return nil, nil, err
 	}
-	if fields.modelBindings {
-		bindingsJSON, err := json.Marshal(object["model_bindings"])
-		if err != nil {
-			return routing, fields, err
+	keys := make([]map[string]bool, len(objects))
+	for index, object := range objects {
+		keys[index] = make(map[string]bool, len(object))
+		for key := range object {
+			keys[index][key] = true
 		}
-		bindings, err := decodeCanonicalModelObject[map[string]routerconfig.ModelBinding](&apiextensionsv1.JSON{Raw: bindingsJSON})
-		if err != nil {
-			return routing, fields, fmt.Errorf("model_bindings: %w", err)
-		}
-		routing.ModelBindings = bindings
 	}
-
-	return routing, fields, nil
+	return items, keys, nil
 }
 
-func applyCanonicalRoutingOverrides(
-	canonical *routerconfig.CanonicalConfig,
-	routing routerconfig.CanonicalRouting,
-	fields canonicalRoutingOverrideFields,
-) {
-	if fields.candidateRequirements {
-		canonical.Routing.CandidateRequirements = routing.CandidateRequirements.Clone()
+// applyOperatorRecipes puts config.recipes, config.entrypoints, config.plugins
+// and config.models into the canonical config.
+func applyOperatorRecipes(canonical *routerconfig.CanonicalConfig, spec configRoutingSpec) error {
+	recipes, keys, err := decodeCanonicalList[routerconfig.CanonicalRecipe](spec.recipes)
+	if err != nil {
+		return fmt.Errorf("config.recipes: %w", err)
 	}
-	if fields.modelBindings {
-		canonical.Routing.ModelBindings = routing.ModelBindings
+	for index, recipe := range recipes {
+		if validateErr := recipe.CandidateRequirements.Validate(); validateErr != nil {
+			return fmt.Errorf("config.recipes[%d].candidate_requirements: %w", index, validateErr)
+		}
+		if recipe.Name == string(routerconfig.DefaultRecipeName) {
+			overrideRecipe(defaultRecipe(canonical), recipe, keys[index])
+			continue
+		}
+		canonical.Recipes = append(canonical.Recipes, recipe)
 	}
-	if fields.modelCards {
-		canonical.Routing.ModelCards = routing.ModelCards
+	entrypoints, _, err := decodeCanonicalList[routerconfig.CanonicalEntrypoint](spec.entrypoints)
+	if err != nil {
+		return fmt.Errorf("config.entrypoints: %w", err)
 	}
-	if fields.signals {
-		canonical.Routing.Signals = routing.Signals
+	if spec.entrypoints != nil {
+		canonical.Entrypoints = entrypoints
 	}
-	if fields.projections {
-		canonical.Routing.Projections = routing.Projections
+	plugins, _, err := decodeCanonicalList[routerconfig.DecisionPlugin](spec.plugins)
+	if err != nil {
+		return fmt.Errorf("config.plugins: %w", err)
 	}
-	if fields.decisions {
-		canonical.Routing.Decisions = routing.Decisions
+	if spec.plugins != nil {
+		canonical.Global.Plugins = plugins
+	}
+	models, _, err := decodeCanonicalList[routerconfig.CanonicalProviderModel](spec.models)
+	if err != nil {
+		return fmt.Errorf("config.models: %w", err)
+	}
+	return mergeModelFacts(canonical, models)
+}
+
+type configRoutingSpec struct {
+	recipes, entrypoints, plugins, models *apiextensionsv1.JSON
+}
+
+// defaultRecipe is the operator's default recipe, which it always writes.
+func defaultRecipe(canonical *routerconfig.CanonicalConfig) *routerconfig.CanonicalRecipe {
+	for index := range canonical.Recipes {
+		if canonical.Recipes[index].Name == string(routerconfig.DefaultRecipeName) {
+			return &canonical.Recipes[index]
+		}
+	}
+	canonical.Recipes = append([]routerconfig.CanonicalRecipe{{Name: string(routerconfig.DefaultRecipeName)}}, canonical.Recipes...)
+	return &canonical.Recipes[0]
+}
+
+// overrideRecipe sets the fields of target that recipe sets.
+func overrideRecipe(target *routerconfig.CanonicalRecipe, recipe routerconfig.CanonicalRecipe, keys map[string]bool) {
+	if keys["description"] {
+		target.Description = recipe.Description
+	}
+	if keys["model_bindings"] {
+		target.ModelBindings = recipe.ModelBindings
+	}
+	if keys["plugins"] {
+		target.Plugins = recipe.Plugins
+	}
+	if keys["signals"] {
+		target.Signals = recipe.Signals
+	}
+	if keys["projections"] {
+		target.Projections = recipe.Projections
+	}
+	if keys["decisions"] {
+		target.Decisions = recipe.Decisions
+	}
+	if keys["strategy"] {
+		target.Strategy = recipe.Strategy
+	}
+	if keys["fallback"] {
+		target.Fallback = recipe.Fallback
+	}
+	if keys["candidate_requirements"] {
+		target.CandidateRequirements = recipe.CandidateRequirements
 	}
 }
 
-func formatCanonicalRoutingOverrideError(err error) error {
-	if err == nil {
-		return nil
+// mergeModelFacts states config.models' facts on the providers.models[]
+// entries of the same name, and adds an entry for a name none has.
+func mergeModelFacts(canonical *routerconfig.CanonicalConfig, models []routerconfig.CanonicalProviderModel) error {
+	for _, model := range models {
+		transport := model
+		transport.ModelFacts = routerconfig.ModelFacts{}
+		if model.Name == "" || !reflect.DeepEqual(transport, routerconfig.CanonicalProviderModel{Name: model.Name}) {
+			return fmt.Errorf("config.models[%s]: an entry states a name and facts; its transport comes from vllmEndpoints", model.Name)
+		}
+		found := false
+		for index := range canonical.Providers.Models {
+			if canonical.Providers.Models[index].Name == model.Name {
+				canonical.Providers.Models[index].ModelFacts = model.ModelFacts
+				found = true
+			}
+		}
+		if !found {
+			canonical.Providers.Models = append(canonical.Providers.Models, model)
+		}
 	}
-	return fmt.Errorf("config.routing: %w", err)
+	return nil
 }

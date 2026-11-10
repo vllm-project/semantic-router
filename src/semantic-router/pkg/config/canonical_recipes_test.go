@@ -9,28 +9,7 @@ import (
 )
 
 const recipeTestBaseYAML = `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
-    - name: model-b
-      description: privacy tier
-  signals:
-    keywords:
-      - name: urgent_keywords
-        operator: OR
-        keywords: ["urgent"]
-  decisions:
-    - name: default_route
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: urgent_keywords
-      modelRefs:
-        - model: model-a
-          use_reasoning: false
+version: v0.5
 providers:
   defaults:
     model: model-a
@@ -39,37 +18,55 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
+      description: default tier
     - name: model-b
       backend_refs:
         - endpoint: 127.0.0.1:8001
           provider: vllm
+      description: privacy tier
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: urgent_keywords
+          operator: OR
+          keywords: ["urgent"]
+    decisions:
+      - name: default_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent_keywords
+        modelRefs:
+          - model: model-a
+            use_reasoning: false
 `
 
 const recipeTestPrivacyBlockYAML = `
-recipes:
   - name: privacy
     description: privacy profile
-    routing:
-      signals:
-        keywords:
-          - name: pii_keywords
-            operator: OR
-            keywords: ["ssn"]
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: pii_keywords
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    signals:
+      keywords:
+        - name: pii_keywords
+          operator: OR
+          keywords: ["ssn"]
+    decisions:
+      - name: privacy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: pii_keywords
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
 entrypoints:
   - model_names: ["vllm-sr/privacy"]
     recipe: privacy
   - model_names: ["vllm-sr/default-alias"]
     recipe: default
+    default: true
 `
 
 func TestCanonicalRecipesRoutingOnlyNormalizesToDefaultRecipe(t *testing.T) {
@@ -136,29 +133,24 @@ func TestCanonicalEntrypointsResolveDefaultRecipeAlias(t *testing.T) {
 
 func TestCanonicalRecipesOnlyDefaultBridgesFlatFields(t *testing.T) {
 	yaml := `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
+version: v0.5
 recipes:
   - name: default
-    routing:
-      signals:
-        keywords:
-          - name: urgent_keywords
-            operator: OR
-            keywords: ["urgent"]
-      decisions:
-        - name: recipe_default_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: urgent_keywords
-          modelRefs:
-            - model: model-a
-              use_reasoning: false
+    signals:
+      keywords:
+        - name: urgent_keywords
+          operator: OR
+          keywords: ["urgent"]
+    decisions:
+      - name: recipe_default_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent_keywords
+        modelRefs:
+          - model: model-a
+            use_reasoning: false
 providers:
   defaults:
     model: model-a
@@ -167,6 +159,7 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
+      description: default tier
 `
 	cfg, err := ParseYAMLBytes([]byte(yaml))
 	if err != nil {
@@ -188,11 +181,8 @@ func TestCanonicalExportEmitsRecipesAndEntrypoints(t *testing.T) {
 	}
 
 	canonical := CanonicalConfigFromRouterConfig(cfg)
-	if len(canonical.Recipes) != 1 || canonical.Recipes[0].Name != "privacy" {
-		t.Fatalf("expected the privacy recipe to be exported, got %+v", canonical.Recipes)
-	}
-	if len(canonical.Recipes[0].Routing.ModelCards) != 0 {
-		t.Fatalf("exported recipes must not own model cards, got %+v", canonical.Recipes[0].Routing.ModelCards)
+	if len(canonical.Recipes) != 2 || canonical.Recipes[0].Name != string(DefaultRecipeName) || canonical.Recipes[1].Name != "privacy" {
+		t.Fatalf("expected the default and privacy recipes to be exported, got %+v", canonical.Recipes)
 	}
 	if len(canonical.Entrypoints) != 2 {
 		t.Fatalf("expected 2 exported entrypoints, got %+v", canonical.Entrypoints)
@@ -235,50 +225,53 @@ var canonicalRecipeErrorCases = []struct {
 	{
 		name: "duplicate recipe name",
 		extra: `
-recipes:
   - name: privacy
-    routing: {}
   - name: privacy
-    routing: {}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
 		wantErr: "duplicate recipe name",
 	},
 	{
-		name: "default recipe conflicts with top-level routing",
+		name: "a second recipe named default",
 		extra: `
-recipes:
   - name: default
-    routing: {}
 `,
-		wantErr: "conflicts with the top-level routing profile",
+		wantErr: "duplicate recipe name",
 	},
 	{
 		name: "recipe owns model cards",
 		extra: `
-recipes:
   - name: privacy
-    routing:
-      modelCards:
-        - name: rogue-model
+    modelCards:
+      - name: rogue-model
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
-		wantErr: "the model catalog is shared",
+		wantErr: `unknown field "modelCards"`,
 	},
 	{
 		name: "recipe decision references unknown model",
 		extra: `
-recipes:
   - name: privacy
-    routing:
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: urgent_keywords
-          modelRefs:
-            - model: missing-model
-              use_reasoning: false
+    decisions:
+      - name: privacy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent_keywords
+        modelRefs:
+          - model: missing-model
+            use_reasoning: false
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
 		wantErr: "references unknown model",
 	},
@@ -303,12 +296,11 @@ entrypoints:
 	{
 		name: "duplicate model name across entrypoints",
 		extra: `
-recipes:
   - name: privacy
-    routing: {}
 entrypoints:
   - model_names: ["vllm-sr/dup"]
     recipe: default
+    default: true
   - model_names: ["vllm-sr/dup"]
     recipe: privacy
 `,
@@ -317,9 +309,11 @@ entrypoints:
 	{
 		name: "recipe name with surrounding whitespace",
 		extra: `
-recipes:
   - name: " privacy "
-    routing: {}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `,
 		wantErr: "must not contain surrounding whitespace",
 	},
@@ -340,9 +334,9 @@ func TestCanonicalRecipeValidationErrors(t *testing.T) {
 }
 
 func TestDuplicateIdenticalSignalWithinRecipeRejected(t *testing.T) {
-	needle := `      - name: urgent_keywords
-        operator: OR
-        keywords: ["urgent"]`
+	needle := `        - name: urgent_keywords
+          operator: OR
+          keywords: ["urgent"]`
 	yamlConfig := strings.Replace(
 		recipeTestBaseYAML,
 		needle,

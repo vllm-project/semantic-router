@@ -1,0 +1,13 @@
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: preference
+          question:
+            type: choice
+            instructions: Which response preference does the request express?
+            choices:
+              - key: terse_answers
+                description: 'Users who prefer short, direct responses. Examples: keep it concise; bullet points only; answer in one paragraph'
+              - key: none
+                description: The request expresses none of these preferences.

@@ -6,13 +6,13 @@ translation:
   outdated: false
 ---
 
-# 保留指令
+# 保留
 
 ## 概览
 
-保留指令为匹配的决策添加有界的状态处理说明。它可以跳过响应缓存写入、缩短该写入的存活时间、在会话中保持当前模型，或发出前缀保留提示。
+决策的 `retention` 属性为该决策添加有界的状态处理说明。它可以跳过响应缓存写入、缩短该写入的存活时间、在会话中保持当前模型，或发出前缀保留提示。
 
-保留是 `emits` 指令，不是信号、算法或插件。
+保留是决策属性，不是信号、算法或插件。它取代了只有 retention 一种类型的 `emits` 列表；仍写 `emits` 的配置会加载失败，`vllm-sr config migrate` 会改写它。
 
 ## 主要优势
 
@@ -38,22 +38,21 @@ translation:
 ## 配置
 
 ```yaml
-routing:
-  decisions:
-    - name: sensitive-turn
-      description: Drop retained state for sensitive turns.
-      priority: 200
-      rules:
-        operator: AND
-        conditions:
-          - type: pii
-            name: restricted_pii
-      modelRefs:
-        - model: private-model
-      emits:
-        - kind: retention
-          retention:
-            drop: true
+recipes:
+  - name: default
+    decisions:
+      - name: sensitive-turn
+        description: Drop retained state for sensitive turns.
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: pii
+              name: restricted_pii
+        modelRefs:
+          - model: private-model
+        retention:
+          drop: true
 ```
 
 等价 DSL 是：
@@ -63,7 +62,7 @@ ROUTE sensitive-turn {
   PRIORITY 200
   WHEN pii("restricted_pii")
   MODEL "private-model"
-  EMIT retention {
+  RETENTION {
     drop: true
   }
 }
@@ -76,9 +75,9 @@ ROUTE sensitive-turn {
 | `drop: true` | 跳过匹配决策的响应缓存写入 | 它不会阻止同一请求更早的缓存读取 |
 | `ttl_turns` | 用 Router 的回合到时间映射覆盖响应缓存条目存活时间 | 它是缓存 TTL 提示，不是持久会话保留 |
 | `keep_current_model: true` | 强制模型切换门保持在已知当前模型上 | 当会话/当前模型身份不可用时没有效果 |
-| `prefer_prefix_retention: true` | 为推理池发出 `x-vsr-retention-prefer-prefix` | Router 本身不管理提供商的 KV-cache 驱逐 |
+| `prefer_prefix_retention: true` | 在 `x-vsr-trace` 的 `retention` 成员中报告为 `prefer_prefix` | Router 本身不管理提供商的 KV-cache 驱逐 |
 
-`drop: true` 和正数 `ttl_turns` 不能同时设置。一条决策只能发出一条保留指令。显式值通过有界的 `x-vsr-retention-*` 响应头和路由诊断暴露。
+`drop: true` 和正数 `ttl_turns` 不能同时设置。一条决策只能发出一条保留指令。显式值记录在 `x-vsr-trace` 的 `retention` 成员和路由诊断中。
 
 ## 数据与安全
 

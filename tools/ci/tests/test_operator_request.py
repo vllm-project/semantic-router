@@ -22,6 +22,57 @@ probe = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(probe)
 
 
+def memory_resource():
+    """The SemanticRouter the operator workflow applies."""
+    workflow = yaml.safe_load((ROOT / ".github/workflows/operator-ci.yml").read_text())
+    script = next(
+        step["run"]
+        for job in workflow["jobs"].values()
+        for step in job.get("steps", [])
+        if step.get("name") == "Create test SemanticRouter CR"
+    )
+    with tempfile.TemporaryDirectory() as directory:
+        output = Path(directory) / "resource.yaml"
+        subprocess.run(
+            ["bash", "-eu", "-c", 'kubectl() { cat > "$OUTPUT"; }\n' + script],
+            env={**os.environ, "OUTPUT": str(output)},
+            check=True,
+        )
+        return yaml.safe_load(output.read_text())
+
+
+def undeclared_fields(value, schema, path="spec"):
+    """The paths of value's fields that the structural schema does not declare."""
+    if schema.get("x-kubernetes-preserve-unknown-fields"):
+        return []
+    if isinstance(value, list):
+        items = schema.get("items", {})
+        return [
+            field
+            for index, item in enumerate(value)
+            for field in undeclared_fields(item, items, f"{path}[{index}]")
+        ]
+    if not isinstance(value, dict):
+        return []
+    if "properties" not in schema:
+        extra = schema.get("additionalProperties")
+        if not isinstance(extra, dict):
+            return []
+        return [
+            field
+            for key, item in sorted(value.items())
+            for field in undeclared_fields(item, extra, f"{path}.{key}")
+        ]
+    fields = []
+    for key, item in sorted(value.items()):
+        if key in schema["properties"]:
+            field_schema = schema["properties"][key]
+            fields.extend(undeclared_fields(item, field_schema, f"{path}.{key}"))
+        else:
+            fields.append(f"{path}.{key}")
+    return fields
+
+
 class OperatorRequestTests(unittest.TestCase):
     def fixture(self):
         return {
@@ -151,31 +202,53 @@ class OperatorRequestTests(unittest.TestCase):
             )
 
     def test_memory_deployment_declares_the_route_exercised_by_the_probe(self):
-        workflow = yaml.safe_load(
-            (ROOT / ".github/workflows/operator-ci.yml").read_text()
+        resource = memory_resource()
+        self.assertEqual(resource["metadata"]["name"], "test-router-memory")
+        spec = resource["spec"]
+        self.assertEqual(spec["config"]["response_cache"]["backend_type"], "memory")
+        (recipe,) = spec["config"]["recipes"]
+        self.assertEqual(len(recipe["decisions"]), 1)
+        decision = recipe["decisions"][0]
+        self.assertEqual(decision["name"], "operator_ci_route")
+        self.assertEqual(decision["rules"], {"operator": "AND"})
+        self.assertEqual(
+            decision["modelRefs"][0]["model"], spec["vllmEndpoints"][0]["model"]
         )
-        script = next(
-            step["run"]
-            for job in workflow["jobs"].values()
-            for step in job.get("steps", [])
-            if step.get("name") == "Create test SemanticRouter CR"
+
+    def test_memory_resource_sets_only_fields_the_crd_declares(self):
+        # The API server's strict field validation refuses any other field.
+        crd = yaml.safe_load(
+            (
+                ROOT / "deploy/operator/config/crd/bases/vllm.ai_semanticrouters.yaml"
+            ).read_text()
         )
-        with tempfile.TemporaryDirectory() as directory:
-            output = Path(directory) / "resource.yaml"
-            subprocess.run(
-                ["bash", "-eu", "-c", 'kubectl() { cat > "$OUTPUT"; }\n' + script],
-                env={**os.environ, "OUTPUT": str(output)},
-                check=True,
-            )
-            resource = yaml.safe_load(output.read_text())
-            self.assertEqual(resource["metadata"]["name"], "test-router-memory")
-            spec = resource["spec"]
-            self.assertEqual(spec["config"]["semantic_cache"]["backend_type"], "memory")
-            routing = spec["config"]["routing"]
-            self.assertEqual(len(routing["decisions"]), 1)
-            decision = routing["decisions"][0]
-            self.assertEqual(decision["name"], "operator_ci_route")
-            self.assertEqual(decision["rules"], {"operator": "AND"})
-            self.assertEqual(
-                decision["modelRefs"][0]["model"], spec["vllmEndpoints"][0]["model"]
-            )
+        (version,) = crd["spec"]["versions"]
+        schema = version["schema"]["openAPIV3Schema"]["properties"]["spec"]
+        self.assertEqual(undeclared_fields(memory_resource()["spec"], schema), [])
+
+    def test_undeclared_fields_names_each_path_the_schema_lacks(self):
+        schema = {
+            "properties": {
+                "config": {
+                    "properties": {
+                        "recipes": {"x-kubernetes-preserve-unknown-fields": True},
+                        "api": {"properties": {"enabled": {}}},
+                    }
+                },
+                "endpoints": {"items": {"properties": {"name": {}}}},
+                "limits": {"additionalProperties": {}},
+            }
+        }
+        spec = {
+            "config": {
+                "recipes": [{"any": 1}],
+                "api": {"enabled": True, "old": 1},
+                "tools": {},
+            },
+            "endpoints": [{"name": "a", "port": 1}],
+            "limits": {"cpu": "1"},
+        }
+        self.assertEqual(
+            undeclared_fields(spec, schema),
+            ["spec.config.api.old", "spec.config.tools", "spec.endpoints[0].port"],
+        )

@@ -133,7 +133,7 @@ When the task changes phase, the harness can ask for a fresh routing decision
 in the same session. It sends `x-vsr-protection-release: 1` on the first request
 of the new phase, at a user turn rather than inside a tool loop. Send it on that
 one request only. A refused release returns its reason in
-`x-vsr-protocol-warnings`. Do not set it through Claude Code's
+`x-vsr-warnings`. Do not set it through Claude Code's
 `ANTHROPIC_CUSTOM_HEADERS`, which sends it on every request. See
 [Explicit release](../tutorials/learning/protection#explicit-release).
 
@@ -175,6 +175,16 @@ its checked-in configuration records request and response data. Use the
 [recipe evaluation workflow](../benchmarking/agent-evaluation-loop) to test
 representative tasks before adopting a policy change.
 
+Decide reasoning in the decision as well. For a model with a reasoning family,
+such as a catalog model, the decision's `modelRefs` entry chooses whether the
+backend thinks and at what effort; the harness's own request does not. Claude
+Code asks for adaptive thinking with its effort setting on every call, but with
+`use_reasoning` left out the Router sends reasoning off, and with
+`use_reasoning: true` it sends the decision's `reasoning_effort`, or the
+family default when none is set, whatever effort the harness asked for. Set
+`use_reasoning: true` and the effort you want on the decisions behind an agent
+entrypoint. See [Model Reasoning](./model-reasoning#select-reasoning-in-a-decision).
+
 ## Keep agent calls on a warm prompt cache
 
 An agent resends its conversation on every call, so most of each prompt is a
@@ -184,8 +194,8 @@ decides much of a call's latency and cost, and three things lose it.
 - **A model change.** A prompt cache belongs to one model, so a switch in the
   middle of a run computes the whole context again on the new model. Keep each
   run on one model as described above. The
-  [hybrid selector](../tutorials/algorithm/selection/hybrid) also favors the
-  model that served the session's previous turn.
+  [multi_factor selector](../tutorials/algorithm/selection/multi-factor#cache-affinity)
+  also favors the model that served the session's previous turn.
 - **A replica change.** Each replica keeps its own prefix cache, and a model's
   `lb_policy` (`round_robin` or `least_request`, see
   [model configuration](model-configuration#tune-timeouts-retries-and-endpoint-health))

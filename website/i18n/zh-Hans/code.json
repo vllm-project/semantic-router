@@ -2541,6 +2541,68 @@
   "community.contributors.range.all.caption": {
     "message": "仓库全量历史"
   },
+  "theme.SearchBar.section.docs": {
+    "message": "文档"
+  },
+  "theme.SearchBar.section.blog": {
+    "message": "博客"
+  },
+  "theme.SearchBar.section.pages": {
+    "message": "页面"
+  },
+  "theme.SearchBar.placeholder": {
+    "message": "搜索文档和博客…",
+    "description": "Placeholder in the command palette search field"
+  },
+  "theme.SearchBar.resultsLabel": {
+    "message": "搜索结果",
+    "description": "Accessible name of the command palette result list"
+  },
+  "theme.SearchBar.idleTitle": {
+    "message": "搜索文档和博客",
+    "description": "Headline of the command palette before anything is typed"
+  },
+  "theme.SearchBar.idleHint": {
+    "message": "结果按栏目分组。按 ↵ 打开高亮项。",
+    "description": "Sub-line of the command palette before anything is typed"
+  },
+  "theme.SearchBar.loading": {
+    "message": "正在加载搜索索引…",
+    "description": "Shown while the search index is being fetched"
+  },
+  "theme.SearchBar.unavailableTitle": {
+    "message": "搜索暂不可用",
+    "description": "Headline shown when the search index could not be fetched"
+  },
+  "theme.SearchBar.unavailableHint": {
+    "message": "无法加载索引。请检查网络连接后刷新页面。",
+    "description": "Sub-line shown when the search index could not be fetched"
+  },
+  "theme.SearchBar.emptyHint": {
+    "message": "试试更短或更宽泛的关键词。",
+    "description": "Advice shown when a query matches nothing"
+  },
+  "theme.SearchBar.seeAllShort": {
+    "message": "查看全部结果",
+    "description": "Row that leaves the palette for the standalone /search page"
+  },
+  "theme.SearchBar.hintNavigate": {
+    "message": "导航"
+  },
+  "theme.SearchBar.hintOpen": {
+    "message": "打开"
+  },
+  "theme.SearchBar.hintClose": {
+    "message": "关闭"
+  },
+  "theme.SearchBar.triggerLabel": {
+    "message": "搜索",
+    "description": "Visible label of the navbar search trigger"
+  },
+  "theme.SearchBar.noResults": {
+    "message": "未找到“{term}”的相关结果",
+    "description": "Headline shown when a query matches nothing; {term} is the query"
+  },
   "theme.SearchBar.noResultsText": {
     "message": "没有找到任何文档"
   },

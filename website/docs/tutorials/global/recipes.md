@@ -24,53 +24,55 @@ Add recipes when consumers need different latency, quality, cost, privacy, or
 safety policies. They are also useful for staging a new policy beside the
 current one before moving clients to its entrypoint.
 
-Keep one top-level `routing` block when a single policy serves all traffic. The
-Router treats that block as the `default` recipe, so existing configurations do
-not need to be rewritten.
+Keep one recipe when a single policy serves all traffic: a document with one
+recipe needs no entrypoints, and the recipe serves `vllm-sr/auto`.
 
 ## Configuration
 
-Provider bindings and model cards stay at the top level. A named recipe refers
-to those shared model names from its own routing block:
+Provider models and the facts about them stay in `providers`, shared by every
+recipe. With several recipes, `entrypoints` maps their public names and marks
+exactly one default; here the empty `default` recipe keeps `vllm-sr/auto` on
+the default model:
 
 ```yaml
-routing:
-  modelCards:
-    - name: local-model
-    - name: general-model
-
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/privacy-v1]
     recipe: privacy
-
 recipes:
+  - name: default
   - name: privacy
     description: Keep prompts containing sensitive identifiers on the local model.
-    routing:
-      strategy: priority
-      signals:
-        pii:
-          - name: sensitive-input
-            threshold: 0.5
-      decisions:
-        - name: local-sensitive-route
-          description: Keep detected PII on the local backend.
-          priority: 200
-          rules:
-            operator: AND
-            conditions:
-              - type: pii
-                name: sensitive-input
-          modelRefs:
-            - model: local-model
-        - name: general-route
-          description: Handle remaining requests with the general backend.
-          priority: 100
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: general-model
+    strategy: priority
+    signals:
+      pii:
+        - name: sensitive-input
+          threshold: 0.5
+    decisions:
+      - name: local-sensitive-route
+        description: Keep detected PII on the local backend.
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: pii
+              name: sensitive-input
+        modelRefs:
+          - model: local-model
+      - name: general-route
+        description: Handle remaining requests with the general backend.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: general-model
+providers:
+  models:
+    - name: local-model
+    - name: general-model
 ```
 
 Names resolve inside the owning recipe. Two recipes may both define a signal or
@@ -82,7 +84,7 @@ definition.
 | Recipe-local | Shared by the deployment |
 | --- | --- |
 | Signals and their thresholds | Provider models and backend endpoints |
-| Projections and dependency graph | Top-level `routing.modelCards` |
+| Projections and dependency graph | Model facts on `providers.models` |
 | Decisions, priorities, and routing strategy | Shared classifier and embedding assets |
 | Selection and looper policy | API, identity, observability, and transport settings |
 | Route-local plugins | External stores and integration services |
@@ -102,7 +104,7 @@ rest of the document:
 | `GET /api/v1/config/recipes` | List recipes and their entrypoints; retain the response `ETag`. |
 | `POST /api/v1/config/recipes/validate` | Validate a proposed recipe without writing or reloading. |
 | `PUT /api/v1/config/recipes/{name}` | Create or replace a recipe and its entrypoints. |
-| `DELETE /api/v1/config/recipes/{name}` | Delete an unreferenced named recipe. |
+| `DELETE /api/v1/config/recipes/{name}` | Delete an unreferenced recipe other than the default. |
 
 Mutations require the current `ETag` in `If-Match`. A missing precondition
 returns `428`; a stale value returns `412`. An accepted mutation validates the
@@ -110,14 +112,14 @@ complete configuration, writes it atomically with a backup, triggers Router
 runtime activation, and returns a new `ETag`. Activation may continue after a
 `202` response; poll `/api/v1/config/hash` before treating the new policy as active.
 
-The `default` recipe cannot be deleted. Before deleting another recipe, remove
+The default recipe cannot be deleted. Before deleting another recipe, remove
 or move every entrypoint that refers to it. See the
 [management API reference](../../api/apiserver) for endpoint details.
 
 ## Limits and security boundaries
 
-- A named recipe cannot declare `routing.modelCards`; all recipes use the
-  shared top-level catalog.
+- A recipe cannot declare provider models; all recipes share
+  `providers.models` and the facts on them.
 - Signal, projection, and decision references must resolve within the same
   recipe.
 - If no decision matches, routing falls back to the deployment's configured

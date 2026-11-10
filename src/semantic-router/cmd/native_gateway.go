@@ -215,12 +215,15 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 		nativeRouter = lease.Router
 	}
 	serving := gateway.Serving{
-		SystemOne:       systemone.Handler(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote)),
+		SystemOne:       systemone.ForClients(cfg, systemone.Handler(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote))),
 		RoutingDisabled: !cfg.RoutingEnabled(),
 		APIKeys:         listenerAPIKeys(cfg, listener),
 		Models:          listenerModels(cfg, listener),
-		IdentityHeaders: []string{cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader()},
-		TrustIdentity:   listenerIdentityTrust(cfg, listener),
+		IdentityHeaders: []string{
+			cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader(),
+			cfg.Authz.DelegatedCredential.GetHeader(),
+		},
+		TrustIdentity: listenerIdentityTrust(cfg, listener),
 	}
 	if cfg.RoutingEnabled() {
 		set, ok := lease.Snapshot.Part(configsnapshot.ComponentUpstream).(*upstream.Set)

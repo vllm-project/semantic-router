@@ -83,3 +83,29 @@ func (m *Manager) HybridSearch(ctx context.Context, id, query string, vector []f
 	}
 	return GenericHybridRerank(ctx, m.backend, id, query, vector, topK, threshold, filter, cfg)
 }
+
+// LexicalSearch searches a store's chunks by BM25 alone. It compares no
+// vectors, so it reads a store of any embedding representation.
+func (m *Manager) LexicalSearch(ctx context.Context, id, query string, topK int, threshold float32, filter map[string]interface{}) ([]SearchResult, error) {
+	if _, err := m.GetStore(id); err != nil {
+		return nil, err
+	}
+	searcher, ok := m.backend.(LexicalSearcher)
+	if !ok {
+		return nil, fmt.Errorf("the %T vector store backend keeps no lexical index", m.backend)
+	}
+	return searcher.LexicalSearch(ctx, id, query, topK, threshold, filter)
+}
+
+// ListChunks lists a store's chunks, the most recently inserted first, and
+// how many it holds; like LexicalSearch it reads any representation.
+func (m *Manager) ListChunks(ctx context.Context, id string, limit int, filter map[string]interface{}) ([]SearchResult, int, error) {
+	if _, err := m.GetStore(id); err != nil {
+		return nil, 0, err
+	}
+	lister, ok := m.backend.(ChunkLister)
+	if !ok {
+		return nil, 0, fmt.Errorf("the %T vector store backend does not list its chunks", m.backend)
+	}
+	return lister.ListChunks(ctx, id, limit, filter)
+}

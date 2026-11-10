@@ -14,7 +14,7 @@ Vela 系列模型加载时会与在 Ascend 910B1 上采集的 NPU 参考答案�
 以下路径在 Ascend 910B1 与 950DT 主机上实测（torch_npu 2.10.0.post4、CANN 8.5 / 9.1）。
 
 大模型推理在昇腾上由 vLLM 经 HTTP endpoint 承担；`npu` 加速器覆盖的是模型运行时
-内部的路由器自有模型（307M 信号编码器与 decision 模型）。
+内部的路由器自有模型（从 307M 编码器到 decision 模型）。
 
 ## 前提条件
 

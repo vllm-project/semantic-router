@@ -1,5 +1,5 @@
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -19,40 +19,38 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    modelCards:
-      - name: general-expert
-    signals:
-      context:
-        - name: long_context
-          description: Requests estimated at 500 tokens or more.
-          min_tokens: "500"
-    decisions:
-      - name: long_context_routing
-        description: Route requests whose estimated token count matches the long_context band.
-        priority: 2000
-        rules:
-          operator: AND
-          conditions:
-            - type: context
-              name: long_context
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
-      - name: default-route
-        description: Fallback route for requests below the long_context threshold
-        priority: 10
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: general-expert
-            use_reasoning: false
+  recipes:
+    - name: default
+      signals:
+        context:
+          - name: long_context
+            description: Requests estimated at 500 tokens or more.
+            min_tokens: "500"
+      decisions:
+        - name: long_context_routing
+          description: Route requests whose estimated token count matches the long_context band.
+          priority: 2000
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: long_context
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
+        - name: default-route
+          description: Fallback route for requests below the long_context threshold
+          priority: 10
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: general-expert
+              use_reasoning: false
   global:
     router:
       strategy: priority
-    model_catalog:
-      kbs: []
+    model_catalog: {}
     services:
       response_api:
         enabled: true
@@ -63,7 +61,7 @@ config:
 resources:
   # 2Gi OOMKills the router on a CI runner: it restarts, never becomes ready,
   # and the helm wait burns its full 60m timeout. Mirrors the same limits
-  # category-remote-backend/local-classifier-backend settled on for the same
+  # structure-routing and conversation-routing settled on for the same
   # reason.
   limits:
     memory: 6Gi

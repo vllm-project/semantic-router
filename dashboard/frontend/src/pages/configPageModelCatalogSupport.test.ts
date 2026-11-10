@@ -64,7 +64,7 @@ describe('effective model API format', () => {
   const model = { name: 'alias', catalog: modelID, backend_refs: [{ provider: 'test' }] }
 
   it('exposes only formats accepted by canonical provider input', () => {
-    expect(modelAPIFormats).toEqual(['openai', 'responses', 'anthropic', 'systemone'])
+    expect(modelAPIFormats).toEqual(['openai', 'responses', 'anthropic', 'images', 'systemone'])
   })
 
   it('resolves native backends without pretending they are Chat models', () => {
@@ -116,7 +116,7 @@ describe('effective model API format', () => {
     expect(effectiveModelAPIFormat({ ...model, backend_refs: [] }, catalog).error).toMatch(
       /backend/,
     )
-    expect(effectiveModelAPIFormat({ ...model, api_format: 'images' }, catalog).error).toMatch(
+    expect(effectiveModelAPIFormat({ ...model, api_format: 'speech' }, catalog).error).toMatch(
       /Unsupported/,
     )
     const noCreate = fixture([chat])

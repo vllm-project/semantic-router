@@ -81,9 +81,8 @@ func TestHandleContextRecoveryFollowupCallsLooper(t *testing.T) {
 	decision := &config.Decision{
 		Name: "recoverable",
 		Plugins: []config.DecisionPlugin{{
-			Type: config.DecisionPluginContextCompression,
-			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled": true,
+			Type: config.DecisionPluginContext,
+			Configuration: compressPayload(map[string]interface{}{
 				"recovery": map[string]interface{}{
 					"enabled": true,
 					"store":   "redis",
@@ -337,9 +336,8 @@ func contextRecoveryFollowupCompressionDecision(name string) *config.Decision {
 	return &config.Decision{
 		Name: name,
 		Plugins: []config.DecisionPlugin{{
-			Type: config.DecisionPluginContextCompression,
-			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled":      true,
+			Type: config.DecisionPluginContext,
+			Configuration: compressPayload(map[string]interface{}{
 				"failure_mode": "fail_closed",
 				"targets": map[string]interface{}{
 					"tool_outputs": map[string]interface{}{
@@ -397,9 +395,8 @@ func TestHandleContextRecoveryFollowupRejectsForgedKey(t *testing.T) {
 	decision := &config.Decision{
 		Name: "recoverable",
 		Plugins: []config.DecisionPlugin{{
-			Type: config.DecisionPluginContextCompression,
-			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled": true,
+			Type: config.DecisionPluginContext,
+			Configuration: compressPayload(map[string]interface{}{
 				"recovery": map[string]interface{}{
 					"enabled": true,
 					"store":   "redis",

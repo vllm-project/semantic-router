@@ -23,7 +23,7 @@ import (
 )
 
 // MaxPeriodicInterval bounds every ticker-driving interval accepted by the
-// router (Elo/RL auto-save flushes and lookup-table auto-save/replay-populate
+// router (Elo auto-save flushes and lookup-table auto-save/replay-populate
 // cadence). Anything larger is almost certainly a misconfiguration: it would
 // make periodic work effectively never run and risks duration overflow. This
 // is the documented maximum referenced by the router configuration contract.
