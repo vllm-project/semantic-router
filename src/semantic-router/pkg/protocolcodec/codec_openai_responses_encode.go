@@ -1,6 +1,7 @@
 package protocolcodec
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -409,6 +410,9 @@ func decodeResponsesReasoning(
 	policy llmprotocol.Policy,
 	providerOutput bool,
 ) ([]llmprotocol.Content, error) {
+	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil, nil
+	}
 	var summaries []struct {
 		Type string `json:"type"`
 		Text string `json:"text"`

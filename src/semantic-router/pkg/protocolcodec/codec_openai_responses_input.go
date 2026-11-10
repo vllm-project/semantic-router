@@ -185,10 +185,9 @@ func decodeResponsesInputItem(
 
 func validateResponsesInputItemMetadata(item responsesItemWire) error {
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
-		"input.async":             item.Async,
-		"input.caller":            item.Caller,
-		"input.encrypted_content": item.EncryptedContent,
-		"input.phase":             item.Phase,
+		"input.async":  item.Async,
+		"input.caller": item.Caller,
+		"input.phase":  item.Phase,
 	}); err != nil {
 		return err
 	}
@@ -322,6 +321,13 @@ func decodeResponsesReasoningItem(item responsesItemWire, request *llmprotocol.R
 		return err
 	}
 	content = append(content, reasoning...)
+	if len(content) == 0 && len(item.EncryptedContent) > 0 {
+		// The provider blob was the item's only payload and the Router does not
+		// relay it, so the turn carries nothing a target can render. decode
+		// reported the omission; leave the empty turn out instead of rejecting
+		// the request the include path accepted.
+		return nil
+	}
 	request.Messages = append(request.Messages, llmprotocol.Message{ID: item.ID, Role: llmprotocol.RoleAssistant, Content: content})
 	return nil
 }
