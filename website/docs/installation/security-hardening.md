@@ -49,11 +49,13 @@ examples include:
 request_headers_to_remove:
   - x-authz-user-id
   - x-authz-user-groups
+  - x-vsr-delegated-credential
 ```
 
 Do not expose Router management, metrics, ExtProc, or backing-store ports as
 public inference endpoints. Terminate client authentication at a trusted
-boundary and allow only that component to supply identity headers.
+boundary and allow only that component to supply identity headers and the
+delegated credential described below.
 
 Relevant Dashboard permissions include:
 
@@ -92,6 +94,106 @@ referenced.
 Existing chart-native Secret references, such as a Dashboard JWT Secret, remain
 external objects and are not copied into the CLI-managed Secret. Use the same
 namespace and release ownership discipline for every manually managed Secret.
+
+### Delegate the user's credential to an upstream
+
+When the Router sits behind an authenticating deployment layer and an upstream
+authorizes each user itself (a LiteLLM, one-api, or similar relay issuing
+per-user virtual keys, or a decision-model API metered per user), let the
+authenticator hand the Router the credential it issued that user, and mark the
+upstream's auth `credential: delegated`. The credential that authenticates the
+client to the deployment and the credential meant for the upstream are
+separate trust objects: the Router never forwards the client's raw
+`Authorization` header.
+
+```yaml
+global:
+  services:
+    authz:
+      delegated_credential:
+        enabled: true
+        header: x-vsr-delegated-credential   # default; set by the authenticator
+  model_catalog:
+    deployments:
+      team-decisions:
+        provider: systemone
+        endpoint: https://decisions.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth:
+          credential: delegated              # a decision-model deployment
+providers:
+  models:
+    - name: gpt-4o
+      provider_model_id: gpt-4o
+      api_format: openai
+      backend_refs:
+        - name: litellm
+          endpoint: https://litellm.internal/v1
+          provider: openai-compatible
+          auth:
+            credential: delegated            # a provider backend
+```
+
+Every upstream the Router calls takes one `auth` block of one shape: a
+provider backend, a decision-model or remote embedding deployment, the judge
+model of an `escalate` stage and an `api_format: systemone` target alike. Its
+mode is a static key (`auth.api_key_env` or `auth.api_key_file`, or a backend's
+`api_key`), whose calls act as the Router; `credential: delegated`, whose calls
+carry the requesting user's credential; or neither, which sends no credential.
+
+The contract is disabled by default. Once enabled:
+
+- The delegated credential is an authentication output like the identity
+  headers. The shipped Envoy configurations (`vllm-sr serve --gateway extproc`
+  and `deploy/local/envoy.yaml`) remove a client-supplied copy in a filter
+  ahead of ext_proc; the `vllm-sr` template removes a custom `header` too, and
+  `deploy/local/envoy.yaml` names only the default. Neither runs an
+  authenticator, so a deployment that issues the credential places its
+  authenticator after that filter and before ext_proc, as the
+  `delegated-credential` E2E profile does. A custom gateway configuration must
+  do the same: `request_headers_to_remove` runs only after ext_proc. A
+  standalone listener drops the header, from Chat and System One requests
+  alike, unless `identity.trust_headers` is set. The Router keeps the value
+  only when the request also carries the authenticated user
+  (`global.services.authz.identity.user_id_header`).
+- `header` must name a dedicated header. Configuration rejects one that
+  carries a client credential (`Authorization`, `api-key`, `x-api-key`, and
+  similar) or an identity header.
+- The Router removes the header from every upstream request, on every branch,
+  and redacts it from logs. It is the one `x-vsr-*` request header the Router
+  reads from the authenticator instead of dropping, and the header registry
+  records it as an internal secret: no response, `x-vsr-trace` member, Router
+  Replay record or cache key carries it. Only an upstream whose auth is
+  `credential: delegated` receives the value, under that upstream's auth
+  header with its prefix (`Authorization: Bearer <credential>` for an
+  OpenAI-compatible backend or a System One API), replacing whatever the
+  client sent there. The client's other credential headers are removed, so a
+  backend that authenticates on `x-api-key` does not also receive the client's
+  `Authorization`.
+- The principal is a property of the call. A call made for a client request
+  carries that request's credential: primary dispatch, fallback attempts,
+  Looper hops, System One decision-model calls, `escalate` judges,
+  `api_format: systemone` targets, response checks and recall embeddings.
+  When the request carries none, the Router answers `401` before the call.
+  Calls the Router makes on its own behalf (probes, model listings,
+  `router_replay.shadow` copies, automatic-output render, store building,
+  management diagnostics) never carry it, and a delegated upstream refuses
+  them.
+- Configuration rejects a delegated upstream that also names a static key, so
+  a shared key can never stand in silently; one without the contract enabled;
+  one that only the Router's own calls reach, or that a Router-own call must
+  reach (vector store ingestion, memory storage, a `model_runtime` endpoint's
+  health checks and preparation, `router_replay.shadow`, automatic output); a
+  delegated `openai_embeddings` deployment without `capabilities.dimensions`;
+  and a delegated and a static backend in one cluster.
+- An answer obtained with one user's credential is served back only to that
+  user. While any upstream is delegated, every `response_cache` keeps its
+  default `scope: user`, and the Router keeps no decision-model answer or
+  embedding of a delegated deployment for another request. The Router never
+  puts two client requests in one upstream call, so a batched System One call
+  carries one request's questions and that request's credential.
+- Caller attribution and any tenant, quota, budget, or spend policy stay with
+  the upstream.
 
 ### Isolate sr-bench credentials
 
@@ -289,6 +391,36 @@ For every enabled store:
 Recipe Model Cards describe the checked-in replay and cache behavior for each
 maintained recipe. See [Data and Storage](storage-overview) for deployment
 guides.
+
+## Review what the decision model reads
+
+Every routing judgment is a question to the decision model, so the model a
+question resolves to sees the parts of the request the question reads:
+
+- **Local by default.** With nothing configured, every question asks the
+  local `primary` deployment, and personal-data rules run there. A binding or
+  a rule's `deployment` moves a question elsewhere; bind `pii` and
+  `hallucination` explicitly when the decision model is remote.
+- **Remote models receive what they judge.** A `systemone` deployment receives
+  the state parts its questions read: the request, the earlier turns, the
+  tool results, the model's answer, a candidate, and the images of image
+  questions. [What leaves the host](../system-one/deployments#what-leaves-the-host)
+  lists them per signal. A remote embedding provider receives the text it
+  embeds.
+- **Guards can fail open or closed.** A `jailbreak` or `pii` rule whose model
+  gives no answer does not match unless it sets `on_unknown: match`; text the
+  model could not read counts as an attack or as personal data.
+- **Masking covers the final request.** The `masking` plugin replaces personal
+  data in every text position of the provider-bound request, including
+  retrieved documents and tool results, and fails closed when it cannot get
+  spans.
+- **Router-owned headers are protected.** `header_mutation` cannot write
+  Router-owned headers or the route key, internal headers a client sends are
+  dropped, and debug detail reaches only the callers
+  `global.router.headers.debug` allows.
+- **Authorization is a signal.** `role_bindings` conditions decide who may
+  reach which route and tools, from identity the gateway asserts; client-sent
+  identity headers are trusted only with `identity.trust_headers: true`.
 
 ## Limit container-runtime access
 

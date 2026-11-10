@@ -1,0 +1,1 @@
+recipes[native-decisions].decisions[classify].algorithm: removed_algorithm_type: algorithm type cascade is removed; run `vllm-sr config migrate` (type: escalate, with its stages and quality under escalate)

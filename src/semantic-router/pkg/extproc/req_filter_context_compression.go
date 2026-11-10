@@ -34,13 +34,14 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 	ctx *RequestContext,
 	request *llmprotocol.Request,
 ) error {
-	if ctx == nil || request == nil || ctx.VSRSelectedDecision == nil {
+	if ctx == nil || request == nil {
 		return nil
 	}
-	pluginConfig := ctx.VSRSelectedDecision.GetContextCompressionConfig()
-	if pluginConfig == nil || !pluginConfig.Enabled {
+	plugin := contextCompression(ctx.VSRSelectedDecision)
+	if plugin == nil {
 		return nil
 	}
+	pluginConfig := plugin.Compress
 	applyContextCompressionRequestControls(ctx, pluginConfig)
 	if ctx.ContextCompressionSkipReason == "request_bypass" {
 		recordContextCompressionStatus(ctx, "bypassed", 0)
@@ -51,16 +52,16 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 	if service == nil {
 		return semanticCompressionFailure(pluginConfig, fmt.Errorf("context compression service is unavailable"))
 	}
-	policy := contextCompressionPolicy(pluginConfig, ctx.ContextCompressionTargetTokens)
+	policy := contextcompression.PolicyFromConfig(pluginConfig, plugin.Budget, ctx.ContextCompressionTargetTokens)
 	policy = compressionPolicyForRequest(policy, ctx)
 	// Live-user truncation belongs to the bounded overflow preparation stages.
 	policy.Targets.CurrentUser.Mode = contextcompression.TargetPreserve
-	if revision, err := cache.FingerprintValue(pluginConfig); err == nil {
+	if revision, err := cache.FingerprintValue(plugin); err == nil {
 		ctx.ContextCompressionRevision = revision[:12]
 	}
 	provenance := contextcompression.Provenance{
-		RAGToolCallIDs:       ctx.RAGToolCallIDs,
-		MemoryMessageIndexes: ctx.MemoryMessageIndexes,
+		RAGToolCallIDs:    ctx.RAGToolCallIDs,
+		MemoryToolCallIDs: ctx.MemoryToolCallIDs,
 	}
 	requestIR := contextRequestIR(ctx, request)
 	model := strings.TrimSpace(ctx.VSRSelectedModel)
@@ -82,7 +83,7 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 		Policy:       policy,
 		Capabilities: semanticContextCompressionCapabilities(r.Config, ctx, request),
 		TokenCounter: counter,
-		Scorer:       r.contextCompressionScorer(callContext, pluginConfig, ctx),
+		Scorer:       r.contextCompressionScorer(pluginConfig),
 		Recovery:     r.contextCompressionRecoveryStore(pluginConfig),
 		Provenance:   provenance,
 	}
@@ -127,7 +128,7 @@ func (r *OpenAIRouter) applySemanticContextCompression(
 	return nil
 }
 
-func semanticCompressionFailure(plugin *config.ContextCompressionPluginConfig, err error) error {
+func semanticCompressionFailure(plugin *config.ContextCompressConfig, err error) error {
 	if plugin.EffectiveFailureMode() == config.ContextCompressionFailureClosed {
 		return err
 	}

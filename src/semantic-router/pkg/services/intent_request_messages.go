@@ -54,6 +54,18 @@ type intentConversationHistory struct {
 	conversationFacts   classification.ConversationFacts
 	inputModality       classification.InputModalityFacts
 	routingInput        routinginput.Outcome
+	// turns are the user and assistant messages with text, in order.
+	turns []classification.ConversationTurn
+}
+
+// priorTurns are the turns before the current (last) user turn.
+func (h intentConversationHistory) priorTurns() []classification.ConversationTurn {
+	for index := len(h.turns) - 1; index >= 0; index-- {
+		if h.turns[index].Role == "user" {
+			return append([]classification.ConversationTurn(nil), h.turns[:index]...)
+		}
+	}
+	return append([]classification.ConversationTurn(nil), h.turns...)
 }
 
 type intentMessageImageURL struct {
@@ -120,13 +132,14 @@ func (req IntentRequest) resolveSignalInputWith(selector *routinginput.Selector)
 		if err != nil {
 			return intentSignalInput{}, err
 		}
-		inputModality, routing := input.requestFacts.InputModality, input.requestFacts.RoutingInput
+		messageFacts := input.requestFacts
 		input.requestFacts = requestFactsForIntent(
 			req.Metadata,
 			contextEstimate,
 		)
-		input.requestFacts.InputModality = inputModality
-		input.requestFacts.RoutingInput = routing
+		input.requestFacts.InputModality = messageFacts.InputModality
+		input.requestFacts.RoutingInput = messageFacts.RoutingInput
+		input.requestFacts.Turns, input.requestFacts.Images = messageFacts.Turns, messageFacts.Images
 		if useTopLevelTextFallback && text != "" && input.requestFacts.InputModality.TextContentCount == 0 {
 			// req.Text supplied user text the message walk could not see.
 			// Promoted system/assistant text must not count: it is not user
@@ -297,7 +310,10 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage, toolDefiniti
 		hasAssistantReply: history.hasAssistantReply,
 		imageURL:          history.currentUserImageURL,
 		conversationFacts: history.conversationFacts,
-		requestFacts:      classification.RequestFacts{InputModality: history.inputModality, RoutingInput: history.routingInput},
+		requestFacts:      classification.RequestFacts{InputModality: history.inputModality, RoutingInput: history.routingInput, Turns: history.priorTurns()},
+	}
+	if history.currentUserImageURL != "" {
+		input.requestFacts.Images = []string{history.currentUserImageURL}
 	}
 
 	// Promote system/assistant text only with no user text AND no image; the
@@ -332,7 +348,6 @@ func hasIntentConversationFacts(facts classification.ConversationFacts) bool {
 		facts.AssistantMessageCount > 0 ||
 		facts.SystemMessageCount > 0 ||
 		facts.ToolMessageCount > 0 ||
-		facts.ImageContentCount > 0 ||
 		facts.ToolDefinitionCount > 0 ||
 		facts.ToolChoiceRequired ||
 		facts.ToolChoiceNone ||
@@ -367,7 +382,6 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 				history.currentUserRawText = rawText
 			}
 			counts := countIntentMessageModalities(msg.Content)
-			history.conversationFacts.ImageContentCount += counts.ImageContentCount
 			history.inputModality.ImageContentCount += counts.ImageContentCount
 			history.inputModality.AudioContentCount += counts.AudioContentCount
 			history.inputModality.VideoContentCount += counts.VideoContentCount
@@ -382,6 +396,9 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 			msg.ToolCallID,
 			previousWasToolResult,
 		)
+		if text != "" && (role == "user" || role == "assistant") {
+			history.turns = append(history.turns, classification.ConversationTurn{Role: role, Text: text})
+		}
 		if recordIntentUserMessage(&history, role, text, msg.Content) {
 			continue
 		}

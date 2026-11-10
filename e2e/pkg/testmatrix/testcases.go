@@ -16,8 +16,6 @@ var BaselineRouterContract = []string{
 	"anthropic-messages-streaming",
 	"apiserver-runtime-config-endpoints",
 	"apiserver-classification-endpoints",
-	"llm-classifier-distribution-routing",
-	"sequence-classifier-routing",
 	"chat-completions-stress-request",
 	"domain-classify",
 	"semantic-cache",
@@ -31,8 +29,6 @@ var BaselineRouterContract = []string{
 	"pii-long-text",
 	// A jailbreak past the classifier's sequence limit is still detected (issue #3204)
 	"security-long-text",
-	// A scanned score names the window it came from (issue #3939)
-	"security-window-provenance",
 	"jailbreak-detection",
 	"decision-priority-selection",
 	// Provider-bound request effects for system_prompt, request_params, and header_mutation (issue #3180)
@@ -67,14 +63,12 @@ var BaselineRouterContract = []string{
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
 	"session-pricing-response-api",
-	// Event signal rule matching and routing (issue #3178)
+	// Keyword routing of event payloads (issue #3178)
 	"event-routing",
 	// Language signal rule matching and routing (issue #3178)
 	"language-routing",
 	// Reask signal rule matching and routing (issue #3178)
 	"reask-routing",
-	// Action signal rule matching and routing
-	"action-routing",
 	// Context signal / block_jailbreak / block_pii priority overlap (issue #3178)
 	"context-safety-overlap",
 }

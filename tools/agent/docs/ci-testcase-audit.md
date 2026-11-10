@@ -107,25 +107,21 @@ so this table must not be summed as unique coverage. It is a dated audit snapsho
 | Profile | Selected cases |
 | --- | ---: |
 | `authz-rbac` | 3 |
-| `category-remote-backend` | 1 |
-| `complexity-remote-backend` | 1 |
 | `complexity-routing` | 1 |
 | `conversation-routing` | 1 |
 | `dashboard` | 16 |
 | `dynamic-config` | 3 |
-| `envoy-ai-gateway` | 41 |
+| `envoy-ai-gateway` | 40 |
 | `external-gateway-responses` | 3 |
 | `hallucination` | 2 |
 | `jailbreak-onerror` | 1 |
-| `local-classifier-backend` | 1 |
 | `long-context-routing` | 1 |
 | `looper` | 13 |
 | `masking` | 2 |
 | `ml-model-selection` | 3 |
-| `model-runtime` | 12 |
+| `model-runtime` | 10 |
 | `model-runtime-real` | 1 |
 | `multi-endpoint` | 4 |
-| `multimodal-routing` | 2 |
 | `pii-remote-backend` | 2 |
 | `preference-routing` | 1 |
 | `production-stack` | 10 |
@@ -138,16 +134,13 @@ so this table must not be summed as unique coverage. It is a dated audit snapsho
 | `response-api-redis-cluster` | 11 |
 | `response-jailbreak` | 3 |
 | `route-action` | 2 |
-| `router-replay` | 13 |
+| `router-replay` | 12 |
 | `routing-errors` | 2 |
 | `routing-strategies` | 4 |
 | `standalone` | 7 |
 | `streaming` | 9 |
 | `structure-routing` | 1 |
 | `vectorstore-registry` | 1 |
-| `vela-halu` | 1 |
-| `vela-omni` | 1 |
-| `vela-shield` | 1 |
 
 ## Follow the effective assertion
 
@@ -218,22 +211,19 @@ when sharing execution setup.
 | [anthropic-messages-streaming](../../../e2e/testcases/anthropic_messages_streaming.go) | Required SSE events, order and exactly one message_stop. Reuse against different backends exercises different codecs. |
 | [apiserver-runtime-config-endpoints](../../../e2e/testcases/apiserver_runtime_config_endpoints.go) | Public model entrypoint, loaded decisions and model inventory state. Keep API wiring; this is not model accuracy. |
 | [apiserver-classification-endpoints](../../../e2e/testcases/apiserver_classification_endpoints.go) | Config decision count agrees with metrics and combined classification fields exist. Keep as an API shape smoke. |
-| [llm-classifier-distribution-routing](../../../e2e/testcases/llm_classifier_distribution_routing.go) | Four positive/negative decision-match probes. Keep semantic routing wiring. |
-| [sequence-classifier-routing](../../../e2e/testcases/sequence_classifier_routing.go) | Positive and negative classifier decision probes. Keep. |
 | [chat-completions-stress-request](../../../e2e/testcases/chat_completions_stress_request.go) | 200 sequential requests; baseline wrapper requires 95% HTTP success, with 30-second request timeout. Full scope only; latency is diagnostic. |
 | [domain-classify](../../../e2e/testcases/domain_classify.go) | Real predicted categories versus fixture, with a 60% baseline accuracy floor. Other profiles do not inherit this floor. |
 | [semantic-cache](../../../e2e/testcases/cache.go) | Per-request similarity, failed priming detection and cancellation without cache publication; baseline also requires 40% hits. Keep. |
 | [semantic-cache-polarity](../../../e2e/testcases/cache_polarity.go) | Opposite meaning misses while a paraphrase hits the selected cache policy; empty fixtures fail. Keep the negative control. |
 | [exact-cache-multilingual-negation](../../../e2e/testcases/cache_exact_negation.go) | German/Chinese identical requests hit and negations miss the exact-cache recipe. Keep. |
-| [pii-detection](../../../e2e/testcases/pii_detection.go) | Observed blocking versus expected outcomes; baseline requires 65% detection accuracy. Preserve the calibrated floor. |
+| [pii-detection](../../../e2e/testcases/pii_detection.go) | Observed blocking versus expected outcomes; the System One fixture's spans are pinned by markers, so every marked case blocks and every clean control passes. |
 | [pii-entity-offsets](../../../e2e/testcases/pii_entity_offsets.go) | Unicode code-point slices equal entity text, including an entity at position zero. Keep the tokenizer/API boundary. |
-| [pii-long-text](../../../e2e/testcases/pii_long_text.go) | An entity beyond the initial sequence window is detected with valid offsets. A mocked tokenizer cannot replace this. |
+| [pii-long-text](../../../e2e/testcases/pii_long_text.go) | An entity beyond the initial sequence window is detected with valid offsets; the System One fixture finds it only in the whole text. |
 | [security-long-text](../../../e2e/testcases/security_long_text.go) | Benign long filler stays benign; an appended attack is detected. Keep both controls. |
-| [security-window-provenance](../../../e2e/testcases/security_window_provenance.go) | Inventory-driven window policy, multiple-window provenance or absence of false window metadata for whole-prompt models. Keep. |
 | [jailbreak-detection](../../../e2e/testcases/jailbreak_detection.go) | Each attack/non-attack class needs 80% accuracy; request/contract errors fail directly. Baseline also checks a 70% aggregate floor. |
 | [decision-priority-selection](../../../e2e/testcases/decision_priority.go) | Four selected-decision probes, with a 75% baseline floor. Dynamic-config reuse has no equivalent wrapper; record that limitation. |
 | [plugin-request-mutations](../../../e2e/testcases/plugin_request_mutations.go) | Actual provider messages, token/n caps, removed parameters and header mutations. Keep; replaces inferred plugin effects. |
-| [tool-selection](../../../e2e/testcases/tool_selection_e2e.go) | Every subcase must pass provider tool passthrough/filter/removal and PII no-dispatch checks. Optional debug fields are supplemental. |
+| [tool-selection](../../../e2e/testcases/tool_selection_e2e.go) | Every subcase must pass the tools policy (passthrough, filtered, none) provider checks and the PII no-dispatch check. |
 | [decision-fallback-behavior](../../../e2e/testcases/decision_fallback.go) | Explicit match/no-match fixture plus provider model/message observations; baseline floor is 85%. Keep. |
 | [chat-completions-progressive-stress](../../../e2e/testcases/chat_completions_progressive_stress.go) | Every one of 10/20/50 concurrent requests gets a Router answer (`x-vsr-response-path`, not `error`) inside the gateway's 60 s deadline; the client waits 90 s. Answers are reported per response path. After the last stage the Router must answer a fresh request in about its unloaded time within 5 minutes, so the next case does not queue behind the burst. Full scope only; no latency regression threshold. |
 | [protocol-codec-openai-regression](../../../e2e/testcases/protocol_codec_openai_regression.go) | Native Chat HTTP/JSON and selected route smoke. Some overlap with chat smoke; share the worker, retain its receipt. |
@@ -248,10 +238,9 @@ when sharing execution setup.
 | [session-telemetry-metrics](../../../e2e/testcases/session_telemetry_e2e.go) | Only HTTP success and metric-name presence. Treat as exporter smoke; it does not prove a request-specific counter increment. |
 | [session-pricing-chat-completions](../../../e2e/testcases/session_pricing_e2e.go) | Token/cost metric names exist, without exact amount or request attribution. Retain as smoke; consider consolidating with telemetry. |
 | [session-pricing-response-api](../../../e2e/testcases/session_pricing_e2e.go) | The Responses entrypoint succeeds and exposes token/cost metric names. It does not establish price calculation correctness. |
-| [event-routing](../../../e2e/testcases/event_routing.go) | Shared helper checks every positive/negative decision and matched event rule. Keep. |
+| [event-routing](../../../e2e/testcases/event_routing.go) | Shared helper checks every positive/negative decision and matched keyword rule for event payloads. Keep. |
 | [language-routing](../../../e2e/testcases/language_routing.go) | Every decision and language-rule expectation must pass. Keep. |
 | [reask-routing](../../../e2e/testcases/reask_routing.go) | Every decision and reask-rule expectation must pass. Keep. |
-| [action-routing](../../../e2e/testcases/action_routing.go) | Every decision and action-rule expectation must pass. Keep. |
 | [context-safety-overlap](../../../e2e/testcases/context_safety_overlap.go) | Safety wins when a long-context signal overlaps jailbreak/PII conditions. Keep the precedence boundary. |
 
 ### Dashboard
@@ -313,7 +302,6 @@ reviews retain the individual assertions and limitations behind each family.
 | Family | Actual boundary and disposition |
 | --- | --- |
 | Model runtime: 12 fixture cases, 1 published-model case | [Tiny random-weight packages](../../../e2e/profiles/model-runtime/runtime_with_fixtures.py) exercise readiness ordering, independent workers, RPC outputs, bundles, supervision and load-retry isolation without downloads. [Real routing](../../../e2e/testcases/model_runtime_real.go) checks five clear requests with published Kai/Vela and compares Router signals to Kai's own answer. Keep both; fixtures qualify process integration, not model accuracy. |
-| Published Vela: Shield, Halu, Omni | [Shield](../../../e2e/testcases/vela_shield.go) requires unsafe/benign/over-refusal verdicts. [Halu](../../../e2e/testcases/vela_halu.go) checks supported/contradictory answers, Unicode spans and input-budget rejection. [Omni](../../../e2e/testcases/vela_omni.go) checks dimensions, normalized vectors, reference cosines, invalid input and recipe isolation. Keep real-model qualification separate from fast units. |
 | Responses and protocol extensions | [response-api](../../../e2e/profiles/response-api/profile.go) selects CRUD, chaining, failure, image and multi-client protocol cases. The reviewed [backend matrix helpers](../../../e2e/testcases/protocol_codec_responses_backend.go) check provider requests, client output and incomplete/midstream failures; reuse across Chat, Responses and Anthropic is intentional. Redis variants add persistence/restart boundaries. |
 | Streaming and privacy | [Body limits](../../../e2e/testcases/streaming_body_limits.go) check 413/408 and exact error codes before routing. [Masking](../../../e2e/testcases/masking_cross_protocol.go) observes provider input without raw PII, requires placeholders and rejects unavailable classifiers with 503. Streamed safety now checks the exact decision/refusal and a benign control; no-dispatch is still owned by the separate provider-observation cases. |
 | Routing and selection | Signal families compare positive/negative matched rules and decisions. [Decision-scoped multi-factor](../../../e2e/testcases/decision_scoped_multi_factor.go) requires distinct quality/cost model choices. [Random](../../../e2e/testcases/decision_scoped_random.go) checks eligible candidates and algorithm wiring; statistical uniformity belongs in selector units. Shared selection infrastructure does not make these distinct policy boundaries redundant. |

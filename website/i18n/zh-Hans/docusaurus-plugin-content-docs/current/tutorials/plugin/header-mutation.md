@@ -30,7 +30,7 @@ translation:
 
 ## 配置
 
-在 `routing.decisions[].plugins` 下添加该插件：
+在 `recipes[].decisions[].plugins` 下添加该插件：
 
 ```yaml
 plugins:
@@ -46,5 +46,9 @@ plugins:
         - X-Debug-Trace
 ```
 
-请求头值是静态配置，而不是模板。不得使用不受信任的请求元数据来构造身份或授权请求头。完整示例见：
+请求头值是静态配置，而不是模板。不得使用不受信任的请求元数据来构造身份或授权请求头。
+
+该插件不能写入 Router 所拥有的请求头：任何 `x-vsr-` 或 `x-envoy-` 请求头，以及[请求头注册表](../../troubleshooting/vsr-headers)中的凭据和其他内部请求头（包括 `Authorization`）。每一个都会在加载时以 `reserved_header` 失败。Envoy 读取的重试和超时请求头属于决策的 `reliability` 块。
+
+完整示例见：
 [`config/fragments/plugin/header-mutation/tenant-routing.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/header-mutation/tenant-routing.yaml)。

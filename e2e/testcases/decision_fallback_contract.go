@@ -28,7 +28,7 @@ func validateFallbackResponse(tc DecisionFallbackCase, header http.Header, body 
 		return fmt.Errorf("inconsistent fallback fixture oracle: decision=%q fallback=%t", tc.ExpectedDecision, tc.ShouldFallback)
 	}
 	for name, expected := range map[string]string{
-		"x-vsr-schema-version": "2", "x-vsr-response-path": "upstream",
+		"x-vsr-schema-version": routerSchemaVersion, "x-vsr-response-path": "upstream",
 		"x-vsr-selected-recipe": fallbackEntrypoint, "x-vsr-selected-decision": tc.ExpectedDecision,
 		"x-vsr-selected-model": expectedFallbackModel(tc),
 	} {

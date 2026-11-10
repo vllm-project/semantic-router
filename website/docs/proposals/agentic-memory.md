@@ -98,7 +98,7 @@ This proof of concept validates the retrieve → inject → extract → store lo
 not claim production-scale isolation, reliable session-end detection, autonomous
 reflection, or factual correctness of extracted memories.
 
-The current [memory plugin guide](../tutorials/plugin/memory) is the source of truth
+The current [memory source guide](../tutorials/plugin/context#memory-sources) is the source of truth
 for implemented configuration and behavior. This proposal should not be used as a
 deployment recipe.
 
@@ -125,5 +125,5 @@ Use synthetic tenants and inspectable records before testing with personal data.
 
 ## References
 
-- [Current memory plugin guide](../tutorials/plugin/memory)
+- [Current memory source guide](../tutorials/plugin/context#memory-sources)
 - [Memory and replay in Router Learning](../tutorials/learning/memory-and-replay)

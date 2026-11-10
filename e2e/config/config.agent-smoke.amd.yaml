@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 
 listeners:
   - name: "agent-smoke-http-amd"
@@ -19,45 +19,19 @@ providers:
           endpoint: "host.docker.internal:8000/v1"
           protocol: "http"
 
-routing:
-  modelCards:
-    - name: "smoke-model"
-      modality: "text"
-  decisions:
-    - name: "default-route"
-      description: "Minimal AMD default route for agent smoke validation"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "smoke-model"
-          use_reasoning: false
-
-global:
-  stores:
-    response_cache:
-      enabled: false
-  model_catalog:
-    embeddings:
-      semantic:
-        mmbert_model_path: ""
-        qwen3_model_path: ""
-        multimodal_model_path: ""
-    modules:
-      prompt_guard:
-        enabled: false
-        jailbreak_mapping_path: ""
-      classifier:
-        domain:
-          enabled: false
-          category_mapping_path: ""
-        pii:
-          enabled: false
-          pii_mapping_path: ""
-      feedback_detector:
-        enabled: false
-
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "Minimal AMD default route for agent smoke validation"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "smoke-model"
+            use_reasoning: false
+global: {}
 entrypoints:
   - model_names: ["vllm-sr/auto"]
     recipe: default

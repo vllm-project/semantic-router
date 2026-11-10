@@ -119,7 +119,7 @@ func TestMergeAppliesAStepsOverrideAsAnotherLayer(t *testing.T) {
 
 func TestCompileKeepsTheTemplatesZeroRetryPolicy(t *testing.T) {
 	topology := compileYAML(t, `
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: bounded
@@ -129,8 +129,9 @@ providers:
         per_try_timeout: 5s
         retry_on: reset
       backend_refs:
-        - {name: a, provider: vllm, endpoint: 10.0.0.1:8000}
-routing: {}
+        - {name: a, provider: vllm, endpoint: '10.0.0.1:8000'}
+recipes:
+  - name: default
 `)
 	got := topology.cluster("bounded").Policy.Retry
 	if got == nil || got.NumRetries != 0 || got.On != RetryReset {

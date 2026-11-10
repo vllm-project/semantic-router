@@ -17,12 +17,6 @@ type TestBlockRunner interface {
 	EvaluateTestBlockQuery(query string) (*TestBlockResult, error)
 }
 
-// ProjectionPartitionRuntimeValidator emits native diagnostics that require runtime
-// signal analysis beyond static AST validation.
-type ProjectionPartitionRuntimeValidator interface {
-	ValidateProjectionPartitions(prog *Program) []Diagnostic
-}
-
 // ValidateTestBlocks evaluates TEST blocks with a runtime runner and emits diagnostics
 // for mismatches or runtime failures. Static TEST block diagnostics remain in the main validator.
 func ValidateTestBlocks(prog *Program, runner TestBlockRunner) []Diagnostic {
@@ -140,19 +134,4 @@ func formatMatchedRules(matchedRules []string) string {
 		return "none"
 	}
 	return strings.Join(matchedRules, ", ")
-}
-
-func programNeedsRuntimeValidation(prog *Program) bool {
-	if prog == nil {
-		return false
-	}
-	if len(prog.TestBlocks) > 0 {
-		return true
-	}
-	for _, partition := range prog.ProjectionPartitions {
-		if strings.EqualFold(partition.Semantics, "softmax_exclusive") {
-			return true
-		}
-	}
-	return false
 }

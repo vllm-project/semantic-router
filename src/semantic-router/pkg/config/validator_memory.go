@@ -17,24 +17,15 @@ const (
 	MaxMemoryPersistenceDurationSeconds = math.MaxInt64 / int64(time.Second)
 )
 
-// validateMemoryContracts validates the long-term-memory similarity threshold
-// wherever it can be configured: the global memory block
-// (default_similarity_threshold) and each decision's memory plugin
-// (similarity_threshold).
+// validateMemoryContracts validates the global memory store's backend,
+// retrieval defaults, reflection and persistence. A memory source's own
+// bounds are its match block's, which the context plugin validates.
 //
-// The threshold is a cosine similarity, which is bounded by [0.0, 1.0]. A value
-// outside that range is silently accepted today and reaches vector-store
-// retrieval unchanged (the Milvus/Qdrant/Valkey stores fall back to and compare
-// against it without clamping). A threshold > 1.0 can never be reached by any
-// similarity, so memory retrieval never matches despite enabled: true —
-// long-term memory is silently disabled. This mirrors the bound the semantic
-// cache and RAG plugins already enforce (validateSemanticCacheContracts /
-// validateRAGSimilarityThreshold).
+// The default similarity threshold is a cosine similarity, bounded by [0.0,
+// 1.0]: a threshold above 1.0 can never be reached, so memory retrieval would
+// never match despite enabled: true.
 func validateMemoryContracts(cfg *RouterConfig) error {
-	if err := validateGlobalMemoryContracts(cfg); err != nil {
-		return err
-	}
-	return validateDecisionMemoryContracts(cfg)
+	return validateGlobalMemoryContracts(cfg)
 }
 
 func validateGlobalMemoryContracts(cfg *RouterConfig) error {
@@ -50,7 +41,7 @@ func validateGlobalMemoryContracts(cfg *RouterConfig) error {
 	); err != nil {
 		return err
 	}
-	if err := validateMemoryRetrievalLimit(cfg.Memory.DefaultRetrievalLimit, false, "global memory default_retrieval_limit"); err != nil {
+	if err := validateMemoryRetrievalLimit(cfg.Memory.DefaultRetrievalLimit, "global memory default_retrieval_limit"); err != nil {
 		return err
 	}
 	if err := validateMemoryHybridMode(cfg.Memory.HybridMode, "global.stores.memory.hybrid_mode"); err != nil {
@@ -108,43 +99,6 @@ func validateMemoryPersistence(cfg MemoryPersistenceConfig) error {
 	return nil
 }
 
-func validateDecisionMemoryContracts(cfg *RouterConfig) error {
-	if cfg == nil {
-		return nil
-	}
-	decisions := cfg.AllRoutingDecisions()
-	for i := range decisions {
-		decision := &decisions[i]
-		pluginCfg := decision.GetMemoryConfig()
-		if pluginCfg == nil {
-			continue
-		}
-		if pluginCfg.SimilarityThreshold != nil {
-			scope := fmt.Sprintf("decision %q memory plugin similarity_threshold", decision.Name)
-			if err := validateMemorySimilarityThreshold(*pluginCfg.SimilarityThreshold, scope); err != nil {
-				return err
-			}
-		}
-		if pluginCfg.RetrievalLimit != nil {
-			scope := fmt.Sprintf("decision %q memory plugin retrieval_limit", decision.Name)
-			if err := validateMemoryRetrievalLimit(*pluginCfg.RetrievalLimit, true, scope); err != nil {
-				return err
-			}
-		}
-		field := fmt.Sprintf("routing.decisions[%s].plugins[memory].hybrid_mode", decision.Name)
-		if err := validateMemoryHybridMode(pluginCfg.HybridMode, field); err != nil {
-			return err
-		}
-		if pluginCfg.Reflection != nil {
-			scope := fmt.Sprintf("decision %q memory plugin reflection", decision.Name)
-			if err := validateMemoryReflectionContracts(*pluginCfg.Reflection, scope); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 // memoryHybridModes are the fusion methods the hybrid scorer implements. Empty
 // selects the default (weighted). Matching is exact because the scorer compares
 // the raw string.
@@ -184,16 +138,12 @@ func validateMemorySimilarityThreshold(threshold float32, scope string) error {
 	return nil
 }
 
-// validateMemoryRetrievalLimit rejects non-positive retrieval limits. The
-// global field is a plain int whose zero value means "unset" (runtime
-// default), while the decision plugin uses a pointer, where an explicit
-// zero or negative would reach the vector stores as an unbounded retrieval
-// ("a non-positive topK means unlimited results").
-func validateMemoryRetrievalLimit(limit int, explicit bool, scope string) error {
-	if limit == 0 && !explicit {
-		return nil
-	}
-	if limit <= 0 {
+// validateMemoryRetrievalLimit rejects a negative retrieval limit: zero
+// means unset (the runtime default), and a negative one would reach the
+// vector stores as an unbounded retrieval ("a non-positive topK means
+// unlimited results").
+func validateMemoryRetrievalLimit(limit int, scope string) error {
+	if limit < 0 {
 		return fmt.Errorf("%s must be greater than 0, got %d", scope, limit)
 	}
 	return nil

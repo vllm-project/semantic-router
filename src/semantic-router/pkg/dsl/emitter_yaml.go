@@ -162,9 +162,10 @@ func EmitCRD(cfg *config.RouterConfig, name, namespace string) ([]byte, error) {
 	return yaml.Marshal(doc)
 }
 
-// buildCRDConfigSpec constructs the operator's canonical config surface. Routing
-// stays under config.routing so DSL emission cannot recreate the retired flat
-// defaults and reasoning-family registry.
+// buildCRDConfigSpec constructs the operator's canonical config surface. The
+// routing fragment stays canonical under config.recipes, config.entrypoints
+// and config.models (the facts of providers.models[] entries), so DSL emission
+// cannot recreate the retired flat defaults and reasoning-family registry.
 func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 	canonical := config.CanonicalConfigFromRouterConfig(cfg)
 	flatBytes, _ := yaml.Marshal(cfg)
@@ -172,18 +173,21 @@ func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 	_ = yaml.Unmarshal(flatBytes, &flat)
 
 	configSpec := make(map[string]interface{})
-	routingBytes, _ := yaml.Marshal(canonical.Routing)
-	var routing map[string]interface{}
-	_ = yaml.Unmarshal(routingBytes, &routing)
-	if len(routing) > 0 {
-		configSpec["routing"] = routing
+	for key, value := range map[string]interface{}{
+		"recipes": canonical.Recipes, "entrypoints": canonical.Entrypoints, "models": modelFactEntries(cfg),
+	} {
+		encoded, _ := yaml.Marshal(value)
+		var items []interface{}
+		_ = yaml.Unmarshal(encoded, &items)
+		if len(items) > 0 {
+			configSpec[key] = items
+		}
 	}
 	if effort := canonical.Providers.Defaults.DefaultReasoningEffort; effort != "" {
 		configSpec["reasoning_effort"] = effort
 	}
 
 	// Infrastructure configs that ConfigSpec supports
-	moveKey(flat, configSpec, "embedding_models")
 	moveKey(flat, configSpec, "classifier")
 	moveKey(flat, configSpec, "prompt_guard")
 	moveKey(flat, configSpec, "semantic_cache")
@@ -255,16 +259,22 @@ func moveKey(src, dst map[string]interface{}, key string) {
 // surface under the chart's canonical `config:` key.
 func EmitHelm(cfg *config.RouterConfig) ([]byte, error) {
 	type helmValuesConfig struct {
-		Version string                  `yaml:"version"`
-		Routing config.CanonicalRouting `yaml:"routing"`
+		Version     string                       `yaml:"version"`
+		Providers   *routingFragmentProviders    `yaml:"providers,omitempty"`
+		Recipes     []config.CanonicalRecipe     `yaml:"recipes,omitempty"`
+		Entrypoints []config.CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
 	}
 
-	values := map[string]interface{}{
-		"config": helmValuesConfig{
-			Version: "v0.3",
-			Routing: config.CanonicalRoutingFromRouterConfig(cfg),
-		},
+	canonical := config.CanonicalConfigFromRouterConfig(cfg)
+	fragment := helmValuesConfig{
+		Version:     config.CanonicalConfigVersion,
+		Recipes:     canonical.Recipes,
+		Entrypoints: canonical.Entrypoints,
 	}
+	if models := modelFactEntries(cfg); len(models) > 0 {
+		fragment.Providers = &routingFragmentProviders{Models: models}
+	}
+	values := map[string]interface{}{"config": fragment}
 
 	doc := &yaml.Node{Kind: yaml.DocumentNode}
 	mapNode := &yaml.Node{Kind: yaml.MappingNode}
@@ -275,8 +285,9 @@ func EmitHelm(cfg *config.RouterConfig) ([]byte, error) {
 }
 
 // MergeRoutingIntoBase takes the DSL-compiled RouterConfig and a base YAML
-// document (containing version, listeners, providers), replaces the routing
-// section with the compiled one, and emits a complete canonical config YAML.
+// document (containing version, listeners, providers), replaces its recipes
+// and entrypoints with the compiled ones and its model facts with the MODEL
+// declarations', and emits a complete canonical config YAML.
 func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, error) {
 	var base map[string]interface{}
 	if err := yaml.Unmarshal(baseYAML, &base); err != nil {
@@ -292,10 +303,10 @@ func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, er
 		return nil, fmt.Errorf("failed to re-parse routing scopes: %w", err)
 	}
 	for _, field := range []string{"adaptations", "reliability", "fallback"} {
-		preserveBaseDecisionField(replacement["routing"], base["routing"], field)
 		preserveBaseRecipeDecisionField(replacement["recipes"], base["recipes"], field)
 	}
-	for _, key := range []string{"routing", "entrypoints", "recipes"} {
+	mergeModelFacts(base, replacement)
+	for _, key := range []string{"recipes", "entrypoints"} {
 		if value, present := replacement[key]; present {
 			base[key] = value
 		} else {
@@ -305,7 +316,7 @@ func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, er
 
 	doc := &yaml.Node{Kind: yaml.DocumentNode}
 	mapNode := &yaml.Node{Kind: yaml.MappingNode}
-	canonicalOrder := []string{"version", "listeners", "providers", "routing", "entrypoints", "recipes", "global"}
+	canonicalOrder := []string{"version", "listeners", "providers", "global", "recipes", "entrypoints", "evaluation"}
 	added := make(map[string]bool)
 	for _, key := range canonicalOrder {
 		if v, ok := base[key]; ok {
@@ -347,7 +358,7 @@ func pruneZeroValues(m map[string]interface{}) {
 	for k, v := range m {
 		// Canonical routing already applied typed omitempty rules. Explicit
 		// false and zero values there carry policy semantics and must survive.
-		if k == "routing" {
+		if k == "recipes" || k == "entrypoints" {
 			continue
 		}
 		switch val := v.(type) {

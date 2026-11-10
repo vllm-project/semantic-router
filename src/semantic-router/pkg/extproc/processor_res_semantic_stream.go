@@ -49,6 +49,9 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
 	recordStreamingTTFT(ctx)
+	if ctx.ResponseGuardHold != nil {
+		return r.handleHeldStreamBody(responseBody, endOfStream, ctx)
+	}
 	r.initializeSemanticResponseStream(ctx)
 	buffers := semanticStreamBuffers{}
 	buffers.push(responseBody, ctx)
@@ -141,9 +144,8 @@ func observeProtocolStream(
 	// Streaming headers have already been emitted. Keep late compatibility
 	// warnings observable through the same counter and structured diagnostics
 	// as buffered responses instead of retaining them only in request state.
-	for _, diagnostic := range diagnostics {
-		recordProtocolDiagnostic(ctx, normalizeProtocol(string(ctx.SourceFormat)), normalizeProtocol(string(ctx.TargetFormat)), diagnostic)
-	}
+	recordProtocolDiagnostics(ctx, diagnostics)
+	ctx.protocolDiagnosticsReported = len(ctx.ProtocolDiagnostics)
 	ctx.SemanticStreamState.observe(events)
 }
 
@@ -413,8 +415,17 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 }
 
 func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, streamErr error) {
+	if semanticResponse := r.completeSemanticStream(ctx, streamErr); semanticResponse != nil {
+		r.commitStreamedAnswer(ctx, semanticResponse)
+	}
+}
+
+// completeSemanticStream settles a stream once it ended: its latency, usage
+// and inflight admission. It returns the answer the stream reconstructs, or
+// nil when the stream ended without one or was settled before.
+func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr error) *llmprotocol.Response {
 	if ctx == nil || ctx.StreamingComplete {
-		return
+		return nil
 	}
 	ctx.StreamingComplete = true
 	if streamErr != nil || ctx.SemanticStreamState == nil || !ctx.SemanticStreamState.terminal {
@@ -448,10 +459,22 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 			"error":      responseErr.Error(),
 		})
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
-		return
+		return nil
 	}
+	return semanticResponse
+}
+
+// commitStreamedAnswer keeps an answer the client received as it streamed:
+// the selected decision's response_guard, which neither blocks nor writes
+// notes, reads it and records what it found, and the answer reaches the
+// cache, memory, the Responses object and Router Replay.
+func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticResponse *llmprotocol.Response) {
 	recordPrimaryOutputDigest(ctx, semanticResponse)
-	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
+	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
+	if ctx.ResponseGuard != nil {
+		ctx.ResponseGuard.live = true
+	}
+	r.recordRouterReplayResponseGuard(ctx)
 	encoded, err := r.encodeClientResponse(*semanticResponse, ctx)
 	if err != nil {
 		logging.ComponentWarnEvent("extproc", "neutral_stream_replay_encode_failed", map[string]interface{}{

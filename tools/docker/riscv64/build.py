@@ -175,8 +175,6 @@ def build_commands(args):
         "IMAGE_REGISTRY=",
         "--build-arg",
         "ATTACHED_BASE_IMAGE=" + args.base_image,
-        "--build-arg",
-        "ASSETS_IMAGE=" + args.base_image,
         "-t",
         "semantic-router-router:" + args.tag,
         ".",
