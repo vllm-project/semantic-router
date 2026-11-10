@@ -615,7 +615,9 @@ model is ready, with the process state (`starting`, `loading`, `warming`,
 `ready`, `degraded`, `failed`) and, when the process serves several models,
 each model's state. `/health/live` is
 liveness (`Liveness`): 200 with `status: alive` while the process serves
-HTTP, whatever its models' states. All three report `api_version`, the
+HTTP, whatever its models' states, and 503 with `status: stalled` and a
+`reason` while a forward has run longer than `--forward-timeout-seconds`
+(section 10). All three report `api_version`, the
 contract version (`info.version`). A router and its runtime come from one
 release, so the router accepts only a runtime of exactly its contract version.
 `/metrics` is Prometheus text with a `model` label on every model-scoped
@@ -1208,7 +1210,14 @@ with a clean device context. The accelerator decides what is one (on CUDA and
 ROCm: a CUDA or HIP error, a device-side assert or an illegal memory access;
 running out of memory is not). Any other error in a forward fails only the
 requests whose jobs were in that batch, as `internal_error`, and so does an
-answer holding NaN or infinity; the model keeps serving. A model that fails
+answer holding NaN or infinity; the model keeps serving. A forward that runs
+longer than `--forward-timeout-seconds` (300 s) is taken for a hung device:
+its model reports `degraded` and takes no requests, and `/health/live`
+answers 503 with `status: stalled`, so a liveness probe restarts the
+process; a forward that does return gives the model back its state. A forward
+on a device cannot be interrupted, so on SIGTERM the server waits
+`--shutdown-grace-seconds` (8 s) for the requests and forwards in flight, then
+exits with status 4, logging each forward it abandoned. A model that fails
 to load releases its worker and device memory. A package or golden-answer
 failure is final; any other load failure (no device with enough free memory,
 a download, a busy device) is retried `--load-attempts` times in all (5),

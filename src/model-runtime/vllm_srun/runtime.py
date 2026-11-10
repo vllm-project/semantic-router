@@ -64,7 +64,7 @@ from .registry import builtin
 from .registry.resolve import resolve
 from .scheduler import calibration
 from .scheduler.batching import Batcher, SharedContext
-from .scheduler.scheduler import Scheduler, SchedulerLimits
+from .scheduler.scheduler import STOP_SECONDS, Forward, Scheduler, SchedulerLimits
 from .supervision.metrics import RuntimeMetrics
 from .supervision.readiness import STATES, Health, golden_check
 from .timing import RunTiming, ServerTiming
@@ -73,6 +73,17 @@ log = logging.getLogger("vllm_srun")
 AUTO_ENGINE = "auto"
 # The families whose input limit max_model_len may lower: each reads it from package.max_input_tokens.
 MAX_MODEL_LEN_FAMILIES = frozenset({"decision1", "decision2", "decision3"})
+# The watchdog looks at the forwards in flight this often, or four times per forward timeout if shorter.
+WATCH_SECONDS = 1.0
+
+
+@dataclass(frozen=True)
+class _Stall:
+    """A forward the watchdog flagged, the health state it replaced and the reason the model reports."""
+
+    forward: Forward
+    replaced: tuple[str, str | None]
+    reason: str
 
 
 def _bf16_parameters(spec: ModelSpec, config: ModelConfig, dtype: str) -> int:
@@ -331,6 +342,7 @@ class ServedModel:
         self.cache = ResultCache(runtime.config.result_cache_entries)
         self.kernel_choices: KernelChoices | None = None
         self.unpinned: str | None = None
+        self._stall: _Stall | None = None
 
     # -- names ---------------------------------------------------------------
 
@@ -635,16 +647,70 @@ class ServedModel:
             "%s runs without its recorded kernel choices: %s", self.label, reason
         )
 
-    def stop(self) -> None:
-        """Stop the worker, then free the model once no forward can still use it."""
-        stopped = self.scheduler.stop() if self.scheduler is not None else True
-        if self.model is not None:
-            if stopped:
-                self.model.close()
-            else:
-                log.warning(
-                    "%s: a forward is still running; the model stays open", self.label
-                )
+    def stop(self, timeout: float = STOP_SECONDS) -> str | None:
+        """Stop the worker, then free the model once no forward can still use it.
+
+        What still runs after ``timeout`` seconds, if anything; the model then stays open.
+        """
+        stopped = self.scheduler.stop(timeout) if self.scheduler is not None else True
+        if self.model is None:
+            return None
+        if stopped:
+            self.model.close()
+            return None
+        forward = self.scheduler.forward if self.scheduler is not None else None
+        running = (
+            f"a forward of {forward.describe()} has run for "
+            f"{time.monotonic() - forward.started:.0f} s"
+            if forward is not None
+            else "its worker has not stopped"
+        )
+        log.warning("%s: %s; the model stays open", self.label, running)
+        return f"{self.label}: {running}"
+
+    @property
+    def stalled(self) -> str | None:
+        """Why the model is stalled: the watchdog flagged its forward in flight, which has not returned."""
+        stall = self._stall
+        if stall is None or self.scheduler is None:
+            return None
+        return stall.reason if self.scheduler.forward is stall.forward else None
+
+    def watch(self, timeout: float, now: float) -> None:
+        """Flag the forward in flight once it has run longer than ``timeout`` seconds, until it returns.
+
+        A stalled model reports ``degraded`` and takes no requests; once the
+        forward returns, it takes back the state the flag replaced, unless
+        another state was set meanwhile.
+        """
+        forward = self.scheduler.forward if self.scheduler is not None else None
+        stall = self._stall
+        if forward is not None and now - forward.started > timeout:
+            if stall is not None and stall.forward is forward:
+                return
+            reason = (
+                f"a forward has run longer than --forward-timeout-seconds "
+                f"({timeout:g} s): {forward.describe()}"
+            )
+            replaced = self.health.exchange("degraded", reason)
+            if stall is not None and replaced == ("degraded", stall.reason):
+                replaced = stall.replaced
+            self._stall = _Stall(forward, replaced, reason)
+            self.runtime.metrics.stalled_forwards.labels(model=self.label).inc()
+            log.error(
+                "%s: %s; GET /health/live and GET /health answer 503 until it returns",
+                self.label,
+                reason,
+            )
+        elif stall is not None:
+            self.health.set_if(("degraded", stall.reason), *stall.replaced)
+            self._stall = None
+            log.warning(
+                "%s: the forward that ran longer than --forward-timeout-seconds "
+                "returned after %.0f s",
+                self.label,
+                now - stall.forward.started,
+            )
 
     def _family(self, ref: PackageRef, options: RegistryOptions) -> ModelFamily:
         names = (
@@ -908,6 +974,10 @@ class Runtime:
                 capped["to"],
             )
         media.configure(self.config.media_workers)
+        if self.config.forward_timeout_seconds > 0:
+            threading.Thread(
+                target=self._watch, name="vllm-srun-watchdog", daemon=True
+            ).start()
         if background:
             self._thread = threading.Thread(
                 target=self._load_all, name="vllm-srun-load", daemon=True
@@ -921,11 +991,41 @@ class Runtime:
             self._thread.join(timeout)
         return self.health.ready
 
-    def stop(self) -> None:
+    def stop(self, timeout: float = STOP_SECONDS) -> list[str]:
+        """Stop every model, waiting up to ``timeout`` seconds in all for the forwards in flight.
+
+        What still runs then, one entry per model; those models stay open.
+        """
         self._stopping.set()
+        # Every worker stops taking work before any is waited for, so a hung
+        # forward leaves the other models the whole timeout.
         for served in self.served:
-            served.stop()
+            if served.scheduler is not None:
+                served.scheduler.stop(0)
+        deadline = time.monotonic() + timeout
+        abandoned = []
+        for served in self.served:
+            running = served.stop(max(0.0, deadline - time.monotonic()))
+            if running is not None:
+                abandoned.append(running)
         media.stop()
+        return abandoned
+
+    def stalls(self) -> list[str]:
+        """Why the process is not live: each model whose forward has run past the forward timeout."""
+        return [
+            f"{served.label}: {reason}"
+            for served in self.served
+            if (reason := served.stalled) is not None
+        ]
+
+    def _watch(self) -> None:
+        """Flag stalled forwards (``ServedModel.watch``) until the runtime stops."""
+        timeout = self.config.forward_timeout_seconds
+        while not self._stopping.wait(min(WATCH_SECONDS, timeout / 4)):
+            now = time.monotonic()
+            for served in self.served:
+                served.watch(timeout, now)
 
     def load(self) -> None:
         """Load every model in order, then ``freeze_heap``; the first failure is raised (foreground start)."""

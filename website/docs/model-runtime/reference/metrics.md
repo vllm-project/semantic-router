@@ -62,7 +62,9 @@ status, `vllm_srun_request_duration_seconds`,
 `vllm_srun_forward_duration_seconds`, `vllm_srun_batch_rows`,
 `vllm_srun_batch_tokens`, `vllm_srun_bundle_tasks`,
 `vllm_srun_result_cache_total` by model and outcome,
-`vllm_srun_queue_depth`, `vllm_srun_ready`,
+`vllm_srun_queue_depth`, `vllm_srun_ready`, `vllm_srun_live` (0 while a
+forward has run longer than `--forward-timeout-seconds`),
+`vllm_srun_stalled_forwards_total` by model,
 `vllm_srun_model_info` (by model, revision, family, engine, accelerator,
 device, `dtype` and `numerics`) and `vllm_srun_model_memory_bytes` (the
 bytes a model's loaded weights take, reduced-precision copies included).
