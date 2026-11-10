@@ -42,10 +42,10 @@ func (r TaskResolution) Explicit() bool {
 	return r.Source != ResolvedByDecisionModel
 }
 
-// recipeBindings are the bindings the scope's recipe authors. A recipe's
+// RecipeBindings are the bindings the scope's recipe authors. A recipe's
 // scoped configuration also carries, in ModelBindings, the global bindings
 // that apply to it; its own are those it declares or that differ from them.
-func (c *RouterConfig) recipeBindings() map[string]ModelBinding {
+func (c *RouterConfig) RecipeBindings() map[string]ModelBinding {
 	if c.scopedBindings == nil {
 		return c.ModelBindings
 	}
@@ -87,7 +87,7 @@ func (c *RouterConfig) resolveTask(consumer string) (TaskResolution, bool, error
 		}
 		return TaskResolution{Consumer: consumer, Name: name, Deployment: deployment.WithDefaults(), Source: source}, true, nil
 	}
-	if binding, ok := c.recipeBindings()[consumer]; ok {
+	if binding, ok := c.RecipeBindings()[consumer]; ok {
 		return pick(binding.Deployment, ResolvedByRecipeBinding)
 	}
 	if binding, ok := c.GlobalModelBindings[consumer]; ok {

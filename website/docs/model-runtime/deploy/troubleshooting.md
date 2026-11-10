@@ -242,30 +242,29 @@ global:
 A safety question (jailbreak, safety, PII and hallucination, and a `systemone`
 rule with `coverage: full`) reads the whole input, up to the model's scan
 budget or the deployment's `input.max_tokens` with `overflow: window`. Content
-past it, or a scan that misses the signals' deadline, was not read, and a
-`jailbreak` or `pii` rule counts it as a match. Direct `/v1/decisions` calls
-retain the model's input limits.
+past it was not read, and a `jailbreak` or `pii` rule counts it as a match.
+Direct `/v1/decisions` calls retain the model's input limits.
 
 A Decision deployment with `max_model_len` fails a longer question with
 `max_length_exceeded`. Raise it up to the package's limit, or leave it out
 ([Engine arguments](./engine-args.md#input-limit)).
 
 A jailbreak or PII rule matches content its model did not read in full: an
-input over the model's `max_tokens` under `reject`, over its cap, truncated, or
-not scanned within the signals' deadline. The match reports the type
-`unscanned` and the reason (`input_limit`, `scan_budget` or `deadline`), so
-padding a prompt cannot carry an attack or personal data past the check. A
-`systemone` rule with `coverage: full` says what such content means with
-`on_unscanned`; the other signals report the reason and resolve as a failed
-signal ([Reference](../reference/http-api.md#long-inputs)).
+input over the model's `max_tokens` under `reject`, over its cap, or truncated.
+The match reports the type `unscanned` and the reason (`input_limit` or
+`scan_budget`), so padding a prompt cannot carry an attack or personal data
+past the check. A `systemone` rule with `coverage: full` says what such
+content means with `on_unscanned`; the other signals report the reason and
+resolve as a failed signal ([Reference](../reference/http-api.md#long-inputs)).
 
 ## A request waits on a slow model
 
 A model-runtime signal that has not answered by the signals' deadline resolves
 through its policy, so one slow model does not fail the whole request: a
-routing signal as a failed signal (`Unknown` under `rules.on_unknown`;
-otherwise no match, or a `systemone` condition's `on_error`), a safety signal
-as unscanned. The deadline
+jailbreak or PII rule as no answer, which matches only with
+`on_unknown: match`, and any other signal as a failed signal (`Unknown` under
+`rules.on_unknown`; otherwise no match, or a `systemone` condition's
+`on_error`). The deadline
 is the request's less a tenth of the time left, or 45 s for a served request;
 set `global.model_catalog.signal_timeout_ms` to shorten it. On a CPU, Vela 2.0
 0.3B reads about 1,000 tokens a second on four cores, so a long request may

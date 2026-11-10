@@ -35,7 +35,7 @@ curl -s localhost:8100/v1/systemone -H 'content-type: application/json' -d '{
 | --- | --- |
 | `POST /v1/systemone` | 回答一个请求。只要有一个问题无法回答，整个请求就失败 |
 | `POST /v1/decisions` | 模型运行时提供的同一调用形式：请求体相同，失败的问题在 200 响应中携带自己的错误 |
-| `GET /v1/models` | 列出运行时用来回答的模型及其模型卡；Router 或 Engine 前端在 `GET /v1/systemone/models` 列出其 System One 模型 |
+| `GET /v1/models` | 列出运行时用来回答的模型及其模型卡；Router 或 Engine 前端在 `GET /v1/systemone/models` 列出其 System One 模型，并给出其所服务的每个内置决策模型的 `question_types` |
 
 下面的两种形式属于 4.0.0 契约，运行时会在 `GET /health` 中以 `api_version` 报告该版本。Router 自己的公共 System One API 也接受这两种形式。
 
@@ -119,6 +119,7 @@ Router 会拒绝其他契约版本的运行时：Router 与其模型运行时来
 - `states` 中的每个条目都是一个标准请求：有自己的 `state`、自己的 `questions`，以及自己的 `images` 和 `videos`。问题名称在条目内唯一，在不同条目之间可以重复。
 - 批量请求的 `model`、`options` 和 `assets` 适用于每个条目。
 - 响应是 `{"model", "states", "usage"}`：每个条目的答案以相同名称返回，与该条目单独请求时得到的一样；`usage` 汇总所有条目。响应没有顶层 `answers`。
+- 如果某个条目单独请求时会因其图像、视频、资源或 token 数被拒绝，该条目的每个问题都改为以 `invalid_input` 失败，其他条目照常回答。只有每个条目都被拒绝的批量请求才会被整体拒绝，返回第一个条目的错误。
 
 :::warning
 两种形式互斥。批量请求体没有顶层的 `state`、`questions`、`images` 或 `videos`。混用两种形式的请求体，或 `states` 为空的批量请求，会以 400 `invalid_request` 被拒绝。
@@ -184,7 +185,7 @@ Router 会拒绝其他契约版本的运行时：Router 与其模型运行时来
 
 ## 错误与限制 {#errors-and-limits}
 
-在 `POST /v1/systemone` 上，按请求顺序第一个无法回答的问题决定整个请求的响应。响应体的 `code` 是 `question_failed`，并带有失败的 `question`、其 `question_error` 和 `reason`：
+在 `POST /v1/systemone` 上，按请求顺序第一个无法回答的问题决定整个请求的响应。响应体的 `code` 是 `question_failed`，并带有失败的 `question`、其 `question_error` 和 `reason`；在批量请求中，还以 `state` 给出该问题所在条目的名称：
 
 | 问题错误 | 状态码 | 含义 |
 | --- | --- | --- |

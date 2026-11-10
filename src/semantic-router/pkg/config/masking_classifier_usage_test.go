@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"slices"
+	"strings"
+	"testing"
+)
 
 // Masking asks the pii rule it names although no decision reads the rule, so
 // the signal-type walk alone left the rule's deployment unprepared, and
@@ -48,5 +52,43 @@ func TestMaskingPluginAloneAsksItsPIIRule(t *testing.T) {
 				t.Fatalf("AsksApplicationRule(personal) = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// A request that matches no decision masks with the recipe's default masking
+// plugin, so its pii rule must exist and is asked even when every decision
+// masks with another rule.
+func TestDefaultMaskingPluginNamesARuleOfTheRecipe(t *testing.T) {
+	doc := func(signal string) string {
+		return `version: v0.5
+providers:
+  models:
+    - name: model-a
+      backend_refs: [{endpoint: "127.0.0.1:8000", provider: vllm}]
+recipes:
+  - name: default
+    signals:
+      pii:
+        - {name: personal, predicate: {gte: 0.5}}
+        - {name: contact, predicate: {gte: 0.5}}
+    decisions:
+      - name: mask
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: model-a}]
+        plugins: [{type: masking, configuration: {enabled: true, signal: personal}}]
+global:
+  plugins: [{type: masking, configuration: {enabled: true, signal: ` + signal + `}}]
+`
+	}
+	cfg, err := ParseYAMLBytes([]byte(doc("contact")))
+	if err != nil {
+		t.Fatalf("a default masking plugin on a pii rule of the recipe must load: %v", err)
+	}
+	if got := cfg.MaskingSignals(); !slices.Equal(got, []string{"personal", "contact"}) {
+		t.Fatalf("MaskingSignals() = %v, want the decision's rule and the default plugins'", got)
+	}
+	_, err = ParseYAMLBytes([]byte(doc("missing")))
+	if err == nil || !strings.Contains(err.Error(), `recipes[default].plugins masking: signal "missing" names no pii rule of this recipe`) {
+		t.Fatalf("err = %v, want the default masking plugin's unknown rule refused", err)
 	}
 }

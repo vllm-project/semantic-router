@@ -23,7 +23,7 @@ translation:
 | `device` | 部署 | 见[让 router 来跑模型](../deploy/connect-the-router.md#describe-a-deployment)。 |
 | `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context` | 部署 | 部署的[引擎参数](../deploy/engine-args.md)；没设的保持 runtime 默认值。 |
 | `input.max_tokens`、`input.overflow` | 部署 | 任务模型的输入上限。答问题的部署只收 `overflow: window` 加 `max_tokens`：它的那些问题把长的部分整读到的扫描预算（见[长输入](./http-api.md#long-inputs)）。这也包括默认决策模型、直接发布给 System One 的部署，以及本地 System One 别名的部署，不论监听器是否发布该别名。路由的 System One 入口不是一个部署。不属于这些情况的绑定部署仍保留任务模型的输入上限。 |
-| `signal_timeout_ms` | `global.model_catalog` | 请求的模型 runtime 信号的截止时间。默认取请求的截止时间扣掉剩余时间的十分之一（至少一秒）；router 看不到截止时间的受服务请求取 45 秒。还在跑的信号按它的政策收尾：路由信号走 `on_error`，安全信号按未扫描处理。 |
+| `signal_timeout_ms` | `global.model_catalog` | 请求的模型 runtime 信号的截止时间。默认取请求的截止时间扣掉剩余时间的十分之一（至少一秒）；router 看不到截止时间的受服务请求取 45 秒。还在跑的信号按它的政策收尾：越狱或 PII 规则按没有答案处理，只有设置 `on_unknown: match` 时才匹配；其他信号都按失败的信号处理，走 `on_error` 或 `rules.on_unknown`。 |
 | `on_unscanned` | `recipes[].signals.systemone[]` | 在 `coverage: full` 下，一个没能读完整个输入的答案意味着什么：`match`、`no_match` 或 `unknown`（默认）。`jailbreak` 和 `pii` 规则把模型没整读的内容计为匹配。 |
 | `process` | 部署 | 同名的托管部署共用一个进程。 |
 | `endpoint`、`model` | 部署 | 挂到你自己跑的 runtime；`model` 是所服务模型的 ID。[连接块](../../installation/model-catalog.md#connection-block)另有 `auth`、`headers`、`timeout_ms` 和 `tls`。 |

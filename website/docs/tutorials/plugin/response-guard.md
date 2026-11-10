@@ -74,15 +74,19 @@ recipes:
 | `rules[].action` | `block` refuses the answer with HTTP 403, or with the stream's error event for a streamed answer; `annotate` delivers it with the rule's warning codes in `x-vsr-warnings`; `none` only records the outcome. |
 | `rules[].details` | With `annotate`, also writes a note at the head of the answer. The hallucination note names the unsupported spans. |
 | `on_unknown` | What a rule does when a response-stage signal it reads could not be read: the detector failed or timed out, the answer had no text, or there was no grounding context to check it against. `block`, `annotate` (the default) or `none`. |
+| `enabled` | `false` turns off the guard a decision inherits from `global.plugins` or its recipe's plugins; `rules` is then not required. |
 
 Rules are read in order, and the first rule that blocks ends the read. A
 response-stage signal is evaluated only when a rule reaches it, and once per
-answer however many rules read it.
+answer however many rules read it. A request for a concrete model bypasses the
+recipe's signals, so it runs no guard, not even one in `global.plugins`.
 
 The warning codes a rule adds are `hallucination` (`unverified_factual` when
 the answer could not be checked), `response_jailbreak`, and `response_guard`
-for any other rule. A blocked answer is replaced with a message that names what
-was found, never that a check failed.
+for any other rule, one for each response-stage signal among the conditions
+that matched, or among all of them when the rule could not be decided. A
+blocked answer is replaced with a message that names what was found, never
+that a check failed.
 
 The grounding context is the documents the [context plugin](./context.md) retrieved and
 the request's own tool results.

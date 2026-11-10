@@ -647,7 +647,6 @@ recipes:
             source: models
             models:
               - model: qwen3-32b
-                lora_name: business-adapter
                 weight: 1.0
                 use_reasoning: true
                 reasoning_mode: enabled

@@ -200,8 +200,13 @@ const (
 
 // GetToolsConfig returns the tools plugin configuration.
 func (d *Decision) GetToolsConfig() *ToolsPluginConfig {
-	result := &ToolsPluginConfig{}
-	return decodeDecisionPlugin(d, DecisionPluginTools, result)
+	return ToolsPluginOf(d.Plugins)
+}
+
+// ToolsPluginOf is the tools plugin among a request's plugins, nil without
+// one.
+func ToolsPluginOf(plugins []DecisionPlugin) *ToolsPluginConfig {
+	return decodePlugin(plugins, DecisionPluginTools, &ToolsPluginConfig{})
 }
 
 // ActivePolicy is the policy of an enabled plugin, nil otherwise.

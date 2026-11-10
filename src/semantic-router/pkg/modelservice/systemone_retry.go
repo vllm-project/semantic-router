@@ -10,15 +10,17 @@ import (
 )
 
 // questionFailure is a System One API's failure of a whole call on one of its
-// questions: the question's ID and why it failed.
+// questions: the question's ID, the batch entry it failed about ("" when the
+// API names none) and why it failed.
 type questionFailure struct {
 	question string
+	state    string
 	code     string
 }
 
 // failedQuestion reads a failed call's answer: the question a System One API
-// names when it fails a call on it, as
-// {"error": {"code": "question_failed", "question": "<id>", "question_error": ...}}.
+// names when it fails a call on it and, in a batch, its entry, as
+// {"error": {"code": "question_failed", "question": "<id>", "state": "<entry>", "question_error": ...}}.
 func failedQuestion(status int, body []byte) (questionFailure, bool) {
 	if status < http.StatusBadRequest || status >= http.StatusInternalServerError || status == http.StatusTooManyRequests {
 		return questionFailure{}, false
@@ -27,6 +29,7 @@ func failedQuestion(status int, body []byte) (questionFailure, bool) {
 		Error struct {
 			Code          string          `json:"code"`
 			Question      string          `json:"question"`
+			State         string          `json:"state"`
 			QuestionError json.RawMessage `json:"question_error"`
 		} `json:"error"`
 	}
@@ -36,7 +39,7 @@ func failedQuestion(status int, body []byte) (questionFailure, bool) {
 	if answer.Error.Code != "question_failed" || answer.Error.Question == "" {
 		return questionFailure{}, false
 	}
-	return questionFailure{question: answer.Error.Question, code: questionErrorCode(answer.Error.QuestionError)}, true
+	return questionFailure{question: answer.Error.Question, state: answer.Error.State, code: questionErrorCode(answer.Error.QuestionError)}, true
 }
 
 // questionErrorCode is the item error a failed question carries: the API's
@@ -55,12 +58,25 @@ func questionErrorCode(raw json.RawMessage) string {
 	return "question_failed"
 }
 
-// answer hands the failed question its error, about every state that asked
-// it.
+// about is whether f is about state: the entry the API named, or every state
+// when it names none.
+func (f questionFailure) about(state *fusedState) bool {
+	return f.state == "" || f.state == state.name
+}
+
+// fails is whether f fails question id about state: its question or, when
+// the API refused the input of the entry it names (invalid_input, as the
+// model runtime refuses an entry's image), every question of that entry.
+func (f questionFailure) fails(state *fusedState, id string) bool {
+	return f.about(state) && (id == f.question || f.state != "" && f.code == "invalid_input")
+}
+
+// answer hands f's error to every question f fails, about every state that
+// asked it.
 func (f questionFailure) answer(task *bundleTask, responses []Response) {
 	for index, state := range task.decision.states {
 		for _, question := range state.request.Questions {
-			if question.ID == f.question {
+			if f.fails(state, question.ID) {
 				responses[index].Answers[question.ID] = Answer{Type: question.Type, Error: f.code}
 			}
 		}
@@ -86,17 +102,18 @@ func (p remotePlan) questions(state *fusedState) map[string]api.Question {
 	return (*p.body.States)[state.name].Questions
 }
 
-// without is the plan that asks every question of p but id, about the states
-// it asks anything else about: a standard request about one of them, a
-// batch about several. ok is false when p does not ask id or asks nothing
-// else.
-func (p remotePlan) without(id string) (remotePlan, bool) {
+// without is the plan that asks every question of p that failed does not
+// fail, about the states it asks anything else about: a standard request
+// about one of them, a batch about several. ok is false when failed fails
+// none of p's questions, or all of them.
+func (p remotePlan) without(failed questionFailure) (remotePlan, bool) {
 	rest := make(map[*fusedState]map[string]api.Question, len(p.asked))
 	var asked []*fusedState
 	dropped := false
 	for _, state := range p.asked {
-		questions, found := dropQuestion(p.questions(state), id)
-		dropped = dropped || found
+		questions := maps.Clone(p.questions(state))
+		maps.DeleteFunc(questions, func(id string, _ api.Question) bool { return failed.fails(state, id) })
+		dropped = dropped || len(questions) < len(p.questions(state))
 		if len(questions) > 0 {
 			rest[state] = questions
 			asked = append(asked, state)
@@ -128,13 +145,4 @@ func (p remotePlan) decode(task *bundleTask, status int, data []byte) ([]Respons
 		}
 	}
 	return responses, nil
-}
-
-func dropQuestion(questions map[string]api.Question, id string) (map[string]api.Question, bool) {
-	if _, ok := questions[id]; !ok {
-		return questions, false
-	}
-	rest := maps.Clone(questions)
-	delete(rest, id)
-	return rest, true
 }

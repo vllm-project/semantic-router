@@ -3,8 +3,6 @@ package dsl
 import (
 	"fmt"
 
-	"gopkg.in/yaml.v2"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -41,19 +39,16 @@ var pluginConfigCompilers = map[string]pluginConfigCompiler{
 		return compileStrictPluginFields(c, "response_cache", fields, &config.ResponseCachePluginConfig{})
 	},
 	"context": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		cfg := &config.ContextPluginConfig{}
-		return compilePluginFields(c, fields, cfg)
+		return compileStrictPluginFields(c, "context", fields, &config.ContextPluginConfig{})
 	},
 	"prompt_cache": compilePromptCachePluginConfig,
-	// masking uses the generic structured path: its configuration is a plain
-	// map, so hand-mapping fields would only add a place to forget one (#3566).
+	// masking decodes its fields as written: hand-mapping them would only add
+	// a place to forget one (#3566).
 	"masking": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		cfg := &config.MaskingPluginConfig{}
-		return compilePluginFields(c, fields, cfg)
+		return compileStrictPluginFields(c, "masking", fields, &config.MaskingPluginConfig{})
 	},
 	"response_guard": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
-		cfg := &config.ResponseGuardPluginConfig{}
-		return compilePluginFields(c, fields, cfg)
+		return compileStrictPluginFields(c, "response_guard", fields, &config.ResponseGuardPluginConfig{})
 	},
 	"header_mutation": func(c *Compiler, fields map[string]Value) (interface{}, bool) {
 		return c.compileHeaderMutationPluginConfig(fields), true
@@ -170,23 +165,6 @@ func compileStrictPluginFields(c *Compiler, pluginType string, fields map[string
 	return target, true
 }
 
-func compilePluginFields(
-	c *Compiler,
-	fields map[string]Value,
-	target interface{},
-) (interface{}, bool) {
-	raw, err := yaml.Marshal(fieldsToMap(fields))
-	if err != nil {
-		c.addError(Position{}, "failed to encode plugin fields: %v", err)
-		return nil, false
-	}
-	if err := yaml.Unmarshal(raw, target); err != nil {
-		c.addError(Position{}, "failed to decode plugin fields: %v", err)
-		return nil, false
-	}
-	return target, true
-}
-
 func (c *Compiler) buildPluginConfigValue(pluginType string, fields map[string]Value) (interface{}, bool) {
 	if fn, ok := pluginConfigCompilers[pluginType]; ok {
 		return fn(c, fields)
@@ -230,6 +208,9 @@ func (c *Compiler) compileRouterReplayPluginConfig(fields map[string]Value) (int
 
 func (c *Compiler) compileFastResponsePluginConfig(fields map[string]Value) config.FastResponsePluginConfig {
 	cfg := config.FastResponsePluginConfig{}
+	if v, ok := getBoolField(fields, "enabled"); ok {
+		cfg.Enabled = &v
+	}
 	if v, ok := getStringField(fields, "message"); ok {
 		cfg.Message = v
 	}

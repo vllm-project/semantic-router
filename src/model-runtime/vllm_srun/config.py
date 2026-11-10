@@ -8,6 +8,7 @@ sets its own.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
@@ -174,6 +175,11 @@ class ServeConfig:
     images and videos for the process's models, off the threads that plan
     requests next to the device worker; 0 decodes in the planning threads, None
     picks a count from the CPUs the process may use (``media.auto_workers``).
+    A model whose forward has run longer than ``forward_timeout_seconds`` is
+    stalled: the process is neither live nor ready until the forward returns
+    (0 turns the watchdog off). A stopping server waits up to
+    ``shutdown_grace_seconds`` for requests and forwards in flight, then exits
+    even if a forward is still running.
     """
 
     models: tuple[ModelConfig, ...] = ()
@@ -198,6 +204,8 @@ class ServeConfig:
     autotune_cache: str | None = None
     exit_on_device_error: bool = True
     media_workers: int | None = None
+    forward_timeout_seconds: float = 300.0
+    shutdown_grace_seconds: float = 8.0
 
     def __post_init__(self) -> None:
         if self.media_workers is not None and (
@@ -206,6 +214,15 @@ class ServeConfig:
             or self.media_workers < 0
         ):
             raise ValueError("media_workers must be a non-negative integer")
+        for name in ("forward_timeout_seconds", "shutdown_grace_seconds"):
+            value = getattr(self, name)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value < 0
+            ):
+                raise ValueError(f"{name} must be a non-negative number of seconds")
 
     def served_models(self) -> tuple[ModelConfig, ...]:
         """The models this process serves, in load order."""

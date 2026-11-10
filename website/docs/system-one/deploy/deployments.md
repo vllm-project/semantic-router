@@ -155,7 +155,7 @@ falls back silently:
 | --- | --- |
 | Every deployment a rule, binding or feature names is declared | The name, and the declared names |
 | The deployment answers the rule's question type | The rule, the deployment and the types it answers |
-| A span-needing rule or plugin resolves to a span-capable deployment | `span_required` |
+| A span-needing rule or plugin resolves to a span-capable deployment, or to one whose `capabilities.presets` lists its `pii` or `halu` preset | `span_required` |
 | A rule's `input.image`, `input.video` or `input.audio` is read by its deployment | `input_modality_unsupported` |
 | A preset answered without a calibrated threshold | `uncalibrated_preset` (a warning; the rule uses 0.5) |
 | A key written inline (`auth.api_key`, an `Authorization` header) | Keys come from `api_key_env` or `api_key_file` |

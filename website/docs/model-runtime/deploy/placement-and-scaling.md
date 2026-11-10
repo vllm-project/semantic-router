@@ -100,6 +100,47 @@ worker's load accounting.
   in-flight requests and restarts. A degraded pool can keep serving through its
   healthy replicas.
 
+### Eject a replica that keeps timing out
+
+A worker whose forward hangs can keep answering `/health`, so readiness alone
+does not take it out of dispatch. The pool counts, per replica, the exchanges
+in a row that run out of their caller's deadline, and ejects a replica that
+reaches `consecutive_timeouts`. Each field is optional:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-4B
+        replicas:
+          - device: rocm:0
+          - device: rocm:1
+        outlier_detection:
+          consecutive_timeouts: 3     # default 3; 0 turns ejection off
+          base_ejection_ms: 30000     # default 30000
+          max_ejection_ms: 300000     # default ten times the base, at most an hour
+          max_ejection_percent: 50    # default 50
+```
+
+- A cancellation, a refused request or a failure neither counts nor resets the
+  count; a successful answer starts it again.
+- An ejected replica leaves dispatch for `base_ejection_ms`, and the Router
+  probes its `/health` at once. When the cool-down ends the replica returns; its
+  next timeout ejects it again for twice as long, up to `max_ejection_ms`. A
+  successful answer readmits it at once and starts over.
+- Ejection never takes the replicas that serve. A replica is ejected only while
+  another ready replica has answered since its timeouts began, so a model that
+  is slow on every replica keeps them all. At most `max_ejection_percent` of the
+  replicas are out at once (one may always be), and a deployment with one worker
+  never ejects it. If no other replica can take requests, the ejected ones serve
+  again.
+- Inventory reports an ejected replica with the state `ejected`. The Router logs
+  `replica_ejected`, `replica_readmitted` and, when a rule above holds an
+  ejection back, `replica_ejection_withheld`, and counts ejections and
+  readmissions in its [metrics](../reference/metrics.md).
+
 ## CPU threads
 
 Each managed CPU worker defaults to half the Router's available CPU budget,

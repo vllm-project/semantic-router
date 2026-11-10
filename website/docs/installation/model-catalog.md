@@ -58,6 +58,7 @@ global:
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
         replicas: [{device: cpu}, {endpoint: http://worker-2.example.com:8100, model: kai}]
+        outlier_detection: {consecutive_timeouts: 3, base_ejection_ms: 30000, max_ejection_ms: 300000, max_ejection_percent: 50}
       # Connection block: an attached model_runtime and every remote provider.
       remote-example:
         provider: systemone              # or openai_chat, openai_embeddings
@@ -86,6 +87,7 @@ global:
 | `device` | `cpu`, `auto` (the best device the host has), `cuda`, `rocm`, or one device such as `cuda:0` |
 | `input` | The deployment's input budget: `max_tokens`, and `overflow` (`reject`, `truncate` or `window`) |
 | `replicas` | Workers of one logical deployment: each a `device`, or an `endpoint` and `model` of a worker started elsewhere |
+| `outlier_detection` | When a replica's exchanges run out of their deadline `consecutive_timeouts` times in a row (default 3; 0 turns it off), it leaves dispatch for `base_ejection_ms` (30000), twice as long each time in a row up to `max_ejection_ms` (ten times the base); at most `max_ejection_percent` (50) of the replicas are out at once. See [Eject a replica that keeps timing out](../model-runtime/deploy/placement-and-scaling.md#eject-a-replica-that-keeps-timing-out) |
 | `public_name` | The deployment's name on the inference API |
 | `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context`, `max_model_len` | Engine arguments; see [engine arguments](../model-runtime/deploy/engine-args.md) |
 
@@ -147,8 +149,12 @@ question-style signal. Embeddings answer no signal: recall embeds with
 A rule's predicate you do not write comes from the model that answers: the
 threshold calibrated for `vela3-fast` or a Vela 2.0 size; 0.5 for any other
 model, local or `systemone`, which has none (the load warns
-`uncalibrated_preset`, naming the rule). A `predicate` you write is used as
-written.
+`uncalibrated_preset`, naming the rule). That default applies to domain, user
+feedback, modality and PII rules, and to a rule that reads its preset's
+positive option (`FACT_CHECK_NEEDED`, `unsafe`, `refusal`, `jailbreak`); any
+other rule without a predicate matches on the model's own selection, and a
+hallucination rule on the model's own span thresholds. A `predicate` you
+write is used as written.
 
 ## Admission
 

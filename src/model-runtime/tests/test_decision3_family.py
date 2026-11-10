@@ -3,7 +3,9 @@
 import asyncio
 import json
 import math
+import re
 import shutil
+from pathlib import Path
 
 import pytest
 import torch
@@ -21,8 +23,23 @@ from vllm_srun.families.decision3.family import (
 )
 from vllm_srun.families.decision3.state_once import StateOnceModel
 from vllm_srun.plugins.base import PackageRef
+from vllm_srun.registry.tables.common import REGISTRY_DIR
 from vllm_srun.registry.tables.decision3 import DECISION3_MODELS
 from vllm_srun.testing.decision3 import write_fixture
+
+REPOSITORY = Path(__file__).resolve().parents[3]
+# The PyTorch each CPU image and install of the runtime pins.
+CPU_TORCH_PINS = {
+    "src/model-runtime/Dockerfile": r"ARG TORCH_VERSION=(\S+)",
+    "src/model-runtime/requirements-lock.txt": r"echo torch==(\S+)",
+    "tools/docker/Dockerfile.extproc": r"ARG TORCH_CPU=torch==(\S+)",
+    "tools/make/model-runtime.mk": r"MODEL_RUNTIME_TORCH \?= torch==(\S+)",
+}
+CPU_REFERENCES = {
+    "cpu",
+    "cpu:x86_64:avx512:bf16_native",
+    "cpu:x86_64:avx2:bf16_emulated",
+}
 
 QUESTIONS = {
     "domain": {
@@ -624,15 +641,13 @@ FLA_KERNELS = {
 
 @pytest.mark.parametrize("model", DECISION3_MODELS, ids=lambda model: model.repo_id)
 def test_every_model_records_goldens_and_kernel_choices(model):
-    expected = {"cpu", "rocm"}
+    expected = {*CPU_REFERENCES, "rocm"}
     devices = {"rocm:gfx942"}
     if model.repo_id == "vllm-sr/d3-edge":
-        expected.update({"cpu:x86_64:avx2:bf16_emulated", "cuda:sm_89"})
+        expected.add("cuda:sm_89")
         devices.add("cuda:sm_89")
-    elif model.repo_id in ("vllm-sr/d3", "vllm-sr/d3-turbo"):
-        expected.add("cpu:x86_64:avx512:bf16_native")
     elif model.repo_id == "vllm-sr/d3-ultra":
-        expected.update({"cpu:x86_64:avx512:bf16_native", "rocm:gfx942"})
+        expected.add("rocm:gfx942")
     elif model.repo_id == "vllm-sr/d3-mini":
         expected.update({"npu", "npu:Ascend950DT"})
     assert set(model.golden_answers) == expected
@@ -651,6 +666,32 @@ def test_every_model_records_goldens_and_kernel_choices(model):
         assert set(choices["kernels"]) == FLA_KERNELS
     if "cuda:sm_89" in devices:
         assert model.kernel_choices["cuda:sm_89"]["triton"] == "3.6.0"
+
+
+def test_cpu_references_are_recorded_with_the_pinned_pytorch():
+    """D3 computes in BF16 on CPU, where a new PyTorch can move its answers past the CPU tolerance.
+
+    2.10.0 to 2.14.1 did (docs/records/d3-cpu-goldens-pytorch-2.14.md), so a
+    PyTorch bump re-records these references with ``tools/golden_answers.py``.
+    """
+    pins = {}
+    for path, pattern in CPU_TORCH_PINS.items():
+        found = re.search(pattern, (REPOSITORY / path).read_text(encoding="utf-8"))
+        assert found, f"{path} no longer pins PyTorch as {pattern!r}"
+        pins[path] = found.group(1)
+    assert len(set(pins.values())) == 1, f"the CPU PyTorch pins disagree: {pins}"
+    pinned = next(iter(pins.values()))
+    recorded = json.loads(
+        (REGISTRY_DIR / "golden_answers_decision3.json").read_text(encoding="utf-8")
+    )
+    stale = []
+    for model in DECISION3_MODELS:
+        versions = recorded[model.repo_id].get("torch", {})
+        for key in model.golden_answers:
+            version = versions.get(key, "no PyTorch recorded")
+            if key.split(":")[0] == "cpu" and version.split("+")[0] != pinned:
+                stale.append(f"{model.repo_id} {key}: {version}")
+    assert not stale, f"CPU references not recorded with PyTorch {pinned}: {stale}"
 
 
 def test_threads_stay_within_the_container_unless_configured(monkeypatch):
