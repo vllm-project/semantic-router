@@ -33,8 +33,8 @@ func ParseRoutingYAMLBytesWithLimits(data []byte, limits DecisionRuleLimits) (*R
 			"decision_rule_limits": map[string]interface{}{"max_depth": depth, "max_nodes": nodes},
 		}},
 	}
-	if _, err := validateRawDecisionRuleLimits(budgetDocument); err != nil {
-		return nil, err
+	if _, limitsErr := validateRawDecisionRuleLimits(budgetDocument); limitsErr != nil {
+		return nil, limitsErr
 	}
 
 	data, formWarnings, err := applyConfigForms(data, configForms)
