@@ -237,12 +237,7 @@ D3_PARAMETERS = 26_086_635_760
 D3 = ModelSpec(
     "d3",
     GATED_DELTA_BACKBONE,
-    DtypePolicy(
-        autocast=None,
-        bf16_resident=False,
-        gpu_weights="bfloat16",
-        cpu_weights="bfloat16",
-    ),
+    DtypePolicy(autocast=None, bf16_resident=False, gpu_weights="bfloat16"),
     262_144,
     requires=GATED_DELTA_BACKBONE.requires,
 )
@@ -264,9 +259,21 @@ def test_the_estimate_counts_weights_in_the_dtype_the_device_holds():
     assert estimate_bytes(SPEC, billion, "rocm") == 4 * billion + 2 * GIB
     assert estimate_bytes(SPEC, billion, "cpu") == 4 * billion + 2 * GIB
     assert estimate_bytes(D3, billion, "rocm") == 2_200_000_000 + 2 * GIB
-    assert estimate_bytes(D3, billion, "cpu") == 2_200_000_000 + 2 * GIB
-    fp32_on_cpu = replace(D3, dtype=replace(D3.dtype, cpu_weights=None))
-    assert estimate_bytes(fp32_on_cpu, billion, "cpu") == 4 * billion + 2 * GIB
+    assert estimate_bytes(D3, billion, "cpu") == 4 * billion + 2 * GIB
+    bf16_on_cpu = replace(D3, dtype=replace(D3.dtype, cpu_weights="bfloat16"))
+    assert estimate_bytes(bf16_on_cpu, billion, "cpu") == 2_200_000_000 + 2 * GIB
+
+
+def test_d3_on_a_cpu_needs_its_fp32_size_unless_it_runs_bfloat16(monkeypatch):
+    monkeypatch.setattr(ROCmAccelerator, "available", lambda self: False)
+    monkeypatch.setattr(CUDAAccelerator, "available", lambda self: False)
+    monkeypatch.setattr(torch._C, "has_lapack", True)
+    with pytest.raises(
+        PlacementError, match=r"cpu: d3 needs about 99\.2 GiB, above --memory-budget 64"
+    ):
+        place(D3, "cpu", D3_PARAMETERS, 64)
+    placement = place(D3, "cpu", D3_PARAMETERS, 64, dtype="bfloat16")
+    assert placement.estimated_bytes / GIB == pytest.approx(55.45, abs=0.01)
 
 
 def test_a_bf16_resident_family_counts_its_bf16_linear_weights_on_gpus():

@@ -35,10 +35,12 @@ CPU_TORCH_PINS = {
     "tools/docker/Dockerfile.extproc": r"ARG TORCH_CPU=torch==(\S+)",
     "tools/make/model-runtime.mk": r"MODEL_RUNTIME_TORCH \?= torch==(\S+)",
 }
+# One FP32 reference for every CPU (--dtype auto), and BF16 ones per CPU class (--dtype bfloat16).
 CPU_REFERENCES = {
     "cpu",
-    "cpu:x86_64:avx512:bf16_native",
-    "cpu:x86_64:avx2:bf16_emulated",
+    "cpu@bfloat16",
+    "cpu:x86_64:avx512:bf16_native@bfloat16",
+    "cpu:x86_64:avx2:bf16_emulated@bfloat16",
 }
 
 QUESTIONS = {
@@ -73,7 +75,7 @@ def test_the_card_lists_images_and_their_limits(d3_runtime):
     assert card["question_types"] == ["choice", "noul", "score"]
     assert card["limits"]["image_max_pixels"] == img.MAX_PIXELS
     assert card["limits"]["image_max_bytes"] == img.MAX_IMAGE_BYTES
-    assert card["dtype"] == "bf16/fp32-readout"
+    assert card["dtype"] == "fp32"
 
 
 def test_answers_follow_the_released_runtime(d3_runtime):
@@ -669,10 +671,11 @@ def test_every_model_records_goldens_and_kernel_choices(model):
 
 
 def test_cpu_references_are_recorded_with_the_pinned_pytorch():
-    """D3 computes in BF16 on CPU, where a new PyTorch can move its answers past the CPU tolerance.
+    """A new PyTorch can move D3's CPU answers past the CPU tolerance.
 
-    2.10.0 to 2.14.1 did (docs/records/d3-cpu-goldens-pytorch-2.14.md), so a
-    PyTorch bump re-records these references with ``tools/golden_answers.py``.
+    2.10.0 to 2.14.1 moved its BF16 ones (docs/records/d3-cpu-goldens-pytorch-2.14.md),
+    so a PyTorch bump re-records these references, FP32 (``auto``) and BF16
+    (``@bfloat16``), with ``tools/golden_answers.py``.
     """
     pins = {}
     for path, pattern in CPU_TORCH_PINS.items():
@@ -689,7 +692,8 @@ def test_cpu_references_are_recorded_with_the_pinned_pytorch():
         versions = recorded[model.repo_id].get("torch", {})
         for key in model.golden_answers:
             version = versions.get(key, "no PyTorch recorded")
-            if key.split(":")[0] == "cpu" and version.split("+")[0] != pinned:
+            device_class = key.split("@")[0].split(":")[0]
+            if device_class == "cpu" and version.split("+")[0] != pinned:
                 stale.append(f"{model.repo_id} {key}: {version}")
     assert not stale, f"CPU references not recorded with PyTorch {pinned}: {stale}"
 

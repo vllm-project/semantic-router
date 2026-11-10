@@ -3,51 +3,51 @@
   "answers": {
    "cpu": {
     "difficulty": {
-     "confidence": 0.8214131946282642,
+     "confidence": 0.8216258868550839,
      "legend": {
       "0": "Trivial",
       "1": "Moderate",
       "2": "Hard"
      },
      "probabilities": {
-      "0": 0.10941164492246473,
-      "1": 0.8809421297521761,
-      "2": 0.00964622532535911
+      "0": 0.10874835634716991,
+      "1": 0.8810839245700559,
+      "2": 0.010167719082774165
      },
-     "score": 0.9002345804028944,
+     "score": 0.9014193627356042,
      "type": "score"
     },
     "domain": {
      "choice": "code",
-     "confidence": 0.9988539940581527,
+     "confidence": 0.9988309662763599,
      "probabilities": {
-      "code": 0.9992359960387684,
-      "math": 0.0004422816892438896,
-      "other": 0.0003217222719877031
+      "code": 0.99922064418424,
+      "math": 0.00045213619994132517,
+      "other": 0.0003272196158187488
      },
      "type": "choice"
     },
     "image_colour": {
      "choice": "other",
-     "confidence": 0.8466497240340032,
+     "confidence": 0.8541656567443275,
      "probabilities": {
-      "blue": 0.01663251776875459,
-      "green": 0.07815353557811391,
-      "other": 0.8849872930255024,
-      "red": 0.020226653627629106
+      "blue": 0.0150933389709891,
+      "green": 0.07353594297939428,
+      "other": 0.8906242425582457,
+      "red": 0.020746475491370993
      },
      "type": "choice"
     },
     "image_photo": {
-     "noul": 0.009866635842125885,
+     "noul": 0.00840271300319764,
      "type": "noul"
     },
     "reasoning": {
-     "noul": 0.8111176490783691,
+     "noul": 0.8093934179752085,
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx2:bf16_emulated": {
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": {
     "difficulty": {
      "confidence": 0.8191804689291049,
      "legend": {
@@ -93,7 +93,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native": {
+   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+    "difficulty": {
+     "confidence": 0.8214131946282642,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.10941164492246473,
+      "1": 0.8809421297521761,
+      "2": 0.00964622532535911
+     },
+     "score": 0.9002345804028944,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9988539940581527,
+     "probabilities": {
+      "code": 0.9992359960387684,
+      "math": 0.0004422816892438896,
+      "other": 0.0003217222719877031
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.8466497240340032,
+     "probabilities": {
+      "blue": 0.01663251776875459,
+      "green": 0.07815353557811391,
+      "other": 0.8849872930255024,
+      "red": 0.020226653627629106
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.009866635842125885,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.8111176490783691,
+     "type": "noul"
+    }
+   },
+   "cpu@bfloat16": {
     "difficulty": {
      "confidence": 0.8214131946282642,
      "legend": {
@@ -189,59 +235,60 @@
   "revision": "cbff3a3cb0b074b6585fe9f747b9f9f5557a0e75",
   "torch": {
    "cpu": "2.14.1+cpu",
-   "cpu:x86_64:avx2:bf16_emulated": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native": "2.14.1+cpu"
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu@bfloat16": "2.14.1+cpu"
   }
  },
  "vllm-sr/d3-edge": {
   "answers": {
    "cpu": {
     "difficulty": {
-     "confidence": 0.7140624038875103,
+     "confidence": 0.7119005028244426,
      "legend": {
       "0": "Trivial",
       "1": "Moderate",
       "2": "Hard"
      },
      "probabilities": {
-      "0": 0.8439145684242249,
-      "1": 0.12154579907655716,
-      "2": 0.03453963249921799
+      "0": 0.8424791035136012,
+      "1": 0.12297546152242589,
+      "2": 0.034545434963972846
      },
-     "score": 0.19062506407499313,
+     "score": 0.19206633145037158,
      "type": "score"
     },
     "domain": {
      "choice": "code",
-     "confidence": 0.8598406859359444,
+     "confidence": 0.8628883695713273,
      "probabilities": {
-      "code": 0.9065604572906297,
-      "math": 0.00010389424738926481,
-      "other": 0.09333564846198099
+      "code": 0.9085922463808849,
+      "math": 9.944674412127164e-05,
+      "other": 0.09130830687499383
      },
      "type": "choice"
     },
     "image_colour": {
      "choice": "other",
-     "confidence": 0.49952127989442624,
+     "confidence": 0.47926120607105416,
      "probabilities": {
-      "blue": 0.011882966529866099,
-      "green": 0.33914548896315533,
-      "other": 0.6246409599208197,
-      "red": 0.024330584586158856
+      "blue": 0.011262919292255818,
+      "green": 0.3566865774856793,
+      "other": 0.6094459045532906,
+      "red": 0.022604598668774272
      },
      "type": "choice"
     },
     "image_photo": {
-     "noul": 0.027942552746198286,
+     "noul": 0.027693224709755604,
      "type": "noul"
     },
     "reasoning": {
-     "noul": 0.06375101398679656,
+     "noul": 0.06404077625031612,
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx2:bf16_emulated": {
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": {
     "difficulty": {
      "confidence": 0.7136749678378922,
      "legend": {
@@ -287,7 +334,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native": {
+   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+    "difficulty": {
+     "confidence": 0.7140624038875103,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.8439145684242249,
+      "1": 0.12154579907655716,
+      "2": 0.03453963249921799
+     },
+     "score": 0.19062506407499313,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.8598406859359444,
+     "probabilities": {
+      "code": 0.9065604572906297,
+      "math": 0.00010389424738926481,
+      "other": 0.09333564846198099
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.49952127989442624,
+     "probabilities": {
+      "blue": 0.011882966529866099,
+      "green": 0.33914548896315533,
+      "other": 0.6246409599208197,
+      "red": 0.024330584586158856
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.027942552746198286,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.06375101398679656,
+     "type": "noul"
+    }
+   },
+   "cpu@bfloat16": {
     "difficulty": {
      "confidence": 0.7140624038875103,
      "legend": {
@@ -429,59 +522,60 @@
   "revision": "18d61df78684675463af9ae732872478845c5a79",
   "torch": {
    "cpu": "2.14.1+cpu",
-   "cpu:x86_64:avx2:bf16_emulated": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native": "2.14.1+cpu"
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu@bfloat16": "2.14.1+cpu"
   }
  },
  "vllm-sr/d3-flash": {
   "answers": {
    "cpu": {
     "difficulty": {
-     "confidence": 0.8108517727937418,
+     "confidence": 0.8091586803846831,
      "legend": {
       "0": "Trivial",
       "1": "Moderate",
       "2": "Hard"
      },
      "probabilities": {
-      "0": 0.10313027275256609,
-      "1": 0.8739011818624944,
-      "2": 0.02296854538493942
+      "0": 0.10369812677856884,
+      "1": 0.8727724535897887,
+      "2": 0.02352941963164244
      },
-     "score": 0.9198382726323733,
+     "score": 0.9198312928530736,
      "type": "score"
     },
     "domain": {
      "choice": "code",
-     "confidence": 0.9870827464890328,
+     "confidence": 0.9871705014685829,
      "probabilities": {
-      "code": 0.9913884976593553,
-      "math": 0.002676218975315343,
-      "other": 0.005935283365329367
+      "code": 0.9914470009790552,
+      "math": 0.002674358975367907,
+      "other": 0.005878640045576879
      },
      "type": "choice"
     },
     "image_colour": {
      "choice": "other",
-     "confidence": 0.763483528205087,
+     "confidence": 0.7588031700180342,
      "probabilities": {
-      "blue": 0.022235527964840577,
-      "green": 0.12469772135128139,
-      "other": 0.8226126461538152,
-      "red": 0.030454104530062774
+      "blue": 0.02086846270318927,
+      "green": 0.12588804514729818,
+      "other": 0.8191023775135257,
+      "red": 0.034141114635986874
      },
      "type": "choice"
     },
     "image_photo": {
-     "noul": 0.015110639433079229,
+     "noul": 0.015941435560256813,
      "type": "noul"
     },
     "reasoning": {
-     "noul": 0.38895273705894384,
+     "noul": 0.3918497147604908,
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx2:bf16_emulated": {
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": {
     "difficulty": {
      "confidence": 0.8070808210830115,
      "legend": {
@@ -527,7 +621,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native": {
+   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+    "difficulty": {
+     "confidence": 0.8108517727937418,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.10313027275256609,
+      "1": 0.8739011818624944,
+      "2": 0.02296854538493942
+     },
+     "score": 0.9198382726323733,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9870827464890328,
+     "probabilities": {
+      "code": 0.9913884976593553,
+      "math": 0.002676218975315343,
+      "other": 0.005935283365329367
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.763483528205087,
+     "probabilities": {
+      "blue": 0.022235527964840577,
+      "green": 0.12469772135128139,
+      "other": 0.8226126461538152,
+      "red": 0.030454104530062774
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.015110639433079229,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.38895273705894384,
+     "type": "noul"
+    }
+   },
+   "cpu@bfloat16": {
     "difficulty": {
      "confidence": 0.8108517727937418,
      "legend": {
@@ -623,59 +763,60 @@
   "revision": "521525effa79469d899a570726547dd7f00da3af",
   "torch": {
    "cpu": "2.14.1+cpu",
-   "cpu:x86_64:avx2:bf16_emulated": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native": "2.14.1+cpu"
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu@bfloat16": "2.14.1+cpu"
   }
  },
  "vllm-sr/d3-lite": {
   "answers": {
    "cpu": {
     "difficulty": {
-     "confidence": 0.53260061735962,
+     "confidence": 0.5335779952565467,
      "legend": {
       "0": "Trivial",
       "1": "Moderate",
       "2": "Hard"
      },
      "probabilities": {
-      "0": 0.7152516129409113,
-      "1": 0.25789718569125736,
-      "2": 0.026851201367831323
+      "0": 0.715549009483563,
+      "1": 0.25795397787057184,
+      "2": 0.026497012645865164
      },
-     "score": 0.31159958842692,
+     "score": 0.31094800316230214,
      "type": "score"
     },
     "domain": {
      "choice": "code",
-     "confidence": 0.981642291868849,
+     "confidence": 0.9818040986958877,
      "probabilities": {
-      "code": 0.987761527912566,
-      "math": 0.0005651041457278242,
-      "other": 0.011673367941706187
+      "code": 0.9878693991305919,
+      "math": 0.0005692700261976564,
+      "other": 0.011561330843210404
      },
      "type": "choice"
     },
     "image_colour": {
      "choice": "green",
-     "confidence": 0.5725630428135422,
+     "confidence": 0.5629246353511119,
      "probabilities": {
-      "blue": 0.013467524652211823,
-      "green": 0.6794222821101567,
-      "other": 0.24631931713548993,
-      "red": 0.06079087610214161
+      "blue": 0.013675555486492817,
+      "green": 0.6721934765133339,
+      "other": 0.24991625152228739,
+      "red": 0.0642147164778858
      },
      "type": "choice"
     },
     "image_photo": {
-     "noul": 0.02082783530934992,
+     "noul": 0.020624133998091498,
      "type": "noul"
     },
     "reasoning": {
-     "noul": 0.04589422334182591,
+     "noul": 0.04632213928960542,
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx2:bf16_emulated": {
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": {
     "difficulty": {
      "confidence": 0.5299599727246167,
      "legend": {
@@ -721,7 +862,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native": {
+   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+    "difficulty": {
+     "confidence": 0.53260061735962,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.7152516129409113,
+      "1": 0.25789718569125736,
+      "2": 0.026851201367831323
+     },
+     "score": 0.31159958842692,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.981642291868849,
+     "probabilities": {
+      "code": 0.987761527912566,
+      "math": 0.0005651041457278242,
+      "other": 0.011673367941706187
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "green",
+     "confidence": 0.5725630428135422,
+     "probabilities": {
+      "blue": 0.013467524652211823,
+      "green": 0.6794222821101567,
+      "other": 0.24631931713548993,
+      "red": 0.06079087610214161
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.02082783530934992,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.04589422334182591,
+     "type": "noul"
+    }
+   },
+   "cpu@bfloat16": {
     "difficulty": {
      "confidence": 0.53260061735962,
      "legend": {
@@ -817,59 +1004,60 @@
   "revision": "a8d25a91ef75552803f7009d25b7bd435991abd9",
   "torch": {
    "cpu": "2.14.1+cpu",
-   "cpu:x86_64:avx2:bf16_emulated": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native": "2.14.1+cpu"
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu@bfloat16": "2.14.1+cpu"
   }
  },
  "vllm-sr/d3-mini": {
   "answers": {
    "cpu": {
     "difficulty": {
-     "confidence": 0.681414109650585,
+     "confidence": 0.6795903050208565,
      "legend": {
       "0": "Trivial",
       "1": "Moderate",
       "2": "Hard"
      },
      "probabilities": {
-      "0": 0.20336224347072157,
-      "1": 0.7876094064337233,
-      "2": 0.009028350095555047
+      "0": 0.2044478981939912,
+      "1": 0.786393536680571,
+      "2": 0.009158565125437824
      },
-     "score": 0.8056661066248334,
+     "score": 0.8047106669314467,
      "type": "score"
     },
     "domain": {
      "choice": "code",
-     "confidence": 0.9949010470911357,
+     "confidence": 0.9949866263556749,
      "probabilities": {
-      "code": 0.9966006980607572,
-      "math": 0.002865849914510217,
-      "other": 0.0005334520247325044
+      "code": 0.9966577509037834,
+      "math": 0.0028075180629279508,
+      "other": 0.000534731033288649
      },
      "type": "choice"
     },
     "image_colour": {
      "choice": "other",
-     "confidence": 0.4639001204481395,
+     "confidence": 0.48777637880499086,
      "probabilities": {
-      "blue": 0.06542371469344573,
-      "green": 0.3142728928471557,
-      "other": 0.5979250903361046,
-      "red": 0.022378302123293923
+      "blue": 0.07167421454892454,
+      "green": 0.29050684678664246,
+      "other": 0.6158322841037431,
+      "red": 0.021986654560689833
      },
      "type": "choice"
     },
     "image_photo": {
-     "noul": 0.0824507611624783,
+     "noul": 0.07468221503530924,
      "type": "noul"
     },
     "reasoning": {
-     "noul": 0.3910111966427804,
+     "noul": 0.39162109469238204,
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx2:bf16_emulated": {
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": {
     "difficulty": {
      "confidence": 0.6772689343895375,
      "legend": {
@@ -915,7 +1103,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native": {
+   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+    "difficulty": {
+     "confidence": 0.681414109650585,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.20336224347072157,
+      "1": 0.7876094064337233,
+      "2": 0.009028350095555047
+     },
+     "score": 0.8056661066248334,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9949010470911357,
+     "probabilities": {
+      "code": 0.9966006980607572,
+      "math": 0.002865849914510217,
+      "other": 0.0005334520247325044
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.4639001204481395,
+     "probabilities": {
+      "blue": 0.06542371469344573,
+      "green": 0.3142728928471557,
+      "other": 0.5979250903361046,
+      "red": 0.022378302123293923
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.0824507611624783,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.3910111966427804,
+     "type": "noul"
+    }
+   },
+   "cpu@bfloat16": {
     "difficulty": {
      "confidence": 0.681414109650585,
      "legend": {
@@ -1103,59 +1337,60 @@
   "revision": "a475367de0d8133a3c1a2a0dc12303d89cfa2ab4",
   "torch": {
    "cpu": "2.14.1+cpu",
-   "cpu:x86_64:avx2:bf16_emulated": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native": "2.14.1+cpu"
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu@bfloat16": "2.14.1+cpu"
   }
  },
  "vllm-sr/d3-nano": {
   "answers": {
    "cpu": {
     "difficulty": {
-     "confidence": 0.3446695427906742,
+     "confidence": 0.3467240731786616,
      "legend": {
       "0": "Trivial",
       "1": "Moderate",
       "2": "Hard"
      },
      "probabilities": {
-      "0": 0.4309314151207785,
-      "1": 0.5631130285271161,
-      "2": 0.0059555563521053985
+      "0": 0.42956935399514845,
+      "1": 0.5644827154524411,
+      "2": 0.005947930552410421
      },
-     "score": 0.5750241412313268,
+     "score": 0.576378576557262,
      "type": "score"
     },
     "domain": {
      "choice": "code",
-     "confidence": 0.9937768256391674,
+     "confidence": 0.9935864556662671,
      "probabilities": {
-      "code": 0.9958512170927782,
-      "math": 0.0008213093465134345,
-      "other": 0.0033274735607083375
+      "code": 0.9957243037775115,
+      "math": 0.0008618947323782027,
+      "other": 0.0034138014901102854
      },
      "type": "choice"
     },
     "image_colour": {
      "choice": "other",
-     "confidence": 0.6060497550804222,
+     "confidence": 0.5491748281013836,
      "probabilities": {
-      "blue": 0.010441989404514669,
-      "green": 0.2787832257423574,
-      "other": 0.7045373163103167,
-      "red": 0.006237468542811233
+      "blue": 0.009766430184720681,
+      "green": 0.3227615817223944,
+      "other": 0.6618811210760377,
+      "red": 0.0055908670168472304
      },
      "type": "choice"
     },
     "image_photo": {
-     "noul": 0.0020783313563453973,
+     "noul": 0.0020843310873249602,
      "type": "noul"
     },
     "reasoning": {
-     "noul": 0.06419295072555542,
+     "noul": 0.06202650789319582,
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx2:bf16_emulated": {
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": {
     "difficulty": {
      "confidence": 0.3444742121635789,
      "legend": {
@@ -1201,7 +1436,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native": {
+   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+    "difficulty": {
+     "confidence": 0.3446695427906742,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.4309314151207785,
+      "1": 0.5631130285271161,
+      "2": 0.0059555563521053985
+     },
+     "score": 0.5750241412313268,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9937768256391674,
+     "probabilities": {
+      "code": 0.9958512170927782,
+      "math": 0.0008213093465134345,
+      "other": 0.0033274735607083375
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.6060497550804222,
+     "probabilities": {
+      "blue": 0.010441989404514669,
+      "green": 0.2787832257423574,
+      "other": 0.7045373163103167,
+      "red": 0.006237468542811233
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.0020783313563453973,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.06419295072555542,
+     "type": "noul"
+    }
+   },
+   "cpu@bfloat16": {
     "difficulty": {
      "confidence": 0.3446695427906742,
      "legend": {
@@ -1297,59 +1578,60 @@
   "revision": "3aeb1c22a5632aac72353c36b3d0111c40e7dbf4",
   "torch": {
    "cpu": "2.14.1+cpu",
-   "cpu:x86_64:avx2:bf16_emulated": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native": "2.14.1+cpu"
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu@bfloat16": "2.14.1+cpu"
   }
  },
  "vllm-sr/d3-turbo": {
   "answers": {
    "cpu": {
     "difficulty": {
-     "confidence": 0.8453487249107529,
+     "confidence": 0.8443218596167212,
      "legend": {
       "0": "Trivial",
       "1": "Moderate",
       "2": "Hard"
      },
      "probabilities": {
-      "0": 0.09646041543074245,
-      "1": 0.8968991499405019,
-      "2": 0.006640434628755626
+      "0": 0.09721170771360486,
+      "1": 0.8962145730778142,
+      "2": 0.006573719208580935
      },
-     "score": 0.9101800191980132,
+     "score": 0.909362011494976,
      "type": "score"
     },
     "domain": {
      "choice": "code",
-     "confidence": 0.9990580687844237,
+     "confidence": 0.9990713436070285,
      "probabilities": {
-      "code": 0.9993720458562825,
-      "math": 0.00020201656637271103,
-      "other": 0.0004259375773448331
+      "code": 0.999380895738019,
+      "math": 0.00019973372319859498,
+      "other": 0.0004193705387824251
      },
      "type": "choice"
     },
     "image_colour": {
      "choice": "other",
-     "confidence": 0.8922188886946699,
+     "confidence": 0.898859044704086,
      "probabilities": {
-      "blue": 0.02482216555213069,
-      "green": 0.04448088478062944,
-      "other": 0.9191641665210024,
-      "red": 0.011532783146237496
+      "blue": 0.023391655107075155,
+      "green": 0.040970598102985666,
+      "other": 0.9241442835280644,
+      "red": 0.011493463261874708
      },
      "type": "choice"
     },
     "image_photo": {
-     "noul": 0.002523519004750289,
+     "noul": 0.002707054167148501,
      "type": "noul"
     },
     "reasoning": {
-     "noul": 0.6544087529182434,
+     "noul": 0.6509521409585434,
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx2:bf16_emulated": {
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": {
     "difficulty": {
      "confidence": 0.8454241169108303,
      "legend": {
@@ -1395,7 +1677,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native": {
+   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+    "difficulty": {
+     "confidence": 0.8453487249107529,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.09646041543074245,
+      "1": 0.8968991499405019,
+      "2": 0.006640434628755626
+     },
+     "score": 0.9101800191980132,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9990580687844237,
+     "probabilities": {
+      "code": 0.9993720458562825,
+      "math": 0.00020201656637271103,
+      "other": 0.0004259375773448331
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.8922188886946699,
+     "probabilities": {
+      "blue": 0.02482216555213069,
+      "green": 0.04448088478062944,
+      "other": 0.9191641665210024,
+      "red": 0.011532783146237496
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.002523519004750289,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.6544087529182434,
+     "type": "noul"
+    }
+   },
+   "cpu@bfloat16": {
     "difficulty": {
      "confidence": 0.8453487249107529,
      "legend": {
@@ -1491,59 +1819,60 @@
   "revision": "689b3af198baaf6f11110be38a9daa7188dfd8ad",
   "torch": {
    "cpu": "2.14.1+cpu",
-   "cpu:x86_64:avx2:bf16_emulated": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native": "2.14.1+cpu"
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu@bfloat16": "2.14.1+cpu"
   }
  },
  "vllm-sr/d3-ultra": {
   "answers": {
    "cpu": {
     "difficulty": {
-     "confidence": 0.9838519193276162,
+     "confidence": 0.9838903218909336,
      "legend": {
       "0": "Trivial",
       "1": "Moderate",
       "2": "Hard"
      },
      "probabilities": {
-      "0": 0.010115714928442232,
-      "1": 0.9892346128850774,
-      "2": 0.00064967218648035
+      "0": 0.010126782764531057,
+      "1": 0.9892602145939557,
+      "2": 0.0006130026415132348
      },
-     "score": 0.9905339572580382,
+     "score": 0.9904862198769823,
      "type": "score"
     },
     "domain": {
      "choice": "code",
-     "confidence": 0.9999964717040662,
+     "confidence": 0.999996398472235,
      "probabilities": {
-      "code": 0.9999976478027108,
-      "math": 9.063374767515886e-07,
-      "other": 1.4458598123869798e-06
+      "code": 0.99999759898149,
+      "math": 9.095325389180975e-07,
+      "other": 1.491485971099221e-06
      },
      "type": "choice"
     },
     "image_colour": {
      "choice": "other",
-     "confidence": 0.9787805046380992,
+     "confidence": 0.9790653936452937,
      "probabilities": {
-      "blue": 0.0029110486444204843,
-      "green": 0.011560611165732187,
-      "other": 0.9840853784785744,
-      "red": 0.0014429617112729388
+      "blue": 0.0030533684776639187,
+      "green": 0.011173615954007003,
+      "other": 0.9842990452339703,
+      "red": 0.0014739703343588366
      },
      "type": "choice"
     },
     "image_photo": {
-     "noul": 0.003991643286572139,
+     "noul": 0.0035331251557140786,
      "type": "noul"
     },
     "reasoning": {
-     "noul": 0.8945308860856823,
+     "noul": 0.8939152293360588,
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx2:bf16_emulated": {
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": {
     "difficulty": {
      "confidence": 0.9841401136448386,
      "legend": {
@@ -1589,7 +1918,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native": {
+   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+    "difficulty": {
+     "confidence": 0.9838519193276162,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.010115714928442232,
+      "1": 0.9892346128850774,
+      "2": 0.00064967218648035
+     },
+     "score": 0.9905339572580382,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9999964717040662,
+     "probabilities": {
+      "code": 0.9999976478027108,
+      "math": 9.063374767515886e-07,
+      "other": 1.4458598123869798e-06
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.9787805046380992,
+     "probabilities": {
+      "blue": 0.0029110486444204843,
+      "green": 0.011560611165732187,
+      "other": 0.9840853784785744,
+      "red": 0.0014429617112729388
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.003991643286572139,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.8945308860856823,
+     "type": "noul"
+    }
+   },
+   "cpu@bfloat16": {
     "difficulty": {
      "confidence": 0.9838519193276162,
      "legend": {
@@ -1731,8 +2106,9 @@
   "revision": "52ba9e7a00402f9560c7fba8c039608e7ddee7fb",
   "torch": {
    "cpu": "2.14.1+cpu",
-   "cpu:x86_64:avx2:bf16_emulated": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native": "2.14.1+cpu"
+   "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu@bfloat16": "2.14.1+cpu"
   }
  }
 }
