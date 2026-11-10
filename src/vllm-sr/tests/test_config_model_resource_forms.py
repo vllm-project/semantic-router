@@ -31,6 +31,7 @@ CASES = (
     "removed-field-binding-object",
     "removed-field-rule-binding",
     "removed-section-external-models",
+    "removed-section-external-models-empty",
     "removed-field-backend-connection",
     "invalid-value-model-provider",
     "removed-field-runtime-profile",

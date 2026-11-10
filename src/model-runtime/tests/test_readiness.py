@@ -234,6 +234,39 @@ def test_unrecorded_hardware_uses_only_its_legacy_device_class():
     assert result.status == "matched" and result.reference == "cuda:sm_89"
 
 
+def test_a_dtype_is_checked_only_against_the_references_recorded_at_it():
+    """D3: one FP32 ``cpu`` reference at ``auto``; ``--dtype bfloat16`` takes its CPU class's BF16 one."""
+    native = "cpu:x86_64:avx512:bf16_native"
+    golden = decisions_golden(
+        {
+            "cpu": answers(0.5),
+            "cpu@bfloat16": answers(0.7),
+            f"{native}@bfloat16": answers(0.6),
+        }
+    )
+
+    def checked(produced, reference_key, dtype="auto"):
+        return golden_check(
+            answers_of(answers(produced)),
+            decisions,
+            [golden],
+            "cpu",
+            reference_key,
+            dtype,
+        )
+
+    for hardware in (native, "cpu:x86_64:avx2:bf16_emulated"):
+        result = checked(0.5, hardware)
+        assert result.status == "matched" and result.reference == "cpu"
+    assert checked(0.6, native).status == "failed"
+    result = checked(0.6, native, "bfloat16")
+    assert result.status == "matched" and result.reference == f"{native}@bfloat16"
+    result = checked(0.6, "cpu:x86_64:avx2:bf16_emulated", "bfloat16")
+    assert result.status == "failed" and result.reference == "cpu@bfloat16"
+    result = checked(0.5, native, "float16")
+    assert result.status == "unverified" and result.reference is None
+
+
 @pytest.mark.parametrize("capability", ["AVX2", "AVX512", "NO AVX"])
 @pytest.mark.parametrize("bf16", [False, True])
 def test_accelerator_selects_the_cpu_instruction_set_reference(

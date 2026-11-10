@@ -173,6 +173,32 @@ cycle's previous release can't run the current harness, declare a reviewed
 release; resolution refuses a previous release that predates the model runtime
 rather than resetting the comparison.
 
+## Development Publication
+
+A merge to `main` publishes its commit once the `Main` run's automatic checks
+pass. A newer merge cancels an older merge's run while it is still queued or
+qualifying, so when merges land together only the newest publishes, and the
+cancelled commits get no SHA images; the newest run checks their changes too.
+A publication that started always finishes. A publication is:
+
+- the six production images under the commit SHA, multi-arch where the image
+  supports it;
+- `latest`, moved only after that complete set exists and only forward. A
+  slower run of an older commit leaves `latest` on the newer commit's images
+  and keeps only its SHA tags;
+- the development CLI `X.Y.Z.devYYYYMMDDHHMMSS`, which defaults to that
+  commit's images. Its version is the commit time, made strictly increasing
+  along `main`'s first-parent history, so each merge sorts after the one
+  before it;
+- the `0.0.0-latest` chart, when the merge changed the chart.
+
+A push runs no full CPU qualification: the reviewed PR qualified the change,
+and Nightly Qualification qualifies `main` every day. When a push's
+publication fails, re-run its failed jobs; to publish a cancelled commit,
+re-run its run. A re-run neither cancels nor is cancelled by a newer push. Dispatching `Main` with
+`publish: true` qualifies `main`'s head fully and then publishes the same set,
+always including the chart.
+
 ## Commands
 
 ```bash

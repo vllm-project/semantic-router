@@ -42,8 +42,8 @@ END = "<!-- END GENERATED MODEL TABLE -->"
 # The precision ``--dtype auto`` runs per family and backbone, on a GPU and on
 # a CPU (each family's ``DtypePolicy``; website engine-args "Precision").
 PRECISION = {
-    ("decision3", "qwen3_5_text"): ("BF16", "BF16"),
-    ("vela3_d3", "qwen3_5_text"): ("BF16", "BF16"),
+    ("decision3", "qwen3_5_text"): ("BF16", "FP32"),
+    ("vela3_d3", "qwen3_5_text"): ("BF16", "FP32"),
     ("decision2", "qwen3"): ("BF16", "FP32"),
     ("decision2", "qwen3_5_text"): ("BF16", "FP32"),
     ("decision1", "qwen3_5_text"): ("BF16", "FP32"),
@@ -60,7 +60,9 @@ BACKBONES = {
     "ultrabert": "UltraBERT",
 }
 # The device-class and hardware keys of recorded reference answers
-# (``Accelerator.golden_reference``).
+# (``Accelerator.golden_reference``); a reference recorded at another
+# ``--dtype`` than ``auto`` carries it after ``@`` (``readiness.qualified``).
+DTYPES = {"bfloat16": "BF16"}
 DEVICES = {
     "cpu": "CPU",
     "cpu:x86_64:avx2:bf16_emulated": "x86-64 CPU with AVX2 (BF16 emulated)",
@@ -379,8 +381,11 @@ def load_models() -> list[Model]:
             else []
         )
         for key in keys:
-            if key not in DEVICES:
+            device, _, dtype = key.partition("@")
+            if device not in DEVICES:
                 fail(f"{repo}: no label for reference device {key}")
+            if dtype and dtype not in DTYPES:
+                fail(f"{repo}: no label for reference dtype {key}")
         for kind in entry["reduced"].values():
             if kind not in REDUCED:
                 fail(f"{repo}: no text for reduced copy {kind}")
@@ -495,6 +500,16 @@ def deploy_section(model: Model) -> list[str]:
             lines += [
                 "Serve it on a CPU from the CPU image, as `--platform cpu` does: the ROCm",
                 "image's PyTorch has no CPU LAPACK, which this backbone needs there.",
+                "",
+            ]
+        if value == "cpu" and "cpu@bfloat16" in model.references:
+            lines += [
+                f"A CPU computes it in FP32: {gigabytes(model.parameters, 'FP32')} of weights, twice its",
+                "BF16 size. On a CPU that computes BF16 natively (AVX-512 BF16 or AMX) a",
+                "request takes 1.2 to 3.5 times as long as at `--dtype bfloat16`, the larger",
+                "sizes the most; on one that emulates BF16 (AVX2) FP32 is 3 to 6 times",
+                "faster. `--dtype bfloat16` is checked against the BF16 reference of its CPU",
+                "class (see Hardware).",
                 "",
             ]
         lines += ["</TabItem>"]
@@ -641,13 +656,29 @@ def render_page(model: Model) -> str:
         ]
     lines += ["## Hardware", ""]
     if model.references:
+        published = [key for key in model.references if "@" not in key]
         lines += [
             "Each time it loads, the model compares its answers with the reference",
             "answers recorded for its revision. They are recorded for:",
             "",
         ]
-        lines += [f"- {DEVICES[key]} (`{key}`)" for key in model.references]
-        classes = {key.split(":", 1)[0] for key in model.references}
+        lines += [f"- {DEVICES[key]} (`{key}`)" for key in published]
+        for dtype, label in DTYPES.items():
+            others = sorted(
+                (key for key in model.references if key.endswith(f"@{dtype}")),
+                key=lambda key: key.partition("@")[0],
+            )
+            if others:
+                lines += [
+                    "",
+                    f"Served with `--dtype {dtype}`, it compares them with the {label}",
+                    "references recorded for:",
+                    "",
+                ]
+                lines += [
+                    f"- {DEVICES[key.partition('@')[0]]} (`{key}`)" for key in others
+                ]
+        classes = {key.split(":", 1)[0] for key in published}
         missing = [CLASSES[c] for c in CLASSES if c not in classes]
         if any(":" in key for key in model.references):
             lines += [

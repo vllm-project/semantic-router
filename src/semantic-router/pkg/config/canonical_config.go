@@ -454,14 +454,29 @@ func validateCanonicalDecisions(path string, decisions []Decision, aliases map[s
 	return nil
 }
 
+// validateCanonicalDecisionModelRefs checks the models a decision names: its
+// modelRefs and its candidate iterations' models.
 func validateCanonicalDecisionModelRefs(path string, decision Decision, aliases map[string]CanonicalProviderModel, cards map[string]RoutingModel) error {
-	for _, modelRef := range decision.ModelRefs {
+	at := fmt.Sprintf("%s.decisions[%s]", path, decision.Name)
+	if err := validateCanonicalModelRefs(at+".modelRefs", decision.ModelRefs, aliases, cards); err != nil {
+		return err
+	}
+	for i, iteration := range decision.CandidateIterations {
+		if err := validateCanonicalModelRefs(fmt.Sprintf("%s.candidateIterations[%d].models", at, i), iteration.Models, aliases, cards); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateCanonicalModelRefs(path string, refs []ModelRef, aliases map[string]CanonicalProviderModel, cards map[string]RoutingModel) error {
+	for _, modelRef := range refs {
 		if modelRef.Model == "" {
 			continue
 		}
 		if len(aliases) > 0 {
 			if _, ok := aliases[modelRef.Model]; !ok && !aliasLoRAExists(modelRef.Model, aliases, cards) {
-				return fmt.Errorf("%s.decisions[%s].modelRefs[%s] references unknown model %q", path, decision.Name, modelRef.Model, modelRef.Model)
+				return fmt.Errorf("%s[%s] references unknown model %q", path, modelRef.Model, modelRef.Model)
 			}
 		}
 		if modelRef.LoRAName == "" {
@@ -480,7 +495,7 @@ func validateCanonicalDecisionModelRefs(path string, decision Decision, aliases 
 			continue
 		}
 		if !routingModelHasLoRA(card, modelRef.LoRAName) {
-			return fmt.Errorf("%s.decisions[%s].modelRefs[%s].lora_name %q not found in the loras of model card %q", path, decision.Name, modelRef.Model, modelRef.LoRAName, cardID)
+			return fmt.Errorf("%s[%s].lora_name %q not found in the loras of model card %q", path, modelRef.Model, modelRef.LoRAName, cardID)
 		}
 	}
 

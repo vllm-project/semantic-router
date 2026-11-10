@@ -91,7 +91,13 @@ hardware each needs and how to serve one.
 
 ## Precision and hardware
 
-- d3 runs in BF16 on every device, its published precision.
+- d3 runs in BF16 on a GPU, its published precision, and in FP32 on a CPU,
+  where its BF16 answers depend on the CPU's kernels and its FP32 answers do
+  not. FP32 holds twice the bytes of BF16; on a CPU that computes BF16
+  natively it takes 1.2 to 3.5 times the time per request, and on an AVX2 CPU,
+  which emulates BF16, it is the faster one. `--dtype bfloat16` runs BF16 on a
+  CPU, checked against the BF16 reference of its CPU class
+  ([Engine arguments](../../deploy/engine-args.md#precision)).
 - It is validated on AMD Instinct MI300X and MI325X; the model pages list the
   devices whose reference answers are recorded for each revision.
 - The ROCm image's PyTorch has no CPU LAPACK, which the Qwen3.5 backbone needs

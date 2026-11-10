@@ -88,10 +88,11 @@ makes.
 | Vela 2.0 | 0.3B to 9B | choice, noul, score, set, span; trained for the built-in questions | CPU (0.3B) or GPU |
 
 Models differ in the question types they answer. Decision 1.0, 2.0 and 3.0
-return no spans, and vela3-fast answers no `score` question. A rule, judge or
-selector whose question type its deployment does not answer fails to load:
+return no spans, and vela3-fast answers no `score` question. A rule whose
+question type its deployment does not answer fails to load with
 `span_required` for a span question, such as PII detection, and
-`question_type_unsupported` for the other types.
+`question_type_unsupported` for the other types. A judge or selector fails to
+load with a message naming the deployment and the types it answers.
 
 Every model has its own page under
 [Supported models](../../model-runtime/supported-models/overview.md), and the

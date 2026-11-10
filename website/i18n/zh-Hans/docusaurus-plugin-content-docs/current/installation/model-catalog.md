@@ -129,7 +129,7 @@ recipes:
 
 ## 阈值 {#thresholds}
 
-规则未写出的 predicate 来自回答的模型：`vela3-fast` 或 Vela 2.0 各尺寸校准的阈值；其他模型（本地或 `systemone`）没有校准值，使用 0.5（加载时警告指明该规则的 `uncalibrated_preset`）。你写出的 `predicate` 按原值使用。
+规则未写出的 predicate 来自回答的模型：`vela3-fast` 或 Vela 2.0 各尺寸校准的阈值；其他模型（本地或 `systemone`）没有校准值，使用 0.5（加载时警告指明该规则的 `uncalibrated_preset`）。这一默认值适用于 domain、用户反馈、modality 和 PII 规则，以及读取其预设正向选项（`FACT_CHECK_NEEDED`、`unsafe`、`refusal`、`jailbreak`）的规则；其他没有 predicate 的规则以模型自己的选择为准，hallucination 规则以模型自己的 span 阈值为准。你写出的 `predicate` 按原值使用。
 
 ## 准入 {#admission}
 

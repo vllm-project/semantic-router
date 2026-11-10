@@ -119,7 +119,7 @@ d3 家族不回答 span，所以这个示例把 `pii` 和 `hallucination` 留在
 | --- | --- |
 | 规则、绑定或功能引用的每个部署都已声明 | 该名称，以及已声明的名称 |
 | 部署能回答规则的问题类型 | 规则、部署及其能回答的类型 |
-| 需要 span 的规则或插件解析到支持 span 的部署 | `span_required` |
+| 需要 span 的规则或插件解析到支持 span 的部署，或其 `capabilities.presets` 列出相应 `pii` 或 `halu` 预设的部署 | `span_required` |
 | 规则的 `input.image`、`input.video` 或 `input.audio` 能被其部署读取 | `input_modality_unsupported` |
 | 预设在没有校准阈值的情况下被回答 | `uncalibrated_preset`（警告；规则使用 0.5） |
 | 内联写入的密钥（`auth.api_key`、`Authorization` 头） | 密钥应来自 `api_key_env` 或 `api_key_file` |

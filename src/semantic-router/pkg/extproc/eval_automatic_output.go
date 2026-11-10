@@ -54,7 +54,7 @@ func (r *OpenAIRouter) selectAutomaticEvalCandidate(input services.EvalModelSele
 		return evalSelectionUnavailable(err.Error())
 	}
 	if len(demands) == 0 {
-		if len(overflows) > 0 && contextOverflowConfig(ctx) != nil {
+		if len(overflows) > 0 && contextOverflowConfig(r.Config, ctx) != nil {
 			return automaticEvalExecutionRequired(decision, "the rendered input requires configured context compression")
 		}
 		return evalSelectionUnavailable("no candidate has a compatible provider-rendered output budget")
@@ -117,7 +117,7 @@ func automaticEvalRequestLimitation(request *llmprotocol.Request, decision *conf
 	if tools.ActiveSelect() != nil && leavesToolChoiceToModel(request) {
 		return "tool selection requires execution"
 	}
-	if plugin := contextCompression(decision); plugin != nil {
+	if plugin := contextCompression(decision.Plugins); plugin != nil {
 		compression := plugin.Compress
 		if compression.Targets != nil && compression.EffectiveTargetMode(compression.Targets.History) != config.ContextCompressionTargetPreserve && len(request.Messages) > 1 {
 			return "configured history compression is not resolved by automatic output preview"

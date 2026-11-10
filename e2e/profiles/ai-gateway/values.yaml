@@ -153,7 +153,6 @@ config:
                   - presence_penalty
                 max_tokens_limit: 64
                 max_n: 1
-                strip_unknown: true
             - type: header_mutation
               configuration:
                 add:
