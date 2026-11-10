@@ -30,10 +30,10 @@ TLS 终止与集群级 Pod 调度仍由部署环境负责。
 
 ```bash
 # Router：位置参数指定提供路由判断的模型
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --config config.yaml
+vllm-sr serve vllm-sr/vela3-fast --config config.yaml
 
 # Engine：共享 Frontend 和运行时，不启用 Chat 路由
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
+vllm-sr serve vllm-sr/d3-edge -e
 ```
 
 `serve` 默认启动 Router；只传模型不会改变模式。`--engine` 可缩写为 `-e`。

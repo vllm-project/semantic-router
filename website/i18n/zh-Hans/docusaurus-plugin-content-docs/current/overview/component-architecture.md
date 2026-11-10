@@ -43,7 +43,7 @@ vLLM-SR 由请求前端、决策引擎和模型运行时组成。可以把它们
 
 ```bash
 # MODEL 覆盖默认决策模型；对话后端仍在 YAML 中配置。
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --config config.yaml
+vllm-sr serve vllm-sr/vela3-fast --config config.yaml
 ```
 
 - 配方路由和对话后端处于启用状态。
@@ -54,7 +54,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --config config.yaml
 
 ```bash
 # 不需要对话后端或路由 YAML。
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine --platform cpu
+vllm-sr serve vllm-sr/d3-edge -e
 ```
 
 - 前端通过 System One API 提供决策模型服务。
@@ -134,7 +134,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine --platform cpu
 在 worker 内部，模型家族定义输入和类型化输出，批次规划器依据部署的引擎参数组织 forward，再由执行引擎和加速器运行。多个问题可以共享一次 forward，但一次 API 调用仍可能需要多次 forward。
 
 ```bash title="在两块 GPU 上运行两个副本"
-vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
+vllm-sr serve vllm-sr/d3-edge -e --platform rocm -dp 2 --device-ids 0,1
 ```
 
 :::warning 数据并行不是分片

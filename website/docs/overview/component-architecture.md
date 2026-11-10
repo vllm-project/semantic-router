@@ -44,7 +44,7 @@ Envoy and ExtProc topology. Click a diagram to open its full-size SVG.
 
 ```bash
 # MODEL overrides the default decision model; chat backends stay in the YAML.
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --config config.yaml
+vllm-sr serve vllm-sr/vela3-fast --config config.yaml
 ```
 
 - Recipe routing and chat backends are active.
@@ -55,7 +55,7 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --config config.yaml
 
 ```bash
 # No chat backend or routing YAML is needed.
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine --platform cpu
+vllm-sr serve vllm-sr/d3-edge -e
 ```
 
 - The frontend serves the decision model through the System One API.
@@ -155,7 +155,7 @@ execution engine and accelerator run them. Several questions can share one
 forward, but one API call can still need several.
 
 ```bash title="Two replicas on two GPUs"
-vllm-sr serve vllm-sr/Vela-2.0-4B -e --platform rocm -dp 2 --device-ids 0,1
+vllm-sr serve vllm-sr/d3-edge -e --platform rocm -dp 2 --device-ids 0,1
 ```
 
 :::warning Data parallel is not sharding

@@ -28,10 +28,10 @@ backends or a routing recipe:
 
 ```bash
 # Router: the positional model supplies routing judgments
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --config config.yaml
+vllm-sr serve vllm-sr/vela3-fast --config config.yaml
 
 # Engine: the same frontend and runtime, without Chat routing
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
+vllm-sr serve vllm-sr/d3-edge -e
 ```
 
 `serve` defaults to Router; a positional model does not change the mode.
