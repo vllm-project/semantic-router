@@ -5,6 +5,7 @@ import os
 import sys
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from typing import ClassVar
 from unittest import mock
@@ -160,6 +161,49 @@ class HealthDevice(unittest.TestCase):
 
     def test_an_older_runtime_has_no_device(self):
         self.assertIsNone(self.health_with({"data": [{"id": "m"}]})["device"])
+
+
+class HostedRuntimeTest(unittest.TestCase):
+    """A hosted System One API: no /health, a /v1/models listing, and questions that name a model."""
+
+    def test_a_404_health_with_listed_models_is_ready(self):
+        def urlopen(request, timeout):
+            if request.full_url.endswith("/health"):
+                raise urllib.error.HTTPError(
+                    request.full_url, 404, "Not Found", {}, None
+                )
+            body = json.dumps({"data": [{"id": "vllm-sr/vela3-flash"}]}).encode()
+            return contextlib.nullcontext(io.BytesIO(body))
+
+        with mock.patch.object(runtime.OPENER, "open", urlopen):
+            out = runtime.health("https://sr.example/v1/decisions")
+        self.assertTrue(out["ready"])
+        self.assertEqual(out["model"], "vllm-sr/vela3-flash")
+
+    def test_a_404_health_without_models_is_not_ready(self):
+        def urlopen(request, timeout):
+            raise urllib.error.HTTPError(request.full_url, 404, "Not Found", {}, None)
+
+        with mock.patch.object(runtime.OPENER, "open", urlopen):
+            self.assertFalse(runtime.health("https://sr.example/v1/decisions")["ready"])
+
+    def test_a_question_names_the_model_only_when_one_is_set(self):
+        sent = []
+
+        def urlopen(request, timeout):
+            sent.append(json.loads(request.data))
+            raise urllib.error.HTTPError(request.full_url, 500, "x", {}, None)
+
+        with mock.patch.object(runtime.OPENER, "open", urlopen):
+            runtime.ask(
+                "https://sr.example/v1/decisions",
+                "guard",
+                "ls",
+                model="vllm-sr/vela3-flash",
+            )
+            runtime.ask("https://sr.example/v1/decisions", "guard", "ls")
+        self.assertEqual(sent[0]["model"], "vllm-sr/vela3-flash")
+        self.assertNotIn("model", sent[1])
 
 
 if __name__ == "__main__":

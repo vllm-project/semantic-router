@@ -155,6 +155,11 @@ with what it read. The redact card names the host, and `/vsr` marks a token sent
 as unencrypted. A remote runtime's token is kept in Claude Code's secure storage
 (`/plugin configure vsr@vllm-sr`), never in `settings.json`.
 
+A hosted System One API, such as `https://app.vllm-sr.ai/v1/decisions`, serves several decision
+models and answers only a question that names one: set `runtimeModel` to one it lists at
+`/v1/models`, and its API key as the token. It has no `/health`, so vSR checks that it is up
+through `/v1/models` instead.
+
 Redact hides names, emails, phone numbers, card numbers, IP addresses, addresses, ID numbers and
 secrets (API keys, tokens, private keys, passwords in config files and connection URLs). It waits
 `redactWait` (3 s by default) for the decision model, and shield then waits `shieldWait` (2 s by
@@ -182,6 +187,7 @@ skill writes them, and `/plugin configure vsr@vllm-sr` edits them. The ones you 
 | `guardWait` | `1`, `2`, `3` (seconds) or `done` | `3` |
 | `logo` | `auto`, `image`, `smooth`, `blocks`, `off` | `auto` |
 | `logPath` | an absolute path or one under `~/`; empty turns the log off | `~/.claude/vsr/decisions.jsonl` |
+| `runtimeModel` | the model a remote runtime that serves several answers with; empty for one that serves one | empty |
 
 A log path under `~/.claude/` follows `CLAUDE_CONFIG_DIR` when it is set. A relative path is refused
 (it would put every project's commands into each project), and a file of your own already at the

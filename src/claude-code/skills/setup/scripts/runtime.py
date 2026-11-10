@@ -94,8 +94,11 @@ def health(url: str, token: str | None = None, timeout: float = 3.0) -> dict:
             out[name] = {"error": str(getattr(error, "reason", error))}
         out[f"{name}Ms"] = round((time.perf_counter() - started) * 1000)
     status = out["health"].get("status") if isinstance(out["health"], dict) else None
-    out["ready"] = status == "ready"
     models = out["models"].get("data") if isinstance(out["models"], dict) else None
+    # A hosted System One API has no /health; the models it lists show it is up.
+    out["ready"] = status == "ready" or (
+        out["health"] == {"error": "HTTP 404"} and bool(models)
+    )
     out["model"] = models[0].get("id") if models else out["health"].get("model")
     # vllm-srun names the device the model runs on in /v1/models; older builds leave it out.
     out["device"] = (
@@ -111,10 +114,13 @@ def ask(
     token: str | None = None,
     timeout: float = 30.0,
     thresholds: dict | None = None,
+    model: str | None = None,
 ) -> dict:
     """One decision call for one app's input: its score (and extras) and the latency."""
     state, questions = framed(app, given)
-    body = json.dumps({"state": state, "questions": questions}).encode()
+    body = json.dumps(
+        {**({"model": model} if model else {}), "state": state, "questions": questions}
+    ).encode()
     started = time.perf_counter()
     try:
         request = urllib.request.Request(url, body, _headers(token))
@@ -145,9 +151,14 @@ def slow_note(median: int | None) -> str | None:
     )
 
 
-def time_question(url: str, token: str | None = None, tries: int = 3) -> int | None:
+def time_question(
+    url: str, token: str | None = None, tries: int = 3, model: str | None = None
+) -> int | None:
     """The median time of a short guard question, asked `tries` times; None when it fails."""
-    asked = [ask(url, "guard", "git status", token, timeout=10) for _ in range(tries)]
+    asked = [
+        ask(url, "guard", "git status", token, timeout=10, model=model)
+        for _ in range(tries)
+    ]
     return median_ms(asked)
 
 
@@ -202,7 +213,14 @@ def run_probes(
             continue
         if smoke and not case.get("smoke"):
             continue
-        got = ask(url, case["app"], case["input"], token, thresholds=defaults)
+        got = ask(
+            url,
+            case["app"],
+            case["input"],
+            token,
+            thresholds=defaults,
+            model=thresholds.get("runtimeModel") or None,
+        )
         expected = case.get("measured")
         drift = (
             None
@@ -291,6 +309,10 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "--token-file", help="a file holding the Bearer token (else $SR_RUNTIME_TOKEN)"
     )
+    parser.add_argument(
+        "--model",
+        help="the model to ask, for a runtime that serves several (default: runtimeModel)",
+    )
     parser.add_argument("--apps", help="comma-separated apps to probe (default: all)")
     parser.add_argument("--smoke", action="store_true", help="one probe per app")
     parser.add_argument(
@@ -307,6 +329,8 @@ def main(argv: list[str]) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 2
     url = args.url or options["runtimeUrl"]
+    if args.model:
+        options = {**options, "runtimeModel": args.model}
     if cleartext_remote(url):
         print(
             f"warning: {url} is plain http to another machine, so requests{' and the token' if token else ''} "
