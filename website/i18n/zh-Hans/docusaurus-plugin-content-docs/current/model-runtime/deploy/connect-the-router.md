@@ -114,6 +114,7 @@ global:
 | `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context`、`max_model_len` | 引擎参数：worker 如何合并请求、计算使用的精度，以及 Decision 模型的输入上限。省略它们则使用运行时的默认值。`max_model_len` 适用于没有副本的托管 worker。参见[引擎参数](./engine-args.md)。 |
 | `input` | 用于任务模型：输入的最大 token 数（`max_tokens`），以及更长输入的处理方式（`overflow`：`reject`、`truncate` 或 `window`）。 |
 | `replicas` | 该模型的显式托管 `device` 放置，或附加的 `endpoint`/`model` 放置。只有一个 worker 时省略。 |
+| `outlier_detection` | 副本的请求持续超时时，暂时把它移出分派。见[剔除持续超时的副本](./placement-and-scaling.md#eject-a-replica-that-keeps-timing-out)。 |
 | `endpoint` | 附加到你运行的运行时，而不是启动一个。 |
 | `model` | 附加运行时上模型的 ID，即其 `GET /v1/models` 列出的 ID（默认：部署名称）。 |
 

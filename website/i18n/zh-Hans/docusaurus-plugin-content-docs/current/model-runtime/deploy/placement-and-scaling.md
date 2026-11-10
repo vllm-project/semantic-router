@@ -74,6 +74,32 @@ global:
 - 这个上限不是 GPU 前向计算的并发度：已经在运行的前向计算可能在调用方超时后继续。
 - Inventory 报告期望和就绪的副本数、每个 worker 的就绪状态、进行中的请求和重启次数。降级的池可以通过健康的副本继续服务。
 
+### 剔除持续超时的副本 {#eject-a-replica-that-keeps-timing-out}
+
+前向计算卡住的 worker 可能仍在正常回应 `/health`，所以单靠就绪检查不会把它移出分派。池为每个副本统计连续超出调用方截止时间的请求数，达到 `consecutive_timeouts` 的副本会被剔除。每个字段都可选：
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/Vela-2.0-4B
+        replicas:
+          - device: rocm:0
+          - device: rocm:1
+        outlier_detection:
+          consecutive_timeouts: 3     # default 3; 0 turns ejection off
+          base_ejection_ms: 30000     # default 30000
+          max_ejection_ms: 300000     # default ten times the base, at most an hour
+          max_ejection_percent: 50    # default 50
+```
+
+- 取消、被拒的请求和失败既不计数也不清零；一次成功的回答让计数从头开始。
+- 被剔除的副本离开分派 `base_ejection_ms`，Router 立即探测它的 `/health`。冷却结束后副本回到分派；它再次超时会被剔除两倍的时长，最长 `max_ejection_ms`。一次成功的回答立即让它回来并从头计。
+- 剔除从不拿走正在服务的副本。只有在该副本开始超时之后另一个就绪副本回答过，才会剔除它，所以在每个副本上都慢的模型会保留全部副本。同时被剔除的副本最多占 `max_ejection_percent`（总可以剔除一个），只有一个 worker 的部署从不剔除它。如果没有别的副本能接请求，被剔除的副本会重新服务。
+- Inventory 把被剔除的副本报告为 `ejected` 状态。Router 记录 `replica_ejected`、`replica_readmitted` 日志，以及上述规则拦下剔除时的 `replica_ejection_withheld`，并在[指标](../reference/metrics.md)中统计剔除和恢复次数。
+
 ## CPU 线程 {#cpu-threads}
 
 每个托管的 CPU worker 默认使用 Router 可用 CPU 预算的一半（向下取整），至少 1 个线程，最多 16 个。要为每个 worker 选择不同的线程数，请在启动栈之前设置一个正整数：

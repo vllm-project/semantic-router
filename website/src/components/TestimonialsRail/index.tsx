@@ -125,9 +125,9 @@ export default function TestimonialsRail(): JSX.Element {
                   aria-hidden={active ? undefined : true}
                 >
                   <span className={styles.cardLabel}>{voice.label}</span>
-                  {voice.kind === 'quote'
-                    ? <q className={styles.statement}>{voice.statement}</q>
-                    : <p className={clsx(styles.statement, styles.perspective)}>{voice.statement}</p>}
+                  <p className={styles.statement}>
+                    {voice.kind === 'quote' ? <q>{voice.statement}</q> : voice.statement}
+                  </p>
                   <footer className={styles.person}>
                     <img className={styles.portrait} src={voice.image} alt="" width={56} height={56} loading="lazy" decoding="async" />
                     <span className={styles.identity}>
