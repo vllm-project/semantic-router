@@ -160,8 +160,12 @@ hardware reference is recorded, it takes precedence over the device-class
 reference: for example `cpu:x86_64:avx2:bf16_emulated` or `cuda:sm_89`. Other
 hardware keeps using the existing `cpu`, `rocm` or `cuda` reference when available.
 CPU keys use PyTorch's selected instruction set and native or emulated BF16
-capability. A mismatching selected reference still fails startup; the runtime
-does not try another reference or relax the tolerance.
+capability. A model served at another `--dtype` than `auto` is checked only
+against references recorded at that dtype, whose keys end in it: Decision 3.0
+at `--dtype bfloat16` on a CPU selects, for example,
+`cpu:x86_64:avx2:bf16_emulated@bfloat16`. A mismatching selected reference
+still fails startup; the runtime does not try another reference or relax the
+tolerance.
 
 `unverified` means the model serves, but the runtime can't vouch for that:
 

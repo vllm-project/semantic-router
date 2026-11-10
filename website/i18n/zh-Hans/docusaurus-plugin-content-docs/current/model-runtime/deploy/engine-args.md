@@ -40,15 +40,17 @@ is_mtpe: true
 
 ## 精度 {#precision}
 
-`--dtype auto` 用模型发布时的精度运行，也就是它的就绪检查记录时所用的精度：
+`--dtype auto` 用模型发布时的精度运行，也就是它的就绪检查记录时所用的精度；Decision 3.0 在 CPU 上例外：
 
 | 模型 | GPU 上的 `auto` | CPU 上的 `auto` |
 | --- | --- | --- |
-| Decision 3.0 | BF16 | BF16 |
+| Decision 3.0，以及基于它的 Vela 3.0 尺寸（vela3-lite 及更大） | BF16 | FP32 |
 | Decision 2.0；基于 Qwen3.5 的 Decision 1.0 和 Vela 2.0 | BF16 | FP32 |
 | Vela 1.0 任务模型、embedder 和 reranker，Vela 1.0 Omni，Vela 2.0 0.3B，Decision 1.0 Kai、Lex 和 Route | FP32 | FP32 |
 
-设成其他值时，骨干网络的全部权重都以该 dtype 存放并以它计算，使用参考 kernel。取值等于发布精度时与 `auto` 相同。runtime 启动时照样检查模型对已记录的请求两次回答一致，但记录的参考答案只适用于 `auto`，所以模型的 `golden.status` 是 `unverified`。`float16` 只能在 GPU 上跑，ONNX Runtime 引擎只支持 `auto`。
+Decision 3.0 以 BF16 发布，但在 CPU 上它的 BF16 回答取决于 CPU 的 kernel：带 AMX 的 Intel Xeon 与带 AVX-512 BF16 的 AMD EPYC 的回答最多相差 0.003，AVX2 CPU 最多相差 0.027，都超过了就绪检查在 CPU 上 0.001 的容差。它的 FP32 回答在各类 CPU 上只相差百万分之几，所以 CPU 以 FP32 计算它，一份参考答案就能在所有 CPU 上检查它。FP32 占用的字节是 BF16 的两倍。在原生计算 BF16 的 CPU（AVX-512 BF16 或 AMX）上，一个请求的耗时是 BF16 的 1.2 到 3.5 倍，尺寸越大越明显；在模拟 BF16 的 CPU（AVX2）上，FP32 比 BF16 快三到六倍（[记录](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/d3-cpu-fp32.md)）。`--dtype bfloat16` 则在 CPU 上运行发布时的 BF16，就绪检查随后比对为该类 CPU 记录的 BF16 参考答案。
+
+设成其他值时，骨干网络的全部权重都以该 dtype 存放并以它计算，使用参考 kernel。取值等于 `auto` 的精度时与 `auto` 相同。runtime 启动时照样检查模型对已记录的请求两次回答一致，但只有在该 dtype 下记录的参考答案适用（Decision 3.0 在 CPU 上的 BF16），其他情况下模型的 `golden.status` 是 `unverified`。`float16` 只能在 GPU 上跑，ONNX Runtime 引擎只支持 `auto`。
 
 ## 共享上下文 {#shared-context}
 
