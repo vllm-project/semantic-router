@@ -24,8 +24,8 @@ func TestCanonicalRecipeSignalsRemainIsolated(t *testing.T) {
 	}
 
 	canonical := CanonicalConfigFromRouterConfig(cfg)
-	if len(canonical.Routing.Signals.Keywords) != 1 || canonical.Routing.Signals.Keywords[0].Name != "urgent_keywords" {
-		t.Fatalf("expected the exported top-level routing block to keep only the default profile, got %+v", canonical.Routing.Signals.Keywords)
+	if len(canonical.Recipes[0].Signals.Keywords) != 1 || canonical.Recipes[0].Signals.Keywords[0].Name != "urgent_keywords" {
+		t.Fatalf("expected the exported default recipe to keep only its own keywords, got %+v", canonical.Recipes[0].Signals.Keywords)
 	}
 
 	if got := len(cfg.AllRoutingDecisions()); got != 2 {
@@ -36,22 +36,26 @@ func TestCanonicalRecipeSignalsRemainIsolated(t *testing.T) {
 func TestUsesSignalTypeInRoutingCoversRecipeDecisions(t *testing.T) {
 	contextRecipeYAML := `
 recipes:
+  - name: default
   - name: privacy
-    routing:
-      signals:
-        context:
-          - name: short_context
-            max_tokens: 1K
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: context
-                name: short_context
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    signals:
+      context:
+        - name: short_context
+          max_tokens: 1K
+    decisions:
+      - name: privacy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: context
+              name: short_context
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + contextRecipeYAML))
 	if err != nil {
@@ -167,52 +171,6 @@ func TestReachableRoutingRecipesAlwaysIncludesDefault(t *testing.T) {
 	}
 }
 
-func TestConfigForRecipeKeepsOnlyReferencedKnowledgeBases(t *testing.T) {
-	cfg := &RouterConfig{
-		KnowledgeBases: []KnowledgeBaseConfig{
-			{Name: "privacy_kb"},
-			{Name: "mmlu_kb"},
-		},
-	}
-	recipe := &RoutingRecipe{
-		Name: "privacy",
-		Profile: RoutingProfile{
-			Signals: Signals{KBRules: []KBSignalRule{{KB: "privacy_kb"}}},
-		},
-	}
-
-	scoped := cfg.ConfigForRecipe(recipe)
-	if len(scoped.KnowledgeBases) != 1 || scoped.KnowledgeBases[0].Name != "privacy_kb" {
-		t.Fatalf("expected only the recipe-referenced KB, got %+v", scoped.KnowledgeBases)
-	}
-	if len(cfg.KnowledgeBases) != 2 {
-		t.Fatalf("scoping mutated the shared KB catalog: %+v", cfg.KnowledgeBases)
-	}
-}
-
-func TestConfigForRecipeKeepsKnowledgeBasesUsedByProjectionMetrics(t *testing.T) {
-	cfg := &RouterConfig{
-		KnowledgeBases: []KnowledgeBaseConfig{{Name: "quality_kb"}},
-	}
-	recipe := &RoutingRecipe{
-		Name: "quality",
-		Profile: RoutingProfile{
-			Projections: Projections{Scores: []ProjectionScore{{
-				Name: "quality_score",
-				Inputs: []ProjectionScoreInput{{
-					Type: ProjectionInputKBMetric,
-					KB:   "quality_kb",
-				}},
-			}}},
-		},
-	}
-
-	scoped := cfg.ConfigForRecipe(recipe)
-	if len(scoped.KnowledgeBases) != 1 || scoped.KnowledgeBases[0].Name != "quality_kb" {
-		t.Fatalf("expected the projection-referenced KB, got %+v", scoped.KnowledgeBases)
-	}
-}
-
 func TestRoutingNamespaceKeyIsCollisionSafe(t *testing.T) {
 	left := RoutingNamespaceKey("a::b", "c")
 	right := RoutingNamespaceKey("a", "b::c")
@@ -229,25 +187,27 @@ func TestRoutingNamespaceKeyIsCollisionSafe(t *testing.T) {
 
 func TestRecipeRoutingStrategyIsValidatedLocally(t *testing.T) {
 	_, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + `
-recipes:
   - name: privacy
-    routing:
-      strategy: random
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: urgent_keywords
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    strategy: random
+    decisions:
+      - name: privacy_route
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: urgent_keywords
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `))
 	if err == nil {
 		t.Fatal("expected an unsupported recipe strategy to fail validation")
 	}
-	if got := err.Error(); !strings.Contains(got, `routing recipe "privacy"`) || !strings.Contains(got, `routing.strategy must be "priority" or "confidence"`) {
+	if got := err.Error(); !strings.Contains(got, `recipes[privacy].strategy must be "priority" or "confidence"`) {
 		t.Fatalf("unexpected validation error: %v", err)
 	}
 }

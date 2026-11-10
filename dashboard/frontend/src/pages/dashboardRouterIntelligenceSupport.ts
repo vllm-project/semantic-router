@@ -46,7 +46,7 @@ export function buildIntelligenceRoutingScopes(config: RouterConfig): Intelligen
     id: scope.id,
     label: scope.label,
     entrypoints: scope.entrypointModelNames,
-    questions: namedItems(scope.routing.signals?.decision).map((signal) => ({
+    questions: namedItems(scope.routing.signals?.systemone).map((signal) => ({
       name: signal.name,
       kind:
         typeof record(signal.question)?.type === 'string'
@@ -54,7 +54,7 @@ export function buildIntelligenceRoutingScopes(config: RouterConfig): Intelligen
           : 'question',
     })),
     signals: Object.entries(scope.routing.signals ?? {})
-      .filter(([type]) => type !== 'decision')
+      .filter(([type]) => type !== 'systemone')
       .map(([type, values]) => ({ type, names: namedItems(values).map(({ name }) => name) }))
       .filter(({ names }) => names.length > 0),
     projections: Object.entries(scope.routing.projections ?? {}).flatMap(([kind, values]) =>

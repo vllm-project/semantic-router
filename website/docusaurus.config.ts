@@ -166,6 +166,100 @@ const config: Config = {
             from: '/blog/introduce-vela',
             to: '/blog/vela-models',
           },
+          {
+            from: [
+              '/docs/next/tutorials/signal/learned/classifier',
+              '/docs/next/tutorials/signal/learned/preference',
+              '/docs/next/tutorials/signal/learned/kb',
+              '/docs/next/tutorials/signal/learned/embedding',
+              '/docs/next/tutorials/signal/learned/decision',
+              '/docs/next/tutorials/signal/learned/systemone',
+              '/docs/next/tutorials/signal/heuristic/action',
+            ],
+            to: '/docs/next/tutorials/signal/systemone',
+          },
+          {
+            from: [
+              '/docs/next/tutorials/signal/learned/reask',
+              '/docs/next/tutorials/signal/heuristic/topic-continuity',
+            ],
+            to: '/docs/next/tutorials/signal/application/turn-relation',
+          },
+          // The application signals moved from signal/learned to
+          // signal/application.
+          ...[
+            'complexity',
+            'domain',
+            'fact-check',
+            'hallucination',
+            'jailbreak',
+            'modality',
+            'pii',
+            'refusal',
+            'safety',
+            'turn-relation',
+            'user-feedback',
+          ].map(signal => ({
+            from: `/docs/next/tutorials/signal/learned/${signal}`,
+            to: `/docs/next/tutorials/signal/application/${signal}`,
+          })),
+          // Pages folded into the System One chapter and the signal pages.
+          {
+            from: '/docs/next/model-runtime/guides/decisions',
+            to: '/docs/next/system-one/overview',
+          },
+          {
+            from: '/docs/next/model-runtime/guides/classify',
+            to: '/docs/next/tutorials/signal/overview',
+          },
+          {
+            from: '/docs/next/model-runtime/guides/pii',
+            to: '/docs/next/tutorials/signal/application/pii',
+          },
+          {
+            from: '/docs/next/model-runtime/guides/hallucination',
+            to: '/docs/next/tutorials/signal/application/hallucination',
+          },
+          {
+            from: '/docs/next/tutorials/global/vela-models',
+            to: '/docs/next/system-one/deployments',
+          },
+          // Removed algorithms: the migration guide lists each rewrite.
+          {
+            from: [
+              '/docs/next/tutorials/algorithm/looper/confidence',
+              '/docs/next/tutorials/algorithm/native/cascade',
+            ],
+            to: '/docs/next/tutorials/algorithm/looper/escalate',
+          },
+          {
+            from: [
+              '/docs/next/tutorials/algorithm/selection/automix',
+              '/docs/next/tutorials/algorithm/selection/hybrid',
+            ],
+            to: '/docs/next/tutorials/algorithm/selection/multi-factor',
+          },
+          {
+            from: [
+              '/docs/next/tutorials/algorithm/selection/prompt',
+              '/docs/next/tutorials/algorithm/selection/router-dc',
+              '/docs/next/tutorials/algorithm/selection/knn',
+              '/docs/next/tutorials/algorithm/selection/kmeans',
+              '/docs/next/tutorials/algorithm/selection/svm',
+              '/docs/next/tutorials/algorithm/selection/mlp',
+              '/docs/next/training/ml-model-selection',
+            ],
+            to: '/docs/next/tutorials/algorithm/selection/systemone',
+          },
+          {
+            from: [
+              '/docs/next/training/classifier-models',
+              '/docs/next/training/mmbert-safety-classifier',
+              '/docs/next/training/multimodal-embeddings',
+              '/docs/next/training/model-catalog',
+            ],
+            to: '/docs/next/training/training-overview',
+          },
           // The model-runtime section exists only in the unreleased (next)
           // docs, and several of these source paths are live v0.4 pages at
           // the root, so these redirects are scoped to /docs/next instead of
@@ -192,8 +286,22 @@ const config: Config = {
             from: [
               '/docs/next/installation/runtime/safety',
               '/docs/next/tutorials/global/safety-models-and-policy',
+              '/docs/next/model-runtime/guides/safety',
             ],
-            to: '/docs/next/model-runtime/guides/safety',
+            to: '/docs/next/tutorials/signal/application/safety',
+          },
+          {
+            from: [
+              '/docs/next/tutorials/plugin/rag',
+              '/docs/next/tutorials/plugin/memory',
+              '/docs/next/tutorials/plugin/context-compression',
+              '/docs/next/model-runtime/guides/rerank',
+            ],
+            to: '/docs/next/tutorials/plugin/context',
+          },
+          {
+            from: '/docs/next/tutorials/plugin/shadow-dispatch',
+            to: '/docs/next/tutorials/plugin/router-replay',
           },
           {
             from: [
@@ -209,6 +317,17 @@ const config: Config = {
           {
             from: '/docs/next/model-runtime/profiles',
             to: '/docs/next/model-runtime/engine-args',
+          },
+          {
+            from: [
+              '/docs/next/tutorials/signal/heuristic/event',
+              '/docs/next/tutorials/signal/heuristic/structure',
+            ],
+            to: '/docs/next/tutorials/signal/heuristic/keyword',
+          },
+          {
+            from: '/docs/next/tutorials/algorithm/selection/decision',
+            to: '/docs/next/tutorials/algorithm/selection/systemone',
           },
           {
             from: '/docs/installation/kubernetes',

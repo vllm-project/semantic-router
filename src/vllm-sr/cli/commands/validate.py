@@ -15,6 +15,7 @@ from cli.router_validation import (
     ROUTER_BINARY_ENV,
     RouterValidationUnavailableError,
     RouterVerdict,
+    with_moving_tag_hint,
 )
 from cli.terminal import echo, error, fields, heading, success
 from cli.validation_error import ValidationError
@@ -31,7 +32,7 @@ def _count_items(value) -> int:
 
 
 def _signal_summary_lines(signals) -> list[str]:
-    """Return non-empty signal summary lines for the canonical v0.3 surface."""
+    """Return non-empty signal summary lines for the canonical v0.5 surface."""
     if not signals:
         return []
 
@@ -130,10 +131,23 @@ def ask_router(
         return None, "the container runtime is not reachable"
 
 
-def router_refusal(verdict: RouterVerdict | None) -> list[ValidationError]:
+def router_refusal(
+    verdict: RouterVerdict | None,
+    name_router: str = "`--image` or `VLLM_SR_IMAGE`",
+    *,
+    pulled: bool = False,
+) -> list[ValidationError]:
+    """The Router's refusal; *name_router* says how this command names another
+    Router, and *pulled* that serve fetched the image in this run."""
     if verdict is None or verdict.valid:
         return []
-    return [ValidationError(f"{verdict.source} refuses it: {verdict.error}")]
+    message = with_moving_tag_hint(
+        f"{verdict.source} refuses it: {verdict.error}",
+        verdict,
+        name_router,
+        pulled=pulled,
+    )
+    return [ValidationError(message)]
 
 
 def router_warnings(verdict: RouterVerdict | None) -> list[ValidationError]:
@@ -152,7 +166,14 @@ def router_check_line(verdict: RouterVerdict | None, unavailable: str, ask: str)
     """
 
     if verdict is not None:
-        return f"  Checked by {verdict.source} as well as the CLI."
+        built = f" (built {verdict.built})" if verdict.pull and verdict.built else ""
+        line = f"  Checked by {verdict.source}{built} as well as the CLI."
+        if verdict.running_router:
+            line += (
+                "\n  This stack's running Router is a different image: "
+                f"{verdict.running_router}."
+            )
+        return line
     if not unavailable:
         return (
             "  Only the CLI's structural checks ran (--offline); the Router "
@@ -221,9 +242,7 @@ def validate_command(
         for line in signal_lines:
             echo(line)
     else:
-        echo(
-            "  Signals: None (catch-all routing is supported; domain categories will auto-generate when needed)"
-        )
+        echo("  Signals: None (catch-all routing is supported)")
 
     for line in _aggregate_projection_summary_lines(routing_profiles):
         echo(line)

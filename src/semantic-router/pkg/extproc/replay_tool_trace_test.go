@@ -201,7 +201,7 @@ func TestBuildReplayRoutingRecordSuppressesRequestTraceWhenMasking(t *testing.T)
 
 	maskingDecision := &config.Decision{Plugins: []config.DecisionPlugin{{
 		Type:          config.DecisionPluginMasking,
-		Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true}),
+		Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "signal": "personal"}),
 	}}}
 
 	// Both paths write through this one builder: the ordinary request path and
@@ -281,10 +281,8 @@ func TestBuildReplayRoutingRecordCapturesToolResultsOnlyWhenOptedIn(t *testing.T
 }
 
 func TestReplayToolResultCaptureIsBoundedByMaxToolTraceBytes(t *testing.T) {
-	yes, limit := true, 5
-	cfg := &config.RouterConfig{RouterReplay: config.RouterReplayConfig{
-		Enabled: true, StoreBackend: "memory", CaptureToolResults: &yes, MaxToolTraceBytes: &limit,
-	}}
+	cfg := withGlobalPlugins(t, &config.RouterConfig{RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"}},
+		replayTestPlugin(map[string]interface{}{"enabled": true, "capture_tool_results": true, "max_tool_trace_bytes": 5}))
 	router := replayRuntimeRouter(t, cfg)
 	ctx := toolResultReplayContext(t, "Sunny, 21C in San Francisco.")
 	router.startRouterReplay(ctx, "vllm-sr/auto", "model-a", "")

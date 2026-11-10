@@ -19,9 +19,18 @@ package vectorstore
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 var _ = Describe("ExtractText", func() {
+	It("should extract every format the config validator accepts", func() {
+		for _, ext := range config.VectorStoreTextFormats {
+			_, err := ExtractText([]byte("{}"), "doc"+ext)
+			Expect(err).NotTo(HaveOccurred(), ext)
+		}
+	})
+
 	Context("with .txt files", func() {
 		It("should return text content as-is", func() {
 			content := []byte("Hello, world!\nSecond line.")

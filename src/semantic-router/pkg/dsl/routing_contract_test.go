@@ -15,7 +15,6 @@ MODEL "math-small" {
   param_size: "3b"
   capabilities: ["math", "chat"]
   tags: ["local", "fast"]
-  modality: "ar"
 }
 
 ROUTE math_route {
@@ -45,7 +44,7 @@ MODEL "math-small" {
     { name: "math-adapter", description: "Improves symbolic math responses" },
   ]
   tags: ["local", "fast"]
-  modality: "ar"
+  modalities: { input: ["text"], output: ["text"] }
 }
 
 ROUTE math_route {
@@ -70,7 +69,7 @@ func assertCompiledTopLevelModelCatalog(t *testing.T, params config.ModelParams)
 	assertStringField(t, "reasoning family", "", params.ReasoningFamily)
 	assertStringField(t, "param_size", "3b", params.ParamSize)
 	assertStringField(t, "description", "Math focused local model", params.Description)
-	assertStringField(t, "modality", "ar", params.Modality)
+	assertLeadingStringSlice(t, "modalities.output", params.Modalities.Output, 1, "text")
 	assertLeadingStringSlice(t, "capabilities", params.Capabilities, 2, "math")
 	assertLeadingStringSlice(t, "tags", params.Tags, 2, "local")
 	if len(params.LoRAs) != 1 || params.LoRAs[0].Name != "math-adapter" {
@@ -128,36 +127,39 @@ ROUTE math_route {
 	}
 
 	yamlText := string(yamlBytes)
-	if !strings.Contains(yamlText, "routing:") {
+	if !strings.Contains(yamlText, "recipes:") {
 		t.Fatalf("expected routing fragment, got:\n%s", yamlText)
 	}
-	if strings.Contains(yamlText, "providers:") || strings.Contains(yamlText, "global:") {
+	if strings.Contains(yamlText, "backend_refs:") || strings.Contains(yamlText, "global:") {
 		t.Fatalf("routing fragment leaked static config:\n%s", yamlText)
 	}
 
 	var doc struct {
-		Routing config.CanonicalRouting `yaml:"routing"`
+		Providers struct {
+			Models []config.CanonicalProviderModel `yaml:"models"`
+		} `yaml:"providers"`
+		Recipes []config.CanonicalRecipe `yaml:"recipes"`
 	}
 	if err := yaml.Unmarshal(yamlBytes, &doc); err != nil {
 		t.Fatalf("unmarshal routing fragment: %v", err)
 	}
-	if len(doc.Routing.ModelCards) != 1 {
-		t.Fatalf("expected 1 routing model, got %d", len(doc.Routing.ModelCards))
+	if len(doc.Providers.Models) != 1 {
+		t.Fatalf("expected 1 model with facts, got %d", len(doc.Providers.Models))
 	}
-	if doc.Routing.ModelCards[0].Name != "math-small" {
-		t.Fatalf("routing model = %q", doc.Routing.ModelCards[0].Name)
+	if doc.Providers.Models[0].Name != "math-small" {
+		t.Fatalf("model = %q", doc.Providers.Models[0].Name)
 	}
-	if len(doc.Routing.ModelCards[0].LoRAs) != 1 || doc.Routing.ModelCards[0].LoRAs[0].Name != "math-adapter" {
-		t.Fatalf("routing model loras = %#v", doc.Routing.ModelCards[0].LoRAs)
+	if len(doc.Providers.Models[0].LoRAs) != 1 || doc.Providers.Models[0].LoRAs[0].Name != "math-adapter" {
+		t.Fatalf("model loras = %#v", doc.Providers.Models[0].LoRAs)
 	}
-	if doc.Routing.Decisions[0].ModelRefs[0].LoRAName != "math-adapter" {
-		t.Fatalf("decision lora_name = %q", doc.Routing.Decisions[0].ModelRefs[0].LoRAName)
+	if doc.Recipes[0].Decisions[0].ModelRefs[0].LoRAName != "math-adapter" {
+		t.Fatalf("decision lora_name = %q", doc.Recipes[0].Decisions[0].ModelRefs[0].LoRAName)
 	}
 }
 
 func TestDecompileRoutingIgnoresStaticCanonicalSections(t *testing.T) {
 	configYAML := `
-version: v0.3
+version: v0.5
 listeners:
   - name: main
     address: 0.0.0.0
@@ -176,31 +178,30 @@ providers:
           provider: vllm
           endpoint: http://localhost:8000/v1
           protocol: http
-          api_key_env: OPENAI_API_KEY
-routing:
-  modelCards:
-    - name: math-small
+          auth: {api_key_env: OPENAI_API_KEY}
       param_size: 3b
       capabilities: [math, chat]
       loras:
         - name: math-adapter
           description: Improves symbolic math responses
       tags: [local, fast]
-  signals:
-    domains:
-      - name: math
-        description: math
-  decisions:
-    - name: math_route
-      priority: 10
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: math
-      modelRefs:
-        - model: math-small
-          lora_name: math-adapter
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: math
+          description: math
+    decisions:
+      - name: math_route
+        priority: 10
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: math
+        modelRefs:
+          - model: math-small
+            lora_name: math-adapter
 global:
   router:
     strategy: priority

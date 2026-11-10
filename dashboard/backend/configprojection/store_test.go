@@ -129,7 +129,7 @@ func TestRefreshFailureMarksStaleWithoutMutatingDeployments(t *testing.T) {
 	err = store.RefreshFromCanonical(RefreshInput{
 		Version:   "20260101-130000",
 		Source:    SourceManual,
-		YAMLBytes: []byte("routing: ["),
+		YAMLBytes: []byte("recipes: ["),
 	})
 	if err == nil {
 		t.Fatal("expected invalid refresh to fail")

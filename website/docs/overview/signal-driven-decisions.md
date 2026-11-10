@@ -69,7 +69,7 @@ After a decision matches, its algorithm handles the candidate set.
 
 - **Selection algorithms** choose one candidate using a fixed order, semantic
   fit, latency, feedback, or another bounded policy.
-- **Looper algorithms** coordinate several calls through a cascade, panel,
+- **Looper algorithms** coordinate several calls through an escalation, panel,
   multi-round process, or workflow.
 
 When a decision has one candidate, the simplest static behavior is often the

@@ -32,14 +32,14 @@ describe('DSL string literals written by Builder mutations', () => {
 
   it('keeps an unchanged signal save parseable', () => {
     const source = [
-      'SIGNAL structure numbered_steps {',
+      'SIGNAL keyword numbered_steps {',
       String.raw`  description: "Prompts with numbered list items such as \"1. ...\""`,
       '}',
       '',
     ].join('\n')
 
     expect(
-      updateSignal(source, 'structure', 'numbered_steps', {
+      updateSignal(source, 'keyword', 'numbered_steps', {
         description: 'Prompts with numbered list items such as "1. ..."',
       }),
     ).toBe(source)
@@ -97,10 +97,10 @@ describe('Builder mutations of blocks whose headers contain DSL strings', () => 
       }),
     ).toContain('ROUTE "coding help" {\n  PRIORITY 2')
     expect(
-      updatePlugin('PLUGIN "team cache" semantic_cache {\n}\n', 'team cache', 'semantic_cache', {
+      updatePlugin('PLUGIN "team cache" response_cache {\n}\n', 'team cache', 'response_cache', {
         enabled: true,
       }),
-    ).toBe('PLUGIN "team cache" semantic_cache {\n  enabled: true\n}\n')
+    ).toBe('PLUGIN "team cache" response_cache {\n  enabled: true\n}\n')
   })
 
   it('quotes route plugin references whose names need quotes', () => {
@@ -110,13 +110,13 @@ describe('Builder mutations of blocks whose headers contain DSL strings', () => 
       plugins: [
         { name: 'team cache' },
         { name: 'team guard', fields: { enabled: true } },
-        { name: 'semantic_cache' },
+        { name: 'response_cache' },
       ],
     })
 
     expect(updated).toContain('  PLUGIN "team cache"\n')
     expect(updated).toContain('  PLUGIN "team guard" {\n    enabled: true\n  }\n')
-    expect(updated).toContain('  PLUGIN semantic_cache\n')
+    expect(updated).toContain('  PLUGIN response_cache\n')
   })
 
   it('writes names that are DSL identifiers without quotes', () => {
@@ -125,8 +125,8 @@ describe('Builder mutations of blocks whose headers contain DSL strings', () => 
         keywords: ['urgent'],
       }),
     ).toBe('SIGNAL keyword urgent-requests {\n  keywords: ["urgent"]\n}\n')
-    expect(updateModel('MODEL qwen3-8b {\n}\n', 'qwen3-8b', { modality: 'text' })).toBe(
-      'MODEL qwen3-8b {\n  modality: "text"\n}\n',
+    expect(updateModel('MODEL qwen3-8b {\n}\n', 'qwen3-8b', { param_size: '8B' })).toBe(
+      'MODEL qwen3-8b {\n  param_size: "8B"\n}\n',
     )
   })
 })

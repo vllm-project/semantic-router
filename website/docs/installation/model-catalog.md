@@ -1,13 +1,13 @@
 ---
 title: Model catalog reference
 sidebar_label: Model catalog reference
-description: Every field of global.model_catalog.deployments, the providers and what each answers, bindings, embeddings, reranking, resolution order, thresholds and admission.
+description: Every field of global.model_catalog.deployments, the providers and what each answers, bindings, embeddings, resolution order, thresholds and admission.
 ---
 
 # Model catalog reference
 
 `global.model_catalog` declares every model the Router asks: the models that
-answer routing signals, embedding models and rerankers. Request routing
+answer routing signals and embedding models. Request routing
 targets, the models that answer users, stay in
 [`providers.models`](model-configuration.md).
 [Choose a model for a signal](choose-a-model-for-a-signal.md) explains which
@@ -22,22 +22,22 @@ API the Router speaks to it.
 | --- | --- | --- |
 | `model_runtime` | The built-in model runtime: managed (the Router starts it) or attached (`endpoint` set) | Anything its model card serves |
 | `systemone` | `POST <endpoint>` and `GET <endpoint>/models` of a System One API | Every question-style signal and selector |
-| `classify` | `POST <endpoint>/classify` | `domain`, `jailbreak`, `pii`, `hallucination`, classifier rules, safety rules and hazard parts, complexity rules |
-| `openai_chat` | `POST <endpoint>/chat/completions` | `jailbreak`, `hallucination`, `preference`, classifier rules |
+| `openai_chat` | `POST <endpoint>/chat/completions` | The memory query rewrite (`global.stores.memory.query_rewrite`) |
 | `openai_embeddings` | `POST <endpoint>/embeddings` | Embeddings |
-| `rerank` | `POST <endpoint>/rerank` | RAG reranking |
 
 The Router refuses at load a deployment given a signal it cannot answer.
 
-Four deployments are always declared and start only when something resolves
+Two deployments are always declared and start only when something resolves
 to them:
 
 | Name | Model | Used by default for |
 | --- | --- | --- |
 | `primary` | `vllm-sr/vela3-fast` on CPU | `system.decision_model` |
-| `hazard` | Vela 1.0 Hazard | A safety rule's hazard part |
 | `vela-embedding` | Vela 1.0 Embedding | `embeddings.default` |
-| `omni-nano` | Vela 1.0 Omni Nano | `embeddings.multimodal` |
+
+Embeddings serve recall only: `vela-embedding` starts when the response cache,
+memory or a vector store recalls with it, never for a decision (see
+[Embeddings](../model-runtime/guides/embeddings.md)).
 
 ## Field reference
 
@@ -53,9 +53,6 @@ global:
         device: cpu                      # cpu | auto | cuda | rocm, or cuda:N / rocm:N
         input: {max_tokens: 32768, overflow: reject}  # reject | truncate | window
         public_name: hazard-public       # its name on the inference API
-        operating_point:                 # pins the head's packaged operating point
-          path: operating_point.json
-          sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5
       replicated-example:
         provider: model_runtime
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
@@ -63,7 +60,7 @@ global:
         replicas: [{device: cpu}, {endpoint: http://worker-2.example.com:8100, model: kai}]
       # Connection block: an attached model_runtime and every remote provider.
       remote-example:
-        provider: systemone              # or classify, openai_chat, openai_embeddings, rerank
+        provider: systemone              # or openai_chat, openai_embeddings
         endpoint: https://api.example.com/v1/systemone  # full URL; unix:///abs.sock for an attached runtime
         model: vllm-sr/d3-ultra          # the remote model; an attached runtime's served model
         auth: {header: Authorization, prefix: Bearer, api_key_env: EXAMPLE_KEY}  # or api_key_file: /abs/path
@@ -76,7 +73,8 @@ global:
     system:
       decision_model: {deployment: primary}
     bindings: {pii: primary}
-    embeddings: {default: vela-embedding, multimodal: omni-nano}
+    embeddings:
+      default: {deployment: vela-embedding}  # recall embeds with it
 ```
 
 ### Managed `model_runtime` fields
@@ -89,7 +87,6 @@ global:
 | `input` | The deployment's input budget: `max_tokens`, and `overflow` (`reject`, `truncate` or `window`) |
 | `replicas` | Workers of one logical deployment: each a `device`, or an `endpoint` and `model` of a worker started elsewhere |
 | `public_name` | The deployment's name on the inference API |
-| `operating_point` | `path` and `sha256` of the operating point the head's package serves. A classifier rule answered by this deployment reads independent label scores at its thresholds |
 | `max_num_seqs`, `max_num_batched_tokens`, `batch_window_ms`, `dtype`, `enable_shared_context`, `max_model_len` | Engine arguments; see [engine arguments](../model-runtime/engine-args.md) |
 
 ### Connection block
@@ -99,15 +96,15 @@ deployment with `endpoint`) and every remote provider.
 
 | Field | Meaning | Limits |
 | --- | --- | --- |
-| `endpoint` | The full URL of the API, path prefix included. The Router appends the operation path (`/classify`, `/chat/completions`, `/embeddings`, `/rerank`); a systemone endpoint is the URL questions are posted to. An attached runtime may use `unix:///abs/path.sock` | `http` or `https`; no credentials or fragment |
-| `model` | The model the remote API answers with; on an attached runtime, the served model | Required for `systemone`, `openai_chat`, `openai_embeddings`, `rerank` |
-| `auth` | `header` (default `Authorization`), `prefix` (default `Bearer`; `""` sends the bare key), and exactly one of `api_key_env` or `api_key_file` (an absolute path, read on each call so a rotated key applies) | A key is never written in the configuration |
+| `endpoint` | The full URL of the API, path prefix included. The Router appends the operation path (`/chat/completions`, `/embeddings`); a systemone endpoint is the URL questions are posted to. An attached runtime may use `unix:///abs/path.sock` | `http` or `https`; no credentials or fragment |
+| `model` | The model the remote API answers with; on an attached runtime, the served model | Required for `systemone`, `openai_chat`, `openai_embeddings` |
+| `auth` | `header` (default `Authorization`), `prefix` (default `Bearer`; `""` sends the bare key), and exactly one of `api_key_env` or `api_key_file` (an absolute path, read on each call so a rotated key applies), or `credential: delegated`: each call made for a client request carries the credential the authenticator issued that user ([Security Hardening](security-hardening#delegate-the-users-credential-to-an-upstream)) | A key is never written in the configuration; `credential: delegated` takes no key, and not on `model_runtime` |
 | `headers` | Further non-secret headers | `Authorization`, `Proxy-Authorization`, `X-Api-Key`, `Api-Key`, `Ocp-Apim-Subscription-Key`, `Cookie` and the `auth` header are refused |
 | `timeout_ms` | Bound of one attempt | systemone ≤ 60000; others ≤ 300000 |
 | `max_retries` | Transport retries after the first attempt, within the caller's deadline | 0–10; not on an attached runtime |
 | `tls` | `ca_file`, `server_name`, `cert_file` and `key_file` (a client certificate), `insecure_skip_verify` | `https` only; files are absolute paths |
 | `limits` | `max_request_bytes`, `max_response_bytes` | Not on an attached runtime |
-| `capabilities` | What a remote model answers when its API lists nothing: `question_types` and `presets` (systemone), `dimensions` (openai_embeddings) | |
+| `capabilities` | The remote model's facts, when its API lists nothing: `question_types`, `presets` and `modalities` (systemone); `dimensions` and `modalities` (openai_embeddings: `text`, `image`, `audio`) | An embedding deployment recall uses embeds `text` |
 | `generation` | `max_tokens`, `temperature` and `reasoning` (`{family, use_reasoning, reasoning_effort}`, where `family` names a built-in reasoning family) of an `openai_chat` deployment's completions | `max_tokens` ≤ 32768; `temperature` 0–2; `reasoning` needs `family` and `use_reasoning` |
 
 Redirects are refused, so a credential never follows a redirect to another
@@ -120,53 +117,49 @@ global:
   model_catalog:
     deployments:
       local-vela: {provider: model_runtime, artifact: vllm-sr/vela3-fast, device: cpu}
-    bindings:            # every recipe
+    bindings: # every recipe
       pii: local-vela
-routing:
-  model_bindings:        # this routing profile; recipes[].routing.model_bindings for one recipe
-    domain: d3-remote
+recipes:
+  - name: default
+    model_bindings: # this routing profile; recipes[].model_bindings for one recipe
+      domain: d3-remote
 ```
 
-Binding keys are the signal types whose rules share one answer: `domain`,
-`jailbreak`, `pii`, `fact_check`, `user_feedback`, `modality`,
-`hallucination`, `preference` and `reask`. Rules that ask their own question
-write `deployment:` on the rule: `routing.signals.decision[]`,
-`classifiers[]`, `safety[]` and `safety[].hazard`, `complexity[]`, and
-`algorithm.decision` of a decision. One remote score drives every complexity
-rule, so complexity rules answered by a `classify` deployment name the same
-one.
+Binding keys are the application signal types: `domain`, `fact_check`,
+`user_feedback`, `jailbreak`, `safety`, `pii`, `hallucination`, `refusal`,
+`turn_relation`, `complexity` and `modality`. A binding answers the rules of
+its type that name no deployment; a rule writes `deployment:` to ask another.
+`recipes[].signals.systemone[]` rules and `algorithm.systemone` of a decision
+write `deployment:` too. The `jailbreak`, `pii` and `hallucination` bindings
+also choose the model behind `response_guard` and `masking`, which read those
+signals' rules.
 
-A binding can also be an object, to select a head of a multi-head
-`model_runtime` deployment: `pii: {deployment: local-vela, head: pii}`. An
-operating point is pinned on the deployment, with `operating_point`.
+A binding names a deployment and nothing else (`pii: primary`).
 
 Resolution, for every signal: the rule's `deployment`, then the recipe's
 binding, then the global binding, then `system.decision_model` for a
-question-style signal. Embeddings resolve through `embeddings.default`, or,
-in a routing profile that embeds with its own model, through its
-`model_bindings.embedding`; reranking through the `rag` plugin's
-`rerank.deployment`; and a hazard part through its own `deployment`, else
-`hazard`.
+question-style signal. Embeddings answer no signal: recall embeds with
+`embeddings.default`, or with the deployment a store's or a RAG source's
+`embedding` block names.
 
 ## Thresholds
 
-A module threshold you do not write comes from the model that answers: the
-calibrated value on a built-in model's card; 0.5 for a `systemone` model, which
-publishes none (the load warns `uncalibrated_threshold`); otherwise the Vela 1.0
-defaults. A `threshold` you write is used as written.
+A rule's predicate you do not write comes from the model that answers: the
+threshold calibrated for `vela3-fast` or a Vela 2.0 size; 0.5 for any other
+model, local or `systemone`, which has none (the load warns
+`uncalibrated_preset`, naming the rule). A `predicate` you write is used as
+written.
 
 ## Admission
 
-`global.model_catalog.admission` bounds concurrent calls. A key is a
-deployment name, for a gate the deployment's users share, or a signal type
-(`jailbreak`, `domain`, `pii`, `fact_check`, `hallucination`,
-`user_feedback`, `safety`, `hazard`), for that signal's own gate.
+`global.model_catalog.admission` bounds concurrent calls. A key is a declared
+deployment's name, and its gate is shared by every user of that deployment.
 
 ```yaml
 global:
   model_catalog:
     admission:
-      jailbreak: {max_concurrency: 4, max_queue: 64, queue_timeout_ms: 250, on_overflow: shed}
+      local-vela: {max_concurrency: 4, max_queue: 64, queue_timeout_ms: 250, on_overflow: shed}
       d3-remote: {max_concurrency: 16}
 ```
 
@@ -185,74 +178,40 @@ global:
         auth: {api_key_env: EMBEDDING_API_KEY}
         timeout_ms: 5000
         max_retries: 2
-        capabilities: {dimensions: 1024}
+        capabilities: {dimensions: 1024, modalities: [text]}
     embeddings:
-      default: remote-embed        # multimodal: <name> for multimodal embeddings
+      default: {deployment: remote-embed}
 ```
 
 The Router posts to `https://embedding.example.com/v1/embeddings`: the
 operation path is appended to the endpoint's path, never assembled from a host
 and port.
 
-### R2. Attached reranker, named where it is used
+### R3. Remote decision model for jailbreak and hallucination
 
-```yaml title="r2-attached-reranker"
+```yaml title="r3-remote-judge"
 global:
   model_catalog:
     deployments:
-      document-ranker:
-        provider: model_runtime          # a model runtime running elsewhere (attached)
-        endpoint: https://ranker.example.com:8100
-        model: vela-reranker
-        auth: {api_key_env: RANKER_KEY}
-        tls: {ca_file: /etc/ssl/internal-ca.pem}
-        timeout_ms: 2000
-routing:
-  decisions:
-    - name: rag
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: vectorstore
-            rerank: {deployment: document-ranker, top_k: 3, layer: 22, dimension: 768}
-```
-
-`layer` and `dimension` select an early exit of a model runtime reranker. A
-remote reranking API is a `rerank` deployment, which answers at its own depth,
-so its `rerank` block writes only `deployment` and `top_k`.
-
-### R3. Remote classifier as the jailbreak guard, and a chat model as a judge
-
-```yaml title="r3-classify-and-chat"
-global:
-  model_catalog:
-    deployments:
-      guard:
-        provider: classify               # POST <endpoint>/classify
-        endpoint: https://guard.example.com
-        auth: {api_key_env: GUARD_KEY}
-        timeout_ms: 5000
-        limits: {max_response_bytes: 1048576}
-      chat-judge:
-        provider: openai_chat            # chat completions used as a classifier or judge
-        endpoint: https://llm.example.com/v1
-        model: gpt-4.1-mini
+      d3-judge:
+        provider: systemone
+        endpoint: https://judge.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
         auth: {api_key_env: JUDGE_KEY}
-        generation: {max_tokens: 256, temperature: 0}
-routing:
-  model_bindings:
-    jailbreak: guard
-  signals:
-    classifiers:
-      - name: tool-risk
-        deployment: chat-judge
-        labels: [SAFE, RISKY]
-        instructions: Choose RISKY only for destructive or irreversible tool operations.
+        timeout_ms: 5000
+recipes:
+  - name: default
+    model_bindings:
+      jailbreak: d3-judge # request- and response-stage rules
+      hallucination: d3-judge
 ```
 
-The provider decides how the Router talks to the model; no role, adapter or
-contract is written.
+Every `jailbreak` and `hallucination` rule of this scope asks `d3-judge`; the
+other signals stay on `primary`. A binding names only the deployment: the
+signal decides the question, the provider how the Router asks it. A
+hallucination rule asks a span question, so its deployment must answer spans;
+a `systemone` deployment that lists `capabilities.question_types` must include
+`span`.
 
 ### R4. System One behind a gateway with its own auth header
 
@@ -321,7 +280,8 @@ global:
 
 `providers.models` stays a separate concept: the models that answer users,
 which routing chooses among. Only the connection shape (`endpoint`, `auth`,
-`headers`) is shared. A backend reads its key from `auth.api_key_env`. A
+`headers`) is shared. A backend reads its key from `auth.api_key_env`, or
+takes the requesting user's with `auth.credential: delegated`. A
 deployment, the decision model included, is never a routing target and never
 appears in `/v1/models`. The native System One API answers for one only under
 its `public_name`, or through a native alias such as `native-d3` that names it.

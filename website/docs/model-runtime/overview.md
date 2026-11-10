@@ -1,14 +1,15 @@
 ---
 title: Model runtime
 sidebar_label: Overview
-description: The models that classify, protect, embed and route your requests run in the built-in model runtime. Start here.
+description: The decision model and the embedding model the Router asks run in the built-in model runtime. Start here.
 ---
 
 # Model runtime
 
-The **built-in model runtime** serves the decision, classifier, embedding,
-reranking, and hallucination models used by routing features. It can run them
-as managed workers or attach to independently operated workers. Features bound
+The **built-in model runtime** serves the models routing features ask: the
+[decision model](../system-one/overview), which answers every System One
+question, and the embedding model recall features use. It can run them as
+managed workers or attach to independently operated workers. Features bound
 to a [remote service](../installation/runtime/external) use that service
 instead.
 
@@ -46,14 +47,8 @@ unscanned policy.
 
 | Task | Built-in models | Guide |
 | --- | --- | --- |
-| Pick a domain, detect a need for fact checking, read user feedback, detect the requested output modality | Vela 1.0 Domain, FactCheck, Feedback, Modality | [Classify requests](./guides/classify.md) |
-| Find personal information | Vela 1.0 PII | [Detect PII](./guides/pii.md) |
-| Stop prompt attacks and unsafe content | Vela 1.0 Guard, Safety, Shield, Hazard | [Prompt attacks and unsafe content](./guides/safety.md) |
-| Check an answer against its sources | Vela 1.0 Halu | [Hallucination checks](./guides/hallucination.md) |
-| Semantic cache, memory, RAG, tool selection, embedding signals | Vela 1.0 Embedding, Qwen3-Embedding-0.6B | [Embeddings](./guides/embeddings.md) |
-| Rerank retrieved documents | Vela 1.0 Reranker | [Rerank documents](./guides/rerank.md) |
-| Route on images and audio | Vela 1.0 Omni Nano and Mini | [Images and audio](./guides/multimodal.md) |
-| Ask your own routing questions in plain language | Decision 2.0, Decision 1.0, Vela 2.0 | [Decision models](./guides/decisions.md) |
+| Answer every routing judgment: the application signals, your own questions, the System One selector, guards and judges | Vela 3.0 (vela3-fast by default), Decision 3.0, Decision 2.0 and 1.0, Vela 2.0 | [System One](../system-one/overview) |
+| Recall for the response cache, memory and RAG | Vela 1.0 Embedding, Qwen3-Embedding-0.6B | [Embeddings](./guides/embeddings.md) |
 
 [Choose a model](model-runtime/choose-a-model.md) helps you pick a size and hardware.
 

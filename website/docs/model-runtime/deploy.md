@@ -35,7 +35,7 @@ workers run.
 
 When you turn on a built-in feature, such as a `domain` signal or the semantic
 cache, the router already knows which model it needs. Judgment tasks share the
-decision model; embeddings and the reranker use their own deployments
+decision model; embeddings use their own deployment
 ([Choose a model for a signal](../installation/choose-a-model-for-a-signal.md)).
 To choose CPU or GPU placement, configure the deployment's `device` or
 `replicas` as described below.
@@ -103,7 +103,7 @@ runtime, metadata validation is deferred until a ready model card is observed;
 requests cannot run an unchecked task. See [readiness](#when-a-model-is-not-ready).
 
 A binding under `global.model_catalog.bindings` applies everywhere. A recipe
-can override it under its own `routing.model_bindings`. Rules that ask their
+can override it under its own `recipes[].model_bindings`. Rules that ask their
 own question (`decision`, `classifiers`, `safety`, `complexity`) name their
 deployment on the rule instead; see
 [Choose a model for a signal](../installation/choose-a-model-for-a-signal.md).
@@ -380,7 +380,7 @@ The router serves a configuration only once the models it runs for it have
 loaded. At startup it waits for every deployment it manages: the task models
 its routes use (domain, PII, guard, safety, fact-check, feedback and
 hallucination models, and your own classifiers) and the decision models that
-`decision` signals and the `decision` selection algorithm ask. Signals that an attached runtime answers as the decision model, or through a binding that selects a head, also need model
+`systemone` signals and the `systemone` selection algorithm ask. Signals that an attached runtime answers as the decision model, or through a binding that selects a head, also need model
 metadata during preparation, so start those runtimes before the Router. While it waits, `/health` answers and `/ready` returns `503`;
 `/startup-status` lists each managed deployment with its state (`starting`,
 `loading`, `warming`, `ready`, ...), and `vllm-sr serve` prints the ones it
@@ -390,7 +390,7 @@ is not ready in time, the router does not start; its log and its last startup
 status (`phase: error`) name the deployment and the reason (see
 [Troubleshooting](model-runtime/troubleshooting.md#the-runtime-reports-failed)).
 
-Custom `decision` questions can target an offline attached runtime without
+Custom `systemone` questions can target an offline attached runtime without
 blocking startup. They remain unknown until the current model card is ready
 and supports the required task. Recovery does not bypass capability checks: a
 ready incompatible card rejects the task. Bindings that select a head still
@@ -420,7 +420,7 @@ answer:
 An unknown signal does not match. A decision's `rules.on_unknown` chooses what
 an unknown signal means for that route (`no_match` by default, or
 `fail_request`), and guard and PII modules have `on_error: allow | block`. The
-`decision` selection algorithm falls back to the first model in `modelRefs`.
+`systemone` selection algorithm falls back to the first model in `modelRefs`.
 
 ## Check what is running
 

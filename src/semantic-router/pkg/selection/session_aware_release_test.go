@@ -9,7 +9,6 @@ import (
 
 func sessionAwareReleaseSelector() *SessionAwareSelector {
 	selector := NewSessionAwareSelector(&SessionAwareConfig{
-		BaseMethod:             MethodStatic,
 		MinTurnsBeforeSwitch:   10,
 		SwitchMargin:           0.05,
 		StayBias:               0.10,

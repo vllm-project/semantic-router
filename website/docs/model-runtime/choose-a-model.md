@@ -11,32 +11,18 @@ Face revision, so the same name always loads the same files.
 
 ## By task
 
-| You want to | Default model | Vela 1.0 specialist | Notes |
-| --- | --- | --- | --- |
-| Route by subject (math, law, code, ...) | Vela 3.0 vela3-fast | `vllm-sr/Vela-1.0-Encoder-307M-Domain` | 14 domains |
-| Spot requests that need fact checking | Vela 3.0 vela3-fast | `vllm-sr/Vela-1.0-Encoder-307M-FactCheck` | It flags the need; it does not check facts |
-| Read how a user reacts to the last answer | Vela 3.0 vela3-fast | `vllm-sr/Vela-1.0-Encoder-307M-Feedback` | Satisfied, needs clarification, wrong answer, wants something different, no feedback |
-| Tell text requests from image requests | Vela 3.0 vela3-fast | `vllm-sr/Vela-1.0-Encoder-307M-Modality` | Reads the written request only |
-| Find personal information | Vela 3.0 vela3-fast | `vllm-sr/Vela-1.0-Encoder-307M-PII` | 17 entity types, with exact character spans |
-| Stop prompt injection and jailbreaks | Vela 3.0 vela3-fast | `vllm-sr/Vela-1.0-Encoder-307M-Guard` | |
-| Flag unsafe content | Vela 3.0 vela3-fast | `vllm-sr/Vela-1.0-Encoder-307M-Safety` or `-Shield` | Shield is an alternative safety model |
-| Check an answer against its sources | Vela 3.0 vela3-fast | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | Marks unsupported spans of the answer |
-| Name the kind of risk | The pre-declared `hazard` deployment | `vllm-sr/Vela-1.0-Encoder-307M-Hazard` | 12 independent categories; a safety rule's `hazard` part uses it at the rule's `hazard.threshold` |
-| Embeddings for cache, memory, RAG and tools | `vllm-sr/Vela-1.0-Encoder-307M-Embedding` | | Smaller sizes and fewer layers trade quality for speed |
-| Larger or instructed text embeddings | `Qwen/Qwen3-Embedding-0.6B` | | 0.6B, 1,024 dimensions |
-| Rerank retrieved documents | `vllm-sr/Vela-1.0-Encoder-307M-Reranker` | | |
-| Embed text, images and audio together | `vllm-sr/Vela-1.0-Omni-Nano` or `-Mini` | | 164M / 1.36B; Mini is more accurate and accepts longer text |
-| Ask your own questions in plain language | A decision model (next section) | | 0.6B to 27B |
+| You want to | Default model | Notes |
+| --- | --- | --- |
+| Answer the routing signals, your own questions and every other System One judgment | Vela 3.0 vela3-fast | The [decision model](../system-one/overview); the sizes below trade latency for accuracy |
+| Embeddings for the response cache, memory and RAG | `vllm-sr/Vela-1.0-Encoder-307M-Embedding` | Recall only; smaller sizes and fewer layers trade quality for speed |
+| Larger or instructed text embeddings | `Qwen/Qwen3-Embedding-0.6B` | 0.6B, 1,024 dimensions |
 
-With no model configured, the built-in signals the table gives vela3-fast
-share one deployment, which batches compatible questions within each routing stage
-([below](#built-in-signals)). Hazard, embeddings, reranking and Omni run their own
-models. The Vela 1.0 specialists remain built in, and naming them restores
-them. Each is a 307M encoder that runs well on a CPU: on 16 cores the median
-Vela Domain request takes about 12 ms
-([measurements](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela1-performance.md)).
-Most read up to 32,768 tokens; vela3-fast reads 32,768 for a decision and 8,192 per window for a router question or a span. Each model card and
-`GET /v1/models` list the limits.
+With no model configured, every System One question asks one deployment,
+`primary`, which batches compatible questions within each routing stage
+([below](#built-in-signals)). Recall features embed with `vela-embedding`,
+which starts only when one of them needs it. vela3-fast reads 32,768 tokens
+for a decision or an evidence span and 8,192 per window for a router question
+or another span. Each model card and `GET /v1/models` list the limits.
 
 These input limits do not guarantee latency. Complete long-input embeddings
 and scans can exceed the signal deadline on a CPU with few cores. Measure your
@@ -107,10 +93,9 @@ Decision 1.0 models (`vllm-sr/Decision-1.0-Kai-0.6B`, `-Lex-0.6B`,
 and answer the same kinds of questions. Vela 2.0 (`vllm-sr/Vela-2.0-0.3B`,
 `-0.8B`, `-4B`, `-9B`) adds questions that pick several labels (`set`) or mark
 spans of text (`span`), and the router routes on both. Its router span head
-also answers the [`pii`](tutorials/signal/learned/pii.md#vela-20) and
-[`hallucination`](tutorials/signal/learned/hallucination.md#vela-20) signals,
-which is how a 0.3B deployment replaces the separate PII and Halu
-models. On a CPU, run the 0.3B. On a GPU, the larger sizes read inputs of up to 16,384 tokens
+also answers the [`pii`](../tutorials/signal/application/pii) and
+[`hallucination`](../tutorials/signal/application/hallucination) signals with
+its own ready-made questions. On a CPU, run the 0.3B. On a GPU, the larger sizes read inputs of up to 16,384 tokens
 (the 0.3B reads 8,192): the 0.8B costs the least of them, and the 4B and 9B
 are the most accurate.
 
@@ -127,9 +112,11 @@ questions. Its answers match the package's own runtime bit for bit on a CPU
 The larger Vela 3.0 sizes, `vllm-sr/vela3-lite`, `-mini`, `-flash` and
 `-turbo`, run a pinned Decision 3.0 package (d3-lite, d3-mini, d3-flash and
 d3-turbo at the revisions their adapters were trained on) with gated LoRA
-adapters over it. The router's built-in question IDs run on trained
-adapters; every other `choice`, `noul` and `score` question answers as that
-d3 package does. They also answer `span` questions, routed by label set and
+adapters over it. The router asks its built-in questions under the IDs
+these packages were trained on, so they run on trained adapters, and asks
+harm categories as one `hazard:` Noul per category, which vela3-lite's
+hazard adapter answers; every other `choice`, `noul` and `score` question
+answers as that d3 package does. They also answer `span` questions, routed by label set and
 wording as vela3-fast's are. vela3-turbo answers each request on d3-turbo's
 state-once path first, then the router questions again with their adapter
 on. Requests with images run with every adapter off and refuse span
@@ -143,8 +130,7 @@ first ([parity record](https://github.com/vllm-project/semantic-router/blob/main
 
 ## The built-in signals run on vela3-fast {#built-in-signals}
 
-The domain, prompt guard, safety, fact check, user feedback, modality, PII and
-hallucination signals default to `vllm-sr/vela3-fast`
+Every application signal defaults to `vllm-sr/vela3-fast`
 ([collection](https://huggingface.co/collections/vllm-sr/vela-30-6ad1c430eb1718eb4754edcd)).
 All of them share one deployment, `primary`, which batches compatible questions
 from the same routing stage. One API call can carry several questions; window
@@ -153,21 +139,24 @@ routing stages can make additional calls. They follow the decision model;
 [Choose a model for a signal](../installation/choose-a-model-for-a-signal.md)
 shows how to give one signal, one recipe or one rule another deployment.
 
-- **Questions:** each signal asks the question the model was trained on for it,
-  with the labels of its Vela 1.0 model, so rules and policies read the answer
-  as before. Domain, fact check and feedback run on adapters of their own; the
-  other questions share the router adapter. PII and hallucination use the
-  span-set adapter, so their spans keep exact character offsets.
+- **Questions:** each signal asks its preset in the form the model was trained
+  on, so the domain, fact check, feedback, jailbreak, safety, refusal and
+  modality questions run on trained adapters; the others are answered
+  zero-shot. PII and hallucination use the span-set adapter, so their spans
+  keep exact character offsets. The
+  [support matrix](../system-one/reference#support-matrix) lists every preset.
 - **Precision:** FP32 on every device, as the package was evaluated.
 - **Memory:** the deployment holds about 7 GB once loaded. Give the Router
   12 GiB, the Helm chart's default limit; less can be killed for memory while
   the model loads.
-- **Input:** ordinary routing judgments may truncate to one 8,192-token window.
-  Prompt guard, safety, PII and hallucination require complete input;
+- **Input:** ordinary routing judgments may truncate to one 8,192-token window,
+  and evidence spans to one 32,768-token window.
+  Jailbreak, safety, PII and hallucination require complete input;
   window scans extend coverage up to the scan budget. Incomplete coverage
-  produces an error or unknown result. See [Long inputs](./reference.md#long-inputs).
-- **Thresholds:** the module defaults are calibrated to vela3-fast's scores
-  (below).
+  leaves the answer unknown, except that a `jailbreak` or `pii` rule counts it
+  as a match. See [Long inputs](./reference.md#long-inputs).
+- **Thresholds:** a rule without a `predicate` takes the threshold calibrated
+  for vela3-fast's scores (below).
 
 Measured on the
 [router signal suite](https://huggingface.co/datasets/vllm-sr/router-signal-suite)'s
@@ -181,26 +170,26 @@ measured for it.
 
 ### Thresholds
 
-Each default threshold keeps the Vela 1.0 specialist's operating point on the
-suite's dev split: its false-positive rate, or for a confidence floor its share
-of requests below the floor. The defaults are prompt guard 0.88, domain 0.41,
-PII 0.18, fact check 0.9999 and user feedback 0.47.
+Each calibrated threshold keeps the Vela 1.0 specialist's operating point on
+the suite's dev split: its false-positive rate, or for a confidence floor its
+share of requests below the floor. On vela3-fast they are jailbreak 0.88,
+domain 0.41, PII 0.18, fact check 0.9999, user feedback 0.47, safety 0.52 and
+modality 0.63; a rule without a `predicate` takes them.
 
 - **PII:** the span-set adapter applies its own per-length thresholds before
   it returns a span, so 0.18 accepts every span it returns.
 - **Fact check:** the fact-check adapter's probabilities sit near 0 and 1, so
   its operating points are close to 1.
-- **Other models:** a module that runs any other model and sets no threshold
-  keeps that model's own default.
-- **Your own rule thresholds** (`routing.signals.jailbreak[].threshold` and the
-  like) are yours. The record maps each Vela 1.0 value to vela3-fast: prompt
-  guard 0.3–0.9 → 0.87–0.91, PII → 0.18, safety 0.5 → 0.52, fact check
-  0.65–0.95 → 0.9997–0.9999, modality `confidence_threshold` 0.7 → 0.63.
+- **Other models:** a model without a calibrated threshold for a preset uses
+  0.5, and the configuration load reports an `uncalibrated_preset` warning.
+- **Your own predicates** are yours. The record maps each Vela 1.0 value to
+  vela3-fast: prompt guard 0.3–0.9 → 0.87–0.91, PII → 0.18, safety 0.5 → 0.52,
+  fact check 0.65–0.95 → 0.9997–0.9999, modality 0.7 → 0.63.
 
 ### Vela 2.0 0.3B, the previous default {#vela-20}
 
 Naming `vllm-sr/Vela-2.0-0.3B` as the `primary` deployment's artifact restores
-it, and the module thresholds follow it (prompt guard 0.75, domain 0.28, PII
+it, and the calibrated thresholds follow it (jailbreak 0.75, domain 0.28, PII
 0.01, fact check 0.93, user feedback 0.37).
 When it became the default, the maintainers chose the 0.3B although it missed two goals they had set
 for it ([#4639](https://github.com/vllm-project/semantic-router/issues/4639)):
@@ -227,7 +216,7 @@ CPU. Measured through the Router on the
 
 | Router on 12 CPU cores | p50 | p95 | Requests per second | At concurrency 16 |
 | --- | ---: | ---: | ---: | ---: |
-| Vela 1.0 specialists (restored) | 16 ms | 58 ms | 38.9 | 51.8 |
+| Vela 1.0 specialists (since removed) | 16 ms | 58 ms | 38.9 | 51.8 |
 | Vela 2.0 0.3B (the previous default) | 79 ms | 100 ms | 11.9 | 12.8 |
 
 [#4668](https://github.com/vllm-project/semantic-router/issues/4668) works on the
@@ -235,73 +224,13 @@ CPU latency. On a GPU, the 0.3B answers the same questions
 in about 7 ms at the median on one AMD Instinct MI325X
 ([measurements](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/vela2-performance.md#against-the-vela-10-path)).
 
-### Restore the Vela 1.0 specialists
-
-Declare a deployment of each specialist and bind its signal to it. Module
-thresholds you do not set return to the specialists' defaults with them:
-
-```yaml
-global:
-  model_catalog:
-    deployments:
-      vela-guard: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-Guard, device: cpu}
-      vela-domain: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain, device: cpu}
-      vela-pii: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-PII, device: cpu}
-      vela-factcheck: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-FactCheck, device: cpu}
-      vela-halu: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-Halu, device: cpu}
-      vela-feedback: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-Feedback, device: cpu}
-      vela-modality: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-Modality, device: cpu}
-      vela-safety: {provider: model_runtime, artifact: vllm-sr/Vela-1.0-Encoder-307M-Safety, device: cpu}
-    bindings:
-      jailbreak: vela-guard
-      domain: vela-domain
-      pii: vela-pii
-      fact_check: vela-factcheck
-      hallucination: vela-halu
-      user_feedback: vela-feedback
-      modality: vela-modality
-```
-
-Safety rules each ask their own question, so each names `deployment:
-vela-safety` itself.
-
-To bring back one signal only, declare its deployment and binding alone. User
-feedback, for example:
-
-```yaml
-global:
-  model_catalog:
-    deployments:
-      vela-feedback:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Feedback
-        device: cpu
-    bindings:
-      user_feedback: vela-feedback
-```
-
-| Signal | Vela 1.0 specialist | Where its deployment is named |
-| --- | --- | --- |
-| Domain | `vllm-sr/Vela-1.0-Encoder-307M-Domain` | `bindings.domain` |
-| Prompt guard | `vllm-sr/Vela-1.0-Encoder-307M-Guard` | `bindings.jailbreak` |
-| Safety | `vllm-sr/Vela-1.0-Encoder-307M-Safety` | `deployment` on each safety rule |
-| Fact check | `vllm-sr/Vela-1.0-Encoder-307M-FactCheck` | `bindings.fact_check` |
-| User feedback | `vllm-sr/Vela-1.0-Encoder-307M-Feedback` | `bindings.user_feedback` |
-| PII | `vllm-sr/Vela-1.0-Encoder-307M-PII` | `bindings.pii` |
-| Hallucination | `vllm-sr/Vela-1.0-Encoder-307M-Halu` | `bindings.hallucination` |
-| Modality | `vllm-sr/Vela-1.0-Encoder-307M-Modality` | `bindings.modality` |
-
-Rule thresholds that a configuration sets itself stay where they are. The
-built-in recipes' rules are calibrated to the decision model they pin, so a signal moved back
-takes its Vela 1.0 rule thresholds with it. In `mom-v1` those are prompt guard
-0.5, safety 0.5 and PII 0.7; the record lists every recipe's.
-
-Specialist bindings stay in place when you select another decision model.
+The Vela 1.0 specialist classifiers answer no System One question, so a
+binding cannot name them; every application signal asks a decision model.
 
 ## Choose a size {#choose-a-size}
 
 The decision model is the deployment that answers the Router's judgment tasks
-and [`decision` questions](../tutorials/signal/learned/decision.md) that no
+and [`systemone` questions](../tutorials/signal/systemone) that no
 binding or rule gives another deployment. Declare the deployment once, then
 name its exact key.
 Without an override, the built-in default is vela3-fast. Passing a model
@@ -344,7 +273,6 @@ specialists, and for the latency record's five request signals
 | `Vela-2.0-0.8B` | CPU or GPU | Ahead on domain, prompt guard, safety, modality and hallucination; behind on PII | 40.1 ms | about 3 s |
 | `Vela-2.0-4B` | GPU, about 17 GB | Ahead on every signal but fact check | 55.2 ms | Not measured |
 | `Vela-2.0-9B` | GPU, about 32 GB | Ahead on every signal | 76.5 ms | Not measured |
-| `Vela-1.0` | CPU or GPU | The specialists themselves | n/a | 16 ms |
 
 - **GPU:** one AMD Instinct MI325X, sequential requests. At concurrency 16 a
   GPU serves about 154 (0.3B), 25 (0.8B), 18 (4B) and 13 (9B) requests per
@@ -358,27 +286,25 @@ specialists, and for the latency record's five request signals
 - **Every size** is behind Vela 1.0 on user feedback's fresh file (CrossWOZ)
   and on PII in distribution. Per-signal numbers with intervals are in the
   record.
-- **Decision 1.0 and Decision 2.0** may be the default judgment deployment.
-  Available tasks follow the model's native capabilities; an unsupported task
-  is unavailable regardless of the model family.
-- **Specialists** stay bound to their signals and can run alongside the
-  decision model.
+- **Decision 1.0, Decision 2.0 and Decision 3.0** may be the default judgment
+  deployment. They answer no span questions, so bind `pii` and
+  `hallucination` to a span-capable deployment; see
+  [Span capability](../system-one/concepts#span-capability).
 
-Each size has its own module thresholds, which a module that sets none takes
-when you switch:
+Each size has its own calibrated thresholds, which a rule without a
+`predicate` takes when you switch:
 
-| Decision model | Prompt guard | Domain | PII | Fact check | User feedback |
+| Decision model | Jailbreak | Domain | PII | Fact check | User feedback |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | `vela3-fast` | 0.88 | 0.41 | 0.18 | 0.9999 | 0.47 |
 | `Vela-2.0-0.3B` | 0.75 | 0.28 | 0.01 | 0.93 | 0.37 |
 | `Vela-2.0-0.8B` | 0.71 | 0.38 | 0.07 | 0.994 | 0.34 |
 | `Vela-2.0-4B` | 0.63 | 0.45 | 0.05 | 0.9984 | 0.33 |
 | `Vela-2.0-9B` | 0.42 | 0.46 | 0.14 | 0.998 | 0.35 |
-| `Vela-1.0` | 0.5 | 0.5 | 0.9 | 0.95 | 0.7 |
 
-Rule thresholds a configuration sets, such as the built-in recipes', stay;
-the record maps each to every size (for example `mom-v1`'s `prompt_attack`
-0.75 is 0.71 on the 0.8B, 0.63 on the 4B and 0.42 on the 9B). A binding keeps
+Predicates a configuration sets, such as the built-in recipes', stay; the
+record maps each to every size (for example `mom-v1`'s `prompt_attack` 0.75
+is 0.71 on the 0.8B, 0.63 on the 4B and 0.42 on the 9B). A binding keeps
 that one signal on its own model.
 
 ## Hardware
@@ -423,8 +349,8 @@ has its own process and weight copy; place replicas on suitable devices (see
 
 ## Your own models
 
-Hugging Face ModernBERT and mmBERT classifiers, token classifiers and
-embedding models load the same way as the built-in Vela models: give a Hub
-repository with `revision`, or an absolute path to a local copy. Models of
-another architecture need a family plugin; see
+Hugging Face ModernBERT and mmBERT embedding models load the same way as the
+built-in Vela Embedding: give a Hub repository with `revision`, or an absolute
+path to a local copy. A decision model of another architecture needs a family
+plugin that answers System One questions; see
 [Add your own model family](./plugins.md).

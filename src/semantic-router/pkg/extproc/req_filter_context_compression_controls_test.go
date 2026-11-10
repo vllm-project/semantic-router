@@ -14,8 +14,7 @@ func TestContextCompressionRequestControlsRequireRouteAuthorization(t *testing.T
 	}
 	applyContextCompressionRequestControls(
 		ctx,
-		&config.ContextCompressionPluginConfig{
-			Enabled: true,
+		&config.ContextCompressConfig{
 			RequestControls: &config.ContextCompressionRequestControlsConfig{
 				Enabled: false,
 				Allowed: []string{"bypass", "target"},
@@ -36,8 +35,7 @@ func TestContextCompressionRequestControlsClampAllowedTarget(t *testing.T) {
 	}
 	applyContextCompressionRequestControls(
 		ctx,
-		&config.ContextCompressionPluginConfig{
-			Enabled: true,
+		&config.ContextCompressConfig{
 			RequestControls: &config.ContextCompressionRequestControlsConfig{
 				Enabled:         true,
 				Header:          "x-control",

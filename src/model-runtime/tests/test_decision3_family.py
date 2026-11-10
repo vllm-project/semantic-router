@@ -202,7 +202,7 @@ def test_literal_placeholders_fail_only_image_questions(d3_runtime, png_url):
     assert call(d3_runtime, {"state": state, "questions": QUESTIONS})[0] == 200
 
 
-def test_further_states_carry_their_own_images(d3_runtime, png_url):
+def test_batch_entries_carry_their_own_images(d3_runtime, png_url):
     picture = png_url(128, 96, 4)
     alone = call(
         d3_runtime, {"state": "b", "questions": QUESTIONS, "images": [picture]}
@@ -210,10 +210,9 @@ def test_further_states_carry_their_own_images(d3_runtime, png_url):
     status, body = call(
         d3_runtime,
         {
-            "state": "a",
-            "questions": QUESTIONS,
             "states": {
-                "other": {"state": "b", "questions": QUESTIONS, "images": [picture]}
+                "text": {"state": "a", "questions": QUESTIONS},
+                "other": {"state": "b", "questions": QUESTIONS, "images": [picture]},
             },
         },
     )
@@ -386,7 +385,7 @@ def test_a_text_model_refuses_videos(d3_text_package, mp4_url):
         runtime.stop()
 
 
-def test_further_states_carry_their_own_videos(d3_runtime, mp4_url):
+def test_batch_entries_carry_their_own_videos(d3_runtime, mp4_url):
     clip = mp4_url(64, 48, frames=6, seed=3)
     alone = call(d3_runtime, {"state": "b", "questions": QUESTIONS, "videos": [clip]})[
         1
@@ -394,10 +393,9 @@ def test_further_states_carry_their_own_videos(d3_runtime, mp4_url):
     status, body = call(
         d3_runtime,
         {
-            "state": "a",
-            "questions": QUESTIONS,
             "states": {
-                "other": {"state": "b", "questions": QUESTIONS, "videos": [clip]}
+                "text": {"state": "a", "questions": QUESTIONS},
+                "other": {"state": "b", "questions": QUESTIONS, "videos": [clip]},
             },
         },
     )

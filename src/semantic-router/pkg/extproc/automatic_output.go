@@ -123,7 +123,7 @@ func (r *OpenAIRouter) renderAutomaticOutput(body []byte, dispatch *providerDisp
 	if err != nil {
 		return nil, err
 	}
-	authorize, err := configuredProviderAuthorizer(r.Config, dispatch.profile, dispatch.logicalModel)
+	authorize, err := configuredProviderAuthorizer(r.Config, dispatch.profile, dispatch.logicalModel, "automatic_output_render")
 	if err != nil {
 		return nil, err
 	}

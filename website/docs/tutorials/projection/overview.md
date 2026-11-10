@@ -12,9 +12,9 @@ score into named outputs a decision can reference.
 
 The route pipeline is:
 
-1. `routing.signals` extracts facts.
-2. `routing.projections` coordinates or derives facts.
-3. `routing.decisions` matches policy and chooses candidate models.
+1. `recipes[].signals` extracts facts.
+2. `recipes[].projections` coordinates or derives facts.
+3. `recipes[].decisions` matches policy and chooses candidate models.
 
 ## Key Advantages
 
@@ -60,58 +60,57 @@ Current methods are:
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    embeddings:
-      - name: technical-support
-        threshold: 0.75
-        candidates: [installation help, troubleshooting]
-      - name: account-management
-        threshold: 0.72
-        candidates: [billing issue, subscription change]
-    context:
-      - name: long-context
-        min_tokens: 4K
-        max_tokens: 200K
-
-  projections:
-    partitions:
-      - name: support-intents
-        semantics: exclusive
-        members: [technical-support, account-management]
-        default: technical-support
-    scores:
-      - name: request-difficulty
-        method: weighted_sum
-        inputs:
-          - type: embedding
-            name: technical-support
-            value_source: confidence
-            weight: 0.5
-          - type: context
-            name: long-context
-            weight: 0.5
-    mappings:
-      - name: difficulty-band
-        source: request-difficulty
-        method: threshold_bands
-        outputs:
-          - name: support-fast
-            lt: 0.5
-          - name: support-escalated
-            gte: 0.5
-
-  decisions:
-    - name: escalated-support
-      description: Route difficult support requests to the larger model.
-      priority: 150
-      rules:
-        operator: AND
-        conditions:
-          - type: projection
-            name: support-escalated
-      modelRefs:
-        - model: support-large
+recipes:
+  - name: default
+    signals:
+      embeddings:
+        - name: technical-support
+          threshold: 0.75
+          candidates: [installation help, troubleshooting]
+        - name: account-management
+          threshold: 0.72
+          candidates: [billing issue, subscription change]
+      context:
+        - name: long-context
+          min_tokens: 4K
+          max_tokens: 200K
+    projections:
+      partitions:
+        - name: support-intents
+          semantics: exclusive
+          members: [technical-support, account-management]
+          default: technical-support
+      scores:
+        - name: request-difficulty
+          method: weighted_sum
+          inputs:
+            - type: embedding
+              name: technical-support
+              value_source: confidence
+              weight: 0.5
+            - type: context
+              name: long-context
+              weight: 0.5
+      mappings:
+        - name: difficulty-band
+          source: request-difficulty
+          method: threshold_bands
+          outputs:
+            - name: support-fast
+              lt: 0.5
+            - name: support-escalated
+              gte: 0.5
+    decisions:
+      - name: escalated-support
+        description: Route difficult support requests to the larger model.
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: projection
+              name: support-escalated
+        modelRefs:
+          - model: support-large
 ```
 
 Only mapping output names are referenced with `type: projection`. Decisions do

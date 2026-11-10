@@ -7,6 +7,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from cli.catalog_provider_projection import project_provider_models_for_envoy
+from cli.config_contract import iter_routing_profiles
 from cli.consts import DEFAULT_LISTENER_PORT
 from cli.durations import envoy_duration
 from cli.envoy_backend_pool import is_ip_address, project_envoy_backend_group
@@ -76,9 +77,9 @@ def _check_decision_reliability(user_config: UserConfig) -> None:
     headers, which the template's ext_proc filter always allows.
     """
 
-    scopes = [("routing", user_config.routing.decisions)] + [
-        (f"recipes[{recipe.name!r}].routing", recipe.routing.decisions)
-        for recipe in user_config.recipes
+    scopes = [
+        (f"recipes[{name!r}]", recipe.decisions)
+        for name, recipe in iter_routing_profiles(user_config)
     ]
     for scope, decisions in scopes:
         for decision in decisions:
@@ -155,6 +156,35 @@ def _route_request_headers(endpoint: dict) -> list[dict[str, str]]:
         if key and value is not None:
             headers[str(key)] = str(value)
     return [{"key": key, "value": value} for key, value in sorted(headers.items())]
+
+
+DEFAULT_DELEGATED_CREDENTIAL_HEADER = "x-vsr-delegated-credential"
+
+
+def _delegated_credential_headers(user_config: UserConfig) -> list[str]:
+    """Name the delegated credential headers Envoy strips ahead of ext_proc.
+
+    The credential is an authenticator output, never a client input. The
+    default name is always stripped; a configured
+    global.services.authz.delegated_credential.header is stripped too.
+    """
+    configured = None
+    services = (user_config.global_ or {}).get("services")
+    authz = services.get("authz") if isinstance(services, dict) else None
+    credential = authz.get("delegated_credential") if isinstance(authz, dict) else None
+    if isinstance(credential, dict):
+        configured = credential.get("header")
+    names = [DEFAULT_DELEGATED_CREDENTIAL_HEADER]
+    if isinstance(configured, str) and configured.strip():
+        header = configured.strip().lower()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", header):
+            raise ValueError(
+                "global.services.authz.delegated_credential.header must be a "
+                f"plain header name, got {configured!r}"
+            )
+        if header not in names:
+            names.append(header)
+    return names
 
 
 def generate_envoy_config_from_user_config(
@@ -308,6 +338,7 @@ def generate_envoy_config_from_user_config(
         ),
         "router_api_host_is_domain": router_api_host_is_domain,
         "models": models,
+        "delegated_credential_headers": _delegated_credential_headers(user_config),
         "use_original_dst": False,  # Use static clusters for now
     }
     _check_decision_reliability(user_config)

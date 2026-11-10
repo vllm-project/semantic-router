@@ -460,28 +460,6 @@ func cloneBoolPtr(value *bool) *bool {
 	return &clone
 }
 
-func logRuntimeLifecycleEvent(event modelruntime.Event) {
-	if event.Status != modelruntime.TaskFailed && event.Status != modelruntime.TaskSkipped {
-		return
-	}
-	payload := map[string]interface{}{
-		"task":        event.Task,
-		"best_effort": event.BestEffort,
-	}
-	if event.Error != nil {
-		payload["error"] = event.Error.Error()
-	}
-	if event.Status == modelruntime.TaskSkipped {
-		logging.ComponentWarnEvent("router", "runtime_lifecycle_task_skipped", payload)
-		return
-	}
-	if event.BestEffort {
-		logging.ComponentWarnEvent("router", "runtime_lifecycle_task_failed", payload)
-		return
-	}
-	logging.ComponentErrorEvent("router", "runtime_lifecycle_task_failed", payload)
-}
-
 func initializeVectorStoreIfEnabled(
 	cfg *config.RouterConfig,
 	shutdownHooks *[]func(context.Context) error,
@@ -522,14 +500,6 @@ func registerVectorStoreShutdownHook(
 			return err
 		}
 		return nil
-	})
-}
-
-func warmupRouterRuntime(ctx context.Context, server *extproc.Server) error {
-	return server.WarmupRouter(ctx, modelruntime.WarmupRouterOptions{
-		Component:      "router",
-		MaxParallelism: 2,
-		OnEvent:        logRuntimeLifecycleEvent,
 	})
 }
 

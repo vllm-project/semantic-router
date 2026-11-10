@@ -13,7 +13,7 @@ from cli.models import UserConfig
 from cli.validator import validate_user_config
 
 BASE = {
-    "version": "v0.3",
+    "version": "v0.5",
     "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
     "providers": {
         "defaults": {"model": "small"},
@@ -47,53 +47,55 @@ BASE = {
             "system": {"decision_model": {"deployment": "hosted-d3"}},
         }
     },
-    "routing": {
-        "modelCards": [{"name": "small"}, {"name": "large"}],
-        "signals": {
-            "decision": [
-                {
-                    "name": "support_team",
-                    "deployment": "gateway-d3",
-                    "question": {
-                        "type": "choice",
-                        "instructions": "Which team should handle this ticket?",
-                        "choices": [{"key": "billing"}, {"key": "engineering"}],
+    "recipes": [
+        {
+            "name": "default",
+            "signals": {
+                "systemone": [
+                    {
+                        "name": "support_team",
+                        "deployment": "gateway-d3",
+                        "question": {
+                            "type": "choice",
+                            "instructions": "Which team should handle this ticket?",
+                            "choices": [{"key": "billing"}, {"key": "engineering"}],
+                        },
                     },
-                },
+                    {
+                        "name": "needs_reasoning",
+                        "question": {"type": "noul", "instructions": "Reasoning?"},
+                    },
+                ]
+            },
+            "decisions": [
                 {
-                    "name": "needs_reasoning",
-                    "question": {"type": "noul", "instructions": "Reasoning?"},
-                },
-            ]
-        },
-        "decisions": [
-            {
-                "name": "engineering",
-                "priority": 10,
-                "rules": {
-                    "operator": "AND",
-                    "conditions": [
-                        {
-                            "type": "decision",
-                            "name": "support_team",
-                            "label": "engineering",
-                            "on_error": "no_match",
-                        },
-                        {
-                            "type": "decision",
-                            "name": "needs_reasoning",
-                            "on_error": "no_match",
-                        },
-                    ],
-                },
-                "modelRefs": [{"model": "small"}, {"model": "large"}],
-                "algorithm": {
-                    "type": "decision",
-                    "decision": {"instructions": "Which model should answer?"},
-                },
-            }
-        ],
-    },
+                    "name": "engineering",
+                    "priority": 10,
+                    "rules": {
+                        "operator": "AND",
+                        "conditions": [
+                            {
+                                "type": "systemone",
+                                "name": "support_team",
+                                "label": "engineering",
+                                "on_error": "no_match",
+                            },
+                            {
+                                "type": "systemone",
+                                "name": "needs_reasoning",
+                                "on_error": "no_match",
+                            },
+                        ],
+                    },
+                    "modelRefs": [{"model": "small"}, {"model": "large"}],
+                    "algorithm": {
+                        "type": "systemone",
+                        "systemone": {"instructions": "Which model should answer?"},
+                    },
+                }
+            ],
+        }
+    ],
 }
 
 
@@ -117,7 +119,7 @@ def test_systemone_deployments_answer_questions_selectors_and_the_default():
     assert _errors(_config()) == []
 
     def named_selector(document):
-        selector = document["routing"]["decisions"][0]["algorithm"]["decision"]
+        selector = document["recipes"][0]["decisions"][0]["algorithm"]["systemone"]
         selector["deployment"] = "gateway-d3"
 
     assert _errors(_config(named_selector)) == []

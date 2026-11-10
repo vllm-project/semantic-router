@@ -9,10 +9,7 @@ import (
 )
 
 func personalizedExactCacheEnabled(ctx *RequestContext) bool {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
-		return false
-	}
-	plugin := ctx.VSRSelectedDecision.GetResponseCacheConfig()
+	plugin := requestResponseCache(ctx)
 	return plugin != nil &&
 		plugin.Enabled &&
 		plugin.Personalized != nil &&

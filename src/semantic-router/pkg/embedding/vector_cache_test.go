@@ -10,18 +10,17 @@ import (
 )
 
 func textKey(text string) VectorKey {
-	return NewVectorKey("model-a", Options{}, InputText, []byte(text))
+	return NewVectorKey("model-a", Options{}, []byte(text))
 }
 
-func TestVectorKeySeparatesRepresentationViewAndModality(t *testing.T) {
-	base := NewVectorKey("model-a", Options{}, InputText, []byte("x"))
+func TestVectorKeySeparatesRepresentationViewAndText(t *testing.T) {
+	base := NewVectorKey("model-a", Options{}, []byte("x"))
 	for _, other := range []VectorKey{
-		NewVectorKey("model-b", Options{}, InputText, []byte("x")),
-		NewVectorKey("model-a", Options{Dimension: 256}, InputText, []byte("x")),
-		NewVectorKey("model-a", Options{Layer: 6}, InputText, []byte("x")),
-		NewVectorKey("model-a", Options{}, InputImage, []byte("x")),
-		NewVectorKey("model-a", Options{}, InputText, []byte("y")),
-		NewVectorKey("model-", Options{}, InputText, []byte("ax")),
+		NewVectorKey("model-b", Options{}, []byte("x")),
+		NewVectorKey("model-a", Options{Dimension: 256}, []byte("x")),
+		NewVectorKey("model-a", Options{Layer: 6}, []byte("x")),
+		NewVectorKey("model-a", Options{}, []byte("y")),
+		NewVectorKey("model-", Options{}, []byte("ax")),
 	} {
 		if other == base {
 			t.Fatal("distinct inputs share a key")
