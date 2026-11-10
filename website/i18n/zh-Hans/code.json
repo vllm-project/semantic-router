@@ -395,7 +395,7 @@
     "message": "面向模型与算力的开放、可编程{decisionLayer}。"
   },
   "homepage.hero.primaryCta": {
-    "message": "体验 Playground"
+    "message": "体验 System Duo"
   },
   "homepage.hero.manifesto": {
     "message": "先把请求看明白，再把系统做大；以信号驱动，以不确定性为标尺，让决策足够清晰。"
@@ -2377,10 +2377,10 @@
     "message": "让每次请求，都发挥价值。"
   },
   "homepage.finalCta.description": {
-    "message": "在 Playground 中体验智能路由，再把它接入你自己的技术栈。"
+    "message": "在 System Duo 中体验智能路由，再把它接入你自己的技术栈。"
   },
   "homepage.finalCta.playground": {
-    "message": "体验 Playground"
+    "message": "体验 System Duo"
   },
   "homepage.finalCta.docs": {
     "message": "自行部署"

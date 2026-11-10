@@ -495,7 +495,7 @@ details[class*='details_'] {
 }
 
 /* Primary is the only filled control, and it is filled with brand blue —
- * the same treatment as the hero's "Try the Playground". */
+ * the same treatment as the hero's "Try System Duo". */
 .site-btn--primary {
   border-color: var(--site-cta-border);
   background: var(--site-cta-bg);

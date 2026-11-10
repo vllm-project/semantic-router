@@ -48,7 +48,7 @@
    * labels use. This clears 5.1:1 on every light-mode hover surface. */
   --site-hover-text: #0a63a8;
   /* Primary CTA. The one filled control on the site: solid brand blue, matching
-   * the hero's "Try the Playground". Light mode drops to the deep blue so white
+   * the hero's "Try System Duo". Light mode drops to the deep blue so white
    * label text clears 4.5:1; dark mode keeps the bright blue with dark ink. */
   --site-cta-bg: #0876c9;
   --site-cta-bg-hover: #0a6ab3;
