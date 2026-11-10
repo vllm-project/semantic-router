@@ -7,7 +7,7 @@ description: How virtual models turn a shared pool of independent models into st
 # Mixture of Models
 
 A **Mixture of Models (MoM)** presents independently deployed models as one
-virtual model. A recipe selects a model, cascade, panel, or bounded workflow for
+virtual model. A recipe selects a model, escalation, panel, or bounded workflow for
 each request. Your harness uses a stable name and retains its task loop and tools.
 
 ```mermaid
@@ -50,11 +50,12 @@ Most requests should take a direct path. Policy narrows the eligible set and an
 algorithm selects one backend by semantic fit, latency, relative cost, feedback,
 or a fixed order.
 
-### Cascade
+### Escalate
 
 Start with an efficient model, inspect a bounded confidence or verification
-signal, and escalate only when needed. Cascades trade extra worst-case latency
-for lower average cost.
+signal, and escalate only when needed, with the
+[`escalate`](../tutorials/algorithm/looper/escalate) algorithm. Escalation
+trades extra worst-case latency for lower average cost.
 
 ### Orchestrate several models
 
@@ -68,27 +69,29 @@ An entrypoint maps one or more public model names to an isolated recipe:
 
 ```yaml
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: ["acme/assistant-fast"]
     recipe: fast
-
 recipes:
+  - name: default
   - name: fast
-    routing:
-      strategy: priority
-      decisions:
-        - name: default-fast-route
-          description: Route eligible requests through the fast model pool.
-          priority: 10
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: local/small
-              use_reasoning: false
-            - model: local/vision
-              use_reasoning: false
-          algorithm:
-            type: static
+    strategy: priority
+    decisions:
+      - name: default-fast-route
+        description: Route eligible requests through the fast model pool.
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local/small
+            use_reasoning: false
+          - model: local/vision
+            use_reasoning: false
+        algorithm:
+          type: static
 ```
 
 Signals and decisions identify the task. Candidate requirements then check the
@@ -106,17 +109,21 @@ policy that fits your harness's model calls:
 
 | Public model | Recipe | Decisions |
 | --- | --- | --- |
-| `vllm-sr/mom-v1-blend` | **Balance**: reasoning effort only where a request needs it | `simple`, `medium`, `reasoning` |
+| `vllm-sr/mom-v1-blend` | **Balance**: reasoning effort only where a request needs it | `long_context`, `vision`, `recovery`, `agentic`, `facts`, `frontier`, `code`, `hard`, `standard`, `fast` |
 | `vllm-sr/mom-v1-lite` | **Cost**: economical serving with targeted escalation | `economy`, `tools`, `reasoning` |
 | `vllm-sr/mom-v1-flash` | **Speed**: responsive conversation and streaming | `fast`, `tools`, `reasoning` |
 | `vllm-sr/mom-v1-ultra` | **Accuracy**: strong answers and explicit orchestration | `simple`, `reasoning`, `review`, `agent` |
 | `vllm-sr/mom-v1-vault` | **Vault**: processing within your private deployment | `private`, `sensitive`, `guard` |
 
-Balance asks the router's decision model five routing questions in one call:
-the kind of work, how much reasoning it needs, whether exact facts matter, what
-a good answer needs, and whether the user is correcting an earlier answer. An
-effort score from those answers selects `simple`, `medium` or `reasoning`;
-corrections and tool work go to `reasoning`, and exact facts stay on `medium`.
+Balance is the Decision Balance policy. It asks the router's decision model six
+routing questions in one call: the kind of work, how much reasoning it needs,
+whether exact facts matter, what a good answer needs, whether the user is
+correcting an earlier answer, and whether the user asks to call a tool now.
+Every lane is its own decision, with its own pool and reasoning effort: long
+inputs and images have their own lanes, corrections go to `recovery`, tool work
+to `agentic` and exact facts to `facts`, and an effort score from the answers
+selects `frontier`, `code`, `hard`, `standard` or `fast`. In `frontier` the
+decision model also chooses which of the assigned models answers.
 Speed, Cost, Accuracy and Vault also route on named decision-model questions:
 whether the user asks to call a tool, whether the request is a hard problem,
 whether it reports a wrong answer, who should do the work (one assistant,
@@ -137,7 +144,7 @@ risky material, or refuse harmful assistance.
 Assign Vault's other decisions to backends that meet your privacy requirements;
 the recipe cannot establish their physical location or provider retention.
 
-Vault's prompt guard and PII judgments read the whole conversation up to the
+Vault's jailbreak and PII judgments read the whole conversation up to the
 decision model's scan budget, and its questions read the start of the latest
 message. An unanswered judgment or an input past the budget fails closed:
 Preview returns HTTP 503 with signal errors and no selected model. A larger
@@ -152,8 +159,9 @@ vllm-sr serve
 Open **Models** in the Dashboard to connect and verify inference endpoints.
 Choose a **Recipe**, assign models to its backend decisions, and publish a
 **Mixture-of-Model** entrypoint. Single-model decisions need at least one
-qualified model; Accuracy's `review` and `agent` need two distinct workers.
-Vault's `guard` needs no backend assignment.
+qualified model; Accuracy's `review` and `agent` need two distinct workers, and
+Balance's `frontier` needs two distinct models. Vault's `guard` needs no
+backend assignment.
 
 Declare capabilities and input/output limits, and supply the relevant quality
 index at the assigned reasoning effort. **Preview** shows the signals, decision,

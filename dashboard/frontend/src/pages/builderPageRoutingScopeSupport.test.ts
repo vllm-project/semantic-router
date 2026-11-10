@@ -5,6 +5,7 @@ import type { ASTProgram } from '@/types/dsl'
 import {
   chooseDefaultBuilderRoutingScope,
   listBuilderRoutingScopes,
+  listReferenceableSignals,
   mutateBuilderRecipeSource,
   resolveBuilderRoutingScope,
   summarizeBuilderRoutingScopes,
@@ -197,10 +198,37 @@ RECIPE speed {
   })
 
   it('keeps bindings-only default routing visible and isolates recipe bindings', () => {
-    const binding = { deployment: 'shared', contract: 'embedding.v1', adapter: 'mmbert' }
+    const binding = { deployment: 'shared' }
     const ast: ASTProgram = { ...scopedAst, modelBindings: { embedding: binding } }
     expect(chooseDefaultBuilderRoutingScope(ast)).toBe('global')
     expect(resolveBuilderRoutingScope(ast, 'global')?.modelBindings).toEqual({ embedding: binding })
     expect(resolveBuilderRoutingScope(ast, 'recipe:balanced')?.modelBindings).toBeUndefined()
+  })
+})
+
+describe('listReferenceableSignals', () => {
+  const pos = { Line: 1, Column: 1 }
+
+  it('offers the role an authz binding grants, not the binding name', () => {
+    const available = listReferenceableSignals([
+      { signalType: 'authz', name: 'admins', fields: { role: 'admin' }, pos },
+      { signalType: 'authz', name: 'admin-tokens', fields: { role: 'admin' }, pos },
+    ])
+
+    expect(available).toEqual([{ signalType: 'authz', name: 'admin' }])
+  })
+
+  it('expands complexity levels and projection outputs', () => {
+    expect(
+      listReferenceableSignals(
+        [{ signalType: 'complexity', name: 'difficulty', fields: {}, pos }],
+        [{ name: 'band', outputs: [{ name: 'band_low' }], pos }],
+      ),
+    ).toEqual([
+      { signalType: 'complexity', name: 'difficulty:easy' },
+      { signalType: 'complexity', name: 'difficulty:medium' },
+      { signalType: 'complexity', name: 'difficulty:hard' },
+      { signalType: 'projection', name: 'band_low' },
+    ])
   })
 })

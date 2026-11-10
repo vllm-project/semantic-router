@@ -1,0 +1,123 @@
+package config
+
+import (
+	"os"
+	"strings"
+	"testing"
+
+	"gopkg.in/yaml.v3"
+)
+
+// loadOnBase loads a configuration fragment merged onto the model catalog
+// documentation base.
+func loadOnBase(t *testing.T, fragment string) (*RouterConfig, error) {
+	t.Helper()
+	var base, overlay map[string]interface{}
+	data, err := os.ReadFile(modelCatalogDocsBase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = yaml.Unmarshal(data, &base); err != nil {
+		t.Fatal(err)
+	}
+	if err = yaml.Unmarshal([]byte(fragment), &overlay); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := yaml.Marshal(mergeYAML(base, overlay))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ParseYAMLBytesWithoutEnvExpansion(encoded)
+}
+
+const (
+	remoteEmbedDeployment = `
+      remote-embed: {provider: openai_embeddings, endpoint: https://embedding.example.com/v1, model: BAAI/bge-m3, auth: {api_key_env: EMBEDDING_API_KEY}}`
+	remoteChatDeployment = `
+      remote-chat: {provider: openai_chat, endpoint: https://chat.example.com/v1, model: rewriter, auth: {api_key_env: CHAT_API_KEY}}`
+)
+
+func TestModelCatalogRefusesWhatCannotWork(t *testing.T) {
+	for name, tc := range map[string]struct{ fragment, want string }{
+		"a binding to an undeclared deployment": {
+			"global: {model_catalog: {bindings: {pii: missing}}}",
+			`unknown deployment "missing"; declared deployments: `,
+		},
+		"a rule naming an undeclared deployment": {
+			"recipes: [{name: default, signals: {domains: [{name: math, labels: [math], deployment: missing}]}}]",
+			`deployment "missing" is not declared in global.model_catalog.deployments`,
+		},
+		"a rule naming a deployment that answers no question": {
+			"global:\n  model_catalog:\n    deployments:" + remoteEmbedDeployment + "\nrecipes: [{name: default, signals: {domains: [{name: math, labels: [math], deployment: remote-embed}]}}]",
+			`deployment "remote-embed" must use provider model_runtime or systemone`,
+		},
+		"a binding of an application type to a chat deployment": {
+			"global:\n  model_catalog:\n    deployments:" + remoteChatDeployment + "\n    bindings: {domain: remote-chat}",
+			"an openai_chat deployment answers no signal",
+		},
+		"an embedding model bound to a question-style signal": {
+			"global:\n  model_catalog:\n    deployments:" + remoteEmbedDeployment + "\n    bindings: {pii: remote-embed}",
+			"an openai_embeddings deployment serves embeddings only",
+		},
+		"a built-in embedding model bound to a question-style signal": {
+			"global: {model_catalog: {bindings: {pii: vela-embedding}}}",
+			"answers no question",
+		},
+		"a question model as the default embedding": {
+			"global: {model_catalog: {embeddings: {default: {deployment: primary}}}}",
+			"serves no embeddings",
+		},
+		"a remote decision model as the default embedding": {
+			"global: {model_catalog: {embeddings: {default: {deployment: d3-remote}}}}",
+			"embeddings need a model_runtime or openai_embeddings deployment",
+		},
+		"a store dimension that disagrees with its remote deployment": {
+			"global:\n  model_catalog:\n    deployments:\n      remote-embed: {provider: openai_embeddings, endpoint: https://embedding.example.com/v1, model: BAAI/bge-m3, capabilities: {dimensions: 1024}}\n" +
+				"  stores:\n    memory:\n      embedding: {deployment: remote-embed, dimension: 768}",
+			`global.stores.memory.embedding.dimension: deployment "remote-embed" answers with 1024 dimensions (capabilities.dimensions), not 768`,
+		},
+		"a key written inline": {
+			"global: {model_catalog: {deployments: {d3-remote: {auth: {api_key: sk-test}}}}}",
+			"a key is never written in the configuration",
+		},
+		"a credential header": {
+			"global: {model_catalog: {deployments: {d3-remote: {headers: {Authorization: Bearer sk-test}}}}}",
+			"carries a credential",
+		},
+		"credentials in the endpoint": {
+			"global: {model_catalog: {deployments: {d3-remote: {endpoint: 'https://user:secret@app.vllm-sr.ai/v1/systemone'}}}}",
+			"must not carry credentials",
+		},
+		"an unknown signal type as a binding key": {
+			"global: {model_catalog: {bindings: {piii: d3-remote}}}",
+			"unknown signal type (did you mean pii?)",
+		},
+		"a systemone question the remote model does not answer": {
+			"global: {model_catalog: {deployments: {d3-remote: {capabilities: {question_types: [choice]}}}}}\nrecipes: [{name: default, signals: {systemone: [{name: tools, deployment: d3-remote, question: {type: noul, instructions: \"Does it need a tool?\"}}]}}]",
+			"noul",
+		},
+		"a pii rule on a deployment without spans": {
+			"global: {model_catalog: {deployments: {d3-remote: {capabilities: {question_types: [choice, noul]}}}, system: {decision_model: {deployment: d3-remote}}}}\nrecipes: [{name: default, signals: {pii: [{name: personal, predicate: {gte: 0.5}}]}, decisions: [{name: guard, rules: {type: pii, name: personal}, modelRefs: [{model: general}]}]}]",
+			"span_required",
+		},
+		"a masking plugin on PII without spans": {
+			"global: {model_catalog: {deployments: {d3-remote: {capabilities: {presets: [halu]}}}, system: {decision_model: {deployment: d3-remote}}}}\nrecipes: [{name: default, signals: {keywords: [{name: secret, operator: OR, keywords: [ssn]}], pii: [{name: personal, predicate: {gte: 0.5}}]}, decisions: [{name: mask, rules: {type: keyword, name: secret}, modelRefs: [{model: general}], plugins: [{type: masking, configuration: {enabled: true, signal: personal}}]}]}]",
+			`recipes[default].signals.pii[personal]: span_required: resolves to deployment "d3-remote", which cannot answer span questions`,
+		},
+		"operating_point on a deployment": {
+			"global: {model_catalog: {deployments: {d3-remote: {operating_point: {path: operating_point.json, sha256: e79a78f48bf45eb38e3f5402de3b3b18eeaa822e00b42b3640bf471276290de5}}}}}",
+			"global.model_catalog.deployments.d3-remote.operating_point: removed_field: a deployment's operating_point is removed: nothing reads it",
+		},
+		"generation on a deployment that is not openai_chat": {
+			"global: {model_catalog: {deployments: {d3-remote: {generation: {max_tokens: 64}}}}}",
+			"generation belongs to an openai_chat deployment",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := loadOnBase(t, tc.fragment)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want one containing %q", err, tc.want)
+			}
+		})
+	}
+}

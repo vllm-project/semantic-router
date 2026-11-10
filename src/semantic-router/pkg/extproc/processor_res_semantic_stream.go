@@ -32,14 +32,15 @@ type semanticResponseStreamState struct {
 }
 
 type semanticStreamItem struct {
-	id           string
-	role         llmprotocol.Role
-	text         string
-	refusal      string
-	reasoning    string
-	reasoningSig string
-	toolCall     *llmprotocol.ToolCall
-	completed    bool
+	id               string
+	role             llmprotocol.Role
+	text             string
+	refusal          string
+	reasoning        string
+	reasoningSig     string
+	toolCall         *llmprotocol.ToolCall
+	completed        bool
+	reasoningDetails map[int]llmprotocol.ReasoningDetail
 }
 
 func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
@@ -48,6 +49,9 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
 	recordStreamingTTFT(ctx)
+	if ctx.ResponseGuardHold != nil {
+		return r.handleHeldStreamBody(responseBody, endOfStream, ctx)
+	}
 	r.initializeSemanticResponseStream(ctx)
 	buffers := semanticStreamBuffers{}
 	buffers.push(responseBody, ctx)
@@ -140,9 +144,8 @@ func observeProtocolStream(
 	// Streaming headers have already been emitted. Keep late compatibility
 	// warnings observable through the same counter and structured diagnostics
 	// as buffered responses instead of retaining them only in request state.
-	for _, diagnostic := range diagnostics {
-		recordProtocolDiagnostic(ctx, normalizeProtocol(string(ctx.SourceFormat)), normalizeProtocol(string(ctx.TargetFormat)), diagnostic)
-	}
+	recordProtocolDiagnostics(ctx, diagnostics)
+	ctx.protocolDiagnosticsReported = len(ctx.ProtocolDiagnostics)
 	ctx.SemanticStreamState.observe(events)
 }
 
@@ -220,6 +223,8 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 		Context: ctx.TraceContext, Source: source, Target: target,
 		Options:     clientStreamOptions(ctx),
 		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
+		// The model the upstream reports, as buffered and same-format replies pass it through.
+		PreferProviderModel: true,
 	}
 	mutation := clientStreamMutation(ctx, source)
 	if responseID := responseObjectPublicID(ctx); responseID != "" {
@@ -286,6 +291,22 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 			}
 		case llmprotocol.EventReasoningDelta:
 			item := state.item(event.ItemIndex)
+			if event.Content != nil && event.Content.ReasoningDetail != nil {
+				if item.reasoningDetails == nil {
+					item.reasoningDetails = make(map[int]llmprotocol.ReasoningDetail)
+				}
+				detail := *event.Content.ReasoningDetail
+				if current, found := item.reasoningDetails[event.ContentIndex]; found {
+					merged, err := llmprotocol.MergeReasoningDetail(current, detail)
+					if err != nil {
+						state.failed = llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "reasoning_detail_identity_mismatch", "upstream reasoning detail changed identity", err)
+						continue
+					}
+					detail = merged
+				}
+				item.reasoningDetails[event.ContentIndex] = detail
+				continue
+			}
 			item.reasoning += event.Delta
 			if event.Content != nil && event.Content.Signature != "" {
 				item.reasoningSig = event.Content.Signature
@@ -349,6 +370,15 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 			return nil, fmt.Errorf("semantic stream output item is incomplete")
 		}
 		contents := make([]llmprotocol.Content, 0, 4)
+		detailIndices := make([]int, 0, len(item.reasoningDetails))
+		for contentIndex := range item.reasoningDetails {
+			detailIndices = append(detailIndices, contentIndex)
+		}
+		sort.Ints(detailIndices)
+		for _, contentIndex := range detailIndices {
+			detail := item.reasoningDetails[contentIndex]
+			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentReasoning, ReasoningDetail: &detail})
+		}
 		if item.reasoning != "" || item.reasoningSig != "" {
 			contents = append(contents, llmprotocol.Content{
 				Kind: llmprotocol.ContentReasoning, Text: item.reasoning,
@@ -385,8 +415,17 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 }
 
 func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, streamErr error) {
+	if semanticResponse := r.completeSemanticStream(ctx, streamErr); semanticResponse != nil {
+		r.commitStreamedAnswer(ctx, semanticResponse)
+	}
+}
+
+// completeSemanticStream settles a stream once it ended: its latency, usage
+// and inflight admission. It returns the answer the stream reconstructs, or
+// nil when the stream ended without one or was settled before.
+func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr error) *llmprotocol.Response {
 	if ctx == nil || ctx.StreamingComplete {
-		return
+		return nil
 	}
 	ctx.StreamingComplete = true
 	if streamErr != nil || ctx.SemanticStreamState == nil || !ctx.SemanticStreamState.terminal {
@@ -420,10 +459,22 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 			"error":      responseErr.Error(),
 		})
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
-		return
+		return nil
 	}
+	return semanticResponse
+}
+
+// commitStreamedAnswer keeps an answer the client received as it streamed:
+// the selected decision's response_guard, which neither blocks nor writes
+// notes, reads it and records what it found, and the answer reaches the
+// cache, memory, the Responses object and Router Replay.
+func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticResponse *llmprotocol.Response) {
 	recordPrimaryOutputDigest(ctx, semanticResponse)
-	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
+	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
+	if ctx.ResponseGuard != nil {
+		ctx.ResponseGuard.live = true
+	}
+	r.recordRouterReplayResponseGuard(ctx)
 	encoded, err := r.encodeClientResponse(*semanticResponse, ctx)
 	if err != nil {
 		logging.ComponentWarnEvent("extproc", "neutral_stream_replay_encode_failed", map[string]interface{}{
@@ -451,6 +502,7 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	}
 	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
 	if usage.invalid {
+		r.updateRouterReplayUsageCost(ctx, r.buildReplayUsageCost(ctx, usage))
 		return
 	}
 	totalTokens := responseUsageTotal(usage)

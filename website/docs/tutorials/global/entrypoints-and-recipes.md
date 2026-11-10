@@ -34,10 +34,11 @@ When the request `model` matches an `entrypoints[].model_names` value, the
 Router evaluates only the mapped recipe. The virtual model name is then
 replaced by the backend selected from that recipe.
 
-The top-level `routing` block is the `default` recipe. It is published as
-`vllm-sr/auto` unless you declare an entrypoint for `recipe: default`.
-An explicit default entrypoint replaces that built-in name; include
-`vllm-sr/auto` in its `model_names` if clients should keep using it. Names such
+A document with one recipe publishes it as `vllm-sr/auto` and needs no
+entrypoints. With several recipes, exactly one chat entrypoint is marked
+`default: true`, and its recipe is the default recipe. An explicit entrypoint
+for the default recipe replaces the built-in name; include `vllm-sr/auto` in
+its `model_names` if clients should keep using it. Names such
 as `auto` or `vllm-sr/flow` work only when explicitly declared. The selected
 recipe's decisions choose its algorithms. If no decision matches, the Router
 uses `providers.defaults.model`.
@@ -49,55 +50,53 @@ exact backend.
 
 ## Configuration
 
-The model catalog is shared. Each named recipe owns its signals, projections,
+The model catalog is shared. Each recipe owns its signals, projections,
 decisions, strategy, algorithms, and route-local plugins.
 
 ```yaml
-routing:
-  modelCards:
-    - name: fast-model
-    - name: accurate-model
-
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/mom-v1-flash]
     recipe: flash
   - model_names: [vllm-sr/mom-v1-ultra]
     recipe: ultra
-
 recipes:
+  - name: default
   - name: flash
     description: Prefer the lowest-latency eligible backend.
-    routing:
-      strategy: priority
-      decisions:
-        - name: fast-path
-          description: Serve requests with the fast model.
-          priority: 100
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: fast-model
-
+    strategy: priority
+    decisions:
+      - name: fast-path
+        description: Serve requests with the fast model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: fast-model
   - name: ultra
     description: Prefer the highest-quality eligible backend.
-    routing:
-      strategy: priority
-      decisions:
-        - name: quality-path
-          description: Serve requests with the accurate model.
-          priority: 100
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: accurate-model
+    strategy: priority
+    decisions:
+      - name: quality-path
+        description: Serve requests with the accurate model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: accurate-model
+providers:
+  models:
+    - name: fast-model
+    - name: accurate-model
 ```
 
-Shared strategy and fallback defaults live in `global.router`. Top-level
-`routing` is the default recipe, not a parent of named recipes. Each
-`recipes[].routing` resolves missing strategy and fallback fields directly from
-the global defaults, then a decision may override its own effective fallback.
+Shared strategy and fallback defaults live in `global.router`. The default
+recipe is not a parent of the others. Each `recipes[]` entry resolves missing
+strategy and fallback fields directly from the global defaults, then a decision may override its own effective fallback.
 A sparse override such as `fallback: {enabled: false}` changes only that field;
 it does not discard shared timeout or retry settings. Direct and passthrough
 requests use the global fallback policy. The runtime default strategy is
@@ -155,8 +154,10 @@ For a recipe that selects among the three models below, configure a
 Leave image input and reasoning settings off.
 
 ```yaml
-routing:
-  modelCards:
+recipes:
+  - name: default
+providers:
+  models:
     - name: local-coder
       context_window_size: 32768
       max_output_tokens: 8192
@@ -173,22 +174,30 @@ routing:
 
 By default, the Router skips a candidate whose declared context window is
 smaller than the estimated input, or whose declared capabilities lack a
-required input such as images. It does not check output limits, so a request
-for 16,384 output tokens can still reach `local-coder`. With
+required input such as images. The estimate holds conservative reserves:
+structured data such as tool-call arguments counts one token per byte, and
+images, audio, video and files carry reserves of their own, so a coding agent's
+long session can be estimated above a window it fits. When the estimate exceeds
+every candidate's window, the Router counts the request without those reserves,
+keeps the candidates that count fits, and rejects the request only when it fits
+none of them. The backend still checks the real length. The Router does not
+check output limits, so a request for 16,384 output tokens can still
+reach `local-coder`. With
 [`candidate_requirements`](../../installation/configuration#recipe-candidate-requirements)
 on the recipe, the Router also checks output limits and tool, reasoning, and
 structured-output declarations before scoring. A request that fits only some
-candidates goes to one of them, and one that fits none is rejected before
-dispatch; see [Request budget errors](../../api/router#request-budget-errors).
+candidates goes to one of them, and one that fits none, even without the
+reserves, is rejected before dispatch; see
+[Request budget errors](../../api/router#request-budget-errors).
 A client configured with the intersection keeps every candidate available to
 every request.
 
 ## When to Use
 
-Use named entrypoints and recipes when one deployment must expose more than one
-routing objective, policy boundary, or rollout track. Keep a single top-level
-`routing` profile when all clients should follow the same policy; the existing
-default `vllm-sr/auto` entrypoint needs no extra configuration.
+Use entrypoints and several recipes when one deployment must expose more than
+one routing objective, policy boundary, or rollout track. Keep a single recipe
+when all clients should follow the same policy; its `vllm-sr/auto` entrypoint
+needs no extra configuration.
 
 Continue with:
 

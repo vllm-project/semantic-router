@@ -150,7 +150,7 @@ def test_sensitive_profile_env_requires_external_value_from(tmp_path, env_field)
     config.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "providers": {"models": [{"api_key": "${GEMINI_API_KEY}"}]},
             }
         ),
@@ -267,7 +267,7 @@ def test_profile_kubernetes_secret_references_are_not_literal_credentials(tmp_pa
 
 def test_atomic_config_drops_ignored_profile_config_from_helm_values(tmp_path):
     config = tmp_path / "config.yaml"
-    source = {"version": "v0.3", "listeners": []}
+    source = {"version": "v0.5", "listeners": []}
     config.write_text(yaml.safe_dump(source), encoding="utf-8")
     canary = "stale-profile-secret-canary"
 
@@ -287,7 +287,7 @@ def test_atomic_config_drops_ignored_profile_config_from_helm_values(tmp_path):
 def test_sensitive_profile_env_rejects_configmap_value_from(tmp_path):
     config = tmp_path / "config.yaml"
     config.write_text(
-        yaml.safe_dump({"version": "v0.3", "api_key": "${MODEL_API_KEY}"}),
+        yaml.safe_dump({"version": "v0.5", "api_key": "${MODEL_API_KEY}"}),
         encoding="utf-8",
     )
     profile = {
@@ -306,11 +306,13 @@ def test_sensitive_profile_env_rejects_configmap_value_from(tmp_path):
 def test_modern_router_config_and_management_auth_survive_helm_translation(tmp_path):
     config = tmp_path / "config.yaml"
     source = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [{"name": "http", "port": 8899}],
         "providers": {"models": [{"name": "local/custom"}]},
-        "routing": {"decisions": [{"name": "custom-route"}]},
-        "recipes": [{"name": "custom-recipe"}],
+        "recipes": [
+            {"name": "default", "decisions": [{"name": "custom-route"}]},
+            {"name": "custom-recipe"},
+        ],
         "global": {
             "services": {
                 "management_api": {
@@ -322,11 +324,14 @@ def test_modern_router_config_and_management_auth_survive_helm_translation(tmp_p
                 }
             }
         },
+        "entrypoints": [
+            {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True}
+        ],
     }
     config.write_text(yaml.safe_dump(source), encoding="utf-8")
     stale_effective = tmp_path / "stale-effective.yaml"
     stale_effective.write_text(
-        yaml.safe_dump({"version": "v0.3", "providers": {"models": []}}),
+        yaml.safe_dump({"version": "v0.5", "providers": {"models": []}}),
         encoding="utf-8",
     )
 

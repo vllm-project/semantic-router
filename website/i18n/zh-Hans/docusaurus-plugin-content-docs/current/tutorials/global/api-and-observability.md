@@ -130,8 +130,7 @@ global:
 | 会话 | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
 | 翻译与请求参数策略 | `llm_translation_lossy_total`, `sr_request_params_blocked_total` |
 | 信号 | `llm_signal_extraction_total`, `llm_signal_match_total`, `llm_signal_extraction_latency_seconds` |
-| 复杂度判定 | `llm_complexity_verdict_total` （按 `rule`、`verdict`、`source`）, `llm_complexity_evaluation_failures_total` |
-| 远程分类器后端 | `llm_remote_connector_requests_total` （按 `operation`、`outcome`）, `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
+| 远程模型调用 | `llm_remote_connector_requests_total` （按 `operation`、`outcome`）, `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
 | Recipe 路由 | `llm_entrypoint_requests_total`, `llm_recipe_selections_total`, `llm_routing_stage_duration_seconds` |
 | 投影 | `llm_projection_score` （按配置中的 Recipe 和投影名称） |
 | Trace 导出 | `llm_trace_export_spans_total` （按导出批次结果） |
@@ -202,13 +201,27 @@ helm install vsr oci://ghcr.io/vllm-project/charts/semantic-router \
 
 仅当由已认证的上游过滤器（Agent Router（原 Envoy AI Gateway）、ext_authz、路由级过滤器等）负责按信任依据设置或剥离该请求头时，才应启用此开关。促成该开关的 AI Gateway 互操作模式背景见 [issue #1808](https://github.com/vllm-project/semantic-router/issues/1808)。
 
+### 调试头
+
+`global.router.headers.debug` 决定谁可以用 `x-vsr-debug: true` 打开调试响应头 `x-vsr-trace`。它会列出请求命中的信号规则和防护规则，所以默认值 `none` 会忽略所有客户端发来的该请求头。`any` 对所有客户端生效，用于开发和测试。`authenticated` 只对 `debug_principals` 里的用户和组生效，以你的认证组件设置的身份头为准。
+
+```yaml
+global:
+  router:
+    headers:
+      debug: authenticated
+      debug_principals:
+        groups: [platform-sre]
+```
+
+追踪头包含哪些内容，见 [VSR 路由头](../../troubleshooting/vsr-headers#the-trace)。
+
 ### 路由回放
 
 ```yaml
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: postgres     # explicit durable, SQL-queryable audit storage
       async_writes: true
       postgres:
@@ -217,9 +230,13 @@ global:
         database: vsr
         user: router
         password: ${ROUTER_REPLAY_POSTGRES_PASSWORD}
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ```
 
-路由回放默认关闭。将 `global.services.router_replay.enabled` 设为启用后，它对整台路由器生效；启用后，决策会采集回放，除非该决策添加路由局部 `router_replay` 插件并将 `enabled` 设为 `false`。决策也可以显式选择加入。若未配置持久后端，默认内存存储仅存在于进程内，重启后丢失。
+路由回放默认关闭。`global.plugins` 中的 `router_replay` 插件使它对整台路由器生效；启用后，决策会采集回放，除非该决策添加路由局部 `router_replay` 插件并将 `enabled` 设为 `false`。决策也可以显式选择加入。若未配置持久后端，默认内存存储仅存在于进程内，重启后丢失。
 
 `store_backend` 控制路由决策回放记录的持久化位置。可用后端：
 

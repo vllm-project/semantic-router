@@ -46,8 +46,8 @@ Provider evidence uses the simulator's recorded request or deterministic echo,
 including [wire-field checks](../../../e2e/testcases/protocol_codec_provider_contract.go)
 and [session-scoped non-dispatch lookup](../../../e2e/testcases/plugin_short_circuit_dispatch.go).
 These checks establish Router integration with a controlled peer, not live
-vendor behavior. The [classification stub](../../test/services/provider-mocker/provider_mocker/classify.py)
-has a 2,048-character window; response-jailbreak cases intentionally place the
+vendor behavior. The [System One fixture](../../test/services/provider-mocker/provider_mocker/systemone.py)
+reads all of what it is sent; response-jailbreak cases intentionally place the
 unsafe phrase beyond it. Structured-output fixtures echo the received schema;
 they do not generate answers constrained by that schema.
 
@@ -88,7 +88,7 @@ the in-memory topology merely because the testcase name is shared.
 
 | Exact case and implementation | Profiles | Effective assertions / negative controls | Value, limitation and recommendation |
 | --- | --- | --- | --- |
-| [masking-classifier-unavailable-fails-closed](../../../e2e/testcases/masking_cross_protocol.go#L56) | M | Classifier-error marker must produce 503; refusal body must not contain the raw email. | **Keep, strengthen.** Useful failure-path gate, but neither provider non-dispatch nor classifier-specific error identity is observed; another 503 can pass. |
+| [masking-classifier-unavailable-fails-closed](../../../e2e/testcases/masking_cross_protocol.go#L56) | M | PII-deployment-unavailable marker must produce 503; refusal body must not contain the raw email. | **Keep, strengthen.** Useful failure-path gate, but neither provider non-dispatch nor classifier-specific error identity is observed; another 503 can pass. |
 | [masking-cross-protocol](../../../e2e/testcases/masking_cross_protocol.go#L51) | M | Chat, Responses and Messages must select mask_pii; provider echo has one user message, placeholder, no raw email, and identical masked bytes across wires. | **Keep.** Strong plugin/codec boundary. The deterministic one-span fixture does not establish classifier accuracy or multi-span coverage. |
 | [response-jailbreak-streaming-passthrough](../../../e2e/testcases/response_jailbreak_signal.go#L20) | J | HTTP 200; reassembled streamed text retains the unsafe trailing phrase; named jailbreak extraction counter increases; no response-jailbreak warning. | **Keep.** Checks observation-without-enforcement. Aggregate counter and substring checks do not prove exact full-body equality or a per-request score. |
 | [response-jailbreak-window-block](../../../e2e/testcases/response_jailbreak_window.go#L39) | J | A long echoed response with unsafe trailing text must return 403 and the jailbreak-block message. | **Keep, strengthen.** Window traversal matters; add matched rule/decision and benign same-length success control to distinguish unrelated blocking. |

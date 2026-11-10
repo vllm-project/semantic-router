@@ -120,7 +120,7 @@ func (r *OpenAIRouter) renderAutomaticCandidates(ctx *RequestContext, refs []con
 	return demands, overflow, nil
 }
 
-func (r *OpenAIRouter) automaticOverflowInputBudget(model string, cfg *config.ContextCompressionPluginConfig) int {
+func (r *OpenAIRouter) automaticOverflowInputBudget(model string, cfg *config.ContextPluginConfig) int {
 	params := r.Config.ModelConfig[model]
 	reserve := 1
 	if cfg.Budget != nil && cfg.Budget.ReserveOutputTokens != nil && !cfg.Budget.ReserveOutputTokens.Auto {

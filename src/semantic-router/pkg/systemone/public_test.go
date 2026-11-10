@@ -16,7 +16,7 @@ import (
 
 func TestPublicSystemOneNativeContractAndSeparateGrant(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"private-key": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test", ServedName: "private-served"}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private-key": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test", Model: "private-served"}}
 	listener := &config.Listener{APIKeys: []string{"test-key"}, Models: []string{"chat-only"}, SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
 	calls := 0
 	handler := Handler(cfg, listener, func(_ context.Context, deployment string, body json.RawMessage) (int, []byte, error) {

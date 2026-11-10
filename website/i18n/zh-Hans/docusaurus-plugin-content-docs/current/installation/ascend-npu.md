@@ -14,7 +14,7 @@ Vela 系列模型加载时会与在 Ascend 910B1 上采集的 NPU 参考答案�
 以下路径在 Ascend 910B1 与 950DT 主机上实测（torch_npu 2.10.0.post4、CANN 8.5 / 9.1）。
 
 大模型推理在昇腾上由 vLLM 经 HTTP endpoint 承担；`npu` 加速器覆盖的是模型运行时
-内部的路由器自有模型（307M 信号编码器与 decision 模型）。
+内部的路由器自有模型（从 307M 编码器到 decision 模型）。
 
 ## 前提条件
 
@@ -49,6 +49,18 @@ readiness 会执行模型的 golden 自检：两次参考前向，各自与发�
 完整配置里，用 `device: npu:0` 把 deployment 放到 NPU 上——放置规则与 GPU 相同
 （见[放置和扩展副本](../model-runtime/deploy.md#place-and-scale-replicas)），
 前提是运行时旁装好了 torch_npu。
+
+### 精度：bf16 作为 opt-in
+
+`--dtype bfloat16` 让模型在 NPU 上以 bf16 精度运行（权重以 bf16 驻留，
+reference kernels）；它是显式引擎参数，`--dtype auto` 保持各模型发布的
+（fp32）精度。bf16 下 readiness 报告 unverified——golden 参照按
+`--dtype auto` 记录——准确度依据是离线的逐请求比对（见
+[bf16 record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/npu-bf16-ascend950dt.md)）：
+665-token 的 Vela 2.0 成员 2.5×（并发 8 时 84.8 → 214.1 请求/秒），
+195-token 成员无变化；两模型在本语料上标签零翻转。confidence 叶子可能漂过
+0.02 容差（两模型分别为 0.8% / 4.3%），阈值卡在 confidence 边界上的路由
+规则在 bf16 下可能翻转——这类部署建议保持 fp32。
 
 ## 在容器中运行 NPU 运行时
 

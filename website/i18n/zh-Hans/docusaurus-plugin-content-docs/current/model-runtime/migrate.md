@@ -11,13 +11,17 @@ translation:
 
 # 从原生绑定迁移
 
+:::note
+`legacy.yaml` 示例来自早期版本，保留了当时的模型字段，例如模块的 `model_id` 以及绑定的 `contract` 和 `adapter`。`vllm-sr config migrate` 也会改写这些字段；[迁移模型资源](../installation/model-resource-migration.md)将每个早期字段与取代它的“部署加绑定”形式并列展示。
+:::
+
 早期版本在路由器内部用三种后端运行模型：candle、ONNX Runtime（`ort`）和 OpenVINO。
 这些本地绑定已经由[模型运行时](model-runtime/overview.md)替代；显式配置的外部服务仍单独调用。
 设备由 deployment 和启动时的平台选择决定。该版本的全部破坏性变更见[发布说明](release-notes/built-in-model-runtime.md)。
 
-**升级后请重新验证路由结果。** 未指定模型的判断任务现在使用默认 Vela 2.0 部署；
-这不保证与旧 Vela 1.0 专用模型得出相同结果。检查[默认模型与任务绑定](choose-a-model.md)，
-用自己的请求验证阈值和准确度。
+**升级后请重新验证路由结果。** 每个路由信号现在都询问决策模型，除非你另行选择，否则为 vela3-fast；
+依赖 Vela 1.0 分类器的历史配置即使迁移顺利，答案也会变化。检查[默认模型与阈值](choose-a-model.md#built-in-signals)，
+用自己的请求验证阈值和准确度。[迁移到 v0.5](../installation/migrate-to-v0-5) 介绍了当前版本的配置变化。
 
 如果你的配置包含以下任何一项，就需要迁移：
 
@@ -44,10 +48,10 @@ vllm-sr config migrate --config legacy.yaml --output legacy.migrated.yaml
 
 ```text
 Changes to review
-  global.model_catalog.deployments.vela-domain
-      provider candle -> model_runtime, device cuda:0
+  global.model_catalog.deployments.vela-embedding
+      provider ort is removed: the built-in model runtime serves every local model; rewritten as provider: model_runtime, on its device, with its artifact's Hub repository (2 places)
   global.model_catalog.deployments.vela-domain.precision
-      removed fp16: the model runs in its published precision (dtype: auto); dtype: float16 runs it in half precision on a GPU
+      the model runs in its published precision (dtype: auto); dtype: float16 runs it in half precision on a GPU
 ```
 
 对于仍需你亲自处理的事项，它会打印 **Warning**：无法安全改写的、指向你自有模型的相对路径
@@ -69,34 +73,23 @@ Changes to review
 | `custom_ops_profile`、`compilation_cache_dir` | 移除：运行时自行选择内核 |
 | 计算图 `head`，例如 `onnx/model_fa.onnx` | 移除：运行时自行选择模型的计算图 |
 | `artifact: models/Vela-1.0-Encoder-307M-...` | `artifact: vllm-sr/Vela-1.0-Encoder-307M-...`，即 Hub 仓库 |
-| `embedding_config.backend: candle` 或 `openvino` | 移除 |
-| `gemma_model_path` 或 `bert_model_path`（即使为空） | 移除：运行时没有 EmbeddingGemma 或 MiniLM 系列，由 Vela Embedding（`mmbert_model_path`）替代 |
-| 响应缓存、记忆或向量存储上的 `embedding_model: bert` 或 `gemma`，或在 MiniLM 为默认值时未设置 `embedding_model` | `embedding_model: mmbert`（Vela Embedding）；重新向量化已存储的向量 |
-| 使用 `mmbert` 的存储上设置了 Vela Embedding 不提供的向量维度（例如 MiniLM 的 384） | 记忆使用 256，响应缓存和向量存储使用 768；按该维度重新创建集合或索引 |
-| `model_selection.ml.model_type: bert` 或 `gemma` | `model_type: mmbert`；用 Vela Embedding 向量重新训练选择模型 |
+| `embeddings.semantic`，连同其中的 `embedding_config.backend: candle` 或 `openvino`，以及 `gemma_model_path` 或 `bert_model_path` | 移除：运行时没有 EmbeddingGemma 或 MiniLM 系列；`embeddings.default` 指定 embedding 部署，不改就是 Vela Embedding（见 [Embeddings](./guides/embeddings.md)） |
+| 响应缓存、记忆或向量存储上的 `embedding_model: bert` 或 `gemma` | 移除：存储改用 `embeddings.default` 向量化；重新向量化已存储的向量 |
+| 用 Vela Embedding 的存储上设置了它不提供的向量维度（例如 MiniLM 的 384） | 保留：记忆改为 256，响应缓存和向量存储改为 768，并按该维度重新创建集合或索引 |
+| `global.router.model_selection.ml` 以及训练得到的 `knn`、`kmeans`、`svm` 和 `mlp` 选择器 | 移除：由不需要训练模型的 `systemone` 选择器替代 |
 | 模块上的 `variant`、`model_type`、`use_modernbert`、`use_mmbert_32k` | 移除：运行时从模型读取架构 |
 | 旧模型目录中的标签映射，例如 `category_mapping_path: models/mom-domain-classifier/category_mapping.json` | 移除：路由器读取所运行模型的标签 |
-| MLP 选择算法上的 `mlp.device` | 移除：MLP 选择器在路由器内运行 |
-| fusion 算法的 `grounding.nli_contradiction_penalty` | `grounding.contradiction_penalty`：grounding 现在读取幻觉检测器 |
-| 使用 `backend: endpoint`、`endpoint` 和 `model_id` 的幻觉检测器 | 指向该聊天服务的 `hallucination_detector` binding；路径不是 `/v1` 的 endpoint 需要手动编写 |
+| fusion 算法的 `grounding.nli_contradiction_penalty` | `grounding.contradiction_penalty`：grounding 现在读取幻觉问题 |
+| 使用 `backend: endpoint`、`endpoint` 和 `model_id` 的幻觉检测器 | 移除：`hallucination` 信号询问支持 span 的 System One 部署 |
 
 ### 更名的模型 {#model-names-that-changed}
 
-较旧的任务模型由同一任务的 Vela 1.0 模型替代。替代模型使用相同的标签名，
-因此你的信号规则和路由条件仍匹配原来匹配的内容。
+Router 不再运行任务分类器：早期版本中的领域、PII、越狱、事实核查、反馈、模态或幻觉模型，无论是 `mom-domain-classifier` 这样的旧名称还是 Vela 1.0 任务模型，都由[决策模型](../system-one/overview)替代，由它提出该信号的问题。它的标签就是你的规则已经在用的标签。embedding 模型按下表替换：
 
 | 旧模型 | 新模型 | 变化 |
 | --- | --- | --- |
-| `mom-domain-classifier`、`mmbert32k-intent-*` 及其别名 | `Vela-1.0-Encoder-307M-Domain` | 相同的 14 个领域 |
-| `mom-pii-classifier`、`mom-mmbert-pii-detector`、`mmbert32k-pii-*` | `Vela-1.0-Encoder-307M-PII` | 相同的 17 种 PII 类型 |
-| `mom-jailbreak-classifier`、`mmbert32k-jailbreak-*` | `Vela-1.0-Encoder-307M-Guard` | 相同的 `benign` / `jailbreak` 标签 |
-| `mom-halugate-sentinel`、`mmbert32k-factcheck-*` | `Vela-1.0-Encoder-307M-FactCheck` | 相同的标签 |
-| `mom-feedback-detector`、`mmbert32k-feedback-*` | `Vela-1.0-Encoder-307M-Feedback` | 新增 `NO_FEEDBACK`，用于不含反馈的消息 |
-| `mmbert32k-modality-router-merged` | `Vela-1.0-Encoder-307M-Modality` | 相同的 `AR` / `DIFFUSION` / `BOTH` 标签 |
-| `mom-halugate-detector`、LettuceDetect v1 和 v2 | `Vela-1.0-Encoder-307M-Halu` | 相同的输入；仍返回回答中的片段 |
 | `mmbert-embed-32k-2d-matryoshka` | `Vela-1.0-Encoder-307M-Embedding` | **重新向量化**已存储的向量 |
 | EmbeddingGemma（`mom-embedding-flash`）、MiniLM（`mom-embedding-light`） | `Vela-1.0-Encoder-307M-Embedding`，或 OpenAI 兼容的 embedding 端点 | **重新向量化**已存储的向量 |
-| `multi-modal-embed-small` / `-large` | `Vela-1.0-Omni-Nano` / `-Mini` | **重新向量化**已存储的向量 |
 | Qwen3-Embedding-0.6B（`mom-embedding-pro`） | 不变 | |
 
 ### 已退役的功能 {#features-that-were-retired}
@@ -126,10 +119,10 @@ Dashboard 修改合并到 `legacy.migrated.yaml`，再加上 `--replace-active-c
 ## 完整示例 {#a-complete-example}
 
 下面的配置在 AMD GPU 上用 ONNX Runtime 运行 embedding，在 NVIDIA GPU 上用 candle 运行领域分类器，
-并使用一个旧的 jailbreak 模型和 NLI 解释器：
+并使用响应缓存的 NLI polarity guard：
 
 ```yaml title="legacy.yaml"
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -140,13 +133,14 @@ providers:
         - name: answer
           endpoint: vllm:8000
           provider: vllm
-routing:
-  model_bindings:
-    embedding:
-      deployment: vela-embedding
-      contract: embedding.v1
-      adapter: mmbert
-      head: onnx/model_fa.onnx
+recipes:
+  - name: default
+    model_bindings:
+      embedding:
+        deployment: vela-embedding
+        contract: embedding.v1
+        adapter: mmbert
+        head: onnx/model_fa.onnx
 global:
   model_catalog:
     deployments:
@@ -161,74 +155,56 @@ global:
         provider: candle
         device: cuda:0
         precision: fp16
-    modules:
-      prompt_guard:
-        enabled: true
-        model_id: models/mom-jailbreak-classifier
-        variant: candle
-      hallucination_mitigation:
-        enabled: true
-        detector:
-          backend: candle
-          model_id: models/Vela-1.0-Encoder-307M-Halu
-          enable_nli_filtering: true
-        explainer:
-          model_id: models/mom-halugate-explainer
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
       polarity_guard:
         mode: lexical+nli
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
 ```
 
 `vllm-sr config migrate --config legacy.yaml` 写出：
 
 ```yaml title="legacy.migrated.yaml"
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
     model: answer-model
   models:
-  - name: answer-model
-    backend_refs:
-    - name: answer
-      endpoint: vllm:8000
-      provider: vllm
-routing:
-  model_bindings:
-    embedding:
-      deployment: vela-embedding
-      contract: embedding.v1
-      adapter: mmbert
+    - name: answer-model
+      backend_refs:
+        - name: answer
+          endpoint: vllm:8000
+          provider: vllm
+recipes:
+  - name: default
 global:
   model_catalog:
     deployments:
-      vela-embedding:
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
-        provider: model_runtime
-        device: rocm:0
       vela-domain:
         artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
         provider: model_runtime
         device: cuda:0
-    modules:
-      prompt_guard:
-        enabled: true
-        model_id: models/Vela-1.0-Encoder-307M-Guard
-      hallucination_mitigation:
-        enabled: true
-        detector:
-          model_id: models/Vela-1.0-Encoder-307M-Halu
+      vela-embedding:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
+        provider: model_runtime
+        device: rocm:0
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
-      embedding_model: mmbert
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
 ```
 
-响应缓存原本没有 `embedding_model`，因此使用的是此前的默认模型 MiniLM；现在它指定 Vela Embedding。
+embedding 绑定被删除：响应缓存用 `embeddings.default` 向量化，即文件声明的 `vela-embedding` 部署，现在由模型运行时在 AMD GPU 上提供服务。
 对迁移后的文件再次运行该命令不会做任何修改。
 
 ## 引擎参数 {#engine-arguments}
@@ -262,9 +238,8 @@ deployment 已设置的引擎参数会保留。命令行参数和请求选项也
 - **记忆：** 用旧模型存储的记忆不会返回。请重新添加需要保留的记忆。
 - **向量存储与 RAG：** 用新模型重新索引你的文档。Milvus、Qdrant 和混合 RAG 后端在原先使用
   MiniLM（384 维）的地方改用 Vela Embedding（768 维）对查询向量化，因此请用 Vela Embedding
-  重新向量化这些集合；迁移会为每个集合打印一条警告。
-- **Embedding 信号和知识库：** 它们的示例文本会在启动时重新向量化。请在你自己的流量上检查相似度阈值；
-  不同模型的分数不可直接比较。
+  重新向量化这些集合，或在 RAG 源的 `backend_config.embedding` 中指定为集合建索引的部署。
+  请在你自己的流量上检查相似度阈值；不同模型的分数不可直接比较。
 
 ## Kubernetes 与 Docker {#kubernetes-and-docker}
 
@@ -272,8 +247,6 @@ deployment 已设置的引擎参数会保留。命令行参数和请求选项也
 请删除仅为 candle、ONNX Runtime 或 OpenVINO 存在的环境变量、init 容器或卷。
 需要 GPU 时，运行 GPU 运行时并让路由器连接它；见[与路由器一起运行](model-runtime/deploy.md#on-kubernetes)。
 
-如果使用 operator 部署，请在升级前从 `SemanticRouter` 资源中删除 `embedding_models.gemma_model_path`。
-资源定义已不再包含该字段：kubectl 默认的严格校验会拒绝仍设置它的清单（`unknown field`），
-而升级前已存储的资源会丢失该字段，如同从未设置过：其路由器使用资源其余部分配置的 embedding 模型，
-例如通过 `mmbert_model_path` 配置的 Vela Embedding。
+如果使用 operator 部署，请在升级前从 `SemanticRouter` 资源中删除 `embedding_models`。
+operator 会拒绝仍设置它的资源；其路由器用 `embeddings.default` 向量化，除非资源的配置指定了别的部署，否则就是 Vela Embedding。
 请重新向量化由 EmbeddingGemma 存储的向量（见[更换 embedding 模型时重新向量化](#re-embed-when-the-embedding-model-changes)）。

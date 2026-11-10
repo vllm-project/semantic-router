@@ -124,7 +124,7 @@ func (d *shadowDispatcher) connectorFor(job *shadowJob, target *shadowTarget) (*
 	if client, ok := d.clients[key]; ok {
 		return client, "", nil
 	}
-	authorize, err := configuredProviderAuthorizer(job.routerConfig, target.profile, target.logicalModel)
+	authorize, err := configuredProviderAuthorizer(job.routerConfig, target.profile, target.logicalModel, "router_replay_shadow")
 	if err != nil {
 		return nil, shadowReasonCredentialUnresolved, err
 	}
@@ -136,7 +136,7 @@ func (d *shadowDispatcher) connectorFor(job *shadowJob, target *shadowTarget) (*
 	return client, "", nil
 }
 
-func shadowConnectorOptions(cfg config.ShadowDispatchPluginConfig) connector.Options {
+func shadowConnectorOptions(cfg config.RouterReplayShadowConfig) connector.Options {
 	options := connector.Options{
 		AttemptTimeout:   time.Duration(cfg.TimeoutSeconds) * time.Second,
 		MaxRetries:       cfg.MaxRetries,

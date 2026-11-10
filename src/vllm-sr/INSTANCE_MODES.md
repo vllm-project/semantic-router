@@ -65,8 +65,8 @@ vllm-sr serve --engine --platform rocm -dp 2 --device-ids 0
 
 ## Ask about images and videos
 
-Decision 3.0 models (`vllm-sr/d3`, `d3-turbo`, `d3-flash`, `d3-mini`,
-`d3-nano`, `d3-lite`, `d3-edge`) read images and videos as well as text.
+Decision 3.0 models (`vllm-sr/d3`, `d3-turbo`, `d3-ultra`, `d3-flash`,
+`d3-mini`, `d3-nano`, `d3-lite`, `d3-edge`) read images and videos as well as text.
 Serve one on an AMD Instinct MI325X:
 
 ```bash
@@ -132,6 +132,9 @@ Serve it on an AMD Instinct MI325X:
 ```bash
 vllm-sr serve vllm-sr/d3-turbo --engine --platform rocm
 ```
+
+`vllm-sr/d3-ultra` answers the same questions the same way; a text-only
+request also lists its questions in front of its state.
 
 ```bash
 curl -s localhost:8899/v1/systemone -H 'content-type: application/json' --data-binary @- <<EOF

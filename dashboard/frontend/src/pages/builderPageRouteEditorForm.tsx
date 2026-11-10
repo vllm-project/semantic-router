@@ -403,7 +403,7 @@ const RouteEditorForm: React.FC<{
             <button
               className={styles.toolbarBtn}
               onClick={() =>
-                setAlgorithm({ algoType: "confidence", fields: {} })
+                setAlgorithm({ algoType: "static", fields: {} })
               }
               style={{ padding: "0.25rem 0.5rem", fontSize: "var(--text-xs)" }}
             >

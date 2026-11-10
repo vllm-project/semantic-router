@@ -182,10 +182,10 @@ func TestReplayUserTurnUsesHistoryBeforeContextChanges(t *testing.T) {
 				require.NoError(t, router.applyContextTransformationPlan(ctx, request))
 				require.Len(t, request.Messages, 1)
 			} else {
-				request.Messages = append([]llmprotocol.Message{{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Saved context."}}}}, request.Messages...)
-				ctx.MemoryMessageIndexes = map[int]struct{}{0: {}}
+				request.Messages = append(request.Messages, memoryExchange("memory-call", "Saved context.")...)
+				ctx.MemoryToolCallIDs = map[string]struct{}{"memory-call": {}}
 				require.NoError(t, router.applyContextTransformationPlan(ctx, request))
-				require.Len(t, request.Messages, 4)
+				require.Len(t, request.Messages, 5)
 			}
 			router.startRouterReplay(ctx, "public", "backend", "route")
 			record, found := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)

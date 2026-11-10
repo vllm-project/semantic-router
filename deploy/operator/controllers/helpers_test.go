@@ -919,7 +919,7 @@ func TestConvertToConfigMapWithMilvus(t *testing.T) {
 		BackendType:         "milvus",
 		SimilarityThreshold: "0.90",
 		TTLSeconds:          7200,
-		EmbeddingModel:      "qwen3",
+		Embedding:           &vllmv1alpha1.EmbeddingBinding{Deployment: "qwen3-embedding"},
 		Milvus: &vllmv1alpha1.MilvusCacheConfig{
 			Connection: vllmv1alpha1.MilvusCacheConnection{
 				Host:     "milvus.default.svc",
@@ -968,8 +968,8 @@ func TestConvertToConfigMapWithMilvus(t *testing.T) {
 	if configMap["backend_type"] != "milvus" {
 		t.Errorf("backend_type = %v, want milvus", configMap["backend_type"])
 	}
-	if configMap["embedding_model"] != "qwen3" {
-		t.Errorf("embedding_model = %v, want qwen3", configMap["embedding_model"])
+	if embedding, isMap := configMap["embedding"].(map[string]interface{}); !isMap || embedding["deployment"] != "qwen3-embedding" {
+		t.Errorf("embedding = %v, want deployment qwen3-embedding", configMap["embedding"])
 	}
 
 	// Verify Milvus nested structure

@@ -62,13 +62,13 @@ func TestHandleFusionQuorumFailurePersistsAccountingAndAttempts(t *testing.T) {
 	decision := &config.Decision{
 		Name: "fusion-quorum-route",
 		Algorithm: &config.AlgorithmConfig{
-			Type: config.DecisionAlgorithmFusion,
+			Type:    config.DecisionAlgorithmFusion,
+			OnError: config.FusionOnErrorSkip,
 			Fusion: &config.FusionAlgorithmConfig{
 				Model:                  "judge",
 				AnalysisModels:         []string{"panel-a", "panel-b", "panel-c"},
 				MaxConcurrent:          3,
 				MinSuccessfulResponses: 2,
-				OnError:                config.FusionOnErrorSkip,
 			},
 		},
 	}

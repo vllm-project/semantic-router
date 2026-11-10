@@ -15,10 +15,16 @@ Semantic Router is an Envoy External Processor. In buffered mode the gateway sen
 
 Requests that name a concrete model are accumulated the same way as `vllm-sr/auto` requests, and the `streamed_body.max_bytes` and `streamed_body.timeout_sec` limits apply to them. Their chunks are held until end-of-stream because the pipeline can still rewrite the model to the provider's model ID, translate the request to the backend's API format, or add `stream_options.include_usage` to a streamed Chat Completions request.
 
+Each chunk is checked against the remaining `max_bytes` budget before it is
+copied into the body buffer; a body exactly at the limit is allowed. If a size
+or timeout guard rejects the request, Semantic Router sends one immediate
+response (413 or 408), releases the body handler, and ends the ExtProc stream.
+Later chunks or trailers cannot resume routing or invoke request-body plugins.
+
 For streamed Chat Completions responses, immediate responses keep OpenAI-compatible behavior:
 
 - looper algorithms return `Content-Type: text/event-stream` when the original request has `"stream": true`;
-- looper responses include `x-vsr-looper-*` headers such as `x-vsr-looper-model`, `x-vsr-looper-models-used`, `x-vsr-looper-iterations`, and `x-vsr-looper-algorithm`;
+- looper responses report the models called, the algorithm and the iterations in the `looper` member of `x-vsr-trace`;
 - non-streaming immediate responses, including many `fast_response` blocks, return a complete JSON response immediately;
 - Response API requests are translated back through the Response API layer, so looper execution is forced to non-streaming internally for those requests.
 
@@ -117,7 +123,7 @@ A complete Kubernetes example is available in `deploy/kubernetes/streaming/aigw-
 
 ## Raw Envoy
 
-If a raw Envoy route table or backend depends on Semantic Router's request headers, as the configuration `vllm-sr serve` generates does, use `request_body_mode: BUFFERED` or the `FULL_DUPLEX_STREAMED` configuration described below. In `STREAMED` mode, Envoy passes the request headers on as soon as Semantic Router answers them. A body that arrives after that answer can still be rewritten, but Envoy no longer applies [header mutations](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ext_proc/v3/external_processor.proto#envoy-v3-api-field-service-ext-proc-v3-commonresponse-header-mutation) to that request. Semantic Router sets the provider credential, the provider request path and the `x-selected-model` routing header at end-of-stream, so such a request reaches Envoy's default route with its original path and the client's own `Authorization` header. Whether a request is affected depends on how long its body takes to arrive, so the failures are intermittent. With `request_body_mode: FULL_DUPLEX_STREAMED`, `request_trailer_mode: SEND` and `global.router.streamed_body` enabled, Envoy applies these header changes, because Semantic Router holds its reply to the request headers until the body is routed. Keep that filter's `failure_mode_allow` at its default, `false`: while the reply is held, a failed ExtProc stream would otherwise let Envoy forward the request with the client's original headers.
+If a raw Envoy route table or backend depends on Semantic Router's request headers, as the configuration `vllm-sr serve` generates does, use `request_body_mode: BUFFERED` or the `FULL_DUPLEX_STREAMED` configuration described below. In `STREAMED` mode, Envoy passes the request headers on as soon as Semantic Router answers them. A body that arrives after that answer can still be rewritten, but Envoy no longer applies [header mutations](https://www.envoyproxy.io/docs/envoy/latest/api-v3/service/ext_proc/v3/external_processor.proto#envoy-v3-api-field-service-ext-proc-v3-commonresponse-header-mutation) to that request. Semantic Router sets the provider credential, the provider request path and the `x-vsr-route-model` routing header at end-of-stream, so such a request reaches Envoy's default route with its original path and the client's own `Authorization` header. Whether a request is affected depends on how long its body takes to arrive, so the failures are intermittent. With `request_body_mode: FULL_DUPLEX_STREAMED`, `request_trailer_mode: SEND` and `global.router.streamed_body` enabled, Envoy applies these header changes, because Semantic Router holds its reply to the request headers until the body is routed. Keep that filter's `failure_mode_allow` at its default, `false`: while the reply is held, a failed ExtProc stream would otherwise let Envoy forward the request with the client's original headers.
 
 The Agent Router example above routes on `x-ai-eg-model`, which Semantic Router does not set, so its routing does not depend on these header changes.
 
@@ -161,7 +167,7 @@ spec:
 
 agentgateway does not support a separate `Streamed` request-body mode. Use `FullDuplexStreamed` for streamed request bodies and enable `global.router.streamed_body` in Semantic Router.
 
-To route on `x-selected-model` or another header Semantic Router sets, add `phase: PreRouting` under `traffic`: in the default `PostRouting` phase, agentgateway selects the route before ExtProc runs.
+To route on `x-vsr-route-model` or another header Semantic Router sets, add `phase: PreRouting` under `traffic`: in the default `PostRouting` phase, agentgateway selects the route before ExtProc runs.
 
 Semantic Router detects the negotiated ExtProc body mode. With
 `FullDuplexStreamed`, it buffers intermediate request chunks without emitting
@@ -179,32 +185,32 @@ Looper algorithms are the main immediate-response path added by the full-duplex 
 Example decision fragment:
 
 ```yaml
-routing:
-  decisions:
-    - name: streamed_confidence_route
-      description: Escalate code requests when the first model is uncertain.
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: computer science
-      modelRefs:
-        - model: small-code-model
-          use_reasoning: false
-        - model: large-code-model
-          use_reasoning: false
-      algorithm:
-        type: confidence
-        confidence:
-          confidence_method: hybrid
-          threshold: 0.72
-          escalation_order: small_to_large
-          on_error: skip
+recipes:
+  - name: default
+    decisions:
+      - name: streamed_confidence_route
+        description: Escalate code requests when the first model is uncertain.
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: computer science
+        modelRefs:
+          - model: small-code-model
+            use_reasoning: false
+          - model: large-code-model
+            use_reasoning: false
+        algorithm:
+          type: escalate
+          escalate:
+            order: size
+            accept:
+              confidence: {method: hybrid, gte: 0.72}
 ```
 
 The `computer science` signal and both provider models must also exist in the
-same recipe. See the [Confidence tutorial](/docs/tutorials/algorithm/looper/confidence)
+same recipe. See the [Escalate tutorial](../../tutorials/algorithm/looper/escalate.md)
 for the complete contract.
 
 When the client sends `"stream": true`, Semantic Router calls the candidate model(s), aggregates the looper result, and returns an immediate SSE body to the gateway. The client still receives a normal OpenAI-compatible stream:
@@ -226,7 +232,7 @@ Look for:
 
 - `HTTP/1.1 200 OK`;
 - `content-type: text/event-stream`;
-- `x-vsr-looper-algorithm: confidence`, `ratings`, or `remom`;
+- `x-vsr-response-path: looper`;
 - SSE events beginning with `data: {"id":"chatcmpl-...","object":"chat.completion.chunk"...}`;
 - final `data: [DONE]`.
 
@@ -235,27 +241,28 @@ Look for:
 `fast_response` can also short-circuit requests that arrive as streamed body chunks. This is useful for safety decisions such as PII or jailbreak blocking.
 
 ```yaml
-routing:
-  signals:
-    jailbreak:
-      - name: streamed_jailbreak
-        method: classifier
-        threshold: 0.6
-        description: Detect prompt-injection attempts before forwarding.
-  decisions:
-    - name: streamed_jailbreak_block
-      description: Return a policy response for detected prompt injection.
-      priority: 1000
-      rules:
-        operator: AND
-        conditions:
-          - type: jailbreak
-            name: streamed_jailbreak
-      modelRefs: []
-      plugins:
-        - type: fast_response
-          configuration:
-            message: This request was blocked by policy.
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: streamed_jailbreak
+          method: classifier
+          threshold: 0.6
+          description: Detect prompt-injection attempts before forwarding.
+    decisions:
+      - name: streamed_jailbreak_block
+        description: Return a policy response for detected prompt injection.
+        priority: 1000
+        rules:
+          operator: AND
+          conditions:
+            - type: jailbreak
+              name: streamed_jailbreak
+        modelRefs: []
+        plugins:
+          - type: fast_response
+            configuration:
+              message: This request was blocked by policy.
 ```
 
 With `request_body_mode: STREAMED` or `requestBodyMode: FullDuplexStreamed`, Semantic Router accumulates the body, runs the safety signal at end-of-stream, and returns the configured immediate response without forwarding the request to the backend.
@@ -278,7 +285,7 @@ With `request_body_mode: STREAMED` or `requestBodyMode: FullDuplexStreamed`, Sem
 
 3. Send a large or chunked request with `"model": "vllm-sr/auto"` and verify it routes normally.
 
-4. Send a streamed Chat Completions request with `"stream": true` that matches a looper decision and verify SSE output plus `x-vsr-looper-*` headers.
+4. Send a streamed Chat Completions request with `"stream": true` that matches a looper decision and verify SSE output plus, for a caller `global.router.headers.debug` allows, the `looper` member of `x-vsr-trace`.
 
 5. Send a request that matches a `fast_response` decision and verify the backend model is not called.
 

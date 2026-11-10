@@ -87,7 +87,7 @@ def resolve_image_sources(plan: dict) -> None:
         if plan["profile"] not in {"pr", "main", "nightly"}:
             # Explicit release qualification requires a published fixture.
             raise
-        # Main publication is explicit. PRs and weekly qualification can test
+        # Main publication is explicit. PRs and nightly qualification can test
         # exact fixture inputs before that publication, without promoting them.
         published["source"] = "candidate"
         plan["build_images"] = sorted({*plan["build_images"], MOCKER_IMAGE})
@@ -148,7 +148,7 @@ def make_plan(
     deferred = []
     if profile == "main" and not publish:
         # Main continuously checks source. Reviewed PRs own affected product
-        # qualification; explicit publication and weekly/release own full runs.
+        # qualification; explicit publication and nightly/release own full runs.
         ids = [name for name in ids if records[name]["execution"] == "automatic"]
         required_ids = list(ids)
     elif require_approval and profile == "pr" and not requested:
@@ -411,10 +411,11 @@ PERFORMANCE_BASES = {
     # current harness cannot compile there. #3852 introduced the paired Vela
     # CPU benchmarks.
     "0.4.0": "12597be5ffae2319d856f230d61ca26248eb9b3b",
-    # v0.4.0 predates the model runtime, so compare-model-baseline.sh could
-    # only record a reset. #4707 pinned the classify benchmarks to the Vela 1.0
-    # specialists, and its own Production Benchmarks job passed with them.
-    "0.5.0": "abae8ff99df2fdab372f0fb6d032b305907b9f44",
+    # v0.4.0 predates the model runtime, and every earlier main commit predates
+    # the decision model's preset questions, so compare-model-baseline.sh could
+    # only record a reset. #5886 answers the classify benchmarks' signals with
+    # the decision model, and its own Production Benchmarks job passed with it.
+    "0.5.0": "4952ca055d0f99adf746b67aa61cfb7223d0739b",
 }
 # The first release that serves the model benchmarks through the model
 # runtime. An older previous release can't be measured, only reset.

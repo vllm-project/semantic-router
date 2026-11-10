@@ -23,12 +23,10 @@ describe('decision editor preservation', () => {
       ],
       plugins: [],
       algorithm: {
-        type: 'prompt',
-        on_error: 'fallback',
-        prompt: {
-          model: 'router-small',
+        type: 'systemone',
+        systemone: {
           instructions: 'Choose.',
-          timeout_seconds: 5,
+          timeout_ms: 5000,
         },
       },
     }
@@ -57,7 +55,7 @@ describe('decision editor preservation', () => {
           conditions: [
             { type: 'metadata', name: 'canary' },
             {
-              type: 'classifier',
+              type: 'systemone',
               name: 'risk',
               label: 'RISKY',
               predicate: { gte: 0.8 },
@@ -79,14 +77,14 @@ describe('decision editor preservation', () => {
       type: 'keyword',
       name: 'complex',
     })
-    const classifier: DecisionConfig['rules'] = {
-      type: 'classifier',
+    const labelled: DecisionConfig['rules'] = {
+      type: 'systemone',
       name: 'risk',
       label: 'RISKY',
       predicate: { gte: 0.8 },
       on_unknown: 'no_match',
     }
-    expect(decisionRulesForSave(classifier)).toEqual(classifier)
+    expect(decisionRulesForSave(labelled)).toEqual(labelled)
     expect(decisionRulesForSave({})).toEqual({})
     expect(decisionRulesForSave({ operator: 'AND', conditions: [] })).toEqual({
       operator: 'AND',
@@ -100,7 +98,7 @@ describe('decision editor preservation', () => {
     const conflicting: DecisionConfig['rules'] = {
       operator: 'AND',
       on_unknown: 'fail_request',
-      conditions: [{ type: 'classifier', name: 'risk', label: 'RISKY', on_error: 'match' }],
+      conditions: [{ type: 'systemone', name: 'risk', label: 'RISKY', on_error: 'match' }],
     }
     expect(decisionRulesForSave(conflicting)).toEqual(conflicting)
   })

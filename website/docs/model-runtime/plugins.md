@@ -175,8 +175,9 @@ contract
 
 ## Use it from the router
 
-Install your plugin next to the runtime the router uses, then bind a feature
-to a deployment of your model. For a runtime you run yourself, attach to it:
+Install your plugin next to the runtime the router uses, then name a
+deployment of your model where a signal uses it. For a runtime you run
+yourself, attach to it:
 
 ```yaml
 global:
@@ -184,13 +185,13 @@ global:
     deployments:
       ticket-topics:
         provider: model_runtime
-        endpoint: http://runtime.internal:8100
-        served_name: keywords
+        endpoint: http://runtime.example.com:8100
+        model: keywords
 ```
 
-A custom classifier signal can then read its labels; see
-[Classify requests](./guides/classify.md#use-your-own-classifier). The router
-checks the binding against the labels your model reports in `/v1/models`. A
+What reads your model's task can then name `ticket-topics` as its
+`deployment`: a systemone rule for a model that answers decision questions
+(see [Write custom questions](../system-one/custom-questions)). A
 deployment names your accelerator in `device` the same way; the router
 checks only its form, and the runtime refuses a name it has no plugin for and
 lists the names it has.

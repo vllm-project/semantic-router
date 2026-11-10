@@ -8,17 +8,15 @@ import "gopkg.in/yaml.v3"
 // a value already in the fragment wins. dsl.MergeRoutingIntoBase applies the
 // same rule for CLI compiles with a base config.
 func preserveBaseDecisionAdaptations(baseRoot, fragmentRoot *yaml.Node) {
-	preserveDecisionAdaptations(mappingValueNode(baseRoot, "routing"), mappingValueNode(fragmentRoot, "routing"))
 	baseRecipes := sequenceItemsByName(mappingValueNode(baseRoot, "recipes"))
 	for _, recipe := range sequenceItems(mappingValueNode(fragmentRoot, "recipes")) {
-		baseRecipe := baseRecipes[itemName(recipe)]
-		preserveDecisionAdaptations(mappingValueNode(baseRecipe, "routing"), mappingValueNode(recipe, "routing"))
+		preserveDecisionAdaptations(baseRecipes[itemName(recipe)], recipe)
 	}
 }
 
-func preserveDecisionAdaptations(baseRouting, fragmentRouting *yaml.Node) {
-	baseDecisions := sequenceItemsByName(mappingValueNode(baseRouting, "decisions"))
-	for _, decision := range sequenceItems(mappingValueNode(fragmentRouting, "decisions")) {
+func preserveDecisionAdaptations(baseRecipe, fragmentRecipe *yaml.Node) {
+	baseDecisions := sequenceItemsByName(mappingValueNode(baseRecipe, "decisions"))
+	for _, decision := range sequenceItems(mappingValueNode(fragmentRecipe, "decisions")) {
 		if mappingValueNode(decision, "adaptations") != nil {
 			continue
 		}

@@ -366,7 +366,7 @@ looper 不再是“绕回 Envoy”的特殊流程，而是在 Router 内部执�
 
 - **类型化扩展注册表：** 信号、算法、插件、图节点、过滤器都按 `type` 注册 Go 实现、schema、默认值和校验器；新增
   一种扩展不需要改核心代码。
-- **校验：** 由 Go 类型生成的 JSON schema（今天是 `router-config-v0.3.schema.json`）+ 交叉引用检查 + 能力检查。
+- **校验：** 由 Go 类型生成的 JSON schema（今天是 `router-config-v0.5.schema.json`）+ 交叉引用检查 + 能力检查。
   当前模式不支持的字段在加载时直接报错，并提示可以支持它的模式（例如 `--gateway extproc`）。
 - **生命周期：** compile、validate、warm、activate（原子切换，和今天的 router generation 切换一样）、drain、history。
 - **增量重建：** 只重建变化的资源。只改 endpoint 时不重建信号和模型绑定；只改 recipe 时不重建上游连接池。

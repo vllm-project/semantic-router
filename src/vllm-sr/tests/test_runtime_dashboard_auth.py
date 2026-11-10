@@ -38,7 +38,7 @@ def test_local_stack_scopes_jwt_secret_and_hides_its_value(
     docker_bin = tmp_path / "docker"
     docker_bin.write_text("")
     config = tmp_path / "config.yaml"
-    config.write_text("version: v0.3\nlisteners: []\n")
+    config.write_text("version: v0.5\nlisteners: []\n")
     commands = []
 
     def fake_run(cmd, **_kwargs):

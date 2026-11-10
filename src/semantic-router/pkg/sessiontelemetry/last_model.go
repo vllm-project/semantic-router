@@ -32,9 +32,10 @@ type lastModelState struct {
 // telemetry and transition stores; durable cross-replica persistence is tracked
 // as follow-up debt.
 type lastModelStore struct {
-	mu       sync.Mutex
-	sessions map[string]*lastModelState
-	nowFn    func() time.Time
+	mu        sync.Mutex
+	sessions  map[string]*lastModelState
+	nowFn     func() time.Time
+	lastEvict time.Time
 }
 
 var globalLastModelStore = &lastModelStore{
@@ -112,7 +113,14 @@ func lastModelInfo(sessionID string, now time.Time, mutate bool) (string, time.D
 	return st.model, idleFor, true
 }
 
+// evictExpiredLocked is throttled to one full sweep per evictInterval, like
+// evictLocked. RecordLastModel overwrites every field, so an expired entry
+// reused before the next sweep carries nothing stale. Callers must hold s.mu.
 func (s *lastModelStore) evictExpiredLocked(t time.Time) {
+	if !s.lastEvict.IsZero() && t.Sub(s.lastEvict) < evictInterval {
+		return
+	}
+	s.lastEvict = t
 	for k, v := range s.sessions {
 		if t.Sub(v.lastSeen) > ttl {
 			delete(s.sessions, k)
@@ -147,6 +155,7 @@ func ResetLastModelForTesting() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sessions = make(map[string]*lastModelState)
+	s.lastEvict = time.Time{}
 }
 
 // setLastModelNowForTesting overrides the store clock for deterministic TTL

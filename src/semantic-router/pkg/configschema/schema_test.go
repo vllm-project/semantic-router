@@ -29,7 +29,7 @@ func TestGeneratedArtifactsMatchGoSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	artifacts := []string{
-		filepath.Join(root, "src", "semantic-router", "pkg", "configschema", "router-config-v0.3.schema.json"),
+		filepath.Join(root, "src", "semantic-router", "pkg", "configschema", "router-config-v0.5.schema.json"),
 	}
 	for _, artifact := range artifacts {
 		got, readErr := os.ReadFile(artifact)
@@ -60,9 +60,9 @@ func TestGeneratedArtifactsMatchGoSource(t *testing.T) {
 func TestCanonicalSchemaIsTheOnlyTrackedSchemaArtifact(t *testing.T) {
 	root := repositoryRoot(t)
 	for _, obsolete := range []string{
-		filepath.Join(root, "config", "schemas", "router-config-v0.3.schema.json"),
-		filepath.Join(root, "src", "vllm-sr", "cli", "config_schema", "router-config-v0.3.schema.json"),
-		filepath.Join(root, "dashboard", "frontend", "src", "generated", "router-config-v0.3.schema.json"),
+		filepath.Join(root, "config", "schemas", "router-config-v0.5.schema.json"),
+		filepath.Join(root, "src", "vllm-sr", "cli", "config_schema", "router-config-v0.5.schema.json"),
+		filepath.Join(root, "dashboard", "frontend", "src", "generated", "router-config-v0.5.schema.json"),
 	} {
 		if _, err := os.Stat(obsolete); err == nil {
 			t.Errorf("obsolete schema mirror still exists: %s", obsolete)
@@ -80,10 +80,13 @@ func TestSchemaPublishesEveryRoutingSurface(t *testing.T) {
 	if err := json.Unmarshal(Document(), &document); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"version", "listeners", "providers", "evaluation", "routing", "entrypoints", "recipes", "global"} {
+	for _, field := range []string{"version", "listeners", "providers", "evaluation", "entrypoints", "recipes", "global"} {
 		if _, ok := document.Properties[field]; !ok {
 			t.Errorf("root schema is missing %q", field)
 		}
+	}
+	if _, ok := document.Properties["routing"]; ok {
+		t.Error("root schema still publishes the removed routing block")
 	}
 	if _, ok := document.Properties["setup"]; ok {
 		t.Error("steady-state Router schema must not publish transient Dashboard setup state")
@@ -124,13 +127,15 @@ func TestSchemaPublishesEveryRoutingSurface(t *testing.T) {
 		"router",
 		"services.management_api",
 		"services.startup_status",
-		"model_catalog.kbs",
 		"model_catalog.admission",
-		"model_catalog.modules.complexity",
+		"plugins",
 	} {
 		if !globalPaths[path] {
 			t.Errorf("global section catalog is missing %q", path)
 		}
+	}
+	if globalPaths["model_catalog.modules"] {
+		t.Error("global section catalog still has model_catalog.modules")
 	}
 	for _, surface := range document.Extension.Signals {
 		if surface.Type == "" || surface.Collection == "" || surface.SchemaRef == "" {
@@ -160,11 +165,11 @@ func TestSchemaMapsCustomScalarTypesToTheirPublicYAMLShape(t *testing.T) {
 	if err := json.Unmarshal(Document(), &document); err != nil {
 		t.Fatal(err)
 	}
-	budget, ok := document.Definitions["ContextCompressionBudgetConfig"]
+	budget, ok := document.Definitions["ContextBudgetConfig"]
 	if !ok {
-		t.Fatal("ContextCompressionBudgetConfig schema is missing")
+		t.Fatal("ContextBudgetConfig schema is missing")
 	}
-	limit, ok := budget.Properties["trigger_tokens"]
+	limit, ok := budget.Properties["max_tokens"]
 	if !ok || len(limit.OneOf) != 2 {
 		t.Fatalf("CompressionTokenLimit schema = %#v, want integer-or-auto scalar", limit)
 	}

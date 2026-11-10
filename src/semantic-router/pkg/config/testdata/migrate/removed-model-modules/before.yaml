@@ -1,0 +1,71 @@
+# The modules, system lines and bindings only removed signals used: a module's
+# threshold becomes the predicate of the rules that inherited it, and a
+# decision-task binding is named for its signal type.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    model_bindings:
+      domain_classifier: {deployment: primary, contract: decision.v1}
+      complexity: {deployment: primary, contract: label_distribution.v1}
+    signals:
+      domains:
+        - {name: math}
+      fact_check:
+        - {name: needs_fact_check}
+      user_feedbacks:
+        - {name: unhappy, labels: [WRONG_ANSWER]}
+      complexity:
+        - {name: difficulty, labels: [hard]}
+      modality:
+        - {name: image_request, labels: [image]}
+    decisions:
+      - name: hard_math
+        priority: 300
+        rules:
+          operator: AND
+          conditions:
+            - {type: domain, name: math}
+            - {type: complexity, name: difficulty}
+        modelRefs: [{model: general}]
+      - name: verify
+        priority: 200
+        rules: {type: fact_check, name: needs_fact_check}
+        modelRefs: [{model: general}]
+      - name: retry
+        priority: 100
+        rules: {type: user_feedback, name: unhappy}
+        modelRefs: [{model: general}]
+      - name: imagine
+        priority: 50
+        rules: {type: modality, name: image_request}
+        modelRefs: [{model: general}]
+global:
+  model_catalog:
+    system:
+      domain_classifier: models/mmbert32k-intent-classifier-merged
+      fact_check_classifier: models/mmbert32k-factcheck-classifier-merged
+      feedback_detector: models/mmbert32k-feedback-detector-merged
+      safety: models/Vela-1.0-Encoder-307M-Safety
+      hazard: models/Vela-1.0-Encoder-307M-Hazard
+    bindings:
+      feedback_detector: {deployment: primary, contract: label_distribution.v1}
+    admission:
+      domain_classifier: {max_concurrency: 2}
+      safety: {max_concurrency: 1}
+    modules:
+      classifier:
+        domain: {threshold: 0.6}
+        mcp: {enabled: false}
+        preference: {use_contrastive: true}
+      feedback_detector: {threshold: 0.5}
+      hallucination_mitigation:
+        fact_check: {threshold: 0.75}
+      safety:
+        safety: {threshold: 0.5}
+      complexity: {prototype_scoring: {enabled: true}}
+      modality_detector: {enabled: true, method: hybrid, confidence_threshold: 0.63, keywords: [draw]}
