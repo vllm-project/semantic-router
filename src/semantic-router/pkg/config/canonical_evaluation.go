@@ -71,9 +71,10 @@ func cloneCanonicalEvaluation(source *CanonicalEvaluation) *CanonicalEvaluation 
 		return nil
 	}
 	result := &CanonicalEvaluation{
-		Benchmarks: make([]modelcatalog.BenchmarkDefinition, len(source.Benchmarks)),
-		Indices:    make([]modelcatalog.IndexDefinition, len(source.Indices)),
-		Records:    cloneCanonicalEvaluationRecords(source.Records),
+		Calibrations: append([]CalibrationArtifact(nil), source.Calibrations...),
+		Benchmarks:   make([]modelcatalog.BenchmarkDefinition, len(source.Benchmarks)),
+		Indices:      make([]modelcatalog.IndexDefinition, len(source.Indices)),
+		Records:      cloneCanonicalEvaluationRecords(source.Records),
 	}
 	for index, definition := range source.Benchmarks {
 		result.Benchmarks[index] = definition

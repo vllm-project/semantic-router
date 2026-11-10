@@ -1,3 +1,5 @@
+//go:build !windows
+
 package main
 
 import (
@@ -44,7 +46,7 @@ func TestStandaloneListenerServesOnlyItsModels(t *testing.T) {
 	previous := modelservice.DefaultManager()
 	modelservice.SetDefault(nil)
 	t.Cleanup(func() { modelservice.SetDefault(previous) })
-	document := strings.ReplaceAll(`version: v0.3
+	document := strings.ReplaceAll(`version: v0.5
 listeners:
   - name: public
     address: 127.0.0.1
@@ -65,20 +67,18 @@ global:
     skip_processing:
       enabled: true
   stores:
-    semantic_cache:
-      enabled: false
-routing:
-  modelCards:
-    - name: a
-    - name: b
-  decisions:
-    - name: compare
-      priority: 10
-      rules: {operator: AND, conditions: []}
-      modelRefs: [{model: a}, {model: b}]
-      algorithm:
-        type: ratings
-        ratings: {max_concurrent: 2, on_error: fail}
+    response_cache: {}
+recipes:
+  - name: default
+    decisions:
+      - name: compare
+        priority: 10
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: a}, {model: b}]
+        algorithm:
+          type: ratings
+          on_error: fail
+          ratings: {max_concurrent: 2}
 `, "BACKEND", strings.TrimPrefix(backend.URL, "http://"))
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte(document), 0o600); err != nil {

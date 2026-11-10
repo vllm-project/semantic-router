@@ -1,6 +1,8 @@
 package memory
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -133,8 +135,146 @@ func TestWordJaccard(t *testing.T) {
 	assert.InDelta(t, 1.0, wordJaccard("", ""), 0.01)
 }
 
+func TestWordJaccard_CJKNearParaphrase(t *testing.T) {
+	cases := []struct {
+		name string
+		a, b string
+	}{
+		{name: "chinese", a: "我的预算是一万美元", b: "我的预算是两万美元"},
+		{name: "japanese", a: "予算は一万円です", b: "予算は二万円です"},
+		{name: "hangul", a: "예산은 만원입니다", b: "예산은 이만원입니다"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			similarity := wordJaccard(tc.a, tc.b)
+			assert.InDelta(t, 1.0, wordJaccard(tc.a, tc.a), 0.01)
+			assert.GreaterOrEqual(t, similarity, consolidationGroupThreshold, "near paraphrases should group at the consolidation threshold")
+			assert.Less(t, similarity, float32(0.90), "a changed amount should stay under the default dedup threshold")
+
+			groups := groupBySimilarity([]*Memory{
+				{ID: "a", Content: tc.a},
+				{ID: "b", Content: tc.b},
+			}, consolidationGroupThreshold)
+			assert.Len(t, groups, 1, "consolidation should place the pair in one group")
+		})
+	}
+}
+
+func TestReflectionGate_CJKDedupKeepsChangedAmount(t *testing.T) {
+	g := NewReflectionGate(config.MemoryReflectionConfig{DedupThreshold: 0.90}, nil)
+	require.NotNil(t, g)
+
+	now := time.Now()
+	result := g.Filter([]*RetrieveResult{
+		{Memory: &Memory{ID: "ten", Content: "我的预算是一万美元", CreatedAt: now}, Score: 0.9},
+		{Memory: &Memory{ID: "twenty", Content: "我的预算是两万美元", CreatedAt: now}, Score: 0.8},
+	})
+	require.Len(t, result, 2)
+	assert.Equal(t, "ten", result[0].Memory.ID)
+	assert.Equal(t, "twenty", result[1].Memory.ID)
+}
+
+func TestReflectionGate_DedupKeepsSwappedAmounts(t *testing.T) {
+	// Default dedup threshold is 0.90. These pairs share one character or word
+	// set, so unordered Jaccard is 1, but the amounts belong to different
+	// entities.
+	cases := []struct {
+		name string
+		a, b string
+	}{
+		{
+			name: "han",
+			a:    "旅行预算一万美元，机票预算两万美元",
+			b:    "旅行预算两万美元，机票预算一万美元",
+		},
+		{
+			name: "digits",
+			a:    "旅行预算10000美元，机票预算20000美元",
+			b:    "旅行预算20000美元，机票预算10000美元",
+		},
+		{
+			name: "english",
+			a:    "travel budget is 10000 and airfare budget is 20000",
+			b:    "travel budget is 20000 and airfare budget is 10000",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.InDelta(t, 1.0, wordJaccard(tc.a, tc.b), 0.01)
+
+			g := NewReflectionGate(config.MemoryReflectionConfig{}, nil)
+			require.NotNil(t, g)
+
+			now := time.Now()
+			swapped := g.Filter([]*RetrieveResult{
+				{Memory: &Memory{ID: "first", Content: tc.a, CreatedAt: now}, Score: 0.9},
+				{Memory: &Memory{ID: "swapped", Content: tc.b, CreatedAt: now}, Score: 0.8},
+			})
+			require.Len(t, swapped, 2)
+			assert.Equal(t, "first", swapped[0].Memory.ID)
+			assert.Equal(t, "swapped", swapped[1].Memory.ID)
+
+			identical := g.Filter([]*RetrieveResult{
+				{Memory: &Memory{ID: "keep", Content: tc.a, CreatedAt: now}, Score: 0.9},
+				{Memory: &Memory{ID: "drop", Content: tc.a, CreatedAt: now}, Score: 0.8},
+			})
+			require.Len(t, identical, 1)
+			assert.Equal(t, "keep", identical[0].Memory.ID)
+		})
+	}
+}
+
+func TestTextUnits_PunctuationSplitsLatin(t *testing.T) {
+	assert.Equal(t, []string{"hello", "world"}, textUnits("hello world"))
+	assert.Equal(t, []string{"hello", "world"}, textUnits("hello,world"))
+}
+
 func TestEstimateTokens(t *testing.T) {
 	assert.Equal(t, 0, estimateTokens(""))
 	tokens := estimateTokens("hello world foo bar")
 	assert.True(t, tokens >= 4 && tokens <= 8, "4 words should be ~5 tokens")
+}
+
+func TestEstimateTokens_CJKCountsCharacters(t *testing.T) {
+	content := strings.Repeat("用户的夏威夷旅行预算是一万美元并且偏好靠窗座位。", 8)
+	tokens := estimateTokens(content)
+	assert.Greater(t, tokens, 100, "a long Chinese memory must not collapse to one whitespace word")
+}
+
+func TestReflectionGate_CJKTokenBudget(t *testing.T) {
+	scripts := []struct {
+		name string
+		base rune
+	}{
+		{name: "han", base: '一'},
+		{name: "hiragana", base: 'あ'},
+		{name: "hangul", base: '가'},
+	}
+	for _, script := range scripts {
+		t.Run(script.name, func(t *testing.T) {
+			g := NewReflectionGate(config.MemoryReflectionConfig{MaxInjectTokens: 64}, nil)
+			require.NotNil(t, g)
+
+			now := time.Now()
+			memories := make([]*RetrieveResult, 20)
+			for i := range memories {
+				// One repeated character keeps the memory long without sharing a
+				// character set, so dedup cannot remove it before the budget does.
+				content := strings.Repeat(string(script.base+rune(i)), 200)
+				require.Equal(t, 300, estimateTokens(content), "200 CJK characters at 1.5 tokens each")
+				memories[i] = &RetrieveResult{
+					Memory: &Memory{
+						ID:        fmt.Sprintf("m%d", i),
+						Content:   content,
+						CreatedAt: now,
+					},
+					Score: 0.9 - float32(i)*0.01,
+				}
+			}
+
+			result := g.Filter(memories)
+			require.Len(t, result, 1, "a 64-token budget keeps one 200-character memory")
+			assert.Equal(t, "m0", result[0].Memory.ID, "highest-scored should be first")
+		})
+	}
 }

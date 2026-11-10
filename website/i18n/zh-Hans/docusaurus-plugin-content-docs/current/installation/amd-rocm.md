@@ -1,15 +1,16 @@
 ---
+is_mtpe: false
 title: AMD ROCm 部署
 description: 连接 AMD vLLM 后端，并在 AMD GPU 上运行 Vela 路由模型。
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/amd-rocm.md"
-  outdated: false
+  outdated: true
 ---
 
 # 使用 AMD ROCm 部署
 
-Semantic Router 可以在 CPU 上运行，同时由 vLLM 在 AMD Instinct GPU 上服务所选模型。本指南先启动一个 ROCm 后端，直接验证它，然后再将其连接到本地 Router 栈。若还需要在 AMD 上运行全部十个 Vela 路由任务模型，使用下文的 [Vela AMD 配方](#run-vela-routing-models-on-amd)。
+Semantic Router 可以在 CPU 上运行，同时由 vLLM 在 AMD Instinct GPU 上服务所选模型。本指南先启动一个 ROCm 后端，直接验证它，然后再将其连接到本地 Router 栈。若还需要在 AMD 上运行 Vela 路由模型，使用下文的 [Vela AMD 配方](#run-vela-routing-models-on-amd)。
 
 该示例用一个 checkpoint 对应多个已服务模型别名，以便维护中的 `balance` 配方可以演练其路由通道。这对功能评估有用，但并不会把一个 checkpoint 变成多个模型。在生产环境中，将每个逻辑 provider 绑定到具备配方所声明能力、容量和运行成本的后端。
 
@@ -112,7 +113,7 @@ curl --fail http://127.0.0.1:8000/v1/chat/completions \
 
 ## 安装并配置 Semantic Router
 
-按[快速开始](installation/installation.md#安装)安装 CLI。只安装 CLI、不启动栈：
+按[快速开始](installation/installation.md#install)安装 CLI。只安装 CLI、不启动栈：
 
 ```bash
 curl -fsSL https://vllm-sr.ai/install.sh | \
@@ -158,9 +159,9 @@ curl --fail --include http://127.0.0.1:8899/v1/chat/completions \
 
 ## 在 AMD 上运行 Vela 路由模型 {#run-vela-routing-models-on-amd}
 
-Router 自身的模型（Vela 分类器、embedding、reranker 和决策模型）运行在[模型运行时](model-runtime/overview.md)中。在 AMD Instinct MI300X 和 MI325X GPU 上，运行时通过 ROCm 版 PyTorch 执行这些模型，该路径已经验证。`--platform rocm` 选择 AMD 镜像，其中包含运行时和经过验证的软件栈（ROCm 7.2 版 PyTorch 2.12、FLA 0.5.2，以及为 ROCm 构建的 `causal-conv1d` 1.7.0），并把 GPU 传给 Router。每个模型加载时都会用在该栈上核验过的参考答案自检；见[选择模型](model-runtime/choose-a-model.md#hardware)。
+Router 自身的模型（决策模型和嵌入模型）运行在[模型运行时](model-runtime/get-started/overview.md)中。在 AMD Instinct MI300X 和 MI325X GPU 上，运行时通过 ROCm 版 PyTorch 执行这些模型，该路径已经验证。`--platform rocm` 选择 AMD 镜像，其中包含运行时和经过验证的软件栈（ROCm 7.2 版 PyTorch 2.12、FLA 0.5.2，以及为 ROCm 构建的 `causal-conv1d` 1.7.0），并把 GPU 传给 Router。每个模型加载时都会用在该栈上核验过的参考答案自检；见[选择模型](model-runtime/get-started/choose-a-model.md#hardware)。
 
-[Vela AMD 模型卡片](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)及完整配置把全部十个任务模型放在 `rocm:0` 上。连接已有的 OpenAI 兼容后端，使用 `--served-model-name vela-default`。配置预期地址是 `http://vllm:8000`：将后端接入 `vllm-sr-network` 并设置网络别名 `vllm`，或修改 endpoint。先用这个名称验证直连请求。为 Router 和生成后端保留足够内存与算力；选择 Router GPU 时使用 `VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES`，deployment 中索引 `0` 指向可见 GPU。
+[Vela AMD 模型卡片](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)及完整配置把决策模型和 embedding 模型放在 `rocm:0` 上。连接已有的 OpenAI 兼容后端，使用 `--served-model-name vela-default`。配置预期地址是 `http://vllm:8000`：将后端接入 `vllm-sr-network` 并设置网络别名 `vllm`，或修改 endpoint。先用这个名称验证直连请求。为 Router 和生成后端保留足够内存与算力；选择 Router GPU 时使用 `VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES`，deployment 中索引 `0` 指向可见 GPU。
 
 ```bash
 curl --fail --location --output vela-amd.yaml \
@@ -181,28 +182,25 @@ curl --fail 'http://localhost:8080/api/v1/routing/preview?trace=true' \
   | jq '{decision_result, signal_confidences, signal_values, signal_errors, metrics, eval_trace}'
 ```
 
-Preview 不执行检索或生成。按配方和[神经重排](../tutorials/plugin/rag.md#neural-reranking)指南将文档入库，再使用 `vela-auto` 发送真实聊天请求验证 RAG。
+Preview 不执行检索或生成。按配方和 [RAG 源](../tutorials/plugin/context.md#rag-sources)指南将文档入库，再使用 `vela-auto` 发送真实聊天请求验证 RAG。
 
 ### 更长的输入 {#longer-inputs}
 
-在 ROCm 上，每个 Vela 任务模型最多读取 32,768 tokens。用 `input.max_tokens` 设置 deployment 接受的最长输入；短请求不会被填充到固定长度，因此仍然很快：
+在 ROCm 上，决策模型按它自己的输入上限读取：vela3-fast 每次决策 32,768 个 token，更大的 Vela 3.0 规格最多 262,144 个。短请求不会被填充到固定长度，因此仍然很快。要在 GPU 上运行决策模型，把 `primary` 声明在那里：
 
 ```yaml
 global:
   model_catalog:
     deployments:
-      domain-amd:
+      primary:
         provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
+        artifact: vllm-sr/vela3-lite
         device: rocm:0
-        input:
-          max_tokens: 32768
-          overflow: truncate
 ```
 
-`truncate` 对前 32,768 个 token（含特殊 token）分类并报告已截断；`reject` 则对更长的输入让该信号保持未知。此限制只作用于分类器，不会缩短聊天请求，也不改变生成模型的上下文窗口。Guard 和 PII 用重叠窗口扫描长输入（`overflow: window`），见[提示词攻击与不安全内容](model-runtime/guides/safety.md)和[检测 PII](model-runtime/guides/pii.md)。
+越狱、安全、PII 和幻觉问题分窗口读取完整输入；其他问题读取能放进模型输入的部分。这个上限只作用于决策模型，不会缩短聊天请求，也不改变生成模型的上下文窗口。见[长输入](../system-one/deploy/performance#long-inputs)。
 
-早期版本在这里选择固定的 ONNX Runtime 计算图（`head: onnx/model_rocm_32k.onnx`）和 MIGraphX 编译缓存。`vllm-sr config migrate` 会移除这些设置，见[从原生绑定迁移](model-runtime/migrate.md)。
+早期版本在这里选择固定的 ONNX Runtime 计算图（`head: onnx/model_rocm_32k.onnx`）和 MIGraphX 编译缓存。`vllm-sr config migrate` 会移除这些设置，见[从原生绑定迁移](../model-runtime/deploy/migrate.md)。
 
 ## 生产检查清单
 

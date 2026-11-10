@@ -73,6 +73,38 @@ Create a separate values file for environment-specific endpoints, images,
 resources, Secret references, storage classes, and ingress. Avoid editing
 `values.yaml` for one cluster.
 
+## Grafana Live behind an external proxy
+
+If a proxy forwards an internal `Host` while the browser sends the public
+Dashboard `Origin`, Grafana Live can reject `/embedded/grafana/api/live/ws`
+even when panels load. Configure the trusted **Dashboard origin**, not the
+internal Grafana service URL, in your release values:
+
+```yaml
+dashboard:
+  enabled: true
+dependencies:
+  observability:
+    grafana:
+      enabled: true
+grafana:
+  grafana.ini:
+    live:
+      allowed_origins: "https://dashboard.example.com,https://dashboard.example.net:8443"
+```
+
+This uses the Grafana subchart's native configuration; `grafana.ini` is one
+literal YAML key. Origins include the scheme, hostname, and optional port,
+but no path or trailing slash. Match the browser's actual address, including
+`http://127.0.0.1:8700` when needed for a local port-forward. An empty value
+preserves Grafana's default origin checks. Do not set `*` to bypass validation.
+This setting does not replace authentication or configure WebSocket forwarding
+in your ingress/proxy.
+
+Render with Grafana enabled and check the ConfigMap's `grafana.ini` before
+upgrading. After rollout, verify that the configured origin can establish a
+Live WebSocket and that an unrelated origin is rejected.
+
 ## Credentials
 
 The CLI places `HF_TOKEN`, `OPENAI_API_KEY`, and `ANTHROPIC_API_KEY` in the
@@ -122,6 +154,37 @@ make helm-safety-validate HELM_REPO_UPDATE=false
 `helm-ci-validate` resolves dependencies and renders the maintained profiles.
 `helm-safety-validate` checks value-schema and local-state safety guards, such
 as unsupported shared use of replica-local learning state.
+
+### Dependency charts
+
+`Chart.lock` pins the dependency charts. `helm-ci-setup` (which
+`helm-ci-validate` and `helm-package` run first) and the chart publication
+download exactly those versions into `semantic-router/charts/` with
+`fetch-dependencies.sh`. It makes up to four attempts with exponential backoff,
+so a brief chart repository or GitHub release outage doesn't fail a run. CI
+caches the archives under the hash of `Chart.lock`; a cache hit downloads
+nothing. The archives are not committed (`charts/*.tgz` is ignored). To change
+a dependency, edit `Chart.yaml`, then refresh the lock and commit it:
+
+```bash
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo add milvus https://milvus-io.github.io/milvus-helm/
+helm repo add jaegertracing https://jaegertracing.github.io/helm-charts
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add grafana https://grafana.github.io/helm-charts
+helm dependency update deploy/helm/semantic-router
+```
+
+The Grafana Live render tests require `helm`, `kubectl` (including Kustomize),
+and PyYAML. They run in `helm-ci-validate` and `validate-chart.sh`, without
+accessing a cluster, as do the data-directory tests, which also render the
+Helm values the [storage guide](../../website/docs/installation/storage-overview.md)
+shows. After resolving chart dependencies, run them directly:
+
+```bash
+.venv-agent/bin/python -m unittest discover -s deploy/helm -p test_grafana_live.py -v
+.venv-agent/bin/python -m unittest discover -s deploy/helm -p test_data_volume.py -v
+```
 
 When a chart value changes, update `values.yaml`, `values.schema.json`, the
 affected templates, and the generated

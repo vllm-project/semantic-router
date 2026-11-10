@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 )
 
 func (p *replicaPool) Do(request *http.Request) (*http.Response, error) {
@@ -100,7 +102,9 @@ func rewriteResponseModel(data []byte, model string) ([]byte, error) {
 		return nil, ErrFailed
 	}
 	if _, ok := object["model"]; ok {
-		object["model"], _ = json.Marshal(model)
+		if err := api.AliasResponseModel(object, model); err != nil {
+			return nil, ErrFailed
+		}
 		return json.Marshal(object)
 	}
 	if results, ok := object["results"]; ok {
@@ -120,8 +124,6 @@ func rewriteResponseModel(data []byte, model string) ([]byte, error) {
 			}
 		}
 		object["results"], _ = json.Marshal(bundle)
-	} else if _, ok := object["model"]; ok {
-		object["model"], _ = json.Marshal(model)
 	}
 	return json.Marshal(object)
 }

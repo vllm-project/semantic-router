@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react'
 import { createPortal } from 'react-dom'
 import ProductIcon from '../components/ProductIcon'
 import styles from './SystemOneSelect.module.css'
@@ -7,6 +15,7 @@ interface Option {
   value: string
   label: string
   description?: string
+  group?: string
 }
 
 interface Props {
@@ -185,26 +194,32 @@ export default function SystemOneSelect({
             }}
           >
             {options.map((option, index) => (
-              <button
-                key={option.value}
-                type="button"
-                tabIndex={-1}
-                id={`${id}-option-${index}`}
-                role="option"
-                aria-selected={value === option.value}
-                data-value={option.value}
-                data-active={activeIndex === index}
-                className={styles.option}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => select(index)}
-                onPointerMove={() => setActive(index)}
-              >
-                <span>
-                  <strong>{option.label}</strong>
-                  {option.description && <small>{option.description}</small>}
-                </span>
-                {value === option.value && <ProductIcon name="check" />}
-              </button>
+              <Fragment key={option.value}>
+                {option.group && option.group !== options[index - 1]?.group && (
+                  <div className={styles.groupLabel} role="presentation">
+                    {option.group}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  id={`${id}-option-${index}`}
+                  role="option"
+                  aria-selected={value === option.value}
+                  data-value={option.value}
+                  data-active={activeIndex === index}
+                  className={styles.option}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => select(index)}
+                  onPointerMove={() => setActive(index)}
+                >
+                  <span>
+                    <strong>{option.label}</strong>
+                    {option.description && <small>{option.description}</small>}
+                  </span>
+                  {value === option.value && <ProductIcon name="check" />}
+                </button>
+              </Fragment>
             ))}
           </div>,
           document.body,

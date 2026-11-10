@@ -18,9 +18,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/kvtransfer"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -32,18 +32,23 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
+	// KVHandoff is an optional trusted deployment adapter; nil disables transfer.
+	KVHandoff KVHandoffPlanner
+
+	nativeExecutors map[string]*systemone.Executor
 	// signals is the signal runtime this router extracts signals with; a
 	// later generation can share it.
-	signals   *signalRuntime
-	rerankers map[config.RecipeName]modelruntime.PairScorer
+	signals *signalRuntime
 	// decisionDecider answers decision selectors; nil uses the process-wide model runtime manager.
-	decisionDecider      modelservice.Decider
+	decisionDecider modelservice.Decider
+	// systemOneDecider answers decision selectors on systemone deployments.
+	systemOneDecider     modelservice.Remote
 	decisionCards        map[string]modelservice.ModelCard
 	Embeddings           *embedding.Set
 	serviceEmbeddings    *embedding.Set
@@ -53,32 +58,24 @@ type OpenAIRouter struct {
 	Classifier           *classification.Classifier
 	// RecipeClassifiers selects the isolated classifier graph for each routing
 	// request. Classifier is the default-recipe accessor.
-	RecipeClassifiers     *classification.RecipeClassifiers
-	ClassificationService *services.ClassificationService
-	Cache                 cache.CacheBackend
-	ResponseCache         *cache.ResponseCacheService
-	responseCacheMu       sync.Mutex
-	ContextCompression    *contextcompression.Service
-	CompressionRecovery   contextcompression.RecoveryStore
-	CompressionEmbedding  embedding.Provider
-	CompressionScorer     contextcompression.RelevanceScorer
-	compressionScorers    map[string]contextcompression.RelevanceScorer
-	contextCompressionMu  sync.Mutex
-	ToolsDatabase         *tools.ToolsDatabase
-	ToolsRegistry         *tools.Registry // retriever strategy registry
-	toolSelectionDBMu     sync.Mutex
-	toolSelectionDBByPath map[string]*tools.ToolsDatabase
-	// toolEmbedder embeds request-supplied tool definitions for tool_selection
-	// filter mode, memoizing them across requests. Set once at router
-	// construction and read-only afterwards; nil (remote provider construction
-	// failed, or a directly assembled test router) makes filter mode error into
-	// its configured fallback instead of embedding.
-	toolEmbedder      *cachedToolEmbedder
+	RecipeClassifiers      *classification.RecipeClassifiers
+	ClassificationService  *services.ClassificationService
+	Cache                  cache.CacheBackend
+	ResponseCache          *cache.ResponseCacheService
+	responseCacheMu        sync.Mutex
+	kvAddressRegistryStore kvtransfer.AddressRegistry
+	kvAddressRegistryMu    sync.Mutex
+	ContextCompression     *contextcompression.Service
+	CompressionRecovery    contextcompression.RecoveryStore
+	contextCompressionMu   sync.Mutex
+	// toolCatalogs are the catalogs the tools plugin's add mode chooses from,
+	// by tools_db_path, read when the generation was built.
+	toolCatalogs      map[string]*toolCatalog
 	ResponseAPIFilter *ResponseAPIFilter
 	ReplayRecorder    *routerreplay.Recorder
 	ReplayStoreShared bool
 	// ShadowDispatcher runs bounded, fail-open shadow model calls after the
-	// primary dispatch is finalized. nil disables the shadow_dispatch plugin.
+	// primary dispatch is finalized. nil disables router_replay shadows.
 	ShadowDispatcher *shadowDispatcher
 	// ModelSelector is the registry of advanced model selection algorithms
 	// initialized from config.IntelligentRouting.ModelSelection.
@@ -89,6 +86,7 @@ type OpenAIRouter struct {
 	LookupTable          lookuptable.LookupTable
 	ReplayRecorders      map[string]*routerreplay.Recorder
 	MemoryStore          memory.Store
+	MemoryStatus         routerruntime.MemoryStatus
 	MemoryExtractor      *memory.MemoryExtractor
 	ProtocolCodecs       *protocolcodec.Registry
 	// hopCaller, when set, sends Looper hops instead of the configuration
@@ -228,6 +226,13 @@ func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext
 
 // createErrorResponse creates a direct error response.
 func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_proc.ProcessingResponse {
+	return r.createErrorResponseOnPath(statusCode, message, headers.ResponsePathError)
+}
+
+// createErrorResponseOnPath creates a direct error response that names
+// responsePath, such as a guard's refusal on the blocked path.
+func (r *OpenAIRouter) createErrorResponseOnPath(statusCode int, message, responsePath string) *ext_proc.ProcessingResponse {
+	statusCode = errorResponseStatusCode(statusCode)
 	errorType := "invalid_request_error"
 	if statusCode >= 500 {
 		errorType = "api_error"
@@ -247,56 +252,12 @@ func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_
 		statusCode = 500
 	}
 
-	return r.createJSONResponseWithBody(statusCode, jsonData, headers.ResponsePathError)
+	return r.createJSONResponseWithBody(statusCode, jsonData, responsePath)
 }
 
 // shouldClearRouteCache checks if route cache should be cleared.
 func (r *OpenAIRouter) shouldClearRouteCache() bool {
 	return r.Config.ClearRouteCache
-}
-
-// LoadToolsDatabase loads tools from file after embedding models are initialized.
-func (r *OpenAIRouter) LoadToolsDatabase() error {
-	if !r.ToolsDatabase.IsEnabled() {
-		return nil
-	}
-
-	if r.Config.Tools.ToolsDBPath == "" {
-		logging.Warnf("Tools database enabled but no tools file path configured; skipping load")
-		return nil
-	}
-
-	if err := r.ToolsDatabase.LoadToolsFromFile(r.Config.Tools.ToolsDBPath); err != nil {
-		return err
-	}
-
-	// Wire the default embedding retriever into the registry now that
-	// the database is loaded and embeddings are available.
-	r.ToolsRegistry = tools.NewDefaultRegistry(r.ToolsDatabase)
-
-	return nil
-}
-
-// PreloadKnowledgeBases moves lazy KB embedding work out of the first routed
-// request and into startup/reload readiness.
-func (r *OpenAIRouter) PreloadKnowledgeBases() error {
-	if r == nil {
-		return nil
-	}
-	if r.RecipeClassifiers != nil {
-		return r.RecipeClassifiers.PreloadKnowledgeBases()
-	}
-	if r.Classifier == nil {
-		return nil
-	}
-	return r.Classifier.PreloadKnowledgeBases()
-}
-
-func (r *OpenAIRouter) RegisterToolStrategy(name string, retriever tools.ToolRetriever) {
-	if r.ToolsRegistry == nil {
-		r.ToolsRegistry = tools.NewRegistry()
-	}
-	r.ToolsRegistry.Register(name, retriever)
 }
 
 func (r *OpenAIRouter) fallbackOrchestratorForContext(ctx *RequestContext) *fallback.Orchestrator {

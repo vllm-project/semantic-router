@@ -132,13 +132,26 @@ func TestDecisionRuleLimitsMergeUsesEnclosingBudget(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatal(errs)
 	}
-	base := []byte("version: v0.3\nglobal:\n  router:\n    decision_rule_limits:\n      max_nodes: 1\n")
+	base := []byte("version: v0.5\nglobal:\n  router:\n    decision_rule_limits:\n      max_nodes: 1\n")
 	if _, err := MergeRoutingIntoBase(cfg, base); err == nil || !strings.Contains(err.Error(), "node count 2 exceeds max_nodes=1") {
 		t.Fatalf("expected merge to use base limits, got %v", err)
 	}
-	base = []byte("version: v0.3\nglobal:\n  router:\n    decision_rule_limits:\n      max_nodes: 512\n")
+	base = []byte("version: v0.5\nglobal:\n  router:\n    decision_rule_limits:\n      max_nodes: 512\n")
 	merged, err := MergeRoutingIntoBase(cfg, base)
 	if err != nil || !strings.Contains(string(merged), "max_nodes: 512") {
 		t.Fatalf("merge must preserve configured limits: %s, %v", merged, err)
+	}
+}
+
+func TestDecisionRuleLimitsASTDecompileRejectsOversizedNamedRecipe(t *testing.T) {
+	maxNodes := 1
+	cfg := &config.RouterConfig{
+		DecisionRuleLimits: config.DecisionRuleLimits{MaxNodes: &maxNodes},
+		Recipes: []config.RoutingRecipe{{Name: "support", Profile: config.RoutingProfile{Decisions: []config.Decision{{
+			Name: "bounded", Rules: config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{{Type: "keyword", Name: "urgent"}}},
+		}}}}},
+	}
+	if program := DecompileToAST(cfg); program != nil {
+		t.Fatal("AST decompilation must reject the entire oversized named recipe config")
 	}
 }

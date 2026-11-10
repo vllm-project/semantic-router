@@ -1,3 +1,5 @@
+//go:build !windows
+
 package main
 
 import (
@@ -203,16 +205,25 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 	cfg := lease.Snapshot.Config()
 	nativeListener, _ := systemone.SelectListener(cfg.Listeners, listener)
 	models, _ := lease.Snapshot.Part(configsnapshot.ComponentModelService).(*extproc.FrontendModels)
+	remote, _ := lease.Snapshot.Part(configsnapshot.ComponentUpstream).(*upstream.Set)
+	local := func(ctx context.Context, deployment string, body json.RawMessage) (int, []byte, error) {
+		result, err := models.SystemOne(ctx, deployment, body)
+		return result.Status, result.Body, err
+	}
+	var nativeRouter systemone.Router
+	if lease.Router != nil {
+		nativeRouter = lease.Router
+	}
 	serving := gateway.Serving{
-		SystemOne: systemone.Handler(cfg, nativeListener, func(ctx context.Context, deployment string, body json.RawMessage) (int, []byte, error) {
-			result, err := models.SystemOne(ctx, deployment, body)
-			return result.Status, result.Body, err
-		}),
+		SystemOne:       systemone.ForClients(cfg, systemone.Handler(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote))),
 		RoutingDisabled: !cfg.RoutingEnabled(),
 		APIKeys:         listenerAPIKeys(cfg, listener),
 		Models:          listenerModels(cfg, listener),
-		IdentityHeaders: []string{cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader()},
-		TrustIdentity:   listenerIdentityTrust(cfg, listener),
+		IdentityHeaders: []string{
+			cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader(),
+			cfg.Authz.DelegatedCredential.GetHeader(),
+		},
+		TrustIdentity: listenerIdentityTrust(cfg, listener),
 	}
 	if cfg.RoutingEnabled() {
 		set, ok := lease.Snapshot.Part(configsnapshot.ComponentUpstream).(*upstream.Set)

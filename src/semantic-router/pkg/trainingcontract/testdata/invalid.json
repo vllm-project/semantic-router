@@ -373,6 +373,19 @@
     }
   },
   {
+    "name": "null classifier label index",
+    "definition": "Profile",
+    "value": {
+      "target_contract": "signal.label-scores/v1",
+      "classifier": {
+        "label_mapping": {
+          "negative": null,
+          "positive": 1
+        }
+      }
+    }
+  },
+  {
     "name": "malformed snapshot created_at",
     "definition": "DataSnapshot",
     "value": {

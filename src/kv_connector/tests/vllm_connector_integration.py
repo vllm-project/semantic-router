@@ -80,11 +80,17 @@ class VllmConnectorTests(unittest.TestCase):
                         num_key_value_heads=1,
                         head_dim=2,
                         num_hidden_layers=1,
+                        rope_theta=1_000_000,
                     ),
                 ),
                 parallel_config=SimpleNamespace(tensor_parallel_size=1),
+                cache_config=SimpleNamespace(enable_prefix_caching=False),
             )
             cls = KVConnectorFactory.get_connector_class(transfer)
+            config.use_v2_model_runner = True
+            unsafe_retry = cls(config, KVConnectorRole.SCHEDULER, None)
+            self.assertIsNone(unsafe_retry.artifact)
+            config.use_v2_model_runner = False
             connector = cls(config, KVConnectorRole.SCHEDULER, None)
             self.assertIsNotNone(connector.artifact)
             self.assertEqual(connector.get_num_new_matched_tokens(None, 0), (0, False))

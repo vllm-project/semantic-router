@@ -1,5 +1,14 @@
 # Release note: choose the decision model
 
+:::note
+This note records an earlier release. The system lines, module `model_id` and
+`classifier.model_path` it mentions are removed forms: they fail at load with
+a one-line hint, and `vllm-sr config migrate` rewrites them.
+[Migrate to v0.5](../installation/migrate-to-v0-5) shows the current form of
+each, and [Migrate model resources](../installation/model-resource-migration)
+covers the model fields.
+:::
+
 The Router selects its default judgment model through an exact deployment
 reference. The default remains Vela 2.0 0.3B on CPU. Decision 1.0 and Decision
 2.0 deployments can also answer routing tasks according to their native
@@ -24,11 +33,11 @@ vllm-sr serve --platform rocm
 
 ## What changes
 
-- The binding contains only `deployment`; model identity, device, profile and
-  endpoint belong to `global.model_catalog.deployments`. Keys are exact and
+- The binding contains only `deployment`; model identity, device, engine
+  arguments and endpoint belong to `global.model_catalog.deployments`. Keys are exact and
   case-sensitive. Scalar model names are rejected.
 - `serve MODEL` changes the configured default deployment's artifact, preserving
-  its placement and profile unless explicit options override them. Select a
+  its placement and engine arguments unless explicit options override them. Select a
   different deployment key in the canonical binding. Status reports that key.
 - Questions and selectors with no deployment use this default. Explicit task
   and question bindings override it without replacing the resource.

@@ -2,7 +2,8 @@
 
 For models that name them it registers the ``geglu`` slot's ``contiguous``
 variant and, on x86, the ``linear`` slot's ``float32-packed`` one
-(``onednn.py``): together they make an encoder's forward batch-invariant.
+(``onednn.py``): together they make an encoder's forward batch-invariant where
+the packed products measure so at load (``onednn.invariant``).
 
 All CPU device work of a process runs on one thread (``execute``). PyTorch's
 OpenMP backend keeps one thread team per calling thread; as soon as two teams
@@ -19,7 +20,7 @@ import platform
 import threading
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import Any, TypeVar
 
 import torch
 
@@ -34,11 +35,70 @@ from .kernels import (
 )
 
 _LOCK = threading.Lock()
+T = TypeVar("T")
 _EXECUTOR: ThreadPoolExecutor | None = None
 
 
+def container_cpus() -> int | None:
+    """CPUs this process may use: the cgroup CPU quota (v2, then v1), else the affinity mask."""
+    try:
+        with open("/sys/fs/cgroup/cpu.max", encoding="utf-8") as stream:
+            quota, period = stream.read().split()[:2]
+        if quota != "max":
+            return max(1, int(quota) // int(period))
+    except (OSError, ValueError):
+        pass
+    try:
+        with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", encoding="utf-8") as stream:
+            v1_quota = int(stream.read())
+        with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us", encoding="utf-8") as stream:
+            v1_period = int(stream.read())
+        if v1_quota > 0 and v1_period > 0:
+            return max(1, v1_quota // v1_period)
+    except (OSError, ValueError):
+        pass
+    try:
+        return len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        return None
+
+
+def cap_threads(configured: int | None) -> dict[str, int] | None:
+    """Keep PyTorch's intra-op threads within the container's CPUs when neither ``--threads`` nor ``OMP_NUM_THREADS`` sets them.
+
+    PyTorch sizes its pool by the host's cores. In a container with a smaller
+    quota the extra threads oversubscribe it: a GPU model's host work (image
+    preprocessing) then waits on spinning workers. Returns the change, if any.
+    """
+    if configured or "OMP_NUM_THREADS" in os.environ:
+        return None
+    limit, current = container_cpus(), torch.get_num_threads()
+    if limit is None or current <= limit:
+        return None
+    torch.set_num_threads(limit)
+    return {"from": current, "to": limit}
+
+
+# oneDNN instruction sets without BF16 dot products: capped to one of these
+# (ONEDNN_MAX_CPU_ISA), oneDNN converts BF16 to FP32 as on a CPU without them.
+EMULATED_BF16_ISAS = frozenset(
+    {
+        "SSE41",
+        "AVX",
+        "AVX2",
+        "AVX2_VNNI",
+        "AVX2_VNNI_2",
+        "AVX512_CORE",
+        "AVX512_CORE_VNNI",
+    }
+)
+
+
 def native_bf16() -> bool:
-    """Whether the CPU computes BF16 natively (AVX-512 BF16 or AMX)."""
+    """Whether the CPU kernels compute BF16 natively: AVX-512 BF16 or AMX, and oneDNN not capped below them."""
+    cap = os.environ.get("ONEDNN_MAX_CPU_ISA") or os.environ.get("DNNL_MAX_CPU_ISA")
+    if cap and cap.upper() in EMULATED_BF16_ISAS:
+        return False
     probes = ("_is_avx512_bf16_supported", "_is_amx_tile_supported")
     return any(getattr(torch.cpu, probe, lambda: False)() for probe in probes)
 
@@ -52,6 +112,13 @@ def device_thread() -> ThreadPoolExecutor:
                 max_workers=1, thread_name_prefix="vllm-sr-cpu"
             )
         return _EXECUTOR
+
+
+def on_device_thread(work: Callable[[], T]) -> T:
+    """``work`` on the CPU device thread, inline when already on it."""
+    if threading.current_thread().name.startswith("vllm-sr-cpu"):
+        return work()
+    return device_thread().submit(work).result()
 
 
 class CPUAccelerator(Accelerator):
@@ -86,6 +153,13 @@ class CPUAccelerator(Accelerator):
 
     def torch_device(self, device: DeviceInfo) -> torch.device:
         return torch.device("cpu")
+
+    def golden_reference(self, device: DeviceInfo) -> str | None:
+        if not device.arch:
+            return None
+        capability = torch.backends.cpu.get_cpu_capability().lower().replace(" ", "_")
+        bf16 = "bf16_native" if device.bf16 else "bf16_emulated"
+        return f"cpu:{device.arch}:{capability}:{bf16}"
 
     def kernels(self, device: DeviceInfo) -> KernelSet:
         kernels = reference_kernels("cpu")
@@ -122,9 +196,9 @@ class CPUAccelerator(Accelerator):
                 "model's CPU kernels need; serve it with a PyTorch that has LAPACK "
                 "(the router's CPU image) or on a GPU device"
             )
+        if capability == "nvfp4":
+            return f"{device.label}: NVFP4 packages need FP4 tensor cores (a Blackwell GPU)"
         return super().lacks(device, capability)
 
     def execute(self, device: DeviceInfo, work: Callable[[], Any]) -> Any:
-        if threading.current_thread().name.startswith("vllm-sr-cpu"):
-            return work()
-        return device_thread().submit(work).result()
+        return on_device_thread(work)

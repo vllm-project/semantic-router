@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
@@ -11,14 +12,15 @@ import (
 // Semantic Router owns the downstream listener. Metadata-only ExtProc configs
 // deliberately remain backendless because their external gateway owns
 // transport and credentials. Built-in virtual models also remain backendless:
-// their recipe resolves a pool of physical model aliases at request time.
+// their recipe resolves a pool of physical model aliases at request time. An
+// entry that states only facts describes a model for routing, not a backend.
 func validateRouterOwnedPhysicalBackend(
 	registry *modelcatalog.Registry,
 	model CanonicalProviderModel,
 	routerOwnsTransport bool,
 	modelIndex int,
 ) error {
-	if !routerOwnsTransport || len(model.BackendRefs) != 0 {
+	if !routerOwnsTransport || len(model.BackendRefs) != 0 || model.Deployment != "" || model.factsOnly() {
 		return nil
 	}
 	if catalogID := strings.TrimSpace(model.Catalog); catalogID != "" {
@@ -36,4 +38,11 @@ func validateRouterOwnedPhysicalBackend(
 		modelIndex,
 		model.Name,
 	)
+}
+
+// factsOnly reports an entry that states a name and facts, and no transport.
+func (m CanonicalProviderModel) factsOnly() bool {
+	transport := m
+	transport.ModelFacts = ModelFacts{}
+	return reflect.DeepEqual(transport, CanonicalProviderModel{Name: m.Name})
 }

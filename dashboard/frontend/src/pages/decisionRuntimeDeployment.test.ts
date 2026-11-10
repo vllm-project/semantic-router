@@ -19,9 +19,16 @@ function snapshot(): RouterConfig {
     },
     global: {
       model_catalog: {
-        system: { decision_model: 'Vela-2.0-4B', pii: 'private-specialist' },
+        system: { decision_model: { deployment: 'other' } },
+        bindings: { pii: 'private-specialist' },
         deployments: {
-          other: { provider: 'model_runtime', artifact: 'team/other', profile: 'batching' },
+          other: { provider: 'model_runtime', artifact: 'team/other', max_num_seqs: 4 },
+          'private-specialist': {
+            provider: 'systemone',
+            endpoint: 'https://pii.example.com/v1/systemone',
+            model: 'team/pii-judge',
+            auth: { api_key_env: 'PII_KEY' },
+          },
         },
         admission: { custom: { max_inflight: 7 } },
       },
@@ -29,7 +36,7 @@ function snapshot(): RouterConfig {
     },
     routing: {
       signals: {
-        decision: [
+        systemone: [
           { name: 'task', question: { type: 'noul', instructions: 'Is this coding?' } },
           { name: 'entities', deployment: 'other', question: { type: 'span' } },
         ],
@@ -41,7 +48,7 @@ function snapshot(): RouterConfig {
         name: 'research',
         routing: {
           signals: {
-            decision: [
+            systemone: [
               {
                 name: 'task',
                 deployment: 'other',
@@ -54,8 +61,8 @@ function snapshot(): RouterConfig {
             {
               name: 'select',
               algorithm: {
-                type: 'decision',
-                decision: {
+                type: 'systemone',
+                systemone: {
                   deployment: 'other',
                   instructions: 'Choose',
                   candidates: { answer: 'General' },
@@ -76,6 +83,7 @@ describe('Decision runtime catalog projection', () => {
   it('contains the projected release families and their supported question types', () => {
     expect(DECISION_RUNTIME_CATALOG.filter((value) => value.family === 'decision2')).toHaveLength(6)
     expect(DECISION_RUNTIME_CATALOG.filter((value) => value.family === 'decision1')).toHaveLength(7)
+    expect(DECISION_RUNTIME_CATALOG.filter((value) => value.family === 'decision3')).toHaveLength(8)
     expect(DECISION_RUNTIME_CAPABILITIES).toEqual(['choice', 'noul', 'score'])
   })
 
@@ -89,7 +97,11 @@ describe('Decision runtime catalog projection', () => {
           unboundDecision: { provider: 'model_runtime', artifact: entry.id },
           other: { provider: 'model_runtime', artifact: 'team/custom-question-model' },
           observedQuestion: { provider: 'model_runtime', artifact: 'team/observed-question' },
-          external: { provider: 'external', artifact: entry.id },
+          remote: {
+            provider: 'systemone',
+            endpoint: 'https://systemone.example.com/v1/systemone',
+            model: entry.id,
+          },
         },
       },
     }
@@ -134,7 +146,7 @@ describe('Decision runtime canonical mutations', () => {
       revision: entry.revision,
       device: 'auto',
     }
-    expected.recipes![0].routing.signals!.decision[0].deployment = 'research-decider'
+    expected.recipes![0].routing.signals!.systemone[0].deployment = 'research-decider'
     expect(next).toEqual(expected)
   })
 
@@ -152,11 +164,11 @@ describe('Decision runtime canonical mutations', () => {
       device: 'cpu',
       consumerId: consumers[0].id,
     })
-    expect(next.routing?.signals?.decision[0].deployment).toBe('decider')
-    expect(next.recipes?.[0].routing.signals?.decision[0].deployment).toBe('other')
+    expect(next.routing?.signals?.systemone[0].deployment).toBe('decider')
+    expect(next.recipes?.[0].routing.signals?.systemone[0].deployment).toBe('other')
   })
 
-  it('writes a decision selector without changing its candidate set or routing rules', () => {
+  it('writes a System One selector without changing its candidate set or routing rules', () => {
     const current = snapshot()
     const consumer = compatibleRuntimeConsumers(current).find((value) => value.kind === 'selector')!
     const next = withDecisionRuntimeDeployment(current, {
@@ -168,8 +180,8 @@ describe('Decision runtime canonical mutations', () => {
     expect(next.recipes?.[0].routing.decisions?.[0]).toEqual({
       ...current.recipes![0].routing.decisions![0],
       algorithm: {
-        type: 'decision',
-        decision: {
+        type: 'systemone',
+        systemone: {
           deployment: 'selector-runtime',
           instructions: 'Choose',
           candidates: { answer: 'General' },
@@ -204,7 +216,8 @@ describe('Decision runtime canonical mutations', () => {
             artifact: entry.id,
             revision: 'a'.repeat(40),
             device: 'rocm:1',
-            profile: 'batching',
+            max_num_batched_tokens: 8192,
+            batch_window_ms: 4,
             input: { max_tokens: 2048, overflow: 'window' },
           },
         },
@@ -224,7 +237,8 @@ describe('Decision runtime canonical mutations', () => {
       artifact: entry.id,
       revision: 'a'.repeat(40),
       device: 'rocm:0',
-      profile: 'batching',
+      max_num_batched_tokens: 8192,
+      batch_window_ms: 4,
       input: { max_tokens: 2048, overflow: 'window' },
     })
   })
@@ -232,7 +246,7 @@ describe('Decision runtime canonical mutations', () => {
   it('rejects stale incompatible consumers, collisions, reserved names and removed deployments', () => {
     const current = snapshot()
     const consumerId = compatibleRuntimeConsumers(current)[0].id
-    current.routing!.signals!.decision[0].question = { type: 'set' }
+    current.routing!.signals!.systemone[0].question = { type: 'set' }
     const request = { entry, name: 'decider', device: 'auto', consumerId }
     expect(() => withDecisionRuntimeDeployment(current, request)).toThrow('no longer compatible')
     expect(() => withDecisionRuntimeDeployment(snapshot(), { ...request, name: 'other' })).toThrow(

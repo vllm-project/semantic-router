@@ -6,8 +6,13 @@ contracts:
 - `recipe/`: maintained recipe probes, conformance checks, deployment validation,
   and evidence reports;
 - `tuning/`: trace analysis and bounded configuration changes, plus offline
-  confidence analysis;
-- `image-routing/`: image-routing classifier calibration.
+  confidence analysis.
+
+`recipe/signal_labeled_set.py` scores a labeled prompt set, such as
+`bench/data/action_test_data.json`, through the routing preview API and reports
+per-label precision, recall, and a confusion matrix. By default it reads the
+label of the systemone `action` question; `--observation` names another
+matched-signals field, or `field:rule` for one rule's labels.
 
 The maintained recipe workflow uses
 `recipe/router_calibration_loop.py` and the versioned probe schema in
@@ -30,7 +35,7 @@ that deliberately exceeds complete-input evaluation limits can require:
 
 ```yaml
 expected_signal_errors:
-  reask:repeat: reask_evaluation_failed
+  turn_relation:repeat: systemone_scan_budget_exceeded
   projection:recovery: projection_input_failed
   projection:retry: projection_input_failed
 ```

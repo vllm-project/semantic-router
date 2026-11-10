@@ -11,9 +11,9 @@ import (
 // budget before canonical routing is recursively decoded by the controller.
 func (r *SemanticRouter) ValidateDecisionRuleLimits() error {
 	spec := r.Spec.Config
-	for _, routing := range []interface{}{spec.Routing, map[string]interface{}{"decisions": spec.Decisions}} {
+	for _, recipes := range []interface{}{spec.Recipes, []interface{}{map[string]interface{}{"name": "default", "decisions": spec.Decisions}}} {
 		data, err := json.Marshal(map[string]interface{}{
-			"routing": routing,
+			"recipes": recipes,
 			"global":  map[string]interface{}{"router": map[string]interface{}{"decision_rule_limits": spec.DecisionRuleLimits}},
 		})
 		if err != nil {

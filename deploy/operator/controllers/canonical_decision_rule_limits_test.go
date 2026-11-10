@@ -32,7 +32,7 @@ func TestDecisionRuleLimitsReachRouterConfig(t *testing.T) {
 func TestOperatorDecisionRuleLimitsRejectOversizedCanonicalRouting(t *testing.T) {
 	spec := vllmv1alpha1.ConfigSpec{
 		DecisionRuleLimits: &vllmv1alpha1.DecisionRuleLimitsConfig{MaxNodes: ptr.To(1)},
-		Routing:            rawCanonicalRoutingJSON(t, `{"decisions":[{"name":"bounded","rules":{"operator":"AND","conditions":[{"type":"keyword","name":"urgent"}]}}]}`),
+		Recipes:            rawCanonicalRoutingJSON(t, `[{"name":"default","decisions":[{"name":"bounded","rules":{"operator":"AND","conditions":[{"type":"keyword","name":"urgent"}]}}]}]`),
 	}
 	r := &SemanticRouterReconciler{}
 	_, err := r.buildCanonicalConfig(context.Background(), &vllmv1alpha1.SemanticRouter{Spec: vllmv1alpha1.SemanticRouterSpec{Config: spec}})

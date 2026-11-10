@@ -21,7 +21,7 @@ func TestDecisionRuleLimitWebhook(t *testing.T) {
 			DecisionRuleLimits: &DecisionRuleLimitsConfig{MaxNodes: ptr.To(1)},
 		}}}
 		if canonical {
-			resource.Spec.Config.Routing = &apiextensionsv1.JSON{Raw: []byte(`{"decisions":[{"name":"bounded","rules":{"operator":"AND","conditions":[{"type":"keyword","name":"urgent"}]}}]}`)}
+			resource.Spec.Config.Recipes = &apiextensionsv1.JSON{Raw: []byte(`[{"name":"default","decisions":[{"name":"bounded","rules":{"operator":"AND","conditions":[{"type":"keyword","name":"urgent"}]}}]}]`)}
 		} else {
 			resource.Spec.Config.Decisions = []DecisionConfig{{Name: "bounded", Rules: RuleCombinationConfig{
 				Operator: "AND", Conditions: []RuleConditionConfig{{Type: "keyword", Name: "urgent"}},

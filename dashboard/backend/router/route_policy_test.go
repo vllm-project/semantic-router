@@ -39,44 +39,6 @@ func TestDashboardRouteInventoryHasCompletePolicies(t *testing.T) {
 			}
 		}
 	}
-	for _, route := range []struct{ method, path string }{
-		{http.MethodGet, "/api/ml-pipeline/availability"},
-		{http.MethodGet, "/api/ml-pipeline/jobs"},
-		{http.MethodGet, "/api/ml-pipeline/jobs/job-1"},
-		{http.MethodPost, "/api/ml-pipeline/benchmark"},
-		{http.MethodPost, "/api/ml-pipeline/train"},
-		{http.MethodPost, "/api/ml-pipeline/config"},
-		{http.MethodGet, "/api/ml-pipeline/download/job-1"},
-		{http.MethodGet, "/api/ml-pipeline/stream/job-1"},
-	} {
-		policy, lookup := server.routePolicies.LookupRoutePolicy(route.method, route.path)
-		if lookup != auth.RouteFound || policy.Permission != auth.PermMlPipeline {
-			t.Errorf("ML inventory %s %s: lookup=%v policy=%+v", route.method, route.path, lookup, policy)
-		}
-	}
-}
-
-func TestMLPipelineAvailabilityFollowsRouteRegistration(t *testing.T) {
-	disabled, disabledCfg := setupRouteInventoryServerWithConfig(t, func(cfg *config.Config) {
-		cfg.MLPipelineEnabled = false
-	})
-	if disabledCfg.MLPipelineAvailable {
-		t.Fatal("MLPipelineAvailable = true, want false while the feature is disabled")
-	}
-	if disabledCfg.MLPipelineUnavailableReason == "" {
-		t.Fatal("MLPipelineUnavailableReason is empty while the feature is disabled")
-	}
-	if _, lookup := disabled.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/ml-pipeline/jobs"); lookup != auth.RouteNotFound {
-		t.Errorf("disabled ML route lookup = %v, want RouteNotFound", lookup)
-	}
-	if policy, lookup := disabled.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/ml-pipeline/availability"); lookup != auth.RouteFound || policy.Permission != auth.PermMlPipeline {
-		t.Errorf("disabled availability route = %v with policy %+v, want RouteFound under PermMlPipeline", lookup, policy)
-	}
-
-	_, enabledCfg := setupRouteInventoryServerWithConfig(t)
-	if !enabledCfg.MLPipelineAvailable || enabledCfg.MLPipelineUnavailableReason != "" {
-		t.Errorf("enabled config = %+v, want available with an empty reason", enabledCfg)
-	}
 }
 
 func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
@@ -88,13 +50,18 @@ func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 		{http.MethodPost, "/api/dsl/decompile", auth.PermConfigRead},
 		{http.MethodPost, "/api/dsl/format", auth.PermConfigRead},
 		{http.MethodGet, "/api/instance", auth.PermConfigRead},
+		{http.MethodGet, "/api/recipes/builtin", auth.PermConfigRead},
+		{http.MethodPost, "/api/recipes/builtin/compose", auth.PermConfigWrite},
 		{http.MethodPost, "/api/router/v1/chat/completions", auth.PermInferenceRun},
 		{http.MethodPost, "/api/router/api/v1/observability/outcomes", auth.PermFeedbackSubmit},
 		{http.MethodGet, "/api/router/api/v1/observability/replays/record-1", auth.PermReplayRead},
 		{http.MethodPost, "/api/router/config/deploy", auth.PermConfigDeploy},
+		{http.MethodGet, "/api/tools/web-search/stats", auth.PermToolsUse},
 		{http.MethodGet, "/api/router/api/v1/inventory/model-runtime", auth.PermConfigRead},
 		{http.MethodGet, "/api/decision-model/capabilities", auth.PermConfigRead},
 		{http.MethodPost, "/api/decision-model/test", auth.PermEvalRun},
+		{http.MethodGet, "/api/decision-model/routes", auth.PermConfigRead},
+		{http.MethodPost, "/api/decision-model/routes", auth.PermEvalRun},
 		{http.MethodGet, "/api/router/api/v1/diagnostics/models/systemone", auth.PermConfigRead},
 		{http.MethodPost, "/api/router/api/v1/diagnostics/models/systemone", auth.PermEvalRun},
 		{http.MethodPost, "/api/mcp/tools/execute", auth.PermToolsUse},
@@ -127,11 +94,29 @@ func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 	}
 }
 
+func TestWebSearchRateLimitStatsRouteIsReadOnly(t *testing.T) {
+	server := setupRouteInventoryServer(t)
+	policy, lookup := server.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/tools/web-search/stats")
+	if lookup != auth.RouteFound || policy.Permission != auth.PermToolsUse ||
+		policy.Sensitivity != auth.SensitivityOperational ||
+		policy.ResourceOwner != auth.ResourceOwnerTools ||
+		policy.AuditMode != auth.AuditNone || policy.AuditAction != "tools.use.read" ||
+		policy.Revalidate || policy.MaxBodyBytes != 0 {
+		t.Fatalf("stats route policy=%+v lookup=%v, want operational read-only tools route", policy, lookup)
+	}
+	if _, lookup := server.routePolicies.LookupRoutePolicy(http.MethodPost, "/api/tools/web-search/stats"); lookup != auth.RouteMethodNotAllowed {
+		t.Fatalf("POST stats route lookup=%v, want method not allowed", lookup)
+	}
+	if _, lookup := server.routePolicies.LookupRoutePolicy(http.MethodGet, "/api/tools/web-search/stats/extra"); lookup != auth.RouteNotFound {
+		t.Fatalf("nested stats route lookup=%v, want not found", lookup)
+	}
+}
+
 func TestOutboundDashboardRoutesRevalidateBeforeUse(t *testing.T) {
 	server := setupRouteInventoryServer(t)
 	for _, path := range []string{
 		"/api/router/api/v1/routing/preview",
-		"/api/router/api/v1/plugins/rag/preview",
+		"/api/router/api/v1/plugins/context/preview",
 	} {
 		policy, lookup := server.routePolicies.LookupRoutePolicy(http.MethodPost, path)
 		if lookup != auth.RouteFound || !policy.Revalidate || policy.MaxBodyBytes == 0 || policy.AuditAction == "" {
@@ -191,11 +176,13 @@ func TestDashboardProductionRoutePermissionsGrantAndRevokeIndependently(t *testi
 		{http.MethodGet, "/api/router/config/all", auth.PermConfigRead},
 		{http.MethodGet, "/api/decision-model/capabilities", auth.PermConfigRead},
 		{http.MethodPost, "/api/decision-model/test", auth.PermEvalRun},
+		{http.MethodGet, "/api/decision-model/routes", auth.PermConfigRead},
+		{http.MethodPost, "/api/decision-model/routes", auth.PermEvalRun},
 		{http.MethodGet, "/api/router/api/v1/observability/replays/record-1", auth.PermReplayRead},
 		{http.MethodPost, "/api/router/api/v1/observability/outcomes", auth.PermFeedbackSubmit},
 		{http.MethodPost, "/api/router/v1/chat/completions", auth.PermInferenceRun},
-		{http.MethodPost, "/api/ml-pipeline/train", auth.PermMlPipeline},
 		{http.MethodPost, "/api/mcp/servers", auth.PermMcpManage},
+		{http.MethodGet, "/api/tools/web-search/stats", auth.PermToolsUse},
 	}
 	setPermission := func(permission string, allowed bool) {
 		t.Helper()
@@ -256,14 +243,14 @@ func setupRouteInventoryServerWithConfig(t *testing.T, options ...func(*config.C
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{
 		Port: "19000", AuthDBPath: filepath.Join(dir, "auth.db"), JWTSecret: "route-inventory-secret",
 		JWTExpiryHours: 1, StaticDir: staticDir, ConfigFile: configPath, AbsConfigPath: configPath,
 		ConfigDir: dir, RouterAPIURL: "http://127.0.0.1:18080", RouterMetrics: "http://127.0.0.1:19190/metrics",
-		MCPEnabled: true, MLPipelineEnabled: true, MLPipelineDataDir: filepath.Join(dir, "ml-pipeline"),
+		MCPEnabled:             true,
 		WorkflowDBPath:         filepath.Join(dir, "workflow.sqlite"),
 		ConfigProjectionDBPath: filepath.Join(dir, "projection.sqlite"),
 	}

@@ -16,15 +16,26 @@ function schemaFieldConfig(field: FieldSchema, name = field.key): FieldConfig {
   }
 }
 
+function withoutNestedFields(field: FieldSchema, omitted: ReadonlySet<string>): FieldSchema {
+  if (!field.fields) return field
+  return {
+    ...field,
+    fields: field.fields
+      .filter((child) => !omitted.has(child.key))
+      .map((child) => withoutNestedFields(child, omitted)),
+  }
+}
+
 export function mergeGeneratedRouterFields(
   path: readonly string[],
   curated: FieldConfig[],
-  options: { omit?: readonly string[] } = {},
+  options: { omit?: readonly string[]; omitNested?: readonly string[] } = {},
 ): FieldConfig[] {
   const represented = new Set([...curated.map((field) => field.name), ...(options.omit ?? [])])
+  const nested = new Set(options.omitNested ?? [])
   const generated = routerConfigFieldsAtPath(path)
     .filter((field) => !represented.has(field.key))
-    .map((field) => schemaFieldConfig(field))
+    .map((field) => schemaFieldConfig(withoutNestedFields(field, nested)))
   return [...curated, ...generated]
 }
 

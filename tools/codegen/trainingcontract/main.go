@@ -135,7 +135,7 @@ func tsType(t reflect.Type) string {
 	if t == reflect.TypeOf(time.Time{}) {
 		return "string"
 	}
-	if t.Name() != "" && t.PkgPath() != "" {
+	if t.Kind() != reflect.Map && t.Name() != "" && t.PkgPath() != "" {
 		return t.Name()
 	}
 	switch t.Kind() {

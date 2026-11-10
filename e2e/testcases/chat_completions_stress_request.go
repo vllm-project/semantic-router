@@ -10,8 +10,9 @@ import (
 	"strings"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 func init() {
@@ -22,6 +23,9 @@ func init() {
 	})
 }
 
+// sequentialStressRequestTimeout bounds each request of the sequential stress test.
+const sequentialStressRequestTimeout = 30 * time.Second
+
 // StressTestResult tracks the result of a single request
 type StressTestResult struct {
 	RequestID    int
@@ -29,6 +33,10 @@ type StressTestResult struct {
 	StatusCode   int
 	Duration     time.Duration
 	ErrorMessage string
+	// ResponsePath is the Router's x-vsr-response-path, which every response
+	// it processed carries, and Decision its x-vsr-selected-decision, if any.
+	ResponsePath string
+	Decision     string
 }
 
 func testStressTest(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -50,7 +58,7 @@ func testStressTest(ctx context.Context, client *kubernetes.Clientset, opts pkgt
 
 	// Send 100 requests sequentially
 	for i := 1; i <= totalRequests; i++ {
-		result := sendSingleRequest(ctx, i, localPort, opts.Verbose)
+		result := sendSingleRequest(ctx, i, localPort, sequentialStressRequestTimeout)
 		results = append(results, result)
 
 		if result.Success {
@@ -93,7 +101,7 @@ func testStressTest(ctx context.Context, client *kubernetes.Clientset, opts pkgt
 	return nil
 }
 
-func sendSingleRequest(ctx context.Context, requestID int, localPort string, verbose bool) StressTestResult {
+func sendSingleRequest(ctx context.Context, requestID int, localPort string, timeout time.Duration) StressTestResult {
 	result := StressTestResult{
 		RequestID: requestID,
 		Success:   false,
@@ -130,7 +138,7 @@ func sendSingleRequest(ctx context.Context, requestID int, localPort string, ver
 	req.Header.Set("Content-Type", "application/json")
 
 	httpClient := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: timeout,
 	}
 
 	resp, err := httpClient.Do(req)
@@ -140,6 +148,8 @@ func sendSingleRequest(ctx context.Context, requestID int, localPort string, ver
 		return result
 	}
 	defer resp.Body.Close()
+	result.ResponsePath = resp.Header.Get("x-vsr-response-path")
+	result.Decision = resp.Header.Get("x-vsr-selected-decision")
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

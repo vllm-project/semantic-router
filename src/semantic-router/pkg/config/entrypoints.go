@@ -3,8 +3,8 @@ package config
 import "strings"
 
 // InferenceAPI identifies an inference contract independently of its HTTP path.
-// Only ChatAPI has recipe routing today; SystemOneAPI is a separate native
-// contract and must never inherit Chat aliases or fallback behavior.
+// Chat and System One have separate routing namespaces; neither inherits the
+// other API's aliases or fallback behavior.
 type InferenceAPI string
 
 const (
@@ -23,7 +23,7 @@ const (
 // config remain source declarations so exporting a document never freezes an
 // inherited default name into a user override.
 func (c *RouterConfig) EffectiveEntrypoints(api InferenceAPI) []EntrypointMapping {
-	if api != ChatAPI {
+	if api != ChatAPI && api != SystemOneAPI {
 		return nil
 	}
 	var declared []EntrypointMapping
@@ -33,16 +33,21 @@ func (c *RouterConfig) EffectiveEntrypoints(api InferenceAPI) []EntrypointMappin
 	result := make([]EntrypointMapping, 0, len(declared)+1)
 	hasDefault := false
 	for _, entrypoint := range declared {
-		entrypoint.API = ChatAPI
+		if entrypoint.API == "" {
+			entrypoint.API = ChatAPI
+		}
+		if entrypoint.API != api {
+			continue
+		}
 		entrypoint.Source = EntrypointExplicit
 		entrypoint.ModelNames = append([]string(nil), entrypoint.ModelNames...)
 		result = append(result, entrypoint)
-		hasDefault = hasDefault || entrypoint.Recipe == DefaultRecipeName
+		hasDefault = hasDefault || c.IsDefaultRecipe(entrypoint.Recipe)
 	}
-	if !hasDefault {
+	if api == ChatAPI && !hasDefault {
 		result = append([]EntrypointMapping{{
-			API: ChatAPI, Source: EntrypointBuiltin,
-			ModelNames: []string{DefaultEntrypointModel}, Recipe: DefaultRecipeName,
+			API: ChatAPI, Source: EntrypointBuiltin, Default: true,
+			ModelNames: []string{DefaultEntrypointModel}, Recipe: c.defaultRecipeName(),
 		}}, result...)
 	}
 	return result
@@ -60,14 +65,18 @@ func (c *RouterConfig) ResolveEntrypoint(api InferenceAPI, model string) (Entryp
 	return EntrypointMapping{}, false
 }
 
-// DefaultEntrypointNames returns the default recipe's effective public names.
-// Consumers that need a default selection use the first declared name.
+// DefaultEntrypointNames returns the default recipe's effective public names,
+// the default entrypoint's first. Consumers that need a default selection use
+// the first name.
 func (c *RouterConfig) DefaultEntrypointNames() []string {
-	var names []string
+	var marked, others []string
 	for _, entrypoint := range c.EffectiveEntrypoints(ChatAPI) {
-		if entrypoint.Recipe == DefaultRecipeName {
-			names = append(names, entrypoint.ModelNames...)
+		switch {
+		case entrypoint.Default:
+			marked = append(marked, entrypoint.ModelNames...)
+		case c.IsDefaultRecipe(entrypoint.Recipe):
+			others = append(others, entrypoint.ModelNames...)
 		}
 	}
-	return names
+	return append(marked, others...)
 }

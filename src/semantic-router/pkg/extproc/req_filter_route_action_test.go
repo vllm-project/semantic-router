@@ -101,6 +101,22 @@ func TestDecisionRouteActionFailsClosedWithoutEligibleModel(t *testing.T) {
 	}
 }
 
+func TestDecisionRouteActionRefusesOnlyWithoutReservesAboveEveryWindow(t *testing.T) {
+	router := routeActionRouter(map[string]int{"safe-model": 100, "small-safe-model": 100})
+	decisionValue := guardDecision(routeAction("safe-model"), config.ModelRef{Model: "small-safe-model"})
+
+	ctx := &RequestContext{VSRContextTokenCount: 200, VSRContextReserveTokens: 150}
+	destination, terminal, err := router.decisionRouteActionDestination(decisionValue, ctx)
+	assert.NoError(t, err)
+	assert.True(t, terminal)
+	assert.Equal(t, "safe-model", destination)
+
+	ctx = &RequestContext{VSRContextTokenCount: 200, VSRContextReserveTokens: 50}
+	_, terminal, err = router.decisionRouteActionDestination(decisionValue, ctx)
+	assert.ErrorIs(t, err, errNoContextEligibleDecisionModel)
+	assert.False(t, terminal)
+}
+
 func TestDecisionRouteActionDestinationEligibleAfterContextShrinks(t *testing.T) {
 	router := routeActionRouter(map[string]int{"safe-model": 100})
 	ctx := &RequestContext{VSRContextTokenCount: 50}
@@ -126,6 +142,30 @@ func TestFinalizeDecisionEvaluationRouteActionOverridesPinnedModel(t *testing.T)
 	assert.NoError(t, err)
 	assert.Equal(t, "guard", decisionName)
 	assert.Equal(t, "safe-model", selectedModel)
+}
+
+func TestFinalizeDecisionEvaluationPIIMatchSelectsDeclaredSafeModel(t *testing.T) {
+	router := routeActionRouter(map[string]int{"safe-model": 0})
+	ctx := &RequestContext{}
+	result := &decision.DecisionResult{
+		Decision: &config.Decision{
+			Name:      "tool-pii-guard",
+			Rules:     config.RuleNode{Type: config.SignalTypePII, Name: "tool_pii"},
+			ModelRefs: []config.ModelRef{{Model: "safe-model"}},
+		},
+		Confidence: 1,
+	}
+
+	decisionName, _, _, selectedModel, err := router.finalizeDecisionEvaluation(
+		result,
+		"vllm-sr/auto",
+		"continue",
+		ctx,
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, "tool-pii-guard", decisionName)
+	assert.Equal(t, "safe-model", selectedModel)
+	assert.Equal(t, "safe-model", ctx.VSRSelectedModel)
 }
 
 func TestFinalizeDecisionEvaluationRouteActionNeverFallsBackToPinnedModel(t *testing.T) {

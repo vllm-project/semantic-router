@@ -139,7 +139,7 @@ class Plan:
 
 
 def read_state(state: Any) -> State:
-    """The typed parts of a System One state; ValueError when the state is empty or malformed."""
+    """``typed_state``, text holding a JSON object read as that object (``vela2_inference.system_one_state``)."""
     if isinstance(state, str) and state.strip().startswith("{"):
         try:
             decoded = json.loads(state.strip())
@@ -147,6 +147,11 @@ def read_state(state: Any) -> State:
             decoded = None
         if isinstance(decoded, dict):
             state = decoded
+    return typed_state(state)
+
+
+def typed_state(state: Any) -> State:
+    """The typed parts of a System One state (text is the user part as it is); ValueError when it is empty or malformed."""
     if isinstance(state, str):
         if not state.strip():
             raise ValueError("state must not be empty or whitespace")

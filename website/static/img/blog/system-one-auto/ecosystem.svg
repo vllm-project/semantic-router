@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1800" height="1160" viewBox="0 0 1800 1160">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10Z" fill="context-stroke"/></marker></defs>
+<rect width="1800" height="1160" fill="white"/>
+<text x="65" y="82" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="46" font-weight="700" text-anchor="start">Decision models need a router, too.</text>
+<text x="65" y="132" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="27" font-weight="400" text-anchor="start">The same orchestration idea. A different kind of model and answer.</text>
+<rect x="60" y="188" width="810" height="809" rx="22" fill="#faf9fc" stroke="#ded9e7" stroke-width="2" />
+<rect x="930" y="188" width="810" height="809" rx="22" fill="#fffcf7" stroke="#e5d4b8" stroke-width="2" />
+<text x="100" y="243" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="30" font-weight="700" text-anchor="start">01</text>
+<text x="161" y="243" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="28" font-weight="700" text-anchor="start">LLM ROUTING</text>
+<text x="970" y="243" fill="#bc711a" font-family="DejaVu Sans,sans-serif" font-size="30" font-weight="700" text-anchor="start">02</text>
+<text x="1031" y="243" fill="#bc711a" font-family="DejaVu Sans,sans-serif" font-size="28" font-weight="700" text-anchor="start">DECISION-MODEL ROUTING</text>
+<rect x="240" y="284" width="450" height="105" rx="16" fill="white" stroke="#ddd7e7" stroke-width="2" />
+<text x="465" y="326" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="30" font-weight="600" text-anchor="middle">Messages</text>
+<text x="465" y="363" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="22" font-weight="400" text-anchor="middle">Chat Completions / Responses</text>
+<rect x="1110" y="284" width="450" height="105" rx="16" fill="white" stroke="#ddd7e7" stroke-width="2" />
+<text x="1335" y="326" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="29" font-weight="600" text-anchor="middle">Input + typed questions</text>
+<text x="1335" y="363" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="23" font-weight="400" text-anchor="middle">System One API</text>
+<path d="M465 389 V445" fill="none" stroke="#211b35" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<path d="M1335 389 V445" fill="none" stroke="#bc711a" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="240" y="451" width="450" height="116" rx="16" fill="#f0ebfa" stroke="#a48dc5" stroke-width="2" />
+<text x="465" y="498" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="28" font-weight="700" text-anchor="middle">vLLM Semantic Router</text>
+<text x="465" y="540" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="24" font-weight="400" text-anchor="middle">Select an LLM backend</text>
+<rect x="1110" y="451" width="450" height="116" rx="16" fill="#fff3df" stroke="#dca04e" stroke-width="2" />
+<text x="1335" y="498" fill="#bc711a" font-family="DejaVu Sans,sans-serif" font-size="30" font-weight="700" text-anchor="middle">System One Auto</text>
+<text x="1335" y="540" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="24" font-weight="400" text-anchor="middle">Select a decision / cascade</text>
+<path d="M465 567 V615 M215 615 H715" fill="none" stroke="#8b7f9c" stroke-width="3" stroke-linejoin="round" />
+<path d="M215 833 H715" fill="none" stroke="#8b7f9c" stroke-width="3" stroke-linejoin="round" />
+<path d="M465 833 V863" fill="none" stroke="#8b7f9c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<path d="M1335 567 V615 M1130 615 H1540" fill="none" stroke="#8b7f9c" stroke-width="3" stroke-linejoin="round" />
+<path d="M1130 833 H1540" fill="none" stroke="#8b7f9c" stroke-width="3" stroke-linejoin="round" />
+<path d="M1335 833 V863" fill="none" stroke="#8b7f9c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<path d="M215 615 V674" fill="none" stroke="#8b7f9c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="108" y="680" width="214" height="99" rx="16" fill="white" stroke="#ddd7e7" stroke-width="2" />
+<text x="215" y="737" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="25" font-weight="600" text-anchor="middle">Small LLM</text>
+<path d="M215 779 V833" fill="none" stroke="#8b7f9c" stroke-width="3" stroke-linejoin="round" />
+<path d="M465 615 V674" fill="none" stroke="#8b7f9c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="358" y="680" width="214" height="99" rx="16" fill="white" stroke="#ddd7e7" stroke-width="2" />
+<text x="465" y="737" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="25" font-weight="600" text-anchor="middle">Mid-size LLM</text>
+<path d="M465 779 V833" fill="none" stroke="#8b7f9c" stroke-width="3" stroke-linejoin="round" />
+<path d="M715 615 V674" fill="none" stroke="#8b7f9c" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="608" y="680" width="214" height="99" rx="16" fill="white" stroke="#ddd7e7" stroke-width="2" />
+<text x="715" y="737" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="25" font-weight="600" text-anchor="middle">Large LLM</text>
+<path d="M715 779 V833" fill="none" stroke="#8b7f9c" stroke-width="3" stroke-linejoin="round" />
+<path d="M1130 615 V674" fill="none" stroke="#bc711a" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="1002" y="680" width="256" height="99" rx="16" fill="#fff3df" stroke="#bc711a" stroke-width="2" />
+<text x="1035" y="738" fill="#bc711a" font-family="DejaVu Sans,sans-serif" font-size="29" font-weight="700" text-anchor="start">Kai</text>
+<text x="1224" y="738" fill="#bc711a" font-family="DejaVu Sans,sans-serif" font-size="26" font-weight="400" text-anchor="end">0.6B</text>
+<path d="M1130 779 V833" fill="none" stroke="#bc711a" stroke-width="3" stroke-linejoin="round" />
+<path d="M1540 615 V674" fill="none" stroke="#7051bb" stroke-width="3" stroke-linejoin="round" marker-end="url(#arrow)" />
+<rect x="1412" y="680" width="256" height="99" rx="16" fill="#f0ebfa" stroke="#7051bb" stroke-width="2" />
+<text x="1445" y="738" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="29" font-weight="700" text-anchor="start">Vega</text>
+<text x="1634" y="738" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="26" font-weight="400" text-anchor="end">27B</text>
+<path d="M1540 779 V833" fill="none" stroke="#7051bb" stroke-width="3" stroke-linejoin="round" />
+<text x="1335" y="659" fill="#bc711a" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="600" text-anchor="middle">DECISION 2.0</text>
+<rect x="240" y="869" width="450" height="86" rx="16" fill="white" stroke="#ddd7e7" stroke-width="2" />
+<text x="465" y="922" fill="#211b35" font-family="DejaVu Sans,sans-serif" font-size="29" font-weight="600" text-anchor="middle">Generated text</text>
+<rect x="1110" y="869" width="450" height="86" rx="16" fill="white" stroke="#ddd7e7" stroke-width="2" />
+<rect x="1134" y="891" width="123" height="42" rx="21" fill="#f0ebfa" stroke="#f0ebfa" stroke-width="2" /><text x="1195.5" y="920" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="600" text-anchor="middle" data-box="1134 891 123 42">choice</text>
+<rect x="1273" y="891" width="123" height="42" rx="21" fill="#f0ebfa" stroke="#f0ebfa" stroke-width="2" /><text x="1334.5" y="920" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="600" text-anchor="middle" data-box="1273 891 123 42">score</text>
+<rect x="1412" y="891" width="123" height="42" rx="21" fill="#f0ebfa" stroke="#f0ebfa" stroke-width="2" /><text x="1473.5" y="920" fill="#7051bb" font-family="DejaVu Sans,sans-serif" font-size="21" font-weight="600" text-anchor="middle" data-box="1412 891 123 42">noul</text>
+<text x="465" y="1050" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="25" font-weight="400" text-anchor="middle">Models generate language.</text>
+<text x="1335" y="1050" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="25" font-weight="400" text-anchor="middle">Models answer structured questions.</text>
+<text x="900" y="1123" fill="#686477" font-family="DejaVu Sans,sans-serif" font-size="24" font-weight="400" text-anchor="middle">Measured here: Kai → Vega. Broader provider evaluation is next.</text>
+</svg>

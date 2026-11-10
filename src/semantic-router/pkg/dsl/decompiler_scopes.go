@@ -7,9 +7,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// DecompileConfig emits the shared routing catalog followed by request-facing
-// entrypoints and isolated recipe programs. Single-profile configs retain the
-// original routing-only output.
+// DecompileConfig emits the shared model catalog with the recipe named
+// default as the top-level program, followed by request-facing entrypoints
+// and every other recipe as a RECIPE program.
 func DecompileConfig(cfg *config.RouterConfig) (string, error) {
 	if cfg == nil {
 		return "", fmt.Errorf("cannot decompile a nil config")
@@ -17,7 +17,7 @@ func DecompileConfig(cfg *config.RouterConfig) (string, error) {
 	if err := config.ValidateDecisionRuleLimits(cfg); err != nil {
 		return "", err
 	}
-	base, err := DecompileRouting(cfg)
+	base, err := DecompileRouting(topLevelView(cfg))
 	if err != nil {
 		return "", err
 	}
@@ -41,6 +41,18 @@ func DecompileConfig(cfg *config.RouterConfig) (string, error) {
 	return canonicalDSLOutput(sb.String()), nil
 }
 
+// topLevelView is the routing view the top-level program describes: the
+// recipe named default, or an empty one when every recipe has its own name.
+func topLevelView(cfg *config.RouterConfig) *config.RouterConfig {
+	if len(cfg.Recipes) == 0 {
+		return cfg
+	}
+	if recipe, ok := cfg.RecipeByName(config.DefaultRecipeName); ok {
+		return cfg.ConfigForRecipe(recipe)
+	}
+	return cfg.ConfigForRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName})
+}
+
 func canonicalDSLOutput(input string) string {
 	return strings.TrimRight(input, "\n") + "\n"
 }
@@ -51,8 +63,14 @@ func writeEntrypoints(sb *strings.Builder, entrypoints []config.EntrypointMappin
 	sb.WriteString("# =============================================================================\n\n")
 	for _, entrypoint := range entrypoints {
 		sb.WriteString("ENTRYPOINT {\n")
+		if entrypoint.API != "" {
+			fmt.Fprintf(sb, "  api: %q\n", entrypoint.API)
+		}
 		fmt.Fprintf(sb, "  model_names: %s\n", formatStringArray(entrypoint.ModelNames))
 		fmt.Fprintf(sb, "  recipe: %q\n", entrypoint.Recipe)
+		if entrypoint.Default {
+			sb.WriteString("  default: true\n")
+		}
 		sb.WriteString("}\n\n")
 	}
 }
@@ -114,8 +132,10 @@ func appendConfigScopesToAST(prog *Program, cfg *config.RouterConfig) {
 	}
 	for _, entrypoint := range cfg.Entrypoints {
 		prog.Entrypoints = append(prog.Entrypoints, &EntrypointDecl{
+			API:        string(entrypoint.API),
 			ModelNames: append([]string(nil), entrypoint.ModelNames...),
 			Recipe:     string(entrypoint.Recipe),
+			Default:    entrypoint.Default,
 		})
 	}
 	for i := range cfg.Recipes {

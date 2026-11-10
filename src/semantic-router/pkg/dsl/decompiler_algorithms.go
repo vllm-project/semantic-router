@@ -5,9 +5,7 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 type algorithmFieldExporter func(*config.AlgorithmConfig, map[string]Value)
 
 var algorithmFieldExporters = map[string]algorithmFieldExporter{
-	"confidence": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		confidenceAlgorithmToFields(algo.Confidence, fields)
-	},
+	config.DecisionAlgorithmEscalate: escalateAlgorithmToFields,
 	"ratings": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		ratingsAlgorithmToFields(algo.Ratings, fields)
 	},
@@ -20,62 +18,33 @@ var algorithmFieldExporters = map[string]algorithmFieldExporter{
 	"workflows": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		workflowsAlgorithmToFields(algo.Workflows, fields)
 	},
-	"router_dc": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		routerDCAlgorithmToFields(algo.RouterDC, fields)
-	},
-	"automix": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		autoMixAlgorithmToFields(algo.AutoMix, fields)
-	},
-	"hybrid": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		hybridAlgorithmToFields(algo.Hybrid, fields)
-	},
-	"latency_aware": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		latencyAwareAlgorithmToFields(algo.LatencyAware, fields)
-	},
 	"multi_factor": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		multiFactorAlgorithmToFields(algo.MultiFactor, fields)
 	},
-	"prompt": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		promptAlgorithmToFields(algo.Prompt, fields)
-	},
-	"decision": func(algo *config.AlgorithmConfig, fields map[string]Value) {
-		decisionModelAlgorithmToFields(algo.Decision, fields)
+	"systemone": func(algo *config.AlgorithmConfig, fields map[string]Value) {
+		systemOneAlgorithmToFields(algo.SystemOne, fields)
 	},
 }
 
-func decisionModelAlgorithmToFields(
-	decision *config.DecisionSelectionConfig,
+func systemOneAlgorithmToFields(
+	selector *config.SystemOneSelectionConfig,
 	fields map[string]Value,
 ) {
-	if decision == nil {
+	if selector == nil {
 		return
 	}
-	decisionFields := map[string]Value{}
-	setStringValue(decisionFields, "deployment", decision.Deployment)
-	setStringValue(decisionFields, "instructions", decision.Instructions)
-	setIntValue(decisionFields, "timeout_ms", decision.TimeoutMs)
-	if len(decision.Candidates) > 0 {
+	selectorFields := map[string]Value{}
+	setStringValue(selectorFields, "deployment", selector.Deployment)
+	setStringValue(selectorFields, "instructions", selector.Instructions)
+	setIntValue(selectorFields, "timeout_ms", selector.TimeoutMs)
+	if len(selector.Candidates) > 0 {
 		candidates := map[string]Value{}
-		for name, description := range decision.Candidates {
+		for name, description := range selector.Candidates {
 			candidates[name] = StringValue{V: description}
 		}
-		decisionFields["candidates"] = ObjectValue{Fields: candidates}
+		selectorFields["candidates"] = ObjectValue{Fields: candidates}
 	}
-	fields["decision"] = ObjectValue{Fields: decisionFields}
-}
-
-func promptAlgorithmToFields(
-	prompt *config.PromptSelectionConfig,
-	fields map[string]Value,
-) {
-	if prompt == nil {
-		return
-	}
-	promptFields := map[string]Value{}
-	setStringValue(promptFields, "model", prompt.Model)
-	setStringValue(promptFields, "instructions", prompt.Instructions)
-	setIntValue(promptFields, "timeout_seconds", prompt.TimeoutSeconds)
-	fields["prompt"] = ObjectValue{Fields: promptFields}
+	fields["systemone"] = ObjectValue{Fields: selectorFields}
 }
 
 func (d *decompiler) algorithmToFields(algo *config.AlgorithmConfig) map[string]Value {
@@ -84,43 +53,12 @@ func (d *decompiler) algorithmToFields(algo *config.AlgorithmConfig) map[string]
 		return fields
 	}
 	setIntValue(fields, "minimum_candidates", algo.MinimumCandidates)
-	algorithmOnErrorToFields(algo, fields)
+	setStringValue(fields, "on_error", algo.OnError)
+	algorithmBudgetToFields(algo.Budget, fields)
 	if export, ok := algorithmFieldExporters[algo.Type]; ok {
 		export(algo, fields)
 	}
 	return fields
-}
-
-func algorithmOnErrorToFields(algo *config.AlgorithmConfig, fields map[string]Value) {
-	switch algo.Type {
-	case "confidence", "ratings", "remom":
-		return
-	default:
-		if algo.OnError != "" {
-			fields["on_error"] = StringValue{V: algo.OnError}
-		}
-	}
-}
-
-func confidenceAlgorithmToFields(c *config.ConfidenceAlgorithmConfig, fields map[string]Value) {
-	if c == nil {
-		return
-	}
-	setStringValue(fields, "confidence_method", c.ConfidenceMethod)
-	setFloatValue(fields, "threshold", c.Threshold)
-	setStringValue(fields, "on_error", c.OnError)
-	setStringValue(fields, "escalation_order", c.EscalationOrder)
-	setFloatValue(fields, "cost_quality_tradeoff", c.CostQualityTradeoff)
-	setStringValue(fields, "token_filter", c.TokenFilter)
-	setStringValue(fields, "verifier_server_url", c.VerifierServerURL)
-	setIntValue(fields, "verifier_timeout_seconds", c.VerifierTimeoutSeconds)
-	setIntValue(fields, "max_response_bytes", int(c.MaxResponseBytes))
-	if c.HybridWeights != nil {
-		weights := map[string]Value{}
-		setFloatValue(weights, "logprob_weight", c.HybridWeights.LogprobWeight)
-		setFloatValue(weights, "margin_weight", c.HybridWeights.MarginWeight)
-		fields["hybrid_weights"] = ObjectValue{Fields: weights}
-	}
 }
 
 func ratingsAlgorithmToFields(r *config.RatingsAlgorithmConfig, fields map[string]Value) {
@@ -128,7 +66,6 @@ func ratingsAlgorithmToFields(r *config.RatingsAlgorithmConfig, fields map[strin
 		return
 	}
 	setIntValue(fields, "max_concurrent", r.MaxConcurrent)
-	setStringValue(fields, "on_error", r.OnError)
 }
 
 func remomAlgorithmToFields(r *config.ReMoMAlgorithmConfig, fields map[string]Value) {
@@ -149,7 +86,6 @@ func remomAlgorithmToFields(r *config.ReMoMAlgorithmConfig, fields map[string]Va
 	}
 	setIntValue(fields, "round_timeout_seconds", r.RoundTimeoutSeconds)
 	setIntValue(fields, "min_successful_responses", r.MinSuccessfulResponses)
-	setStringValue(fields, "on_error", r.OnError)
 	setIntValue(fields, "shuffle_seed", r.ShuffleSeed)
 	setBoolTrueValue(fields, "include_intermediate_responses", r.IncludeIntermediateResponses)
 	setIntValue(fields, "max_responses_per_round", r.MaxResponsesPerRound)
@@ -174,7 +110,6 @@ func fusionAlgorithmToFields(f *config.FusionAlgorithmConfig, fields map[string]
 	if f.IncludeAnalysis != nil {
 		fields["include_analysis"] = BoolValue{V: *f.IncludeAnalysis}
 	}
-	setStringValue(fields, "on_error", f.OnError)
 	setStringValue(fields, "quorum_failure_policy", string(f.QuorumFailurePolicy))
 	setStringValue(fields, "quorum_fallback_target", f.QuorumFallbackTarget)
 	setStringValue(fields, "analysis_template", f.AnalysisTemplate)
@@ -214,7 +149,6 @@ func workflowsAlgorithmToFields(w *config.WorkflowsAlgorithmConfig, fields map[s
 	if w.IncludeIntermediateResponses != nil {
 		fields["include_intermediate_responses"] = BoolValue{V: *w.IncludeIntermediateResponses}
 	}
-	setStringValue(fields, "on_error", w.OnError)
 }
 
 func workflowRolesValue(roles []config.WorkflowRoleConfig) ArrayValue {
@@ -236,52 +170,6 @@ func workflowFinalValue(final config.WorkflowFinalConfig) ObjectValue {
 	setStringValue(fields, "model", final.Model)
 	setStringValue(fields, "prompt", final.Prompt)
 	return ObjectValue{Fields: fields}
-}
-
-func routerDCAlgorithmToFields(r *config.RouterDCSelectionConfig, fields map[string]Value) {
-	if r == nil {
-		return
-	}
-	setFloatValue(fields, "temperature", r.Temperature)
-	setIntValue(fields, "dimension_size", r.DimensionSize)
-	setFloatValue(fields, "min_similarity", r.MinSimilarity)
-	setBoolTrueValue(fields, "use_query_contrastive", r.UseQueryContrastive)
-	setBoolTrueValue(fields, "use_model_contrastive", r.UseModelContrastive)
-	setBoolTrueValue(fields, "require_descriptions", r.RequireDescriptions)
-	setBoolTrueValue(fields, "use_capabilities", r.UseCapabilities)
-}
-
-func autoMixAlgorithmToFields(a *config.AutoMixSelectionConfig, fields map[string]Value) {
-	if a == nil {
-		return
-	}
-	setFloatValue(fields, "verification_threshold", a.VerificationThreshold)
-	setIntValue(fields, "max_escalations", a.MaxEscalations)
-	setBoolTrueValue(fields, "cost_aware_routing", a.CostAwareRouting)
-	setFloatValue(fields, "cost_quality_tradeoff", a.CostQualityTradeoff)
-	setFloatValue(fields, "discount_factor", a.DiscountFactor)
-	setBoolTrueValue(fields, "use_logprob_verification", a.UseLogprobVerification)
-}
-
-func hybridAlgorithmToFields(h *config.HybridSelectionConfig, fields map[string]Value) {
-	if h == nil {
-		return
-	}
-	setFloatValue(fields, "experience_weight", h.ExperienceWeight)
-	setFloatValue(fields, "router_dc_weight", h.RouterDCWeight)
-	setFloatValue(fields, "automix_weight", h.AutoMixWeight)
-	setFloatValue(fields, "cost_weight", h.CostWeight)
-	setFloatValue(fields, "quality_gap_threshold", h.QualityGapThreshold)
-	setBoolTrueValue(fields, "normalize_scores", h.NormalizeScores)
-}
-
-func latencyAwareAlgorithmToFields(l *config.LatencyAwareAlgorithmConfig, fields map[string]Value) {
-	if l == nil {
-		return
-	}
-	setIntValue(fields, "tpot_percentile", l.TPOTPercentile)
-	setIntValue(fields, "ttft_percentile", l.TTFTPercentile)
-	setStringValue(fields, "description", l.Description)
 }
 
 func multiFactorAlgorithmToFields(m *config.MultiFactorSelectionConfig, fields map[string]Value) {

@@ -1,0 +1,1 @@
+global.model_catalog.deployments.remote-reranker: invalid_value: provider rerank is removed: the decision model judges RAG relevance; run `vllm-sr config migrate` (the rag source's match.judge; the deployment is deleted)

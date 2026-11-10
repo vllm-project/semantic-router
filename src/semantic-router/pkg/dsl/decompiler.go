@@ -15,7 +15,10 @@ func Decompile(cfg *config.RouterConfig) (string, error) {
 }
 
 func DecompileToAST(cfg *config.RouterConfig) *Program {
-	prog := DecompileRoutingToAST(cfg)
+	if err := config.ValidateDecisionRuleLimits(cfg); err != nil {
+		return nil
+	}
+	prog := DecompileRoutingToAST(topLevelView(cfg))
 	appendConfigScopesToAST(prog, cfg)
 	return prog
 }
@@ -40,7 +43,7 @@ func (d *decompiler) extractPluginTemplates() {
 	seen := make(map[pluginKey]*pluginTemplate)
 
 	for _, dec := range d.cfg.Decisions {
-		for _, p := range dec.Plugins {
+		for _, p := range dec.DeclaredPlugins() {
 			key := pluginKey{pluginType: p.Type}
 			// Use a simple fingerprint: type
 			if _, exists := seen[key]; !exists {
@@ -123,70 +126,6 @@ func FormatWithLimits(input string, limits config.DecisionRuleLimits) (string, e
 		return formatted, nil
 	}
 	return appendFormattedTestBlocks(formatted, prog.TestBlocks), nil
-}
-
-func (d *decompiler) decompileEmit(e config.EmitDirective) {
-	if e.Kind == "" {
-		return
-	}
-	switch e.Kind {
-	case "retention":
-		if e.Retention == nil {
-			d.write("  EMIT retention {}\n")
-			return
-		}
-		r := e.Retention
-		lines := make([]string, 0, 4)
-		if r.Drop != nil {
-			lines = append(lines, fmt.Sprintf("    drop: %t", *r.Drop))
-		}
-		if r.TTLTurns != nil {
-			lines = append(lines, fmt.Sprintf("    ttl_turns: %d", *r.TTLTurns))
-		}
-		if r.KeepCurrentModel != nil {
-			lines = append(lines, fmt.Sprintf("    keep_current_model: %t", *r.KeepCurrentModel))
-		}
-		if r.PreferPrefixRetention != nil {
-			lines = append(lines, fmt.Sprintf("    prefer_prefix_retention: %t", *r.PreferPrefixRetention))
-		}
-		if len(lines) == 0 {
-			d.write("  EMIT retention {}\n")
-			return
-		}
-		d.write("  EMIT retention {\n%s\n  }\n", strings.Join(lines, "\n"))
-	default:
-		// Unknown kind: preserve as an empty block so validator surfaces the error.
-		d.write("  EMIT %s {}\n", sanitizeName(e.Kind))
-	}
-}
-
-func emitDirectiveToDecl(e config.EmitDirective) *EmitDecl {
-	decl := &EmitDecl{Kind: e.Kind}
-	if e.Kind == "retention" && e.Retention != nil {
-		decl.Retention = &RetentionDirective{
-			Drop:                  clonePtrBoolDSL(e.Retention.Drop),
-			TTLTurns:              clonePtrIntDSL(e.Retention.TTLTurns),
-			KeepCurrentModel:      clonePtrBoolDSL(e.Retention.KeepCurrentModel),
-			PreferPrefixRetention: clonePtrBoolDSL(e.Retention.PreferPrefixRetention),
-		}
-	}
-	return decl
-}
-
-func clonePtrBoolDSL(p *bool) *bool {
-	if p == nil {
-		return nil
-	}
-	v := *p
-	return &v
-}
-
-func clonePtrIntDSL(p *int) *int {
-	if p == nil {
-		return nil
-	}
-	v := *p
-	return &v
 }
 
 func sanitizeName(name string) string {

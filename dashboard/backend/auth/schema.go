@@ -62,6 +62,11 @@ var AllPermissions = []string{
 	PermFeedbackSubmit, PermReplayRead, PermInferenceRun,
 }
 
+// ErrInvalidRole is returned by normalizeRole when the supplied role string is
+// not a recognized role. It is a sentinel so callers can distinguish a
+// client-supplied bad role from a store error.
+var ErrInvalidRole = fmt.Errorf("role must be one of %s, %s, %s", RoleAdmin, RoleWrite, RoleRead)
+
 func normalizeRole(raw string) (string, error) {
 	role := strings.ToLower(strings.TrimSpace(raw))
 	if role == "" {
@@ -75,7 +80,7 @@ func normalizeRole(raw string) (string, error) {
 	case RoleAdmin, RoleWrite, RoleRead:
 		return role, nil
 	default:
-		return "", fmt.Errorf("role must be one of %s, %s, %s", RoleAdmin, RoleWrite, RoleRead)
+		return "", ErrInvalidRole
 	}
 }
 

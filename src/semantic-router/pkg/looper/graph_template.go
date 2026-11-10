@@ -3,7 +3,9 @@ package looper
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
@@ -62,9 +64,13 @@ func (s *algorithmStep) Run(ctx context.Context, x *graph.Exec, st *graph.State)
 // Template returns the built-in request graph of a Looper algorithm: the
 // algorithm's step, then a respond step that answers with its result. The
 // configuration and the workflow state belong to the router generation that
-// runs the template.
-func Template(cfg *config.LooperConfig, algorithm string, workflows *WorkflowStateService) (*graph.Program, error) {
+// runs the template; limit is the decision's algorithm budget, if it has one.
+func Template(cfg *config.LooperConfig, algorithm string, limit *config.AlgorithmBudget, workflows *WorkflowStateService) (*graph.Program, error) {
 	if _, err := constructorFor(algorithm); err != nil {
+		return nil, err
+	}
+	limits, err := templateLimits(limit)
+	if err != nil {
 		return nil, err
 	}
 	return &graph.Program{
@@ -73,5 +79,26 @@ func Template(cfg *config.LooperConfig, algorithm string, workflows *WorkflowSta
 			{ID: algorithm, Type: StepType, Node: &algorithmStep{cfg: cfg, algorithm: algorithm, workflows: workflows}},
 			{ID: "respond", Type: graph.TypeRespond, Node: &graph.Respond{}},
 		},
+		Limits: limits,
 	}, nil
+}
+
+// templateLimits bounds a run. The hard per-request call budget rejects
+// configurations that are already over it at config load, so a statically
+// valid program only reaches it through call counts that are knowable during
+// execution (retries, nested and multi-stage fan-out). An algorithm budget
+// lowers the call limit to its max_calls and adds its deadline. A run that
+// would cross a limit fails closed instead of amplifying past it.
+func templateLimits(limit *config.AlgorithmBudget) (graph.Limits, error) {
+	limits := graph.Limits{MaxHops: config.MaxUpstreamCallsPerRequest}
+	if limit == nil {
+		return limits, nil
+	}
+	deadline, err := time.ParseDuration(limit.Deadline)
+	if err != nil || deadline <= 0 || limit.MaxCalls <= 0 {
+		return graph.Limits{}, fmt.Errorf("invalid algorithm budget: deadline %q, max_calls %d", limit.Deadline, limit.MaxCalls)
+	}
+	limits.Timeout = deadline
+	limits.MaxHops = min(limits.MaxHops, limit.MaxCalls)
+	return limits, nil
 }

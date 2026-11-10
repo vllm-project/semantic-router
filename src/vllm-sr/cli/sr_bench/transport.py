@@ -8,17 +8,26 @@ import re
 import socket
 import threading
 import time
+from collections.abc import Mapping
 from contextlib import suppress
 from http import HTTPStatus
 
 import requests
+
+from cli.vsr_trace import TRACE_HEADER, parse_trace
 
 from . import native_output
 from .activity import CHECKPOINT_SECONDS
 
 MAX_USAGE_RECEIPT_BYTES = 12288
 MAX_RECEIPT_CALLS = 256
-SESSION_ID_HEADER = "x-session-id"
+USER_TURN_PHASE = "user_turn"
+TOOL_LOOP_PHASE = "tool_loop"
+PROVIDER_STATE_PHASE = "provider_state"
+UNKNOWN_PHASE = "unknown"
+SESSION_PHASES = frozenset({USER_TURN_PHASE, TOOL_LOOP_PHASE, PROVIDER_STATE_PHASE})
+SESSION_ID_HEADER = "x-vsr-session-id"
+CONVERSATION_ID_HEADER = "x-conversation-id"
 
 
 # Shared internal transport/harness contract; preserving its exception identity.
@@ -35,6 +44,72 @@ def final_content(content):
         if "<think>" in content:
             return ""
     return content.strip()
+
+
+def _is_tool_result_message(message: dict) -> bool:
+    if message.get("role") in {"tool", "function"}:
+        return True
+    content = message.get("content")
+    return isinstance(content, list) and any(
+        isinstance(part, dict) and part.get("type") == "tool_result" for part in content
+    )
+
+
+def request_phase(messages: list[dict]) -> str:
+    """Apply the Router's tool-loop rule to the request's latest messages."""
+    if not messages or not isinstance(messages[-1], dict):
+        return USER_TURN_PHASE
+    latest = messages[-1]
+    role = latest.get("role")
+    if _is_tool_result_message(latest) or (
+        role == "assistant" and latest.get("tool_calls")
+    ):
+        return TOOL_LOOP_PHASE
+    if role == "user" and len(messages) > 1:
+        previous = messages[-2]
+        if isinstance(previous, dict) and _is_tool_result_message(previous):
+            return TOOL_LOOP_PHASE
+    return USER_TURN_PHASE
+
+
+def router_receipts(response_headers: Mapping[str, str] | None) -> dict[str, str]:
+    """The Router's receipts in x-vsr-trace: the config hash, inference calls and
+    model usage of a config-bound request, the session phase and the
+    automatic-output budget. The Router sends the trace only to a caller its
+    global.router.headers.debug allows."""
+    trace = parse_trace((response_headers or {}).get(TRACE_HEADER))
+    return {name: member.value for name, member in trace.items()}
+
+
+def session_phase(
+    messages: list[dict], response_headers: Mapping[str, str] | None = None
+) -> tuple[str, str]:
+    """Prefer the Router phase while retaining a bounded request fallback."""
+    value = router_receipts(response_headers).get("session_phase")
+    if isinstance(value, str) and value.strip():
+        phase = value.strip()
+        return (phase if phase in SESSION_PHASES else UNKNOWN_PHASE), "router"
+    return request_phase(messages), "request"
+
+
+def usage_presence(raw: object) -> tuple[bool, bool]:
+    """Return whether cache-read and cache-write fields were actually present."""
+    if not isinstance(raw, dict):
+        return False, False
+    details = raw.get("prompt_tokens_details") or raw.get("input_tokens_details") or {}
+    if not isinstance(details, dict):
+        return False, False
+    read_reported = (
+        details.get("cached_tokens") is not None
+        or raw.get("cache_read_input_tokens") is not None
+    )
+    write_reported = (
+        details.get("cache_creation_tokens") is not None
+        or details.get("created_cache_tokens") is not None
+        or details.get("cache_write_tokens") is not None
+        or raw.get("cache_creation_input_tokens") is not None
+    )
+    return read_reported, write_reported
 
 
 def normalize_usage(raw):
@@ -93,9 +168,17 @@ def cost_for(usage, model, prices):
     )
 
 
-def mom_usage(response_headers, response_usage, prices):
+def mom_usage(
+    response_headers,
+    response_usage,
+    prices,
+    *,
+    cache_read_reported: bool | None = None,
+    cache_write_reported: bool | None = None,
+):
     """Account every traced child call; never price MoM tokens as its final model."""
-    raw = response_headers.get("x-vsr-model-usage")
+    receipts = router_receipts(response_headers)
+    raw = receipts.get("model_usage")
     if raw:
         if len(raw.encode()) > MAX_USAGE_RECEIPT_BYTES:
             raise CallFailure("MoM usage receipt exceeds bounded contract")
@@ -117,19 +200,22 @@ def mom_usage(response_headers, response_usage, prices):
             if not isinstance(call, dict) or not isinstance(call.get("model"), str):
                 raise CallFailure("Invalid MoM child identity")
             raw_usage = call.get("usage") or {}
-            usage = normalize_usage(
-                {
-                    **raw_usage,
-                    "cache_read_input_tokens": raw_usage.get("cached_input_tokens", 0),
-                    "cache_creation_input_tokens": raw_usage.get(
-                        "cache_write_tokens", 0
-                    ),
-                }
-            )
+            normalized_usage = {**raw_usage}
+            if "cached_input_tokens" in raw_usage:
+                normalized_usage["cache_read_input_tokens"] = raw_usage[
+                    "cached_input_tokens"
+                ]
+            if "cache_write_tokens" in raw_usage:
+                normalized_usage["cache_creation_input_tokens"] = raw_usage[
+                    "cache_write_tokens"
+                ]
+            usage = normalize_usage(normalized_usage)
             breakdown.append(
                 {
                     **call,
                     "usage": usage,
+                    "cache_read_reported": None,
+                    "cache_write_reported": None,
                     "cost_usd": cost_for(usage, call["model"], prices),
                 }
             )
@@ -160,8 +246,10 @@ def mom_usage(response_headers, response_usage, prices):
             "model_usage": breakdown,
             "inference_call_count": len(calls),
             "usage_complete": complete,
+            "cache_read_reported": None,
+            "cache_write_reported": None,
         }
-    if response_headers.get("x-vsr-inference-call-count") == "1":
+    if receipts.get("inference_calls") == "1":
         selected = response_headers.get("x-vsr-selected-model")
         if selected:
             return {
@@ -169,12 +257,16 @@ def mom_usage(response_headers, response_usage, prices):
                 "cost_usd": cost_for(response_usage, selected, prices),
                 "inference_call_count": 1,
                 "usage_complete": response_usage is not None,
+                "cache_read_reported": cache_read_reported,
+                "cache_write_reported": cache_write_reported,
             }
     return {
         "usage": None,
         "cost_usd": None,
         "inference_call_count": None,
         "usage_complete": False,
+        "cache_read_reported": cache_read_reported,
+        "cache_write_reported": cache_write_reported,
     }
 
 
@@ -212,6 +304,7 @@ def chat(
     output_policy="bounded",
     activity=None,
     session_id: str | None = None,
+    conversation_id: str | None = None,
 ):
     started = time.monotonic()
     endpoint = target["base_url"].rstrip("/") + "/chat/completions"
@@ -223,17 +316,21 @@ def chat(
     if body.get("max_tokens", 0) > limits["max_output_tokens"]:
         raise CallFailure("Requested tokens exceed frozen cap")
     headers = {"Content-Type": "application/json"}
+    if target["kind"] == "mom":
+        headers["X-VSR-Debug"] = "true"
+    if session_id is not None:
+        headers[SESSION_ID_HEADER] = session_id
+    if conversation_id is not None:
+        headers[CONVERSATION_ID_HEADER] = conversation_id
     if target.get("api_key_env"):
         key = os.environ.get(target["api_key_env"])
         if not key:
             raise CallFailure("Target credential environment variable is not set")
         headers["Authorization"] = "Bearer " + key
     if target.get("config_hash"):
-        headers["X-SR-Bench-Expected-Config-Hash"] = target["config_hash"]
+        headers["X-VSR-Bench-Expected-Config-Hash"] = target["config_hash"]
     if target.get("max_inference_calls"):
-        headers["X-SR-Bench-Max-Inference-Calls"] = str(target["max_inference_calls"])
-    if session_id:
-        headers[SESSION_ID_HEADER] = session_id
+        headers["X-VSR-Bench-Max-Inference-Calls"] = str(target["max_inference_calls"])
     content = ""
     reasoning = ""
     usage = None
@@ -243,6 +340,11 @@ def chat(
     ttft = None
     tool_calls = {}
     raw_usage = {}
+    cache_read_usage: dict[str, int] | None = None
+    cache_read_reported: bool | None = None
+    cache_write_reported: bool | None = None
+    observed_session_phase = request_phase(messages)
+    observed_phase_source = "request"
     done = False
     response = None
     stop = threading.Event()
@@ -266,7 +368,12 @@ def chat(
             "ttft_s": ttft,
             "finish_reason": finish,
             "raw_usage": raw_usage,
+            "cache_read_usage": cache_read_usage,
             "tool_calls": list(tool_calls.values()),
+            "phase": observed_session_phase,
+            "phase_source": observed_phase_source,
+            "cache_read_reported": cache_read_reported,
+            "cache_write_reported": cache_write_reported,
             "cost_usd": (
                 cost_for(usage, model, target.get("prices", {}))
                 if target["kind"] == "single"
@@ -307,6 +414,9 @@ def chat(
             raise CallFailure(f"Target HTTP {response.status_code}")
         if "text/event-stream" not in response.headers.get("content-type", ""):
             raise CallFailure("Target did not return a streaming response")
+        observed_session_phase, observed_phase_source = session_phase(
+            messages, response.headers
+        )
         if output_policy == "native" and target["kind"] == "mom":
             native_evidence = native_output.from_headers(target, response.headers)
 
@@ -335,6 +445,7 @@ def chat(
         def consume(lines):
             nonlocal content, reasoning, usage, model, finish, ttft, raw_usage, done
             nonlocal provider_model_observed
+            nonlocal cache_read_usage, cache_read_reported, cache_write_reported
             data = "\n".join(x[5:].lstrip() for x in lines if x.startswith("data:"))
             if not data:
                 return
@@ -351,6 +462,17 @@ def chat(
             if obj.get("usage"):
                 raw_usage = obj["usage"]
                 usage = normalize_usage(raw_usage)
+                chunk_cache_read_reported, chunk_cache_write_reported = usage_presence(
+                    raw_usage
+                )
+                cache_read_reported = (
+                    cache_read_reported is True or chunk_cache_read_reported
+                )
+                cache_write_reported = (
+                    cache_write_reported is True or chunk_cache_write_reported
+                )
+                if chunk_cache_read_reported:
+                    cache_read_usage = usage
             for choice in obj.get("choices", []):
                 if choice.get("index", 0) != 0:
                     continue
@@ -455,13 +577,19 @@ def chat(
         )
         result["response_usage"] = result["usage"]
         if target["kind"] == "mom":
-            result.update(mom_usage(response.headers, usage, target.get("prices", {})))
+            result.update(
+                mom_usage(
+                    response.headers,
+                    usage,
+                    target.get("prices", {}),
+                    cache_read_reported=cache_read_reported,
+                    cache_write_reported=cache_write_reported,
+                )
+            )
         else:
             result["inference_call_count"] = 1
         result["cost_complete"] = result["cost_usd"] is not None
-        result["config_hash"] = response.headers.get(
-            "x-sr-bench-config-hash"
-        ) or response.headers.get("x-vsr-config-hash")
+        result["config_hash"] = router_receipts(response.headers).get("config_hash")
         result["selected_model"] = response.headers.get("x-vsr-selected-model") or model
         result["decision"] = response.headers.get("x-vsr-selected-decision")
         if target.get("config_hash") and result["config_hash"] != target["config_hash"]:
@@ -485,6 +613,7 @@ def chat(
             response.close()
         if stream_file is not None:
             try:
+                stream_file.flush()
                 os.fsync(stream_file.fileno())
             finally:
                 stream_file.close()

@@ -294,7 +294,7 @@ def test_worker_that_never_started_is_removed_and_its_port_conflict_named(
                     command,
                     stderr=f"Bind for 127.0.0.1:{port} failed: port is already allocated",
                 )
-            if command[1] == "inspect":
+            if command[1:3] == ["container", "inspect"]:
                 labels = {BENCH_IDENTITY_LABEL: "same"}
                 return SimpleNamespace(
                     returncode=0, stdout=json.dumps({**worker, "labels": labels})
@@ -349,7 +349,7 @@ def test_worker_that_never_started_is_removed_and_reports_the_runtime_error(
     def run(command, **kwargs):
         if command[1] == "run":
             raise subprocess.CalledProcessError(127, command, stderr=runtime_error)
-        if command[1] == "inspect":
+        if command[1:3] == ["container", "inspect"]:
             worker = {"id": "unstarted-id", "status": "created", "labels": {}}
             return SimpleNamespace(returncode=0, stdout=json.dumps(worker))
         removed.append(command[1:])
@@ -417,7 +417,7 @@ def test_serve_replaces_only_idle_image_upgrade_and_preserves_journal(
                     125, command, stderr="name conflict"
                 )
             state.update(exists=True, image="dashboard:new")
-        elif action == "inspect":
+        elif action == "container":
             info = {
                 "id": "owned-container-id",
                 "status": "running",
@@ -439,7 +439,7 @@ def test_serve_replaces_only_idle_image_upgrade_and_preserves_journal(
     )
     assert code == 0, error
     assert state == {"exists": True, "paused": False, "image": "dashboard:new"}
-    assert actions == ["run", "inspect", "image", "pause", "rm", "run", "exec"]
+    assert actions == ["run", "container", "image", "pause", "rm", "run", "exec"]
     with sqlite3.connect(bench.store / "journal.sqlite3") as db:
         assert db.execute("SELECT id, status FROM runs").fetchall() == [
             ("saved-result", saved_status)
@@ -652,7 +652,7 @@ def test_any_launch_change_replaces_an_owned_idle_worker(
             if state["exists"]:
                 raise subprocess.CalledProcessError(125, command, stderr="conflict")
             state["exists"] = True
-        elif command[1] == "inspect":
+        elif command[1] == "container":
             return SimpleNamespace(returncode=0, stdout=json.dumps(info), stderr="")
         elif command[1] == "rm":
             assert command[-1] == "owned-id"
@@ -664,7 +664,7 @@ def test_any_launch_change_replaces_an_owned_idle_worker(
         [spec], router_secret_values={}, bench_secret_values=credentials
     )
     assert code == 0, error
-    assert actions == ["run", "inspect", "image", "pause", "rm", "run", "exec"]
+    assert actions == ["run", "container", "image", "pause", "rm", "run", "exec"]
 
 
 @pytest.mark.parametrize("blocker", ["active-run", "missing-label", "stopped"])
@@ -686,7 +686,7 @@ def test_worker_that_cannot_be_replaced_is_kept_and_the_stack_still_starts(
         actions.append(command[1:2] + command[-1:])
         if command[1] == "run" and command[-1] != "dashboard":
             raise subprocess.CalledProcessError(125, command, stderr="conflict")
-        if command[1] == "inspect":
+        if command[1:3] == ["container", "inspect"]:
             return SimpleNamespace(returncode=0, stdout=json.dumps(info), stderr="")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 

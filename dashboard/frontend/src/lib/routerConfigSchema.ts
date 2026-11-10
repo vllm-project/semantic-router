@@ -57,9 +57,6 @@ function arrayFieldType(items: JSONSchemaNode | undefined): FieldSchema['type'] 
   const item = concreteSchema(items)
   if (item.type === 'string') return 'string[]'
   if (item.type === 'number' || item.type === 'integer') return 'number[]'
-  if (item.type === 'array' && concreteSchema(item.items ?? {}).type === 'string') {
-    return 'string[][]'
-  }
   if (item.type === 'object' || item.properties) return 'object[]'
   return 'json'
 }
@@ -208,9 +205,11 @@ export function algorithmFieldsFromRouterSchema(algorithmType: string): FieldSch
   const payloadKeys = ROUTER_CONFIG_EXTENSION.algorithms.flatMap((entry) =>
     'config_field' in entry && typeof entry.config_field === 'string' ? [entry.config_field] : [],
   )
+  // budget and on_error are executor settings; selectors reject them.
+  const executorFields = new Set(['budget', 'on_error'])
   const common = routerConfigFieldsForRef('#/$defs/AlgorithmConfig', {
     omit: ['type', ...payloadKeys],
-  })
+  }).filter((field) => surface.kind === 'executor' || !executorFields.has(field.key))
   if (!('schema_ref' in surface) || typeof surface.schema_ref !== 'string') return common
   const payloadFields = routerConfigFieldsForRef(surface.schema_ref)
   if (

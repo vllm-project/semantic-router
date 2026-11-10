@@ -44,11 +44,11 @@ ignore = [
 ]
 "tools/calibration/tuning/scenarios/*.py" = ["PLR2004"]
 "tools/calibration/tuning/tests/*.py" = ["PLC0415", "PLR2004"]
-"tools/test/services/mcp-classifier-server/server_*.py" = [
-  "N812",     # torch.nn.functional as F is the PyTorch convention
-  "PLC0415",  # aiohttp is an optional dependency used only in HTTP mode
-]
+"tools/calibration/systemone_auto/tests/*.py" = ["PLR2004"]
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
+# vSR's thresholds and probe scores are the calibrated values themselves; they read
+# best inline next to the question they gate.
+"src/agent-harness/claude-code/**/*.py" = ["PLR2004"]
 # The model runtime keeps the PyTorch `F` convention and imports heavy optional
 # modules (uvicorn, safetensors, huggingface_hub, tokenizers) where they are used,
 # so the API, registry and CLI stay importable without them.

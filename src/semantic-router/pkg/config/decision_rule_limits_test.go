@@ -15,11 +15,11 @@ func TestParseYAMLBytesRejectsOversizedDecisionBeforeStaticValidation(t *testing
 		rule = map[string]interface{}{"operator": "AND", "conditions": []interface{}{rule}}
 	}
 	document := map[string]interface{}{
-		"version": "v0.3",
+		"version": "v0.5",
 		"global":  map[string]interface{}{"router": map[string]interface{}{"config_source": "kubernetes"}},
-		"routing": map[string]interface{}{"decisions": []interface{}{
+		"recipes": []interface{}{map[string]interface{}{"name": "default", "decisions": []interface{}{
 			map[string]interface{}{"name": "oversized", "rules": rule},
-		}},
+		}}},
 	}
 	data, err := json.Marshal(document)
 	if err != nil {
@@ -69,9 +69,9 @@ func ruleCorpusDocument(t *testing.T, tc decisionRuleCorpusCase) map[string]inte
 		router["decision_rule_limits"] = limits
 	}
 	return map[string]interface{}{
-		"version": "v0.3",
+		"version": "v0.5",
 		"global":  map[string]interface{}{"router": router},
-		"routing": map[string]interface{}{"decisions": []interface{}{decision}},
+		"recipes": []interface{}{map[string]interface{}{"name": "default", "decisions": []interface{}{decision}}},
 	}
 }
 
@@ -133,7 +133,7 @@ func TestDecisionRuleLimitsTypedAndRecipeBudgets(t *testing.T) {
 	}
 	cfg.Recipes[0].Profile.Decisions[0].Rules = RuleNode{Operator: "AND", Conditions: []RuleNode{leaf}}
 	err := ValidateKubernetesConfigContracts(cfg)
-	if err == nil || !strings.Contains(err.Error(), `routing recipe "support": decision "c": rules.conditions[0]`) {
+	if err == nil || !strings.Contains(err.Error(), `recipes[support]: decision "c": rules.conditions[0]`) {
 		t.Fatalf("expected recipe-scoped early error, got %v", err)
 	}
 	cfg.DecisionRuleLimits.MaxDepth = canonicalIntPtr(0)
@@ -144,10 +144,30 @@ func TestDecisionRuleLimitsTypedAndRecipeBudgets(t *testing.T) {
 
 func TestDecisionRuleLimitsRawRecipesAndEarlyRejection(t *testing.T) {
 	document := ruleCorpusDocument(t, decisionRuleCorpusCase{Kind: "depth", Size: 1000})
-	document["recipes"] = []interface{}{map[string]interface{}{"name": "support", "routing": document["routing"]}}
-	delete(document, "routing")
+	document["recipes"].([]interface{})[0].(map[string]interface{})["name"] = "support"
 	_, err := validateRawDecisionRuleLimits(document)
-	if err == nil || !strings.Contains(err.Error(), `routing recipe "support": decision "bounded"`) || !strings.Contains(err.Error(), "depth 17") {
+	if err == nil || !strings.Contains(err.Error(), `recipes[support]: decision "bounded"`) || !strings.Contains(err.Error(), "depth 17") {
 		t.Fatalf("expected early recipe depth rejection, got %v", err)
+	}
+}
+
+func TestDecisionRuleLimitsTypedRecipeErrorScope(t *testing.T) {
+	cfg := &RouterConfig{
+		DecisionRuleLimits: DecisionRuleLimits{MaxNodes: canonicalIntPtr(1)},
+		Recipes: []RoutingRecipe{{Name: "support", Profile: RoutingProfile{Decisions: []Decision{{
+			Name: "bounded", Rules: RuleNode{Operator: "AND", Conditions: []RuleNode{{Type: "keyword", Name: "urgent"}}},
+		}}}}},
+	}
+	cfg.UseDefaultRecipe("support")
+	for name, candidate := range map[string]*RouterConfig{
+		"named default": cfg,
+		"scoped":        cfg.ConfigForRecipe(&cfg.Recipes[0]),
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := ValidateDecisionRuleLimits(candidate)
+			if err == nil || !strings.Contains(err.Error(), `recipes[support]: decision "bounded"`) {
+				t.Fatalf("expected the selected recipe in the budget error, got %v", err)
+			}
+		})
 	}
 }

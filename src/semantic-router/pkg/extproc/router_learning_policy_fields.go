@@ -29,6 +29,7 @@ const (
 	learningPolicyFieldDecision          routerLearningPolicyField = "decision"
 	learningPolicyFieldDecisionTier      routerLearningPolicyField = "decision_tier"
 	learningPolicyFieldRescue            routerLearningPolicyField = "rescue"
+	learningPolicyFieldRelease           routerLearningPolicyField = "release"
 )
 
 type routerLearningPolicyField string

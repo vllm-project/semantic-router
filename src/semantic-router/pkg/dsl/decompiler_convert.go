@@ -7,22 +7,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func (d *decompiler) categoryToSignal(cat *config.Category) *SignalDecl {
-	fields := make(map[string]Value)
-	if cat.Description != "" {
-		fields["description"] = StringValue{V: cat.Description}
-	}
-	if len(cat.MMLUCategories) > 0 {
-		fields["mmlu_categories"] = stringsToArray(cat.MMLUCategories)
-	}
-	if len(cat.ModelScores) > 0 {
-		fields["model_scores"] = modelScoresValue(cat.ModelScores)
-	}
-	return &SignalDecl{SignalType: "domain", Name: cat.Name, Fields: fields}
-}
-
 func (d *decompiler) keywordToSignal(kw *config.KeywordRule) *SignalDecl {
 	fields := make(map[string]Value)
+	if kw.Description != "" {
+		fields["description"] = StringValue{V: kw.Description}
+	}
 	if kw.Operator != "" {
 		fields["operator"] = StringValue{V: kw.Operator}
 	}
@@ -50,81 +39,16 @@ func (d *decompiler) keywordToSignal(kw *config.KeywordRule) *SignalDecl {
 	if kw.NgramArity != 0 {
 		fields["ngram_arity"] = IntValue{V: kw.NgramArity}
 	}
+	if kw.IncludeHistory {
+		fields["include_history"] = BoolValue{V: true}
+	}
+	if kw.Count != nil {
+		fields["count"] = numericPredicateObject(kw.Count)
+	}
+	if kw.Density != nil {
+		fields["density"] = numericPredicateObject(kw.Density)
+	}
 	return &SignalDecl{SignalType: "keyword", Name: kw.Name, Fields: fields}
-}
-
-func (d *decompiler) embeddingToSignal(emb *config.EmbeddingRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if emb.PrototypeScoring != nil {
-		fields["prototype_scoring"] = ObjectValue{Fields: prototypeScoringFields(emb.PrototypeScoring)}
-	}
-	if emb.SimilarityThreshold != 0 {
-		fields["threshold"] = FloatValue{V: float64(emb.SimilarityThreshold)}
-	}
-	if len(emb.Candidates) > 0 {
-		fields["candidates"] = stringsToArray(emb.Candidates)
-	}
-	if emb.AggregationMethodConfiged != "" {
-		fields["aggregation_method"] = StringValue{V: string(emb.AggregationMethodConfiged)}
-	}
-	for _, list := range []struct {
-		name   string
-		values []string
-	}{
-		{"image_candidates", emb.ImageCandidates}, {"negative_candidates", emb.NegativeCandidates}, {"negative_image_candidates", emb.NegativeImageCandidates},
-	} {
-		if len(list.values) > 0 {
-			fields[list.name] = stringsToArray(list.values)
-		}
-	}
-	if emb.QueryModality != "" && emb.QueryModality != config.QueryModalityText {
-		fields["query_modality"] = StringValue{V: string(emb.QueryModality)}
-	}
-	return &SignalDecl{SignalType: "embedding", Name: emb.Name, Fields: fields}
-}
-
-func (d *decompiler) factCheckToSignal(fc *config.FactCheckRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if fc.Description != "" {
-		fields["description"] = StringValue{V: fc.Description}
-	}
-	return &SignalDecl{SignalType: "fact_check", Name: fc.Name, Fields: fields}
-}
-
-func (d *decompiler) userFeedbackToSignal(uf *config.UserFeedbackRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if uf.Description != "" {
-		fields["description"] = StringValue{V: uf.Description}
-	}
-	return &SignalDecl{SignalType: "user_feedback", Name: uf.Name, Fields: fields}
-}
-
-func (d *decompiler) reaskToSignal(rule *config.ReaskRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if rule.Description != "" {
-		fields["description"] = StringValue{V: rule.Description}
-	}
-	if rule.Threshold != 0 {
-		fields["threshold"] = FloatValue{V: float64(rule.Threshold)}
-	}
-	if rule.LookbackTurns != 0 {
-		fields["lookback_turns"] = IntValue{V: rule.LookbackTurns}
-	}
-	return &SignalDecl{SignalType: "reask", Name: rule.Name, Fields: fields}
-}
-
-func (d *decompiler) preferenceToSignal(pref *config.PreferenceRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if pref.Description != "" {
-		fields["description"] = StringValue{V: pref.Description}
-	}
-	if len(pref.Examples) > 0 {
-		fields["examples"] = stringsToArray(pref.Examples)
-	}
-	if pref.Threshold != 0 {
-		fields["threshold"] = FloatValue{V: float64(pref.Threshold)}
-	}
-	return &SignalDecl{SignalType: "preference", Name: pref.Name, Fields: fields}
 }
 
 func (d *decompiler) languageToSignal(lang *config.LanguageRule) *SignalDecl {
@@ -152,18 +76,6 @@ func (d *decompiler) contextToSignal(ctx *config.ContextRule) *SignalDecl {
 	return &SignalDecl{SignalType: "context", Name: ctx.Name, Fields: fields}
 }
 
-func (d *decompiler) structureToSignal(rule *config.StructureRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if rule.Description != "" {
-		fields["description"] = StringValue{V: rule.Description}
-	}
-	fields["feature"] = structureFeatureValue(rule.Feature)
-	if rule.Predicate != nil {
-		fields["predicate"] = structurePredicateValue(rule.Predicate)
-	}
-	return &SignalDecl{SignalType: "structure", Name: rule.Name, Fields: fields}
-}
-
 func (d *decompiler) conversationToSignal(rule *config.ConversationRule) *SignalDecl {
 	fields := make(map[string]Value)
 	if rule.Description != "" {
@@ -171,40 +83,9 @@ func (d *decompiler) conversationToSignal(rule *config.ConversationRule) *Signal
 	}
 	fields["feature"] = conversationFeatureValue(rule.Feature)
 	if rule.Predicate != nil {
-		fields["predicate"] = structurePredicateValue(rule.Predicate)
+		fields["predicate"] = numericPredicateObject(rule.Predicate)
 	}
 	return &SignalDecl{SignalType: "conversation", Name: rule.Name, Fields: fields}
-}
-
-func (d *decompiler) complexityToSignal(comp *config.ComplexityRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if comp.PrototypeScoring != nil {
-		fields["prototype_scoring"] = ObjectValue{Fields: prototypeScoringFields(comp.PrototypeScoring)}
-	}
-	if comp.Threshold != 0 {
-		fields["threshold"] = FloatValue{V: float64(comp.Threshold)}
-	}
-	if comp.Description != "" {
-		fields["description"] = StringValue{V: comp.Description}
-	}
-	if len(comp.Hard.Candidates) > 0 || len(comp.Hard.ImageCandidates) > 0 {
-		fields["hard"] = complexityCandidatesValue(comp.Hard)
-	}
-	if len(comp.Easy.Candidates) > 0 || len(comp.Easy.ImageCandidates) > 0 {
-		fields["easy"] = complexityCandidatesValue(comp.Easy)
-	}
-	if comp.Composer != nil {
-		fields["composer"] = ruleCombinationValue(comp.Composer)
-	}
-	return &SignalDecl{SignalType: "complexity", Name: comp.Name, Fields: fields}
-}
-
-func (d *decompiler) modalityToSignal(mod *config.ModalityRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if mod.Description != "" {
-		fields["description"] = StringValue{V: mod.Description}
-	}
-	return &SignalDecl{SignalType: "modality", Name: mod.Name, Fields: fields}
 }
 
 func (d *decompiler) roleBindingToSignal(rb *config.RoleBinding) *SignalDecl {
@@ -226,138 +107,6 @@ func (d *decompiler) roleBindingToSignal(rb *config.RoleBinding) *SignalDecl {
 		fields["subjects"] = ArrayValue{Items: items}
 	}
 	return &SignalDecl{SignalType: "authz", Name: rb.Name, Fields: fields}
-}
-
-func (d *decompiler) hallucinationToSignal(rule *config.HallucinationRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if rule.Description != "" {
-		fields["description"] = StringValue{V: rule.Description}
-	}
-	return &SignalDecl{SignalType: "hallucination", Name: rule.Name, Fields: fields}
-}
-
-func (d *decompiler) jailbreakToSignal(jb *config.JailbreakRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if jb.Method != "" {
-		fields["method"] = StringValue{V: jb.Method}
-	}
-	if jb.Threshold != 0 {
-		fields["threshold"] = FloatValue{V: float64(jb.Threshold)}
-	}
-	if jb.IncludeHistory {
-		fields["include_history"] = BoolValue{V: true}
-	}
-	if jb.Direction != "" {
-		fields["direction"] = StringValue{V: jb.Direction}
-	}
-	if jb.Description != "" {
-		fields["description"] = StringValue{V: jb.Description}
-	}
-	if len(jb.JailbreakPatterns) > 0 {
-		fields["jailbreak_patterns"] = stringsToArray(jb.JailbreakPatterns)
-	}
-	if len(jb.BenignPatterns) > 0 {
-		fields["benign_patterns"] = stringsToArray(jb.BenignPatterns)
-	}
-	return &SignalDecl{SignalType: "jailbreak", Name: jb.Name, Fields: fields}
-}
-
-func (d *decompiler) piiToSignal(pii *config.PIIRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if pii.Threshold != 0 {
-		fields["threshold"] = FloatValue{V: float64(pii.Threshold)}
-	}
-	if len(pii.PIITypesAllowed) > 0 {
-		fields["pii_types_allowed"] = stringsToArray(pii.PIITypesAllowed)
-	}
-	if pii.IncludeHistory {
-		fields["include_history"] = BoolValue{V: true}
-	}
-	if pii.Description != "" {
-		fields["description"] = StringValue{V: pii.Description}
-	}
-	return &SignalDecl{SignalType: "pii", Name: pii.Name, Fields: fields}
-}
-
-func (d *decompiler) kbSignalToDecl(rule *config.KBSignalRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if rule.KB != "" {
-		fields["kb"] = StringValue{V: rule.KB}
-	}
-	fields["target"] = ObjectValue{Fields: map[string]Value{
-		"kind":  StringValue{V: rule.Target.Kind},
-		"value": StringValue{V: rule.Target.Value},
-	}}
-	if rule.Match != "" {
-		fields["match"] = StringValue{V: rule.Match}
-	}
-	return &SignalDecl{SignalType: "kb", Name: rule.Name, Fields: fields}
-}
-
-func (d *decompiler) eventRuleToDecl(rule *config.EventRule) *SignalDecl {
-	fields := make(map[string]Value)
-	if len(rule.EventTypes) > 0 {
-		fields["event_types"] = stringsToArray(rule.EventTypes)
-	}
-	if len(rule.Severities) > 0 {
-		fields["severities"] = stringsToArray(rule.Severities)
-	}
-	if len(rule.ActionCodes) > 0 {
-		fields["action_codes"] = stringsToArray(rule.ActionCodes)
-	}
-	if rule.Temporal {
-		fields["temporal"] = BoolValue{V: true}
-	}
-	return &SignalDecl{SignalType: "event", Name: rule.Name, Fields: fields}
-}
-
-func modelScoresValue(scores []config.ModelScore) ArrayValue {
-	items := make([]Value, 0, len(scores))
-	for _, score := range scores {
-		fields := map[string]Value{
-			"model": StringValue{V: score.Model},
-			"score": FloatValue{V: score.Score},
-		}
-		if score.UseReasoning != nil {
-			fields["use_reasoning"] = BoolValue{V: *score.UseReasoning}
-		}
-		items = append(items, ObjectValue{Fields: fields})
-	}
-	return ArrayValue{Items: items}
-}
-
-func complexityCandidatesValue(candidates config.ComplexityCandidates) ObjectValue {
-	fields := make(map[string]Value)
-	if len(candidates.Candidates) > 0 {
-		fields["candidates"] = stringsToArray(candidates.Candidates)
-	}
-	if len(candidates.ImageCandidates) > 0 {
-		fields["image_candidates"] = stringsToArray(candidates.ImageCandidates)
-	}
-	return ObjectValue{Fields: fields}
-}
-
-func ruleCombinationValue(node *config.RuleCombination) ObjectValue {
-	fields := make(map[string]Value)
-	if node == nil {
-		return ObjectValue{Fields: fields}
-	}
-	if node.Type != "" {
-		fields["type"] = StringValue{V: node.Type}
-		fields["name"] = StringValue{V: node.Name}
-		return ObjectValue{Fields: fields}
-	}
-	if node.Operator != "" {
-		fields["operator"] = StringValue{V: node.Operator}
-	}
-	if len(node.Conditions) > 0 {
-		items := make([]Value, 0, len(node.Conditions))
-		for i := range node.Conditions {
-			items = append(items, ruleCombinationValue(&node.Conditions[i]))
-		}
-		fields["conditions"] = ArrayValue{Items: items}
-	}
-	return ObjectValue{Fields: fields}
 }
 
 func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
@@ -401,7 +150,7 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 	}
 
 	// PLUGINs
-	for _, p := range dec.Plugins {
+	for _, p := range dec.DeclaredPlugins() {
 		ref := &PluginRef{Name: sanitizeName(p.Type)}
 		fields := pluginConfigToFields(&p)
 		if len(fields) > 0 {
@@ -414,9 +163,8 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 		route.CandidateIterations = append(route.CandidateIterations, candidateIterationConfigToDecl(iter))
 	}
 
-	for _, e := range dec.Emits {
-		route.Emits = append(route.Emits, emitDirectiveToDecl(e))
-	}
+	route.Retention = retentionToDecl(dec.Retention)
+	route.Output = outputToDecl(dec.Output)
 
 	return route
 }
@@ -506,7 +254,7 @@ func decompileSignalRefNode(
 		fields["label"] = StringValue{V: node.Label}
 	}
 	if node.Predicate != nil {
-		fields["predicate"] = structurePredicateValue(node.Predicate)
+		fields["predicate"] = numericPredicateObject(node.Predicate)
 	}
 	if node.OnError != "" {
 		fields["on_error"] = StringValue{V: node.OnError}

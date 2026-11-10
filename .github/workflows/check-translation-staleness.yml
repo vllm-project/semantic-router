@@ -92,5 +92,5 @@ jobs:
               });
               console.log('PR created successfully');
             } catch (e) {
-              console.log('Failed to create PR:', e.message);
+              core.setFailed(`Failed to create translation status PR: ${e.message}`);
             }

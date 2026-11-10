@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 7
 translation:
   source_commit: "6a387d587e2635de36c7ed5e4c2d513a3ec525a1"
@@ -155,11 +156,8 @@ spec:
 global:
   stores:
     response_cache:
-      enabled: true
       backend_type: qdrant
-      similarity_threshold: 0.90
       ttl_seconds: 7200
-      embedding_model: mmbert
       qdrant:
         host: qdrant                   # 服务名或主机名
         port: 6334
@@ -168,20 +166,22 @@ global:
         connect_timeout: 10
 ```
 
+store 只提供后端；[`response_cache` 插件](../tutorials/plugin/response-cache)负责开启缓存并设置召回的 `min_similarity`。
+
 ### 智能体记忆
+
+带 `memory` 源的 [`context` 插件](../tutorials/plugin/context#memory-sources)负责读写这个存储。
 
 ```yaml
 global:
   stores:
     memory:
-      enabled: true
       backend: qdrant
       qdrant:
         host: qdrant
         port: 6334
         collection: agentic_memory
-        dimension: 256               # mmbert：64、128、256、512 或 768
-      embedding_model: mmbert
+        dimension: 256               # Vela Embedding：64、128、256、512 或 768
       default_retrieval_limit: 5
       default_similarity_threshold: 0.30
 ```
@@ -200,8 +200,6 @@ global:
       enabled: true
       backend_type: qdrant
       file_storage_dir: /var/lib/vsr/data
-      embedding_model: multimodal
-      embedding_dimension: 384
       qdrant:
         host: qdrant
         port: 6334
@@ -219,15 +217,18 @@ global:
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: qdrant
       qdrant:
         host: qdrant
         port: 6334
         collection_name: router_replay
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ```
 
-这会启用 Router 范围的回放策略。仅当决策需要覆盖捕获或保留行为时，才添加路由局部 `router_replay` 插件；参见 [路由回放插件](../tutorials/plugin/router-replay)。
+`global.plugins` 中的 `router_replay` 插件启用 Router 范围的回放策略。仅当决策需要覆盖捕获或保留行为时，才添加路由局部 `router_replay` 插件；参见 [路由回放插件](../tutorials/plugin/router-replay)。
 
 ### 配置参考
 

@@ -5,9 +5,10 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import os
+import socket
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from http import HTTPStatus
 
 import requests
@@ -23,7 +24,7 @@ from .native_output import validate_recipes as validate_native_recipes
 from .provenance import capture_runner
 from .report import BUCKETS, make_report
 from .store import TERMINAL, now
-from .transport import CallFailure, chat, effective_request
+from .transport import CallFailure, chat, effective_request, request_phase
 
 
 class ReviewedPlanChangedError(ValueError):
@@ -62,6 +63,9 @@ class Context:
             if target.get("session_mode") == SESSION_AWARE
             else None
         )
+        # Conversation-scoped Router protection binds to a second identity
+        # header; session-aware evaluation sends both, one pair per task.
+        self.conversation_id = self.session_id
 
     def cancelled(self):
         return self._cancel.is_set() or time.monotonic() > self.deadline
@@ -84,6 +88,9 @@ class Context:
         if role not in {"subject", "judge", "simulator"}:
             raise ValueError("Unknown call role")
         session_id: str | None = self.session_id if role == "subject" else None
+        conversation_id: str | None = (
+            self.conversation_id if role == "subject" else None
+        )
         if role == "subject" and not any(
             call["role"] == "subject" for call in self.calls
         ):
@@ -151,23 +158,30 @@ class Context:
         activity = CallActivity(
             lambda value: self.store.update_call_activity(call_id, value)
         )
+        call_data = {
+            "model": selected["model"],
+            "activity": activity.snapshot(),
+            "request": {
+                "messages": messages,
+                "sampling": self.manifest["sampling"],
+                "request_params": selected.get("request_params", {}),
+                "effective_body": request_body,
+                "extra_body": extra_body,
+            },
+        }
+        if session_id is not None:
+            call_data["session_id"] = session_id
+        if conversation_id is not None:
+            call_data["conversation_id"] = conversation_id
+        if role == "subject":
+            call_data["phase"] = request_phase(messages)
+            call_data["phase_source"] = "request"
         call_id = self.store.start_call(
             self.run_id,
             self.case["id"],
             self.target["id"],
             role,
-            {
-                "model": selected["model"],
-                "activity": activity.snapshot(),
-                "request": {
-                    "messages": messages,
-                    "sampling": self.manifest["sampling"],
-                    "request_params": selected.get("request_params", {}),
-                    "effective_body": request_body,
-                    "extra_body": extra_body,
-                },
-                **({"session_id": session_id} if session_id else {}),
-            },
+            call_data,
         )
         call_record = {"id": call_id, "role": role}
         self.calls.append(call_record)
@@ -182,6 +196,7 @@ class Context:
                 self.artifact_dir / (call_id + ".sse"),
                 activity=activity,
                 session_id=session_id,
+                conversation_id=conversation_id,
                 **(
                     {"output_policy": "native"}
                     if self.manifest["output_policy"] == "native"
@@ -377,7 +392,7 @@ class Engine:
                     headers["Authorization"] = "Bearer " + key
                 url = target["preview_url"]
                 if target.get("config_hash"):
-                    headers["X-SR-Bench-Expected-Config-Hash"] = target["config_hash"]
+                    headers["X-VSR-Bench-Expected-Config-Hash"] = target["config_hash"]
                 payload = build_preview_request(
                     {
                         "messages": case["messages"],
@@ -396,18 +411,40 @@ class Engine:
                         "preview_context": manifest["preview_context"],
                     }
                 )
+                if ctx.cancelled():
+                    raise CallFailure("Run cancelled or wall-time budget exhausted")
                 response = requests.post(
                     url,
                     json=payload,
                     headers=headers,
+                    stream=True,
                     timeout=min(
                         manifest["limits"]["total_timeout_s"],
                         manifest["limits"]["idle_timeout_s"],
+                        max(0.1, ctx.deadline - time.monotonic()),
                     ),
                 )
-                if response.status_code >= HTTPStatus.BAD_REQUEST:
-                    raise ValueError(f"Preview HTTP {response.status_code}")
-                routing = response.json()
+                stop = threading.Event()
+
+                def watch():
+                    while not stop.wait(0.1):
+                        if ctx.cancelled():
+                            with suppress(AttributeError, OSError):
+                                response.raw._fp.fp.raw._sock.shutdown(socket.SHUT_RDWR)
+                            return
+
+                watcher = threading.Thread(target=watch, daemon=True)
+                watcher.start()
+                try:
+                    if response.status_code >= HTTPStatus.BAD_REQUEST:
+                        raise ValueError(f"Preview HTTP {response.status_code}")
+                    routing = response.json()
+                    if ctx.cancelled():
+                        raise CallFailure("Run cancelled or wall-time budget exhausted")
+                finally:
+                    stop.set()
+                    response.close()
+                    watcher.join()
                 if (
                     target.get("config_hash")
                     and routing.get("config_hash") != target["config_hash"]

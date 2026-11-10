@@ -1,100 +1,161 @@
 .section {
-  --ecosystem-bg: var(--site-surface);
-  --ecosystem-text: var(--site-text-strong);
-  --ecosystem-secondary: var(--site-muted-bright);
-  --ecosystem-muted: var(--site-muted);
-  --ecosystem-link-decoration: var(--site-border-strong);
   position: relative;
-  isolation: isolate;
-  overflow: hidden;
   scroll-margin-top: var(--site-header-height);
-  padding: clamp(3rem, 4.5vw, 4rem) 0 clamp(2.75rem, 4vw, 3.5rem);
-  background: var(--ecosystem-bg);
-  color: var(--ecosystem-text);
+  padding: var(--site-section-pad-top, var(--site-section-pad)) 0 var(--site-section-pad);
 }
 
-:global([data-theme='dark']) .section {
-  --ecosystem-bg: #050607;
-  --ecosystem-text: #fff;
-  --ecosystem-secondary: rgba(255, 255, 255, 0.66);
-  --ecosystem-muted: rgba(255, 255, 255, 0.58);
-  --ecosystem-link-decoration: rgba(255, 255, 255, 0.45);
-}
-
-.section::before {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  background: radial-gradient(ellipse at 50% 18%, color-mix(in srgb, var(--site-brand-blue) 5%, transparent), transparent 58%);
-  content: '';
-}
-
-:global([data-theme='dark']) .section::before {
-  background:
-    radial-gradient(ellipse at 50% 18%, rgba(116, 133, 167, 0.1), transparent 58%),
-    radial-gradient(ellipse at 78% 76%, rgba(82, 104, 124, 0.07), transparent 56%);
-}
-
-.atmosphere {
-  display: none;
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  background-position: center;
-  background-size: cover;
-  opacity: 0.45;
-  mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
-  pointer-events: none;
-}
-
-:global([data-theme='dark']) .atmosphere {
-  display: block;
-}
-
-.content {
-  width: min(100%, 88rem);
+.wrap {
+  width: min(100% - 2 * var(--gut), 1280px);
   margin-inline: auto;
-  padding-inline: clamp(1.5rem, 5vw, 5rem);
 }
 
-.heading {
+/* The organizations as Duo's marks: official logos, unmodified, each on its own surface tile. 24 fill 8, 6 or 3
+ * columns. */
+.organizations {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.organization {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.8rem;
-  margin-bottom: clamp(2.25rem, 4vw, 3rem);
-  text-align: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 6rem;
+  padding: 14px 12px;
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair), 0 1px 2px rgba(40, 32, 20, 0.04);
 }
 
-.wordmark {
-  width: min(31rem, 80%);
-  height: auto;
-  margin-bottom: 1rem;
+.organization img {
+  width: min(100%, var(--logo-width));
+  max-width: 8.5rem;
+  max-height: 2.6rem;
   object-fit: contain;
 }
 
-.heading h2 {
-  margin: 0;
-  color: var(--ecosystem-text);
-  font-size: clamp(1.7rem, 3.2vw, 2.5rem);
-  font-weight: 530;
-  line-height: 1.15;
-  letter-spacing: -0.04em;
+.organization[data-caption] img {
+  max-height: 2.2rem;
+}
+
+.logoCaption {
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
   text-wrap: balance;
 }
 
-.heading p {
-  max-width: 44rem;
+.foundations {
+  display: grid;
+  justify-items: center;
+  gap: 22px;
+  margin-top: clamp(56px, 6vw, 80px);
+}
+
+.foundationsIntro {
+  display: grid;
+  justify-items: center;
+  gap: 0;
+  max-width: 40rem;
+  text-align: center;
+}
+
+.foundationsIntro :global(.site-label) {
+  margin-bottom: 14px;
+}
+
+.foundationsTitle {
   margin: 0;
-  color: var(--ecosystem-secondary);
-  font-size: 1rem;
-  line-height: 1.6;
+  color: var(--ink);
+  font: 500 clamp(30px, 3vw, 40px) / 1.05 var(--serif);
+  letter-spacing: -0.01em;
+}
+
+.foundationsIntro .foundationsLede {
+  margin: 12px 0 0;
+  color: var(--ink-2);
+  font-size: 16px;
+  line-height: 1.55;
   text-wrap: balance;
 }
 
-.heading strong {
-  color: var(--ecosystem-text);
-  font-weight: 650;
+.projects {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  max-width: 64rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px 7px 7px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  color: var(--ink);
+  font: 500 14.5px/1 var(--sans);
+  text-decoration: none;
+  transition: box-shadow 0.2s, transform 0.3s var(--ease);
+}
+
+.project:hover,
+.project:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--hair-2), var(--shadow);
+  color: var(--ink);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+/* Several of these marks are drawn for white, so each sits on its own light plate in both modes. */
+.projectLogo {
+  display: grid;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #f8fafc;
+}
+
+.projectLogo img {
+  max-width: 22px;
+  max-height: 22px;
+  object-fit: contain;
+}
+
+/* AMD's mark is white on transparent. */
+.project[data-project-id='amd'] .projectLogo img {
+  filter: invert(1);
+}
+
+.projectName {
+  white-space: nowrap;
+}
+
+.projectArrow {
+  color: var(--ember-text);
+  font-size: 13px;
+  transition: transform 0.3s var(--ease);
+}
+
+.project:hover .projectArrow {
+  transform: translate(2px, -2px);
 }
 
 .footer {
@@ -102,43 +163,54 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 0.65rem 1.5rem;
-  font-size: 0.875rem;
-  line-height: 1.6;
-  text-align: center;
+  gap: 10px 24px;
+  margin-top: clamp(36px, 4vw, 52px);
 }
 
 .footer p {
   margin: 0;
-  color: var(--ecosystem-muted);
+  color: var(--muted);
+  font-size: 15px;
 }
 
-.footer a {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  color: var(--ecosystem-text);
-  text-decoration-color: var(--ecosystem-link-decoration);
-  text-underline-offset: 0.25em;
+:global(html[lang='zh-Hans']) .foundationsTitle {
+  font-size: clamp(26px, 2.6vw, 34px);
+  letter-spacing: 0;
 }
 
-.footer a:hover {
-  color: var(--ecosystem-text);
-  text-decoration: underline;
+@media (max-width: 1179px) {
+  .organizations {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
 }
 
-.footer a:focus-visible {
-  outline: 2px solid var(--ecosystem-text);
-  outline-offset: 0.4rem;
-}
-
-@media (max-width: 480px) {
-  .content {
-    padding-inline: 1.5rem;
+@media (max-width: 760px) {
+  .organizations {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
   }
 
-  .wordmark {
-    width: 88%;
-    margin-bottom: 0.75rem;
+  .organization {
+    min-height: 4.75rem;
+    padding: 10px 8px;
+  }
+
+  .organization img {
+    max-height: 2.1rem;
+  }
+
+  .organization[data-caption] img {
+    max-height: 1.8rem;
+  }
+
+  .logoCaption {
+    font-size: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project,
+  .projectArrow {
+    transition: none;
   }
 }

@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -21,7 +20,7 @@ const (
 	stableRunDuration = 2 * time.Minute
 )
 
-// stopGracePeriod is how long a stopping runtime gets between SIGTERM and SIGKILL.
+// stopGracePeriod is how long a stopping runtime gets between the stop request and the forced kill.
 var stopGracePeriod = 10 * time.Second
 
 // errRecycled marks the exit of a process the group recycled.
@@ -92,7 +91,7 @@ func (s *supervisor) runOnce(ctx context.Context) error {
 	}
 	cmd := exec.Command(path, s.command[1:]...) //nolint:gosec // the command comes from Router configuration and environment
 	cmd.Env = s.env
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	newProcessGroup(cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -130,7 +129,7 @@ func (s *supervisor) runOnce(ctx context.Context) error {
 	}
 }
 
-// terminate stops the process group: SIGTERM, then SIGKILL after the grace period.
+// terminate stops the runtime: a stop request, then a forced kill after the grace period.
 func (s *supervisor) terminate(done <-chan error) {
 	s.mu.Lock()
 	process := s.running
@@ -138,7 +137,7 @@ func (s *supervisor) terminate(done <-chan error) {
 	if process == nil {
 		return
 	}
-	_ = syscall.Kill(-process.Pid, syscall.SIGTERM)
+	_ = requestStop(process)
 	select {
 	case <-done:
 	case <-time.After(stopGracePeriod):
@@ -148,8 +147,8 @@ func (s *supervisor) terminate(done <-chan error) {
 }
 
 // recycle stops the running process as an exit would, so run starts a new one
-// after its back-off: SIGTERM, then SIGKILL after the grace period. It acts
-// once per process and reports whether it did.
+// after its back-off: a stop request, then a forced kill after the grace
+// period. It acts once per process and reports whether it did.
 func (s *supervisor) recycle() bool {
 	s.mu.Lock()
 	process := s.running
@@ -159,7 +158,7 @@ func (s *supervisor) recycle() bool {
 	}
 	s.recycled = process
 	s.mu.Unlock()
-	_ = syscall.Kill(-process.Pid, syscall.SIGTERM)
+	_ = requestStop(process)
 	time.AfterFunc(stopGracePeriod, func() {
 		s.mu.Lock()
 		running := s.running == process
@@ -171,12 +170,12 @@ func (s *supervisor) recycle() bool {
 	return true
 }
 
-// kill ends a process group that outlived its grace period, and records it.
+// kill ends a runtime that outlived its grace period, and records it.
 func (s *supervisor) kill(process *os.Process) {
 	logging.ComponentWarnEvent("model_runtime", "runtime_process_killed", map[string]interface{}{
 		"process": s.process, "deployments": s.deployments, "pid": process.Pid, "grace_period": stopGracePeriod.String(),
 	})
-	_ = syscall.Kill(-process.Pid, syscall.SIGKILL)
+	_ = forceKill(process)
 }
 
 func (s *supervisor) forwardLogs(reader io.Reader) {

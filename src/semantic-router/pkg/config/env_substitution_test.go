@@ -39,7 +39,7 @@ func TestParseYAMLBytesExpandsEnvironmentVariablesInRouterReplayPostgres(t *test
 	t.Setenv("POSTGRES_PASSWORD", "super_sensitive_string")
 
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -53,28 +53,26 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  signals:
-    domains:
-      - name: general
-        description: General requests
-        mmlu_categories: [other]
-  modelCards:
-    - name: qwen3
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: qwen3
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: general
+          description: General requests
+          labels: [other]
+    decisions:
+      - name: default_route
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: general
+        modelRefs:
+          - model: qwen3
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: postgres
       postgres:
         host: 10.0.0.1
@@ -83,6 +81,10 @@ global:
         password: "${POSTGRES_PASSWORD}"
         ssl_mode: disable
         table_name: router_replay
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
@@ -99,7 +101,7 @@ func TestParseYAMLBytesExpandsEnvironmentVariablesInProviderAccessKey(t *testing
 	t.Setenv("OPENAI_API_KEY", "sk-router-secret")
 
 	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -111,24 +113,23 @@ providers:
         - endpoint: https://api.openai.com/v1
           provider: vllm
           api_key: "${OPENAI_API_KEY}"
-routing:
-  signals:
-    domains:
-      - name: general
-        description: General requests
-        mmlu_categories: [other]
-  modelCards:
-    - name: gpt-4o
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: gpt-4o
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: general
+          description: General requests
+          labels: [other]
+    decisions:
+      - name: default_route
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: general
+        modelRefs:
+          - model: gpt-4o
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
@@ -181,38 +182,41 @@ func TestExpandStringKeepsUnsetReferences(t *testing.T) {
 	}
 }
 
-func deferredEnvDocument(maxTokens, apiKey string) []byte {
-	return []byte(`version: v0.3
+func deferredEnvDocument(maxTokens, apiKey, ejectionTime string) []byte {
+	return []byte(`version: v0.5
 providers:
   defaults:
     model: model-a
   models:
     - name: model-a
+      reliability:
+        base_ejection_time: ` + ejectionTime + `
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: model-a
-  signals:
-    context:
-      - name: probe
-        min_tokens: 8K
-        max_tokens: ` + maxTokens + `
-  decisions:
-    - name: default
-      rules:
-        operator: AND
-      modelRefs:
-        - model: model-a
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: openai
-            backend_config:
-              vector_store_id: vs_probe
-              api_key: ` + apiKey + `
+recipes:
+  - name: default
+    signals:
+      context:
+        - name: probe
+          min_tokens: 8K
+          max_tokens: ` + maxTokens + `
+    decisions:
+      - name: default
+        rules:
+          operator: AND
+        modelRefs:
+          - model: model-a
+        plugins:
+          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: openai
+                  backend_config:
+                    vector_store_id: vs_probe
+                    api_key: ` + apiKey + `
 `)
 }
 
@@ -220,20 +224,27 @@ func TestValidateYAMLBytesDeferringEnv(t *testing.T) {
 	// Values in this process must not decide the outcome.
 	t.Setenv("DEFER_PROBE_MAX", "not-a-count")
 	t.Setenv("DEFER_PROBE_KEY", "")
+	t.Setenv("DEFER_PROBE_EJECT", "soon")
 	tests := []struct {
-		name      string
-		maxTokens string
-		apiKey    string
-		wantErr   string
+		name         string
+		maxTokens    string
+		apiKey       string
+		ejectionTime string
+		wantErr      string
 	}{
 		{name: "required value without a default", maxTokens: "64K", apiKey: "${DEFER_PROBE_KEY}"},
 		{name: "token count without a default", maxTokens: "${DEFER_PROBE_MAX}", apiKey: "sk-probe"},
+		{
+			name:      "required value with a token count and a duration without defaults",
+			maxTokens: "${DEFER_PROBE_MAX}", apiKey: "${DEFER_PROBE_KEY}", ejectionTime: "${DEFER_PROBE_EJECT}",
+		},
+		{name: "unbraced references sharing a prefix", maxTokens: "$DEFER_PROBE_MAX", apiKey: "$DEFER_PROBE"},
 		{name: "default", maxTokens: "${DEFER_PROBE_MAX:-64K}", apiKey: "sk-probe"},
 		{name: "invalid default", maxTokens: "${DEFER_PROBE_MAX:-lots}", apiKey: "sk-probe", wantErr: "invalid token count format: lots"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateYAMLBytesDeferringEnv(deferredEnvDocument(tt.maxTokens, tt.apiKey))
+			err := ValidateYAMLBytesDeferringEnv(deferredEnvDocument(tt.maxTokens, tt.apiKey, tt.ejectionTime))
 			if tt.wantErr == "" && err != nil {
 				t.Fatalf("ValidateYAMLBytesDeferringEnv() error = %v", err)
 			}
@@ -248,7 +259,7 @@ func TestParseYAMLBytesDeferringEnvKeepsRoutingAsWritten(t *testing.T) {
 	t.Setenv("DEFER_PROBE_MAX", "not-a-count")
 	t.Setenv("DEFER_PROBE_HOST", "process-host")
 	document := strings.Replace(
-		string(deferredEnvDocument("${DEFER_PROBE_MAX:-64K}", "${DEFER_PROBE_KEY}")),
+		string(deferredEnvDocument("${DEFER_PROBE_MAX:-64K}", "${DEFER_PROBE_KEY}", "")),
 		"endpoint: 127.0.0.1:8000", "endpoint: ${DEFER_PROBE_HOST:-127.0.0.1}:8000", 1,
 	)
 
@@ -263,7 +274,7 @@ func TestParseYAMLBytesDeferringEnvKeepsRoutingAsWritten(t *testing.T) {
 		t.Fatalf("backend address = %q, want the reference default", got)
 	}
 
-	_, err = ParseYAMLBytesDeferringEnv(deferredEnvDocument("${DEFER_PROBE_MAX:-lots}", "sk-probe"))
+	_, err = ParseYAMLBytesDeferringEnv(deferredEnvDocument("${DEFER_PROBE_MAX:-lots}", "sk-probe", ""))
 	if err == nil || !strings.Contains(err.Error(), "invalid token count format: lots") {
 		t.Fatalf("ParseYAMLBytesDeferringEnv() error = %v, want the invalid default", err)
 	}

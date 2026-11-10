@@ -67,7 +67,7 @@ func TestMultiFactorEligibilityIntersectsCapabilitiesBeforeDispatch(t *testing.T
 				request.ImageGeneration = &llmprotocol.ImageGenerationOptions{}
 				ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 				ctx.VSRSelectedDecision = decision
-				eligible, err := router.contextEligibleDecisionModelRefs(refs, decision.Name, 100, ctx)
+				eligible, err := router.contextEligibleDecisionModelRefs(refs, decision.Name, 100, 1, ctx)
 				if err != nil {
 					t.Fatal(err)
 				}

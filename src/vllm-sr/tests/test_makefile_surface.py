@@ -2,7 +2,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 MAKEFILE_PATH = Path(__file__).resolve().parents[1] / "Makefile"
-EXPECTED_ENVOY_IMAGE = "envoyproxy/envoy:v1.35.3"
+EXPECTED_ENVOY_IMAGE = "docker.io/envoyproxy/envoy:v1.35.3"
 
 
 def test_makefile_uses_current_cli_config_commands() -> None:

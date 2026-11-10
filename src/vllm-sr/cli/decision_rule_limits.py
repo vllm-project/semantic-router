@@ -35,11 +35,10 @@ def validate_decision_rule_limits(document: Any) -> None:
             )
         limits[name] = value
 
-    profiles = [("default", _field(document, "routing"))]
-    profiles.extend(
-        (_field(recipe, "name", ""), _field(recipe, "routing"))
+    profiles = [
+        (_field(recipe, "name", ""), recipe)
         for recipe in _items(_field(document, "recipes"))
-    )
+    ]
     for recipe, routing in profiles:
         for decision in _items(_field(routing, "decisions")):
             root = _field(decision, "rules")

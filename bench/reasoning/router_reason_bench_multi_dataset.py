@@ -626,6 +626,7 @@ def call_model_detailed(
             max_tokens=max_tokens,
             temperature=temperature,
             extra_body=extra_body if extra_body else None,
+            extra_headers={"x-vsr-debug": "true"},
         )
         response = raw.parse()
         choice = response.choices[0]

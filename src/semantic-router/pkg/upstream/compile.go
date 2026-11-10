@@ -46,9 +46,9 @@ func Compile(cfg *config.RouterConfig) (Topology, error) {
 			return Topology{}, err
 		}
 		topology.Clusters = append(topology.Clusters, spec)
-	}
-	if len(topology.Clusters) > 0 {
-		topology.DefaultCluster = topology.Clusters[0].Name
+		if topology.DefaultCluster == "" && !cfg.IsSystemOneBackend(alias) {
+			topology.DefaultCluster = spec.Name
+		}
 	}
 	return topology, nil
 }
@@ -145,6 +145,7 @@ func compileCluster(cfg *config.RouterConfig, alias string, endpoints []config.V
 	}
 	spec.PathPrefix = prefix
 	spec.RouteHeaders = routeHeaders(profile.ExtraHeaders)
+	spec.RemoveHeaders = cfg.Authz.Identity.HeaderNames()
 	if err := compileHealth(&spec, reliability); err != nil {
 		return ClusterSpec{}, fmt.Errorf("providers.models[%s].reliability: %w", alias, err)
 	}

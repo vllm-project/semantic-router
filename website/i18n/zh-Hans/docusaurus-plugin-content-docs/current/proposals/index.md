@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 提案
 description: vLLM Semantic Router 的设计提案、概念验证探索、实现记录和架构决策。
 translation:
@@ -15,6 +16,7 @@ translation:
 
 | 提案 | 创建日期 | 状态 | 范围 |
 | --- | --- | --- | --- |
+| [决策模型作为一等模型](./decision-model-first-class) | 2026-11-05 | 已实现 | 一族决策模型通过 System One 回答每个路由判断，信号、算法、插件、v0.5 配置和响应头都围绕它重建（[#5886](https://github.com/vllm-project/semantic-router/pull/5886)）。 |
 | [路由范围：逐查询与容量感知路由](./batch-and-capacity-aware-routing) | 2026-07-14 | 决策记录 | 保持语义路由逐查询，容量处理留在服务层。 |
 | [路由学习](./router-learning-memory-and-adaptations) | 2026-06-20 | 已实现 | 在线适配、路由保护和离线配方改进。 |
 | [提示词分类路由](./prompt-classification-routing) | 2025-10-08 | 提案 | 关键词、正则、嵌入和分类器信号融合。 |
@@ -30,7 +32,7 @@ translation:
 | [审议算法](./deliberation-algorithms) | 2026-06-17 | 提案 | 感知依据的多模型综合。 |
 | [智能体记忆](./agentic-memory) | 2026-02-09 | 概念验证 | 跨会话记忆检索与持久化。 |
 | [OpenAI RAG 集成](./agentic-rag) | 2026-01-23 | 已实现 | 通过 OpenAI Files 和 Vector Stores 检索。 |
-| [高级工具过滤](./advanced-tool-filtering) | 2026-01-14 | 已实现 | 对工具候选做可解释的过滤和重排序。 |
+| [高级工具过滤](./advanced-tool-filtering) | 2026-01-14 | 已取代 | 对工具候选做可解释的过滤和重排序。 |
 
 ## 安全与韧性 {#safety--resilience}
 

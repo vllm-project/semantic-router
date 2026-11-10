@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 统一配置契约 v0.3
 description: 记录路由器、CLI、仪表盘、Helm、operator 和 DSL 共享的已实现配置契约。
 created: 2026-03-17
@@ -6,10 +7,14 @@ status: Implemented
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/proposals/unified-config-contract-v0-3.md"
-  outdated: false
+  outdated: true
 ---
 
 > **状态：** 已实现 · **创建日期：** 2026-03-17
+
+:::note
+本记录早于模型目录的重新设计。它描述的绑定契约、模块 `backend` 块和 `external[]` 模型已弃用：它们仍可加载，并报告 `deprecated_model_field` 警告。[迁移模型资源](../installation/model-resource-migration.md)给出了每一种的当前形式。
+:::
 
 ## 问题 {#problem}
 
@@ -84,7 +89,7 @@ DSL 是路由语义的编写视图。它不拥有提供商凭证、监听器、�
 
 内置默认值位于路由器中。`global.router.config_source` 选择基于文件的配置或 Kubernetes CRD 调和。外部模板不得在校验后应用隐藏默认值。
 
-内置模型资源位于 `global.model_catalog.deployments`，`system.decision_model` 选择默认判断部署。模块保存任务策略，global bindings 提供共享默认绑定，recipe 的 `routing.model_bindings` 可为任务选择其他资源或契约。`candle`、`ort`、`openvino` 及 `variant` 等原生执行字段已退役，参见[模型运行时迁移](../model-runtime/migrate.md)。
+内置模型资源位于 `global.model_catalog.deployments`，`system.decision_model` 选择默认判断部署。模块保存任务策略，global bindings 提供共享默认绑定，recipe 的 `routing.model_bindings` 可为任务选择其他资源或契约。`candle`、`ort`、`openvino` 及 `variant` 等原生执行字段已退役，参见[模型运行时迁移](../model-runtime/deploy/migrate.md)。
 
 领域、复杂度、安全、PII 等消费者共用此边界。外部分类后端仍声明 `protocol`、`contract`、`model`、`deadline_ms`；`model` 是外部目录中的精确名称。接受多种响应契约的消费者必须显式指定契约。连接器响应体上限由其 `max_response_bytes` 管理。
 

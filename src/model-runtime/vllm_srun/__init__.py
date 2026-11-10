@@ -2,8 +2,8 @@
 
 A standalone process that serves decision, classification, embedding and
 reranking models behind one HTTP contract (``api/openapi.yaml``). Model
-families, execution engines, accelerators and numerics profiles are plugins
-discovered through Python entry points; see ``docs/design.md``.
+families, execution engines and accelerators are plugins discovered through
+Python entry points; see ``docs/design.md``.
 """
 
 import os

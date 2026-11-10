@@ -7,6 +7,14 @@ status: Implemented
 
 > **Status:** Implemented · **Created:** 2026-03-17
 
+:::note
+This record predates the model catalog redesign. The binding contracts, module
+`backend` blocks and `external[]` models it describes are deprecated: they still
+load, with a `deprecated_model_field` warning.
+[Migrate model resources](../installation/model-resource-migration.md) shows the
+current form of each.
+:::
+
 ## Problem
 
 The router, CLI, dashboard, Helm chart, operator, and DSL previously interpreted
@@ -94,6 +102,12 @@ conversation signals expose whether the protocol requires or forbids tool
 execution, projections reconcile those facts with text-derived observations,
 and decisions consume the resulting policy-facing output.
 
+PII rule scope is explicit. An omitted or empty `source` preserves the legacy
+prompt/history behavior; `source: tool_result` selects textual tool-result
+content after protocol decoding. Tool-result scope is opt-in and does not
+implicitly include prompt or history content. Unsupported source values are
+configuration errors rather than silently falling back to another scope.
+
 Top-level `entrypoints` select the default routing profile or a named item from
 top-level `recipes`; they are not nested inside `routing`.
 
@@ -128,7 +142,7 @@ judgment deployment is selected by `system.decision_model`. Runtime modules own
 task policy, global bindings supply shared consumer defaults, and a recipe's
 `routing.model_bindings` can select a different resource or contract for its tasks.
 Native `candle`, `ort`, `openvino` execution fields such as `variant` are retired;
-use the [model-runtime migration guide](../model-runtime/migrate.md).
+use the [model-runtime migration guide](../model-runtime/deploy/migrate.md).
 
 Domain, complexity, safety, PII and other model consumers share this boundary.
 External classifier backends still declare `protocol`, `contract`, `model` and

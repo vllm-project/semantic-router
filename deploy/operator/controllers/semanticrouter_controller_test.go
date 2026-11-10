@@ -20,8 +20,6 @@ import (
 	"context"
 	"testing"
 
-	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -33,6 +31,9 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestGenerateConfigYAMLIncludesBackendTargetAndLoRACatalog(t *testing.T) {
@@ -88,12 +89,12 @@ func TestGenerateConfigYAMLIncludesBackendTargetAndLoRACatalog(t *testing.T) {
 		t.Fatalf("failed to parse generated YAML: %v", err)
 	}
 
-	if len(parsed.Routing.ModelCards) != 1 {
-		t.Fatalf("expected one generated modelCard, got %#v", parsed.Routing.ModelCards)
+	if len(parsed.Providers.Models) != 1 {
+		t.Fatalf("expected one generated provider model, got %#v", parsed.Providers.Models)
 	}
 	assertGeneratedBackendTarget(t, parsed)
 
-	modelCard := parsed.Routing.ModelCards[0]
+	modelCard := parsed.Providers.Models[0]
 	if len(modelCard.LoRAs) != 1 {
 		t.Fatalf("expected one generated LoRA adapter, got %#v", modelCard.LoRAs)
 	}

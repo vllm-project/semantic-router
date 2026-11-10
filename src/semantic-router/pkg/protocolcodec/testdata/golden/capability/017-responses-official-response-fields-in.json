@@ -17,11 +17,14 @@
     {"name": "conversation", "patch": {"conversation": {"id": "conv_1"}}},
     {"name": "conversation_id", "patch": {"conversation_id": "conv_1"}},
     {"name": "created_at", "patch": {"created_at": 101}},
+    {"name": "ec_transfer_params", "patch": {"ec_transfer_params": null}},
     {"name": "error", "patch": {"status": "failed", "error": {"code": "provider_error", "message": "provider failed"}}},
     {"name": "frequency_penalty", "patch": {"frequency_penalty": 0.0}},
     {"name": "id", "patch": {"id": "resp_2"}},
     {"name": "incomplete_details", "patch": {"status": "incomplete", "incomplete_details": {"reason": "max_output_tokens"}}},
+    {"name": "input_messages", "patch": {"input_messages": null}},
     {"name": "instructions", "patch": {"instructions": "Be concise."}},
+    {"name": "kv_transfer_params", "patch": {"kv_transfer_params": null}},
     {"name": "max_output_tokens", "patch": {"max_output_tokens": 64}},
     {"name": "max_tool_calls", "patch": {"max_tool_calls": 4}},
     {"name": "metadata", "patch": {"metadata": {"trace": "field-matrix"}}},
@@ -29,6 +32,7 @@
     {"name": "moderation", "patch": {"moderation": {"status": "passed"}}},
     {"name": "object", "patch": {"object": "response"}},
     {"name": "output", "patch": {"output": [{"type": "message", "id": "msg_2", "role": "assistant", "status": "completed", "content": [{"type": "output_text", "text": "alternate", "annotations": []}]}]}},
+    {"name": "output_messages", "patch": {"output_messages": null}},
     {"name": "output_text", "patch": {"output_text": "done"}},
     {"name": "parallel_tool_calls", "patch": {"parallel_tool_calls": true}},
     {"name": "previous_response_id", "patch": {"previous_response_id": "resp_previous"}},
@@ -50,7 +54,7 @@
     {"name": "top_logprobs", "patch": {"top_logprobs": 0}},
     {"name": "top_p", "patch": {"top_p": 0.9}},
     {"name": "truncation", "patch": {"truncation": "disabled"}},
-    {"name": "usage", "patch": {"usage": {"input_tokens": 8, "input_tokens_details": {"cached_tokens": 2, "cache_write_tokens": 1}, "output_tokens": 5, "output_tokens_details": {"reasoning_tokens": 3}, "total_tokens": 13}}},
+    {"name": "usage", "patch": {"usage": {"input_tokens": 8, "input_tokens_details": {"cached_tokens": 2, "cache_write_tokens": 1, "input_tokens_per_turn": [], "cached_tokens_per_turn": []}, "output_tokens": 5, "output_tokens_details": {"reasoning_tokens": 3, "output_tokens_per_turn": [], "tool_output_tokens": 0, "tool_output_tokens_per_turn": []}, "total_tokens": 13}}},
     {"name": "user", "patch": {"user": "user-2"}}
   ]
 }

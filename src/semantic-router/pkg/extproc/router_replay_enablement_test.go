@@ -11,7 +11,8 @@ import (
 
 func TestInitializeReplayRecordersUsesGlobalReplayDefault(t *testing.T) {
 	cfg := &config.RouterConfig{
-		RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory"},
+		RouterReplay:  config.RouterReplayConfig{StoreBackend: "memory"},
+		GlobalPlugins: []config.DecisionPlugin{replayTestPlugin(map[string]interface{}{"enabled": true})},
 		IntelligentRouting: config.IntelligentRouting{
 			Decisions: []config.Decision{
 				{Name: "inherits-global", ModelRefs: []config.ModelRef{{Model: "m"}}},
@@ -27,6 +28,7 @@ func TestInitializeReplayRecordersUsesGlobalReplayDefault(t *testing.T) {
 			},
 		},
 	}
+	withGlobalPlugins(t, cfg)
 
 	recorders := initializeReplayRecorders(cfg)
 	if _, ok := recorders["inherits-global"]; !ok {
@@ -39,7 +41,8 @@ func TestInitializeReplayRecordersUsesGlobalReplayDefault(t *testing.T) {
 
 func TestInitializeReplayRecordersIncludesNamedRecipeDecisions(t *testing.T) {
 	cfg := &config.RouterConfig{
-		RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory"},
+		RouterReplay:  config.RouterReplayConfig{StoreBackend: "memory"},
+		GlobalPlugins: []config.DecisionPlugin{replayTestPlugin(map[string]interface{}{"enabled": true})},
 		Recipes: []config.RoutingRecipe{
 			{
 				Name: "balanced",
@@ -55,6 +58,7 @@ func TestInitializeReplayRecordersIncludesNamedRecipeDecisions(t *testing.T) {
 			},
 		},
 	}
+	withGlobalPlugins(t, cfg)
 
 	recorders := initializeReplayRecorders(cfg)
 	for _, key := range []string{"balanced::shared-route", "speed::shared-route"} {
@@ -81,13 +85,15 @@ func TestNamedRecipeRecorderNeverFallsBackToBareDecisionKey(t *testing.T) {
 
 func TestApplyDecisionResultToContextUsesEffectiveRouterReplayConfig(t *testing.T) {
 	cfg := &config.RouterConfig{
-		RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory"},
+		RouterReplay:  config.RouterReplayConfig{StoreBackend: "memory"},
+		GlobalPlugins: []config.DecisionPlugin{replayTestPlugin(map[string]interface{}{"enabled": true})},
 		IntelligentRouting: config.IntelligentRouting{
 			Decisions: []config.Decision{
 				{Name: "inherits-global", ModelRefs: []config.ModelRef{{Model: "m"}}},
 			},
 		},
 	}
+	withGlobalPlugins(t, cfg)
 	router := &OpenAIRouter{Config: cfg}
 	ctx := &RequestContext{}
 
@@ -169,11 +175,13 @@ func TestResolveReplayStoreBackend(t *testing.T) {
 
 func TestCreateReplayRuntimeFailsClosedWhenEnabledSharedStoreIsInvalid(t *testing.T) {
 	cfg := &config.RouterConfig{
-		RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "redis"},
+		RouterReplay:  config.RouterReplayConfig{StoreBackend: "redis"},
+		GlobalPlugins: []config.DecisionPlugin{replayTestPlugin(map[string]interface{}{"enabled": true})},
 		IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{
 			{Name: "replay-required", ModelRefs: []config.ModelRef{{Model: "m"}}},
 		}},
 	}
+	withGlobalPlugins(t, cfg)
 
 	_, _, _, err := createReplayRuntime(cfg)
 	if err == nil || !strings.Contains(err.Error(), "redis config required") {
@@ -183,7 +191,7 @@ func TestCreateReplayRuntimeFailsClosedWhenEnabledSharedStoreIsInvalid(t *testin
 
 func TestCreateReplayRuntimeAllowsExplicitDecisionOptInWithSafeDefaults(t *testing.T) {
 	cfg := &config.RouterConfig{
-		RouterReplay: config.RouterReplayConfig{Enabled: false, StoreBackend: "memory"},
+		RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"},
 		IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{
 			{
 				Name:      "replay-opt-in",
@@ -196,6 +204,7 @@ func TestCreateReplayRuntimeAllowsExplicitDecisionOptInWithSafeDefaults(t *testi
 			},
 		}},
 	}
+	withGlobalPlugins(t, cfg)
 
 	recorders, shared, sharedStore, err := createReplayRuntime(cfg)
 	if err != nil {

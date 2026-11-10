@@ -122,7 +122,7 @@ Qwen3.5 widths).
 One runtime process in the image on one MI325X, as uid 65532 with a read-only
 root filesystem, the model volume at `/app/models`, an offline model cache and
 no network. It serves Vela 2.0 4B and 0.3B and the router's five Vela 1.0
-encoders (Domain, PII, Guard, FactCheck, Feedback) on `rocm:0`, `exact`.
+encoders (Domain, PII, Guard, FactCheck, Feedback) on `rocm:0`, each request alone.
 
 | Image | Ready | Golden | Requests (16 threads, every model) |
 | --- | --- | --- | --- |
@@ -169,7 +169,7 @@ byte on this image, and no ROCm golden is re-recorded.
 
 Decision 2.0 in the release image against this image (2026-10-05; the
 runtime at `a580be6b9` on both sides, one cold process per model on one
-MI325X, `exact`, readiness `matched` on both sides). The panels are
+MI325X, each request alone, readiness `matched` on both sides). The panels are
 `typed-final` (1,600 prompts), `css15` (6,547), `public231` (231) and
 `mlx-diag` (2,275); a prompt is identical when every answer value is equal.
 

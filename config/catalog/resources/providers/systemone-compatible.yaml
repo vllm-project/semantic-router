@@ -1,0 +1,22 @@
+id: systemone-compatible
+display_name: System One Compatible
+description: Connect a concrete decision model through the native System One API.
+category: private_runtime
+support_tier: compatible
+protocols:
+- vllm-sr/systemone@1
+default_protocol: vllm-sr/systemone@1
+supported_operations:
+- vllm-sr/systemone@1#create
+- vllm-sr/systemone@1#list_models
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: public:/img/vllm-sr-mark.svg
+  monogram: S
+  monochrome: true
+  featured: false
+conformance:
+  status: unverified

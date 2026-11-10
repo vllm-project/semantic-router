@@ -226,6 +226,7 @@ func ValidateUsage(usage Usage) error {
 	}
 	counts := []TokenCount{
 		usage.InputUncached, usage.InputCacheRead, usage.InputCacheWrite,
+		usage.InputCacheWrite5m, usage.InputCacheWrite1h,
 		usage.OutputReasoning, usage.OutputOther, usage.InputTotal, usage.OutputTotal, usage.Total,
 	}
 	hasValue := false
@@ -268,6 +269,7 @@ func validUsageProvenance(provenance UsageProvenance) bool {
 func validateUsageTotals(usage Usage) error {
 	checks := [][2]bool{
 		usageSumStatus(usage.InputTotal, usage.InputUncached, usage.InputCacheRead, usage.InputCacheWrite),
+		usageSumStatus(usage.InputCacheWrite, usage.InputCacheWrite5m, usage.InputCacheWrite1h),
 		usageSumStatus(usage.OutputTotal, usage.OutputReasoning, usage.OutputOther),
 		usageSumStatus(usage.Total, usage.InputTotal, usage.OutputTotal),
 	}

@@ -1,7 +1,8 @@
-// Package hallucination provides the e2e test profile for the pluggable
-// hallucination detector endpoint backend. It deploys the router with the
-// endpoint detector backend, a mock LLM backend, and a mock detector endpoint,
-// then verifies that hallucination detection surfaces on the response.
+// Package hallucination provides the e2e test profile for the hallucination
+// signal on a remote systemone deployment. It deploys the router with a mock
+// LLM backend whose provider-mocker also serves the System One fixture that
+// answers the hallucination rule, then verifies that hallucination detection
+// surfaces on the response.
 package hallucination
 
 import (
@@ -10,7 +11,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -18,18 +18,17 @@ const valuesFile = "e2e/profiles/hallucination/values.yaml"
 
 var resourceManifests = []string{
 	"deploy/kubernetes/hallucination/provider-mocker.yaml",
-	"deploy/kubernetes/hallucination/mock-hallucination-detector.yaml",
 	"deploy/kubernetes/hallucination/gwapi-resources.yaml",
 }
 
 // waitDeployments are the mock backends the profile must wait on before running
-// tests: the LLM backend and the endpoint detector both back the detection path.
+// tests: provider-mocker is both the LLM backend and the hallucination
+// deployment.
 var waitDeployments = []helpers.DeploymentRef{
 	{Namespace: "default", Name: "provider-mocker"},
-	{Namespace: "default", Name: "mock-hallucination-detector"},
 }
 
-// Profile implements the hallucination endpoint-backend test profile.
+// Profile implements the hallucination test profile.
 type Profile struct {
 	stack *gatewaystack.Stack
 }
@@ -53,7 +52,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests the hallucination signal over the pluggable endpoint detector backend and the hallucination plugin that enforces on it"
+	return "Tests the hallucination signal on a remote systemone deployment and the response_guard that acts on it"
 }
 
 // Setup deploys the shared gateway stack and hallucination resources.

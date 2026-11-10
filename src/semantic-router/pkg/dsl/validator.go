@@ -201,7 +201,9 @@ func (v *Validator) buildSymbolTable() {
 		if v.signalNames[s.SignalType] == nil {
 			v.signalNames[s.SignalType] = make(map[string]bool)
 		}
-		v.signalNames[s.SignalType][s.Name] = true
+		if name := signalReferenceName(s); name != "" {
+			v.signalNames[s.SignalType][name] = true
+		}
 	}
 	if v.signalNames[config.SignalTypeProjection] == nil {
 		v.signalNames[config.SignalTypeProjection] = make(map[string]bool)
@@ -376,12 +378,42 @@ func (v *Validator) walkBoolExpr(expr BoolExpr) {
 	case *SignalRefExpr:
 		if !v.isSignalDefined(e.SignalType, e.SignalName) {
 			fix := v.suggestSignal(e.SignalType, e.SignalName)
-			v.addDiag(DiagWarning, e.Pos,
-				fmt.Sprintf("Signal %s(\"%s\") referenced in WHEN clause is not defined. Add SIGNAL %s %s { ... } as a top-level declaration", e.SignalType, e.SignalName, e.SignalType, e.SignalName),
-				fix,
-			)
+			v.addDiag(DiagWarning, e.Pos, undefinedSignalRefMessage(e), fix)
 		}
 	}
+}
+
+func undefinedSignalRefMessage(e *SignalRefExpr) string {
+	if e.SignalType == config.SignalTypeAuthz {
+		return fmt.Sprintf("Signal authz(\"%s\") referenced in WHEN clause is not defined. An authz reference names a role: declare a SIGNAL authz with role: \"%s\"", e.SignalName, e.SignalName)
+	}
+	return fmt.Sprintf("Signal %s(\"%s\") referenced in WHEN clause is not defined. Add SIGNAL %s %s { ... } as a top-level declaration", e.SignalType, e.SignalName, e.SignalType, e.SignalName)
+}
+
+// signalReferenceName is the name WHEN clauses and projection inputs use for a
+// declared signal. The Router's authz signal emits the role a binding grants,
+// never the binding's own name.
+func signalReferenceName(s *SignalDecl) string {
+	if s.SignalType == config.SignalTypeAuthz {
+		role, _ := getStringField(s.Fields, "role")
+		return role
+	}
+	return s.Name
+}
+
+func boolExprSetsOnError(expr BoolExpr) bool {
+	switch e := expr.(type) {
+	case *BoolAnd:
+		return boolExprSetsOnError(e.Left) || boolExprSetsOnError(e.Right)
+	case *BoolOr:
+		return boolExprSetsOnError(e.Left) || boolExprSetsOnError(e.Right)
+	case *BoolNot:
+		return boolExprSetsOnError(e.Expr)
+	case *SignalRefExpr:
+		onError, _ := getStringField(e.Fields, "on_error")
+		return onError != ""
+	}
+	return false
 }
 
 func signalReferenceDefined(names map[string]bool, signalType, name string) bool {
@@ -474,11 +506,6 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 
 	// Check field constraints
 	v.checkFieldConstraints(s.Fields, s.Pos, context)
-	if s.SignalType == "embedding" || s.SignalType == "complexity" {
-		if _, err := prototypeScoringFromSignal(s); err != nil {
-			v.addDiag(DiagConstraint, s.Pos, fmt.Sprintf("%s: %v", context, err), nil)
-		}
-	}
 
 	// Signal-type-specific required fields
 	switch s.SignalType {
@@ -489,25 +516,11 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 				nil,
 			)
 		}
-	case "embedding":
-		if _, ok := s.Fields["threshold"]; !ok {
-			v.addDiag(DiagConstraint, s.Pos,
-				fmt.Sprintf("%s: 'threshold' field is recommended", context),
-				nil,
-			)
-		}
-		if _, ok := s.Fields["candidates"]; !ok && s.Fields["image_candidates"] == nil {
-			v.addDiag(DiagConstraint, s.Pos,
-				fmt.Sprintf("%s: 'candidates' field is recommended", context),
-				nil,
-			)
-		}
+		v.checkKeywordSignalConstraints(s, context)
 	case "domain":
 		v.checkDomainSignalConstraints(s, context)
 	case "context":
 		v.checkContextSignalConstraints(s, context)
-	case "structure":
-		v.checkStructureSignalConstraints(s)
 	case "conversation":
 		v.checkConversationSignalConstraints(s)
 	}
@@ -523,30 +536,29 @@ func (v *Validator) checkContextSignalConstraints(s *SignalDecl, context string)
 	}
 }
 
-func (v *Validator) checkStructureSignalConstraints(s *SignalDecl) {
+func (v *Validator) checkKeywordSignalConstraints(s *SignalDecl, context string) {
 	payload := dslFieldObjectFromValues(s.Fields)
 	payload.setString("name", s.Name)
 
 	raw, err := payload.marshalYAML()
 	if err != nil {
 		v.addDiag(DiagConstraint, s.Pos,
-			fmt.Sprintf("failed to encode structure signal %q: %v", s.Name, err),
+			fmt.Sprintf("failed to encode keyword signal %q: %v", s.Name, err),
 			nil,
 		)
 		return
 	}
 
-	var rule config.StructureRule
+	var rule config.KeywordRule
 	if err := yaml.Unmarshal(raw, &rule); err != nil {
 		v.addDiag(DiagConstraint, s.Pos,
-			fmt.Sprintf("failed to decode structure signal %q: %v", s.Name, err),
+			fmt.Sprintf("failed to decode keyword signal %q: %v", s.Name, err),
 			nil,
 		)
 		return
 	}
-	rule.Name = s.Name
-	if err := config.ValidateStructureRuleContract(rule); err != nil {
-		v.addDiag(DiagConstraint, s.Pos, err.Error(), nil)
+	if err := config.ValidateKeywordRuleContract(rule); err != nil {
+		v.addDiag(DiagConstraint, s.Pos, fmt.Sprintf("%s: %v", context, err), nil)
 	}
 }
 
@@ -594,6 +606,9 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 			nil,
 		)
 	}
+	if r.OnUnknown != "" && boolExprSetsOnError(r.When) {
+		v.addDiag(DiagConstraint, r.Pos, fmt.Sprintf("%s: %s", context, config.OnUnknownOnErrorConflictMessage), nil)
+	}
 
 	v.checkRouteAction(r, context)
 
@@ -610,7 +625,8 @@ func (v *Validator) checkRouteConstraints(r *RouteDecl) {
 		v.checkCandidateIterationConstraints(r, iter, context)
 	}
 
-	v.checkRouteEmits(r)
+	v.checkRouteRetention(r)
+	v.checkRouteOutput(r)
 }
 
 func (v *Validator) checkAlgorithmConstraints(algo *AlgoSpec, parentContext string) {

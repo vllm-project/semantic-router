@@ -63,7 +63,11 @@ func ValidateDecisionRuleLimits(cfg *RouterConfig) error {
 		}
 		return nil
 	}
-	if err := validate(cfg.Decisions, DefaultRecipeName); err != nil {
+	recipe := cfg.RoutingScope
+	if recipe == "" {
+		recipe = cfg.defaultRecipeName()
+	}
+	if err := validate(cfg.Decisions, recipe); err != nil {
 		return err
 	}
 	for _, recipe := range cfg.Recipes {
@@ -119,14 +123,11 @@ func validateRawDecisionRuleLimits(raw map[string]interface{}) (DecisionRuleLimi
 		}
 		return nil
 	}
-	if err := validate(nestedStringMap(raw["routing"]), DefaultRecipeName); err != nil {
-		return limits, err
-	}
 	recipes, _ := raw["recipes"].([]interface{})
 	for _, value := range recipes {
 		recipe := nestedStringMap(value)
 		name, _ := recipe["name"].(string)
-		if err := validate(nestedStringMap(recipe["routing"]), RecipeName(name)); err != nil {
+		if err := validate(recipe, RecipeName(name)); err != nil {
 			return limits, err
 		}
 	}

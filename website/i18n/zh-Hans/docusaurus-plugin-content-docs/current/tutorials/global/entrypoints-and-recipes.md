@@ -1,27 +1,28 @@
 ---
+is_mtpe: false
 title: 虚拟模型
 description: 在同一 Semantic Router 部署中，为客户端提供由隔离路由策略支撑的稳定虚拟模型名。
 translation:
-  source_commit: "7f1b814c97035e96a3780a3b8780ea5d3b6a6b24"
+  source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
   source_file: "docs/tutorials/global/entrypoints-and-recipes.md"
   outdated: false
 ---
 
-# 虚拟模型
+# 虚拟模型 {#virtual-models}
 
-## 概览
+## 概览 {#overview}
 
 入口与配方把一个 Semantic Router 部署变成一组面向目标的虚拟模型：
 
 - **入口** 是客户端请求的模型名；
 - **配方** 是处理该名称请求的路由策略；
-- 提供商、模型端点和共享服务仍可供每个配方使用。
+- 提供方、模型端点和共享服务仍可供每个配方使用。
 
-## 解决什么问题？
+## 解决什么问题？ {#what-problem-does-it-solve}
 
-这种分离让 Agent Harness 可以选择低延迟、高质量或折中目标，而无需知道由哪个后端模型服务该请求。
+这种分离让 agent harness 可以选择低延迟、高质量或折中的目标，而无需知道由哪个后端模型服务该请求。
 
-在规范 YAML 中，`entrypoints` 保存公开名称映射，`recipes` 保存命名的路由策略。
+在规范 YAML 中，`entrypoints` 保存公开名称映射，`recipes` 保存具名的路由策略。
 
 ## 各部分如何衔接 {#how-the-pieces-fit}
 
@@ -29,70 +30,77 @@ translation:
 request model name -> entrypoint -> recipe -> decision -> algorithm -> backend
 ```
 
-当请求的 `model` 匹配某个 `entrypoints[].model_names` 值时，Router 只评估映射的配方。虚拟模型名随后会被该配方选出的后端替换。
+当请求的 `model` 匹配某个 `entrypoints[].model_names` 值时，Router 只评估映射的配方。随后，虚拟模型名会被该配方选出的后端替换。
 
-顶层 `routing` 块是 `default` 配方，默认发布为 `vllm-sr/auto`。
-显式声明 `recipe: default` 的入口会替换这个内置名称；如果客户端仍需使用
-`vllm-sr/auto`，请把它写入该入口的 `model_names`。`auto`、`vllm-sr/flow`
-等名称只有显式声明后才可用；算法由所选配方的决策决定。
-若所选配方没有匹配的决策，Router 使用 `providers.defaults.model`。
+- **一个配方**会以 `vllm-sr/auto` 发布，不需要入口。
+- **多个配方**需要恰好一个标记 `default: true` 的 chat 入口；它的配方就是默认配方。
+- **名字是显式的。** 默认配方的显式入口会替换内置名称，因此如果客户端仍需使用 `vllm-sr/auto`，请把它写入该入口的 `model_names`。`auto`、`vllm-sr/flow` 等名称只有在声明后才可用。
+- **没有匹配**时，请求交给 `providers.defaults.model`。
 
-具体后端模型名不同：它们会直接选择该模型并绕过配方路由。当客户端应按目标请求时使用虚拟入口；仅当有意需要那个精确后端时，才使用具体模型名。
+算法由所选配方的决策决定。
 
-## 配置
+具体后端模型名不同：它们直接选择该模型，并绕过配方路由。当客户端应按目标请求时使用虚拟入口；只有确实需要那个精确后端时，才使用具体模型名。
 
-模型目录是共享的。每个命名配方拥有自己的信号、投影、决策、策略、算法和路由局部插件。
+## 配置 {#configuration}
+
+模型目录是共享的。每个配方拥有自己的信号、投影、决策、strategy、算法和路由局部插件。
 
 ```yaml
-routing:
-  modelCards:
-    - name: fast-model
-    - name: accurate-model
-
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/mom-v1-flash]
     recipe: flash
   - model_names: [vllm-sr/mom-v1-ultra]
     recipe: ultra
-
 recipes:
+  - name: default
   - name: flash
     description: Prefer the lowest-latency eligible backend.
-    routing:
-      strategy: priority
-      decisions:
-        - name: fast-path
-          description: Serve requests with the fast model.
-          priority: 100
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: fast-model
-
+    strategy: priority
+    decisions:
+      - name: fast-path
+        description: Serve requests with the fast model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: fast-model
   - name: ultra
     description: Prefer the highest-quality eligible backend.
-    routing:
-      strategy: priority
-      decisions:
-        - name: quality-path
-          description: Serve requests with the accurate model.
-          priority: 100
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: accurate-model
+    strategy: priority
+    decisions:
+      - name: quality-path
+        description: Serve requests with the accurate model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: accurate-model
+providers:
+  models:
+    - name: fast-model
+    - name: accurate-model
 ```
 
-客户端可通过 `/v1/models` 发现入口名称。已路由的响应包含 `x-vsr-selected-recipe`，运维人员可据此确认由哪条策略处理了请求，而无需向客户端暴露后端选择契约。
+共享的 strategy 和 fallback 默认值位于 `global.router`：
 
-连接、协议和会话配置见[接入 Agent Harness](../../installation/agent-harness)。
+- **没有父配方。** 默认配方不是其他配方的父级。每个 `recipes[]` 条目直接从全局默认值补齐缺失的 strategy 和 fallback 字段，决策还可以覆盖自己的 fallback。
+- **部分覆盖。** `fallback: {enabled: false}` 只改变这一个字段，保留共享的超时和重试设置。
+- **直接请求**使用全局 fallback 策略。运行时默认的 strategy 是 `priority`。
+
+回放采集默认值是 `global.plugins` 中的 `router_replay` 插件，存储位于 `global.services.router_replay`；配方或决策的 `router_replay` 插件逐字段覆盖它们。
+
+客户端可通过 `/v1/models` 发现入口名称。经过路由的响应包含 `x-vsr-selected-recipe`，运维人员可据此确认由哪条策略处理了请求，而无需向客户端暴露后端选择契约。
+
+连接、协议和会话设置见[接入 agent harness](../../installation/agent-harness)。
 
 ## Agent 客户端的限制 {#limits-for-agent-clients}
 
-`/v1/models` 告诉客户端有哪些虚拟名称以及它们如何解析，但不报告上下文窗口、输出
-上限或能力。同一名称背后的模型可能在不同请求间变化。`vllm-sr/auto` 的条目如下：
+`/v1/models` 告诉客户端有哪些虚拟名称以及它们如何解析，但不报告上下文窗口、输出上限或能力，而且同一名称背后的模型可能在不同请求间变化。`vllm-sr/auto` 的条目如下：
 
 ```json
 {
@@ -110,9 +118,7 @@ recipes:
 }
 ```
 
-编码 Agent 和其他需要在发送前计算请求大小的客户端，必须在自身配置中设置这些值。
-会话的任意一轮都可能到达配方可选择的任意模型，包括 `providers.defaults.model`。
-因此，应按这些模型卡的交集配置客户端：
+编码 Agent 和其他需要在发送前计算请求大小的客户端，必须在自身配置中设置这些值。会话的任意一轮都可能到达配方可选择的任意模型，包括 `providers.defaults.model`，因此应按这些模型卡的交集配置客户端：
 
 | 客户端设置 | 取值 |
 | --- | --- |
@@ -122,12 +128,13 @@ recipes:
 | 图像输入 | 仅当所有模型都声明 `vision` 或 `image_input` 时开启 |
 | 推理设置 | 仅当所有模型都声明 `reasoning` 时发送 |
 
-如果配方在以下三个模型中选择，请配置 32,768 token 的上下文窗口、8,192 token 的
-输出上限，并启用工具调用。保持图像输入和推理设置关闭。
+如果配方在以下三个模型中选择，请配置 32,768 token 的上下文窗口、8,192 token 的输出上限，并启用工具调用。保持图像输入和推理设置关闭。
 
 ```yaml
-routing:
-  modelCards:
+recipes:
+  - name: default
+providers:
+  models:
     - name: local-coder
       context_window_size: 32768
       max_output_tokens: 8192
@@ -142,18 +149,21 @@ routing:
       capabilities: [chat, tools, vision]
 ```
 
-默认情况下，Router 会跳过声明的上下文窗口小于估算输入，或声明的能力无法满足图像
-等必需输入的候选模型。它不会检查输出上限，因此请求 16,384 个输出 token 时，仍
-可能选中 `local-coder`。在配方上配置
-[`candidate_requirements`（英文）](https://vllm-sr.ai/docs/installation/configuration#recipe-wide-candidate-and-replay-policies)
-后，Router 还会在评分前检查输出上限以及工具、推理和结构化输出声明。只适合部分
-候选的请求会发往其中一个；没有合格候选时，在派发前拒绝，详见
-[请求预算错误（英文）](https://vllm-sr.ai/docs/api/router#request-budget-errors)。按交集配置客户端，可以让每个
-候选模型对每条请求都保持可用。
+默认情况下，Router 会跳过声明的上下文窗口小于估算输入，或声明的能力无法满足图像等必需输入的候选：
 
-## 何时使用
+- **保守的估算。** 工具调用参数等结构化数据按每字节一个 token 计，图片、音频、视频和文件各有自己的预留。因此，编码 Agent 的长会话可能被估算得超过它实际放得下的窗口。
+- **第二次计数。** 当估算超过所有候选的窗口时，Router 会去掉这些预留重新计数，并保留放得下的候选。只有一个都放不下时才拒绝请求，真实长度仍由后端检查。
+- **默认不检查输出上限**，因此请求 16,384 个输出 token 时，仍可能选中 `local-coder`。
 
-当一个部署必须暴露多个路由目标、策略边界或发布轨道时，使用命名入口和配方。当所有客户端应遵循同一策略时，保持单个顶层 `routing` 配置即可；现有 auto-model 流程无需额外配置。
+在配方上配置 [`candidate_requirements`](../../installation/configuration#recipe-candidate-requirements) 后，Router 还会在打分前检查输出上限以及工具、推理和结构化输出声明。一个候选都不适合的请求会在派发前被拒绝；见[请求预算错误](../../api/router#request-budget-errors)。
+
+:::tip
+按交集配置客户端，可以让每个候选模型对每条请求都保持可用。
+:::
+
+## 何时使用 {#when-to-use}
+
+当一个部署必须暴露多个路由目标、策略边界或发布轨道时，使用入口和多个配方。当所有客户端应遵循同一策略时，保持单个配方即可；它的 `vllm-sr/auto` 入口无需额外配置。
 
 继续阅读：
 

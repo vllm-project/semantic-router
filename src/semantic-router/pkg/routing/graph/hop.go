@@ -11,6 +11,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 )
 
 // HopRequest is one model call of a run.
@@ -73,6 +74,10 @@ func (x *Exec) Call(ctx context.Context, req *HopRequest) (*HopResponse, error) 
 	started := time.Now()
 	resp, err := x.opts.Caller.Call(ctx, &sent)
 	latency := time.Since(started)
+	if errors.Is(err, budget.ErrExhausted) {
+		x.fail(ErrHopLimit)
+		return nil, ErrHopLimit
+	}
 
 	var usage Usage
 	status := 0

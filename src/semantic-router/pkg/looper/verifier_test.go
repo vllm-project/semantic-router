@@ -19,8 +19,6 @@ package looper
 import (
 	"context"
 	"errors"
-	"fmt"
-	"math"
 	"strings"
 	"testing"
 	"time"
@@ -73,27 +71,6 @@ func TestDeterministicVerifierNoCandidateIsTypedFailure(t *testing.T) {
 	}
 }
 
-type timeoutError struct{}
-
-func (timeoutError) Error() string { return "deadline exceeded" }
-func (timeoutError) Timeout() bool { return true }
-
-type netError struct{}
-
-func (netError) Error() string { return "connection refused" }
-
-func TestClassifyVerifierHTTPErrorDistinguishesTimeout(t *testing.T) {
-	if got := classifyVerifierHTTPError(timeoutError{}); got != VerifierFailureTimeout {
-		t.Fatalf("timeout error classified as %q, want timeout", got)
-	}
-	if got := classifyVerifierHTTPError(netError{}); got != VerifierFailureUnavailable {
-		t.Fatalf("network error classified as %q, want unavailable", got)
-	}
-	if got := classifyVerifierHTTPError(nil); got != VerifierFailureUnavailable {
-		t.Fatalf("nil error classified as %q, want unavailable", got)
-	}
-}
-
 func TestVerifierResultConfidenceNilIsExplicitAbsence(t *testing.T) {
 	// Numeric zero must be distinguishable from "no score"; the contract uses a
 	// pointer so 0.0 stays a real value (see #2864 zero-score presence rule).
@@ -125,41 +102,6 @@ func TestValidVerifierDisposition(t *testing.T) {
 	} {
 		if got := ValidVerifierDisposition(d); got != want {
 			t.Fatalf("ValidVerifierDisposition(%q) = %v, want %v", d, got, want)
-		}
-	}
-}
-
-func TestClassifyVerifierHTTPErrorIsDeterministic(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		err  error
-		want VerifierFailureCode
-	}{
-		{"canceled", context.Canceled, VerifierFailureCanceled},
-		{"wrapped-canceled", fmt.Errorf("transport: %w", context.Canceled), VerifierFailureCanceled},
-		{"deadline", context.DeadlineExceeded, VerifierFailureTimeout},
-		{"timeout-iface", netTimeoutErr{}, VerifierFailureTimeout},
-		{"unavailable", errors.New("connection refused"), VerifierFailureUnavailable},
-	} {
-		if got := classifyVerifierHTTPError(tc.err); got != tc.want {
-			t.Fatalf("classify(%q) = %q, want %q", tc.name, got, tc.want)
-		}
-	}
-}
-
-func TestValidVerifierConfidenceRejectsOutOfDomain(t *testing.T) {
-	for c, want := range map[float64]bool{
-		0:            true,
-		0.5:          true,
-		1:            true,
-		-0.1:         false,
-		2.0:          false,
-		math.NaN():   false,
-		math.Inf(1):  false,
-		math.Inf(-1): false,
-	} {
-		if got := validVerifierConfidence(c); got != want {
-			t.Fatalf("validVerifierConfidence(%v) = %v, want %v", c, got, want)
 		}
 	}
 }
@@ -198,10 +140,3 @@ func TestVerifierCandidateHidesProducingIdentity(t *testing.T) {
 		t.Fatalf("candidate ID = %q, want opaque c1", c.ID)
 	}
 }
-
-// netTimeoutErr implements the net.Error timeout interface used by HTTP
-// clients to signal deadline expiry.
-type netTimeoutErr struct{ error }
-
-func (netTimeoutErr) Timeout() bool   { return true }
-func (netTimeoutErr) Temporary() bool { return false }

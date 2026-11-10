@@ -27,7 +27,7 @@ func attachedLease(t *testing.T, runtimes map[*runtimetest.Runtime][]string) *Le
 		t.Cleanup(server.Close)
 		for _, name := range names {
 			deployments[name] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: server.URL}
-			cfg.DecisionRules = append(cfg.DecisionRules, config.DecisionSignalRule{Name: "r_" + name, Deployment: name, Question: config.DecisionQuestion{Type: "noul", Instructions: "x"}})
+			cfg.SystemOneRules = append(cfg.SystemOneRules, config.SystemOneRule{Name: "r_" + name, Deployment: name, Question: config.SystemOneQuestion{Type: "noul", Instructions: "x"}})
 		}
 	}
 	cfg.ModelDeployments = deployments
@@ -51,9 +51,11 @@ func TestBundleSendsOneCallPerLogicalDeploymentWhenEveryParticipantParks(t *test
 	encoders := runtimetest.New(classifyHead("domain"), classifyHead("guard"), classifyHead("feedback"))
 	decisions := runtimetest.New(runtimetest.Model{ID: "kai"})
 	lease := attachedLease(t, map[*runtimetest.Runtime][]string{encoders: {"domain", "guard", "feedback"}, decisions: {"kai"}})
-	ctx, bundle := WithBundle(context.Background(), 50*time.Millisecond)
+	ctx, bundle := WithBundle(context.Background(), 10*time.Second)
 	var wg sync.WaitGroup
 	errs := make(chan error, 4)
+	// decisions joins before any encoder starts, so the encoders alone are never all parked.
+	decide := bundle.Join()
 	for _, deployment := range []string{"domain", "guard", "feedback"} {
 		leave := bundle.Join()
 		wg.Add(1)
@@ -67,11 +69,10 @@ func TestBundleSendsOneCallPerLogicalDeploymentWhenEveryParticipantParks(t *test
 			errs <- err
 		}(deployment)
 	}
-	leave := bundle.Join()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer leave()
+		defer decide()
 		_, err := lease.Decide(ctx, "kai", sampleRequest("is this hard"))
 		errs <- err
 	}()

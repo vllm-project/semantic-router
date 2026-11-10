@@ -120,32 +120,3 @@ func TestDecompile_RecognizesUnnormalizedOperatorCase(t *testing.T) {
 		t.Fatalf("expected 2 conditions to survive the round trip, got %d: %+v", len(rules.Conditions), rules.Conditions)
 	}
 }
-
-// TestCompileComplexitySignal_RejectsUnsupportedComposerOperator locks in the
-// DSL-compiler half of issue #2937: compileComposerObj used to copy an
-// invalid operator into the config verbatim, so a typo in DSL source (e.g.
-// "XOR" instead of "OR") only failed much later at config load, far from the
-// line that caused it. The compiler must reject it immediately.
-func TestCompileComplexitySignal_RejectsUnsupportedComposerOperator(t *testing.T) {
-	input := `SIGNAL complexity needs_reasoning {
-  threshold: 0.7
-  hard: { candidates: ["a"] }
-  easy: { candidates: ["b"] }
-  composer: { operator: "XOR", conditions: [{ type: "keyword", name: "kw" }] }
-}`
-
-	_, errs := Compile(input)
-	if len(errs) == 0 {
-		t.Fatal("expected a compile error for an unsupported composer operator")
-	}
-	found := false
-	for _, e := range errs {
-		if strings.Contains(e.Error(), "XOR") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected an error naming the unsupported operator XOR, got: %v", errs)
-	}
-}

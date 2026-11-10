@@ -22,8 +22,13 @@ permissions:
 jobs:
   quality:
     name: Checks
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.verifications != '[]' && fromJSON(inputs.verifications)[0].runner || 'ubuntu-24.04' }}
     steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - name: Check Out the Planned Source
         uses: actions/checkout@v4
         with:
@@ -33,9 +38,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            tools/agent/requirements.txt
+            tools/docs/requirements.txt
       - uses: actions/setup-go@v5
+        if: ${{ !inputs.docs_only }}
         with:
           go-version: "1.25"
+          cache-dependency-path: '**/go.sum'
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -55,13 +66,6 @@ jobs:
           version: ${{ steps.golangci_lint.outputs.version }}
           install-mode: goinstall
           args: --help
-      - name: Cache Go Dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-precommit-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-precommit-
       - name: Cache Node Dependencies
         uses: actions/cache@v4
         with:
@@ -75,7 +79,7 @@ jobs:
           path: ~/.cache/pre-commit
           key: ${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-precommit-
+            ${{ runner.os }}-pre-commit-
       - name: Install Reference Generator Dependencies
         run: python -m pip install -r tools/docs/requirements.txt
       # Verify committed references before website builds consume them.
@@ -94,7 +98,9 @@ jobs:
         working-directory: website
         run: |
           npm ci
-          npm run build
+          # Committed references were checked above; build them only once.
+          npm run sync:install
+          npx --no-install docusaurus build
       - name: Record Quality Evidence
         if: inputs.verifications != '[]'
         env:
@@ -109,6 +115,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: inputs.verifications != '[]'
         with:
+          overwrite: true
           name: ci-result-quality
           path: .agent-harness/quality-result.json
           include-hidden-files: true
@@ -118,4 +125,9 @@ jobs:
         run: |
           git status --short
           git diff --stat
+          echo ""
+          echo "=== golangci-lint fmt diff per Go module ==="
+          for module in $(git ls-files "*/go.mod" | xargs -n1 dirname); do
+            (cd "$module" && golangci-lint fmt --diff --config "$GITHUB_WORKSPACE/tools/linter/go/.golangci.yml" ./...) || true
+          done
           echo "Reproduce with make check BASE_REF=origin/${{ github.base_ref }}"

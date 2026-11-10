@@ -1,8 +1,9 @@
-"""Reduced copies of an encoder's linear layers (the max_speed profile)."""
+"""Reduced copies of an encoder's linear layers, which batches that merge requests run."""
 
 import pytest
 import torch
 from torch import nn
+from vllm_srun.accel import onednn
 from vllm_srun.accel.onednn import PackedLinear
 from vllm_srun.engines.native.reduced import (
     linear_bytes,
@@ -68,16 +69,38 @@ def test_a_view_computes_close_to_the_exact_backbone(kind, tolerance):
     torch.testing.assert_close(actual, expected, rtol=0, atol=tolerance)
 
 
-def test_packed_linears_give_a_row_the_same_result_in_any_batch():
+def test_the_probe_says_whether_a_packed_linear_gives_a_row_the_same_result_in_any_batch():
     runnable("float32-packed")
     torch.manual_seed(0)
-    linear = PackedLinear(nn.Linear(64, 96))
-    rows = torch.randn(300, 64)
-    with torch.inference_mode():
-        alone = linear(rows[:3])
-        for count in (4, 17, 64, 300):
-            assert torch.equal(linear(rows[:count])[:3], alone)
-        assert linear(rows[None, :5]).shape == (1, 5, 96)
+    # a narrow product and ModernBERT's wide-K down-projection, which oneDNN
+    # 3.7 splits differently from 81 rows at some thread counts
+    for features in ((64, 96), (1152, 768)):
+        linear = PackedLinear(nn.Linear(*features))
+        rows = onednn.probe_rows(features[0], torch.Generator().manual_seed(0))
+        with torch.inference_mode():
+            pairs = torch.cat(
+                [linear(rows[i : i + 2]) for i in range(0, rows.shape[0], 2)]
+            )
+            same = all(
+                torch.equal(linear(rows[:count]), pairs[:count])
+                for count in onednn.PROBE_ROWS
+            )
+            assert onednn.invariant([linear]) == same
+            assert linear(rows[None, :5]).shape == (1, 5, features[1])
+
+
+class _Drifting(PackedLinear):
+    """A packed linear whose rows move once a batch exceeds the 2-row reference."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return super().forward(x) + (x.shape[0] > 2) * 1e-6
+
+
+def test_the_probe_fails_a_product_whose_rows_move_with_the_batch():
+    runnable("float32-packed")
+    torch.manual_seed(0)
+    assert not onednn.invariant([_Drifting(nn.Linear(64, 96))])
+    assert onednn.invariant([]) is True
 
 
 def test_copies_that_cannot_run_on_a_device_say_why():
@@ -87,8 +110,8 @@ def test_copies_that_cannot_run_on_a_device_say_why():
     assert unavailable("bfloat16", torch.device("cuda")) is None
 
 
-@pytest.mark.parametrize("profile_asks", [True, False])
-def test_the_engine_runs_reduced_batches_on_the_copy_only(tmp_path, profile_asks):
+@pytest.mark.parametrize("asked", [True, False])
+def test_the_engine_runs_reduced_batches_on_the_copy_only(tmp_path, asked):
     runnable("int8")
     from vllm_srun.accel.cpu import CPUAccelerator
     from vllm_srun.engines.native.engine import NativeEngine
@@ -116,9 +139,7 @@ def test_the_engine_runs_reduced_batches_on_the_copy_only(tmp_path, profile_asks
         spec,
         accelerator,
         accelerator.devices()[0],
-        EngineOptions(
-            reduced_precision=profile_asks, exact_kernels_only=not profile_asks
-        ),
+        EngineOptions(reduced_precision=asked, exact_kernels_only=not asked),
     )
     lengths = [9, 3]
     ids, mask = batch(lengths, seed=4)
@@ -129,6 +150,6 @@ def test_the_engine_runs_reduced_batches_on_the_copy_only(tmp_path, profile_asks
     ).hidden[4]
     again = model.encode(EncoderBatch(flat, None, lengths=lengths)).hidden[4]
     assert torch.equal(again, exact)
-    assert (model.receipt().get("reduced", {}).get("kind") == "int8") is profile_asks
-    assert torch.equal(reduced, exact) is not profile_asks
+    assert (model.receipt().get("reduced", {}).get("kind") == "int8") is asked
+    assert torch.equal(reduced, exact) is not asked
     torch.testing.assert_close(reduced, exact, rtol=0, atol=0.1)

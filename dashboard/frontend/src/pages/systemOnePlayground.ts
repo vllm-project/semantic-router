@@ -1,9 +1,9 @@
-import type { DecisionModelSignal } from '../types/config'
+import type { SystemOneSignal } from '../types/config'
 
-// Question fields follow the canonical DecisionModelSignal authoring contract;
+// Question fields follow the canonical SystemOneSignal authoring contract;
 // response fields follow src/model-runtime/vllm_srun/api/openapi.yaml.
-export type QuestionType = DecisionModelSignal['question']['type']
-export type SystemOneQuestion = DecisionModelSignal['question'] & {
+export type QuestionType = SystemOneSignal['question']['type']
+export type SystemOneQuestion = SystemOneSignal['question'] & {
   over?: string
   require_full_input?: boolean
 }
@@ -38,7 +38,17 @@ export interface SystemOneSpan {
   text: string
   probability: number
 }
+export interface SystemOneRouting {
+  recipe: string
+  decision: string
+  algorithm: string
+  stage: string
+  selected_model: string
+  quality: string
+  model_calls: number
+}
 export interface SystemOneResponse {
+  routing?: SystemOneRouting
   model: string
   answers: Record<string, SystemOneAnswer>
   spans?: Record<string, SystemOneSpan[]>

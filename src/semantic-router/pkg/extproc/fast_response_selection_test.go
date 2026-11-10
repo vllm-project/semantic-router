@@ -70,7 +70,7 @@ func TestFastResponseLiveDecisionAndPreviewNeedNoBackend(t *testing.T) {
 	cfg := immediateResponseTestConfig()
 	cfg.DefaultModel = "immediate-unused-default"
 	cfg.Decisions[0].ModelRefs = []config.ModelRef{{Model: "immediate-unused-candidate"}}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifier, err := classification.NewClassifier(cfg)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, classifier.Close()) })
 	router := &OpenAIRouter{Config: cfg, Classifier: classifier}
@@ -110,7 +110,7 @@ func TestFastResponseLiveDecisionAndPreviewNeedNoBackend(t *testing.T) {
 	for _, model := range []string{cfg.DefaultModel, cfg.Decisions[0].ModelRefs[0].Model, "unknown"} {
 		countsBefore[model] = testutil.ToFloat64(metrics.ModelRequests.WithLabelValues(model))
 	}
-	_, response := router.runRequestPreRoutingStages(requestedModel, extractSemanticRequestSignals(request), ctx)
+	_, response := router.runRequestPreRoutingStages(requestedModel, request, extractSemanticRequestSignals(request), ctx)
 	require.NotNil(t, response)
 	immediate := response.GetImmediateResponse()
 	require.NotNil(t, immediate)

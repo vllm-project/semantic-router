@@ -1,4 +1,5 @@
 import type {
+  BackendRefAuth,
   BackendRefEntry,
   ConfigData,
   LoRAAdapter,
@@ -27,6 +28,31 @@ export function normalizeModelLoras(value: unknown): LoRAAdapter[] {
     .filter((entry) => entry.name)
 }
 
+function stringMap(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, nestedValue]) => typeof nestedValue === 'string')
+      .map(([key, nestedValue]) => [key, nestedValue as string]),
+  )
+}
+
+function backendRefAuth(value: unknown): BackendRefAuth | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const entry = value as Record<string, unknown>
+  const auth: BackendRefAuth = {}
+  if (entry.credential === 'delegated') auth.credential = 'delegated'
+  if (typeof entry.header === 'string' && entry.header.trim()) auth.header = entry.header.trim()
+  // Presence is semantic: an explicit empty prefix sends the bare key instead
+  // of the provider's catalog default.
+  if (typeof entry.prefix === 'string') auth.prefix = entry.prefix.trim()
+  if (typeof entry.api_key_env === 'string' && entry.api_key_env.trim())
+    auth.api_key_env = entry.api_key_env.trim()
+  if (typeof entry.api_key_file === 'string' && entry.api_key_file.trim())
+    auth.api_key_file = entry.api_key_file.trim()
+  return auth
+}
+
 export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
   if (!Array.isArray(value)) return []
 
@@ -44,34 +70,18 @@ export function normalizeModelBackendRefs(value: unknown): BackendRefEntry[] {
       else if (entry.protocol === 'http') normalized.protocol = 'http'
       if (typeof entry.weight === 'number' && Number.isFinite(entry.weight))
         normalized.weight = entry.weight
-      if (typeof entry.base_url === 'string' && entry.base_url.trim())
-        normalized.base_url = entry.base_url.trim()
       if (typeof entry.provider === 'string' && entry.provider.trim())
         normalized.provider = entry.provider.trim()
-      if (typeof entry.auth_header === 'string' && entry.auth_header.trim())
-        normalized.auth_header = entry.auth_header.trim()
-      // Presence is semantic: an explicit empty prefix disables a provider's
-      // catalog default instead of falling back to it.
-      if (typeof entry.auth_prefix === 'string') normalized.auth_prefix = entry.auth_prefix.trim()
-      if (
-        entry.extra_headers &&
-        typeof entry.extra_headers === 'object' &&
-        !Array.isArray(entry.extra_headers)
-      ) {
-        normalized.extra_headers = Object.fromEntries(
-          Object.entries(entry.extra_headers as Record<string, unknown>)
-            .filter(([, nestedValue]) => typeof nestedValue === 'string')
-            .map(([key, nestedValue]) => [key, nestedValue as string]),
-        )
-      }
+      const headers = stringMap(entry.headers)
+      if (headers) normalized.headers = headers
+      const auth = backendRefAuth(entry.auth)
+      if (auth) normalized.auth = auth
       if (typeof entry.api_version === 'string' && entry.api_version.trim())
         normalized.api_version = entry.api_version.trim()
       if (typeof entry.chat_path === 'string' && entry.chat_path.trim())
         normalized.chat_path = entry.chat_path.trim()
       if (typeof entry.api_key === 'string' && entry.api_key.trim())
         normalized.api_key = entry.api_key.trim()
-      if (typeof entry.api_key_env === 'string' && entry.api_key_env.trim())
-        normalized.api_key_env = entry.api_key_env.trim()
       return normalized
     })
 }
@@ -261,12 +271,19 @@ export function normalizeModelPricing(value: unknown): ModelPricing | undefined 
   ) {
     normalized.cache_write_per_1m = pricing.cache_write_per_1m
   }
+  if (
+    typeof pricing.cache_write_1h_per_1m === 'number' &&
+    Number.isFinite(pricing.cache_write_1h_per_1m)
+  ) {
+    normalized.cache_write_1h_per_1m = pricing.cache_write_1h_per_1m
+  }
   if (typeof pricing.completion_per_1m === 'number' && Number.isFinite(pricing.completion_per_1m))
     normalized.completion_per_1m = pricing.completion_per_1m
   const hasRate = [
     normalized.prompt_per_1m,
     normalized.cached_input_per_1m,
     normalized.cache_write_per_1m,
+    normalized.cache_write_1h_per_1m,
     normalized.completion_per_1m,
   ].some((rate) => typeof rate === 'number')
   if (hasRate && !normalized.currency) normalized.currency = 'USD'
@@ -354,9 +371,10 @@ export function effectiveModelCardFormData(model: NormalizedModel): Record<strin
     context_window_size: model.context_window_size ?? '',
     description: model.description ?? '',
     capabilities: model.capabilities ?? [],
+    input_modalities: model.modalities?.input ?? [],
+    output_modalities: model.modalities?.output ?? [],
     loras: model.loras ?? [],
     tags: model.tags ?? [],
-    modality: model.modality ?? '',
   }
 }
 

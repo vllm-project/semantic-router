@@ -1,9 +1,10 @@
 """Latency and throughput of the vela2 family against the Vela 2.0 packages' own engine.
 
     python3 tools/vela2_bench.py --package DIR --device cpu|rocm:0 --output OUT.json
-        [--sides runtime,runtime-shared,runtime-batching,max_speed:KIND,reference,reference-onnx]
+        [--sides runtime,runtime-merged,runtime-shared,copy:KIND,reference,reference-onnx]
         [--tokens 32,128,512,2048] [--requests 40] [--warmup 5] [--concurrency 1,8]
-        [--prompts PROMPTS.jsonl] [--rounds 5 --baselines reference,runtime]
+        [--prompts PROMPTS.jsonl] [--rounds 5 --baselines reference,runtime] [--no-graphs] [--no-fused]
+        [--questions QUESTIONS.json]
 
 Workload: the router's signals as one Vela 2.0 request (domain over 14 subject areas,
 jailbreak, PII spans, fact-check, feedback, modality and safety categories) over a
@@ -16,7 +17,7 @@ given prompts (``{"id", "text"}`` lines) instead, and records each one's latency
 concurrency 1, to pair with another runtime's per-prompt latencies.
 
 ``--trace`` adds ``forwards``: per runtime side and row, the measured forwards' count, rows,
-tokens and time (how a profile batched the callers' requests).
+tokens and time (how a side batched the callers' requests).
 
 ``--rounds N`` repeats the measured requests N times after one warm-up; above
 concurrency 1 the sides run one after another in an order that rotates every
@@ -25,10 +26,10 @@ side minus baseline (p50, p95, mean, req/s) with its 95% t interval, for every
 ``--baselines`` side.
 
 Sides:
-- ``runtime``: the family on the exact profile through the runtime's scheduler;
-- ``runtime-shared``: the shared-context profile (decoders: packed trees, one parts pass);
-- ``runtime-batching``: cross-request batching (2 ms window);
-- ``max_speed:KIND``: the max_speed profile on a model that loaded the KIND reduced copy
+- ``runtime``: the family through the runtime's scheduler, each request alone in its released forwards;
+- ``runtime-merged``: the default engine arguments: rows of concurrent requests merged (2 ms window);
+- ``runtime-shared``: merged rows with shared context (decoders: packed trees, one parts pass);
+- ``copy:KIND``: ``runtime-shared`` on a model that loaded the KIND reduced copy
   (``float32-packed``, ``bfloat16``, ``int8``; consented for the run);
 - ``reference``: ``vela2_inference.py`` (torch), one request at a time in arrival order, as its
   server serves concurrent callers;
@@ -60,11 +61,9 @@ from vela2_parity import (  # noqa: E402
     load_runtime,
     pin_choices,
 )
-from vllm_srun.plugins.base import SurfacePlan  # noqa: E402
-from vllm_srun.profiles.batching import BatchingProfile  # noqa: E402
-from vllm_srun.profiles.exact import ExactProfile  # noqa: E402
-from vllm_srun.profiles.max_speed import MaxSpeedProfile  # noqa: E402
-from vllm_srun.profiles.shared_context import SharedContextProfile  # noqa: E402
+from vllm_srun.config import EngineArgs  # noqa: E402
+from vllm_srun.plugins.base import EngineOptions, SurfacePlan  # noqa: E402
+from vllm_srun.scheduler.batching import Batcher, SharedContext  # noqa: E402
 from vllm_srun.scheduler.scheduler import Scheduler, SchedulerLimits  # noqa: E402
 
 SUBJECTS = [
@@ -286,22 +285,22 @@ def forwards(trace: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def runtime_side(
     model: Any,
-    profile: str,
+    planner: str,
     execute: Any,
     trace: list[dict[str, Any]] | None = None,
     phase: dict[str, Any] | None = None,
     side: str = "",
 ) -> tuple[Any, Any]:
-    """A side's caller; with ``trace``, every forward appends its rows, tokens and seconds under ``phase``."""
-    profiles = {
-        "exact": ExactProfile(),
-        "shared_context": SharedContextProfile(),
-        "batching": BatchingProfile(),
-        "max_speed": MaxSpeedProfile(),
-    }
-    for value in profiles.values():
-        if value.available(model) is None:
-            value.bind(model)
+    """A side's caller; with ``trace``, every forward appends its rows, tokens and seconds under ``phase``.
+
+    ``planner`` is ``alone`` (each request in its released forwards), ``merged`` (the default
+    engine arguments) or ``shared`` (merged, with shared-context trees where the model has them).
+    """
+    sharing = SharedContext() if planner == "shared" else None
+    if sharing is not None and sharing.unavailable(model) is not None:
+        sharing = None
+    batcher = Batcher(EngineArgs(), sharing)
+    batcher.bind(model)
 
     def observe(event: str, values: dict[str, Any]) -> None:
         if trace is not None and event == "forward":
@@ -317,7 +316,7 @@ def runtime_side(
 
     scheduler = Scheduler(
         model,
-        profiles,
+        batcher,
         SchedulerLimits(batch_window_ms=2.0),
         observe=observe,
         execute=execute,
@@ -326,7 +325,9 @@ def runtime_side(
 
     def call(state: Any) -> dict[str, Any]:
         plan = model.plan(state, ROUTER_QUESTIONS)
-        results = scheduler.submit(plan.items, deadline=None, profile=profile).result()
+        results = scheduler.submit(
+            plan.items, deadline=None, reference=planner == "alone"
+        ).result()
         return model.finish_surface(
             SurfacePlan("decisions", plan.items, plan.input_tokens, plan), results
         )
@@ -349,38 +350,49 @@ def main() -> int:
     parser.add_argument("--engine", default="native", help="runtime engine plugin")
     parser.add_argument("--rounds", type=int, default=1)
     parser.add_argument("--baselines", default="reference,runtime")
+    parser.add_argument("--no-graphs", action="store_true")
+    parser.add_argument("--no-fused", action="store_true")
+    parser.add_argument(
+        "--questions",
+        type=Path,
+        help="a JSON object of questions to ask instead of the router's signals",
+    )
     parser.add_argument(
         "--trace",
         action="store_true",
         help="record each runtime side's forwards (rows, tokens, time) per row",
     )
     args = parser.parse_args()
+    if args.questions:
+        ROUTER_QUESTIONS.clear()
+        ROUTER_QUESTIONS.update(json.loads(args.questions.read_text(encoding="utf-8")))
     sides = args.sides.split(",")
     lengths = [int(x) for x in args.tokens.split(",")]
     concurrency = [int(x) for x in args.concurrency.split(",")]
     pin_choices(args.package, args.device)
     execute = device_executor(args.device)
-    model = execute(lambda: load_runtime(args.package, args.device, args.engine))
+    options = EngineOptions(graphs=not args.no_graphs, fused_kernels=not args.no_fused)
+    model = execute(
+        lambda: load_runtime(args.package, args.device, args.engine, options=options)
+    )
     runs: list[dict[str, Any]] = []
     callers: dict[str, Any] = {}
     trace: list[dict[str, Any]] | None = [] if args.trace else None
     phase: dict[str, Any] = {}
     for side in sides:
-        if side.startswith("max_speed:"):
+        if side.startswith("copy:"):
             kind = side.split(":", maxsplit=1)[1]
             copy = execute(
                 lambda kind=kind: load_runtime(
-                    args.package, args.device, args.engine, kind
+                    args.package, args.device, args.engine, kind, options
                 )
             )
-            callers[side], _ = runtime_side(
-                copy, "max_speed", execute, trace, phase, side
-            )
+            callers[side], _ = runtime_side(copy, "shared", execute, trace, phase, side)
         elif side.startswith("runtime"):
-            profile = {"runtime": "exact", "runtime-shared": "shared_context"}.get(
-                side, "batching"
+            planner = {"runtime": "alone", "runtime-shared": "shared"}.get(
+                side, "merged"
             )
-            callers[side], _ = runtime_side(model, profile, execute, trace, phase, side)
+            callers[side], _ = runtime_side(model, planner, execute, trace, phase, side)
         else:
             backend = "onnx" if side == "reference-onnx" else "torch"
             engine, _ = execute(
@@ -447,6 +459,11 @@ def main() -> int:
     report: dict[str, Any] = {
         "package": str(args.package),
         "device": args.device,
+        "fast_path_options": {
+            "graphs": not args.no_graphs,
+            "fused_kernels": not args.no_fused,
+        },
+        "fast_path": model.engine_model.receipt(),
         "runs": runs,
     }
     if args.rounds > 1:

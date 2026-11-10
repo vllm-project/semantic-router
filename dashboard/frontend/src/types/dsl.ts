@@ -4,6 +4,8 @@
  *   signalCompile, signalValidate, signalDecompile, signalFormat, signalParseAST
  */
 
+import type { RouterConfigWarning } from '../utils/configSaveWarnings'
+
 // ---------- Diagnostics ----------
 
 export type DiagLevel = 'error' | 'warning' | 'constraint'
@@ -74,8 +76,6 @@ export interface ASTProjectionPartitionDecl {
 export interface ASTProjectionScoreInput {
   signalType: string
   signalName: string
-  kb?: string
-  metric?: string
   weight: number
   valueSource?: string
   match?: number
@@ -256,6 +256,8 @@ export interface DeployResult {
   status: 'success' | 'error'
   version?: string
   message: string
+  /** The Router's warnings about the deployed configuration. */
+  warnings?: RouterConfigWarning[]
 }
 
 export interface ConfigVersion {

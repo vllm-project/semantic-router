@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -23,12 +24,21 @@ func init() {
 }
 
 type routerConfigDocument struct {
-	Routing struct {
+	Recipes []struct {
 		Decisions []struct {
 			Name string `json:"name"`
 		} `json:"decisions"`
 		Signals map[string]interface{} `json:"signals"`
-	} `json:"routing"`
+	} `json:"recipes"`
+}
+
+// decisionCount is the number of decisions of the first recipe, the default
+// recipe of the baseline configuration.
+func (doc routerConfigDocument) decisionCount() int {
+	if len(doc.Recipes) == 0 {
+		return 0
+	}
+	return len(doc.Recipes[0].Decisions)
 }
 
 type classificationMetricsDocument struct {
@@ -65,8 +75,8 @@ func testAPIServerClassificationEndpoints(
 	if err != nil {
 		return err
 	}
-	if metricsDoc.DecisionCount != len(configDoc.Routing.Decisions) {
-		return fmt.Errorf("expected /api/v1/observability/classification-metrics decision_count=%d, got %d", len(configDoc.Routing.Decisions), metricsDoc.DecisionCount)
+	if metricsDoc.DecisionCount != configDoc.decisionCount() {
+		return fmt.Errorf("expected /api/v1/observability/classification-metrics decision_count=%d, got %d", configDoc.decisionCount(), metricsDoc.DecisionCount)
 	}
 
 	combinedKeys, err := fetchCombinedClassificationKeys(
@@ -107,8 +117,8 @@ func fetchRouterConfigDocument(
 	if err := json.Unmarshal(resp.Body, &doc); err != nil {
 		return nil, nil, fmt.Errorf("decode /api/v1/config response: %w", err)
 	}
-	if len(doc.Routing.Decisions) == 0 {
-		return nil, nil, fmt.Errorf("expected /api/v1/config to include routing decisions")
+	if doc.decisionCount() == 0 {
+		return nil, nil, fmt.Errorf("expected /api/v1/config to include recipe decisions")
 	}
 	return resp.Body, &doc, nil
 }

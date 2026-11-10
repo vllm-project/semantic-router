@@ -16,7 +16,7 @@ whole in windows, which timed out long probes on CPU runners.
   or 4 of them like a CI runner (80–83, `--threads 4`), with memory on NUMA
   node 1. Other workloads ran on the host's other cores, so the times are
   indicative.
-- **Models:** at their pinned revisions, native engine, `exact`, FP32:
+- **Models:** at their pinned revisions, native engine, each request alone, FP32:
   `vllm-sr/Vela-1.0-Encoder-307M-Embedding` (a 32,768-token window),
   `vllm-sr/Vela-1.0-Encoder-307M-Guard` (classify in 512-token windows with
   255 of overlap, at most 32,768 tokens) and `vllm-sr/Vela-2.0-0.3B` (the

@@ -5,26 +5,15 @@ import { mockAuthenticatedAppShell } from './support/auth'
 const globalConfig = {
   router: { strategy: 'priority' },
   model_catalog: {
-    embeddings: {
-      semantic: {
-        mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
-        use_cpu: true,
-        embedding_config: {
-          backend: 'model_runtime',
-          model_type: 'mmbert',
-          target_dimension: 768,
-          preload_embeddings: true,
-        },
-      },
-    },
+    embeddings: { default: { deployment: 'vela-embedding' } },
   },
 }
 
 const configResponse = {
-  version: 'v0.3',
+  version: 'v0.5',
   listeners: [{ name: 'public', address: '0.0.0.0', port: 8801 }],
-  providers: { defaults: { default_model: 'test-model' }, models: [] },
-  routing: { signals: {}, decisions: [] },
+  providers: { defaults: { model: 'test-model' }, models: [] },
+  recipes: [{ name: 'default' }],
   global: globalConfig,
 }
 
@@ -111,46 +100,65 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
     await card.getByRole('button', { name: 'Edit' }).click()
 
     const modal = page.getByRole('dialog', { name: 'Edit Embedding Models' })
-    await expect(modal.getByLabel('mmBERT Model Path')).toBeVisible()
+    await expect(modal.getByLabel('Default Deployment')).toHaveValue('vela-embedding')
     await expect(modal.getByLabel('Base URL')).toHaveCount(0)
 
     await expect(modal.getByLabel('Provider Type')).toHaveValue('local')
-    await expect(modal.getByLabel('Local Model Type')).toHaveValue('mmbert')
-    await expect(modal.getByLabel('Local Backend')).toHaveCount(0)
     await expect(modal.getByLabel('API Protocol')).toHaveCount(0)
     await modal.getByLabel('Provider Type').selectOption('remote')
-    await expect(modal.getByLabel('mmBERT Model Path')).toHaveCount(0)
-    await expect(modal.getByLabel('Local Model Type')).toHaveCount(0)
-    await expect(modal.getByLabel('Local Backend')).toHaveCount(0)
+    await expect(modal.getByLabel('Default Deployment')).toHaveCount(0)
     await modal.getByLabel('API Protocol').selectOption('openai_compatible')
     await modal.getByLabel('Base URL').fill('https://embedding.example.com/v1')
     await modal.getByLabel('Model', { exact: true }).fill('text-embedding-3-small')
     await modal.getByLabel('API Key Environment Variable').fill('OPENAI_API_KEY')
     await modal.getByLabel('Dimensions').fill('1536')
-    await modal.getByLabel('Target Dimension').fill('1536')
     await modal.getByRole('button', { name: 'Save' }).click()
 
     await expect(modal).toBeHidden()
     await expect.poll(() => updateBody).not.toBeNull()
     expect(updateBody).toMatchObject({
       model_catalog: {
-        embeddings: {
-          semantic: {
-            embedding_config: {
-              backend: 'openai_compatible',
-              model_type: 'remote',
-              target_dimension: 1536,
-            },
-            endpoint: {
-              base_url: 'https://embedding.example.com/v1',
-              model: 'text-embedding-3-small',
-              api_key_env: 'OPENAI_API_KEY',
-              dimensions: 1536,
-            },
+        deployments: {
+          'remote-embed': {
+            provider: 'openai_embeddings',
+            endpoint: 'https://embedding.example.com/v1',
+            model: 'text-embedding-3-small',
+            auth: { api_key_env: 'OPENAI_API_KEY' },
+            capabilities: { dimensions: 1536 },
           },
         },
+        embeddings: { default: { deployment: 'remote-embed' } },
       },
     })
+  })
+
+  test('saves the default local provider without edits', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 })
+    await mockRemoteEmbeddingDashboard(page)
+
+    let updateBody: Record<string, unknown> | null = null
+    await page.route('**/api/router/config/global/update', async (route) => {
+      updateBody = route.request().postDataJSON() as Record<string, unknown>
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"status":"ok"}' })
+    })
+
+    await page.goto('/config/global-config')
+    await page.getByRole('button', { name: /Model Catalog/ }).click()
+    const card = page.locator('article').filter({
+      has: page.getByRole('heading', { name: 'Embedding Models' }),
+    })
+    await card.getByRole('button', { name: 'Edit' }).click()
+
+    const modal = page.getByRole('dialog', { name: 'Edit Embedding Models' })
+    await modal.getByRole('button', { name: 'Save' }).click()
+
+    await expect(modal).toBeHidden()
+    await expect.poll(() => updateBody).not.toBeNull()
+    expect(updateBody).toMatchObject({
+      model_catalog: { embeddings: { default: { deployment: 'vela-embedding' } } },
+    })
+    expect(updateBody).not.toHaveProperty('model_catalog.embeddings.semantic')
+    expect(updateBody).not.toHaveProperty('model_catalog.deployments')
   })
 
   test('keeps service availability inside desktop and mobile layouts', async ({ page }) => {

@@ -52,6 +52,7 @@ func CompileASTWithLimits(prog *Program, limits config.DecisionRuleLimits) (*con
 	c.config.Strategy = config.RoutingStrategy(prog.Strategy)
 	c.config.ModelBindings = cloneModelBindings(prog.ModelBindings)
 	c.config.CandidateRequirements = prog.CandidateRequirements.Clone()
+	c.config.Plugins = append([]config.DecisionPlugin(nil), prog.RecipePlugins...)
 	c.compile()
 	c.compileScopes()
 	if len(c.errors) > 0 {
@@ -111,8 +112,6 @@ func (c *Compiler) compileProjectionScores() {
 			score.Inputs = append(score.Inputs, config.ProjectionScoreInput{
 				Type:        inputDecl.SignalType,
 				Name:        inputDecl.SignalName,
-				KB:          inputDecl.KB,
-				Metric:      inputDecl.Metric,
 				Weight:      inputDecl.Weight,
 				ValueSource: inputDecl.ValueSource,
 				Match:       inputDecl.Match,
@@ -152,53 +151,6 @@ func (c *Compiler) compileProjectionMappings() {
 func (c *Compiler) addError(pos Position, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
 	c.errors = append(c.errors, fmt.Errorf("%s: %s", pos, msg))
-}
-
-func (c *Compiler) validateEmitForCompile(r *RouteDecl, e *EmitDecl) bool {
-	if e == nil {
-		return false
-	}
-	context := fmt.Sprintf("ROUTE %s EMIT", r.Name)
-	if !supportedEmitKinds[e.Kind] {
-		c.addError(e.Pos, "%s: unknown EMIT kind %q. Supported kinds: retention", context, e.Kind)
-		return false
-	}
-	if e.Kind != emitKindRetention {
-		return true
-	}
-	ok := true
-	for _, issue := range retentionRawFieldDiagnostics(e, context) {
-		c.addError(issue.pos, "%s", issue.message)
-		ok = false
-	}
-	if e.Retention == nil {
-		return ok
-	}
-	if e.Retention.TTLTurns != nil && *e.Retention.TTLTurns < 0 {
-		c.addError(e.Pos, "%s retention: ttl_turns must be >= 0, got %d", context, *e.Retention.TTLTurns)
-		ok = false
-	}
-	if e.Retention.Drop != nil && *e.Retention.Drop && e.Retention.TTLTurns != nil && *e.Retention.TTLTurns > 0 {
-		c.addError(e.Pos, "%s retention: drop=true conflicts with ttl_turns=%d. Use one or the other", context, *e.Retention.TTLTurns)
-		ok = false
-	}
-	return ok
-}
-
-func compileEmitDecl(e *EmitDecl) config.EmitDirective {
-	if e == nil {
-		return config.EmitDirective{}
-	}
-	out := config.EmitDirective{Kind: e.Kind}
-	if e.Retention != nil {
-		out.Retention = &config.RetentionDirective{
-			Drop:                  clonePtrBool(e.Retention.Drop),
-			TTLTurns:              clonePtrInt(e.Retention.TTLTurns),
-			KeepCurrentModel:      clonePtrBool(e.Retention.KeepCurrentModel),
-			PreferPrefixRetention: clonePtrBool(e.Retention.PreferPrefixRetention),
-		}
-	}
-	return out
 }
 
 func clonePtrBool(p *bool) *bool {

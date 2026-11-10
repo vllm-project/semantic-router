@@ -16,6 +16,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 )
 
 // firstChunkSize bounds what an attempt reads ahead to see the first byte.
@@ -148,6 +149,15 @@ func (r *run) exchange(c *call) (*http.Response, []byte, *Error) {
 		c.req, &c.cluster.spec, &r.ep.spec, c.defaultRoute)
 	if err != nil {
 		return nil, nil, r.located(asError(err))
+	}
+	if budgetErr := budget.Consume(r.ctx); budgetErr != nil {
+		if out.Body != nil {
+			_ = out.Body.Close()
+		}
+		if r.ctx.Err() != nil {
+			return nil, nil, r.located(contextError(r.ctx))
+		}
+		return nil, nil, r.located(&Error{Kind: KindBudgetExhausted, Err: budgetErr})
 	}
 	for _, kv := range tracing.InjectSpanContextToSlice(r.ctx) {
 		out.Header.Set(kv[0], kv[1])

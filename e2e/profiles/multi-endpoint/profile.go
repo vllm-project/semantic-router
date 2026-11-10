@@ -6,7 +6,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -16,11 +15,14 @@ var (
 	resourceManifests = []string{
 		"e2e/profiles/multi-endpoint/gateway-resources/backend.yaml",
 		"e2e/profiles/multi-endpoint/gateway-resources/gwapi-resources.yaml",
+		// Serves the System One fixture the jailbreak and PII rules ask.
+		"deploy/kubernetes/hallucination/provider-mocker.yaml",
 	}
 	waitDeployments = []helpers.DeploymentRef{
 		{Namespace: "default", Name: "vllm-14b-dev"},
 		{Namespace: "default", Name: "vllm-14b-prod"},
 		{Namespace: "default", Name: "vllm-14b-slow"},
+		{Namespace: "default", Name: "provider-mocker"},
 	}
 )
 

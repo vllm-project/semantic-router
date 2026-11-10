@@ -7,9 +7,10 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 // structuredOutputProbeFormat mirrors the reproduction in issue #3024: a

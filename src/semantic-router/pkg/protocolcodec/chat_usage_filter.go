@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -10,7 +11,9 @@ import (
 // ChatUsageStreamFilter frames a same-format Chat stream before exposing it to
 // the client. It removes Router-requested accounting evidence when the client
 // did not opt into usage, and provider decorations that the neutral codec
-// reports as dropped. Undecorated frames retain their original bytes.
+// reports as dropped. Undecorated frames retain their original bytes. A
+// provider error event ends the public stream: the filter drops it and every
+// later frame, and UpstreamFailed reports it.
 type ChatUsageStreamFilter struct {
 	framer          sseFramer
 	stripUsage      bool
@@ -19,7 +22,12 @@ type ChatUsageStreamFilter struct {
 	pendingTerminal []byte
 	failure         error
 	finalized       bool
+	upstreamFailed  bool
 }
+
+// errChatUpstreamErrorFrame marks a provider error event. The filter drops it
+// and every frame after it; the Router sends its own error frame instead.
+var errChatUpstreamErrorFrame = errors.New("chat stream carried a provider error event")
 
 func NewChatUsageStreamFilter(limit int) *ChatUsageStreamFilter {
 	return NewChatPublicStreamFilter(limit, false)
@@ -51,6 +59,13 @@ func (filter *ChatUsageStreamFilter) Push(chunk []byte) ([]byte, error) {
 	return filter.filterFrames(frames)
 }
 
+// UpstreamFailed reports whether the stream carried a provider error event.
+// The filter dropped that event, so when this is true the caller must send the
+// Router's error frame in its place.
+func (filter *ChatUsageStreamFilter) UpstreamFailed() bool {
+	return filter != nil && filter.upstreamFailed
+}
+
 func (filter *ChatUsageStreamFilter) Finalize() ([]byte, error) {
 	if filter == nil {
 		return nil, nil
@@ -78,10 +93,21 @@ func (filter *ChatUsageStreamFilter) Finalize() ([]byte, error) {
 func (filter *ChatUsageStreamFilter) filterFrames(frames [][]byte) ([]byte, error) {
 	var output bytes.Buffer
 	for _, frame := range frames {
+		if filter.upstreamFailed {
+			continue
+		}
 		filtered, keep, hasData, terminal, err := filterChatUsageFrame(
 			frame, filter.framer.limit, filter.frames == 0, filter.stripUsage, filter.seenFinish,
 		)
 		filter.frames++
+		if errors.Is(err, errChatUpstreamErrorFrame) {
+			if len(filter.pendingTerminal) == 0 {
+				filter.upstreamFailed = true
+				continue
+			}
+			// After [DONE], an error event is data after the terminal, as before.
+			err = nil
+		}
 		if err != nil {
 			return nil, filter.poison(err)
 		}
@@ -124,6 +150,9 @@ func filterChatUsageFrame(frame []byte, limit int, first, stripUsage bool, seenF
 	var object map[string]json.RawMessage
 	if err := decodeProviderWire(parsed.Data, &object, llmprotocol.DefaultPolicy()); err != nil {
 		return nil, false, true, false, err
+	}
+	if raw, failed := object["error"]; failed && !bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil, false, true, false, errChatUpstreamErrorFrame
 	}
 	changed := false
 	if _, present := object["provider"]; present {

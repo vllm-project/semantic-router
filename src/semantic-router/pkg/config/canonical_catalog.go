@@ -55,6 +55,9 @@ func applyEffectiveModelRegistry(
 	for _, model := range models {
 		params := modelParamsFromEffectiveModel(model, defaults.QualityIndex, defaults.ReasoningEffort)
 		params.AuthoredModel = authoredByAlias[model.Alias]
+		if params.AuthoredModel != nil {
+			params.Deployment = params.AuthoredModel.Deployment
+		}
 		if model.BindingDefaults.Protocol != "" {
 			apiFormat, err := apiFormatForProtocol(model.BindingDefaults.Protocol)
 			if err != nil {
@@ -77,10 +80,6 @@ func applyEffectiveModelRegistry(
 
 func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityIndex, reasoningEffort string) ModelParams {
 	card := model.Card.Card
-	modality := model.Card.RuntimeModality
-	if modality == "" {
-		modality = runtimeModalityFromCard(card)
-	}
 	indexResults := model.Indices
 	if effortResults, ok := model.IndicesByEffort[reasoningEffort]; ok {
 		indexResults = effortResults
@@ -95,7 +94,7 @@ func modelParamsFromEffectiveModel(model modelcatalog.EffectiveModel, qualityInd
 		LoRAs:                loraAdaptersFromEffectiveCard(model.Card),
 		Tags:                 append([]string(nil), card.Tags...),
 		ReasoningFamily:      card.ReasoningFamily,
-		Modality:             modality,
+		Modalities:           cloneModalities(card.Modalities),
 		IndexResults:         cloneCatalogIndexResults(indexResults),
 		IndexResultsByEffort: cloneCatalogIndexResultsByEffort(model.IndicesByEffort),
 		QualityIndex:         qualityIndex,
@@ -120,16 +119,11 @@ func declaredCardCapabilities(card modelcatalog.EffectiveModelCard) []string {
 	return append([]string(nil), card.Card.Capabilities...)
 }
 
-func runtimeModalityFromCard(card modelcatalog.ModelCard) string {
-	if stringSliceContains(card.Capabilities, "image_generation") {
-		return "diffusion"
+func cloneModalities(modalities modelcatalog.Modalities) modelcatalog.Modalities {
+	return modelcatalog.Modalities{
+		Input:  append([]string(nil), modalities.Input...),
+		Output: append([]string(nil), modalities.Output...),
 	}
-	for _, input := range card.Modalities.Input {
-		if input != "text" {
-			return "omni"
-		}
-	}
-	return "ar"
 }
 
 func appendEffectiveProviderBinding(
@@ -237,7 +231,11 @@ func appendMaterializedEndpoint(
 	endpointName := effectiveEndpointName(
 		modelAlias, provider.Instance.Name, endpointURL.name, bindingIndex, endpointIndex,
 	)
-	cfg.ProviderProfiles[endpointName] = materializedProviderProfile(effective, endpointURL.url)
+	profile := materializedProviderProfile(effective, endpointURL.url)
+	if err := validateDelegatedProfile(&profile); err != nil {
+		return fmt.Errorf("providers.models[%s].backend_refs[%d]: %w", modelAlias, bindingIndex, err)
+	}
+	cfg.ProviderProfiles[endpointName] = profile
 	address, port, scheme, err := endpointAddress(endpointURL.url)
 	if err != nil {
 		return fmt.Errorf("providers.models[%s].backend_refs[%d]: %w", modelAlias, bindingIndex, err)
@@ -248,6 +246,25 @@ func appendMaterializedEndpoint(
 		Model: modelAlias, Protocol: scheme,
 	})
 	params.PreferredEndpoints = append(params.PreferredEndpoints, endpointName)
+	return nil
+}
+
+// validateDelegatedProfile requires a delegated backend to have a wire
+// header that can carry the request's credential.
+func validateDelegatedProfile(profile *ProviderProfile) error {
+	if !profile.Delegated() {
+		return nil
+	}
+	auth, err := profile.ResolveAuth()
+	if err != nil {
+		return err
+	}
+	if auth.Strategy == "none" || strings.TrimSpace(auth.Header) == "" {
+		return fmt.Errorf(
+			"auth.credential: delegated needs a header to carry the credential; provider %q sends none, set auth.header",
+			profile.Type,
+		)
+	}
 	return nil
 }
 
@@ -276,7 +293,8 @@ func materializedProviderProfile(
 		ExtraHeaders:       mergeProviderHeaders(provider.Definition.DefaultHeaders, provider.Instance.Headers),
 		APIVersion:         provider.Instance.APIVersion, AuthHeader: provider.Instance.AuthHeader,
 		AuthPrefix: provider.Instance.AuthPrefix, AuthPrefixSet: provider.Instance.AuthPrefixSet,
-		ChatPath: provider.Instance.ChatPath,
+		ChatPath:       provider.Instance.ChatPath,
+		AuthCredential: provider.Instance.AuthCredential,
 	}
 }
 
@@ -384,12 +402,16 @@ func resolveProviderCredential(credentials modelcatalog.CredentialsRef) string {
 
 func apiFormatForProtocol(protocol string) (string, error) {
 	switch protocol {
+	case "vllm-sr/systemone@1":
+		return APIFormatSystemOne, nil
 	case "openai/chat-completions@1":
 		return APIFormatOpenAI, nil
 	case "openai/responses@1":
 		return APIFormatResponses, nil
 	case "anthropic/messages@1":
 		return APIFormatAnthropic, nil
+	case "openai/images@1":
+		return APIFormatImages, nil
 	default:
 		return "", fmt.Errorf("protocol %q has no runtime codec", protocol)
 	}
@@ -399,7 +421,8 @@ func modelPricingFromCatalog(pricing modelcatalog.Pricing) ModelPricing {
 	return ModelPricing{
 		Currency: pricing.Currency, PromptPer1M: pricing.PromptPer1M,
 		CompletionPer1M: pricing.CompletionPer1M, CachedInputPer1M: pricing.CachedInputPer1M,
-		CacheWritePer1M: pricing.CacheWritePer1M,
+		CacheWritePer1M:   pricing.CacheWritePer1M,
+		CacheWrite1hPer1M: pricing.CacheWrite1hPer1M,
 	}
 }
 
@@ -482,7 +505,7 @@ func validateEffectiveLoRAReferences(cfg *RouterConfig) error {
 				}
 			}
 			if !found {
-				return fmt.Errorf("routing.decisions[%s].modelRefs[%s].lora_name %q is not declared by model card %q", decision.Name, ref.Model, ref.LoRAName, params.Catalog)
+				return fmt.Errorf("%s.lora_name %q is not declared by model card %q", cfg.ScopePath(fmt.Sprintf("decisions[%s].modelRefs[%s]", decision.Name, ref.Model)), ref.LoRAName, params.Catalog)
 			}
 		}
 	}

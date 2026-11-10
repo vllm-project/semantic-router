@@ -9,7 +9,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -25,6 +24,8 @@ const (
 var gatewayResources = []string{
 	"deploy/kubernetes/routing-strategies/aigw-resources/base-model.yaml",
 	"deploy/kubernetes/routing-strategies/aigw-resources/gwapi-resources.yaml",
+	// Serves the System One fixture billing_support asks.
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 }
 
 // Profile validates text embedding routing through an external OpenAI-compatible provider.
@@ -41,6 +42,7 @@ func NewProfile() *Profile {
 			ResourceManifests:        gatewayResources,
 			WaitDeployments: []helpers.DeploymentRef{
 				{Namespace: "default", Name: "vllm-llama3-8b-instruct"},
+				{Namespace: "default", Name: "provider-mocker"},
 			},
 		}),
 	}
@@ -53,7 +55,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile contract.
 func (p *Profile) Description() string {
-	return "Tests OpenAI-compatible remote embedding provider startup and deterministic text embedding routing"
+	return "Tests the OpenAI-compatible remote embedding provider as the response cache's recall source, with System One routing"
 }
 
 // Setup deploys the mock provider before the router because startup probes call it immediately.

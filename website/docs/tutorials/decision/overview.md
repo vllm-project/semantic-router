@@ -18,9 +18,12 @@ a route policy:
 
 ## What Problem Does It Solve?
 
-Without a decision layer, signal outputs do not tell the router how to react. Teams end up scattering route logic across ad hoc if-statements, model defaults, and plugin wiring.
+Without a decision layer, signal outputs do not tell the router how to react.
+Teams end up scattering route logic across ad hoc if-statements, model
+defaults, and plugin wiring.
 
-Decisions solve that by turning named signals into clear route policies with stable priorities and candidate models.
+Decisions solve that by turning named signals into clear route policies with
+stable priorities and candidate models.
 
 ## When to Use
 
@@ -33,34 +36,42 @@ Use a decision when:
 
 ## Configuration
 
-In v0.3, decisions live under `routing.decisions`:
+Decisions live under `recipes[].decisions`:
 
 ```yaml
-routing:
-  decisions:
-    - name: business_route
-      description: Route business requests to the business model.
-      priority: 110
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: business_route
+        description: Route business requests to the business model.
+        priority: 110
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
 ```
 
-Each `rules` node is either a leaf (`type` and `name`) or a combination
-(`operator` and `conditions`). The operator must be `AND`, `OR`, or `NOT`;
-case and surrounding whitespace are normalized, and an omitted operator on a
-node with conditions means `AND`. `NOT` is strictly unary and takes exactly one
-child condition; nest `NOT` around `OR` or `AND` for NOR or NAND. Config
-validation rejects any other operator, a `NOT` with zero or several children,
-a node that mixes leaf and combination fields, and a childless combination
-anywhere except a root `AND`, which is the explicit match-all form. Errors name
-the decision and the node path, for example
-`decision "billing": rules.conditions[1]: NOT requires exactly one child condition, got 2`.
+### Rule trees
+
+- **Nodes.** Each `rules` node is either a leaf (`type` and `name`) or a
+  combination (`operator` and `conditions`).
+- **Operators.** `AND`, `OR` or `NOT`; case and surrounding whitespace are
+  normalized, and a node with conditions but no operator means `AND`.
+- **`NOT` is unary.** It takes exactly one child; nest it around `OR` or `AND`
+  for NOR or NAND.
+- **Match-all.** A childless combination is valid only as a root `AND`, the
+  explicit match-all form.
+
+Validation rejects anything else, such as a node that mixes leaf and
+combination fields. Each error names the decision and the node path:
+
+```text
+decision "billing": rules.conditions[1]: NOT requires exactly one child condition, got 2
+```
 
 Each decision also has a maximum rule-tree depth and total node count, checked
 when configuration loads. The defaults are **16 levels** and **256 nodes**.
@@ -87,23 +98,30 @@ limits only for a needed rule structure.
 
 An oversized tree rejects the entire candidate configuration with the recipe,
 decision, offending path, and limit in the error, for example:
-`routing recipe "support": decision "billing": rules.conditions[255]: node count 257 exceeds max_nodes=256`.
+`recipes[support]: decision "billing": rules.conditions[255]: node count 257 exceeds max_nodes=256`.
 An invalid reload keeps the previous active configuration. CLI, Dashboard, and
 Kubernetes configuration paths use the same budgets. Standalone DSL fragments
 use the defaults; compiling against a base configuration uses that document's
 limits. The operator exposes the settings at `spec.config.decision_rule_limits`.
 IntelligentRoute's separate 50-child CRD restriction still applies.
 
-Classifier failures evaluate as `Unknown`, not `False`. `NOT Unknown` remains
-`Unknown`; `False AND Unknown` is `False`, and `True OR Unknown` is `True`.
-When the final result is still unknown, `rules.on_unknown` chooses `no_match`,
-`match`, or `fail_request`. If omitted, existing generic-classifier
-`on_error` and prompt-guard `on_error` behavior is retained, and the router
-warns at startup about classifier conditions that set neither. Applied policies
-appear in the `x-vsr-applied-unknown-policy` response header and the
-`llm_decision_unknown_total{decision, policy}` metric. The `fail_request` 503
-carries the code [`decision_unresolved`](../../api/router.md#routing-errors),
-and the Router's log line for it names the fix.
+### Unknown signals
+
+A signal that failed or answered late is unknown. By default, its condition
+evaluates as `False`, and a `NOT` over it stays `False`. Two settings change
+that:
+
+| Setting | Effect |
+| --- | --- |
+| `rules.on_unknown` | Keeps unknown conditions `Unknown`: `NOT Unknown` stays `Unknown`, `False AND Unknown` is `False`, and `True OR Unknown` is `True`. A result that is still unknown resolves to `no_match`, `match` or `fail_request`. |
+| `on_error` on a `systemone` condition | Resolves that one condition to `match` or `no_match`. It can't be combined with `rules.on_unknown`. |
+
+- The Router warns at startup about a `systemone` condition that sets neither.
+- Applied policies appear in the `on_unknown` member of `x-vsr-trace` and in
+  the `llm_decision_unknown_total{decision, policy}` metric.
+- `fail_request` returns a 503 with the code
+  [`decision_unresolved`](../../api/router.md#routing-errors), and the
+  Router's log line names the fix.
 
 Decision matching stays separate from:
 
@@ -127,55 +145,58 @@ Add [Algorithm](../algorithm/overview) when `modelRefs` contains more than one c
 ## Selection Order
 
 Matching and ranking are separate steps. Every decision whose rules evaluate to
-true becomes a candidate, and ranking then picks one of them.
+true becomes a candidate, and ranking then picks one of them:
 
-`decision.tier` is the hard precedence boundary: a lower tier wins, and a
-decision that omits `tier` is tier 0, so it ranks ahead of every decision that
-sets one. Tier is compared first whenever one matched decision carries a tier
-above 0. `routing.strategy` then decides how the decisions inside that tier are
-ordered, and it means the same thing where no decision sets a tier at all.
+1. **Tier first.** `decision.tier` is a hard precedence boundary: a lower tier
+   wins. A decision without `tier` is tier 0, ahead of every decision that sets
+   one. Tier counts whenever a matched decision has a tier above 0.
+2. **Then the recipe's strategy** orders the decisions inside that tier, or
+   all of them when no decision sets a tier.
+3. **Catch-alls last.** A catch-all ranks after every real match under either
+   strategy, whatever its priority, so an unconditional fallback stays a
+   fallback.
 
-| `routing.strategy` | Keys, in order |
+| `recipes[].strategy` | Keys, in order |
 | --- | --- |
 | `priority` (the default) | tier ascending, catch-all last, priority descending, confidence descending, name ascending |
 | `confidence` | tier ascending, catch-all last, confidence descending, priority descending, name ascending |
 
-Confidence ranks a comparable pool only. A pool is one tier under tiered
-ranking and the whole candidate set otherwise. Every leaf is either policy or
-evidence. Keyword rules, `NOT` guards, predicates, conversation and metadata
-rules, and projection outputs restate policy the operator already wrote, so
-they decide whether a decision matches and carry no weight in its confidence.
-Only a signal that reports a measurement is evidence, and selection ranks on
-it only where the quantity it reports is established.
+Name ascending is the final tie-break, so ranking never depends on map or file
+order.
 
-| Evidence signal | Score kind |
-| --- | --- |
-| `domain`, `classifier`, `safety`, `preference` | classifier probability |
-| `embedding`, `reask`, `kb` | vector similarity |
-| `complexity`, `jailbreak` | depends on the configured backend |
+### Confidence
 
-A decision is comparable when exactly one evidence leaf produced its score,
-since a mean over several leaves falls as a decision gains evidence. A pool
-ranks by confidence when every member that is not a catch-all is comparable
-and all of those scores are the same kind. Otherwise the pool ranks by
-priority, and the router warns at startup about a pool that mixes kinds. Three
-cases are never comparable: a score whose kind depends on the backend that
-produced it, a tree that reports one kind or another depending on which branch
-of an `OR` matched, and a match an `on_error` policy manufactured. Inside an
-`OR`, a branch that reported a score outranks one that did not, so an extra
-matching gate adds support without removing evidence. Name ascending is the
-final tie-break, so ranking never depends on map or file order.
+Confidence ranks only a comparable pool: one tier under tiered ranking, and
+the whole candidate set otherwise.
 
-The eval API reports how one request was ranked under `decision_ranking`: the
-strategy that ran, the tier the winner came from, whether that pool was
-comparable and which decision made it incomparable, the key that separated
-the winner from the decision behind it, that decision as `runner_up`, and a
-`reason` stating the values compared, such as `priority 150 > 100`.
+- **Evidence comes from model-judged leaves.** `systemone`, `domain`,
+  `safety`, `jailbreak`, `complexity` and `turn_relation` leaves report the
+  probability of their answer.
+- **Policy leaves carry no weight.** Keyword rules, `NOT` guards, predicates,
+  conversation and metadata rules, and projection outputs decide whether a
+  decision matches, but add nothing to its confidence.
+- **One score per decision.** A decision is comparable when exactly one
+  evidence leaf produced its score, because a mean over several leaves falls
+  as a decision gains evidence. A match that an `on_error` policy manufactured
+  is never comparable.
+- **Otherwise, priority.** A pool ranks by confidence only when every member
+  that is not a catch-all is comparable.
 
-A catch-all ranks after every real match under either strategy, whatever
-priority it carries, so an unconditional fallback stays a fallback. The
-[Decision Ranking Semantics](../../proposals/decision-ranking-semantics)
-proposal records how this contract was settled.
+Inside an `OR`, a branch that reported a score outranks one that did not, so
+an extra matching gate adds support without removing evidence.
+
+### Read the ranking
+
+The eval API reports how one request was ranked under `decision_ranking`:
+
+- the strategy that ran, and the tier the winner came from;
+- whether that pool was comparable, and which decision made it incomparable;
+- the decision behind the winner, as `runner_up`, and the key that separated
+  them;
+- a `reason` stating the values compared, such as `priority 150 > 100`.
+
+The [Decision Ranking Semantics](../../proposals/decision-ranking-semantics)
+proposal explains the design of this contract.
 
 ## Operational Boundaries
 

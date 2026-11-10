@@ -44,14 +44,18 @@ on the selected backend.
 
 ## Configuration
 
-Enable Router Replay with the existing service config:
+Enable Router Replay with a `router_replay` plugin in `global.plugins`; the
+service config holds its store:
 
 ```yaml
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: postgres
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ```
 
 This example uses Postgres for persistence. The default `memory` backend loses

@@ -36,7 +36,7 @@ func TestSampleCRValidation(t *testing.T) {
 	}{
 		{
 			name:     "mmbert sample CR",
-			filename: "vllm.ai_v1alpha1_semanticrouter_mmbert.yaml",
+			filename: "vllm.ai_v1alpha1_semanticrouter_embedding.yaml",
 		},
 		{
 			name:     "complexity routing sample CR",
@@ -69,7 +69,7 @@ func TestSampleCRValidation(t *testing.T) {
 
 			// Parse the YAML into a SemanticRouter object
 			var sr SemanticRouter
-			if err := yaml.Unmarshal(data, &sr); err != nil {
+			if err = yaml.Unmarshal(data, &sr); err != nil {
 				t.Errorf("Failed to unmarshal sample CR: %v", err)
 				return
 			}
@@ -81,30 +81,9 @@ func TestSampleCRValidation(t *testing.T) {
 			}
 
 			// Additional checks for specific samples
-			if tt.filename == "vllm.ai_v1alpha1_semanticrouter_mmbert.yaml" {
-				if sr.Spec.Config.EmbeddingModels == nil {
-					t.Error("mmbert sample should have embedding_models configured")
-				} else {
-					if sr.Spec.Config.EmbeddingModels.MmBertModelPath == "" {
-						t.Error("mmbert sample should have mmbert_model_path set")
-					}
-					if sr.Spec.Config.EmbeddingModels.EmbeddingConfig == nil {
-						t.Error("mmbert sample should have embedding_config")
-					} else {
-						if sr.Spec.Config.EmbeddingModels.EmbeddingConfig.ModelType != "mmbert" {
-							t.Errorf("mmbert sample embedding_config model_type = %v, want mmbert", sr.Spec.Config.EmbeddingModels.EmbeddingConfig.ModelType)
-						}
-						// Verify target_layer is one of the valid values
-						validLayers := map[int]bool{3: true, 6: true, 11: true, 22: true}
-						if !validLayers[sr.Spec.Config.EmbeddingModels.EmbeddingConfig.TargetLayer] {
-							t.Errorf("mmbert sample target_layer = %v, want one of 3, 6, 11, 22", sr.Spec.Config.EmbeddingModels.EmbeddingConfig.TargetLayer)
-						}
-					}
-				}
-				if sr.Spec.Config.ResponseCache != nil {
-					if sr.Spec.Config.ResponseCache.EmbeddingModel != "mmbert" {
-						t.Errorf("mmbert sample should use embedding_model: mmbert, got %v", sr.Spec.Config.ResponseCache.EmbeddingModel)
-					}
+			if tt.filename == "vllm.ai_v1alpha1_semanticrouter_embedding.yaml" {
+				if cache := sr.Spec.Config.ResponseCache; cache == nil || cache.Embedding == nil || cache.Embedding.Dimension != 256 {
+					t.Error("embedding sample should set the response cache's embedding dimension")
 				}
 			}
 
@@ -117,35 +96,21 @@ func TestSampleCRValidation(t *testing.T) {
 					if rule.Name == "" {
 						t.Error("complexity rule should have a name")
 					}
-					if len(rule.Hard.Candidates) == 0 {
-						t.Errorf("complexity rule %s should have hard candidates", rule.Name)
-					}
-					if len(rule.Easy.Candidates) == 0 {
-						t.Errorf("complexity rule %s should have easy candidates", rule.Name)
+					if rule.Hard != nil || rule.Easy != nil || rule.Composer != nil {
+						t.Errorf("complexity rule %s writes example banks, which the decision model does not read", rule.Name)
 					}
 				}
 			}
 
 			if tt.filename == "vllm.ai_v1alpha1_semanticrouter_redis_cache.yaml" {
-				if sr.Spec.Config.EmbeddingModels == nil {
-					t.Error("redis cache sample should have embedding_models configured")
-				}
 				if sr.Spec.Config.ResponseCache != nil {
 					if sr.Spec.Config.ResponseCache.BackendType != "redis" {
 						t.Errorf("redis cache sample backend_type = %v, want redis", sr.Spec.Config.ResponseCache.BackendType)
-					}
-					// Should use qwen3 or another embedding model
-					if sr.Spec.Config.ResponseCache.EmbeddingModel != "" && sr.Spec.Config.ResponseCache.EmbeddingModel == "bert" {
-						// This is fine, but ideally should showcase new embedding models
-						t.Logf("redis cache sample could showcase new embedding models (qwen3/gemma)")
 					}
 				}
 			}
 
 			if tt.filename == "vllm.ai_v1alpha1_semanticrouter_milvus_cache.yaml" {
-				if sr.Spec.Config.EmbeddingModels == nil {
-					t.Error("milvus cache sample should have embedding_models configured")
-				}
 				if sr.Spec.Config.ResponseCache != nil {
 					if sr.Spec.Config.ResponseCache.BackendType != "milvus" {
 						t.Errorf("milvus cache sample backend_type = %v, want milvus", sr.Spec.Config.ResponseCache.BackendType)

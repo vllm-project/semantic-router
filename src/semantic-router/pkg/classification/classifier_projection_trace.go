@@ -27,8 +27,6 @@ func mergeProjectionTrace(results *SignalResults, p config.Projections) *project
 			sb.Inputs = append(sb.Inputs, projectiontrace.ScoreInputPart{
 				Type:         input.Type,
 				Name:         input.Name,
-				KB:           input.KB,
-				Metric:       input.Metric,
 				Weight:       input.Weight,
 				Value:        v,
 				Contribution: contrib,

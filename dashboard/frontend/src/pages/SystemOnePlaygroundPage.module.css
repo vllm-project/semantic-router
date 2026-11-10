@@ -1196,3 +1196,15 @@
     transition: none;
   }
 }
+
+.routingOutcome {
+  padding: 1rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface-panel);
+}
+.routingHeading {
+  display: grid;
+  gap: 0.3rem;
+  overflow-wrap: anywhere;
+}

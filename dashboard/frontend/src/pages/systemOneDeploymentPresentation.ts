@@ -1,4 +1,4 @@
-import type { SystemOneDeployment } from './useSystemOnePlayground'
+import type { SystemOneDeployment } from './systemOneTargets'
 
 export function systemOneDeploymentOption(deployment: SystemOneDeployment) {
   const label = deployment.repo?.trim() || deployment.model || deployment.id

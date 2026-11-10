@@ -6,6 +6,23 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+func TestChatDiscoveryExcludesNativeOnlyAliases(t *testing.T) {
+	cfg := &config.RouterConfig{RouterOptions: config.RouterOptions{ListBackendModels: true}, BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+		"chat-model": {}, "decision-model": {APIFormat: config.APIFormatSystemOne},
+	}}}
+	models := NewOpenAIModelList(cfg, 123)
+	found := false
+	for _, model := range models.Data {
+		if model.ID == "decision-model" {
+			t.Fatal("native-only model leaked into Chat discovery")
+		}
+		found = found || model.ID == "chat-model"
+	}
+	if !found {
+		t.Fatal("Chat model was omitted")
+	}
+}
+
 func TestNewOpenAIModelListUsesSourceMetadata(t *testing.T) {
 	cfg := &config.RouterConfig{
 		RouterOptions: config.RouterOptions{

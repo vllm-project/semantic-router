@@ -54,11 +54,7 @@ func exactCacheLookupInput(
 	if identity.ExactFingerprint == "" {
 		identity = responseCacheIdentity(ctx, ctx.CacheRequestModel)
 	}
-	var maxAge *time.Duration
-	if ctx.CacheMaxAgeSeconds != nil {
-		value := time.Duration(*ctx.CacheMaxAgeSeconds) * time.Second
-		maxAge = &value
-	}
+	maxAge := responseCacheMaxAgeDuration(ctx)
 	lookupContext := ctx.TraceContext
 	if lookupContext == nil {
 		lookupContext = context.Background()
@@ -101,17 +97,7 @@ func (r *OpenAIRouter) finishExactCacheLookup(
 	metrics.RecordCachePluginHit(requestDecisionStateKey(ctx), "response_cache")
 	r.startRouterReplay(ctx, ctx.CacheRequestModel, ctx.CacheSelectedModel, categoryName)
 	r.reportCacheHitTelemetry(ctx, result.ResponseBody, lookupDuration)
-	// Intermediate cache detail (category, matched keywords, similarity) is
-	// demoted to the x-vsr-debug surface (#2205), same as the semantic path.
-	cacheCategory, cacheKeywords, cacheSimilarity := cacheDetailForSurface(ctx, categoryName)
-	response := r.createCacheHitResponse(
-		ctx,
-		result.ResponseBody,
-		cacheCategory,
-		ctx.VSRSelectedDecisionName,
-		cacheKeywords,
-		cacheSimilarity,
-	)
+	response := r.createCacheHitResponse(ctx, result.ResponseBody)
 	r.updateRouterReplayStatus(ctx, 200, ctx.ExpectStreamingResponse)
 	r.attachRouterReplayResponse(ctx, result.ResponseBody, true)
 	logging.ComponentDebugEvent("extproc", "exact_cache_hit", map[string]interface{}{

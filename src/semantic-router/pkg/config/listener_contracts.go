@@ -5,12 +5,17 @@ import (
 	"net/netip"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // CapabilityListenerModels is a listener's model allow-list, which only the
 // standalone gateway enforces: the Envoy listener the CLI generates does not
 // yet, so behind Envoy every model would stay reachable.
 const CapabilityListenerModels = "listener_models"
+
+// DefaultSystemOneMaxDeadlineMs is the longest a listener's System One API
+// waits for a model when its systemone.max_deadline_ms is omitted: 10 minutes.
+const DefaultSystemOneMaxDeadlineMs = 600_000
 
 func init() {
 	GatewayCapabilities.MustRegister(CapabilityListenerModels, GatewayCapability{
@@ -66,17 +71,49 @@ func validateListenerSystemOne(cfg *RouterConfig, listener Listener) error {
 	if len(listener.SystemOne.Models) == 0 {
 		return fmt.Errorf("listener %q: systemone.models must explicitly name at least one public model", listener.Name)
 	}
+	if limit := listener.SystemOne.MaxDeadlineMs; limit != nil && *limit <= 0 {
+		return fmt.Errorf("listener %q: systemone.max_deadline_ms must be greater than zero, got %d", listener.Name, *limit)
+	}
 	seen := map[string]bool{}
 	for _, model := range listener.SystemOne.Models {
 		if model == "" || model != strings.TrimSpace(model) || seen[model] {
 			return fmt.Errorf("listener %q: systemone.models must contain distinct non-empty model names without surrounding spaces", listener.Name)
 		}
 		seen[model] = true
-		if _, _, err := cfg.ResolveSystemOneDeployment(model); err != nil {
+		// A routed entrypoint is not one deployment. A provider alias is
+		// checked in validateNativeRoutingConfig, published or not.
+		if _, routed := cfg.ResolveEntrypoint(SystemOneAPI, model); routed || cfg.IsSystemOneBackend(model) {
+			continue
+		}
+		name, deployment, err := cfg.ResolveSystemOneDeployment(model)
+		if err != nil {
+			return fmt.Errorf("listener %q: systemone.models: %w", listener.Name, err)
+		}
+		if err := deployment.ValidateDecisionInput(name); err != nil {
 			return fmt.Errorf("listener %q: systemone.models: %w", listener.Name, err)
 		}
 	}
 	return nil
+}
+
+// MaxDeadline is the longest the listener's System One API waits for a model
+// it calls directly.
+func (s *ListenerSystemOne) MaxDeadline() time.Duration {
+	if s == nil || s.MaxDeadlineMs == nil {
+		return DefaultSystemOneMaxDeadlineMs * time.Millisecond
+	}
+	return time.Duration(*s.MaxDeadlineMs) * time.Millisecond
+}
+
+// IsSystemOneBackend reports whether model is an exact provider alias for the
+// native System One contract. Chat aliases and upstream-only identities do not
+// become native public names.
+func (c *RouterConfig) IsSystemOneBackend(model string) bool {
+	if c == nil {
+		return false
+	}
+	backend, ok := c.ModelConfig[model]
+	return ok && backend.APIFormat == APIFormatSystemOne
 }
 
 // ResolveSystemOneDeployment maps a public inference identity to exactly one

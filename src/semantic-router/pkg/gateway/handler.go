@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
@@ -143,10 +144,20 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		return
 	}
 	defer release()
-	if r.URL.Path == "/v1/systemone" || r.URL.Path == "/v1/decisions" || r.URL.Path == "/v1/systemone/models" {
+	// With Chat routing off (Engine mode) the System One model list also
+	// answers GET /v1/models, which the System One SDKs read.
+	systemOneModels := r.Method == http.MethodGet && r.URL.Path == "/v1/models" && serving.RoutingDisabled && serving.SystemOne != nil
+	if r.URL.Path == "/v1/systemone" || r.URL.Path == "/v1/decisions" || r.URL.Path == "/v1/systemone/models" || systemOneModels {
 		if serving.SystemOne == nil {
 			http.NotFound(w, r)
 			return
+		}
+		// A System One request's calls act for its client too, so it
+		// keeps the authenticator's outputs only from a trusted sender.
+		if !serving.TrustIdentity.trusts(r) {
+			for name := range headerSet(append(append([]string(nil), identityHeaders...), serving.IdentityHeaders...)) {
+				r.Header.Del(name)
+			}
 		}
 		serving.SystemOne.ServeHTTP(w, r)
 		return
@@ -160,12 +171,14 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		return
 	}
 	ctx = routing.WithListenerModels(ctx, serving.Models)
+	x.record.RequestID = r.Header.Get(headers.RequestID)
 	body, err := readBody(r, h.opts.MaxRequestBodyBytes)
 	if errors.Is(err, errBodyTooLarge) {
 		writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")
 		return
 	}
 	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "The request body could not be read.")
 		return
 	}
 	var strip map[string]bool
@@ -173,7 +186,7 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		strip = headerSet(append(append([]string(nil), identityHeaders...), serving.IdentityHeaders...))
 	}
 	req := routingRequest(r, body, strip)
-	x.record.RequestID = req.Header.Get("x-request-id")
+	x.record.RequestID = req.Header.Get(headers.RequestID)
 	plan, err := serving.Engine.Plan(ctx, req)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "routing_error", "The router could not process the request.")
@@ -261,7 +274,7 @@ func responseBody(call *routing.Call, resp *upstream.Response) io.Reader {
 }
 
 // localReply stands in for a failure the upstream layer reports as an error
-// rather than as Envoy's local reply, so the response phases still see it.
+// rather than as Envoy's local reply, and reaches the client as one does.
 func localReply(err error) *upstream.Response {
 	status := http.StatusServiceUnavailable
 	var upstreamErr *upstream.Error

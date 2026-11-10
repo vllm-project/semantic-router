@@ -17,10 +17,15 @@ permissions:
 jobs:
   inventory:
     name: Inventory
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.verification).runner }}
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -45,6 +50,7 @@ jobs:
         run: |
           python tools/calibration/recipe/recipe_conformance.py \
             plan-all \
+            --shards 3 \
             --github-output "$GITHUB_OUTPUT"
 
       - name: Publish static coverage summary
@@ -56,6 +62,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: recipe-conformance-inventory
           path: .agent-harness/recipe-conformance/
           include-hidden-files: true
@@ -65,7 +72,7 @@ jobs:
   live-cpu:
     name: Preview (${{ matrix.shard }})
     needs: inventory
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.verification).runner }}
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -76,6 +83,11 @@ jobs:
       HF_HUB_DISABLE_XET: "1"
       OPENROUTER_API_KEY: recipe-conformance-placeholder
     steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
 
       - name: Free disk space
@@ -107,21 +119,23 @@ jobs:
         with:
           images: '["vllm-sr"]'
       - name: Allocate CPUs for serial long-context probes
-        if: matrix.shard == 'built-in-latest-mom-v1'
+        if: matrix.source == 'built-in-latest' && matrix.recipes == 'mom-v1'
         run: |
-          # This shard runs one probe at a time, including full-context embeddings.
+          # These shards run one probe at a time, including long-context reads.
           cpu_threads="$(nproc)"
           printf 'VLLM_SRUN_CPU_THREADS=%s\n' "$cpu_threads" >> "$GITHUB_ENV"
           printf 'Serial long-context worker threads: %s\n' "$cpu_threads"
       - name: Run maintained recipe probes
         env:
           RECIPE_CONFORMANCE_RECIPES: ${{ matrix.recipes }}
+          RECIPE_CONFORMANCE_PROBE_SHARD: ${{ matrix.probe_shard }}
           RECIPE_CONFORMANCE_RECIPES_ROOT: ${{ matrix.recipes_root }}
           RECIPE_CONFORMANCE_REPORT_DIR: >-
             ${{ github.workspace }}/.agent-harness/recipe-conformance/${{ matrix.report_dir }}
         run: |
           make recipe-conformance-live-cpu \
             RECIPE_CONFORMANCE_RECIPES="$RECIPE_CONFORMANCE_RECIPES" \
+            RECIPE_CONFORMANCE_PROBE_SHARD="$RECIPE_CONFORMANCE_PROBE_SHARD" \
             RECIPE_CONFORMANCE_RECIPES_ROOT="$RECIPE_CONFORMANCE_RECIPES_ROOT" \
             RECIPE_CONFORMANCE_REPORT_DIR="$RECIPE_CONFORMANCE_REPORT_DIR"
 
@@ -143,6 +157,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: recipe-conformance-live-${{ matrix.shard }}
           path: .agent-harness/recipe-conformance/
           include-hidden-files: true
@@ -155,8 +170,13 @@ jobs:
     needs:
       - inventory
       - live-cpu
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.verification).runner }}
     steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
@@ -166,10 +186,16 @@ jobs:
       - name: Install report dependencies
         run: python -m pip install -r tools/agent/requirements.txt
 
-      - name: Download inventory and live reports
+      - name: Download inventory
         uses: actions/download-artifact@v4
         with:
-          pattern: recipe-conformance-*
+          name: recipe-conformance-inventory
+          path: .agent-harness/recipe-conformance
+      - name: Download live reports
+        uses: actions/download-artifact@v4
+        with:
+          # A previous attempt's aggregate must never overwrite fresh probes.
+          pattern: recipe-conformance-live-*
           path: .agent-harness/recipe-conformance
           merge-multiple: true
 
@@ -186,6 +212,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: ci-result-${{ fromJSON(inputs.verification).id }}
           path: .agent-harness/recipe-result.json
           include-hidden-files: true
@@ -202,6 +229,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: recipe-conformance-report
           path: .agent-harness/recipe-conformance/
           include-hidden-files: true

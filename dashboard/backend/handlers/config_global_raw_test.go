@@ -47,7 +47,7 @@ func TestGlobalConfigYAMLHandler_ReturnsEffectiveGlobalConfig(t *testing.T) {
 	configPath := createValidTestConfig(t, tempDir)
 
 	configWithGlobal := `
-version: v0.3
+version: v0.5
 listeners:
   - name: public
     address: 0.0.0.0
@@ -63,23 +63,22 @@ providers:
           provider: vllm
           endpoint: 127.0.0.1:8000
           protocol: http
-routing:
-  modelCards:
-    - name: test-model
-  signals:
-    domains:
-      - name: business
-        description: Business
-  decisions:
-    - name: business-route
-      priority: 1
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: business
+          description: Business
+    decisions:
+      - name: business-route
+        priority: 1
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
 global:
   router:
     strategy: priority
@@ -101,7 +100,7 @@ global:
 	}
 
 	body := w.Body.String()
-	if strings.Contains(body, "\nversion:") || strings.Contains(body, "\nproviders:") || strings.Contains(body, "\nrouting:") {
+	if strings.Contains(body, "\nversion:") || strings.Contains(body, "\nproviders:") || strings.Contains(body, "\nrecipes:") {
 		t.Fatalf("raw global response should only contain the global block, got:\n%s", body)
 	}
 	if !strings.Contains(body, "router:") || !strings.Contains(body, "response_api:") {
@@ -145,7 +144,7 @@ func TestUpdateGlobalConfigYAMLHandler_ReplacesGlobalOverride(t *testing.T) {
 	configPath := createValidTestConfig(t, tempDir)
 
 	initial := `
-version: v0.3
+version: v0.5
 listeners:
   - name: public
     address: 0.0.0.0
@@ -161,23 +160,22 @@ providers:
           provider: vllm
           endpoint: 127.0.0.1:8000
           protocol: http
-routing:
-  modelCards:
-    - name: test-model
-  signals:
-    domains:
-      - name: business
-        description: Business
-  decisions:
-    - name: business-route
-      priority: 1
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: business
+          description: Business
+    decisions:
+      - name: business-route
+        priority: 1
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
 global:
   router:
     strategy: priority
@@ -191,8 +189,7 @@ global:
 
 	rawUpdate := `
 stores:
-  semantic_cache:
-    enabled: true
+  response_cache:
     backend_type: memory
 router:
   clear_route_cache: true
@@ -212,7 +209,7 @@ router:
 		t.Fatalf("read updated config: %v", err)
 	}
 	updated := string(updatedData)
-	if !strings.Contains(updated, "semantic_cache:") || !strings.Contains(updated, "clear_route_cache: true") {
+	if !strings.Contains(updated, "response_cache:") || !strings.Contains(updated, "clear_route_cache: true") {
 		t.Fatalf("raw global save did not persist the new block, got:\n%s", updated)
 	}
 }
@@ -222,7 +219,7 @@ func TestUpdateGlobalConfigYAMLHandler_EmptyBodyClearsGlobalOverride(t *testing.
 	configPath := createValidTestConfig(t, tempDir)
 
 	configWithGlobal := `
-version: v0.3
+version: v0.5
 listeners:
   - name: public
     address: 0.0.0.0
@@ -238,23 +235,22 @@ providers:
           provider: vllm
           endpoint: 127.0.0.1:8000
           protocol: http
-routing:
-  modelCards:
-    - name: test-model
-  signals:
-    domains:
-      - name: business
-        description: Business
-  decisions:
-    - name: business-route
-      priority: 1
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: business
+          description: Business
+    decisions:
+      - name: business-route
+        priority: 1
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
 global:
   router:
     strategy: priority

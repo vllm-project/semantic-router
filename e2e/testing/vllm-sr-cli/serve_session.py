@@ -161,7 +161,6 @@ class ServeSessionMixin:
         *,
         env: dict[str, str] | None = None,
         endpoint: str = "host.docker.internal:8000",
-        base_url: str | None = None,
         provider: str | None = None,
         api_key_env: str | None = None,
         api_only: bool = False,
@@ -169,11 +168,11 @@ class ServeSessionMixin:
         ensure_models_dir: bool = False,
         skip_processing: bool = False,
         looper: bool = False,
+        arguments: tuple[str, ...] = (),
     ):
         """Start one background serve session and clean it up automatically."""
         self.write_minimal_canonical_config(
             endpoint=endpoint,
-            base_url=base_url,
             provider=provider,
             api_key_env=api_key_env,
             api_only=api_only,
@@ -188,7 +187,7 @@ class ServeSessionMixin:
         if env:
             full_env.update(env)
 
-        serve_process = self._start_serve_background(env=full_env)
+        serve_process = self._start_serve_background(env=full_env, arguments=arguments)
         try:
             self._wait_for_serve_success(serve_process)
             yield serve_process

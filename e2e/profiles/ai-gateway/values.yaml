@@ -1,5 +1,5 @@
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -18,925 +18,6 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    projections:
-      scores:
-        - name: e2e_contract_score
-          method: weighted_sum
-          inputs:
-            - type: keyword
-              name: retention_probe_keywords
-              weight: 1
-              value_source: binary
-    decisions:
-      - name: llm_classifier_toxic
-        description: Route on the complete score distribution returned by the LLM classifier
-        priority: 2100
-        rules:
-          operator: AND
-          conditions:
-            - type: classifier
-              name: llm_toxicity
-              label: toxic
-              predicate:
-                gte: 0.8
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-      - name: sequence_classifier_toxic
-        description: Route on a score returned by the remote sequence-classifier E2E provider
-        priority: 2000
-        rules:
-          operator: AND
-          conditions:
-            - type: classifier
-              name: remote_toxicity
-              label: toxic
-              predicate:
-                gte: 0.8
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-      - name: block_jailbreak
-        description: Block jailbreak attempts
-        priority: 1000
-        rules:
-          operator: OR
-          conditions:
-            - type: jailbreak
-              name: jailbreak_standard
-        plugins:
-          - type: fast_response
-            configuration:
-              message: I'm sorry, but I cannot process this request as it appears to violate our usage policies.
-      - &block_pii_decision
-        name: block_pii
-        description: Block requests containing PII
-        priority: 999
-        rules:
-          operator: OR
-          conditions:
-            - type: pii
-              name: pii_deny_all
-        plugins:
-          - type: fast_response
-            configuration:
-              message: Your request contains personal information. Please remove any sensitive data and try again.
-      - name: retention_probe_decision
-        description: "Deterministic keyword-gated route used by the retention-directive E2E to assert x-vsr-retention-* response headers (issue #2009)."
-        priority: 600
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: retention_probe_keywords
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        emits:
-          - kind: retention
-            retention:
-              ttl_turns: 0
-              keep_current_model: true
-              prefer_prefix_retention: true
-      - name: looper_metrics_probe_decision
-        description: "Deterministic keyword-gated looper route used by the looper-latency-token-headers E2E to assert x-vsr-looper-latency-ms and x-vsr-looper-*-tokens response headers (issue #2694)."
-        priority: 610
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: looper_metrics_probe_keywords
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-          - model: base-model
-            lora_name: math-expert
-            use_reasoning: false
-        algorithm:
-          type: confidence
-          confidence:
-            confidence_method: hybrid
-            threshold: 0.72
-            on_error: skip
-            escalation_order: small_to_large
-      - &plugin_request_mutations_decision
-        name: plugin_request_mutations_decision
-        description: Deterministic route for provider-boundary plugin mutation coverage (issue #3180).
-        priority: 550
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: plugin_request_mutations
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: "E2E plugin contract: system prompt applied."
-              mode: replace
-          - type: request_params
-            configuration:
-              blocked_params:
-                - frequency_penalty
-                - presence_penalty
-              max_tokens_limit: 64
-              max_n: 1
-              strip_unknown: true
-          - type: header_mutation
-            configuration:
-              add:
-                - name: x-vsr-e2e-added
-                  value: added-by-router
-              update:
-                - name: x-vsr-e2e-updated
-                  value: updated-by-router
-              delete:
-                - x-vsr-e2e-deleted
-      - &tools_passthrough_decision
-        name: tools_passthrough_decision
-        description: "Deterministic route for tools passthrough provider-boundary coverage (issue #3180)."
-        priority: 540
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tools_passthrough
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: passthrough
-              semantic_selection: false
-      - &tools_filtered_decision
-        name: tools_filtered_decision
-        description: "Deterministic route for tools allow-list provider-boundary coverage (issue #3180)."
-        priority: 540
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tools_filtered
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: filtered
-              semantic_selection: false
-              allow_tools:
-                - get_weather
-      - &tools_none_decision
-        name: tools_none_decision
-        description: "Deterministic route for tools removal provider-boundary coverage (issue #3180)."
-        priority: 540
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tools_none
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: none
-              semantic_selection: false
-      - &tool_selection_add_weather_decision
-        name: tool_selection_add_weather_decision
-        description: Contract route for tool_selection add mode (weather-aligned retrieval)
-        priority: 500
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tool_selection_add_weather
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: passthrough
-              semantic_selection: false
-          - type: tool_selection
-            configuration:
-              enabled: true
-              mode: add
-              top_k: 3
-              similarity_threshold: 0.01
-              strategy: default
-      - &tool_selection_add_calc_decision
-        name: tool_selection_add_calc_decision
-        description: Contract route for tool_selection add mode (math-aligned retrieval)
-        priority: 500
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tool_selection_add_calc
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: passthrough
-              semantic_selection: false
-          - type: tool_selection
-            configuration:
-              enabled: true
-              mode: add
-              top_k: 3
-              similarity_threshold: 0.01
-              strategy: default
-      - &tool_selection_filter_decision
-        name: tool_selection_filter_decision
-        description: Contract route for tool_selection filter mode
-        priority: 500
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tool_selection_filter
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: passthrough
-              semantic_selection: false
-          - type: tool_selection
-            configuration:
-              enabled: true
-              mode: filter
-              relevance_threshold: 0.95
-              preserve_count: 2
-      - &tool_selection_filter_threshold_decision
-        name: tool_selection_filter_threshold_decision
-        description: Contract route for tool_selection filter mode with strict relevance threshold
-        priority: 500
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tool_selection_filter_threshold
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: passthrough
-              semantic_selection: false
-          - type: tool_selection
-            configuration:
-              enabled: true
-              mode: filter
-              relevance_threshold: 0.95
-              preserve_count: 1
-      - &tool_selection_add_topk_one_decision
-        name: tool_selection_add_topk_one_decision
-        description: Contract route for tool_selection add mode with alternate top_k
-        priority: 500
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tool_selection_add_topk_one
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: passthrough
-              semantic_selection: false
-          - type: tool_selection
-            configuration:
-              enabled: true
-              mode: add
-              top_k: 1
-              similarity_threshold: 0.01
-              strategy: default
-      - &tool_selection_with_system_prompt_decision
-        name: tool_selection_with_system_prompt_decision
-        description: Contract route for tool_selection stacked with system_prompt plugin
-        priority: 500
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: tool_selection_with_system_prompt
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: tools
-            configuration:
-              enabled: true
-              mode: passthrough
-              semantic_selection: false
-          - type: tool_selection
-            configuration:
-              enabled: true
-              mode: add
-              top_k: 2
-              similarity_threshold: 0.01
-              strategy: default
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: "Contract route: system_prompt + tool_selection (non-PII path)."
-              mode: append
-      - &business_decision
-        name: business_decision
-        description: Business and management related queries
-        priority: 10
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: business
-        modelRefs:
-          - model: base-model
-            lora_name: social-expert
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations.
-              mode: replace
-      - &law_decision
-        name: law_decision
-        description: Legal questions and law-related topics
-        priority: 10
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: law
-        modelRefs:
-          - model: base-model
-            lora_name: law-expert
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters.
-              mode: replace
-      - &psychology_decision
-        name: psychology_decision
-        description: Psychology and mental health topics
-        priority: 10
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: psychology
-        modelRefs:
-          - model: base-model
-            lora_name: humanities-expert
-            use_reasoning: false
-        plugins:
-          - type: response_cache
-            configuration:
-              enabled: true
-              scope: global
-              similarity_threshold: 0.8
-      - &biology_decision
-        name: biology_decision
-        description: Biology and life sciences questions
-        priority: 10
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: biology
-        modelRefs:
-          - model: base-model
-            lora_name: science-expert
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems.
-              mode: replace
-      - &chemistry_decision
-        name: chemistry_decision
-        description: Chemistry and chemical sciences questions
-        priority: 10
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: chemistry
-        modelRefs:
-          - model: base-model
-            lora_name: science-expert
-            use_reasoning: true
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations.
-              mode: replace
-      - &history_decision
-        name: history_decision
-        description: Historical questions and cultural topics
-        priority: 10
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: history
-        modelRefs:
-          - model: base-model
-            lora_name: humanities-expert
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis.
-              mode: replace
-      - &health_decision
-        name: health_decision
-        description: Health and medical information queries
-        priority: 10
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: health
-        modelRefs:
-          - model: base-model
-            lora_name: science-expert
-            use_reasoning: false
-        plugins:
-          - type: response_cache
-            configuration:
-              enabled: true
-              scope: global
-              similarity_threshold: 0.8
-      - &economics_decision
-        name: economics_decision
-        description: Economics and financial topics
-        priority: 10
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: economics
-        modelRefs:
-          - model: base-model
-            lora_name: social-expert
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses.
-              mode: replace
-      - &math_decision
-        name: math_decision
-        description: Mathematics and quantitative reasoning
-        priority: 10
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: math
-        modelRefs:
-          - model: base-model
-            lora_name: math-expert
-            use_reasoning: true
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way.
-              mode: replace
-      - &physics_decision
-        name: physics_decision
-        description: Physics and physical sciences
-        priority: 10
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: physics
-        modelRefs:
-          - model: base-model
-            lora_name: science-expert
-            use_reasoning: true
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate.
-              mode: replace
-      - &computer_science_decision
-        name: computer_science_decision
-        description: Computer science and programming
-        priority: 10
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: computer science
-        modelRefs:
-          - model: base-model
-            lora_name: science-expert
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful.
-              mode: replace
-      - &philosophy_decision
-        name: philosophy_decision
-        description: Philosophy and ethical questions
-        priority: 10
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: philosophy
-        modelRefs:
-          - model: base-model
-            lora_name: humanities-expert
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates.
-              mode: replace
-      - &engineering_decision
-        name: engineering_decision
-        description: Engineering and technical problem-solving
-        priority: 10
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: engineering
-        modelRefs:
-          - model: base-model
-            lora_name: science-expert
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards.
-              mode: replace
-      - name: thinking_decision
-        description: Complex reasoning and multi-step thinking
-        priority: 20
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: thinking
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: true
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are a thinking expert, should think multiple steps before answering. Please answer the question step by step.
-              mode: replace
-      - name: urgent_request
-        description: Urgent requests requiring immediate attention
-        priority: 30
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: urgent_keywords
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are handling an urgent request. Prioritize quick and direct responses.
-              mode: replace
-      - name: sensitive_data
-        description: Queries containing sensitive data keywords (SSN and credit card)
-        priority: 40
-        rules:
-          operator: AND
-          conditions:
-            - type: keyword
-              name: sensitive_keywords
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are handling a query with sensitive data. Be cautious and provide security-focused guidance.
-              mode: replace
-      - name: critical_event
-        description: Critical operational events requiring specialized handling
-        priority: 35
-        rules:
-          operator: OR
-          conditions:
-            - type: event
-              name: critical_payment_event
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are handling a critical event alert. Prioritize a fast, precise, and factual response.
-              mode: replace
-      - name: spanish_language
-        description: Spanish-language requests requiring specialized handling
-        priority: 25
-        rules:
-          operator: OR
-          conditions:
-            - type: language
-              name: es
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: You are responding to a Spanish-language query. Respond in Spanish.
-              mode: replace
-      - name: reask_escalation
-        description: User has repeated a similar question across recent turns without resolution
-        priority: 45
-        rules:
-          operator: AND
-          conditions:
-            - type: reask
-              name: repeated_billing_question
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              enabled: true
-              system_prompt: The user has asked a similar question multiple times without a resolution. Acknowledge this and provide a definitive, complete answer.
-              mode: replace
-      - name: long_context_routing
-        description: Route requests whose estimated token count matches the long_context band. Gated by a dedicated keyword (only the context-safety-overlap prompt carries it) so a drifting online-calibrated token estimate can't pull in unrelated small requests, such as reask's fixtures. Kept below block_jailbreak/block_pii so a long unsafe request is still blocked (see context-safety-overlap).
-        priority: 50
-        rules:
-          operator: AND
-          conditions:
-            - type: context
-              name: long_context
-            - type: keyword
-              name: context_safety_overlap_probe
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-      - &other_decision
-        name: other_decision
-        description: General knowledge and miscellaneous topics
-        priority: 1
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: other
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins: &baseline_response_cache_plugins
-          - type: response_cache
-            configuration:
-              enabled: true
-              scope: global
-              similarity_threshold: 0.75
-    signals:
-      keywords:
-        - name: thinking
-          operator: OR
-          keywords:
-            - think
-            - careful
-          case_sensitive: false
-        - name: urgent_keywords
-          operator: OR
-          keywords:
-            - urgent
-            - immediate
-            - asap
-            - emergency
-          case_sensitive: false
-        - name: sensitive_keywords
-          operator: OR
-          keywords:
-            - SSN
-            - credit card
-          case_sensitive: false
-        - name: context_safety_overlap_probe
-          operator: OR
-          keywords:
-            - __CONTEXT_SAFETY_OVERLAP__
-          case_sensitive: false
-        - &tool_selection_add_weather
-          name: tool_selection_add_weather
-          operator: OR
-          keywords:
-            - __TOOL_SELECTION_ADD_WEATHER__
-          case_sensitive: false
-        - &tool_selection_add_calc
-          name: tool_selection_add_calc
-          operator: OR
-          keywords:
-            - __TOOL_SELECTION_ADD_CALC__
-          case_sensitive: false
-        - &tool_selection_filter
-          name: tool_selection_filter
-          operator: OR
-          keywords:
-            - __TOOL_SELECTION_FILTER__
-          case_sensitive: false
-        - &tool_selection_filter_threshold
-          name: tool_selection_filter_threshold
-          operator: OR
-          keywords:
-            - __TOOL_SELECTION_FILTER_THRESHOLD__
-          case_sensitive: false
-        - &tool_selection_add_topk_one
-          name: tool_selection_add_topk_one
-          operator: OR
-          keywords:
-            - __TOOL_SELECTION_ADD_TOPK_ONE__
-          case_sensitive: false
-        - &tool_selection_with_system_prompt
-          name: tool_selection_with_system_prompt
-          operator: OR
-          keywords:
-            - __TOOL_SELECTION_WITH_SYSTEM_PROMPT__
-          case_sensitive: false
-        - &plugin_request_mutations
-          name: plugin_request_mutations
-          operator: OR
-          keywords:
-            - __PLUGIN_REQUEST_MUTATIONS__
-          case_sensitive: true
-        - &tools_passthrough
-          name: tools_passthrough
-          operator: OR
-          keywords:
-            - __TOOLS_PASSTHROUGH__
-          case_sensitive: true
-        - &tools_filtered
-          name: tools_filtered
-          operator: OR
-          keywords:
-            - __TOOLS_FILTERED__
-          case_sensitive: true
-        - &tools_none
-          name: tools_none
-          operator: OR
-          keywords:
-            - __TOOLS_NONE__
-          case_sensitive: true
-        - name: retention_probe_keywords
-          operator: OR
-          keywords:
-            - __RETENTION_PROBE__
-          case_sensitive: false
-        - name: looper_metrics_probe_keywords
-          operator: OR
-          keywords:
-            - __MULTI_MODEL_PROBE__
-          case_sensitive: false
-      events:
-        - name: critical_payment_event
-          event_types:
-            - payment_failed
-          severities:
-            - critical
-          action_codes:
-            - TXN_DECLINE
-      language:
-        - name: es
-          description: Spanish-language requests.
-      reasks:
-        - name: repeated_billing_question
-          description: Current user turn closely repeats the last two billing complaints.
-          threshold: 0.8
-          lookback_turns: 2
-      context:
-        - name: long_context
-          description: Requests estimated at 500 tokens or more.
-          min_tokens: "500"
-      domains: &baseline_domain_signals
-        - name: business
-          description: Business, corporate strategy, management, finance, marketing
-        - name: law
-          description: Legal principles, case law, statutory interpretation, legal procedures
-        - name: psychology
-          description: Cognitive processes, behavioral patterns, mental health, developmental psychology
-        - name: biology
-          description: Molecular biology, genetics, cell biology, ecology, evolution, anatomy
-        - name: chemistry
-          description: Chemical reactions, molecular structures, laboratory techniques
-        - name: history
-          description: Historical events, time periods, cultures, civilizations
-        - name: health
-          description: Anatomy, physiology, diseases, treatments, preventive care, nutrition
-        - name: economics
-          description: Microeconomics, macroeconomics, financial markets, monetary policy, trade
-        - name: math
-          description: Mathematics, algebra, calculus, geometry, statistics
-        - name: physics
-          description: Physical laws, mechanics, thermodynamics, electromagnetism, quantum physics
-        - name: computer science
-          description: Algorithms, data structures, programming, software engineering
-        - name: philosophy
-          description: Philosophical traditions, ethics, logic, metaphysics, epistemology
-        - name: engineering
-          description: Engineering disciplines, design, problem-solving, systems
-        - name: other
-          description: General knowledge and miscellaneous topics
-      jailbreak:
-        - name: jailbreak_standard
-          # Match the published Guard operating point in canonical defaults.
-          threshold: 0.75
-          include_history: false
-          description: Standard jailbreak detection
-      pii:
-        - &pii_deny_all
-          name: pii_deny_all
-          threshold: 0.01
-          include_history: false
-          description: Block all PII
-      classifiers:
-        - name: llm_toxicity
-          description: Deterministic outbound LLM classifier E2E signal
-          type: llm
-          model: e2e-llm-classifier
-          labels: [benign, toxic]
-          instructions: Score whether the input contains toxic content.
-        - name: remote_toxicity
-          description: Deterministic outbound http_classify E2E signal
-          type: sequence_classifier
-          model: e2e-sequence-classifier
-          labels: [benign, toxic]
-    modelCards:
-      - name: base-model
         loras:
           - name: science-expert
             description: 'Specialized for science domains: biology, chemistry, physics, health, engineering'
@@ -950,7 +31,6 @@ config:
             description: 'Optimized for humanities: psychology, history, philosophy'
           - name: general-expert
             description: General-purpose adapter for diverse topics
-      - name: general-expert
   entrypoints:
     - model_names: ["e2e-domain"]
       recipe: e2e-domain
@@ -972,227 +52,884 @@ config:
       recipe: metadata-policy
     - model_names: ["vllm-sr/auto", "vllm-sr/e2e-default-alias"]
       recipe: default
+      default: true
   recipes:
+    - name: default
+      projections:
+        scores:
+          - name: e2e_contract_score
+            method: weighted_sum
+            inputs:
+              - type: keyword
+                name: retention_probe_keywords
+                weight: 1
+                value_source: binary
+      decisions:
+        - name: block_jailbreak
+          description: Block jailbreak attempts
+          priority: 1000
+          rules:
+            operator: OR
+            conditions:
+              - type: jailbreak
+                name: jailbreak_standard
+          plugins:
+            - type: fast_response
+              configuration:
+                message: I'm sorry, but I cannot process this request as it appears to violate our usage policies.
+        - &block_pii_decision
+          name: block_pii
+          description: Block requests containing PII
+          priority: 999
+          rules:
+            operator: OR
+            conditions:
+              - type: pii
+                name: pii_deny_all
+          plugins:
+            - type: fast_response
+              configuration:
+                message: Your request contains personal information. Please remove any sensitive data and try again.
+        - name: retention_probe_decision
+          description: "Deterministic keyword-gated route used by the retention-directive E2E to assert x-vsr-retention-* response headers (issue #2009)."
+          priority: 600
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: retention_probe_keywords
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+          retention:
+            ttl_turns: 0
+            keep_current_model: true
+            prefer_prefix_retention: true
+        - name: looper_metrics_probe_decision
+          description: "Deterministic keyword-gated looper route used by the looper-latency-token-headers E2E to assert the latency_ms and token counts of the looper member of x-vsr-trace (issue #2694)."
+          priority: 610
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: looper_metrics_probe_keywords
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+            - model: base-model
+              lora_name: math-expert
+              use_reasoning: false
+          algorithm:
+            type: escalate
+            escalate:
+              order: size
+              accept:
+                confidence: {method: hybrid, gte: 0.72}
+        - &plugin_request_mutations_decision
+          name: plugin_request_mutations_decision
+          description: Deterministic route for provider-boundary plugin mutation coverage (issue #3180).
+          priority: 550
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: plugin_request_mutations
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: "E2E plugin contract: system prompt applied."
+                mode: replace
+            - type: request_params
+              configuration:
+                blocked_params:
+                  - frequency_penalty
+                  - presence_penalty
+                max_tokens_limit: 64
+                max_n: 1
+            - type: header_mutation
+              configuration:
+                add:
+                  - name: x-e2e-added
+                    value: added-by-router
+                update:
+                  - name: x-e2e-updated
+                    value: updated-by-router
+                delete:
+                  - x-e2e-deleted
+        - &tools_passthrough_decision
+          name: tools_passthrough_decision
+          description: "Deterministic route for tools passthrough provider-boundary coverage (issue #3180)."
+          priority: 540
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: tools_passthrough
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+          plugins:
+            - type: tools
+              configuration:
+                enabled: true
+                policy:
+                  mode: passthrough
+        - &tools_filtered_decision
+          name: tools_filtered_decision
+          description: "Deterministic route for tools allow-list provider-boundary coverage (issue #3180)."
+          priority: 540
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: tools_filtered
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+          plugins:
+            - type: tools
+              configuration:
+                enabled: true
+                policy:
+                  mode: filtered
+                  allow_tools:
+                    - get_weather
+        - &tools_none_decision
+          name: tools_none_decision
+          description: "Deterministic route for tools removal provider-boundary coverage (issue #3180)."
+          priority: 540
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: tools_none
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+          plugins:
+            - type: tools
+              configuration:
+                enabled: true
+                policy:
+                  mode: none
+        - &business_decision
+          name: business_decision
+          description: Business and management related queries
+          priority: 10
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: business
+          modelRefs:
+            - model: base-model
+              lora_name: social-expert
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations.
+                mode: replace
+        - &law_decision
+          name: law_decision
+          description: Legal questions and law-related topics
+          priority: 10
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: law
+          modelRefs:
+            - model: base-model
+              lora_name: law-expert
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters.
+                mode: replace
+        - &psychology_decision
+          name: psychology_decision
+          description: Psychology and mental health topics
+          priority: 10
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: psychology
+          modelRefs:
+            - model: base-model
+              lora_name: humanities-expert
+              use_reasoning: false
+          plugins:
+            - type: response_cache
+              configuration:
+                enabled: true
+                scope: global
+                semantic: {match: {recall: {top_k: 3, min_similarity: 0.8}}}
+        - &biology_decision
+          name: biology_decision
+          description: Biology and life sciences questions
+          priority: 10
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: biology
+          modelRefs:
+            - model: base-model
+              lora_name: science-expert
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems.
+                mode: replace
+        - &chemistry_decision
+          name: chemistry_decision
+          description: Chemistry and chemical sciences questions
+          priority: 10
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: chemistry
+          modelRefs:
+            - model: base-model
+              lora_name: science-expert
+              use_reasoning: true
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations.
+                mode: replace
+        - &history_decision
+          name: history_decision
+          description: Historical questions and cultural topics
+          priority: 10
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: history
+          modelRefs:
+            - model: base-model
+              lora_name: humanities-expert
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis.
+                mode: replace
+        - &health_decision
+          name: health_decision
+          description: Health and medical information queries
+          priority: 10
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: health
+          modelRefs:
+            - model: base-model
+              lora_name: science-expert
+              use_reasoning: false
+          plugins:
+            - type: response_cache
+              configuration:
+                enabled: true
+                scope: global
+                semantic: {match: {recall: {top_k: 3, min_similarity: 0.8}}}
+        - &economics_decision
+          name: economics_decision
+          description: Economics and financial topics
+          priority: 10
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: economics
+          modelRefs:
+            - model: base-model
+              lora_name: social-expert
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses.
+                mode: replace
+        - &math_decision
+          name: math_decision
+          description: Mathematics and quantitative reasoning
+          priority: 10
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: math
+          modelRefs:
+            - model: base-model
+              lora_name: math-expert
+              use_reasoning: true
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way.
+                mode: replace
+        - &physics_decision
+          name: physics_decision
+          description: Physics and physical sciences
+          priority: 10
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: physics
+          modelRefs:
+            - model: base-model
+              lora_name: science-expert
+              use_reasoning: true
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate.
+                mode: replace
+        - &computer_science_decision
+          name: computer_science_decision
+          description: Computer science and programming
+          priority: 10
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: computer science
+          modelRefs:
+            - model: base-model
+              lora_name: science-expert
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful.
+                mode: replace
+        - &philosophy_decision
+          name: philosophy_decision
+          description: Philosophy and ethical questions
+          priority: 10
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: philosophy
+          modelRefs:
+            - model: base-model
+              lora_name: humanities-expert
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates.
+                mode: replace
+        - &engineering_decision
+          name: engineering_decision
+          description: Engineering and technical problem-solving
+          priority: 10
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: engineering
+          modelRefs:
+            - model: base-model
+              lora_name: science-expert
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards.
+                mode: replace
+        - name: thinking_decision
+          description: Complex reasoning and multi-step thinking
+          priority: 20
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: thinking
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: true
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are a thinking expert, should think multiple steps before answering. Please answer the question step by step.
+                mode: replace
+        - name: urgent_request
+          description: Urgent requests requiring immediate attention
+          priority: 30
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: urgent_keywords
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are handling an urgent request. Prioritize quick and direct responses.
+                mode: replace
+        - name: sensitive_data
+          description: Queries containing sensitive data keywords (SSN and credit card)
+          priority: 40
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: sensitive_keywords
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are handling a query with sensitive data. Be cautious and provide security-focused guidance.
+                mode: replace
+        - name: critical_event
+          description: Critical operational events requiring specialized handling
+          priority: 35
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: critical_payment_event
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are handling a critical event alert. Prioritize a fast, precise, and factual response.
+                mode: replace
+        - name: spanish_language
+          description: Spanish-language requests requiring specialized handling
+          priority: 25
+          rules:
+            operator: OR
+            conditions:
+              - type: language
+                name: es
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: You are responding to a Spanish-language query. Respond in Spanish.
+                mode: replace
+        - name: reask_escalation
+          description: User has repeated a similar question across recent turns without resolution
+          priority: 45
+          rules:
+            operator: AND
+            conditions:
+              - type: turn_relation
+                name: repeated_billing_question
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+          plugins:
+            - type: system_prompt
+              configuration:
+                enabled: true
+                system_prompt: The user has asked a similar question multiple times without a resolution. Acknowledge this and provide a definitive, complete answer.
+                mode: replace
+        - name: long_context_routing
+          description: Route requests whose estimated token count matches the long_context band. Gated by a dedicated keyword (only the context-safety-overlap prompt carries it) so a drifting online-calibrated token estimate can't pull in unrelated small requests, such as reask's fixtures. Kept below block_jailbreak/block_pii so a long unsafe request is still blocked (see context-safety-overlap).
+          priority: 50
+          rules:
+            operator: AND
+            conditions:
+              - type: context
+                name: long_context
+              - type: keyword
+                name: context_safety_overlap_probe
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+        - &other_decision
+          name: other_decision
+          description: General knowledge and miscellaneous topics
+          priority: 1
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: other
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+          plugins: &baseline_response_cache_plugins
+            - type: response_cache
+              configuration:
+                enabled: true
+                scope: global
+                semantic: {match: {recall: {top_k: 3, min_similarity: 0.75}}}
+      signals:
+        keywords:
+          - name: thinking
+            operator: OR
+            keywords:
+              - think
+              - careful
+            case_sensitive: false
+          - name: urgent_keywords
+            operator: OR
+            keywords:
+              - urgent
+              - immediate
+              - asap
+              - emergency
+            case_sensitive: false
+          - name: sensitive_keywords
+            operator: OR
+            keywords:
+              - SSN
+              - credit card
+            case_sensitive: false
+          - name: context_safety_overlap_probe
+            operator: OR
+            keywords:
+              - __CONTEXT_SAFETY_OVERLAP__
+            case_sensitive: false
+          - &plugin_request_mutations
+            name: plugin_request_mutations
+            operator: OR
+            keywords:
+              - __PLUGIN_REQUEST_MUTATIONS__
+            case_sensitive: true
+          - &tools_passthrough
+            name: tools_passthrough
+            operator: OR
+            keywords:
+              - __TOOLS_PASSTHROUGH__
+            case_sensitive: true
+          - &tools_filtered
+            name: tools_filtered
+            operator: OR
+            keywords:
+              - __TOOLS_FILTERED__
+            case_sensitive: true
+          - &tools_none
+            name: tools_none
+            operator: OR
+            keywords:
+              - __TOOLS_NONE__
+            case_sensitive: true
+          - name: retention_probe_keywords
+            operator: OR
+            keywords:
+              - __RETENTION_PROBE__
+            case_sensitive: false
+          - name: looper_metrics_probe_keywords
+            operator: OR
+            keywords:
+              - __MULTI_MODEL_PROBE__
+            case_sensitive: false
+          # A payment incident by its event type, severity or action code.
+          - name: critical_payment_event
+            operator: OR
+            keywords:
+              - payment_failed
+              - critical
+              - TXN_DECLINE
+            case_sensitive: false
+        language:
+          - name: es
+            description: Spanish-language requests.
+          # Unreferenced by decisions: must not raise the defaulted es threshold
+          # or change the Spanish routes asserted by language-routing (#4804).
+          - name: en
+            description: High-threshold isolation control for the defaulted Spanish rule.
+            threshold: 0.99
+        context:
+          - name: long_context
+            description: Requests estimated at 500 tokens or more.
+            min_tokens: "500"
+        domains: &baseline_domain_signals
+          - name: business
+            description: Business, corporate strategy, management, finance, marketing
+          - name: law
+            description: Legal principles, case law, statutory interpretation, legal procedures
+          - name: psychology
+            description: Cognitive processes, behavioral patterns, mental health, developmental psychology
+          - name: biology
+            description: Molecular biology, genetics, cell biology, ecology, evolution, anatomy
+          - name: chemistry
+            description: Chemical reactions, molecular structures, laboratory techniques
+          - name: history
+            description: Historical events, time periods, cultures, civilizations
+          - name: health
+            description: Anatomy, physiology, diseases, treatments, preventive care, nutrition
+          - name: economics
+            description: Microeconomics, macroeconomics, financial markets, monetary policy, trade
+          - name: math
+            description: Mathematics, algebra, calculus, geometry, statistics
+          - name: physics
+            description: Physical laws, mechanics, thermodynamics, electromagnetism, quantum physics
+          - name: computer science
+            description: Algorithms, data structures, programming, software engineering
+          - name: philosophy
+            description: Philosophical traditions, ethics, logic, metaphysics, epistemology
+          - name: engineering
+            description: Engineering disciplines, design, problem-solving, systems
+          - name: other
+            description: General knowledge and miscellaneous topics
+        jailbreak:
+          - name: jailbreak_standard
+            description: Standard jailbreak detection
+            predicate:
+              gte: 0.88
+        pii:
+          - &pii_deny_all
+            name: pii_deny_all
+            description: Block all PII
+            predicate:
+              gte: 0.18
+        turn_relation:
+          - name: repeated_billing_question
+            description: Current user turn closely repeats the last two billing complaints.
+            labels: [reask]
+            input:
+              previous_turns: 4
     - name: e2e-domain
       description: Domain classification using the unchanged baseline labels and model selections.
-      routing:
-        strategy: priority
-        signals:
-          domains: *baseline_domain_signals
-        decisions:
-          - <<: *business_decision
-            plugins: []
-          - <<: *law_decision
-            plugins: []
-          - <<: *psychology_decision
-            plugins: []
-          - <<: *biology_decision
-            plugins: []
-          - <<: *chemistry_decision
-            plugins: []
-          - <<: *history_decision
-            plugins: []
-          - <<: *health_decision
-            plugins: []
-          - <<: *economics_decision
-            plugins: []
-          - <<: *math_decision
-            plugins: []
-          - <<: *physics_decision
-            plugins: []
-          - <<: *computer_science_decision
-            plugins: []
-          - <<: *philosophy_decision
-            plugins: []
-          - <<: *engineering_decision
-            plugins: []
-          - <<: *other_decision
-            plugins: []
+      strategy: priority
+      signals:
+        domains: *baseline_domain_signals
+      decisions:
+        - !!merge <<: *business_decision
+          plugins: []
+        - !!merge <<: *law_decision
+          plugins: []
+        - !!merge <<: *psychology_decision
+          plugins: []
+        - !!merge <<: *biology_decision
+          plugins: []
+        - !!merge <<: *chemistry_decision
+          plugins: []
+        - !!merge <<: *history_decision
+          plugins: []
+        - !!merge <<: *health_decision
+          plugins: []
+        - !!merge <<: *economics_decision
+          plugins: []
+        - !!merge <<: *math_decision
+          plugins: []
+        - !!merge <<: *physics_decision
+          plugins: []
+        - !!merge <<: *computer_science_decision
+          plugins: []
+        - !!merge <<: *philosophy_decision
+          plugins: []
+        - !!merge <<: *engineering_decision
+          plugins: []
+        - !!merge <<: *other_decision
+          plugins: []
     - name: e2e-fallback
       description: Explicit matching policy and the declared provider default for unmatched requests.
-      routing:
-        strategy: priority
-        signals:
-          keywords:
-            - name: fallback_contract_keyword
-              operator: OR
-              keywords: ["__E2E_FALLBACK_MATCH__"]
-              case_sensitive: true
-        decisions:
-          - name: fallback_contract_match
-            priority: 1
-            rules:
-              operator: OR
-              conditions:
-                - type: keyword
-                  name: fallback_contract_keyword
-            modelRefs:
-              - model: base-model
-                use_reasoning: false
+      strategy: priority
+      signals:
+        keywords:
+          - name: fallback_contract_keyword
+            operator: OR
+            keywords: ["__E2E_FALLBACK_MATCH__"]
+            case_sensitive: true
+      decisions:
+        - name: fallback_contract_match
+          priority: 1
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: fallback_contract_keyword
+          modelRefs:
+            - model: base-model
+              use_reasoning: false
     # Feature probes select the policy they exercise explicitly. The default
     # recipe retains its learned security signals and their precedence tests.
     - name: e2e-protocol
       description: Upstream protocol translation without cache or security short circuits.
-      routing:
-        strategy: priority
-        decisions:
-          - name: e2e_protocol_upstream
-            priority: 1
-            rules:
-              operator: AND
-            modelRefs:
-              - model: base-model
-                lora_name: general-expert
-                use_reasoning: false
+      strategy: priority
+      decisions:
+        - name: e2e_protocol_upstream
+          priority: 1
+          rules:
+            operator: AND
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
     - name: e2e-plugins
       description: Provider-boundary mutation and tool selection using the baseline plugin definitions.
-      routing:
-        strategy: priority
-        signals:
-          keywords:
-            - *plugin_request_mutations
-            - *tools_passthrough
-            - *tools_filtered
-            - *tools_none
-            - *tool_selection_add_weather
-            - *tool_selection_add_calc
-            - *tool_selection_filter
-            - *tool_selection_filter_threshold
-            - *tool_selection_add_topk_one
-            - *tool_selection_with_system_prompt
-        decisions:
-          - *plugin_request_mutations_decision
-          - *tools_passthrough_decision
-          - *tools_filtered_decision
-          - *tools_none_decision
-          - *tool_selection_add_weather_decision
-          - *tool_selection_add_calc_decision
-          - *tool_selection_filter_decision
-          - *tool_selection_filter_threshold_decision
-          - *tool_selection_add_topk_one_decision
-          - *tool_selection_with_system_prompt_decision
+      strategy: priority
+      signals:
+        keywords:
+          - *plugin_request_mutations
+          - *tools_passthrough
+          - *tools_filtered
+          - *tools_none
+      decisions:
+        - *plugin_request_mutations_decision
+        - *tools_passthrough_decision
+        - *tools_filtered_decision
+        - *tools_none_decision
     - name: e2e-pii-precedence
       # Only the two decisions the case orders: the baseline's jailbreak guard
-      # also reads the tool-selection marker, and Vela 2.0 scores the marker
-      # before payment data as an injection.
-      description: A PII block outranks tool selection on the same request.
-      routing:
-        strategy: priority
-        signals:
-          keywords:
-            - *tool_selection_add_weather
-          pii:
-            - *pii_deny_all
-        decisions:
-          - *block_pii_decision
-          - *tool_selection_add_weather_decision
+      # also reads the tools marker, and Vela 2.0 scores the marker before
+      # payment data as an injection.
+      description: A PII block outranks a tools route on the same request.
+      strategy: priority
+      signals:
+        keywords:
+          - *tools_passthrough
+        pii:
+          - *pii_deny_all
+      decisions:
+        - *block_pii_decision
+        - *tools_passthrough_decision
     - name: e2e-cache
       description: Cache hit, paraphrase, and contradiction probes independent of domain routing.
-      routing:
-        strategy: priority
-        decisions:
-          - name: e2e_cache_decision
-            priority: 1
-            rules:
-              operator: AND
-            modelRefs:
-              - model: base-model
-                lora_name: general-expert
-                use_reasoning: false
-            plugins: *baseline_response_cache_plugins
+      strategy: priority
+      decisions:
+        - name: e2e_cache_decision
+          priority: 1
+          rules:
+            operator: AND
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+          plugins: *baseline_response_cache_plugins
     - name: e2e-cache-exact
       description: Exact cache reuse and multilingual negation safety, independent of domain routing.
-      routing:
-        strategy: priority
-        decisions:
-          - name: e2e_cache_exact_decision
-            priority: 1
-            rules:
-              operator: AND
-            modelRefs:
-              - model: base-model
-                lora_name: general-expert
-                use_reasoning: false
-            plugins:
-              - type: response_cache
-                configuration:
-                  enabled: true
-                  mode: exact
-                  scope: global
+      strategy: priority
+      decisions:
+        - name: e2e_cache_exact_decision
+          priority: 1
+          rules:
+            operator: AND
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+          plugins:
+            - type: response_cache
+              configuration:
+                enabled: true
+                mode: exact
+                scope: global
     - name: entrypoint-probe
       description: "Deterministic keyword-gated recipe used by the entrypoint-recipe-routing E2E (issue #2331)."
-      routing:
-        strategy: priority
-        signals:
-          keywords:
-            # Intentionally reuses a signal name from the default recipe with
-            # a different definition. Recipe-local namespaces must keep the
-            # two definitions isolated at validation and request time.
-            - name: retention_probe_keywords
-              operator: OR
-              keywords:
-                - __ENTRYPOINT_RECIPE_PROBE__
-              case_sensitive: false
-        decisions:
-          - name: entrypoint_probe_decision
-            description: Route entrypoint-probe recipe traffic to the general-expert adapter.
-            priority: 100
-            rules:
-              operator: OR
-              conditions:
-                - type: keyword
-                  name: retention_probe_keywords
-            modelRefs:
-              - model: base-model
-                lora_name: general-expert
-                use_reasoning: false
+      strategy: priority
+      signals:
+        keywords:
+          # Intentionally reuses a signal name from the default recipe with
+          # a different definition. Recipe-local namespaces must keep the
+          # two definitions isolated at validation and request time.
+          - name: retention_probe_keywords
+            operator: OR
+            keywords:
+              - __ENTRYPOINT_RECIPE_PROBE__
+            case_sensitive: false
+      decisions:
+        - name: entrypoint_probe_decision
+          description: Route entrypoint-probe recipe traffic to the general-expert adapter.
+          priority: 100
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: retention_probe_keywords
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
     - name: metadata-policy
       description: Deterministic recipe-local metadata routing probe.
-      routing:
-        strategy: priority
-        signals:
-          metadata:
-            - name: canary_cohort
-              key: cohort
-              predicate:
-                equals: canary
-        decisions:
-          - name: metadata_recipe_decision
-            description: Route canary metadata inside the selected recipe.
-            priority: 100
-            rules:
-              operator: AND
-              conditions:
-                - type: metadata
-                  name: canary_cohort
-            modelRefs:
-              - model: base-model
-                lora_name: general-expert
-                use_reasoning: false
+      strategy: priority
+      signals:
+        metadata:
+          - name: canary_cohort
+            key: cohort
+            predicate:
+              equals: canary
+      decisions:
+        - name: metadata_recipe_decision
+          description: Route canary metadata inside the selected recipe.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: metadata
+                name: canary_cohort
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
   global:
+    model_catalog:
+      deployments:
+        # provider-mocker's System One fixture answers the jailbreak, PII and
+        # turn_relation rules, so the shared cases are pinned by their markers
+        # (tools/test/services/provider-mocker/README.md).
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
+          timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
+      bindings:
+        jailbreak: fake-systemone
+        pii: fake-systemone
+        turn_relation: fake-systemone
     router:
       strategy: priority
-    model_catalog:
-      kbs: []
-      external:
-        - name: e2e-llm-classifier
-          llm_provider: openai
-          model_role: classification
-          llm_endpoint:
-            address: mock-sequence-classifier.default.svc.cluster.local
-            port: 8000
-            protocol: http
-          llm_model_name: e2e-llm-classifier
-          llm_timeout_seconds: 5
-          access_key: e2e-classifier-key
-        - name: e2e-sequence-classifier
-          model_role: classification
-          llm_endpoint:
-            address: mock-sequence-classifier.default.svc.cluster.local
-            port: 8000
-            protocol: http
-          llm_timeout_seconds: 5
-          access_key: e2e-classifier-key
     services:
       response_api:
         enabled: true
@@ -1202,8 +939,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: true
@@ -1249,25 +984,11 @@ config:
             deployment_environment: development
     stores:
       response_cache:
-        enabled: true
         backend_type: memory
-        similarity_threshold: 0.8
         max_entries: 1000
         ttl_seconds: 3600
         eviction_policy: fifo
-        embedding_model: mmbert
         # Exercised by the semantic-cache-polarity case.
-      memory:
-        embedding_model: mmbert
-      vector_store:
-        embedding_model: mmbert
-    integrations:
-      tools:
-        enabled: true
-        top_k: 3
-        similarity_threshold: 0.2
-        tools_db_path: config/tools_db.json
-        fallback_to_empty: true
 toolsDb:
   - tool:
       type: function

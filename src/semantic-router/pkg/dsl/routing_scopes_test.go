@@ -52,8 +52,8 @@ func TestCompileAndDecompileRoutingScopes(t *testing.T) {
 	if len(cfg.Recipes) != 3 {
 		t.Fatalf("recipe count = %d, want default plus two named recipes", len(cfg.Recipes))
 	}
-	if len(cfg.Entrypoints) != 2 {
-		t.Fatalf("entrypoint count = %d, want 2", len(cfg.Entrypoints))
+	if len(cfg.Entrypoints) != 3 || !cfg.Entrypoints[0].Default || cfg.Entrypoints[0].Recipe != config.DefaultRecipeName {
+		t.Fatalf("entrypoints = %+v, want the default one first, then 2", cfg.Entrypoints)
 	}
 	alpha, ok := cfg.RecipeByName("alpha")
 	if !ok || alpha.Profile.Strategy != config.RoutingStrategyConfidence {
@@ -74,6 +74,61 @@ func TestCompileAndDecompileRoutingScopes(t *testing.T) {
 	if !reflect.DeepEqual(cfg.Recipes, recompiled.Recipes) {
 		t.Fatalf("recipes changed after round trip:\n%+v\n%+v", cfg.Recipes, recompiled.Recipes)
 	}
+}
+
+func TestEntrypointAPISurvivesRoundTrip(t *testing.T) {
+	source := `
+MODEL shared_model {}
+ENTRYPOINT { model_names: ["router/auto"] recipe: "alpha" default: true }
+ENTRYPOINT { api: "systemone" model_names: ["router/auto"] recipe: "native" }
+RECIPE alpha { ROUTE alpha_route { MODEL shared_model } }
+RECIPE native { ROUTE native_route { MODEL shared_model } }
+`
+	diagnostics, parseErrs := Validate(source)
+	if len(parseErrs) > 0 {
+		t.Fatalf("parse errors: %v", parseErrs)
+	}
+	for _, diagnostic := range diagnostics {
+		if strings.Contains(diagnostic.Message, "is already mapped") {
+			t.Fatalf("Chat and System One names were checked as one namespace: %s", diagnostic.Message)
+		}
+	}
+	cfg, errs := Compile(source)
+	if len(errs) > 0 {
+		t.Fatalf("compile errors: %v", errs)
+	}
+	if len(cfg.Entrypoints) != 2 || cfg.Entrypoints[0].API != "" || cfg.Entrypoints[1].API != config.SystemOneAPI {
+		t.Fatalf("entrypoint APIs = %+v, want an omitted Chat api and systemone", cfg.Entrypoints)
+	}
+
+	text, err := Decompile(cfg)
+	if err != nil {
+		t.Fatalf("decompile: %v", err)
+	}
+	if strings.Count(text, "api:") != 1 || !strings.Contains(text, `api: "systemone"`) {
+		t.Fatalf("decompiled DSL should write only the explicit systemone api:\n%s", text)
+	}
+	recompiled, errs := Compile(text)
+	if len(errs) > 0 {
+		t.Fatalf("recompile errors: %v\n%s", errs, text)
+	}
+	if !reflect.DeepEqual(cfg.Entrypoints, recompiled.Entrypoints) {
+		t.Fatalf("entrypoints changed after round trip:\n%+v\n%+v", cfg.Entrypoints, recompiled.Entrypoints)
+	}
+}
+
+func TestCompileRejectsUnknownEntrypointAPI(t *testing.T) {
+	_, errs := Compile(`
+MODEL shared_model {}
+ENTRYPOINT { api: "batch" model_names: ["router/auto"] recipe: "alpha" }
+RECIPE alpha { ROUTE alpha_route { MODEL shared_model } }
+`)
+	for _, err := range errs {
+		if strings.Contains(err.Error(), `ENTRYPOINT api must be chat or systemone, got "batch"`) {
+			return
+		}
+	}
+	t.Fatalf("compile errors = %v, want an unknown api error", errs)
 }
 
 func TestValidateRoutingScopesDoesNotLeakSignals(t *testing.T) {
@@ -105,12 +160,10 @@ SIGNAL keyword factual { keywords: ["verify"] }
 ROUTE factual_route {
   WHEN keyword("factual")
   MODEL model
-  PLUGIN semantic_cache { enabled: true, similarity_threshold: 0.9, ttl_seconds: 900 }
-  PLUGIN hallucination {
-    enabled: true
-    hallucination_action: "header"
-    unverified_factual_action: "header"
-    include_hallucination_details: true
+  PLUGIN response_cache { enabled: true, ttl_seconds: 900, semantic: { match: { recall: { top_k: 3, min_similarity: 0.9 } } } }
+  PLUGIN response_guard {
+    rules: [{ when: { type: "keyword", name: "factual" }, action: "annotate", details: true }]
+    on_unknown: "none"
   }
 }`
 	cfg, errs := Compile(input)
@@ -121,7 +174,7 @@ ROUTE factual_route {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"ttl_seconds: 900", `unverified_factual_action: "header"`, "include_hallucination_details: true"} {
+	for _, expected := range []string{"ttl_seconds: 900", "min_similarity: 0.9", `on_unknown: "none"`, "details: true"} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("decompiled DSL is missing %q:\n%s", expected, text)
 		}

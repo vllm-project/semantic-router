@@ -1,62 +1,45 @@
 ---
-title: 训练 Vela Router 模型
-sidebar_label: 概览
+is_mtpe: false
+title: 训练 Vela 路由模型
+sidebar_label: 概述
 translation:
-  source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
+  source_commit: "118fb72eb67a0e7193697e350d7b494dc016631e"
   source_file: "docs/training/training-overview.md"
   outdated: false
 ---
 
-# 训练 Vela Router 模型 {#train-vela-router-models}
+# 训练 Router 的模型 {#train-the-routers-models}
 
-根据应用的语言、主题和路由策略适配 Vela。模型家族包含共享编码器、任务分类器、Embedding 和 Reranker。需要推理时，先使用已发布的任务模型；评测发现能力缺口后，再进行训练。
+Router 会询问两类模型，而对大多数应用来说，只有其中一类值得训练。
 
-部署请参阅[使用 Vela 模型](../tutorials/global/vela-models.md)。本节介绍如何训练和评测自己的任务模型。
+- **决策模型**零样本回答每个路由判断：应用信号、你自己的问题、System One 选择器、防护和评审。新的路由问题无需训练：把它写成一条 [`systemone` 规则](../tutorials/signal/systemone)，再调优它的 predicate（[编写自定义问题](../system-one/use/custom-questions)）。当某个问题需要更高准确率时，下一步是换用更大的[决策模型](../system-one/deploy/deployments)。
+- **嵌入模型**只用于召回：响应缓存、记忆和 RAG 用它查找候选，没有任何决策读取它。当召回在你的数据上漏掉相关内容时，训练一个嵌入模型。
 
 ## 选择训练流程 {#choose-a-training-workflow}
 
-| 目标 | 流程 | 训练输出 |
+| 你的目标 | 流程 | 训练内容 |
 | --- | --- | --- |
-| 改善语义搜索或请求相似度 | [Embedding](./mmbert-32k-models#embedding-model-bi-encoder) | 查询和文档向量 |
-| 改善检索候选的顺序 | [Reranking](./mmbert-32k-models#reranking-model-cross-encoder) | 每个查询与文档对的相关性分数 |
-| 适配领域、反馈、提示词攻击、事实核查或输出模态检测 | [分类器](./classifier-models) | 请求标签 |
-| 检测个人信息 | [PII](./classifier-models#pii-detector) | 实体片段 |
-| 应用内容风险策略 | [Safety 和 Hazard](./mmbert-safety-classifier) | 安全判断和风险类别 |
+| 改进语义搜索、缓存召回或记忆召回 | [嵌入](./mmbert-32k-models#embedding-model-bi-encoder) | 查询和文档的向量 |
+| 选择路由要调用的生成模型 | [提供方模型评测](./model-performance-eval) | 不训练：评测你的候选模型 |
 
-[Vela 模型目录](./model-catalog)列出了各任务 checkpoint。Vela 1.0 接受文本输入；[多模态嵌入](./multimodal-embeddings)属于独立家族。[后端模型评测](./model-performance-eval)和[学习式模型选择](./ml-model-selection)用于选择下游 LLM。
+## 选择起始 checkpoint {#record-the-base-and-task-lineage}
 
-## 选择起始模型 {#record-the-base-and-task-lineage}
+从 [Vela Encoder](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M) 或已发布的 [Vela Embedding](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M-Embedding) 开始。下载明确的 Hub revision，并把它的 tokenizer 和配置与权重放在一起。
 
-训练新任务时，使用 [Vela Encoder](https://huggingface.co/vllm-sr/Vela-1.0-Encoder-307M)。它是分类器、Embedding 和 Reranker 的共同基座。下载明确的 Hub revision，并保持权重、tokenizer 和配置一致。
+## 用你的应用准备示例 {#prepare-examples-from-your-application}
 
-改进已有任务时，从完整的 Vela 任务 checkpoint 继续训练，保留已训练的 head。除非要训练新的输出契约，否则保持标签和预处理一致。各任务指南分别说明新任务初始化和继续训练。
+从真实请求和你期望它们召回的内容开始。包括你的应用会收到的语言和输入长度，以及不应匹配的相近样本对。
 
-## 准备应用数据 {#prepare-examples-from-your-application}
+把相关的对话、文档和译文放在同一个划分中。用训练数据更新权重，用开发数据选择 checkpoint，并用单独的测试集做最终比较。
 
-从真实请求及预期行为开始。覆盖应用会接收的语言和长度、应当不触发信号的普通请求，以及接近决策边界的样本。
+## 训练并比较 {#train-and-compare}
 
-把相关对话、文档和翻译保留在同一数据分区。训练集用于更新权重，开发集用于选择 checkpoint 和阈值，独立测试集用于最终对比。任务指南提供数据格式和现有构建工具。
+先运行一次小规模训练，检查数据。然后在相同的输入和推理设置下，把你训练的模型与已发布的嵌入模型比较：分别在不同语言和长度的切片上比较检索和语义相似度质量。按你计划服务的输入长度测量延迟。
 
-## 训练并对比 {#train-and-compare}
+## 在 Router 中使用训练好的模型 {#use-the-trained-model-in-the-router}
 
-先运行小规模训练，检查数据和输出标签。然后用相同输入和推理设置，对比训练后的模型与已发布任务模型。
-
-| 任务 | 评测指标 |
-| --- | --- |
-| 分类器 | 各类别 precision、recall、F1 和误报 |
-| PII | 实体级 precision、recall 和 F1 |
-| Embedding | 检索与语义相似度质量 |
-| Reranker | 固定候选列表上的排序质量 |
-| Safety 和 Hazard | 漏检风险、安全请求误报和类别覆盖 |
-
-分别检查语言和长度分组。长上下文应用需要同时覆盖短请求和真实长文档，并把相关内容放在开头、中间和末尾。在实际服务长度下测量延迟。
-
-## 接入 Router {#use-the-trained-model-in-the-router}
-
-导出包含 tokenizer 和标签的完整 checkpoint。在[本地运行模型](../model-runtime/deploy)中选择支持的引擎和输入预算，然后验证配置：
+导出包含 tokenizer 的完整 checkpoint。把它声明为嵌入部署，并在召回使用它的地方指定它（[嵌入](../model-runtime/guides/embeddings.md)）。用其他模型建立索引的存储必须重新建立索引，或继续指定建立索引的那个模型。然后校验你的配置：
 
 ```bash
 vllm-sr config validate --config config.yaml
 ```
-
-使用[路由预览](../model-runtime/troubleshooting.md)，在部署到真实流量前检查代表性请求的信号、决策和延迟。

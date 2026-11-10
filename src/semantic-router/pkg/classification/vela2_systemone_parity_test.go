@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"os"
 	"slices"
@@ -29,7 +28,7 @@ const (
 )
 
 const vela2ParityConfig = `
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: m
@@ -45,83 +44,73 @@ global:
       vela2:
         provider: model_runtime
         endpoint: %s
-        served_name: %s
-    bindings:
-      pii_classifier:
+        model: %s
+    system:
+      decision_model:
         deployment: vela2
-        contract: token_spans.v1
-      hallucination_detector:
-        deployment: vela2
-        contract: token_spans.v1
-    modules:
-      hallucination_mitigation:
-        detector:
-          min_span_length: 1
-          min_span_confidence: 0
-routing:
-  signals:
-    decision:
-      - name: topics
-        deployment: vela2
-        timeout_ms: 60000
-        question:
-          type: set
-          instructions: Which topics does the request mention?
-          labels:
-            - {key: billing, description: "payments, invoices, charges or refunds"}
-            - {key: shipping, description: "deliveries, parcels, tracking or returns"}
-            - {key: account, description: "logins, passwords or account settings"}
-            - {key: medication, description: drugs or doses}
-      - name: entities
-        deployment: vela2
-        timeout_ms: 60000
-        question:
-          type: span
-          instructions: Which spans name a place or an organization?
-          labels:
-            - {key: location, description: "a city, country or address"}
-            - {key: organization, description: a company or institution}
-      - name: urgent
-        deployment: vela2
-        timeout_ms: 60000
-        question:
-          type: noul
-          instructions: Does the request need an urgent answer?
-    pii:
-      - name: any_pii
-        threshold: 0.0001
-  decisions:
-    - name: every-signal
-      priority: 10
-      rules:
-        operator: OR
-        conditions:
-          - {type: decision, name: topics, label: billing}
-          - {type: decision, name: topics, label: shipping}
-          - {type: decision, name: topics, label: account}
-          - {type: decision, name: topics, label: medication}
-          - {type: decision, name: entities, label: location}
-          - {type: decision, name: entities, label: organization}
-          - {type: decision, name: urgent}
-          - {type: pii, name: any_pii}
-      modelRefs:
-        - model: m
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: topics
+          timeout_ms: 60000
+          question:
+            type: set
+            instructions: Which topics does the request mention?
+            labels:
+              - {key: billing, description: "payments, invoices, charges or refunds"}
+              - {key: shipping, description: "deliveries, parcels, tracking or returns"}
+              - {key: account, description: "logins, passwords or account settings"}
+              - {key: medication, description: drugs or doses}
+        - name: entities
+          timeout_ms: 60000
+          question:
+            type: span
+            instructions: Which spans name a place or an organization?
+            labels:
+              - {key: location, description: "a city, country or address"}
+              - {key: organization, description: a company or institution}
+        - name: urgent
+          timeout_ms: 60000
+          question:
+            type: noul
+            instructions: Does the request need an urgent answer?
+      pii:
+        - name: any_pii
+          predicate: {gte: 0.0001}
+    decisions:
+      - name: every-signal
+        priority: 10
+        rules:
+          operator: OR
+          conditions:
+            - {type: systemone, name: topics, label: billing}
+            - {type: systemone, name: topics, label: shipping}
+            - {type: systemone, name: topics, label: account}
+            - {type: systemone, name: topics, label: medication}
+            - {type: systemone, name: entities, label: location}
+            - {type: systemone, name: entities, label: organization}
+            - {type: systemone, name: urgent}
+            - {type: pii, name: any_pii}
+        modelRefs:
+          - model: m
 `
 
 // The questions the configuration above asks, written out as a client of
-// /v1/systemone would, independently of the Router's encoder.
+// /v1/systemone would, independently of the Router's encoder, under the IDs
+// the Router asks them by: a question's ID is part of what the model reads.
 var vela2ParityQuestions = map[string]interface{}{
-	"topics": map[string]interface{}{"type": "set", "instructions": "Which topics does the request mention?", "criteria": orderedObject{
+	"systemone:topics": map[string]interface{}{"type": "set", "instructions": "Which topics does the request mention?", "criteria": orderedObject{
 		{"billing", "payments, invoices, charges or refunds"},
 		{"shipping", "deliveries, parcels, tracking or returns"},
 		{"account", "logins, passwords or account settings"},
 		{"medication", "drugs or doses"},
 	}},
-	"entities": map[string]interface{}{"type": "span", "instructions": "Which spans name a place or an organization?", "criteria": orderedObject{
+	"systemone:entities": map[string]interface{}{"type": "span", "instructions": "Which spans name a place or an organization?", "criteria": orderedObject{
 		{"location", "a city, country or address"}, {"organization", "a company or institution"},
 	}},
-	"urgent":             map[string]interface{}{"type": "noul", "instructions": "Does the request need an urgent answer?"},
-	"pii_classifier:pii": map[string]interface{}{"preset": "pii"},
+	"systemone:urgent": map[string]interface{}{"type": "noul", "instructions": "Does the request need an urgent answer?"},
+	"preset:pii":       map[string]interface{}{"preset": "pii"},
 }
 
 var vela2ParityTexts = []string{
@@ -249,7 +238,13 @@ func TestVela2RouterMatchesSystemOne(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	classifier, err := buildClassifierWithAdmission(cfg, nil, nil, nil, nil, RecipeRuntimeOptions{Runtime: serving.New(lease, nil)})
+	// An attached deployment's card arrives with its watcher; a rule asked
+	// before it does is unknown.
+	card, err := lease.Card(context.Background(), "vela2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	classifier, err := buildClassifier(cfg, RecipeRuntimeOptions{Runtime: serving.New(lease, nil)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,11 +252,7 @@ func TestVela2RouterMatchesSystemOne(t *testing.T) {
 	if err = classifier.InitializeRuntime(); err != nil {
 		t.Fatal(err)
 	}
-	card, err := lease.Card(context.Background(), "vela2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	report := map[string]interface{}{"model": card.ID, "revision": card.Revision, "model_sha256": card.ModelSHA256, "device": card.Device, "profile": card.Profile}
+	report := map[string]interface{}{"model": card.ID, "revision": card.Revision, "model_sha256": card.ModelSHA256, "device": card.Device, "numerics": card.Numerics}
 	var rows []map[string]interface{}
 	for _, text := range vela2ParityTexts {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -273,50 +264,60 @@ func TestVela2RouterMatchesSystemOne(t *testing.T) {
 		want := askSystemOne(t, endpoint, text, vela2ParityQuestions)
 		row := map[string]interface{}{"text": text}
 		var selected []string
-		for label, probability := range want.Sets["topics"].Probabilities {
-			if got := results.SignalValues["decision:topics:"+label]; got != probability {
+		for label, probability := range want.Sets["systemone:topics"].Probabilities {
+			if got := results.SignalValues["systemone:topics:"+label]; got != probability {
 				t.Fatalf("%q: set label %s = %v, /v1/systemone %v", text, label, got, probability)
 			}
 		}
-		for _, name := range results.MatchedDecisionRules {
+		for _, name := range results.MatchedSystemOneRules {
 			if label, ok := strings.CutPrefix(name, "topics:"); ok {
 				selected = append(selected, label)
 			}
 		}
 		sort.Strings(selected)
-		wantSelected := slices.Clone(want.Sets["topics"].Selected)
+		wantSelected := slices.Clone(want.Sets["systemone:topics"].Selected)
 		sort.Strings(wantSelected)
 		if !slices.Equal(selected, wantSelected) {
 			t.Fatalf("%q: set labels matched %v, /v1/systemone selected %v", text, selected, wantSelected)
 		}
 		var spanned []string
-		for _, name := range results.MatchedDecisionRules {
+		for _, name := range results.MatchedSystemOneRules {
 			if label, ok := strings.CutPrefix(name, "entities:"); ok {
 				spanned = append(spanned, label)
 			}
 		}
 		sort.Strings(spanned)
-		if wantSpans := spanLabels(want.Spans["entities"]); !slices.Equal(spanned, wantSpans) {
+		if wantSpans := spanLabels(want.Spans["systemone:entities"]); !slices.Equal(spanned, wantSpans) {
 			t.Fatalf("%q: span labels matched %v, /v1/systemone found %v", text, spanned, wantSpans)
 		}
-		for _, span := range want.Spans["entities"] {
-			if got := results.SignalValues["decision:entities:"+span.Label]; got < span.Probability {
+		highest := 0.0
+		for _, span := range want.Spans["systemone:entities"] {
+			if got := results.SignalValues["systemone:entities:"+span.Label]; got < span.Probability {
 				t.Fatalf("%q: span label %s = %v, below a /v1/systemone span at %v", text, span.Label, got, span.Probability)
 			}
+			if span.Label == "location" || span.Label == "organization" {
+				highest = max(highest, span.Probability)
+			}
 		}
-		if got, noul := results.SignalValues["decision:entities"], want.Answers["entities"].Noul; noul == nil || got != *noul {
-			t.Fatalf("%q: span question value %v, /v1/systemone %v", text, got, noul)
+		if got := results.SignalValues["systemone:entities"]; got != highest {
+			t.Fatalf("%q: span rule value %v, the most probable /v1/systemone span of a label %v", text, got, highest)
 		}
-		if got, noul := results.SignalValues["decision:urgent"], want.Answers["urgent"].Noul; noul == nil || got != *noul {
+		if got, noul := results.SignalValues["systemone:urgent"], want.Answers["systemone:urgent"].Noul; noul == nil || got != *noul {
 			t.Fatalf("%q: noul %v, /v1/systemone %v", text, got, noul)
 		}
 		entities := slices.Clone(results.PIIEntities)
 		sort.Strings(entities)
-		if wantPII := spanLabels(want.Spans["pii_classifier:pii"]); !slices.Equal(entities, wantPII) {
+		var counted []modelservice.Span
+		for _, span := range want.Spans["preset:pii"] {
+			if piiCounts(span.Label) {
+				counted = append(counted, span)
+			}
+		}
+		if wantPII := spanLabels(counted); !slices.Equal(entities, wantPII) {
 			t.Fatalf("%q: PII entities %v, /v1/systemone %v", text, entities, wantPII)
 		}
 		row["set_selected"], row["span_labels"], row["pii_entities"] = selected, spanned, entities
-		row["set_probabilities"], row["span_question_noul"] = want.Sets["topics"].Probabilities, results.SignalValues["decision:entities"]
+		row["set_probabilities"], row["span_rule_value"] = want.Sets["systemone:topics"].Probabilities, results.SignalValues["systemone:entities"]
 		rows = append(rows, row)
 	}
 	report["requests"] = rows
@@ -331,34 +332,27 @@ func TestVela2RouterMatchesSystemOne(t *testing.T) {
 
 func checkVela2Hallucination(t *testing.T, endpoint string, classifier *Classifier) []map[string]interface{} {
 	t.Helper()
-	detector, err := NewHallucinationDetector(&classifier.models.cfg.HallucinationMitigation.HallucinationModel, classifier.models)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := detector.Initialize(); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = detector.Close() })
+	detect := classifier.GroundingBackends().Detect
 	var rows []map[string]interface{}
 	for _, item := range vela2ParityHallucinations {
-		got, err := detector.Detect(context.Background(), item.Context, item.Question, item.Answer)
+		got, err := detect(context.Background(), item.Context, item.Question, item.Answer)
 		if err != nil {
 			t.Fatal(err)
 		}
 		want := askSystemOne(t, endpoint, map[string]string{"request": item.Question, "context": item.Context, "answer": item.Answer},
-			map[string]interface{}{"hallucination_detector:halu": map[string]interface{}{"preset": "halu"}})
-		spans := want.Spans["hallucination_detector:halu"]
+			map[string]interface{}{"preset:hallucination": map[string]interface{}{"preset": "halu"}})
+		spans := want.Spans["preset:hallucination"]
 		if len(got.Spans) != len(spans) {
 			t.Fatalf("%q: %d unsupported spans, /v1/systemone %d", item.Answer, len(got.Spans), len(spans))
 		}
 		var texts []string
 		for index, span := range spans {
-			if got.Spans[index].Text != span.Text || math.Abs(float64(got.Spans[index].Confidence)-span.Probability) > 1e-6 {
+			if got.Spans[index] != span.Text {
 				t.Fatalf("%q: span %d = %+v, /v1/systemone %+v", item.Answer, index, got.Spans[index], span)
 			}
 			texts = append(texts, span.Text)
 		}
-		rows = append(rows, map[string]interface{}{"answer": item.Answer, "unsupported": texts, "detected": got.HallucinationDetected})
+		rows = append(rows, map[string]interface{}{"answer": item.Answer, "unsupported": texts, "detected": got.Unsupported})
 	}
 	return rows
 }

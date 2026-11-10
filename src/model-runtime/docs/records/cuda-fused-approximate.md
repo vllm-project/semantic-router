@@ -2,9 +2,9 @@
 
 The fused element-wise Triton kernels of `accel/triton_gfx942.py` run on
 NVIDIA GPUs but do not reproduce the eager ops there, so the CUDA accelerator
-registers them as approximate kernels. Only `max_speed` selects approximate
-kernels, and only for a family that consents (`DtypePolicy.approximate_kernels`):
-Decision 2.0 does, Vela 2.0 does not.
+registers them as approximate kernels. They run only at `--dtype auto`, and
+only for a family that consents (`DtypePolicy.approximate_kernels`): Decision
+2.0 does, so its CUDA deployments run them by default; Vela 2.0 does not.
 
 - **Date:** 2026-10-09.
 - **Device:** one NVIDIA GeForce RTX 4070 Ti SUPER (sm_89, 16 GB), driver
@@ -33,7 +33,8 @@ The public many-question request (`tools/many_questions.py`, a ~300-token
 ticket) at 1, 4, 16 and 64 questions, and the ticket repeated six times at 1
 and 16 questions, loaded through `tools/gpu_parity.py`'s `load` with fused
 kernels and graphs, once with `EngineOptions(exact_kernels_only=False)`.
-Exact profile batching in both runs, so only the kernels differ. Five untimed
+Both runs answer each request alone, in the released batches, so only the
+kernels differ. Five untimed
 runs, then the p50 of 30.
 
 | Model | Shape | Exact kernels (ms) | Approximate kernels (ms) | Faster |
@@ -66,7 +67,7 @@ the same GPU, with approximate kernels allowed:
   relevance (25) decision unchanged, but 23 of 336 span answers changed
   (93.2% unchanged), with a largest probability difference of 0.022. That is
   below the 99% per question type a family needs to consent, so Vela 2.0
-  keeps the exact kernels under `max_speed`.
+  keeps the exact kernels.
 
 Without approximate kernels the same 300 requests are identical on both sizes,
 as before this change.

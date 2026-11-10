@@ -127,9 +127,6 @@ Feature controls:
 | `DASHBOARD_SETUP_MODE` | Deprecated; still read only to report disagreement on `/api/setup/state`. Setup mode is declared by `setup.mode` in the router config. |
 | `SR_BENCH_URL` | Server-owned sr-bench service origin; default `http://127.0.0.1:8090`. |
 | `SR_BENCH_TOKEN_ENV` | Environment variable containing the service token; default `SR_BENCH_TOKEN`. The browser never receives this token. |
-| `ML_PIPELINE_ENABLED` | Enable benchmark, training, and config-generation jobs. Defaults to `false`. |
-| `ML_TRAINING_DIR` | Training script directory for subprocess mode. |
-| `ML_SERVICE_URL` | Use an ML service instead of local subprocesses; co-located sidecars use `http://127.0.0.1:8686`. |
 | `MCP_ENABLED` | Enable MCP server and tool management. |
 
 ## sr-bench evaluation
@@ -317,6 +314,16 @@ Setup mode is the dashboard's first-run state. While it is active the UI forces 
 - **An unreadable or unparsable config resolves to "not in setup mode", deliberately.** Failing closed is the only safe posture for something gating unauthenticated admin creation; the resolver never falls back to the legacy flag on an error path. `/api/setup/state` answers `200` with a diagnostic `reason` (rather than a `500` the frontend silently coerced to "not in setup mode") so the condition is visible instead of silent. The reason never contains config file contents.
 - **`--allow-open-bootstrap` is a separate, still-supported operator escape hatch.** It is unaffected by setup-mode resolution and has no config-file counterpart. Production should provision the admin via `DASHBOARD_ADMIN_*` rather than enabling it.
 - **The `-openclaw*` flags are deprecated and ignored.** OpenClaw was removed. `-openclaw`, `-openclaw-url`, `-openclaw-data` and `-openclaw-token` still parse for this release, so an older manifest keeps starting, and the backend logs one `DEPRECATED` line naming the flags and `OPENCLAW_*` variables it was given. The next release no longer accepts the flags.
+
+## WebSearch rate-limit diagnostics
+
+Authenticated callers with `tools.use` can read the current WebSearch limiter
+snapshot from `GET /api/tools/web-search/stats`. The response contains only
+aggregate counts and fixed limits: active limiter keys, upstream reservations,
+the 60-second rolling window, and the existing per-client and global limits.
+`global_requests` counts reservations in the current Dashboard process, not
+successful requests or a multi-replica deployment total. The endpoint does not
+return identities, IP addresses, client keys, or query content.
 
 ## Router contract access
 

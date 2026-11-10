@@ -19,7 +19,7 @@ conformance = importlib.import_module("recipe_conformance")
 runtime = importlib.import_module("recipe_conformance_runtime")
 sources = importlib.import_module("recipe_conformance_sources")
 http = importlib.import_module("router_calibration_http")
-EXPECTED_BUILTIN_PROBES = 315
+EXPECTED_BUILTIN_PROBES = 366
 
 
 class BuiltInRecipeConformanceTest(unittest.TestCase):
@@ -49,7 +49,7 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
         conformance.validate_probe_references(
             self.recipe / "probes.yaml", self.config, self.manifest, bound
         )
-        self.assertEqual(len(bound), 315)
+        self.assertEqual(len(bound), EXPECTED_BUILTIN_PROBES)
         self.assertEqual(
             {probe.model for probe in bound},
             {
@@ -77,15 +77,25 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
         decisions = [
             decision
             for recipe in self.config["recipes"]
-            for decision in recipe["routing"]["decisions"]
+            for decision in recipe["decisions"]
         ]
         for decision in decisions:
             minimum = decision.get("algorithm", {}).get("minimum_candidates", 0)
             self.assertGreaterEqual(len(decision.get("modelRefs", [])), minimum)
 
+    def test_prepare_runtime_composes_the_bundle_through_the_cli(self):
+        self.assertTrue(self.authored["entrypoints"])
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "runtime/config.yaml"
+            args = argparse.Namespace(
+                recipes_root=self.recipe_root, recipe="mom-v1", config=output
+            )
+            self.assertEqual(conformance.command_prepare_runtime(args), 0)
+            self.assertEqual(conformance.load_yaml_mapping(output), self.config)
+
     def test_policy_mutation_is_rejected(self):
         changed = copy.deepcopy(self.config)
-        changed["recipes"][0]["routing"]["decisions"][0]["priority"] += 1
+        changed["recipes"][0]["decisions"][0]["priority"] += 1
         with self.assertRaisesRegex(ValueError, "changed authored routing policy"):
             runtime.verify_composed_policy(self.authored, changed, self.manifest)
 
@@ -251,19 +261,28 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
             self.assertEqual(len({row["shard"] for row in matrix}), len(matrix))
             built_in = [row for row in matrix if row["source"] == "built-in-latest"]
             self.assertEqual(
-                built_in,
+                [{**row, "variants": 0} for row in built_in],
                 [
                     {
                         "source": "built-in-latest",
-                        "shard": "built-in-latest-0",
+                        "shard": f"built-in-latest-mom-v1-{index}",
                         "recipes": "mom-v1",
-                        "variants": 315,
+                        "probe_shard": f"{index}/16",
+                        "variants": 0,
                         "recipes_root": "config/recipes/built-in/latest",
                         "report_dir": "built-in/latest",
                     }
+                    for index in range(16)
                 ],
             )
-            hardware = {"decision-balance", "vela-amd"}
+            self.assertEqual(sum(row["variants"] for row in built_in), 366)
+            hardware = {
+                recipe.name
+                for recipe in conformance.discover_inventory(
+                    conformance.DEFAULT_RECIPE_ROOT
+                )
+                if recipe.required_devices
+            }
             self.assertTrue(
                 all(not hardware & set(row["recipes"].split(",")) for row in matrix)
             )
@@ -305,23 +324,33 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                 for recipe in item.recipes
             }
 
-            self.assertEqual(len(matrix), len(expected))
             self.assertEqual(
                 {(row["source"], row["recipes"]) for row in matrix},
                 set(expected),
             )
-            for row in matrix:
+            whole = [row for row in matrix if not row["probe_shard"]]
+            self.assertEqual(len(whole), len(expected) - 1)
+            for row in whole:
                 key = (row["source"], row["recipes"])
                 self.assertEqual(row["shard"], f"{row['source']}-{row['recipes']}")
                 self.assertEqual(
                     (row["recipes_root"], row["report_dir"], row["variants"]),
                     expected[key],
                 )
+            sharded = [row for row in matrix if row["probe_shard"]]
+            self.assertEqual(
+                [row["shard"] for row in sharded],
+                [f"built-in-latest-mom-v1-{index}" for index in range(16)],
+            )
+            self.assertEqual(
+                sum(row["variants"] for row in sharded),
+                expected[("built-in-latest", "mom-v1")][2],
+            )
             self.assertIn(("built-in-latest", "mom-v1"), expected)
             self.assertNotIn(("standalone", "vela-amd"), expected)
 
     def test_eval_rejects_zero_or_partial_probe_execution(self):
-        for count in (0, 314, 315):
+        for count in (0, 365, 366):
             with self.subTest(count=count), tempfile.TemporaryDirectory() as directory:
                 probes = runtime.bind_runtime_entrypoints(self.config, self.probes)
                 evaluation = {
@@ -371,11 +400,11 @@ class BuiltInRecipeConformanceTest(unittest.TestCase):
                 )
 
     def test_consolidation_fails_missing_partial_or_empty_results(self):
-        for count in (None, 0, 314, 315):
+        for count in (None, 0, 365, 366):
             with self.subTest(count=count), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 (root / "inventory.json").write_text(
-                    json.dumps({"recipes": [{"name": "mom-v1", "variants": 315}]})
+                    json.dumps({"recipes": [{"name": "mom-v1", "variants": 366}]})
                 )
                 if count is not None:
                     (root / "mom-v1").mkdir()

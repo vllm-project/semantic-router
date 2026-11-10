@@ -130,18 +130,18 @@ func testAuthzHeaderSpoofing(ctx context.Context, client *kubernetes.Clientset, 
 			correctTests, totalTests, successRate)
 	}
 
-	// Return error if all tests failed
-	if correctTests == 0 {
-		return fmt.Errorf("authz header spoofing test failed: 0%% success rate (0/%d correct)", totalTests)
-	}
+	return validateAuthzSpoofingResults(len(testCases), results)
+}
 
-	// Warn if success rate is low (but don't fail)
-	if successRate < 100 {
-		if opts.Verbose {
-			fmt.Printf("[Test] Warning: Some tests failed. Success rate: %.2f%%\n", successRate)
+func validateAuthzSpoofingResults(expected int, results []AuthzSpoofingResult) error {
+	if expected == 0 || len(results) != expected {
+		return fmt.Errorf("authz header spoofing completed %d cases, expected %d", len(results), expected)
+	}
+	for _, result := range results {
+		if !result.Correct || result.Error != "" {
+			return fmt.Errorf("authz header spoofing %q: model=%q, want %q: %s", result.Description, result.ActualModel, result.ExpectedModel, result.Error)
 		}
 	}
-
 	return nil
 }
 
@@ -179,7 +179,7 @@ func testSingleAuthzSpoofing(ctx context.Context, testCase AuthzSpoofingTestCase
 	}
 
 	actualModel := result.ActualModel
-	result.Correct = (actualModel == testCase.ExpectedModel || (actualModel == "" && testCase.ExpectedModel != ""))
+	result.Correct = true // validateAuthzResponse requires the exact non-empty model.
 
 	if verbose {
 		printAuthzSpoofingTestResult(testCase.Description, result, testCase.ExpectedModel, actualModel)
@@ -192,7 +192,9 @@ func createAuthzSpoofingRequest(ctx context.Context, testCase AuthzSpoofingTestC
 	requestBody := map[string]interface{}{
 		"model": "vllm-sr/auto",
 		"messages": []map[string]string{
-			{"role": "user", "content": "Hello, this is a test message"},
+			// The profile routes premium code requests to 14B. A greeting also
+			// routes premium users to 7B, hiding a failed header-stripping rule.
+			{"role": "user", "content": "Write code to implement a sorting function"},
 		},
 	}
 
@@ -207,6 +209,7 @@ func createAuthzSpoofingRequest(ctx context.Context, testCase AuthzSpoofingTestC
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-vsr-debug", "true")
 
 	if testCase.UserID != "" {
 		req.Header.Set("x-authz-user-id", testCase.UserID)
@@ -240,45 +243,36 @@ func validateAuthzResponse(resp *http.Response, result *AuthzSpoofingResult, tes
 		return fmt.Errorf("failed to extract model: %w", err)
 	}
 	result.ActualModel = actualModel
+	if testCase.ExpectedModel == "" || actualModel != testCase.ExpectedModel {
+		return fmt.Errorf("selected model %q, expected %q after stripping client identity", actualModel, testCase.ExpectedModel)
+	}
 	return nil
 }
 
 func extractModelFromResponse(resp *http.Response) (string, error) {
-	if model := resp.Header.Get("x-ai-eg-model"); model != "" {
-		return model, nil
-	}
-
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	var responseBody map[string]interface{}
+	var responseBody struct {
+		Model string `json:"model"`
+	}
 	if err := json.Unmarshal(bodyBytes, &responseBody); err != nil {
 		return "", fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	return extractModelFromBody(responseBody), nil
-}
-
-func extractModelFromBody(responseBody map[string]interface{}) string {
-	choices, ok := responseBody["choices"].([]interface{})
-	if !ok || len(choices) == 0 {
-		return ""
+	selected := resp.Header.Get("x-vsr-selected-model")
+	if selected != "" && responseBody.Model != "" && selected != responseBody.Model {
+		return "", fmt.Errorf("selected model %q disagrees with response model %q", selected, responseBody.Model)
 	}
-
-	choice, ok := choices[0].(map[string]interface{})
-	if !ok {
-		return ""
+	if responseBody.Model != "" {
+		return responseBody.Model, nil
 	}
-
-	message, ok := choice["message"].(map[string]interface{})
-	if !ok {
-		return ""
+	if selected != "" {
+		return selected, nil
 	}
-
-	model, _ := message["model"].(string)
-	return model
+	return "", fmt.Errorf("response provides neither a top-level model nor x-vsr-selected-model")
 }
 
 func printAuthzSpoofingTestResult(description string, result AuthzSpoofingResult, expectedModel, actualModel string) {

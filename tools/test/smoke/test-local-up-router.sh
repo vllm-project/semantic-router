@@ -18,6 +18,8 @@ WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/local-up-smoke.XXXXXX")
 
 MOCK_PID=""
 HARNESS_PID=""
+SMOKE_PASSED=0
+SMOKE_REPORT=${LOCAL_DEV_SMOKE_REPORT_PATH:-}
 
 log() { echo "[local-up-smoke] $*"; }
 
@@ -42,7 +44,35 @@ cleanup() {
     kill "${MOCK_PID}" 2>/dev/null || true
   fi
 }
-trap cleanup EXIT INT TERM
+finish() {
+  status=$?
+  trap - EXIT INT TERM
+  cleanup
+  if [[ -n "${SMOKE_REPORT}" ]]; then
+    python3 - "${SMOKE_REPORT}" "${status}" "${SMOKE_PASSED}" <<'PYREPORT'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+case = "tools/test/smoke/test-local-up-router.sh"
+passed = sys.argv[2:] == ["0", "1"]
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(json.dumps({
+    "expected_cases": [case],
+    "cases": [{"id": case, "status": "passed" if passed else "failed"}],
+}) + "\n")
+PYREPORT
+  fi
+  exit "${status}"
+}
+trap finish EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+# Never reuse a receipt left by an interrupted previous invocation.
+if [[ -n "${SMOKE_REPORT}" ]]; then
+  rm -f -- "${SMOKE_REPORT}"
+fi
 
 runtime_bin=${VLLM_SRUN_COMMAND%% *}
 command -v "${runtime_bin}" >/dev/null 2>&1 ||
@@ -116,4 +146,5 @@ done
 [[ "${routed}" == "yes" ]] || fail "Envoy access log never showed selected_model=Model-A via vllm_backend_cluster; requests returned 200 but the router (ext_proc) did not process them"
 log "Got HTTP 200; response: $(head -c 200 "${WORK_DIR}/response.json")"
 
+SMOKE_PASSED=1
 log "PASS: request reached the mock backend through Envoy and was processed by the router."

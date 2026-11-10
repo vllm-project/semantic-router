@@ -24,6 +24,11 @@ jobs:
       HF_HUB_DISABLE_XET: "1"
       MODEL_TEST_REPORT_DIR: ${{ github.workspace }}/.agent-harness/model-tests/${{ fromJSON(inputs.batch).id }}
     steps:
+      - name: Record Runner Environment
+        working-directory: ${{ github.workspace }}
+        env:
+          OBSERVED_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+        run: echo "CI_RUNNER_ENVIRONMENT=$OBSERVED_RUNNER_ENVIRONMENT" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: ./.github/actions/free-disk-space
       - uses: actions/setup-python@v5
@@ -48,6 +53,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          overwrite: true
           name: ci-result-${{ fromJSON(inputs.batch).id }}
           path: .agent-harness/model-tests/${{ fromJSON(inputs.batch).id }}/results/*.json
           include-hidden-files: true
@@ -56,6 +62,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          overwrite: true
           name: platform-${{ fromJSON(inputs.batch).id }}
           path: .agent-harness/model-tests/${{ fromJSON(inputs.batch).id }}/
           include-hidden-files: true

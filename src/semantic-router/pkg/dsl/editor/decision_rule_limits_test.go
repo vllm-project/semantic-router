@@ -12,14 +12,15 @@ func TestFullDocumentEditorPreservesCustomRuleBudget(t *testing.T) {
 		rule = map[string]interface{}{"operator": "NOT", "conditions": []interface{}{rule}}
 	}
 	base, err := json.Marshal(map[string]interface{}{
-		"version": "v0.3",
+		"version": "v0.5",
 		"global": map[string]interface{}{"router": map[string]interface{}{
 			"config_source": "kubernetes", "decision_rule_limits": map[string]int{"max_depth": 32, "max_nodes": 512},
 		}},
-		"routing": map[string]interface{}{
+		"recipes": []interface{}{map[string]interface{}{
+			"name":      "default",
 			"signals":   map[string]interface{}{"keywords": []interface{}{map[string]interface{}{"name": "urgent", "operator": "OR", "keywords": []string{"urgent"}}}},
 			"decisions": []interface{}{map[string]interface{}{"name": "bounded", "rules": rule}},
-		},
+		}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -67,12 +68,13 @@ ROUTE bounded {PRIORITY 1 WHEN NOT keyword("urgent") MODEL "test"}`
 }
 
 func TestEditorBareLeafRoundTripUsesOneNode(t *testing.T) {
-	base := `version: v0.3
+	base := `version: v0.5
 global:
   router:
     config_source: kubernetes
     decision_rule_limits: {max_depth: 1, max_nodes: 1}
-routing:
+recipes:
+- name: default
   signals:
     keywords:
       - {name: urgent, operator: OR, keywords: [urgent]}

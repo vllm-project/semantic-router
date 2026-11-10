@@ -7,8 +7,8 @@ records; raw results are in `vela1-performance.json`.
 
 - **Date:** 2026-10-05. **Runtime commits**, unless a row names another:
   - CPU: `efb5ec4d7`, the staging head `b604edeab` with `vela1`'s A/B tool
-    commit merged. On it, `exact` lets rows of every length share a batch on
-    models that pack rows.
+    commit merged. On it, merged forwards let rows of every length share a
+    batch on models that pack rows.
   - ROCm: `35ff3a8a5`, which adds the fixes for a shared GPU process and
     leaves the CPU code as it was, in the router's ROCm image stack (Python
     3.12.14, PyTorch 2.12.0+rocm7.2, HIP 7.2.53211, Triton 3.7.0, fla-core
@@ -33,7 +33,8 @@ records; raw results are in `vela1-performance.json`.
   - ROCm: one AMD Instinct MI325X with 8 pinned host vCPUs.
 - **Runtime side:** `Runtime.call` as the HTTP server calls it: one event
   loop, the encoded body size passed so small requests plan inline, result
-  cache off, `exact` unless a row says otherwise.
+  cache off, merged (the queued requests of a batch-invariant model share
+  forwards without a window, as they still do) unless a row says otherwise.
 
 ## CPU, interleaved with the legacy facade
 
@@ -47,10 +48,11 @@ threads capped at 16: the systemd scope `vela1-ab-efb5ec4d7-021909`
   input, then the runtime answers the same input. The order flips each
   round, over 5 rounds of all 547 / 64 inputs.
 - **Under load:** 20 s windows of 4 closed-loop callers then rotate over the
-  legacy facade, the runtime's `exact` profile and its `batching` profile
+  legacy facade, the runtime merged and the runtime windowed (rows collected
+  for the 2 ms batching window first)
   (5 rounds, the order shifting by one each round; medians).
 
-`exact` batches the requests queued together, because the CPU forward is
+Merged forwards batch the requests queued together, because the CPU forward is
 batch-invariant (next section), so its answers stay those of a request
 alone. The forward packs rows without padding, so rows of every length share
 those batches. The node's 1-minute load stayed at or below 84 (median 46) on
@@ -67,7 +69,7 @@ The intervals are 95%:
 
 A row passes when its whole interval is at or above 1.
 
-| Job | Pairs | p50 legacy → runtime (ms) [legacy / runtime, 95% CI] | p95 legacy → runtime (ms) [legacy / runtime, 95% CI] | Median per-input speedup (95% CI) | 4 callers, calls/s: legacy → `exact` | `exact` / legacy rate (95% CI) |
+| Job | Pairs | p50 legacy → runtime (ms) [legacy / runtime, 95% CI] | p95 legacy → runtime (ms) [legacy / runtime, 95% CI] | Median per-input speedup (95% CI) | 4 callers, calls/s: legacy → merged | merged / legacy rate (95% CI) |
 | --- | --- | --- | --- | --- | --- | --- |
 | domain | 2,735 | 37.86 → 12.50 [3.00, 3.08] | 215.42 → 83.61 [2.31, 2.99] | 3.08× [3.05, 3.11] | 40.6 → 78.8 | 1.91× [1.80, 2.02] |
 | guard | 2,725 | 37.88 → 12.57 [2.97, 3.05] | 209.66 → 33.27 [5.96, 6.55] | 3.14× [3.11, 3.17] | 18.8 → 48.8 | 2.58× [2.43, 2.74] |
@@ -81,7 +83,7 @@ A row passes when its whole interval is at or above 1.
 | pii_truncate | 2,735 | 93.28 → 13.60 [6.78, 6.99] | 284.17 → 57.07 [4.22, 5.76] | 6.94× [6.92, 6.97] | 27.1 → 79.8 | 2.93× [2.84, 3.01] |
 | halu | 320 | 1414.38 → 148.30 [8.91, 10.06] | 41,279.77 → 3,149.38 [8.28, 13.95] | 9.54× [9.28, 9.77] | 1.6 → 3.2 | 2.06× [1.85, 2.29] |
 
-Under load, `exact` serves 1.8–2.9× legacy's calls per second.
+Under load, merged serves 1.8–2.9× legacy's calls per second.
 
 - **Windowed jobs (Guard, Hazard, PII) and Halu:** they scan long prompts
   in full. The scheduler (design section 9) answers each job as soon as its
@@ -91,17 +93,18 @@ Under load, `exact` serves 1.8–2.9× legacy's calls per second.
 - **Short prompts:** the scheduler plans the jobs it takes between two
   forwards on their own. With 4 closed-loop callers that is usually one new
   request, so concurrent short calls rarely share a forward (74–80
-  calls/s). `batching` waits up to 2 ms for company and serves
+  calls/s). Windowed batching waits up to 2 ms for company and serves
   108–114 calls/s on the same prompts. At `93a3492c0`, before
-  this scheduler, `exact` merged everything queued (102–110/s on
+  this scheduler, the merged path merged everything queued (102–110/s on
   them) but left PII and Hazard at 1.1× and 1.5× legacy.
 
-`batching` is opt-in; the router deploys `exact`. It waits up to 2 ms for
-concurrent requests and fills each forward up to 65,536 tokens, where
-`exact` caps a shared batch at 512. That pays on short prompts. On windowed
+Windowed batching was opt-in then; the router deployed merged, which is
+what a batch-invariant model always runs now. Windowed waits up to 2 ms
+for concurrent requests and fills each forward up to 65,536 tokens, where
+merged caps a shared batch at 512. That pays on short prompts. On windowed
 jobs, a short call then shares its forward with a long scan's windows:
 
-| Job | 4 callers, calls/s: legacy → `batching` | `batching` / legacy rate (95% CI) | `batching` / `exact` |
+| Job | 4 callers, calls/s: legacy → windowed | windowed / legacy rate (95% CI) | windowed / merged |
 | --- | --- | --- | --- |
 | domain | 40.6 → 109.7 | 2.73× [2.62, 2.84] | 1.39× |
 | guard | 18.8 → 53.8 | 2.79× [2.57, 3.03] | 1.10× |
@@ -115,8 +118,8 @@ jobs, a short call then shares its forward with a long scan's windows:
 | pii_truncate | 27.1 → 110.3 | 4.00× [3.65, 4.39] | 1.38× |
 | halu | 1.6 → 2.6 | 1.64× [1.56, 1.73] | 0.81× |
 
-Every other `batching` row's interval lies above legacy; PII's at 1.09× [0.99,
-1.20] (`exact`, the default: 1.9×) is level with it, its interval reaching 1.
+Every other windowed row's interval lies above legacy; PII's at 1.09× [0.99,
+1.20] (merged, the default: 1.9×) is level with it, its interval reaching 1.
 
 ## ROCm
 
@@ -144,7 +147,7 @@ the rounds.
 
 The intervals are computed as on CPU.
 
-| Job | Pairs | p50 legacy → runtime (ms) [legacy / runtime, 95% CI] | p95 legacy → runtime (ms) [legacy / runtime, 95% CI] | Median per-input speedup (95% CI) | 4 callers, calls/s: legacy → `exact` | `exact` / legacy rate (95% CI) |
+| Job | Pairs | p50 legacy → runtime (ms) [legacy / runtime, 95% CI] | p95 legacy → runtime (ms) [legacy / runtime, 95% CI] | Median per-input speedup (95% CI) | 4 callers, calls/s: legacy → alone | alone / legacy rate (95% CI) |
 | --- | --- | --- | --- | --- | --- | --- |
 | domain | 2,725 | 153.27 → 1.89 [81.03, 81.34] | 154.87 → 3.28 [31.05, 49.07] | 81.15× [80.97, 81.30] | 6.5 → 436.7 | 67.73× [66.80, 68.68] |
 | guard (ROCm EP) | 2,725 | 243.05 → 1.87 [129.46, 129.97] | 253.82 → 3.29 [52.28, 80.42] | 130.15× [129.91, 130.39] | 4.1 → 430.8 | 105.66× [103.11, 108.28] |
@@ -170,15 +173,15 @@ inputs, against legacy candle on CPU:
 - sequence models: p50 33–40 → 1.8–1.9 ms, and 4-caller throughput
   35–41 → 431–478 calls/s.
 
-Profiles on ROCm (AMD-recipe inputs, 4 callers):
+Batching on ROCm (AMD-recipe inputs, 4 callers):
 
-| Profile | Domain p50 / p95 (ms) | Calls/s, sequence models | Values |
+| Configuration | Domain p50 / p95 (ms) | Calls/s, sequence models | Values |
 | --- | --- | --- | --- |
-| `exact` (`35ff3a8a5`, the router image's stack) | 1.88 / 3.51 | 413–439 | the parity record's |
-| `batching` (`35ff3a8a5`, the router image's stack) | 3.98 / 5.56 | 601–612 | identical to `exact` one request at a time |
-| `max_speed`, BF16 copy (`973842d9e`, release image, records only) | 6.69 / 11.00 | 437–468 | fails the 99% floor for PII and Halu |
+| Alone (`35ff3a8a5`, the router image's stack) | 1.88 / 3.51 | 413–439 | the parity record's |
+| Batched, today's default on a GPU (`35ff3a8a5`, the router image's stack) | 3.98 / 5.56 | 601–612 | identical to alone one request at a time |
+| Batched on a BF16 copy (`973842d9e`, release image, records only) | 6.69 / 11.00 | 437–468 | fails the 99% floor for PII and Halu |
 
-`batching` waits up to 2 ms for concurrent requests, so a lone request pays
+Batching waits up to 2 ms for concurrent requests, so a lone request pays
 the window, and under load it serves about 40% more. The BF16 copy adds a
 cast per linear to a launch-bound forward and is slower still, so the
 family consents to none (`vela1-parity.md`).
@@ -234,7 +237,7 @@ Every number below is Vela 307M in FP32.
   per process, no page faults, as in a serving process), is 1.7–2.3× faster
   at every length: 10 tokens 15.6 → 6.7 ms, 64 29.5 → 14.6, 128 42.8 → 21.9,
   256 65.6 → 34.5, 512 112 → 62, 1,024 206 → 116, 2,048 413 → 250.
-- **CPU: `exact` batches concurrent requests without changing an answer.**
+- **CPU: merged forwards batch concurrent requests without changing an answer.**
   Each row's forward is bit-identical alone or inside any batch, given:
   - packed linears;
   - GeGLU and the score sigmoid on aligned rows (`rowwise`);
@@ -242,9 +245,9 @@ Every number below is Vela 307M in FP32.
   - one rotary table per grid width;
   - grids of one length only.
 
-  The family probes this on the host at load before it lets `exact`
-  batch, so a PyTorch build where a kernel is not invariant keeps one
-  request per forward.
+  The family probes this on the host at load before it merges requests
+  without a window, so on a PyTorch build where a kernel is not invariant
+  the model batches after the window instead, as on a GPU.
 - **CPU: one device thread.** PyTorch's OpenMP keeps a thread team per
   calling thread. Two teams on 16 vCPUs stop libgomp's spin-waiting, so
   every parallel region pays a wake-up. With one thread doing all CPU device
@@ -260,7 +263,7 @@ python3 tools/legacy_parity.py build-legacy --recipe cpu --tree <legacy tree> \
 sudo systemd-run --scope -p AllowedCPUs=96-111 --uid=$(id -u) --gid=$(id -g) \
   python3 tools/legacy_parity.py ab --binary legacy-cpu.test \
   --tree <legacy tree> --cache <hf cache> --threads 16 --rounds 5 --concurrency 4 \
-  --seconds 20 --profile batching --out ab.json
+  --seconds 20 --out ab.json
 # a stopped run, or more rounds: the same command with --rounds N --resume ab.raw.json
 
 # ROCm, each round on one GPU and the same host cores, the order flipping each round:
