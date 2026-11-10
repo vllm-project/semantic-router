@@ -2,7 +2,7 @@
 slug: vsr-claude-code
 title: "vSR: vLLM Semantic Router Inside Claude Code"
 description: "vSR brings vLLM Semantic Router's decision model into Claude Code. It routes subagents to the right model, hides personal data and secrets before Claude reads them, and holds risky Bash commands for you to confirm."
-authors: [theohsiung, aayushsaini101, abhinav]
+authors: [theohsiung, abhinav]
 tags: [claude-code, agents, routing, safety, privacy, vela, semantic-router, community]
 image: /img/blog/vsr-claude-code/05-vsr-pane.png
 ---
@@ -171,6 +171,16 @@ vSR is six small apps on one decision model. You can turn each one on or off.
   **WITHHELD**: redact could not check `notes.md`, so Claude got nothing from it rather than an unchecked file.
 </ArticleFigure>
 
+### Limitations
+
+vSR narrows what reaches Claude and what runs. It is not a sandbox, and each app has edges worth knowing.
+
+- **Redact is best effort.** The decision model finds names, emails, phone numbers, card numbers, addresses and ID numbers by reading them, and fixed rules catch common secret formats. Either can miss a value written in an unusual way. With the default 3 s wait on a CPU, redact reads about the first 8,000 characters of an output and marks the rest `PARTIAL`. Keep real secrets out of files the agent can read: redact is a second line of defence, not the first.
+- **Shield will not catch every injection.** It flags text that reads as instructions to an AI agent, scored against a 0.90 line, and an instruction phrased as ordinary prose can score under it. Shield checks `Read` and `WebFetch` output, not Bash output, so text pulled in with a command such as `gh issue view` gets redact but not shield.
+- **Guard's scores can be wrong in both directions.** A harmless command can be held, and a risky one can score under the line. The fixed rules are the only hard guarantee. Guard adds holds on top of Claude Code's own permissions, so keep those in place.
+- **Default waits let unchecked work through.** When the decision model is slow or offline, redact, shield and guard step aside and say so, with a `SKIPPED` line or the `model offline` tally. Set a wait to `until done` where you would rather wait or withhold.
+- **Routing savings are estimates.** The cost row prices the subagent turns vSR saw at list price. It is not your bill.
+
 ## What you see
 
 {/* 5. Cards only when something needs your eyes (HELD, DECLINED/APPROVED, SHIELDED, UNVERIFIED,
@@ -235,4 +245,4 @@ On a CPU, each app's wait is the dial. Redact, shield and guard wait 3, 2 and 3 
 
 ⟦What's next, and where to send feedback.⟧
 
-**[Plugin README](https://github.com/vllm-project/semantic-router/tree/main/src/claude-code) · [Report an issue](https://github.com/vllm-project/semantic-router/issues)**
+**[Plugin README](https://github.com/vllm-project/semantic-router/tree/main/src/agent-harness/claude-code) · [Report an issue](https://github.com/vllm-project/semantic-router/issues)**
