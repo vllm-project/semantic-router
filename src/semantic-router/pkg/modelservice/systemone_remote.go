@@ -65,16 +65,17 @@ type RemoteSystemOne struct {
 }
 
 type systemOneDeployment struct {
-	name     string
-	model    string
-	declared []string
-	presets  []string
-	client   *connector.Client
-	cache    *resultCache
-	started  atomic.Bool
-	prepared sync.Once
-	listed   atomic.Pointer[ModelCard]
-	failures sync.Map
+	name       string
+	model      string
+	declared   []string
+	presets    []string
+	modalities []string
+	client     *connector.Client
+	cache      *resultCache
+	started    atomic.Bool
+	prepared   sync.Once
+	listed     atomic.Pointer[ModelCard]
+	failures   sync.Map
 }
 
 // NewRemoteSystemOne prepares a client for each systemone deployment of cfg.
@@ -111,7 +112,7 @@ func NewRemoteSystemOne(cfg *config.RouterConfig) (*RemoteSystemOne, error) {
 		remote.deployments[name] = &systemOneDeployment{
 			name: name, model: deployment.Model,
 			declared: deployment.DeclaredQuestionTypes(), presets: deployment.DeclaredPresets(),
-			client: client, cache: cache,
+			modalities: deployment.DeclaredModalities(), client: client, cache: cache,
 		}
 	}
 	return remote, nil
@@ -119,7 +120,8 @@ func NewRemoteSystemOne(cfg *config.RouterConfig) (*RemoteSystemOne, error) {
 
 // Card is the card name's questions compile against: the question types and
 // presets its API lists for the model in GET <endpoint>/models, else the
-// declared question_types and presets, else the System One types. The first
+// declared ones, else the System One types; and the modalities it lists, else
+// the declared ones, else text. The first
 // call reads the listing in the background unless a preparation has read it;
 // until it answers, the declared or System One types apply.
 func (r *RemoteSystemOne) Card(name string) (ModelCard, bool) {
@@ -250,7 +252,9 @@ func (r *RemoteSystemOne) deployment(name string) *systemOneDeployment {
 }
 
 func (d *systemOneDeployment) declaredCard() ModelCard {
-	return RemoteCard(d.model, d.declared, d.presets)
+	card := RemoteCard(d.model, d.declared, d.presets)
+	card.Modalities = slices.Clone(d.modalities)
+	return card
 }
 
 // send asks a fused task's questions in one System One call. A System One
@@ -430,17 +434,27 @@ func (d *systemOneDeployment) listing(ctx context.Context) (ModelCard, error) {
 			ID            string   `json:"id"`
 			QuestionTypes []string `json:"question_types"`
 			Presets       []string `json:"presets"`
+			Modalities    []string `json:"modalities"`
 		} `json:"data"`
 	}
 	if json.Unmarshal(data, &models) != nil {
 		return ModelCard{}, errors.New("the models listing is not a model list")
 	}
 	for _, entry := range models.Data {
-		if entry.ID == d.model && len(entry.QuestionTypes) > 0 {
-			return RemoteCard(d.model, entry.QuestionTypes, entry.Presets), nil
+		if entry.ID != d.model || (len(entry.QuestionTypes) == 0 && entry.Modalities == nil) {
+			continue
 		}
+		card := d.declaredCard()
+		if len(entry.QuestionTypes) > 0 {
+			card.QuestionTypes, card.Presets = entry.QuestionTypes, entry.Presets
+		}
+		if entry.Modalities != nil {
+			// A System One request carries no audio part.
+			card.Modalities = slices.DeleteFunc(entry.Modalities, func(modality string) bool { return modality == config.SystemOneModalityAudio })
+		}
+		return card, nil
 	}
-	return ModelCard{}, fmt.Errorf("the models listing gives no question types for %q", d.model)
+	return ModelCard{}, fmt.Errorf("the models listing gives no question types or modalities for %q", d.model)
 }
 
 // reportFailure logs each kind of failure once per deployment and generation;

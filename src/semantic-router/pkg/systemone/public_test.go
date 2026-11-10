@@ -156,6 +156,27 @@ func TestPublicDiscoveryListsTheQuestionTypesARemoteDeploymentReads(t *testing.T
 	}
 }
 
+// The listing also gives the input modalities of each model it lists, so a
+// remote deployment's image and video rules resolve to a model that reads them.
+func TestPublicDiscoveryListsTheModalitiesARemoteDeploymentReads(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/d3-ultra"}}
+	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/d3-ultra"}}}
+	server := httptest.NewServer(Handler(cfg, listener, nil))
+	defer server.Close()
+	client := &config.RouterConfig{}
+	client.ModelDeployments = map[string]config.ModelDeployment{"engine": {Provider: config.SystemOneProvider, Endpoint: server.URL + "/v1/systemone", Model: "vllm-sr/d3-ultra"}}
+	remote, err := modelservice.NewRemoteSystemOne(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = remote.Close() }()
+	card, err := remote.PrepareCard(context.Background(), "engine")
+	if err != nil || !slices.Equal(card.ReadModalities(), []string{"text", "image", "video"}) {
+		t.Fatalf("card %+v, %v; want the listed d3-ultra modalities", card, err)
+	}
+}
+
 func TestPublicSystemOneRequiresNonemptyCredentialsOnProtectedListeners(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}

@@ -74,12 +74,12 @@ func (c *RouterConfig) deploymentAnswers(name string) (questionTypes, modalities
 	return nil, nil
 }
 
-// DeploymentQuestionTypes are the question types of the model a deployment
-// serves, as far as the configuration tells (deploymentAnswers); nil is
-// unknown.
-func (c *RouterConfig) DeploymentQuestionTypes(name string) []string {
-	questionTypes, _ := c.deploymentAnswers(name)
-	return slices.Clone(questionTypes)
+// DeploymentAnswers are the question types and input modalities of the model
+// a deployment serves, as far as the configuration tells (deploymentAnswers);
+// nil is unknown.
+func (c *RouterConfig) DeploymentAnswers(name string) (questionTypes, modalities []string) {
+	questionTypes, modalities = c.deploymentAnswers(name)
+	return slices.Clone(questionTypes), slices.Clone(modalities)
 }
 
 // catalogModel is the built-in decision model a model_runtime deployment

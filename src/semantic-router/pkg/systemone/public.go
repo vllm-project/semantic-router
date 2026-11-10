@@ -243,8 +243,9 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 }
 
 // publishedModels are the listener's System One models that can be served now.
-// A deployment's model lists the question types the configuration knows it
-// answers, which a systemone deployment naming this API reads.
+// A deployment's model lists the question types and input modalities the
+// configuration knows it answers and reads, which a systemone deployment naming
+// this API reads.
 func publishedModels(config *routerconfig.RouterConfig, listener *routerconfig.Listener) []map[string]any {
 	models := make([]map[string]any, 0, len(listener.SystemOne.Models))
 	for _, id := range listener.SystemOne.Models {
@@ -256,8 +257,11 @@ func publishedModels(config *routerconfig.RouterConfig, listener *routerconfig.L
 		forwarded := routed || config.IsSystemOneBackend(id)
 		if forwarded || err == nil {
 			model := map[string]any{"id": id, "object": "model", "api": "systemone", "routing": routed}
-			if questionTypes := config.DeploymentQuestionTypes(name); !forwarded && questionTypes != nil {
+			if questionTypes, modalities := config.DeploymentAnswers(name); !forwarded && questionTypes != nil {
 				model["question_types"] = questionTypes
+				if modalities != nil {
+					model["modalities"] = modalities
+				}
 			}
 			models = append(models, model)
 		}
