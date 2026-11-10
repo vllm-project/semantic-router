@@ -81,6 +81,175 @@ entrypoints:
     recipe: default
 ```
 
+## Claude Code and Codex CLI
+
+Claude Code on a Claude subscription runs Anthropic's models, and the
+[vSR plugin](https://github.com/vllm-project/semantic-router/tree/main/src/claude-code)
+adds guard, shield, redact and check to it without a gateway. Route Claude Code
+or Codex CLI through the Router when your own models or provider keys should
+answer: the Router then chooses the model for every call, the main
+conversation included, while vSR keeps judging tool output and shell commands
+inside Claude Code. Codex reaches the Router the same way; vSR's checks are not
+available for Codex yet.
+
+The two harnesses need different Router-wide settings: the losses the Router
+accepts, the headers that identify a session and a subagent, and defaults for
+what the harness leaves out. Start with one Router for each; both can use the
+same backends and decision model. This was checked with Claude Code 2.1.322
+with vSR 0.1.10, Claude Code 2.1.317 without it, and Codex CLI 0.166.0, against
+`anthropic` provider models served by vLLM 0.32.0.
+
+### Connect with `vllm-sr connect`
+
+```bash
+export VLLM_SR_API_KEY=<the listener's API key>   # leave unset when it has none
+vllm-sr connect claude-code --gateway http://localhost:8899 --config claude-code.yaml
+vllm-sr connect codex --gateway http://localhost:8900 --config codex.yaml
+codex --profile vllm-sr
+```
+
+Here each harness has its own Router, on port 8899 with `claude-code.yaml` and
+on port 8900 with `codex.yaml`.
+
+The command shows the changes and asks before writing them:
+
+- Claude Code: the `env` block of `~/.claude/settings.json` (or
+  `$CLAUDE_CONFIG_DIR/settings.json`; `--scope project` writes
+  `.claude/settings.local.json`). The other settings stay as they are. The
+  file holds the key when one is set, so only you can read it afterwards.
+- Codex: a `vllm-sr` provider in `~/.codex/config.toml` and a
+  `~/.codex/vllm-sr.config.toml` profile that selects it and turns off hosted
+  web search, which the Router does not serve.
+
+It then checks the Router configuration given with `--config` and prints the
+settings below that are missing, without changing it, and sends one tool call
+in the harness's protocol: `System Two: ok` names the model that answered and
+whether it called the tool. With the vSR plugin installed it also reports
+whether the plugin's decision runtime answers (`System One: ok` or `offline`).
+`--dry-run` prints the plan and writes nothing. `--undo` puts back what each
+key held before the first run, leaves alone a key changed since, and keeps
+everything else in the files.
+
+### Router settings for Claude Code
+
+```yaml
+global:
+  router:
+    allow_lossy_translation: [tools.defer_loading]
+    learning:
+      enabled: true
+      protection:
+        enabled: true
+        scope: session
+        identity:
+          headers:
+            session: x-claude-code-session-id
+            agent: x-claude-code-agent-id
+```
+
+Claude Code's tool search marks tools for loading on demand. Without
+`tools.defer_loading` the Router refuses the first calls of every session, and
+Claude Code goes on without tool search. Toward an `openai` backend, also list
+`tool_result.is_error`, `messages[].role` and `content.file`, as
+[protocol compatibility](protocol-compatibility#validation-and-failure-behavior)
+describes. An `anthropic` backend receives those as sent.
+
+### Router settings for Codex CLI
+
+```yaml
+recipes:
+  - name: default
+    decisions:
+      - name: agents
+        # rules and modelRefs as in your recipe
+        plugins:
+          - type: request_params
+            configuration:
+              default_max_tokens: 32000
+global:
+  router:
+    allow_lossy_translation: [reasoning.signature]
+    learning:
+      enabled: true
+      protection:
+        enabled: true
+        scope: session
+        identity:
+          headers:
+            session: session-id
+            agent: thread-id
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
+```
+
+Codex sends no output limit, so a decision that sends it to an `anthropic`
+backend sets one. Thinking from an `anthropic` backend carries a signature that
+a Responses client cannot receive: without `reasoning.signature` the stream
+ends in a `lossy_translation` error where the thinking block closes, and Codex
+reconnects until it gives up. The Responses endpoint needs the Router's
+Responses service and store. See [Codex CLI](protocol-compatibility#codex-cli)
+for the other fields Codex sends.
+
+### With the vSR plugin
+
+Turn the plugin's router app off (`/vsr router off`) so the plugin and the
+Router do not both choose a subagent's model. Its escalate app still asks Claude
+to re-check an answer you push back on, but no longer moves the next subagent
+up a model, since that step belongs to the router app. The other apps work as
+before. When the plugin's decision runtime does not answer, its tally says
+`model offline` and its checks step aside while Claude goes on, except guard's
+fixed rules, which still hold, and an app set to wait until done, which withholds
+the output or holds the command instead. A `SKIPPED` row says what one check
+left unchecked. Both are explained in the
+[plugin README](https://github.com/vllm-project/semantic-router/tree/main/src/claude-code#what-you-see).
+
+### Settings by hand
+
+The command writes these. Claude Code reads them from its settings:
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://localhost:8899",
+    "ANTHROPIC_AUTH_TOKEN": "<the listener's API key, or any value without one>",
+    "ANTHROPIC_MODEL": "vllm-sr/auto",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "vllm-sr/auto",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "vllm-sr/auto",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "vllm-sr/auto",
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000"
+  }
+}
+```
+
+Codex reads the provider from `~/.codex/config.toml`:
+
+```toml
+[model_providers.vllm-sr]
+name = "vLLM Semantic Router"
+base_url = "http://localhost:8899/v1"
+wire_api = "responses"
+env_key = "VLLM_SR_API_KEY"
+```
+
+and the profile from `~/.codex/vllm-sr.config.toml`, whose keys come before any
+table:
+
+```toml
+model = "vllm-sr/auto"
+model_provider = "vllm-sr"
+web_search = "disabled"
+```
+
+Codex does not know `vllm-sr/auto`, so it warns that it uses fallback model
+metadata. Set `model_context_window` in the profile when that guess should
+follow your backends.
+
+The Codex TUI sends a `namespace` tool on every turn. A Router that refuses
+namespace tools answers its first turn with `unsupported_tool`; on such a
+Router, run `codex exec` with `[features] multi_agent = false` instead.
+
 ## Set budgets before running a task
 
 `GET /v1/models` discovers virtual names and routing metadata; it does not
