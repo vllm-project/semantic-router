@@ -17,7 +17,7 @@ Router 提问的每个 System One 模型都使用同一套 HTTP API，无论它�
 | --- | --- |
 | `POST /v1/systemone` | 回答请求。任何一个无法回答的问题都会让整个请求失败 |
 | `POST /v1/decisions` | 模型运行时对同一调用的形式：请求体相同，失败的问题在 200 响应中带着自己的错误 |
-| `GET /v1/models` | 列出运行时用来回答的模型及其模型卡；Router 或 Engine 前端在 `GET /v1/systemone/models` 列出其 System One 模型 |
+| `GET /v1/models` | 列出运行时用来回答的模型及其模型卡；Router 或 Engine 前端在 `GET /v1/systemone/models` 列出其 System One 模型，并给出其所服务的每个内置决策模型的 `question_types` |
 
 [模型运行时参考](../model-runtime/reference#decisions)记录了运行时读取的每个字段，其 OpenAPI 契约是权威来源。下面的两种形式属于契约 4.0.0，运行时在 `GET /health` 中以 `api_version` 报告它。Router 拒绝任何其他契约的运行时：Router 和它的模型运行时来自同一个版本。Router 自己的公开 System One API 也接受这两种形式。
 

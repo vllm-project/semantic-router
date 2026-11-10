@@ -36,7 +36,7 @@ func validateApplicationSignalContracts(cfg *RouterConfig) (err error) {
 		}
 		deployment := cfg.SystemOneRuleDeployment(rule.Rule)
 		questionTypes, modalities := cfg.deploymentAnswers(deployment)
-		if err := CheckApplicationAnswerer(cfg.ApplicationRulePath(spec.signalType, spec.name), cfg.ScopePath(""), deployment, rule, questionTypes, modalities); err != nil {
+		if err := CheckApplicationAnswerer(cfg.ApplicationRulePath(spec.signalType, spec.name), cfg.ScopePath(""), deployment, rule, questionTypes, cfg.ModelDeployments[deployment].DeclaredPresets(), modalities); err != nil {
 			return err
 		}
 	}

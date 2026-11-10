@@ -15,7 +15,7 @@ for writing a client, and for understanding what the Router sends.
 | --- | --- |
 | `POST /v1/systemone` | Answers a request. A question that cannot be answered fails the request as a whole |
 | `POST /v1/decisions` | The model runtime's form of the same call: the same bodies, and a failed question carries its own error in a 200 |
-| `GET /v1/models` | Lists the models a runtime answers with, with their cards; a Router or Engine frontend lists its System One models at `GET /v1/systemone/models` |
+| `GET /v1/models` | Lists the models a runtime answers with, with their cards; a Router or Engine frontend lists its System One models at `GET /v1/systemone/models`, with the `question_types` of each built-in decision model it serves |
 
 The [model runtime reference](../model-runtime/reference#decisions) documents
 every field the runtime reads; its OpenAPI contract is the source of truth.

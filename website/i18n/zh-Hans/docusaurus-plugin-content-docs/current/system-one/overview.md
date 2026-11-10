@@ -26,7 +26,7 @@ POST /v1/systemone
 - **训练绑定。** 有些模型家族针对 Router 的内置问题做过训练。当回答问题的模型有该问题的训练形式时，Router 按训练形式提问，再把答案映射回来。
 - **校准阈值。** 对于在 router signal suite 上测量过的家族，内置问题的默认阈值保持一个已知的工作点。没有校准阈值的模型使用 0.5，并在加载配置时给出 `uncalibrated_preset` 警告。
 
-各模型能回答的问题类型不同（见下表）：Decision 1.0、2.0 和 3.0 不返回 span，vela3-fast 不回答 `score` 问题。能回答 `noul` 的模型也能回答 `set` 问题，方式是每个标签问一个 `noul`。规则、评审或选择器的问题类型如果其部署不能回答，配置加载失败：span 问题（例如 PII 检测）报 `span_required`，其他类型报 `question_type_unsupported`。加载时已知内置模型能回答什么，以及 `systemone` 部署在 `capabilities.question_types` 中声明了什么；其他模型在生成准备时按其模型卡或 API 列表检查。
+各模型能回答的问题类型不同（见下表）：Decision 1.0、2.0 和 3.0 不返回 span，vela3-fast 不回答 `score` 问题。能回答 `noul` 的模型也能回答 `set` 问题，方式是每个标签问一个 `noul`。规则、评审或选择器的问题类型如果其部署不能回答，配置加载失败：span 问题（例如 PII 检测）报 `span_required`，其他类型报 `question_type_unsupported`。加载时已知内置模型能回答什么，以及 `systemone` 部署在 `capabilities.question_types` 和 `capabilities.presets` 中声明了什么（声明的 `pii` 或 `halu` 预设回答其 span 规则）；其他模型在生成准备时按其模型卡或 API 列表检查。
 
 ## 默认决策模型 {#the-default-decision-model}
 

@@ -300,7 +300,7 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 	components.useSignals(signals)
 	registerRouterSessionStore(components.resources, components.routerSessionStore)
 	var err error
-	components.decisionCards, err = prepareDecisionSelectionCards(cfg, components.modelLease)
+	components.decisionCards, err = prepareDecisionSelectionCards(cfg, components.serving.Services())
 	if err != nil {
 		return nil, rollbackResources(components.resources, err)
 	}

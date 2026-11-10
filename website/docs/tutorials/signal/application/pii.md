@@ -123,7 +123,8 @@ The decision model answers every PII rule, unless the `pii` binding or the
 rule's `deployment` names another; see
 [Choose a deployment](../../../system-one/deployments). The question needs
 spans: a rule that resolves to a deployment without span answers, such as a
-d3 model, fails to load with `span_required`. vela3-fast (the default), the
+d3 model, fails to load with `span_required`, unless that deployment declares
+the `pii` preset in its `capabilities`. vela3-fast (the default), the
 Vela 3.0 d3 sizes and Vela 2.0 answer it with their own PII question, in the
 same call as the request's other questions about the same text.
 

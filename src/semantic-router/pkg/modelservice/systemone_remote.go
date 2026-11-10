@@ -528,13 +528,14 @@ func DecodeSystemOneResponse(status int, body []byte, questions []Question) (Res
 }
 
 // decodeSystemOneBody reads a System One API's answer to a standard request,
-// or with batch to a batch, whose answers are its entries'.
+// or with batch to a batch, whose answers are its entries'. The connector
+// bounds body by the deployment's limits.max_response_bytes.
 func decodeSystemOneBody(status int, body []byte, batch bool) (api.DecisionResponse, error) {
 	if err := systemOneStatusError(status); err != nil {
 		return api.DecisionResponse{}, err
 	}
 	var decoded api.DecisionResponse
-	invalid := len(body) > SystemOneResponseLimit || json.Unmarshal(body, &decoded) != nil
+	invalid := json.Unmarshal(body, &decoded) != nil
 	if batch {
 		invalid = invalid || decoded.States == nil
 	} else {

@@ -42,8 +42,9 @@ per label. A rule, judge or selector whose question type its deployment does
 not answer fails to load: `span_required` for a span question, such as PII
 detection, and `question_type_unsupported` for the other types. The load knows
 what a built-in model answers, and what a `systemone` deployment declares in
-`capabilities.question_types`; any other model is checked against its card, or
-its API's listing, when the generation prepares.
+`capabilities.question_types` and `capabilities.presets` (a declared `pii` or
+`halu` preset answers its span rule); any other model is checked against its
+card, or its API's listing, when the generation prepares.
 
 ## The default decision model
 

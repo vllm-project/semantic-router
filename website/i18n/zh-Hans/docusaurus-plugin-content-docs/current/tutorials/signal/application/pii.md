@@ -103,7 +103,7 @@ recipes:
 
 ### 回答问题的模型 {#the-model-that-answers}
 
-除非 `pii` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有 PII 规则；见[选择部署](../../../system-one/deployments)。该问题需要 span：解析到不支持 span 的部署（例如 d3 模型）的规则会以 `span_required` 加载失败。vela3-fast（默认）、Vela 3.0 的 d3 规格和 Vela 2.0 用它们自己的 PII 问题回答，并与该请求针对同一文本的其他问题放在同一次调用中。
+除非 `pii` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有 PII 规则；见[选择部署](../../../system-one/deployments)。该问题需要 span：解析到不支持 span 的部署（例如 d3 模型）的规则会以 `span_required` 加载失败，除非该部署在 `capabilities` 中声明了 `pii` 预设。vela3-fast（默认）、Vela 3.0 的 d3 规格和 Vela 2.0 用它们自己的 PII 问题回答，并与该请求针对同一文本的其他问题放在同一次调用中。
 
 ```yaml
 global:
