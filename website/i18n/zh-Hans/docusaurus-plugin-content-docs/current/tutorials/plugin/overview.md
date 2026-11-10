@@ -123,7 +123,7 @@ match:
 | `context.sources[rag].match` | `recall: {method: embedding, top_k: 20, min_similarity: 0.3}`，`judge: {preset: relevance, top_k: 6, min_score: 0.5}` | `recall: {method: bm25}` 和没有召回的 judge 读取本地知识库：基于内存向量库的 `vectorstore` 源。基于外部向量数据库的源用 `embedding` 召回 |
 | `context.sources[memory].match` | `recall: {method: embedding, top_k: 5, min_similarity: 0.7}` | 记忆存储的 `default_retrieval_limit` 和 `default_similarity_threshold` 替代召回缺省值。没有召回的 judge 读取用户最新的记忆 |
 | `context.compress.match` | `recall: {method: bm25}`，`judge: {preset: relevance}` | 请求的每个片段都是关于最新一条用户消息的候选；BM25 先为 judge 的 64 个名额预筛；保留多少由预算决定 |
-| `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | 最多 255 个工具；更多的会被截断，或由 `recall: {method: bm25}` 缩小 |
+| `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | 最多 255 个工具；更多的会被截断，或由 `recall: {method: bm25}` 缩小；没有 judge 的块在加载时失败 |
 
 每个阶段都计入 `vsr_match_recall_total`（feature、method、outcome）或 `vsr_match_judge_total`（feature、preset、outcome），并在 `vsr_match_stage_duration_seconds` 中计时。
 

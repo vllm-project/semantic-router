@@ -190,7 +190,8 @@ const (
 
 // Defines values for LivenessStatus.
 const (
-	Alive LivenessStatus = "alive"
+	Alive   LivenessStatus = "alive"
+	Stalled LivenessStatus = "stalled"
 )
 
 // Defines values for ModelCardImagePlacements.
@@ -859,6 +860,9 @@ type ErrorBody struct {
 	// These fixed words never carry request data, so a gateway may show them where it must not show
 	// `message`.
 	Reason *ErrorBodyReason `json:"reason,omitempty"`
+
+	// State In a batch, the name of the entry `question` belongs to.
+	State *string `json:"state,omitempty"`
 }
 
 // ErrorBodyCode The request's error. `question_failed` (POST /v1/systemone): the request is answered as a whole for
@@ -981,8 +985,11 @@ type ItemError string
 // Liveness Liveness of the process (`GET /health/live`), whatever its models' readiness.
 type Liveness struct {
 	// ApiVersion The version of this contract the runtime serves (`info.version`); a client refuses another major version.
-	ApiVersion string         `json:"api_version"`
-	Status     LivenessStatus `json:"status"`
+	ApiVersion string `json:"api_version"`
+
+	// Reason Why the process is stalled, per model; absent while alive.
+	Reason *string        `json:"reason"`
+	Status LivenessStatus `json:"status"`
 }
 
 // LivenessStatus defines model for Liveness.Status.
@@ -2578,6 +2585,7 @@ type GetLivenessResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *Liveness
+	JSON503      *Liveness
 }
 
 // Status returns HTTPResponse.Status
@@ -3003,6 +3011,13 @@ func ParseGetLivenessResponse(rsp *http.Response) (*GetLivenessResponse, error) 
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Liveness
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 

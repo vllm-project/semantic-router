@@ -128,6 +128,10 @@ different states:
 - The response is `{"model", "states", "usage"}`: each entry's answers under
   the same name, as that entry's own request would get them, and a `usage`
   that sums every entry. It has no top-level `answers`.
+- An entry whose own request would be refused for its images, videos, assets
+  or tokens instead fails each of its questions with `invalid_input`, and the
+  other entries are answered. Only a batch whose every entry is refused is
+  refused, with the first entry's error.
 
 :::warning
 The two forms are mutually exclusive. A batch body has no top-level `state`,
@@ -203,7 +207,8 @@ A remote API that lists no card for the model is described by the deployment's
 
 On `POST /v1/systemone`, the first question that cannot be answered, in request
 order, answers the whole request. The body's `code` is `question_failed`, with
-the failed `question`, its `question_error` and a `reason`:
+the failed `question`, its `question_error`, a `reason` and, in a batch, the
+name of the question's entry as `state`:
 
 | Question error | Status | Means |
 | --- | --- | --- |

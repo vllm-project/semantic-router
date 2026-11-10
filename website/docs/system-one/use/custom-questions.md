@@ -116,7 +116,8 @@ are fine.
 ## 4. Match on the answer
 
 - `labels` say which options of a `choice`, `set` or `span` match the rule; a
-  condition can still name any option with `label`.
+  condition on a `choice` can still name any option with `label`, and one on a
+  `set` or `span` names a counted label.
 - `predicate` is the bound the answer must meet: P(yes) for a `noul`, the
   expected level for a `score`, a label's probability otherwise. Without one, a
   `noul` matches at 0.5 and a `choice` on its chosen option.

@@ -480,7 +480,8 @@ func unscanned(reason string) bool {
 // applyUnscanned resolves a full-coverage rule whose model could not read
 // the whole input as its on_unscanned says, when that is not unknown: the
 // rule and its counted labels match, or nothing does. An unscanned answer
-// has no values, so a condition's own predicate does not match it.
+// has no values, so a condition's own predicate resolves the match as the
+// condition without one does.
 func (c *Classifier) applyUnscanned(results *SignalResults, asked askedRule) {
 	if asked.rule.EffectiveOnUnscanned() != config.SystemOneUnscannedMatch {
 		return
@@ -579,9 +580,10 @@ func SystemOneQuestion(id string, question config.SystemOneQuestion) modelservic
 // applySystemOneAnswer publishes an answer's values and returns the matched
 // references: the rule name when the rule matches itself, and "rule:label"
 // for each matching option (choice) or label (set, span). A value is
-// published under "<type>:<rule>" (P(yes), the expected level, the chosen
-// option's probability, or the highest probability of a counted label) and
-// under "<type>:<rule>:<label>" for every option or label.
+// published under "<type>:<rule>" (P(yes), the expected level, the highest
+// probability of a counted label, or for a choice rule without labels the
+// chosen option's) and under "<type>:<rule>:<label>" for every option or
+// label.
 func applySystemOneAnswer(results *SignalResults, signalType string, rule config.SystemOneRule, answer modelservice.Answer) []string {
 	key := signalConfidenceKey(signalType, rule.Name)
 	predicate := rule.EffectivePredicate()
@@ -610,8 +612,8 @@ func applySystemOneAnswer(results *SignalResults, signalType string, rule config
 }
 
 // applyChoiceAnswer publishes each option's probability, and under the rule
-// itself the chosen option's (or, for an operating point, the highest of its
-// labels'), and returns the matching options. With two options and a
+// itself the highest of its labels' (the chosen option's for a rule without
+// labels), and returns the matching options. With two options and a
 // predicate, the predicate is an operating point: an option matches when its
 // own probability satisfies it, whichever option the model chose. Otherwise
 // the chosen option matches, when the predicate (a confidence floor) holds
@@ -621,25 +623,23 @@ func applyChoiceAnswer(rule config.SystemOneRule, answer modelservice.Answer, pr
 	for option, probability := range answer.Probabilities {
 		publish(key+":"+option, probability)
 	}
+	best := answer.Probabilities[answer.Choice]
+	if len(rule.Labels) > 0 {
+		best = 0
+		for _, label := range rule.Labels {
+			best = max(best, answer.Probabilities[label])
+		}
+	}
+	publish(key, best)
 	var matched []string
 	if predicate != nil && len(rule.Question.Choices) == 2 {
-		best := 0.0
 		for _, option := range rule.Question.OptionKeys() {
-			probability := answer.Probabilities[option]
-			if slices.Contains(rule.Labels, option) {
-				best = max(best, probability)
-			}
-			if predicateMatches(probability, predicate) {
+			if predicateMatches(answer.Probabilities[option], predicate) {
 				matched = append(matched, rule.Name+":"+option)
 			}
 		}
-		if len(rule.Labels) == 0 {
-			best = answer.Probabilities[answer.Choice]
-		}
-		publish(key, best)
 	} else {
 		chosen := answer.Probabilities[answer.Choice]
-		publish(key, chosen)
 		if answer.Choice == "" || (predicate != nil && !predicateMatches(chosen, predicate)) {
 			return nil
 		}

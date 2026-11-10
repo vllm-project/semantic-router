@@ -225,7 +225,7 @@ Set 把每个标签作为一个 Noul 答在 `<id>.<label>` 下，并在 `sets` �
 
 无效的问题答 `{"type", "error": "invalid_question", "message"}`，message 指出字段，比如 `set questions do not take ['colour']`；其他问题照常答。Vela 3.0 只按 instructions 读 Noul，描述了 `false` 或 `true` 的 Noul 答 `invalid_question`。一个问题都无效的请求答 400 `invalid_request`，每个问题的理由在 message 里。
 
-请求要么是标准请求（上面那样的一个 `state` 和它的 `questions`），要么是批量请求：放在 `states` 下的若干具名标准请求，一次调用答完。每一条含一个 `state` 和它自己的 `questions`，也可以带 `images` 和 `videos`；读法和带它们、再加上批量请求的 `model`、`options` 和 `assets` 的标准请求完全一样，在响应的 `states` 里按同名答回。两种形式互斥：批量请求没有顶层的 `state`、`questions`、`images` 或 `videos`，混用两种形式的请求答 400 `invalid_request`。一个请求阶段要让一个部署读多段文本时，router 就发批量请求：`relevance` 或 `same_request` 判断要核对的候选（每个一条），或能看历史的越狱或 PII 规则读到的先前消息。关于同一段文本的问题合在同一条里。
+请求要么是标准请求（上面那样的一个 `state` 和它的 `questions`），要么是批量请求：放在 `states` 下的若干具名标准请求，一次调用答完。每一条含一个 `state` 和它自己的 `questions`，也可以带 `images` 和 `videos`；读法和带它们、再加上批量请求的 `model`、`options` 和 `assets` 的标准请求完全一样，在响应的 `states` 里按同名答回。某个条目的图像、视频、资源或 token 数被拒绝时，该条目的每个问题都以 `invalid_input`（原因 `input_malformed`）和拒绝的消息失败，其他条目照常回答；每个条目都被拒绝的批量请求以第一个拒绝作答。两种形式互斥：批量请求没有顶层的 `state`、`questions`、`images` 或 `videos`，混用两种形式的请求答 400 `invalid_request`。一个请求阶段要让一个部署读多段文本时，router 就发批量请求：`relevance` 或 `same_request` 判断要核对的候选（每个一条），或能看历史的越狱或 PII 规则读到的先前消息。关于同一段文本的问题合在同一条里。
 
 ```json title="POST /v1/decisions"
 {
@@ -278,7 +278,7 @@ Set 把每个标签作为一个 Noul 答在 `<id>.<label>` 下，并在 `sets` �
 
 边界是相对于图像左上角、占图像高度和宽度的比例，以发送时的图像为准。box 总是会给出，因此当目标可能不存在时，请搭配一个 Noul；`visible` 是目标在那个时刻可见的概率。`confidence` 遵循模型卡的公式，可能为 `null`。模型只有在其模型卡的 `question_types` 列出 `box` 和 `track` 时才回答它们；否则该问题以 `box_unsupported` 或 `track_unsupported` 失败。如果模型卡有 `limits.box_video_max_seconds`，带 `at` 的 `box` 问题和 `track` 问题最多读取该秒数的片段：更长的片段，或无法从其容器读取长度的片段，会让该问题以 `box_video_too_long` 失败。关于视频的其他问题仍使用 `limits.video_max_seconds`。
 
-**错误。** 在 `/v1/systemone` 上，只要请求中有任何问题失败，就像 System One 那样把请求作为整体回答，以保证客户端收到的每个答案都具有其问题的类型：`{"error": {"code": "question_failed", "question_error", "reason", "question", "message"}}`，`invalid_question` 为 422，`max_length_exceeded`、`scan_budget_exceeded` 和 `invalid_input` 为 400，`invalid_model_output` 为 500，`unavailable` 为 503，`deadline_exceeded` 为 504。由第一个失败的问题决定，消息会列出所有失败的问题。`/v1/decisions` 则就地回答每个失败的问题。
+**错误。** 在 `/v1/systemone` 上，只要请求中有任何问题失败，就像 System One 那样把请求作为整体回答，以保证客户端收到的每个答案都具有其问题的类型：`{"error": {"code": "question_failed", "question_error", "reason", "question", "message"}}`（批量请求中还以 `"state"` 给出该问题所在的条目），`invalid_question` 为 422，`max_length_exceeded`、`scan_budget_exceeded` 和 `invalid_input` 为 400，`invalid_model_output` 为 500，`unavailable` 为 503，`deadline_exceeded` 为 504。由第一个失败的问题决定，消息会列出所有失败的问题。`/v1/decisions` 则就地回答每个失败的问题。
 
 **长上下文。** 模型卡有 `limits.validated_input_tokens` 的模型，会把每个问题（状态加该问题）限制在这个经过验证的长度。带 `"options": {"long_context": true}` 的请求每个问题最多可以有 `limits.max_input_tokens` 个 token，速度更慢、准确率更低；更长的问题以 `max_length_exceeded`（原因 `question_tokens`）失败。没有 `validated_input_tokens` 的模型在两种情况下都最多读取 `max_input_tokens`。只读一次状态的模型（`usage: state_once`）还把每个请求限制在 `limits.max_request_tokens`：状态只计一次，加上每个问题自己的 token，无论是否启用长上下文（视频 Box 或 track 问题读取的帧窗口改由视频限制约束）；更长的请求作为整体以 400 `invalid_request`（原因 `request_tokens`）失败，`limit` 给出该上限。
 
