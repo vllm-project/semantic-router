@@ -30,11 +30,6 @@ type ProgressState struct {
 // ProgressReporter receives model download progress updates.
 type ProgressReporter func(ProgressState)
 
-// DownloadModel downloads a model using huggingface-cli
-func DownloadModel(spec ModelSpec, config DownloadConfig) error {
-	return DownloadModelWithProgress(spec, config)
-}
-
 // IsGatedModelError checks if an error indicates a gated model that requires authentication.
 // hfToken is the HF_TOKEN value from the download config; an empty string means no token is set.
 func IsGatedModelError(err error, repoID string, hfToken string) bool {
@@ -70,11 +65,6 @@ func IsGatedModelError(err error, repoID string, hfToken string) bool {
 	noToken := hfToken == ""
 
 	return isKnownGated || isAuthError || noToken
-}
-
-// DownloadModelWithProgress downloads a model with real-time progress output
-func DownloadModelWithProgress(spec ModelSpec, config DownloadConfig) error {
-	return DownloadModelWithProgressContext(context.Background(), spec, config)
 }
 
 func DownloadModelWithProgressContext(ctx context.Context, spec ModelSpec, config DownloadConfig) error {

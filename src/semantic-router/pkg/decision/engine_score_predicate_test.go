@@ -10,10 +10,10 @@ import (
 func float64Ptr(value float64) *float64 { return &value }
 
 func TestScorePredicateUsesRawSignalValueWithoutBooleanMatch(t *testing.T) {
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{
+	engine := NewDecisionEngine([]config.Decision{{
 		Name: "bounded",
 		Rules: config.RuleNode{
-			Type: "embedding",
+			Type: "systemone",
 			Name: "risk",
 			Predicate: &config.NumericPredicate{
 				GTE: float64Ptr(0.2),
@@ -23,7 +23,7 @@ func TestScorePredicateUsesRawSignalValueWithoutBooleanMatch(t *testing.T) {
 	}}, "priority")
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
-		SignalValues: map[string]float64{"embedding:risk": 0.3},
+		SignalValues: map[string]float64{"systemone:risk": 0.3},
 	})
 	if err != nil {
 		t.Fatalf("EvaluateDecisionsWithSignals() error = %v", err)
@@ -34,17 +34,17 @@ func TestScorePredicateUsesRawSignalValueWithoutBooleanMatch(t *testing.T) {
 }
 
 func TestSignalConfidencePreservesZero(t *testing.T) {
-	got, reported := signalConfidence(map[string]float64{"embedding:risk": 0}, "embedding", "risk")
+	got, reported := signalConfidence(map[string]float64{"systemone:risk": 0}, "systemone", "risk")
 	if got != 0 || !reported {
 		t.Fatalf("signalConfidence() = (%v, %v), want (0, true)", got, reported)
 	}
 }
 
 func TestScorePredicateOnErrorMatch(t *testing.T) {
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{
+	engine := NewDecisionEngine([]config.Decision{{
 		Name: "fail-closed",
 		Rules: config.RuleNode{
-			Type:      "embedding",
+			Type:      "systemone",
 			Name:      "risk",
 			Predicate: &config.NumericPredicate{GTE: float64Ptr(0.8)},
 			OnError:   "match",
@@ -52,7 +52,7 @@ func TestScorePredicateOnErrorMatch(t *testing.T) {
 	}}, "priority")
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
-		SignalErrors: map[string]string{"embedding:risk": "backend unavailable"},
+		SignalErrors: map[string]string{"systemone:risk": "backend unavailable"},
 	})
 	if err != nil {
 		t.Fatalf("EvaluateDecisionsWithSignals() error = %v", err)
@@ -63,13 +63,13 @@ func TestScorePredicateOnErrorMatch(t *testing.T) {
 }
 
 func TestPredicateMatchesUseBooleanConfidenceForRanking(t *testing.T) {
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{
+	engine := NewDecisionEngine([]config.Decision{
 		{
 			Name:     "strong-lower-bound-match",
 			Priority: 10,
 			Tier:     1,
 			Rules: config.RuleNode{
-				Type:      "structure",
+				Type:      "keyword",
 				Name:      "small",
 				Predicate: &config.NumericPredicate{LT: float64Ptr(0.2)},
 			},
@@ -79,7 +79,7 @@ func TestPredicateMatchesUseBooleanConfidenceForRanking(t *testing.T) {
 			Priority: 20,
 			Tier:     1,
 			Rules: config.RuleNode{
-				Type:      "structure",
+				Type:      "keyword",
 				Name:      "large",
 				Predicate: &config.NumericPredicate{GTE: float64Ptr(0.5)},
 			},
@@ -88,8 +88,8 @@ func TestPredicateMatchesUseBooleanConfidenceForRanking(t *testing.T) {
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
 		SignalValues: map[string]float64{
-			"structure:small": 0.01,
-			"structure:large": 0.5,
+			"keyword:small": 0.01,
+			"keyword:large": 0.5,
 		},
 	})
 	if err != nil {
@@ -104,17 +104,17 @@ func TestPredicateMatchesUseBooleanConfidenceForRanking(t *testing.T) {
 }
 
 func TestScorePredicateCanMatchPublishedZeroValue(t *testing.T) {
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{
+	engine := NewDecisionEngine([]config.Decision{{
 		Name: "empty",
 		Rules: config.RuleNode{
-			Type:      "structure",
+			Type:      "keyword",
 			Name:      "bytes",
 			Predicate: &config.NumericPredicate{LTE: float64Ptr(0)},
 		},
 	}}, "priority")
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
-		SignalValues: map[string]float64{"structure:bytes": 0},
+		SignalValues: map[string]float64{"keyword:bytes": 0},
 	})
 	if err != nil {
 		t.Fatalf("EvaluateDecisionsWithSignals() error = %v", err)
@@ -138,7 +138,7 @@ func TestNumericPredicateRejectsNonFiniteSignalValue(t *testing.T) {
 }
 
 func TestORPreservesZeroConfidenceMatchedRule(t *testing.T) {
-	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{{
+	engine := NewDecisionEngine([]config.Decision{{
 		Name: "zero-confidence",
 		Rules: config.RuleNode{
 			Operator: "OR",
@@ -148,6 +148,7 @@ func TestORPreservesZeroConfidenceMatchedRule(t *testing.T) {
 			},
 		},
 	}}, "priority")
+
 	signals := &SignalMatches{
 		KeywordRules:      []string{"zero"},
 		SignalConfidences: map[string]float64{"keyword:zero": 0},

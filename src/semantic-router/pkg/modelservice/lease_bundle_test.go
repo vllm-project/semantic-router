@@ -27,7 +27,7 @@ func attachedLease(t *testing.T, runtimes map[*runtimetest.Runtime][]string) *Le
 		t.Cleanup(server.Close)
 		for _, name := range names {
 			deployments[name] = config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: server.URL}
-			cfg.DecisionRules = append(cfg.DecisionRules, config.DecisionSignalRule{Name: "r_" + name, Deployment: name, Question: config.DecisionQuestion{Type: "noul", Instructions: "x"}})
+			cfg.SystemOneRules = append(cfg.SystemOneRules, config.SystemOneRule{Name: "r_" + name, Deployment: name, Question: config.SystemOneQuestion{Type: "noul", Instructions: "x"}})
 		}
 	}
 	cfg.ModelDeployments = deployments

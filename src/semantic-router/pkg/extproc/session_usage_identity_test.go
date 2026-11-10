@@ -46,7 +46,7 @@ func TestRecordSessionTurnUsesDispatchOwner(t *testing.T) {
 						SelectedModel: model, Score: 1, Confidence: 1, Method: selection.MethodStatic,
 						AllScores: map[string]float64{model: 1},
 					}})
-					selCtx := router.buildSelectionContext([]config.ModelRef{{Model: model}}, "choice", "", nil, "", nil, ctx)
+					selCtx := router.buildSelectionContext([]config.ModelRef{{Model: model}}, "choice", "", "", nil, ctx)
 					selected, _, err := router.selectModelFromCandidates(selCtx, nil, ctx)
 					if err != nil || selected == nil || selected.Model != model {
 						t.Fatalf("selection did not establish %q: selected=%+v err=%v", model, selected, err)

@@ -20,14 +20,8 @@ import (
 const (
 	mrSocketDir           = "/tmp/vsr-runtime"
 	mrDecisionDeployment  = "decision-fixture"
-	mrDomainDeployment    = "vela-domain"
-	mrPIIDeployment       = "vela-pii"
-	mrGuardDeployment     = "vela-guard"
 	mrEmbeddingDeployment = "vela-embedding"
-	mrRerankerDeployment  = "vela-reranker"
-	mrModalityDeployment  = "vela-modality"
 	mrAttachedDecisions   = "attached-decisions"
-	mrAttachedFeedback    = "attached-feedback"
 	mrAttachedVela2       = "attached-vela2"
 	mrOfflineDeployment   = "decision-offline"
 	mrAttachedService     = "model-runtime-attached"
@@ -37,9 +31,9 @@ const (
 
 var (
 	// Sorted, as the lifecycle case compares it with each process's models.
-	mrDeviceGroup         = []string{mrDomainDeployment, mrEmbeddingDeployment, mrGuardDeployment, mrModalityDeployment, mrPIIDeployment, mrRerankerDeployment}
+	mrDeviceGroup         = []string{mrEmbeddingDeployment}
 	mrManagedDeployments  = append([]string{mrDecisionDeployment}, mrDeviceGroup...)
-	mrAttachedDeployments = []string{mrAttachedDecisions, mrAttachedFeedback, mrAttachedVela2}
+	mrAttachedDeployments = []string{mrAttachedDecisions, mrAttachedVela2}
 )
 
 // modelRuntimeSession holds the connections the model-runtime contracts use.
@@ -172,7 +166,10 @@ type routingPreview struct {
 	SignalValues      map[string]float64 `json:"signal_values"`
 	SignalErrors      map[string]string  `json:"signal_errors"`
 	DecisionResult    *struct {
-		DecisionName string `json:"decision_name"`
+		DecisionName   string `json:"decision_name"`
+		MatchedSignals struct {
+			SystemOne []string `json:"systemone"`
+		} `json:"matched_signals"`
 	} `json:"decision_result"`
 }
 
@@ -203,10 +200,10 @@ func (s *modelRuntimeSession) chat(ctx context.Context, text string) (*localChat
 	return response, nil
 }
 
-// headerItems splits a comma-separated x-vsr header into its entries.
-func headerItems(headers http.Header, name string) map[string]bool {
+// signalItems is the set of rules of one signal type the trace lists.
+func signalItems(headers http.Header, signalType string) map[string]bool {
 	items := map[string]bool{}
-	for _, item := range strings.Split(headers.Get(name), ",") {
+	for _, item := range strings.Split(matchedSignals(headers, signalType), ",") {
 		if item = strings.TrimSpace(item); item != "" {
 			items[item] = true
 		}
@@ -218,4 +215,15 @@ func headerItems(headers http.Header, name string) map[string]bool {
 // cache cannot answer it and the call must reach the runtime, also on a retry.
 func freshPrompt(text string) string {
 	return fmt.Sprintf("%s (request %d)", text, time.Now().UnixNano())
+}
+
+// onlyOfflineSignalError allows the one signal error the profile plants: the
+// systemone signal of the deployment that has no runtime.
+func onlyOfflineSignalError(signalErrors map[string]string) error {
+	for signal, reason := range signalErrors {
+		if signal != "systemone:offline" || reason != "systemone_unavailable" {
+			return fmt.Errorf("routing preview reported signal errors %v", signalErrors)
+		}
+	}
+	return nil
 }

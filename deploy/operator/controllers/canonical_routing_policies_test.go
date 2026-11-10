@@ -8,33 +8,33 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestCanonicalRoutingPolicyOverrides(t *testing.T) {
-	raw := &apiextensionsv1.JSON{Raw: []byte(`{"candidate_requirements":{"capabilities":"declared","context":"known_limits"}}`)}
-	routing, fields, err := canonicalRoutingFromKubernetesJSON(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestCanonicalRecipePolicyOverrides(t *testing.T) {
+	raw := &apiextensionsv1.JSON{Raw: []byte(`[{"name":"default","candidate_requirements":{"capabilities":"declared","context":"known_limits"}}]`)}
 	global := routerconfig.DefaultCanonicalGlobal()
 	canonical := &routerconfig.CanonicalConfig{Global: &global}
-	canonical.Global.Services.RouterReplay.Enabled = true
-	applyCanonicalRoutingOverrides(canonical, routing, fields)
-	if canonical.Routing.CandidateRequirements == nil || canonical.Routing.CandidateRequirements.Context != routerconfig.CandidateContextKnownLimits {
-		t.Fatal("operator lost routing policy")
+	canonical.Global.Plugins = []routerconfig.DecisionPlugin{{Type: routerconfig.DecisionPluginRouterReplay}}
+	if err := applyOperatorRecipes(canonical, configRoutingSpec{recipes: raw}); err != nil {
+		t.Fatal(err)
 	}
-	routing.CandidateRequirements.Context = ""
-	if canonical.Routing.CandidateRequirements.Context != routerconfig.CandidateContextKnownLimits {
+	if defaultRecipe(canonical).CandidateRequirements == nil || defaultRecipe(canonical).CandidateRequirements.Context != routerconfig.CandidateContextKnownLimits {
+		t.Fatal("operator lost recipe policy")
+	}
+	raw.Raw[0] = '!'
+	if defaultRecipe(canonical).CandidateRequirements.Context != routerconfig.CandidateContextKnownLimits {
 		t.Fatal("operator policy shares mutable input")
 	}
-	if !canonical.Global.Services.RouterReplay.Enabled {
-		t.Fatal("routing override changed global replay settings")
+	if len(canonical.Global.Plugins) != 1 {
+		t.Fatal("a recipe override changed global.plugins")
 	}
 	for _, invalid := range []string{
-		`{"candidate_requirements":{"context":"bounded"}}`,
-		`{"candidate_requirements":{"unknown":true}}`,
-		`{"data_policy":{"replay":false}}`,
-		`{"data_policy":{"replay":true}}`,
+		`[{"name":"default","candidate_requirements":{"context":"bounded"}}]`,
+		`[{"name":"default","candidate_requirements":{"unknown":true}}]`,
+		`[{"name":"default","data_policy":{"replay":false}}]`,
+		`[{"name":"default","routing":{"decisions":[]}}]`,
 	} {
-		if _, _, err := canonicalRoutingFromKubernetesJSON(&apiextensionsv1.JSON{Raw: []byte(invalid)}); err == nil {
+		global := routerconfig.DefaultCanonicalGlobal()
+		target := &routerconfig.CanonicalConfig{Global: &global}
+		if err := applyOperatorRecipes(target, configRoutingSpec{recipes: &apiextensionsv1.JSON{Raw: []byte(invalid)}}); err == nil {
 			t.Fatalf("accepted %s", invalid)
 		}
 	}

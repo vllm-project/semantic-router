@@ -22,13 +22,12 @@ trim it for a deployment instead of treating every optional service as required.
 A router config uses these top-level sections:
 
 ```yaml
-version: v0.3
+version: v0.5
 listeners: []
 providers: {}
 evaluation: {}
-routing: {}
 entrypoints: []
-recipes: []
+recipes: [{name: default}]
 global: {}
 ```
 
@@ -37,17 +36,20 @@ global: {}
   `providers.models[]` binds model names to concrete backends and owns their
   deployment pricing metadata. A built-in model may add an optional `catalog`
   identity, while `backend_refs[].provider` selects the stable runtime Provider
-  ID. Custom vLLM/SGLang models continue to omit `catalog`.
+  ID. Custom vLLM/SGLang models continue to omit `catalog`. The facts routing
+  reads about a model (`capabilities`, `modalities`, context window, LoRA
+  adapters) sit on the same entry.
 - `evaluation` optionally defines benchmarks, indices, and model-linked
   measurement records.
-- `routing` owns model cards, signals, projections, decisions, and the routing
-  strategy for the default profile.
-- `entrypoints` maps request-facing model names to isolated `recipes`. Each
-  recipe has its own signals, decisions, algorithms, and plugins while sharing
-  providers and router-wide services. See
+- `recipes` are isolated routing profiles. Each recipe has its own signals,
+  projections, decisions, strategy, algorithms, and plugins while sharing
+  providers and router-wide services. One recipe needs no entrypoints.
+- `entrypoints` maps request-facing model names to recipes; with several
+  recipes, exactly one chat entrypoint is marked `default: true`. See
   [`tutorials/global/entrypoints-and-recipes.md`](../website/docs/tutorials/global/entrypoints-and-recipes.md).
 - `global` owns cross-cutting router settings, services, stores, integrations,
-  and router-managed model assets.
+  router-managed model assets, and the default plugins (`global.plugins`) that
+  recipes and decisions override field by field.
 
 Validate a file before serving it:
 
@@ -56,11 +58,11 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-The [Vela model guide](../website/docs/tutorials/global/vela-models.md) explains
-the built-in model defaults, explicit older models, and opt-in long-context
-deployment settings. Model migration preserves the existing input budgets.
+[Choose a deployment](../website/docs/system-one/deploy/deployments.md) explains the
+built-in decision model, the other sizes and remote System One APIs, and what
+the Router checks at load.
 
-`src/semantic-router/pkg/configschema/router-config-v0.3.schema.json` is the one
+`src/semantic-router/pkg/configschema/router-config-v0.5.schema.json` is the one
 checked-in schema generated from the Go configuration types and routing
 registries. Do not edit it directly. See the
 [Configuration Contract](../website/docs/installation/configuration-contract.md)
@@ -74,10 +76,11 @@ Fragments show one capability in its owning section. They are not complete
 deployments and may rely on model or service definitions from a base config.
 
 - `config/fragments/signal/`: request and response facts used by decisions.
-  Heuristic and learned signal guides live under
-  `tutorials/signal/heuristic/` and `tutorials/signal/learned/`.
+  The guide of the `systemone` primitive is `tutorials/signal/systemone.md`;
+  application and heuristic signal guides live under
+  `tutorials/signal/application/` and `tutorials/signal/heuristic/`.
 - `config/fragments/decision/`: `single`, `and`, `or`, `not`, and nested
-  boolean rule shapes. Classifier-backed rules may resolve a terminal
+  boolean rule shapes. Rules on model-judged signals may resolve a terminal
   `Unknown` result with `on_unknown: no_match|match|fail_request`.
 - `config/fragments/algorithm/`: per-decision model selection and bounded
   multi-model execution policies.
@@ -114,7 +117,7 @@ runtime dependency; they do not define routing behavior by themselves.
   values.
 - Catalog-backed models materialize their built-in Model Card, reasoning family,
   provider protocol, path, and non-secret defaults automatically. A handwritten
-  override uses the canonical `catalog` identity as `routing.modelCards[].name`;
+  override uses the canonical `catalog` identity as `providers.models[].name`;
   a fully custom model uses its request alias as the card name.
 - `api_format` selects the upstream wire format; it never selects a Provider.
   When this config declares a listener, every physical model must use
@@ -128,58 +131,41 @@ runtime dependency; they do not define routing behavior by themselves.
   but must keep one DNS hostname. Provider ID, wire protocol, native model ID,
   credentials, headers, request path, and TLS semantics must also match; use
   separate aliases for heterogeneous providers.
-- `routing.modelCards` describes semantic capabilities; concrete URLs,
+- `providers.models` describes semantic capabilities; concrete URLs,
   credentials, and pricing belong in `providers.models`.
 - Protocol controls such as `tool_choice` enter routing as conversation facts;
   projections combine those facts with text-derived intent before decisions
   apply policy.
-- `routing.projections` derives named routing outputs from signals. Decisions
+- `recipes[].projections` derives named routing outputs from signals. Decisions
   consume those outputs instead of embedding free-form computation.
 - Candidate iteration is bounded policy metadata, not a general scripting
   runtime.
-- `routing.decisions[].algorithm.minimum_candidates` keeps a model-free Recipe
+- `recipes[].decisions[].algorithm.minimum_candidates` keeps a model-free Recipe
   portable while making its candidate-pool cardinality executable as soon as
   an Entrypoint assigns Models. Request-time context filtering cannot silently
   reduce the eligible pool below that contract.
-- PII rules keep the legacy prompt/history scope when `source` is omitted or
-  empty. Set `source: tool_result` explicitly to scan textual tool-result
-  content decoded from the request protocol; this source does not implicitly
-  include the prompt or conversation history.
+- A PII rule reads the current user turn. `input.history: true` adds the
+  earlier user turns, and `input.tool_results: true` the request's textual
+  tool results.
+- The decision model answers the application signals (domain, PII, jailbreak,
+  complexity and the others) as System One questions. A rule's `deployment`, a
+  recipe's `model_bindings` or `global.model_catalog.bindings` names another
+  deployment from `global.model_catalog.deployments`, such as a remote System
+  One API.
+- A complexity rule answers `easy`, `medium` or `hard`, and a decision
+  condition names the level it routes on with `label`.
+- A PII rule needs a deployment that answers span questions, or the
+  configuration fails to load with `span_required`. When the rule's model gives
+  no answer, its `on_unknown` decides: `no_match` (the default) or `match`.
+  Text the model could not read counts as personal data.
+- A remote deployment caps one upstream response with
+  `limits.max_response_bytes`.
 - Router Learning lives under `global.router.learning`; it is separate from a
   decision's request-time base algorithm.
 - Router replay is disabled by default and can capture request or response
   bodies. Review its access controls and retention settings before enabling it.
 - `global.router.skip_processing.enabled` should be enabled only when an
   authenticated upstream component owns the bypass header.
-- Knowledge bases are declared under `global.model_catalog.kbs[]`; routing
-  signals bind to those shared assets by name.
-- Built-in category/domain classification uses the local `variant` selector by
-  default. A named remote classifier may instead be attached with
-  `global.model_catalog.modules.classifier.domain.backend`; its `model` must
-  name an entry in `global.model_catalog.external[]` with
-  `model_role: classification`. The shared backend contract uses
-  `protocol`, `contract`, `model`, and optional `deadline_ms`.
-- Complexity attaches the same block at
-  `global.model_catalog.modules.complexity.backend`, beside `prototype_scoring`
-  rather than on a rule, so it survives the per-recipe replacement of
-  `routing.signals`. It reads two contracts and therefore requires `contract`
-  to be stated: `score.v1`, where each rule converts the score with its own
-  `hard_above`/`easy_below` boundaries, or `label_distribution.v1`, where the
-  winning label is the verdict. `threshold` stays the symmetric shorthand for
-  the local signed margin, and the `hard`/`easy` candidate lists are unread
-  once a backend supplies the score.
-- PII attaches the same block at
-  `global.model_catalog.modules.classifier.pii.backend`. It reads one contract,
-  `token_spans.v1`, so `contract` may be omitted; the remote model returns
-  entity spans as code-point offsets into the exact request string, and its
-  labels must be in the configured `pii_mapping_path`. `on_error` beside the
-  backend selects what a backend failure, or a provider-declared truncation,
-  does to the rule that consumed it: `allow` (default) treats the content as
-  not matching, `block` matches it as `classification_error`. A backend is
-  mutually exclusive with the local `use_mmbert_32k` selector.
-- External LLM classifiers use `max_response_bytes` on their
-  `global.model_catalog.external[]` entry. The MCP classifier uses the same key
-  under `global.model_catalog.modules.classifier.mcp`.
 
 ## Keep examples in sync
 

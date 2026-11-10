@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestProfileUsesCanonicalFactCheckBindingWithRemoteDetector(t *testing.T) {
+func TestProfileAsksFactCheckOfTheDecisionModelAndHallucinationOfTheFixture(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Base(valuesFile))
 	if err != nil {
 		t.Fatal(err)
@@ -17,36 +17,35 @@ func TestProfileUsesCanonicalFactCheckBindingWithRemoteDetector(t *testing.T) {
 	if err := yaml.Unmarshal(raw, &values); err != nil {
 		t.Fatal(err)
 	}
-	module := profileSection(t, values, "config", "global", "model_catalog", "modules", "hallucination_mitigation")
-	if module["enabled"] != true {
-		t.Fatal("hallucination mitigation must remain enabled")
+	recipes, _ := profileSection(t, values, "config")["recipes"].([]any)
+	if len(recipes) == 0 {
+		t.Fatal("the profile declares no recipe")
 	}
-	factCheck := profileSection(t, module, "fact_check")
-	for _, selector := range []string{"model_ref", "model_id"} {
-		if value, exists := factCheck[selector]; exists {
-			t.Fatalf("fact-check must follow the decision model instead of naming a model with %s: %v", selector, value)
+	defaultRecipe, _ := recipes[0].(map[string]any)
+	signals := profileSection(t, defaultRecipe, "signals")
+	rules, _ := signals["fact_check"].([]any)
+	var factCheck map[string]any
+	for _, rule := range rules {
+		if entry, _ := rule.(map[string]any); entry["name"] == "needs_fact_check" {
+			factCheck = entry
 		}
 	}
+	if factCheck == nil {
+		t.Fatal("the response_guard reads the fact_check rule needs_fact_check")
+	}
+	if deployment, named := factCheck["deployment"]; named {
+		t.Fatalf("fact-check must follow the decision model instead of naming deployment %v", deployment)
+	}
 	// 0.9997 on vela3-fast keeps Vela 1.0 FactCheck's operating point at 0.65.
-	if factCheck["threshold"] != 0.9997 || factCheck["use_cpu"] != true {
-		t.Fatalf("fact-check execution policy changed: %#v", factCheck)
-	}
-	if _, retired := factCheck["use_mmbert_32k"]; retired {
-		t.Fatal("use_mmbert_32k is retired: the model runtime reads the architecture from the package")
-	}
-	detector := profileSection(t, module, "detector")
-	if _, shorthand := detector["backend"]; shorthand || detector["include_explanation"] != false {
-		t.Fatalf("the remote detector is a binding, not the retired endpoint shorthand: %#v", detector)
+	if predicate, _ := factCheck["predicate"].(map[string]any); predicate["gte"] != 0.9997 {
+		t.Fatalf("fact-check operating point changed: %#v", factCheck)
 	}
 	catalog := profileSection(t, values, "config", "global", "model_catalog")
-	if _, external := catalog["external"]; external {
-		t.Fatal("the remote detector is a deployment, not an external model")
-	}
 	deploymentName, _ := profileSection(t, catalog, "bindings")["hallucination"].(string)
 	deployment := profileSection(t, catalog, "deployments", deploymentName)
-	if deployment["provider"] != "openai_chat" || deployment["model"] != "KRLabsOrg/lettucedect-v2-qwen-2b" ||
-		deployment["endpoint"] != "http://mock-hallucination-detector.default.svc.cluster.local:8000/v1" {
-		t.Fatalf("the hallucination binding must name the remote detector served over chat completions: %#v", deployment)
+	if deployment["provider"] != "systemone" || deployment["model"] != "e2e/fake-systemone" ||
+		deployment["endpoint"] != "http://provider-mocker.default.svc.cluster.local:8000/v1/systemone" {
+		t.Fatalf("the hallucination binding must name provider-mocker's System One fixture: %#v", deployment)
 	}
 }
 

@@ -16,10 +16,10 @@ func captureOriginalContextHistory(ctx *RequestContext) {
 func contextRequestIR(ctx *RequestContext, request *llmprotocol.Request) *contextcompression.RequestIR {
 	if ctx.ContextRequestIR == nil {
 		ctx.ContextRequestIR = contextcompression.ParseSemanticRequest(request, contextcompression.Provenance{
-			RAGToolCallIDs:       ctx.RAGToolCallIDs,
-			MemoryMessageIndexes: ctx.MemoryMessageIndexes,
-			OriginalHistory:      ctx.OriginalContextHistory,
-			ProtectedMessages:    ctx.ProtectedContextMessages,
+			RAGToolCallIDs:    ctx.RAGToolCallIDs,
+			MemoryToolCallIDs: ctx.MemoryToolCallIDs,
+			OriginalHistory:   ctx.OriginalContextHistory,
+			ProtectedMessages: ctx.ProtectedContextMessages,
 		})
 	}
 	return ctx.ContextRequestIR

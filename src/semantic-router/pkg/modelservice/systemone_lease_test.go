@@ -28,7 +28,7 @@ func TestSystemOneLeaseDoesNotFollowPublishedGeneration(t *testing.T) {
 		_, _ = io.WriteString(w, `{"model":"served","answers":{}}`)
 	})
 	status := manager.Published().Statuses()[0]
-	retained, err := manager.AcquireDeployments(map[string]config.ModelDeployment{"test-systemone": {Provider: config.ModelRuntimeProvider, Endpoint: status.Endpoint, ServedName: "served"}})
+	retained, err := manager.AcquireDeployments(map[string]config.ModelDeployment{"test-systemone": {Provider: config.ModelRuntimeProvider, Endpoint: status.Endpoint, Model: "served"}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 
 listeners:
   - name: http-8888
@@ -28,18 +28,17 @@ providers:
           provider: openai
           weight: 100
 
-routing:
-  modelCards:
-    - name: test-model
-  decisions:
-    - name: bearer_route
-      description: Route every request to the test model.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
-      algorithm:
-        type: static
+recipes:
+  - name: default
+    decisions:
+      - name: bearer_route
+        description: Route every request to the test model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
+        algorithm:
+          type: static

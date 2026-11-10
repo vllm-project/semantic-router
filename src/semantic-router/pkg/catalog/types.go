@@ -212,6 +212,9 @@ type ProviderInstance struct {
 	// ProviderInstance an internal materialization contract.
 	AuthPrefixSet bool   `json:"-" yaml:"-"`
 	ChatPath      string `json:"chat_path,omitempty" yaml:"chat_path,omitempty"`
+	// AuthCredential is the credential mode: delegated receives the
+	// requesting user's delegated credential in place of a configured one.
+	AuthCredential string `json:"auth_credential,omitempty" yaml:"auth_credential,omitempty"`
 }
 
 // ModelProviderBinding binds a request-facing model alias to one provider
@@ -353,9 +356,6 @@ type ModelCardOverlay struct {
 	Tags              *[]string                  `json:"tags,omitempty" yaml:"tags,omitempty"`
 	LoRAs             *[]LoRAAdapter             `json:"loras,omitempty" yaml:"loras,omitempty"`
 	Verification      *ModelVerification         `json:"verification,omitempty" yaml:"verification,omitempty"`
-	// RuntimeModality preserves the existing router-specific ar/diffusion/omni
-	// classification while canonical model facts use input/output modalities.
-	RuntimeModality *string `json:"-" yaml:"-"`
 }
 
 // EvaluationConfig is the optional operator extension surface.
@@ -538,10 +538,9 @@ type IndexResult struct {
 type FieldProvenance map[string]string
 
 type EffectiveModelCard struct {
-	Card            ModelCard       `json:"card"`
-	LoRAs           []LoRAAdapter   `json:"loras,omitempty"`
-	Provenance      FieldProvenance `json:"provenance"`
-	RuntimeModality string          `json:"runtime_modality,omitempty"`
+	Card       ModelCard       `json:"card"`
+	LoRAs      []LoRAAdapter   `json:"loras,omitempty"`
+	Provenance FieldProvenance `json:"provenance"`
 }
 
 type EffectiveProvider struct {

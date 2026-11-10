@@ -24,11 +24,10 @@ func summarizeCanonicalSetupConfig(configData *routerconfig.CanonicalConfig) set
 	if configData == nil {
 		return setupConfigSummary{}
 	}
-	decisions := len(configData.Routing.Decisions)
-	signals := countCanonicalSignals(configData.Routing.Signals)
+	decisions, signals := 0, 0
 	for _, recipe := range configData.Recipes {
-		decisions += len(recipe.Routing.Decisions)
-		signals += countCanonicalSignals(recipe.Routing.Signals)
+		decisions += len(recipe.Decisions)
+		signals += countCanonicalSignals(recipe.Signals)
 	}
 	return setupConfigSummary{
 		Models:    countConfiguredModels(configData),
@@ -41,31 +40,26 @@ func countConfiguredModels(configData *routerconfig.CanonicalConfig) int {
 	if configData == nil {
 		return 0
 	}
-	if len(configData.Routing.ModelCards) > 0 {
-		return len(configData.Routing.ModelCards)
-	}
 	return len(configData.Providers.Models)
 }
 
 func countCanonicalSignals(signals routerconfig.CanonicalSignals) int {
 	return len(signals.Keywords) +
-		len(signals.Embeddings) +
 		len(signals.Domains) +
 		len(signals.FactCheck) +
 		len(signals.UserFeedbacks) +
-		len(signals.Reasks) +
-		len(signals.Preferences) +
 		len(signals.Language) +
 		len(signals.Context) +
-		len(signals.Structure) +
 		len(signals.Complexity) +
 		len(signals.Modality) +
 		len(signals.RoleBindings) +
 		len(signals.Jailbreak) +
+		len(signals.Safety) +
+		len(signals.Hallucination) +
+		len(signals.Refusal) +
+		len(signals.TurnRelation) +
 		len(signals.PII) +
-		len(signals.KB) +
 		len(signals.Conversation) +
-		len(signals.EventRules) +
 		len(signals.Metadata) +
-		len(signals.Classifiers)
+		len(signals.SystemOne)
 }

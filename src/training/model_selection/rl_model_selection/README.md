@@ -11,7 +11,6 @@ semantic-router runtime or its supported configuration schema.
 | `train_router_r1.py` | fine-tune a causal language model to emit routing actions |
 | `train_gmtrouter.py` | train a heterogeneous-graph routing model |
 | `router_r1_server.py` | standalone `/route` demonstration server |
-| `automix_verifier.py` | standalone answer-verification demonstration server |
 | `configs/` | example training configuration |
 | `data/` | small example JSON inputs |
 | `scripts/` | GPU-oriented wrappers for the two trainers |
@@ -83,18 +82,17 @@ uv run python train_gmtrouter.py \
 `train_gmtrouter.py --use_synthetic` is a code-path smoke mode. It is not an
 evaluation dataset.
 
-## Standalone Demos
+## Standalone Demo
 
-The servers do not proxy requests to the selected backend and do not configure
-semantic-router. They expose the prototype decision or verification output for
+The server does not proxy requests to the selected backend and does not configure
+semantic-router. It exposes the prototype decision output for
 manual inspection:
 
 ```bash
 uv run python router_r1_server.py --model microsoft/phi-2 --port 8888
-uv run python automix_verifier.py --model microsoft/phi-2 --port 8889
 ```
 
-Use each script's `--test` flag for a local demonstration without starting the
+Use its `--test` flag for a local demonstration without starting the
 HTTP server.
 
 ## Evaluation Boundary
@@ -109,4 +107,3 @@ runtime loader, tests, and user documentation exist.
 
 - [Router-R1](https://arxiv.org/abs/2506.09033)
 - [GMTRouter](https://arxiv.org/abs/2511.08590)
-- [AutoMix](https://arxiv.org/abs/2310.12963)

@@ -25,7 +25,7 @@ Semantic Router 在 `vllm-sr serve` 期间运行在 Docker 中。名称 `host.do
 
 ## 前置条件
 
-- 已安装 Semantic Router，并且可以用 [`vllm-sr serve`](/zh-Hans/docs/installation) 运行（Linux、macOS，或带 Docker 的 WSL2）
+- 已安装 Semantic Router，并且可以用 [`vllm-sr serve`](/docs/installation) 运行（Linux、macOS，或带 Docker 的 WSL2）
 - Ollama 安装在运行 Docker 的**同一台机器**上
 - 至少有一个模型所需的磁盘空间（例如，`llama3.2:3b` 大约 2 GB）
 
@@ -200,8 +200,7 @@ JSON 聊天补全响应表示 Ollama 已正确接入。
 如果希望直接编辑 YAML 而不是使用控制面板，添加类似这样的模型条目：
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   defaults:
     model: llama3.2:3b
@@ -215,20 +214,18 @@ providers:
           protocol: http
           provider: ollama
           weight: 100
-
-routing:
-  modelCards:
-    - name: llama3.2:3b
-  decisions:
-    - name: default-route
-      description: Route all requests to the local Ollama model.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: llama3.2:3b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        description: Route all requests to the local Ollama model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: llama3.2:3b
+            use_reasoning: false
 ```
 
 校验并启动服务：

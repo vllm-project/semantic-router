@@ -110,6 +110,16 @@ var (
 		},
 		[]string{"plugin_type", "error_reason"},
 	)
+
+	// ResponseGuardBufferedTotal counts the streamed answers the Router held
+	// until the decision's response_guard had read them, by what became of each.
+	ResponseGuardBufferedTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_response_guard_buffered_total",
+			Help: "Streamed answers held for the decision's response_guard by decision and outcome: passed, annotated, blocked, over_limit or incomplete",
+		},
+		[]string{"decision_name", "outcome"},
+	)
 )
 
 // RecordSignalExtraction records a signal extraction event
@@ -188,4 +198,13 @@ func RecordPluginError(pluginType, errorReason string) {
 		errorReason = "unknown"
 	}
 	PluginExecutionErrors.WithLabelValues(pluginType, errorReason).Inc()
+}
+
+// RecordResponseGuardBuffered records one streamed answer held for the
+// decision's response_guard and what became of it.
+func RecordResponseGuardBuffered(decisionName, outcome string) {
+	if decisionName == "" {
+		decisionName = consts.UnknownLabel
+	}
+	ResponseGuardBufferedTotal.WithLabelValues(decisionName, outcome).Inc()
 }

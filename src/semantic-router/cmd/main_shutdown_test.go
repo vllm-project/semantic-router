@@ -23,7 +23,7 @@ func TestRunRouterProcessShutsDownManagementServerWhenStartupIsCancelled(t *test
 	apiPort := freePort(t)
 	routerPort := freePort(t)
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	configYAML := fmt.Sprintf(`version: v0.3
+	configYAML := fmt.Sprintf(`version: v0.5
 global:
   services:
     management_api:
@@ -74,7 +74,7 @@ func TestRunRouterProcessReturnsTheManagementAPIBindFailure(t *testing.T) {
 	apiPort := taken.Addr().(*net.TCPAddr).Port
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")
-	configYAML := fmt.Sprintf(`version: v0.3
+	configYAML := fmt.Sprintf(`version: v0.5
 global:
   services:
     management_api:

@@ -1,0 +1,20 @@
+recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: critical_payment_event
+          description: Critical payment or transaction events that need incident-grade routing.
+          operator: OR
+          keywords:
+            - payment_failed
+            - transaction_declined
+            - critical
+            - high
+            - TXN_DECLINE
+            - urgent
+            - immediate
+            - asap
+            - deadline
+            - time sensitive
+            - time-sensitive
+          case_sensitive: false
