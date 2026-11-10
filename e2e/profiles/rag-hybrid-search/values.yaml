@@ -1,5 +1,5 @@
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -13,33 +13,41 @@ config:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    decisions:
-      - name: other_decision
-        description: General knowledge and miscellaneous topics
-        priority: 1
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: other
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-    signals:
-      domains:
-        - name: other
-          description: General knowledge and miscellaneous topics
-    modelCards:
-      - name: base-model
         loras:
           - name: general-expert
             description: General-purpose adapter
-      - name: general-expert
+  recipes:
+    - name: default
+      decisions:
+        - name: other_decision
+          description: General knowledge and miscellaneous topics
+          priority: 1
+          rules:
+            operator: OR
+            conditions:
+              - type: domain
+                name: other
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
+      signals:
+        domains:
+          - name: other
+            description: General knowledge and miscellaneous topics
   global:
     model_catalog:
-      kbs: []
+      deployments:
+        # Llama Stack embeds search queries itself, so the Router embeds the
+        # chunks it inserts with the same model, served by Llama Stack.
+        llama-stack-embedding:
+          provider: openai_embeddings
+          endpoint: http://llama-stack.llama-stack-system.svc.cluster.local:8321/v1
+          model: sentence-transformers/all-MiniLM-L6-v2
+          # The first request loads the model.
+          timeout_ms: 120000
+          capabilities:
+            dimensions: 384
     router:
       strategy: priority
     services: {}
@@ -49,8 +57,9 @@ config:
         backend_type: llama_stack
         file_storage_dir: /tmp/vsr-data
         max_file_size_mb: 50
-        embedding_model: mmbert
-        embedding_dimension: 384
+        embedding:
+          deployment: llama-stack-embedding
+          dimension: 384
         ingestion_workers: 2
         ingestion_drain_timeout_seconds: 25
         supported_formats:
@@ -61,9 +70,4 @@ config:
           embedding_model: sentence-transformers/all-MiniLM-L6-v2
           request_timeout_seconds: 120
           search_type: hybrid
-      response_cache:
-        enabled: false
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
     integrations: {}

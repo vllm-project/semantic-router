@@ -15,9 +15,9 @@ translation:
 
 路由管道是：
 
-1. `routing.signals` 提取事实。
-2. `routing.projections` 协调或派生事实。
-3. `routing.decisions` 匹配策略并选择候选模型。
+1. `recipes[].signals` 提取事实。
+2. `recipes[].projections` 协调或派生事实。
+3. `recipes[].decisions` 匹配策略并选择候选模型。
 
 ## 主要优势
 
@@ -58,58 +58,57 @@ translation:
 ## 配置
 
 ```yaml
-routing:
-  signals:
-    embeddings:
-      - name: technical-support
-        threshold: 0.75
-        candidates: [installation help, troubleshooting]
-      - name: account-management
-        threshold: 0.72
-        candidates: [billing issue, subscription change]
-    context:
-      - name: long-context
-        min_tokens: 4K
-        max_tokens: 200K
-
-  projections:
-    partitions:
-      - name: support-intents
-        semantics: exclusive
-        members: [technical-support, account-management]
-        default: technical-support
-    scores:
-      - name: request-difficulty
-        method: weighted_sum
-        inputs:
-          - type: embedding
-            name: technical-support
-            value_source: confidence
-            weight: 0.5
-          - type: context
-            name: long-context
-            weight: 0.5
-    mappings:
-      - name: difficulty-band
-        source: request-difficulty
-        method: threshold_bands
-        outputs:
-          - name: support-fast
-            lt: 0.5
-          - name: support-escalated
-            gte: 0.5
-
-  decisions:
-    - name: escalated-support
-      description: Route difficult support requests to the larger model.
-      priority: 150
-      rules:
-        operator: AND
-        conditions:
-          - type: projection
-            name: support-escalated
-      modelRefs:
-        - model: support-large
+recipes:
+  - name: default
+    signals:
+      embeddings:
+        - name: technical-support
+          threshold: 0.75
+          candidates: [installation help, troubleshooting]
+        - name: account-management
+          threshold: 0.72
+          candidates: [billing issue, subscription change]
+      context:
+        - name: long-context
+          min_tokens: 4K
+          max_tokens: 200K
+    projections:
+      partitions:
+        - name: support-intents
+          semantics: exclusive
+          members: [technical-support, account-management]
+          default: technical-support
+      scores:
+        - name: request-difficulty
+          method: weighted_sum
+          inputs:
+            - type: embedding
+              name: technical-support
+              value_source: confidence
+              weight: 0.5
+            - type: context
+              name: long-context
+              weight: 0.5
+      mappings:
+        - name: difficulty-band
+          source: request-difficulty
+          method: threshold_bands
+          outputs:
+            - name: support-fast
+              lt: 0.5
+            - name: support-escalated
+              gte: 0.5
+    decisions:
+      - name: escalated-support
+        description: Route difficult support requests to the larger model.
+        priority: 150
+        rules:
+          operator: AND
+          conditions:
+            - type: projection
+              name: support-escalated
+        modelRefs:
+          - model: support-large
 ```
 
 只有映射输出名用 `type: projection` 引用。决策不直接引用分区名或分数名。
@@ -122,4 +121,4 @@ DSL 通过 `PROJECTION partition`、`PROJECTION score` 和 `PROJECTION mapping` 
 - 分区默认值是回退，不是其成员已匹配的证据。
 - 加权和不自动校准来自不同信号家族的输入。请在带标签的流量上一起评估权重和映射档。
 - 派生分数之间的环会在校验时被拒绝。
-- 端到端示例见 [`balance` 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml)。
+- 分数和映射的端到端示例见 [`feedback` 配方](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/feedback/config.yaml)，分区示例见 [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml)。

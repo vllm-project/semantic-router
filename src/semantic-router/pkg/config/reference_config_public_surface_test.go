@@ -27,11 +27,22 @@ func assertReferenceConfigProviderCoverage(t testingT, root map[string]interface
 		reflect.TypeOf(CanonicalReasoning{}),
 		"providers.models[].reasoning",
 	)
+	backendRefs := collectNestedSliceItems(t, models, "backend_refs", "providers.models")
+	// The reference config writes no key inline (api_key).
 	assertSliceUnionCoversStructFields(
 		t,
-		collectNestedSliceItems(t, models, "backend_refs", "providers.models"),
+		backendRefs,
 		reflect.TypeOf(CanonicalBackendRef{}),
 		"providers.models[].backend_refs",
+		"api_key",
+	)
+	// A backend reads its key from api_key_env only.
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, backendRefs, "auth", "providers.models[].backend_refs"),
+		reflect.TypeOf(DeploymentAuth{}),
+		"providers.models[].backend_refs[].auth",
+		"api_key_file",
 	)
 }
 
@@ -54,230 +65,221 @@ func assertReferenceConfigRecipeCoverage(t testingT, root map[string]interface{}
 }
 
 func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{}) {
-	routing := mustMapAt(t, root, "routing")
-
-	// Recipe-wide policies can be demonstrated by a named recipe without
-	// changing the broad default profile's compatibility behavior.
-	profiles := []interface{}{routing}
-	for _, profile := range collectChildMapsFromSlice(t, mustSliceAt(t, root, "recipes"), "routing", "recipes") {
-		profiles = append(profiles, profile)
-	}
-	assertSliceUnionCoversStructFields(t, profiles, reflect.TypeOf(CanonicalRouting{}), "routing profiles")
-	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, profiles, "fallback", "routing profiles"), reflect.TypeOf(fallback.FallbackPolicy{}), "routing.fallback")
-	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, collectChildMapsFromSlice(t, profiles, "fallback", "routing profiles"), "circuit_breaker", "routing profiles"), reflect.TypeOf(fallback.CircuitBreakerConfig{}), "routing.fallback.circuit_breaker")
-	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, profiles, "candidate_requirements", "routing profiles"), reflect.TypeOf(CandidateRequirements{}), "routing.candidate_requirements")
+	// Recipe-wide policies can be demonstrated by any recipe without changing
+	// the broad default recipe's compatibility behavior.
+	profiles := mustSliceAt(t, root, "recipes")
+	defaultRecipe := referenceDefaultRecipe(t, profiles)
+	models := mustSliceAt(t, root, "providers", "models")
+	assertSliceUnionCoversStructFields(t, profiles, reflect.TypeOf(CanonicalRecipe{}), "recipes")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, profiles, "fallback", "recipes"), reflect.TypeOf(fallback.FallbackPolicy{}), "recipes[].fallback")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, collectChildMapsFromSlice(t, profiles, "fallback", "recipes"), "circuit_breaker", "recipes"), reflect.TypeOf(fallback.CircuitBreakerConfig{}), "recipes[].fallback.circuit_breaker")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, profiles, "candidate_requirements", "recipes"), reflect.TypeOf(CandidateRequirements{}), "recipes[].candidate_requirements")
 	assertSliceUnionCoversStructFields(
 		t,
-		mustSliceAt(t, routing, "modelCards"),
-		reflect.TypeOf(RoutingModel{}),
-		"routing.modelCards",
+		models,
+		reflect.TypeOf(ModelFacts{}),
+		"providers.models",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
-		collectNestedSliceItems(t, mustSliceAt(t, routing, "modelCards"), "loras", "routing.modelCards"),
+		collectNestedSliceItems(t, models, "loras", "providers.models"),
 		reflect.TypeOf(LoRAAdapter{}),
-		"routing.modelCards[].loras",
+		"providers.models[].loras",
 	)
-	assertReferenceConfigSignalCoverage(t, mustMapAt(t, routing, "signals"))
-	assertReferenceConfigProjectionCoverage(t, mustMapAt(t, routing, "projections"))
+	assertReferenceConfigSignalCoverage(t, mustMapAt(t, defaultRecipe, "signals"))
+	assertReferenceConfigProjectionCoverage(t, mustMapAt(t, defaultRecipe, "projections"))
 	assertReferenceConfigDecisionCoverage(t, referenceRecipeDecisions(t, root))
+	recipeBindings := collectChildMapsFromSlice(t, profiles, "model_bindings", "recipes")
+	for _, bindings := range recipeBindings {
+		assertReferenceConfigBindingsBySignalType(t, bindings, "recipes[].model_bindings")
+	}
 }
 
 func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interface{}) {
-	assertMapCoversStructFields(t, signals, reflect.TypeOf(CanonicalSignals{}), "routing.signals")
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "keywords"), reflect.TypeOf(KeywordRule{}), "routing.signals.keywords")
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "embeddings"), reflect.TypeOf(EmbeddingRule{}), "routing.signals.embeddings")
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "domains"), reflect.TypeOf(Category{}), "routing.signals.domains")
+	assertMapCoversStructFields(t, signals, reflect.TypeOf(CanonicalSignals{}), "recipes[default].signals")
+	keywords := mustSliceAt(t, signals, "keywords")
+	assertSliceUnionCoversStructFields(t, keywords, reflect.TypeOf(KeywordRule{}), "recipes[default].signals.keywords")
 	assertSliceUnionCoversStructFields(
 		t,
-		collectNestedSliceItems(t, mustSliceAt(t, signals, "domains"), "model_scores", "routing.signals.domains"),
-		reflect.TypeOf(ModelScore{}),
-		"routing.signals.domains[].model_scores",
+		append(
+			collectChildMapsFromSlice(t, keywords, "count", "recipes[default].signals.keywords"),
+			collectChildMapsFromSlice(t, keywords, "density", "recipes[default].signals.keywords")...,
+		),
+		reflect.TypeOf(NumericPredicate{}),
+		"recipes[default].signals.keywords[].count and density",
 	)
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "fact_check"), reflect.TypeOf(FactCheckRule{}), "routing.signals.fact_check")
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "user_feedbacks"), reflect.TypeOf(UserFeedbackRule{}), "routing.signals.user_feedbacks")
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "reasks"), reflect.TypeOf(ReaskRule{}), "routing.signals.reasks")
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "preferences"), reflect.TypeOf(PreferenceRule{}), "routing.signals.preferences")
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "language"), reflect.TypeOf(LanguageRule{}), "routing.signals.language")
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "context"), reflect.TypeOf(ContextRule{}), "routing.signals.context")
-	assertReferenceConfigStructureCoverage(t, mustSliceAt(t, signals, "structure"))
-	assertReferenceConfigComplexityCoverage(t, mustSliceAt(t, signals, "complexity"))
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "modality"), reflect.TypeOf(ModalityRule{}), "routing.signals.modality")
+	assertSliceUnionCoversStructFields(
+		t,
+		collectNestedSliceItems(t, mustSliceAt(t, signals, "domains"), "model_scores", "recipes[default].signals.domains"),
+		reflect.TypeOf(ModelScore{}),
+		"recipes[default].signals.domains[].model_scores",
+	)
+	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "language"), reflect.TypeOf(LanguageRule{}), "recipes[default].signals.language")
+	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "context"), reflect.TypeOf(ContextRule{}), "recipes[default].signals.context")
+	assertReferenceConfigApplicationRuleCoverage(t, signals)
+	assertReferenceConfigModelRuleCoverage(t, signals)
 	assertReferenceConfigRoleBindingCoverage(t, mustSliceAt(t, signals, "role_bindings"))
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "jailbreak"), reflect.TypeOf(JailbreakRule{}), "routing.signals.jailbreak")
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "pii"), reflect.TypeOf(PIIRule{}), "routing.signals.pii")
-	assertReferenceConfigKBSignalCoverage(t, mustSliceAt(t, signals, "kb"))
 	assertReferenceConfigConversationSignalCoverage(t, mustSliceAt(t, signals, "conversation"))
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "events"), reflect.TypeOf(EventRule{}), "routing.signals.events")
-	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "input_modality"), reflect.TypeOf(InputModalityRule{}), "routing.signals.input_modality")
+	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "input_modality"), reflect.TypeOf(InputModalityRule{}), "recipes[default].signals.input_modality")
+}
+
+// assertReferenceConfigApplicationRuleCoverage covers every field of the
+// application signals, which ask the Router's presets, with the inputs the
+// rules may add.
+func assertReferenceConfigApplicationRuleCoverage(t testingT, signals map[string]interface{}) {
+	for key, rule := range map[string]reflect.Type{
+		"domains":        reflect.TypeOf(Category{}),
+		"fact_check":     reflect.TypeOf(FactCheckRule{}),
+		"user_feedbacks": reflect.TypeOf(UserFeedbackRule{}),
+		"jailbreak":      reflect.TypeOf(JailbreakRule{}),
+		"safety":         reflect.TypeOf(SafetyRule{}),
+		"pii":            reflect.TypeOf(PIIRule{}),
+		"hallucination":  reflect.TypeOf(HallucinationRule{}),
+		"refusal":        reflect.TypeOf(RefusalRule{}),
+		"turn_relation":  reflect.TypeOf(TurnRelationRule{}),
+		"complexity":     reflect.TypeOf(ComplexityRule{}),
+		"modality":       reflect.TypeOf(ModalityRule{}),
+	} {
+		assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, key), rule, "recipes[default].signals."+key)
+	}
+	for key, input := range map[string]reflect.Type{
+		"jailbreak":     reflect.TypeOf(JailbreakRuleInput{}),
+		"pii":           reflect.TypeOf(PIIRuleInput{}),
+		"turn_relation": reflect.TypeOf(TurnRelationRuleInput{}),
+	} {
+		assertSliceUnionCoversStructFields(
+			t,
+			collectChildMapsFromSlice(t, mustSliceAt(t, signals, key), "input", "recipes[default].signals."+key),
+			input,
+			"recipes[default].signals."+key+"[].input",
+		)
+	}
 }
 
 func assertReferenceConfigProjectionCoverage(t testingT, projections map[string]interface{}) {
-	assertMapCoversStructFields(t, projections, reflect.TypeOf(CanonicalProjections{}), "routing.projections")
+	assertMapCoversStructFields(t, projections, reflect.TypeOf(CanonicalProjections{}), "recipes[default].projections")
 	assertSliceUnionCoversStructFields(
 		t,
 		mustSliceAt(t, projections, "partitions"),
 		reflect.TypeOf(ProjectionPartition{}),
-		"routing.projections.partitions",
+		"recipes[default].projections.partitions",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
 		mustSliceAt(t, projections, "scores"),
 		reflect.TypeOf(ProjectionScore{}),
-		"routing.projections.scores",
+		"recipes[default].projections.scores",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
-		collectNestedSliceItems(t, mustSliceAt(t, projections, "scores"), "inputs", "routing.projections.scores"),
+		collectNestedSliceItems(t, mustSliceAt(t, projections, "scores"), "inputs", "recipes[default].projections.scores"),
 		reflect.TypeOf(ProjectionScoreInput{}),
-		"routing.projections.scores[].inputs",
+		"recipes[default].projections.scores[].inputs",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
 		mustSliceAt(t, projections, "mappings"),
 		reflect.TypeOf(ProjectionMapping{}),
-		"routing.projections.mappings",
+		"recipes[default].projections.mappings",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
-		collectChildMapsFromSlice(t, mustSliceAt(t, projections, "mappings"), "calibration", "routing.projections.mappings"),
+		collectChildMapsFromSlice(t, mustSliceAt(t, projections, "mappings"), "calibration", "recipes[default].projections.mappings"),
 		reflect.TypeOf(ProjectionMappingCalibration{}),
-		"routing.projections.mappings[].calibration",
+		"recipes[default].projections.mappings[].calibration",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
-		collectNestedSliceItems(t, mustSliceAt(t, projections, "mappings"), "outputs", "routing.projections.mappings"),
+		collectNestedSliceItems(t, mustSliceAt(t, projections, "mappings"), "outputs", "recipes[default].projections.mappings"),
 		reflect.TypeOf(ProjectionMappingOutput{}),
-		"routing.projections.mappings[].outputs",
+		"recipes[default].projections.mappings[].outputs",
 	)
 }
 
-func assertReferenceConfigComplexityCoverage(t testingT, complexity []interface{}) {
-	// hard_below/easy_above express a score that falls as difficulty rises,
-	// which only a score.v1 backend can produce: the local margin is
-	// hard-minus-easy, so a higher value is harder by construction. Covering
-	// them here would mean shipping a reference rule whose direction is
-	// wrong for the path the reference config actually uses.
-	assertSliceUnionCoversStructFields(t, complexity, reflect.TypeOf(ComplexityRule{}), "routing.signals.complexity", "hard_below", "easy_above")
+// assertReferenceConfigModelRuleCoverage covers the systemone rules, which
+// ask their own question of the deployment they name.
+func assertReferenceConfigModelRuleCoverage(t testingT, signals map[string]interface{}) {
+	systemOne := mustSliceAt(t, signals, "systemone")
+	assertSliceUnionCoversStructFields(t, systemOne, reflect.TypeOf(SystemOneRule{}), "recipes[default].signals.systemone")
+	// No deployment reads audio yet, so the reference configuration cannot
+	// show input.audio.
 	assertSliceUnionCoversStructFields(
 		t,
-		collectChildMapsFromSlice(t, complexity, "hard", "routing.signals.complexity"),
-		reflect.TypeOf(ComplexityCandidates{}),
-		"routing.signals.complexity[].hard",
-	)
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(t, complexity, "easy", "routing.signals.complexity"),
-		reflect.TypeOf(ComplexityCandidates{}),
-		"routing.signals.complexity[].easy",
-	)
-}
-
-func assertReferenceConfigStructureCoverage(t testingT, structure []interface{}) {
-	assertSliceUnionCoversStructFields(t, structure, reflect.TypeOf(StructureRule{}), "routing.signals.structure")
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(t, structure, "feature", "routing.signals.structure"),
-		reflect.TypeOf(StructureFeature{}),
-		"routing.signals.structure[].feature",
-	)
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(t, structure, "predicate", "routing.signals.structure"),
-		reflect.TypeOf(NumericPredicate{}),
-		"routing.signals.structure[].predicate",
-	)
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(
-			t,
-			collectChildMapsFromSlice(t, structure, "feature", "routing.signals.structure"),
-			"source",
-			"routing.signals.structure[].feature",
-		),
-		reflect.TypeOf(StructureSource{}),
-		"routing.signals.structure[].feature.source",
+		collectChildMapsFromSlice(t, systemOne, "input", "recipes[default].signals.systemone"),
+		reflect.TypeOf(SystemOneInput{}),
+		"recipes[default].signals.systemone[].input",
+		"audio",
 	)
 }
 
 func assertReferenceConfigRoleBindingCoverage(t testingT, roleBindings []interface{}) {
-	assertSliceUnionCoversStructFields(t, roleBindings, reflect.TypeOf(RoleBinding{}), "routing.signals.role_bindings")
+	assertSliceUnionCoversStructFields(t, roleBindings, reflect.TypeOf(RoleBinding{}), "recipes[default].signals.role_bindings")
 	assertSliceUnionCoversStructFields(
 		t,
-		collectNestedSliceItems(t, roleBindings, "subjects", "routing.signals.role_bindings"),
+		collectNestedSliceItems(t, roleBindings, "subjects", "recipes[default].signals.role_bindings"),
 		reflect.TypeOf(Subject{}),
-		"routing.signals.role_bindings[].subjects",
-	)
-}
-
-func assertReferenceConfigKBSignalCoverage(t testingT, kb []interface{}) {
-	assertSliceUnionCoversStructFields(t, kb, reflect.TypeOf(KBSignalRule{}), "routing.signals.kb")
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(t, kb, "target", "routing.signals.kb"),
-		reflect.TypeOf(KBSignalTarget{}),
-		"routing.signals.kb[].target",
+		"recipes[default].signals.role_bindings[].subjects",
 	)
 }
 
 func assertReferenceConfigConversationSignalCoverage(t testingT, conv []interface{}) {
-	assertSliceUnionCoversStructFields(t, conv, reflect.TypeOf(ConversationRule{}), "routing.signals.conversation")
+	assertSliceUnionCoversStructFields(t, conv, reflect.TypeOf(ConversationRule{}), "recipes[default].signals.conversation")
 	assertSliceUnionCoversStructFields(
 		t,
-		collectChildMapsFromSlice(t, conv, "feature", "routing.signals.conversation"),
+		collectChildMapsFromSlice(t, conv, "feature", "recipes[default].signals.conversation"),
 		reflect.TypeOf(ConversationFeature{}),
-		"routing.signals.conversation[].feature",
+		"recipes[default].signals.conversation[].feature",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
 		collectChildMapsFromSlice(
 			t,
-			collectChildMapsFromSlice(t, conv, "feature", "routing.signals.conversation"),
-			"source", "routing.signals.conversation[].feature",
+			collectChildMapsFromSlice(t, conv, "feature", "recipes[default].signals.conversation"),
+			"source", "recipes[default].signals.conversation[].feature",
 		),
 		reflect.TypeOf(ConversationSource{}),
-		"routing.signals.conversation[].feature.source",
+		"recipes[default].signals.conversation[].feature.source",
 	)
 }
 
 func assertReferenceConfigDecisionCoverage(t testingT, decisions []interface{}) {
-	assertSliceUnionCoversStructFields(t, decisions, reflect.TypeOf(Decision{}), "routing.decisions")
+	assertSliceUnionCoversStructFields(t, decisions, reflect.TypeOf(Decision{}), "recipes[default].decisions")
 	assertSliceUnionCoversStructFields(
 		t,
-		collectNestedSliceItems(t, decisions, "modelRefs", "routing.decisions"),
+		collectNestedSliceItems(t, decisions, "modelRefs", "recipes[default].decisions"),
 		reflect.TypeOf(ModelRef{}),
-		"routing.decisions[].modelRefs",
+		"recipes[default].decisions[].modelRefs",
 	)
-	candidateIterations := collectNestedSliceItems(t, decisions, "candidateIterations", "routing.decisions")
+	candidateIterations := collectNestedSliceItems(t, decisions, "candidateIterations", "recipes[default].decisions")
 	assertSliceUnionCoversStructFields(
 		t,
 		candidateIterations,
 		reflect.TypeOf(CandidateIterationConfig{}),
-		"routing.decisions[].candidateIterations",
+		"recipes[default].decisions[].candidateIterations",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
-		collectNestedSliceItems(t, candidateIterations, "models", "routing.decisions[].candidateIterations"),
+		collectNestedSliceItems(t, candidateIterations, "models", "recipes[default].decisions[].candidateIterations"),
 		reflect.TypeOf(ModelRef{}),
-		"routing.decisions[].candidateIterations[].models",
+		"recipes[default].decisions[].candidateIterations[].models",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
-		collectNestedSliceItems(t, candidateIterations, "outputs", "routing.decisions[].candidateIterations"),
+		collectNestedSliceItems(t, candidateIterations, "outputs", "recipes[default].decisions[].candidateIterations"),
 		reflect.TypeOf(CandidateIterationOutputConfig{}),
-		"routing.decisions[].candidateIterations[].outputs",
+		"recipes[default].decisions[].candidateIterations[].outputs",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
-		collectChildMapsFromSlice(t, decisions, "algorithm", "routing.decisions"),
+		collectChildMapsFromSlice(t, decisions, "algorithm", "recipes[default].decisions"),
 		reflect.TypeOf(AlgorithmConfig{}),
-		"routing.decisions[].algorithm",
+		"recipes[default].decisions[].algorithm",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
-		collectNestedSliceItems(t, decisions, "plugins", "routing.decisions"),
+		collectNestedSliceItems(t, decisions, "plugins", "recipes[default].decisions"),
 		reflect.TypeOf(DecisionPlugin{}),
-		"routing.decisions[].plugins",
+		"recipes[default].decisions[].plugins",
 	)
 }
 
@@ -290,4 +292,5 @@ func assertReferenceConfigGlobalCoverage(t testingT, root map[string]interface{}
 	assertReferenceConfigStoreGlobalCoverage(t, mustMapAt(t, global, "stores"))
 	assertReferenceConfigIntegrationGlobalCoverage(t, mustMapAt(t, global, "integrations"))
 	assertReferenceConfigModelCatalogCoverage(t, mustMapAt(t, global, "model_catalog"))
+	assertReferenceConfigSignalsCompressionCoverage(t, mustSliceAt(t, global, "plugins"))
 }

@@ -78,7 +78,7 @@ running packaged remote code (`trust_remote_code`).
 | Families | `decision1` (Decision 1.0), `task_heads` (Vela 1.0 and compatible HF encoder task models), `vela2` (Vela 2.0), `multimodal_embedding` (Vela 1.0 Omni). `decision2` is unchanged. |
 | Surfaces | `POST /v1/classify`, `/v1/embeddings` (OpenAI-compatible), `/v1/rerank`, and `/v1/bundle`; Set and Span answers on `/v1/decisions` where a model declares them. The Phase 1 surfaces are unchanged. |
 | Processes | One runtime process serves one or more models. Each model keeps its own worker, device and engine arguments. The router groups its managed deployments into processes (by default one per device). |
-| Bundling | The router sends all model work of one request stage for one runtime process as one `/v1/bundle` call, and every question the stage asks one model as one decisions task, about one state or several (`states`). Bundling is transport only: every task keeps the semantics of its own surface. |
+| Bundling | The router sends all model work of one request stage for one runtime process as one `/v1/bundle` call, and every question the stage asks one model as one decisions task: a standard request about one state, or a batch (`states`) about several. Bundling is transport only: every task keeps the semantics of its own surface. |
 | Engines | The native PyTorch engine first, for encoders and decoders, on every accelerator; every built-in model runs on it by default. An optional `onnxruntime` engine (the `onnx` extra, not in the router images) runs the ONNX graphs packages ship (Vela 1.0, Vela 2.0 0.3B) and prepared Omni bundles, for portability. |
 | Hardware | Accelerators `cpu`, `cuda`, `rocm` (built in) plus `xpu` and `mps` (built-in plugin slots, unvalidated). |
 | Router seam | The router's typed task bindings (`pkg/modelruntime/binding`, contracts `label_distribution.v1`, `label_scores.v1`, `token_spans.v1`, `embedding.v1`, `relevance_scores.v1`) are kept. The provider facade `pkg/modelruntime/native` (candle, ORT, OpenVINO) is replaced by `pkg/modelruntime/serving`, which implements every contract through the runtime. Consumers change their constructor, not their logic. |
@@ -189,7 +189,7 @@ so the runtime has one discovery path.
 
 | Entry-point group | Base class | Built-in |
 | --- | --- | --- |
-| `vllm_srun.families` | `ModelFamily` | `decision3`, `decision2`, `decision1`, `task_heads`, `vela2`, `multimodal_embedding` |
+| `vllm_srun.families` | `ModelFamily` | `decision3`, `decision2`, `decision1`, `task_heads`, `vela2`, `vela3`, `vela3_d3`, `multimodal_embedding` |
 | `vllm_srun.engines` | `Engine` | `native`, `onnxruntime` |
 | `vllm_srun.accelerators` | `Accelerator` | `cpu`, `cuda`, `rocm`, `xpu`, `mps` |
 
@@ -481,16 +481,18 @@ declare them:
 - **Thresholds.** A Set or Span question may carry `threshold`; the response
   always reports the applied one in `thresholds.<id>`, including
   length-dependent rules.
-- **Further states** (every decision family). `states` names more states, each
-  with its own questions; the runtime runs each as a request of its own in the
-  model's job group, as it runs a bundle's tasks, so a state's answers are
-  those it gets alone, and answers it under the same name in the response's
-  `states`. A typed-part state reads all its parts together, so texts a
-  client wants read apart are states, not parts.
+- **Batches** (every decision family). A request is a standard request (`state`
+  and `questions`) or a batch: `states` alone, named standard requests that
+  share the batch's model, options and assets. The runtime runs each entry as
+  a request of its own in the model's job group, as it runs a bundle's tasks,
+  so an entry's answers are those it gets alone, and answers it under the same
+  name in the response's `states`, with the `usage` of every entry. A batch
+  has no top-level state, questions, images or videos; a body that mixes the
+  forms is `invalid_request`. A typed-part state reads all its parts
+  together, so texts a client wants read apart are entries, not parts.
 
-This follows the Vela 2.0 packages' own server, so the runtime is a drop-in
-for it. Decision models without Set or Span answer such a question with
-`invalid_question`.
+Apart from batches, this follows the Vela 2.0 packages' own server. Decision
+models without Set or Span answer such a question with `invalid_question`.
 
 ### 6.2 `POST /v1/classify`
 
@@ -783,7 +785,9 @@ costs its budget, not its length, and fails the questions that read it whole
 with `scan_budget_exceeded`; the other questions read its first tokens, which
 are all any truncation keeps of a part they do not read. A question with
 `overflow: truncate` reads only a part's first `limits.truncate_tokens` (one
-input on a CPU, its row one forward over what fits). The model's answer to a
+input on a CPU, its row one forward over what fits), and a Vela 3.0 evidence
+span question its route's 32,768-token window of the parts it reads, the
+others still cut to the router's. The model's answer to a
 question depends on the questions beside it in a sequence, so questions of
 both kinds share their rows as before unless a row has to be read in windows;
 only then does each kind get rows of its own. The router truncates its
@@ -998,6 +1002,11 @@ positions, each layer at its own rope base) with adapter networks over it.
 | Router adapters | The shared router adapter and the domain, fact-check and feedback adapters | Choice and Set questions whose instructions are a trained router text, per (part, adapter) in the Vela 2.0 0.3B layout, 8,192-token windows |
 | Span adapters | span, span-set (PII and unsupported claims), evidence (one window up to 32,768 tokens), relation and NER | Span questions, one row each, in the Vela 2.0 0.3B layout; routed by label set and wording, each route at its own temperature and threshold |
 
+A string state is one user part as it is, even when it parses as JSON
+(`vela3_encoder._parts`), so span offsets index the text the caller sent; only
+a JSON-object state is read as typed parts. Vela 2.0 reads a string that holds
+a JSON object as that object.
+
 Each adapter file holds LoRA factors for every projection of every layer, its
 own copies of the top layers it trained and the readout tensors it trained.
 The engine builds each one as an adapter network (`BackboneSpec.adapters`):
@@ -1006,11 +1015,73 @@ parameter the file does not hold, are the backbone's own objects, so an
 adapter adds only its own tensors. A request's inputs carry the call they
 belong to (all decisions; one router group on one adapter; one span
 question), and `run` batches each call as the released runtime does, by
-length under its token budget; calls never share a forward. The padded
+length under its token budget; calls never share a forward. On a GPU a batch
+that merges concurrent requests (`run_approximate`) batches equal calls of
+different requests together instead, rows of one length class per forward,
+while a request's own calls stay apart, so a request alone still runs the
+released forwards. A CPU keeps the calls apart here too: it gains no
+throughput, and two long rows in one forward need their dense masks together
+in host memory. The padded
 layout passes the modeling code's additive float masks, so the forwards are
 bit-identical to the package's on a CPU ([record](records/vela3-parity.md)).
+The CPU never holds those masks at `[rows, 1, width, width]`: global layers
+read the `[rows, 1, 1, width]` key mask and local layers attend 1,024 queries
+per SDPA call over every key with their rows of the dense mask. A tail under
+768 queries joins the call before it, because the CPU kernel blocks shorter
+calls differently, so each query's reduction, and every answer, stays
+unchanged.
 The span and router layout, word units and span decoder are the Vela 2.0
 family's, which the package copies verbatim.
+
+### 8.8 Vela 3.0 d3 sizes (`vela3_d3`)
+
+vela3-lite, -mini, -flash and -turbo (`vela3_config.json` format `vela3/3`)
+hold no backbone. Each pins a Decision 3.0 package (`base`: repository and
+40-hex revision), which the family fetches like decision2's base (or takes
+from `--base-path`), verifies with the `decision3` family and runs
+unchanged; the identity covers the package's weight files and the base's
+identity. Over the base's text model sit gated LoRA adapters
+(`BackboneSpec.gated`): FP32 factors on the base's own Linears, at most one
+on per forward, on the rows `ForwardBatch.adapter` names. A gated Linear
+returns `base(x) + ((x.float() @ A.T) @ B.T * alpha / r).to(dtype)` on its
+rows and `base(x)` itself on the others, so a forward with every adapter off
+is the base's. Fused layers and graphs would bypass the gate, so a model with
+gated adapters runs eager on GPUs.
+
+| Questions | Adapter | Forward |
+| --- | --- | --- |
+| Router question IDs (by ID, or ID and trained wording) | `decision` | The base's batch, one pass per adapter, each row keeping its own adapter's pass |
+| `decision_task_adapters` IDs and `prefix:` keys | Their own (`decision_df`, `decision_hz`, ...) | As above |
+| `"decision_adapter": true` with `decision_opt_in` | `decision_optin` (or `decision`) | As above |
+| Every other Choice, Noul and Score question | None | The base's own |
+| Span questions | `span`, `ner` or `relation`, by label set and wording | One noncausal pass per window over d3's prompt; the head reads word first tokens against option-line means |
+
+vela3-turbo (`decisions.attention` `noncausal`) answers every question on
+d3-turbo's state-once path first, then each gated question again as a
+replay row (its full prompt, noncausal, adapter on for the pass, eight rows
+per pass); the replay's answer replaces the base's and its tokens count in
+the usage. Span passes add nothing to `usage.input_tokens` on any size, on
+purpose: the packages' runtime does not count them either, and every
+parity request's input tokens agree with it (the vela3 family counts its
+span windows). Requests with images, videos or assets and Box / track
+questions take the base alone; those with media refuse span questions. On
+every path a blank state is refused and span questions are planned before
+the base sees the rest.
+A span question reads its whole target in windows, so `overflow` takes only
+`window`. The target holds at most 32,768 tokens on every size (the vela3
+family's default scan budget on a CPU; it does not follow the base's question
+cap, which is 262,144 tokens on vela3-lite, -mini and -flash): a longer one
+fails alone with `scan_budget_exceeded` before any window runs. The card reports no scan
+budget, so the Router asks these models without `overflow`. Each window goes
+through the base's length check (`max_length_exceeded`).
+`"decision_adapter"` is part of the API contract (`Question`). `{"preset": "pii"}` and `"halu"` ask the package's
+trained question and label set, as on the vela3 family; the card lists the
+presets the package's span schemas hold. Span answers follow the contract (`spans`, `thresholds`, a Noul of
+the most probable word); the decoder is the package's (its unit class starts
+its compatibility block at U+F900, unlike the word splitter's). Open labels
+without a description run by name: the packages' label-definition writers
+(vela3-mini's base, vela3-flash's grafted head) are not run
+([record](records/vela3-d3-parity.md)).
 
 ## 9. Scheduler and planner
 
@@ -1164,7 +1235,7 @@ Section 13.4.
 | --- | --- | --- |
 | `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
-| `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`) |
+| `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`); fused gated-delta prep (`gdn_prep`) needs FLA but does not require causal-conv1d to be installed; optional causal-conv1d is approximate on CUDA, so exact-only/non-consenting models use torch reference even when it is installed; [convolution evidence and released-runtime impact](records/cuda-causal-conv1d-exactness.md); [A/B model comparison](records/cuda-gdn-prep-without-causal-conv1d.md) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
 
 Intel hardware that used the OpenVINO provider runs on CPU, on `xpu`, or
@@ -1512,10 +1583,9 @@ Router entry points into them: `pkg/modelruntime/native` (61 files: the
 owned-model facade for every contract), the legacy singletons in
 `pkg/classification` (`classifier_{category,jailbreak,pii}_init.go`,
 `unified_classifier*`, `native_task_results.go`, `keyword_classifier*`),
-`pkg/modelselection` (`selector.go`, `persistence.go`), test helpers in
+test helpers in
 `pkg/cache` and `pkg/extproc`, and, outside the router,
 `src/training/model_classifier/*_verifier.go`,
-`src/training/model_selection/ml_model_selection/validate.go`,
 `tools/dev/examples/{redis,valkey}`, `tools/modelcompat` and `perf/`. 204 router
 files carry `!windows && cgo` build tags only because of these imports.
 
@@ -1580,7 +1650,7 @@ files carry `!windows && cgo` build tags only because of these imports.
 | Make | `rust.mk`, `openvino.mk`, `build-run-test.mk` binding targets, `models.mk` native model tests, `common.mk` library paths | Deleted or pointed at the runtime |
 | Workflows | `test-native.yml`, `build-native.yml`, `publish-crate.yml`, the native lanes of `ci.yml`, `performance-test.yml`, Rust hooks in `pre-commit.yml` | Deleted, or replaced by the model-runtime lanes |
 | Helm and operator | model download init containers, native library environment, provider settings | The runtime ships in the router image; optional attached runtime sidecar values |
-| E2E profiles | `vela-halu`, `vela-shield`, `vela-omni`, `multimodal-routing`, `local-classifier-backend`, `ml-model-selection`, `hallucination`, and every profile that loads default models through the router image | Run against the runtime; new runtime profiles (section 15) |
+| E2E profiles | `vela-halu`, `vela-shield`, `vela-omni`, `multimodal-routing`, `hallucination`, and every profile that loads default models through the router image | Run against the runtime; new runtime profiles (section 15) |
 | Harness | `tools/agent/domains.yaml` domains `native-bindings`, `openvino`, `riscv-runtime`, `onnx-*`, `ck-flash-attn-rewriter`, `published-model-tests`, native verifications | Removed; `model-runtime` domain covers the families, engines and parity tools |
 | Docs | runtime, installation, AMD, OpenVINO and Vela pages describing candle, ORT and OpenVINO | Task-oriented runtime docs and a migration guide |
 | RISC-V | candle on riscv64 under QEMU, a riscv64 router build and its CI lane | **Removed** (maintainer decision): no riscv64 build, lane, image or build tags |

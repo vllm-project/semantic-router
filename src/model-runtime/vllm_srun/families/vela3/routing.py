@@ -20,14 +20,11 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from ..vela3_shared import RELATION_WORDING
 from .package import Roster
 
 ROUTER_TYPES = ("choice", "set")
-# vela3_encoder._REL_Q and _EV_Q, character for character.
-RELATION_WORDING = re.compile(
-    r"\bspans? (?:are|is) the .+ (?:of|for)\b|\brelat(?:ed|ion|ions|es|ing)?\b|\b(?:head|tail)\b|\bstands? in\b"
-    r"|\bwith respect to\b|\bcounterpart\b|\bsuch that\b|\brole of\b"
-)
+# vela3_encoder._EV_Q, character for character (_REL_Q is RELATION_WORDING).
 EVIDENCE_WORDING = re.compile(
     r"\b(?:evidence|support(?:s|ing|ed)?|cite[sd]?|citations?)\b"
 )
@@ -196,7 +193,14 @@ class Router:
             thresholds.update(overrides["thresholds_by_set"])
             buckets = overrides["pii_buckets"]
         if route.label_set == "pii":
-            bucket = next(b for b in buckets if target_tokens <= b["max_tokens"])
+            bucket = next(
+                (b for b in buckets if target_tokens <= b["max_tokens"]),
+                None,
+            )
+            if bucket is None:
+                raise ValueError(
+                    f"no PII threshold bucket covers {target_tokens} tokens"
+                )
             return float(bucket["threshold"]), temperature
         if route.label_set in ("halu", "toxic"):
             return float(thresholds[route.label_set]), temperature
@@ -204,8 +208,17 @@ class Router:
             evidence = span[EVIDENCE]
             if evidence.get("buckets"):
                 bucket = next(
-                    b for b in evidence["buckets"] if target_tokens <= b["max_tokens"]
+                    (
+                        b
+                        for b in evidence["buckets"]
+                        if target_tokens <= b["max_tokens"]
+                    ),
+                    None,
                 )
+                if bucket is None:
+                    raise ValueError(
+                        f"no evidence threshold bucket covers {target_tokens} tokens"
+                    )
                 return float(bucket["threshold"]), 1.0
             return float(evidence["threshold"]), 1.0
         if route.head == "relation":

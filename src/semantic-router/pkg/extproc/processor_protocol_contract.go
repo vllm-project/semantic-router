@@ -10,6 +10,7 @@ import (
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
@@ -290,7 +291,7 @@ func (r *OpenAIRouter) decodeClientResponse(
 	ctx.SemanticResponse = &decoded.Response
 	ctx.ResponseEnvelope = decoded.Envelope
 	ctx.ResponseBodyNeedsRewrite = decoded.Envelope.ResponseReencodeRequired
-	ctx.ResponseVendorExtensions = protocolcodec.DiagnosticsDroppedVendorExtensions(decoded.Diagnostics)
+	ctx.ResponseUnknownFields = protocolcodec.DiagnosticsDroppedUnknownFields(decoded.Diagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, decoded.Diagnostics...)
 	return ctx.SemanticResponse, nil
 }
@@ -328,6 +329,24 @@ func (r *OpenAIRouter) encodeClientResponse(
 	response llmprotocol.Response,
 	ctx *RequestContext,
 ) ([]byte, error) {
+	return r.encodeClientResponseWithReplay(response, ctx, true)
+}
+
+// encodeCanonicalClientResponse renders the client wire from the neutral
+// response without replaying the upstream bytes, which may carry members the
+// wire contract does not declare.
+func (r *OpenAIRouter) encodeCanonicalClientResponse(
+	response llmprotocol.Response,
+	ctx *RequestContext,
+) ([]byte, error) {
+	return r.encodeClientResponseWithReplay(response, ctx, false)
+}
+
+func (r *OpenAIRouter) encodeClientResponseWithReplay(
+	response llmprotocol.Response,
+	ctx *RequestContext,
+	replay bool,
+) ([]byte, error) {
 	engine, err := r.protocolEngine()
 	if err != nil {
 		return nil, err
@@ -341,6 +360,9 @@ func (r *OpenAIRouter) encodeClientResponse(
 		envelope = ctx.ResponseEnvelope
 		envelope.ResponseRender.PreviousResponseID = responseObjectPreviousID(ctx)
 	}
+	if !replay {
+		envelope.ResponseReencodeRequired = true
+	}
 	encoded, err := engine.EncodeResponse(format, response, envelope)
 	if err != nil {
 		return nil, err
@@ -353,12 +375,6 @@ func (r *OpenAIRouter) encodeClientResponse(
 }
 
 func requestWirePath(format llmprotocol.WireFormat) string {
-	// The Images wire predates the protocol catalog and is not registered
-	// there; keep its canonical path stable instead of falling back to the
-	// chat-completions default.
-	if format == llmprotocol.OpenAIImagesV1 {
-		return "/v1/images/generations"
-	}
 	registry, err := modelcatalog.BuiltIn()
 	if err != nil {
 		return "/v1/chat/completions"
@@ -376,6 +392,8 @@ func requestWireProtocol(format llmprotocol.WireFormat) string {
 		return "openai/responses@1"
 	case llmprotocol.AnthropicMessagesV1:
 		return "anthropic/messages@1"
+	case llmprotocol.OpenAIImagesV1:
+		return "openai/images@1"
 	default:
 		return "openai/chat-completions@1"
 	}
@@ -406,6 +424,7 @@ func (r *OpenAIRouter) encodeImmediateResponseForClient(
 		protocolError := immediateProtocolError(status)
 		if ctx.ImmediateProtocolError != nil {
 			protocolError = ctx.ImmediateProtocolError
+			logProtocolRejection(ctx, protocolError, status)
 		}
 		if body, encodeErr := engine.EncodeError(format, protocolError); encodeErr == nil {
 			immediate.Body = body
@@ -476,4 +495,20 @@ func setImmediateContentType(response *ext_proc.ImmediateResponse, value string)
 		response.Headers.SetHeaders,
 		newHeaderValueOption("content-type", value),
 	)
+}
+
+// logProtocolRejection records why the Router refused a request. Every refusal
+// that carries a protocol error leaves through encodeImmediateResponseForClient,
+// and the client's error body is otherwise the only trace: the request never
+// reaches replay. Only the protocol error's own message is logged, never the
+// request body.
+func logProtocolRejection(ctx *RequestContext, protocolError *llmprotocol.ProtocolError, status int) {
+	logging.ComponentWarnEvent("extproc", "protocol_request_rejected", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"model":      ctx.RequestModel,
+		"status":     status,
+		"code":       protocolError.Code,
+		"category":   string(protocolError.Category),
+		"message":    protocolError.Message,
+	})
 }

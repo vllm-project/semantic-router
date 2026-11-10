@@ -10,7 +10,7 @@ import (
 )
 
 const testDocument = `
-version: v0.3
+version: v0.5
 listeners:
   - name: public
     address: 0.0.0.0
@@ -36,29 +36,28 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: hosted.example:443/v1
-          api_key_env: TEST_HOSTED_KEY
-routing:
-  modelCards:
-    - name: local-model
-    - name: hosted-model
-  decisions:
-    - name: default-decision
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: local-model
+          auth: {api_key_env: TEST_HOSTED_KEY}
 recipes:
+  - name: default
+    decisions:
+      - name: default-decision
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local-model
   - name: coding
-    routing:
-      decisions:
-        - name: coding-decision
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: hosted-model
+    decisions:
+      - name: coding-decision
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: hosted-model
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [coding-auto]
     recipe: coding
 `
@@ -118,7 +117,7 @@ func TestCompileNamesEveryResourceAndItsReferences(t *testing.T) {
 	if got := refNames(route.Refs); len(got) != 1 || got[0] != "program/coding" {
 		t.Fatalf("route refs = %v", got)
 	}
-	if route.Path != "entrypoints[0]" {
+	if route.Path != "entrypoints[1]" {
 		t.Fatalf("route path = %q", route.Path)
 	}
 
@@ -127,7 +126,7 @@ func TestCompileNamesEveryResourceAndItsReferences(t *testing.T) {
 		t.Fatalf("coding program refs = %v", got)
 	}
 	defaultProgram := mustGet(t, resources, KindProgram, string(config.DefaultRecipeName))
-	if defaultProgram.Path != "routing" {
+	if defaultProgram.Path != "recipes[default]" {
 		t.Fatalf("default program path = %q", defaultProgram.Path)
 	}
 	if got := defaultProgram.Spec.(ProgramSpec).Decisions; len(got) != 1 || got[0] != "default-decision" {

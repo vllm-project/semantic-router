@@ -13,7 +13,7 @@ import (
 func TestObservationPreservesActualInputAndImmutableCapabilities(t *testing.T) {
 	var events []Event
 	registry := NewRegistry(func(event Event) { events = append(events, event) })
-	task, err := Register(registry, "test.distribution", func(string) error { return nil }, func(string, tasks.LabelDistribution) error { return nil })
+	task, err := RegisterTask(registry, "test.distribution", "test.distribution", func(string) error { return nil }, func(string, tasks.EmbeddingResult) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,8 +23,8 @@ func TestObservationPreservesActualInputAndImmutableCapabilities(t *testing.T) {
 	}
 	id := Identity{Recipe: "r", Name: "domain", Deployment: "weights", Contract: "test.distribution", Adapter: "test"}
 	capability := Capability{Contract: id.Contract, Provider: "test", Device: "cpu", Precision: "fp32", Limits: Limits{ModelTokens: 32768, TaskTokens: 512, DeploymentTokens: 128, Overflow: "truncate"}, Labels: []string{"safe", "unsafe"}, Embedding: &EmbeddingCapability{Dimension: 2, Modalities: []string{"text"}}}
-	bound, err := task.Resolve(id, capability, resource, func(context.Context, io.Closer, string) (tasks.LabelDistribution, error) {
-		return tasks.LabelDistribution{Probabilities: []float32{0.25, 0.75}, Input: &tasks.InputUsage{OriginalTokens: 200, ProcessedTokens: 128, Truncated: true}}, nil
+	bound, err := task.Resolve(id, capability, resource, func(context.Context, io.Closer, string) (tasks.EmbeddingResult, error) {
+		return tasks.EmbeddingResult{Embedding: []float32{0.25, 0.75}, Input: &tasks.InputUsage{OriginalTokens: 200, ProcessedTokens: 128, Truncated: true}}, nil
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -56,11 +56,13 @@ func TestObservationPreservesActualInputAndImmutableCapabilities(t *testing.T) {
 	}
 }
 
+type spanResult struct{ spans []string }
+
 func TestPartialSpansMustStillPassTaskValidation(t *testing.T) {
 	for _, valid := range []bool{true, false} {
 		t.Run(fmt.Sprint(valid), func(t *testing.T) {
-			task, err := Register(NewRegistry(), "spans", func(string) error { return nil }, func(_ string, output tasks.TokenClassificationResult) error {
-				if len(output.Entities) != 1 {
+			task, err := RegisterTask(NewRegistry(), "spans", "spans", func(string) error { return nil }, func(_ string, output spanResult) error {
+				if len(output.spans) != 1 {
 					return fmt.Errorf("test task requires one actual span")
 				}
 				return nil
@@ -73,10 +75,10 @@ func TestPartialSpansMustStillPassTaskValidation(t *testing.T) {
 				t.Fatal(err)
 			}
 			id := Identity{Recipe: "r", Name: "spans", Deployment: "weights", Contract: "spans", Adapter: "test"}
-			bound, err := task.Resolve(id, Capability{Contract: "spans", Provider: "test", Device: "cpu", Precision: "fp32"}, resource, func(context.Context, io.Closer, string) (tasks.TokenClassificationResult, error) {
-				result := tasks.TokenClassificationResult{}
+			bound, err := task.Resolve(id, Capability{Contract: "spans", Provider: "test", Device: "cpu", Precision: "fp32"}, resource, func(context.Context, io.Closer, string) (spanResult, error) {
+				result := spanResult{}
 				if valid {
-					result.Entities = []tasks.TokenEntity{{EntityType: "claim", Text: "text", End: 4}}
+					result.spans = []string{"text"}
 				}
 				return result, tasks.ErrTokenSpansTruncated
 			})

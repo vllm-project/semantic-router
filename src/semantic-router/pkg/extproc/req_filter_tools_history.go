@@ -13,13 +13,12 @@ import (
 func (r *OpenAIRouter) applyPreDispatchToolsPolicy(
 	ctx *RequestContext,
 ) (bool, error) {
-	toolsCfg := resolveDecisionToolsConfig(ctx)
+	policy := resolveDecisionToolsConfig(ctx).ActivePolicy()
 	request := ctx.SemanticRequest
-	if request == nil || toolsCfg == nil || !toolsCfg.Enabled ||
-		toolsCfg.EffectiveMode() != config.ToolsPluginModeNone {
+	if request == nil || policy.EffectiveMode() != config.ToolsPolicyModeNone {
 		return false, nil
 	}
-	changed, removed := stripSemanticToolPolicy(request, toolsCfg.StripToolHistory)
+	changed, removed := stripSemanticToolPolicy(request, policy.StripToolHistory)
 	if changed {
 		request.Generation++
 	}

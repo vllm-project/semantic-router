@@ -8,6 +8,8 @@ import (
 	"net/http"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
@@ -79,15 +81,28 @@ func BackendInvoker(cfg *config.RouterConfig, listener string, local Invoke, rem
 		}
 		header := http.Header{"Content-Type": {"application/json"}}
 		if model.APIFormat == config.APIFormatSystemOne {
-			header.Set(BackendRequestHeader, "1")
+			header.Set(headers.VSRSystemOneBackend, "1")
 		}
 		endpoint, _ := cfg.GetEndpointByName(endpointName)
-		if endpoint.APIKey != "" {
+		key := endpoint.APIKey
+		if profile.Delegated() {
+			// A call made for a client request presents its delegated
+			// credential; one without it, or a Router-own call, is never sent.
+			credential, delegatedErr := principal.Delegated(ctx)
+			if errors.Is(delegatedErr, principal.ErrCredentialMissing) {
+				return http.StatusUnauthorized, nil, delegatedErr
+			}
+			if delegatedErr != nil {
+				return http.StatusForbidden, nil, delegatedErr
+			}
+			key = credential
+		}
+		if key != "" {
 			name, prefix, authErr := profile.ResolveAuthHeader()
 			if authErr != nil {
 				return 0, nil, authErr
 			}
-			value := endpoint.APIKey
+			value := key
 			if prefix != "" {
 				value = prefix + " " + value
 			}

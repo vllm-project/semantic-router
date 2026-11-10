@@ -98,16 +98,16 @@ curl -s localhost:8899/v1/systemone -H 'content-type: application/json' -d '{
 记录的 worker benchmark 在 16 个 CPU 核上约需 0.2 秒。`POST /v1/decisions` 是
 `/v1/systemone` 的别名，都要求明确的公开模型 ID。原生模型发现使用
 `/v1/systemone/models`，`/v1/models` 仍属于 Chat。classify、embeddings、rerank
-和 bundle 属于独立的 worker API，参见[任务指南](model-runtime/guides/classify.md)。
+和 bundle 属于独立的 worker API，参见 [HTTP API 参考](./reference.md#http-api)。
 
 ## 4. 在路由器中使用 {#4-use-it-from-the-router}
 
 路由器会替你运行模型。把模型声明为 `provider: model_runtime` 的 **deployment**，
-然后在 `decision` 信号中向它提问。把下面的内容保存为 `config.yaml`，并把 `host.docker.internal:8000`
+然后在 `systemone` 信号中向它提问。把下面的内容保存为 `config.yaml`，并把 `host.docker.internal:8000`
 换成为你的用户提供回答的 OpenAI 兼容后端：
 
 ```yaml
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -123,38 +123,37 @@ providers:
         - name: answer
           endpoint: host.docker.internal:8000
           protocol: http
-routing:
-  modelCards:
-    - name: answer-model
-  signals:
-    decision:
-      - name: needs_reasoning
-        deployment: primary
-        question:
-          type: noul
-          instructions: Does answering this request need multi-step reasoning?
-        predicate:
-          gte: 0.7
-  decisions:
-    - name: think-first
-      priority: 100
-      rules:
-        operator: AND
-        on_unknown: no_match
-        conditions:
-          - type: decision
-            name: needs_reasoning
-      modelRefs:
-        - model: answer-model
-          use_reasoning: true
-    - name: default-route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: answer-model
-          use_reasoning: false
+recipes:
+  - name: default
+    signals:
+      systemone:
+        - name: needs_reasoning
+          deployment: primary
+          question:
+            type: noul
+            instructions: Does answering this request need multi-step reasoning?
+          predicate:
+            gte: 0.7
+    decisions:
+      - name: think-first
+        priority: 100
+        rules:
+          operator: AND
+          on_unknown: no_match
+          conditions:
+            - type: systemone
+              name: needs_reasoning
+        modelRefs:
+          - model: answer-model
+            use_reasoning: true
+      - name: default-route
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: answer-model
+            use_reasoning: false
 global:
   model_catalog:
     deployments:
@@ -183,17 +182,17 @@ curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
   | grep -i '^x-vsr-'
 ```
 
-`x-vsr-selected-decision` 给出路由名称，`x-vsr-matched-decision-model` 列出匹配的决策信号。
+`x-vsr-selected-decision` 给出路由名称，`x-vsr-trace` 的 `signals` 成员列出匹配的 `systemone` 信号。
 如果运行时之后重启，在模型恢复之前该信号为未知，`on_unknown: no_match` 会在此期间把请求送到 `default-route`。
 
 Engine 与 Router 共享同一个受管理实例。若要接入独立运营的 worker，明确配置
-`endpoint` 和 `served_name`；[部署指南](model-runtime/deploy.md) 说明其独立 API 和生命周期。
+`endpoint` 和 `model`；[部署指南](model-runtime/deploy.md) 说明其独立 API 和生命周期。
 
 ## 下一步 {#next-steps}
 
 - [选择模型、规模和硬件](model-runtime/choose-a-model.md)
-- 开启一个内置功能：[请求分类](model-runtime/guides/classify.md)、
-  [检测 PII](model-runtime/guides/pii.md)、[拦截提示词攻击](model-runtime/guides/safety.md)、
-  [使用 embeddings](model-runtime/guides/embeddings.md)
+- 开启一个内置功能：[应用信号](../tutorials/signal/overview#application-signals)、
+  [你自己的问题](../system-one/custom-questions)、
+  [用于召回的 embeddings](model-runtime/guides/embeddings.md)
 - [与路由器一起运行](model-runtime/deploy.md)：GPU、Kubernetes、共享运行时
 - [故障排查](model-runtime/troubleshooting.md)

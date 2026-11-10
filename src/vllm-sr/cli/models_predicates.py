@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class NumericPredicate(BaseModel):
-    """Numeric threshold predicate for structure signals."""
+    """Numeric threshold predicate for counting signals."""
 
     model_config = ConfigDict(extra="forbid")
 

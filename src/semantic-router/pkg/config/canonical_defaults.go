@@ -20,23 +20,6 @@ func defaultCanonicalRouterGlobal() CanonicalRouterGlobal {
 		ClearRouteCache:   true,
 		ModelSelection: ModelSelectionConfig{
 			Enabled: true,
-			Method:  "knn",
-			RouterDC: RouterDCSelectionConfig{
-				Temperature:         0.07,
-				DimensionSize:       768,
-				MinSimilarity:       0.3,
-				UseQueryContrastive: true,
-				UseModelContrastive: true,
-				UseCapabilities:     true,
-			},
-			Hybrid: HybridSelectionConfig{
-				ExperienceWeight:    0.3,
-				RouterDCWeight:      0.3,
-				AutoMixWeight:       0.2,
-				CostWeight:          0.2,
-				QualityGapThreshold: 0.1,
-				NormalizeScores:     true,
-			},
 		},
 	}
 }
@@ -54,17 +37,9 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 			MaxResponses: 1000,
 		},
 		RouterReplay: RouterReplayConfig{
-			CaptureRequestBody:  canonicalBoolPtr(true),
-			CaptureResponseBody: canonicalBoolPtr(true),
-			CapturePersonalData: canonicalBoolPtr(true),
-			MaxRecords:          canonicalIntPtr(defaultRouterReplayMaxRecords),
-			MaxBodyBytes:        canonicalIntPtr(defaultRouterReplayMaxBodyBytes),
-			MaxToolTraceBytes:   canonicalIntPtr(0),
-			MaxToolTraceSteps:   canonicalIntPtr(defaultRouterReplayMaxToolTraceSteps),
-			Enabled:             false,
-			StoreBackend:        "memory",
-			TTLSeconds:          2592000,
-			AsyncWrites:         false,
+			StoreBackend: "memory",
+			TTLSeconds:   2592000,
+			AsyncWrites:  false,
 		},
 		StartupStatus: StartupStatusConfig{
 			StoreBackend: "file",
@@ -104,7 +79,6 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 	return CanonicalStoreGlobal{
 		Memory: MemoryConfig{
-			Enabled:                    false,
 			AutoStore:                  false,
 			Milvus:                     MemoryMilvusConfig{Collection: "agentic_memory"},
 			DefaultRetrievalLimit:      5,
@@ -117,7 +91,6 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 			},
 		},
 		ResponseCache: SemanticCache{
-			Enabled:        true,
 			BackendType:    "memory",
 			MaxEntries:     1000,
 			TTLSeconds:     3600,
@@ -128,12 +101,6 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 
 func defaultCanonicalIntegrationGlobal() CanonicalIntegrationGlobal {
 	return CanonicalIntegrationGlobal{
-		Tools: ToolsConfig{
-			Enabled:         false,
-			TopK:            3,
-			ToolsDBPath:     "config/tools_db.json",
-			FallbackToEmpty: true,
-		},
 		Looper: LooperConfig{
 			TimeoutSeconds: 1200,
 			Headers:        map[string]string{},
@@ -147,223 +114,36 @@ func defaultCanonicalIntegrationGlobal() CanonicalIntegrationGlobal {
 	}
 }
 
+// The deployments every configuration declares. Declaring one does not start
+// it: a deployment runs only when a consumer resolves to it.
+const EmbeddingDefaultDeployment = "vela-embedding"
+
 func defaultCanonicalModelCatalog() CanonicalModelCatalog {
-	catalog := CanonicalModelCatalog{
-		Embeddings: defaultCanonicalEmbeddingModels(),
-		System:     DefaultSystemModels(),
-		KBs:        defaultCanonicalKnowledgeBases(),
-		Modules:    defaultCanonicalModelModules(),
-	}
-	// Declaring a deployment does not activate it. Recipes opt in through an
-	// independent-score binding that names the artifact's operating point.
-	if hazard, err := ImplicitModelRuntimeDeployment(catalog.System.Hazard, true); err == nil {
-		hazard.Input = ModelInputBudget{MaxTokens: 32768, Overflow: "reject"}
-		catalog.Deployments = map[string]ModelDeployment{"hazard": hazard}
-	}
-	primary, err := ImplicitModelRuntimeDeployment(Vela3SignalModel, true)
-	if err == nil {
-		if catalog.Deployments == nil {
-			catalog.Deployments = make(map[string]ModelDeployment)
-		}
-		catalog.Deployments[DefaultDecisionDeployment] = primary
-	}
-	enabledSoftMatching := false
-	catalog.Embeddings.Semantic.EmbeddingConfig.EnableSoftMatching = &enabledSoftMatching
-	return catalog
-}
-
-func defaultCanonicalKnowledgeBases() []KnowledgeBaseConfig {
-	return []KnowledgeBaseConfig{
-		defaultPrivacyKnowledgeBase(),
-		defaultCalibrationKnowledgeBase(),
+	return CanonicalModelCatalog{
+		Deployments: DefaultModelDeployments(),
+		Embeddings:  CanonicalEmbeddingModels{Default: EmbeddingModelBinding{Deployment: EmbeddingDefaultDeployment}},
+		System:      CanonicalSystemModels{DecisionModel: DecisionModelBinding{Deployment: DefaultDecisionDeployment}},
 	}
 }
 
-func defaultPrivacyKnowledgeBase() KnowledgeBaseConfig {
-	return KnowledgeBaseConfig{
-		Name: "privacy_kb",
-		Source: KnowledgeBaseSource{
-			Path:     "knowledge_bases/privacy/",
-			Manifest: "labels.json",
-		},
-		Threshold: 0.55,
-		LabelThresholds: map[string]float32{
-			"prompt_injection": 0.7,
-		},
-		Groups: map[string][]string{
-			"security_containment": {"prompt_injection", "credential_exfiltration", "jailbreak_role", "system_prompt_extraction"},
-			"privacy_policy":       {"proprietary_code", "internal_document", "pii", "business_strategy", "trade_secret_ip", "operational_infrastructure", "locality_directive", "customer_data"},
-			"frontier_reasoning":   {"architecture_analysis", "root_cause_analysis", "multi_step_tradeoffs"},
-			"local_standard":       {"generic_coding", "simple_task", "general_knowledge"},
-			"private":              {"prompt_injection", "credential_exfiltration", "jailbreak_role", "system_prompt_extraction", "proprietary_code", "internal_document", "pii", "business_strategy", "trade_secret_ip", "operational_infrastructure", "locality_directive", "customer_data"},
-			"public":               {"architecture_analysis", "root_cause_analysis", "multi_step_tradeoffs", "generic_coding", "simple_task", "general_knowledge"},
-		},
-		Metrics: []KnowledgeBaseMetricConfig{
-			{
-				Name:          "private_vs_public",
-				Type:          KBMetricTypeGroupMargin,
-				PositiveGroup: "private",
-				NegativeGroup: "public",
-			},
-		},
+// DefaultModelDeployments are the pre-declared deployments: primary, the
+// default decision model (vela3-fast), and vela-embedding, the embedding
+// model of recall. Embeddings longer than its input budget are truncated.
+func DefaultModelDeployments() map[string]ModelDeployment {
+	deployments := make(map[string]ModelDeployment)
+	if primary, err := ImplicitModelRuntimeDeployment(Vela3SignalModel, true); err == nil {
+		deployments[DefaultDecisionDeployment] = primary
 	}
-}
-
-func defaultCalibrationKnowledgeBase() KnowledgeBaseConfig {
-	return KnowledgeBaseConfig{
-		Name: "mmlu_kb",
-		Source: KnowledgeBaseSource{
-			Path:     "knowledge_bases/mmlu/",
-			Manifest: "labels.json",
-		},
-		Threshold: 0.25,
-		Groups: map[string][]string{
-			"escalate": {"biology", "business", "computer science", "economics", "history", "math", "other", "philosophy", "psychology"},
-			"keep":     {"chemistry", "engineering", "health", "law", "physics"},
-		},
-		Metrics: []KnowledgeBaseMetricConfig{
-			{
-				Name:          "escalate_vs_keep",
-				Type:          KBMetricTypeGroupMargin,
-				PositiveGroup: "escalate",
-				NegativeGroup: "keep",
-			},
-		},
+	if embedding, err := ImplicitModelRuntimeDeployment(VelaEmbeddingModel, true); err == nil {
+		embedding.Input.Overflow = "truncate"
+		deployments[EmbeddingDefaultDeployment] = embedding
 	}
-}
-
-func defaultCanonicalEmbeddingModels() CanonicalEmbeddingModels {
-	return CanonicalEmbeddingModels{
-		Semantic: EmbeddingModels{
-			MmBertModelPath:     "models/Vela-1.0-Encoder-307M-Embedding",
-			MultiModalModelPath: "models/vela-1.0-omni-nano",
-			UseCPU:              true,
-			EmbeddingConfig: HNSWConfig{
-				// Keep representative routing samples; full 32K text is explicitly opt-in.
-				FullContext:       false,
-				ModelType:         "mmbert",
-				PreloadEmbeddings: true,
-				TargetDimension:   0,
-				TargetLayer:       22,
-				TopK:              canonicalIntPtr(0),
-				MinScoreThreshold: 0.5,
-			},
-		},
-	}
-}
-
-func defaultCanonicalModelModules() CanonicalModelModules {
-	return CanonicalModelModules{
-		Safety:                  SafetyModelsConfig{Safety: SequenceHeadModelConfig{ModelRef: "safety", UseCPU: true}},
-		PromptGuard:             defaultPromptGuardModule(),
-		Classifier:              defaultClassifierModule(),
-		Complexity:              ComplexityModelConfig{}.WithDefaults(),
-		HallucinationMitigation: defaultHallucinationModule(),
-		FeedbackDetector:        defaultFeedbackDetectorModule(),
-	}
-}
-
-func defaultPromptGuardModule() CanonicalPromptGuardModule {
-	return CanonicalPromptGuardModule{
-		ModelRef: "prompt_guard",
-		PromptGuardConfig: PromptGuardConfig{
-			Enabled:   true,
-			Threshold: ModuleThresholdsOf(Vela3SignalModel).PromptGuard,
-			UseCPU:    true,
-		},
-	}
-}
-
-func defaultClassifierModule() CanonicalClassifierModule {
-	return CanonicalClassifierModule{
-		Domain: CanonicalCategoryModule{
-			ModelRef: "domain_classifier",
-			CategoryModel: CategoryModel{
-				Threshold: ModuleThresholdsOf(Vela3SignalModel).Domain,
-				UseCPU:    true,
-			},
-		},
-		PII: CanonicalPIIModule{
-			ModelRef: "pii_classifier",
-			PIIModel: PIIModel{
-				Threshold: ModuleThresholdsOf(Vela3SignalModel).PII,
-				UseCPU:    true,
-			},
-		},
-		Preference: PreferenceModelConfig{},
-	}
-}
-
-func defaultHallucinationModule() CanonicalHallucinationModule {
-	return CanonicalHallucinationModule{
-		Enabled: false,
-		FactCheck: CanonicalFactCheckModule{
-			ModelRef: "fact_check_classifier",
-			FactCheckModelConfig: FactCheckModelConfig{
-				Threshold: ModuleThresholdsOf(Vela3SignalModel).FactCheck,
-				UseCPU:    true,
-			},
-		},
-		Detector: CanonicalHallucinationDetector{
-			ModelRef: "hallucination_detector",
-			HallucinationModelConfig: HallucinationModelConfig{
-				Threshold:         0.5,
-				UseCPU:            true,
-				MinSpanLength:     1,
-				MinSpanConfidence: 0,
-				ContextWindowSize: 50,
-			},
-		},
-	}
-}
-
-func defaultFeedbackDetectorModule() CanonicalFeedbackDetectorModule {
-	return CanonicalFeedbackDetectorModule{
-		ModelRef: "feedback_detector",
-		FeedbackDetectorConfig: FeedbackDetectorConfig{
-			Enabled:   true,
-			Threshold: ModuleThresholdsOf(Vela3SignalModel).Feedback,
-			UseCPU:    true,
-		},
-	}
-}
-
-// DefaultSystemModels returns stable capability bindings for built-in runtime
-// models: Vela 3.0 vela3-fast for every built-in signal it answers, which then
-// share one deployment and one call per request, and Vela 1.0 Hazard.
-func DefaultSystemModels() CanonicalSystemModels {
-	return CanonicalSystemModels{
-		DecisionModel:         DecisionModelBinding{Deployment: DefaultDecisionDeployment},
-		Safety:                Vela3SignalModel,
-		Hazard:                "models/Vela-1.0-Encoder-307M-Hazard",
-		PromptGuard:           Vela3SignalModel,
-		DomainClassifier:      Vela3SignalModel,
-		PIIClassifier:         Vela3SignalModel,
-		FactCheckClassifier:   Vela3SignalModel,
-		HallucinationDetector: Vela3SignalModel,
-		FeedbackDetector:      Vela3SignalModel,
-	}
-}
-
-// Vela1SystemModels returns the Vela 1.0 specialists the built-in signals ran
-// before Vela 2.0 0.3B; global.model_catalog.system restores them.
-func Vela1SystemModels() CanonicalSystemModels {
-	return CanonicalSystemModels{
-		Safety:                "models/Vela-1.0-Encoder-307M-Safety",
-		Hazard:                "models/Vela-1.0-Encoder-307M-Hazard",
-		PromptGuard:           "models/Vela-1.0-Encoder-307M-Guard",
-		DomainClassifier:      "models/Vela-1.0-Encoder-307M-Domain",
-		PIIClassifier:         "models/Vela-1.0-Encoder-307M-PII",
-		FactCheckClassifier:   "models/Vela-1.0-Encoder-307M-FactCheck",
-		HallucinationDetector: "models/Vela-1.0-Encoder-307M-Halu",
-		FeedbackDetector:      "models/Vela-1.0-Encoder-307M-Feedback",
-	}
+	return deployments
 }
 
 // DefaultGlobalConfig materializes canonical global defaults into the runtime RouterConfig.
 func DefaultGlobalConfig() RouterConfig {
 	global := DefaultCanonicalGlobal()
-	_ = resolveModuleModelRefs(&global)
 	cfg := RouterConfig{}
 	_ = applyCanonicalGlobal(&cfg, &global)
 	if cfg.VectorStore != nil {

@@ -212,8 +212,7 @@ its optional manual profile and does not affect this fixed baseline.
 | Model-heavy singleton | `vela-omni` |
 | Dashboard lane | `dashboard` |
 | Provider fixture batch 1 | `envoy-ai-gateway`, `local-classifier-backend`, `routing-errors` |
-| Provider fixture batch 2 | `standalone`, `streaming`, `vela-halu` |
-| Provider fixture batch 3 | `vela-shield` |
+| Provider fixture batch 2 | `standalone`, `streaming` |
 | Router-only batch | `multimodal-routing`, `remote-embedding` |
 
 Each job has at most three profiles and at most 270 minutes of declared profile
@@ -229,14 +228,21 @@ The platform batch contains `platform.image-calibration-cpu` and
 It shares model files/runtime installation, but preserves separate evidence
 and process deadlines. This can take longer to finish than two concurrent jobs.
 
+Later, `local-classifier-backend`, `multimodal-routing` and `vela-omni` left the
+inventory with the classifier, embedding and image-routing paths they qualified,
+and `platform.image-calibration-cpu` left with them: the platform batch now
+holds `platform.models-cpu` alone. `vela-halu` and `vela-shield` left the
+provider fixture batches too: the Vela 1.0 Halu and Shield encoders answer no
+System One question, so no application rule can bind them.
+
 ### Recipe mapping
 
 | Live shard | Exact source and recipes | Variant weight |
 | --- | --- | ---: |
 | `standalone-0` | Standalone `multi-objective` | 129 |
-| `standalone-1` | Standalone `balance`, `knowledge` | 87 |
-| `standalone-2` | Standalone `agent`, `feedback`, `privacy`, `accuracy` | 100 |
-| `built-in-latest-mom-v1-0` to `-15` | Built-in latest `mom-v1`, one probe shard each | 19–32 (347 total) |
+| `standalone-1` | Standalone `balance`, `knowledge` | 91 |
+| `standalone-2` | Standalone `agent`, `feedback`, `privacy`, `accuracy` | 103 |
+| `built-in-latest-mom-v1-0` to `-15` | Built-in latest `mom-v1`, one probe shard each | 21–32 (366 total) |
 
 All eight recipes remain. Weights count authored probe variants, not measured
 seconds. The heavy built-in recipe remains alone: its historical median job
@@ -386,6 +392,13 @@ batching, caches, and failure paths, so the historic average must not be
 presented as measured future usage. With no manual dispatches and all
 prerequisites succeeding, the planned job-launch budget is 700 versus 49 per
 week; that combined count also must not be translated into a cost percentage.
+
+Weekly qualification made one failure cost a week of nightly publication, so
+issue #5845 returned it to a daily schedule with the versioned inventory kept.
+A scheduled run of a commit that another run already passed or is still
+qualifying launches one short job instead of the full qualification. A dispatch
+cancels the qualification it supersedes, a scheduled run waits for a running
+one, and a failed first attempt re-runs only its failed jobs, once.
 
 Routine Main source/component qualification remains. Expensive qualification
 and publication move to an explicit decision; they are not free when that

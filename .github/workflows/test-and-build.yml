@@ -65,7 +65,7 @@ jobs:
       - name: Check Go modules and vet source
         run: make check-go-mod-tidy vet
 
-      - name: Set up Python for selector parity
+      - name: Set up Python for the core harness
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -73,26 +73,19 @@ jobs:
       - name: Install the core harness dependencies
         run: python3 -m pip install PyYAML==6.0.3
 
-      - name: Verify trained selector parity with the router's selectors
-        run: |
-          python3 -m pip install -r src/training/model_selection/ml_model_selection/requirements-parity.txt
-          mkdir -p .agent-harness/core
-          PYTEST_ADDOPTS="--junitxml=$GITHUB_WORKSPACE/.agent-harness/core/parity.xml" make test-model-selection-parity
-
       - name: Run discovered core contracts once
         run: make test-core-unit
         env:
           SR_TEST_MODE: "true"
           ROUTER_PROTECTION_REPORT: ${{ github.workspace }}/.agent-harness/agent-routing-protection/report.json
 
-      - name: Record actual core and parity evidence
+      - name: Record actual core evidence
         if: inputs.verification != ''
         env:
           VERIFICATION: ${{ inputs.verification }}
         run: |
           python3 tools/ci/workflow_evidence.py --verification "$VERIFICATION" \
             --evidence .agent-harness/core/unit/evidence.json \
-            --junit .agent-harness/core/parity.xml \
             --output .agent-harness/core/result.json
       - uses: actions/upload-artifact@v4
         if: inputs.verification != ''
@@ -106,7 +99,7 @@ jobs:
         if: always()
         with:
           overwrite: true
-          name: core-framework-evidence
+          name: core-framework-evidence-attempt-${{ github.run_attempt }}
           path: .agent-harness/core/
           include-hidden-files: true
           if-no-files-found: error

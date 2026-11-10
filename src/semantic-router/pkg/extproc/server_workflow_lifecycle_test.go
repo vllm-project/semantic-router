@@ -12,7 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
-func TestReloadRouterFromConfig_FailedWarmupDoesNotApplyFileTTL(t *testing.T) {
+func TestReloadRouterFromConfig_RejectedCandidateDoesNotApplyFileTTL(t *testing.T) {
 	restore := stubReloadSeams(t)
 	defer restore()
 
@@ -31,23 +31,21 @@ func TestReloadRouterFromConfig_FailedWarmupDoesNotApplyFileTTL(t *testing.T) {
 	candidate := cfg
 	candidate.Flow.State.TTLSeconds = 1
 	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
+		server.lifecycle.beginShutdown()
 		return newWorkflowRouter(t, candidate), nil
-	}
-	warmupReloadRouter = func(*OpenAIRouter) error {
-		return fmt.Errorf("warmup failed")
 	}
 
 	if err := server.reloadRouterFromConfig("file", workflowReloadConfigPath(t, oldRouter.Config), oldRouter.Config); err == nil {
-		t.Fatal("reloadRouterFromConfig succeeded; want warmup failure")
+		t.Fatal("reloadRouterFromConfig succeeded; want the candidate rejected")
 	}
 	if server.service.GetRouter() != oldRouter {
-		t.Fatal("failed warmup swapped the active router")
+		t.Fatal("a rejected candidate swapped the active router")
 	}
 
 	time.Sleep(1500 * time.Millisecond)
 	resumeResp := routeWorkflowRequest(t, oldRouter, workflowResumeChatBody(t, immediateBody(pauseResp)))
 	if got := immediateStatus(resumeResp); got != 200 {
-		t.Fatalf("resume after failed warmup status = %d, body %s", got, immediateBody(resumeResp))
+		t.Fatalf("resume after a rejected candidate status = %d, body %s", got, immediateBody(resumeResp))
 	}
 	if !tracker.sawToolResult() || !tracker.sawFinal() {
 		t.Fatal("pending file state expired or changed after a rejected candidate TTL")
@@ -304,7 +302,6 @@ func workflowReloadConfigPath(t *testing.T, cfg *config.RouterConfig) string {
 func stubWorkflowReloadSeams(t *testing.T, looperCfg config.LooperConfig) {
 	t.Helper()
 	ensureReloadConfigModels = func(*config.RouterConfig) error { return nil }
-	warmupReloadRouter = func(*OpenAIRouter) error { return nil }
 	replaceReloadConfig = func(*config.RouterConfig) {}
 	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
 		return newWorkflowRouter(t, looperCfg), nil

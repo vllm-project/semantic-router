@@ -168,8 +168,8 @@ func TestCollectUnknownFields_MapValues(t *testing.T) {
 
 func TestCollectUnknownFields_CanonicalConfig(t *testing.T) {
 	raw := map[string]interface{}{
-		"version": "0.3",
-		"routing": map[interface{}]interface{}{},
+		"version": "v0.5",
+		"recipes": []interface{}{map[interface{}]interface{}{"name": "default"}},
 		"global":  map[interface{}]interface{}{},
 	}
 	diagnostics := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
@@ -178,13 +178,13 @@ func TestCollectUnknownFields_CanonicalConfig(t *testing.T) {
 
 func TestCollectUnknownFields_CanonicalConfigTypo(t *testing.T) {
 	raw := map[string]interface{}{
-		"version":  "0.3",
-		"routingg": map[interface{}]interface{}{}, // typo
+		"version":  "v0.5",
+		"recipess": []interface{}{}, // typo
 	}
 	diagnostics := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
 	assert.Len(t, diagnostics, 1)
-	assert.Contains(t, diagnostics[0], `"routingg"`)
-	assert.Contains(t, diagnostics[0], `"routing"`)
+	assert.Contains(t, diagnostics[0], `"recipess"`)
+	assert.Contains(t, diagnostics[0], `"recipes"`)
 }
 
 func TestCollectUnknownFields_ReferenceConfig(t *testing.T) {

@@ -45,7 +45,7 @@ deployment 及其状态：
 curl -s localhost:8080/startup-status
 ```
 
-离线的附加运行时不会阻塞自定义 `decision` 问题或显式 `decision.v1` 任务绑定的准备；当前能力信息就绪且兼容之前，这些任务不可用。隐式绑定和原生任务头仍可能需要在启动时读取模型元数据。见[部署就绪规则](./deploy#when-a-model-is-not-ready)。
+离线的挂接运行时不会阻塞自定义 `systemone` 问题的准备；当前能力信息就绪且兼容之前，这些问题不可用。它作为决策模型回答的信号、或通过选择头的绑定回答的信号，仍可能需要在启动时读取模型元数据。见[部署就绪规则](./deploy#when-a-model-is-not-ready)。
 
 首次启动要下载模型，因此比之后的启动更久。等待在 `VLLM_SRUN_READY_TIMEOUT`（默认 10 分钟）后结束，
 并报告 `did not become ready within 10m0s`；再次启动即可从缓存继续下载，或在路由器的环境中调大该超时。
@@ -59,7 +59,7 @@ curl -s localhost:8080/startup-status
 2. 按 `reason` 查看 `vsr_model_runtime_unknown_answers_total`。`timeout` 表示答案晚于信号的
    `timeout_ms`：调大它，或改用更小的模型或 GPU。`unavailable` 表示运行时未就绪或不可达。
    `overloaded` 表示它的队列已满。
-3. 打开调试并发送同样的文本，读取 `x-vsr-matched-*` 响应头：
+3. 打开调试并发送同样的文本，读取 `x-vsr-trace` 的 `signals` 成员；Router 只把它发给 `global.router.headers.debug` 允许的调用方：
 
    ```bash
    curl -s -D - -o /dev/null localhost:8899/v1/chat/completions \
@@ -99,7 +99,7 @@ curl -s localhost:8080/startup-status
 ## 运行时报告 `failed` {#the-runtime-reports-failed}
 
 `GET /v1/models` 会给出每个模型失败的原因。由路由器运行模型时，路由器日志会带有同样的原因，例如
-`model runtime is not ready: model @domain_classifier failed to load: ...`。
+`model runtime is not ready: model vela-domain failed to load: ...`，其中给出部署名。
 路由器运行的某个运行时进程中所有模型都加载失败时，路由器会重启该进程（首次等待 1 秒，之后最长间隔 60 秒），
 因此 GPU 被占用、磁盘已满这类暂时性原因消除后，模型会自行恢复。与仍在服务的模型同处一个进程的模型加载失败时，由运行时自己重试，该进程会继续运行。路由器托管的模型重试三次仍然失败时，路由器无法启动；配置重新加载时，新配置会被拒绝，上一份配置继续服务。常见原因：
 
@@ -184,22 +184,21 @@ global:
           overflow: window
 ```
 
-对于 prompt guard 和 safety 信号，如果原生模型因单次输入过长而拒绝处理，路由器会以有限并发
-重试覆盖全文的重叠窗口，取各窗口的最高风险，并要求每个窗口确认已完整读取输入。
-未完成的扫描仍是未确定状态；扫描预算和截止时间继续生效。直接调用 `/v1/decisions` 时，
-仍遵循模型本身的输入长度限制。
+安全问题（jailbreak、safety、PII、hallucination，以及带 `coverage: full` 的 `systemone`
+规则）会整读输入，上限是模型的扫描预算或部署的 `input.max_tokens`（带 `overflow: window`）。
+超出部分，或没赶上信号截止时间的扫描，就是没读到的内容，`jailbreak` 或 `pii` 规则会把它算作匹配。
+直接调用 `/v1/decisions` 时，仍遵循模型本身的输入长度限制。
 
 模型没有完整读取的内容会让越狱或 PII 规则匹配：在 `reject` 下超过模型 `max_tokens`
-的输入、超过其上限的输入、被截断的输入，或未能在信号截止时间内扫描完的输入。无论
-`on_error` 如何设置，匹配的类型都是 `unscanned`，并给出原因（`input_limit`、`scan_budget`
-或 `deadline`），因此填充提示词无法让攻击或个人数据绕过检查。在模块上设置
-`on_unscanned: allow` 可让这类内容改为遵循 `on_error`。其他信号报告原因，并遵循各自的
-`on_error`（[参考](model-runtime/reference.md#long-inputs)）。
+的输入、超过其上限的输入、被截断的输入，或未能在信号截止时间内扫描完的输入。匹配的类型是
+`unscanned`，并给出原因（`input_limit`、`scan_budget` 或 `deadline`），因此填充提示词无法让攻击或个人数据绕过检查。
+带 `coverage: full` 的 `systemone` 规则用 `on_unscanned` 决定这类内容的含义；其他信号报告原因，并按失败的信号处理
+（[参考](model-runtime/reference.md#long-inputs)）。
 
 ## 请求在等待慢模型 {#a-request-waits-on-a-slow-model}
 
 在信号截止时间前没有返回的模型运行时信号会按其策略处理，因此一个慢模型不会让整个请求失败：
-路由类信号遵循 `on_error`，安全类信号按未扫描处理。截止时间是请求的截止时间减去剩余时间的十分之一，
+路由类信号按失败的信号处理（设置了 `rules.on_unknown` 时为 `Unknown`；否则不匹配，或遵循 `systemone` 条件的 `on_error`），安全类信号按未扫描处理。截止时间是请求的截止时间减去剩余时间的十分之一，
 已部署服务的请求没有路由器可见的截止时间，则为 45 秒；设置 `global.model_catalog.signal_timeout_ms`
 可以缩短它。在 CPU 上，Vela 2.0 0.3B 用四个核每秒约读取 1,000 个 token，因此长请求可能无法在截止时间内完成安全扫描。
 

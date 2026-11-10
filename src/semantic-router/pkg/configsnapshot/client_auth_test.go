@@ -31,11 +31,11 @@ func TestCompileRecordsWhereEntrypointKeysComeFrom(t *testing.T) {
 	t.Setenv("CODING_KEY_CURRENT", "coding-secret-current")
 	t.Setenv("CODING_KEY_NEXT", "coding-secret-next")
 	cfg := parseTestConfig(t, testDocument)
-	cfg.Entrypoints[0].ClientAuth = bearerAuth("CODING_KEY_CURRENT", "CODING_KEY_NEXT")
+	cfg.Entrypoints[1].ClientAuth = bearerAuth("CODING_KEY_CURRENT", "CODING_KEY_NEXT")
 	resources := compileTest(t, cfg)
 
 	secret := mustGet(t, resources, KindSecret, "entrypoint/chat/coding-auto")
-	if secret.Path != "entrypoints[0].client_auth" {
+	if secret.Path != "entrypoints[1].client_auth" {
 		t.Fatalf("secret path = %q", secret.Path)
 	}
 	if got := secret.Spec.(SecretSpec); !reflect.DeepEqual(got, SecretSpec{Env: []string{"CODING_KEY_CURRENT", "CODING_KEY_NEXT"}}) {
@@ -150,7 +150,7 @@ func TestSecretsOfDifferentOwnersNeverCollide(t *testing.T) {
 	for _, provider := range []string{"entrypoint/chat/coding-auto", "listener/public"} {
 		t.Run(provider, func(t *testing.T) {
 			cfg := parseTestConfig(t, strings.ReplaceAll(testDocument, "hosted-model", provider))
-			cfg.Entrypoints[0].ClientAuth = bearerAuth("CODING_KEY")
+			cfg.Entrypoints[1].ClientAuth = bearerAuth("CODING_KEY")
 			resources := compileTest(t, cfg)
 			for _, name := range []string{"cluster/" + provider, "listener/public", "entrypoint/chat/coding-auto"} {
 				mustGet(t, resources, KindSecret, name)

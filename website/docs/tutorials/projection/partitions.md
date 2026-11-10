@@ -6,7 +6,7 @@ sidebar_position: 2
 
 ## Overview
 
-`routing.projections.partitions` coordinates competing `domain` or `embedding` signals and keeps one winner.
+`recipes[].projections.partitions` coordinates competing `domain` or `embedding` signals and keeps one winner.
 
 ## What Problem Does It Solve?
 
@@ -43,20 +43,20 @@ So partitions are not "named projection outputs" in the same sense as mappings. 
 ## Configuration
 
 ```yaml
-routing:
-  projections:
-    partitions:
-      - name: balance_domain_partition
-        semantics: softmax_exclusive
-        temperature: 0.10
-        members: [law, business, health, history, other]
-        default: other
-
-      - name: balance_intent_partition
-        semantics: softmax_exclusive
-        temperature: 0.18
-        members: [code_general, architecture_design, research_synthesis, general_chat_fallback]
-        default: general_chat_fallback
+recipes:
+  - name: default
+    projections:
+      partitions:
+        - name: balance_domain_partition
+          semantics: softmax_exclusive
+          temperature: 0.10
+          members: [law, business, health, history, other]
+          default: other
+        - name: balance_intent_partition
+          semantics: softmax_exclusive
+          temperature: 0.18
+          members: [code_general, architecture_design, research_synthesis, general_chat_fallback]
+          default: general_chat_fallback
 ```
 
 ## DSL
@@ -98,5 +98,5 @@ Do not use partitions when:
 
 Partitions make no additional model calls; they coordinate results produced by
 their member signals. A configured default is a routing fallback, not evidence
-that the default actually matched. See a complete example in the
-[`config/recipes/balance/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/config.yaml).
+that the default actually matched. See a complete example in
+[`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

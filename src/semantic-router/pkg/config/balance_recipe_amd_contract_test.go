@@ -30,8 +30,8 @@ func TestBalanceRecipePreservesAMDLocalAliasContract(t *testing.T) {
 		t.Fatalf("expected AMD recipe default model to stay on the local Qwen alias, got %q", recipe.Providers.Defaults.DefaultModel)
 	}
 	deployment := recipe.Global.ModelCatalog.Deployments["primary"]
-	if deployment.Provider != "model_runtime" || deployment.Artifact != "vllm-sr/Vela-2.0-0.3B" {
-		t.Fatalf("balance must pin the decision deployment to Vela 2.0 0.3B, got provider=%q artifact=%q", deployment.Provider, deployment.Artifact)
+	if deployment.Provider != "model_runtime" || deployment.Artifact != "vllm-sr/Vela-2.0-0.8B" {
+		t.Fatalf("balance must pin the decision deployment to Vela 2.0 0.8B, got provider=%q artifact=%q", deployment.Provider, deployment.Artifact)
 	}
 	if recipe.Global.ModelCatalog.System.DecisionModel.Deployment != "primary" {
 		t.Fatalf("balance decision_model must select the primary deployment, got %q", recipe.Global.ModelCatalog.System.DecisionModel.Deployment)
@@ -40,8 +40,8 @@ func TestBalanceRecipePreservesAMDLocalAliasContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse %s: %v", asset, err)
 	}
-	if got := loaded.DecisionModelSpec().Model; got != Vela2SignalModel {
-		t.Fatalf("balance resolved decision model %q, want %q (an unset binding follows the vela3-fast default)", got, Vela2SignalModel)
+	if got := loaded.DecisionModelSpec().Model; got != Vela2Model08B {
+		t.Fatalf("balance resolved decision model %q, want %q (an unset binding follows the vela3-fast default)", got, Vela2Model08B)
 	}
 	assertBalanceProviderContract(t, recipe)
 	assertBalanceModelCardContract(t, recipe)
@@ -80,30 +80,30 @@ func assertBalanceProviderContract(t *testing.T, recipe CanonicalConfig) {
 
 func assertBalanceModelCardContract(t *testing.T, recipe CanonicalConfig) {
 	t.Helper()
-	modelCardNames := make([]string, 0, len(recipe.Routing.ModelCards))
-	for _, modelCard := range recipe.Routing.ModelCards {
+	modelCardNames := make([]string, 0, len(recipe.Providers.Models))
+	for _, modelCard := range canonicalModelCards(recipe.Providers.Models) {
 		modelCardNames = append(modelCardNames, modelCard.Name)
 	}
 	if len(modelCardNames) != len(balanceAMDLocalAliases) {
-		t.Fatalf("expected exactly %d routing model cards, got %d", len(balanceAMDLocalAliases), len(modelCardNames))
+		t.Fatalf("expected exactly %d model cards, got %d", len(balanceAMDLocalAliases), len(modelCardNames))
 	}
-	assertBalanceAliasSet(t, "routing.modelCards", modelCardNames)
+	assertBalanceAliasSet(t, "providers.models facts", modelCardNames)
 }
 
 func assertBalanceDecisionContract(t *testing.T, recipe CanonicalConfig) {
 	t.Helper()
-	if len(recipe.Routing.Decisions) != 15 {
-		t.Fatalf("expected 15 balance decisions (one visual lane, 13 calibrated lanes, and one terminal fallback), got %d", len(recipe.Routing.Decisions))
+	if len(recipe.Recipes[0].Decisions) != 15 {
+		t.Fatalf("expected 15 balance decisions (one visual lane, 13 calibrated lanes, and one terminal fallback), got %d", len(recipe.Recipes[0].Decisions))
 	}
 
-	decisionModelNames := make([]string, 0, len(recipe.Routing.Decisions))
-	omni := recipe.Routing.Decisions[0]
+	decisionModelNames := make([]string, 0, len(recipe.Recipes[0].Decisions))
+	omni := recipe.Recipes[0].Decisions[0]
 	if omni.Name != "omni" || omni.Tier != 1 || len(omni.ModelRefs) != 1 || omni.ModelRefs[0].Model != "local/omni" {
 		t.Fatalf("expected tier-1 omni lane to use the dedicated visual model, got %+v", omni)
 	}
 	decisionModelNames = append(decisionModelNames, omni.ModelRefs[0].Model)
 
-	calibratedLanes := recipe.Routing.Decisions[1:14]
+	calibratedLanes := recipe.Recipes[0].Decisions[1:14]
 	for index, decision := range calibratedLanes {
 		if decision.Tier != index+2 {
 			t.Fatalf("expected calibrated lane %q to have tier %d, got %d", decision.Name, index+2, decision.Tier)
@@ -122,12 +122,12 @@ func assertBalanceDecisionContract(t *testing.T, recipe CanonicalConfig) {
 		}
 	}
 
-	terminal := recipe.Routing.Decisions[14]
+	terminal := recipe.Recipes[0].Decisions[14]
 	assertBalanceTerminalDecision(t, terminal)
 	for _, modelRef := range terminal.ModelRefs {
 		decisionModelNames = append(decisionModelNames, modelRef.Model)
 	}
-	assertBalanceAliasSet(t, "routing.decisions[].modelRefs", decisionModelNames)
+	assertBalanceAliasSet(t, "recipes[default].decisions[].modelRefs", decisionModelNames)
 }
 
 func assertBalanceTerminalDecision(t *testing.T, terminal Decision) {

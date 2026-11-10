@@ -115,8 +115,8 @@ func TestValidateContextContractsRejectsInvalidBands(t *testing.T) {
 			if !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error %q does not contain %q", err.Error(), tc.want)
 			}
-			if !strings.HasPrefix(err.Error(), "routing.signals.context[") {
-				t.Fatalf("error %q is missing the routing.signals.context prefix", err.Error())
+			if !strings.HasPrefix(err.Error(), "recipes[default].signals.context[") {
+				t.Fatalf("error %q is missing the recipes[default].signals.context prefix", err.Error())
 			}
 		})
 	}
@@ -155,28 +155,32 @@ func TestContextBoundsMatches(t *testing.T) {
 func TestParseYAMLLoadsOpenEndedContextBand(t *testing.T) {
 	const recipeYAML = `
 recipes:
+  - name: default
   - name: bands
-    routing:
-      signals:
-        context:
-          - name: short_context
-            min_tokens: 0
-            max_tokens: 8K
-          - name: exact_context
-            min_tokens: 1K
-            max_tokens: 1K
-          - name: overflow_context
-            min_tokens: 8001
-      decisions:
-        - name: overflow_route
-          rules:
-            operator: AND
-            conditions:
-              - type: context
-                name: overflow_context
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
+    signals:
+      context:
+        - name: short_context
+          min_tokens: 0
+          max_tokens: 8K
+        - name: exact_context
+          min_tokens: 1K
+          max_tokens: 1K
+        - name: overflow_context
+          min_tokens: 8001
+    decisions:
+      - name: overflow_route
+        rules:
+          operator: AND
+          conditions:
+            - type: context
+              name: overflow_context
+        modelRefs:
+          - model: model-b
+            use_reasoning: false
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 `
 	parsed, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + recipeYAML))
 	if err != nil {

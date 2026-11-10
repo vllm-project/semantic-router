@@ -30,19 +30,21 @@ func init() {
 // The active profile is canonical and defines base-model. Keeping that model
 // card in the fragment makes its unknown model reference the only deliberate
 // validation error, independently of the profile's routing rules.
-const safeFailureFragment = `routing:
-  modelCards:
+const safeFailureFragment = `recipes:
+  - name: default
+    decisions:
+      - name: e2e-safe-failure
+        description: Deploy probe that must be rejected by config validation
+        priority: 3
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: e2e-nonexistent-model
+            use_reasoning: false
+providers:
+  models:
     - name: base-model
-  decisions:
-    - name: e2e-safe-failure
-      description: Deploy probe that must be rejected by config validation
-      priority: 3
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: e2e-nonexistent-model
-          use_reasoning: false
 `
 
 // testDashboardDeploySafeFailure covers the "safe failure" journey from #3233.

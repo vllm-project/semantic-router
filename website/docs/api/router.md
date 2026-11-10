@@ -20,6 +20,8 @@ queries. See [Router management API](./apiserver).
 | `DELETE` | `/v1/responses/{id}` | OpenAI Responses | Deletes a stored response |
 | `GET` | `/v1/responses/{id}/input_items` | OpenAI Responses | Reads stored input items |
 | `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
+| `POST` | `/v1/messages/count_tokens` | Anthropic Messages | Counts with the Messages backend of the named model, or of the model that last served the session, at its `count_tokens` path; otherwise answers with its own estimate, which counts text by tokenizer-style pieces rather than bytes. No turn is routed or recorded. A recipe with candidate requirements, or with a decision that reads content (any signal but conversation shape and context size) or has a plugin, always gets the estimate. Rate limits, token budgets included, admit a count by its input before it is forwarded |
+| `POST` | `/v1/images/generations` | OpenAI Images | Routed on the prompt like any text request, and answered only by a decision whose `output` is an image. See [Images API](#images-api) |
 | `POST` | `/openai/deployments/{deployment}/chat/completions` | Azure OpenAI Chat Completions | The deployment names the Router model; `api-version` is accepted and not forwarded |
 | `POST` | `/openai/responses` | Azure OpenAI Responses | Accepts the dated `api-version`; the model is in the request body and the Responses service must be enabled |
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | The model is in the request body and the Responses service must be enabled |
@@ -50,7 +52,7 @@ for assets, Box, track and long context.
 In Router mode, publish an `entrypoints` item with `api: systemone` and grant
 its name in `listeners[].systemone.models`. The Chat default `vllm-sr/auto`
 does not automatically publish a native entrypoint. Follow the
-[System One cascade guide](../tutorials/algorithm/native/cascade.md) to connect
+[System One escalate guide](../tutorials/algorithm/looper/escalate.md#on-system-one) to connect
 local deployments or remote Engine and compatible System One services.
 
 ```bash
@@ -77,14 +79,14 @@ multiple named states. The selected native response retains its answers,
 probabilities, usage and other fields. `model` stays the public entrypoint;
 the additional `routing` object identifies the execution. Set
 `options.return_meta: true` to include the selected model's runtime metadata.
-Calibrated cascades collect this provenance internally even when
+Calibrated escalations collect this provenance internally even when
 you leave response metadata disabled.
 
 ```json
 {
-  "recipe": "native-cascade",
+  "recipe": "native-escalate",
   "decision": "classify",
-  "algorithm": "cascade",
+  "algorithm": "escalate",
   "stage": "strong",
   "selected_model": "vega",
   "quality": "uncalibrated",
@@ -92,20 +94,27 @@ you leave response metadata disabled.
 }
 ```
 
-`model_calls` counts physical inference attempts within the selected algorithm,
-including its transport retries. Signal calls are outside this counter and have
-their own timeouts and request cancellation. It is not a count of GPU forwards. `usage`
-belongs to the returned native candidate and is not total cascade billing.
+`model_calls` counts physical inference attempts across signal evaluation and
+the selected algorithm, including remote decision-model calls and transport
+retries. Signal timeouts remain upper bounds inside the shared request deadline.
+It is not a count of GPU forwards. `usage` belongs to the returned native
+candidate and is not total escalation billing.
 The `quality` field names the configured acceptance method; it is not an
 accuracy score. Native discovery marks recipe entrypoints with `routing: true`
 and concrete models with `routing: false`.
 
 Malformed or unsupported auto questions return `400`. If no complete answer
-passes the declared acceptance rule within the call budget, the request
-returns `503` with `systemone_unresolved`; expiration of the algorithm deadline
-returns `504` with `systemone_deadline_exceeded`. Failed
-candidates never become empty successful answers. Direct model requests keep
-their existing native API contract and do not run the cascade.
+passes the declared acceptance rule, the request returns `503` with
+`systemone_unresolved`. Exhausting the shared physical-call limit returns
+`503`; exhausting its deadline returns `504`. Both budget errors use
+`systemone_budget_exhausted` and include the reason and `model_calls` count.
+A model whose auth is `credential: delegated` answers `401`
+(`delegated_credential_missing`) when the request carries no delegated
+credential, before the call, as a request the Dashboard forwards does, and `403`
+(`delegated_router_call_refused`) when no client request is behind the call,
+as for an operator's routing diagnostic.
+Failed candidates never become empty successful answers. Direct model requests
+keep their existing native API contract and do not run the escalation.
 
 A remote Engine backend must expose a concrete model. Native backend calls
 carry `X-VSR-SystemOne-Backend: 1`; a receiving Router returns `409`
@@ -190,7 +199,12 @@ curl -sS http://localhost:8899/v1/chat/completions \
 
 The response keeps the client protocol's shape. Its model, content, token
 usage, and optional router headers depend on the selected backend and recipe.
-See [VSR routing headers](../troubleshooting/vsr-headers) for the stable
+A reply the backend produced names the model as the backend reports it,
+whether it streams or not and whatever format the backend speaks. A stream
+whose backend names no model in its first event keeps the logical name. A
+reply the Router composes itself, from a Looper algorithm or its own refusal,
+names the logical model, the name `x-vsr-selected-model` reports. See
+[VSR routing headers](../troubleshooting/vsr-headers) for the stable
 observability contract.
 
 The model names accepted by the Router come from canonical provider entries.
@@ -217,7 +231,7 @@ providers:
 ```
 
 Pricing is operator-supplied deployment metadata, not a live quote. It stays on
-`providers.models[]`; `routing.modelCards` only describes semantic capabilities.
+`providers.models[]`; `providers.models` only describes semantic capabilities.
 `currency` is optional and resolves to `USD` for accounting when omitted. When set,
 it must be an uppercase three-letter code. All per-million-token rates must be finite
 and non-negative. `cached_input_per_1m` and `cache_write_per_1m` are optional, and an
@@ -280,6 +294,39 @@ curl -sS http://localhost:8899/v1/messages \
   }'
 ```
 
+### Images API
+
+```bash
+curl -sS http://localhost:8899/v1/images/generations \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "vllm-sr/auto",
+    "prompt": "Draw a lighthouse at dusk.",
+    "size": "1024x1024"
+  }'
+```
+
+The Router routes an Images API request on its prompt, like any text request.
+The request must reach a decision whose
+[output contract](../tutorials/decision/output) is an image, such as
+`output: {kind: image, action: generate}`. That decision's model generates the
+image, whether it answers on the Images API (`api_format: images`) or on the
+Responses API with the hosted `image_generation` operation, and the client
+receives the image in the Images API's own shape:
+
+```json
+{"created": 1700000000, "data": [{"b64_json": "iVBORw0KGgo..."}]}
+```
+
+The request takes `model`, `prompt`, `n`, `size`, `quality`, `background`,
+`moderation`, `output_format` and `output_compression`. `response_format` must
+be `b64_json`, and the API does not stream. A request that reaches no image
+decision (it matches none, matches one that answers in text, or names a model
+directly instead of an entrypoint such as `vllm-sr/auto`) gets `400`
+`image_route_required` before any model is called. A Chat Completions or
+Anthropic Messages request that reaches an image decision gets `400`
+`unsupported_capability`, since neither API can return an image.
+
 ### Azure OpenAI clients
 
 Clients built for Azure OpenAI can call the Router as if it were an Azure
@@ -305,11 +352,45 @@ supported Chat paths are `/openai/v1/chat/completions` and the deployment
 route. The Router accepts Copilot's `reasoning.summary` on Responses
 turns. It forwards the setting to a Responses backend. With a Chat Completions
 or Messages backend, the turn still runs, but the summary request is dropped
-and reported in `x-vsr-protocol-warnings`.
+and reported in `x-vsr-warnings`.
 
 Protocol translation is limited to fields the router supports. When a request
-crosses protocols, inspect `x-vsr-client-protocol`,
-`x-vsr-upstream-protocol`, and any `x-vsr-protocol-warnings` response header.
+crosses protocols, inspect the `client_protocol` and `upstream_protocol`
+members of `x-vsr-trace` and any `x-vsr-warnings` response header.
+
+Chat Completions accepts OpenRouter's `reasoning_details` on assistant messages
+and streaming deltas. Text, summary, encrypted, and server tool call blocks keep
+their order, IDs, format, index, and signatures when responses are returned or
+replayed in a follow-up Chat request. Send the original blocks back with tool
+results; do not summarize or reorder them. A buffered reply carries the plain
+reasoning text as `reasoning_content`. A same-format Chat stream passes the
+provider's deltas through and keeps its field name, which for OpenRouter is
+usually `reasoning`; a Chat stream that the Router renders itself, such as a
+cache replay, uses `reasoning_content`. In a follow-up request the blocks take
+precedence, and the Router does not forward the `reasoning` or
+`reasoning_content` text a second time.
+Stream fragments accumulate in order when they share a type and an index or ID.
+A fragment of another type under the same index starts a new block, as Gemini
+models do for the encrypted signature of a tool call. Blocks without either
+identifier remain separate; the Router does not infer their identity.
+
+Only Chat Completions carries these blocks. A Responses or Messages client of a
+Chat backend still gets the reply: the Router drops the blocks and keeps the
+reasoning text. A buffered reply reports the drop in `x-vsr-warnings`
+as `dropped;...;reasoning_details`. A stream has already sent its headers when
+the drop is found, so the drop is recorded only in the
+`llm_translation_lossy_total` metric and a `translation_lossy` debug log event;
+the stream carries no warning.
+
+A request whose history contains the blocks cannot be sent to a Responses or
+Messages backend and fails with `unsupported_capability`. Candidate selection
+does not avoid those backends unless `candidate_requirements.capabilities` is
+`declared`. Looper decisions and context compression recovery build their
+internal calls in a form that cannot carry the blocks, so the Router refuses
+those calls rather than send them without the blocks. A Looper decision returns
+400. A refused recovery follows the plugin's `failure_mode`: `fail_closed`
+returns 502, and `fail_open`, the default, returns the original reply without
+its retrieval calls.
 
 ## Routing errors
 
@@ -327,10 +408,13 @@ decision, or request content:
 | --- | --- | --- | --- |
 | `model_not_found` | 400 | `invalid_request_error` | The request names a model this Router does not serve. |
 | `no_route` | 400 | `invalid_request_error` | No decision matched, and no default model applies. A recipe entrypoint falls back to `providers.defaults.model` when it is configured. Looper entrypoints follow the same recipe rules; their names do not select an algorithm. |
-| `context_length_exceeded` | 400 or 422 | `invalid_request_error` | The request does not fit the models that could serve it: 400 from the [request budget check](#request-budget-errors), 422 from the models' `context_window_size`. |
+| `context_length_exceeded` | 400 or 422 | `invalid_request_error` | The request does not fit the models that could serve it, even without the estimate's reserves for structured data and media: 400 from the [request budget check](#request-budget-errors), 422 from the models' `context_window_size`. |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
-| `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. `x-vsr-applied-unknown-policy` names the decision. |
+| `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. The `on_unknown` member of `x-vsr-trace` names the decision. |
 | `no_eligible_model` | 503 | `server_error` | The selection policy rejected every candidate model of the matched decision. |
+| `image_route_required` | 400 | `invalid_request_error` | An [Images API](#images-api) request reached no decision whose output is an image. |
+| `image_generation_forbidden` | 400 | `invalid_request_error` | The matched decision answers with a generated image, and the request's `tool_choice` is `none`. |
+| `tool_selection_failed` | 503 | `server_error` | The matched decision's [tool selection](../tutorials/plugin/tools.md#selection) failed or timed out, and its `select.on_error` is `fail`. |
 
 The Router logs each of these failures at `WARN`, under the request's
 `x-request-id`, with the code and its own reason: the model the request named,
@@ -354,7 +438,10 @@ is never intentionally sent with a success status.
 
 With `candidate_requirements.context: known_limits`, the Router checks estimated
 input plus the effective output allowance against the candidates' configured
-limits. If all candidates fail only the budget check, it returns HTTP 400:
+limits. When the full estimate leaves fewer candidates than the decision needs,
+the Router checks again without the estimate's reserves for structured data and
+media and keeps the candidates that count fits. If all candidates still fail
+only the budget check, it returns HTTP 400:
 
 | Error code | Meaning |
 | --- | --- |
@@ -364,7 +451,7 @@ limits. If all candidates fail only the budget check, it returns HTTP 400:
 Missing capabilities, unknown limits, unavailable selection evidence, and mixed
 failures retain their selection-error behavior, `no_eligible_model`. Budget checks do not
 truncate requests by themselves; opt into
-[context compression](../tutorials/plugin/context-compression.md) when appropriate.
+[context compression](../tutorials/plugin/context.md#compression-and-budget) when appropriate.
 
 These counts are estimates. A backend can still reject a request; its valid
 HTTP status and meaningful message are retained. vLLM integer codes are exposed
@@ -382,14 +469,17 @@ Router Replay records routing decisions and selected request lifecycle data.
 It is useful for debugging, evaluation, and Router Learning, but it does not
 change routing merely because a record is read.
 
-Replay is disabled unless the service is enabled:
+Replay is disabled unless a `router_replay` plugin enables it:
 
 ```yaml
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: memory
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ```
 
 The in-memory backend is suitable for local inspection. Use a configured
@@ -438,6 +528,14 @@ requests without a selected decision use the global defaults.
 `capture_personal_data: false` retains routing evidence but suppresses content
 when personal data is detected or PII evidence is unavailable.
 
+Client tool results are stored only with `capture_tool_results: true`, which
+requires `capture_personal_data: true`. A `client_tool_result` step then carries
+the result text in `output` with `content_redacted: false`, cut to
+`max_tool_trace_bytes` and flagged `truncated` when cut, and a trajectory's
+tool message carries it as `content` with `content_truncated`. Otherwise the
+step keeps only its call ID and `status`. Without `replay.detail`, outputs,
+request bodies and trajectory content are returned redacted either way.
+
 ### Configured-rate cost estimates
 
 Insights uses recorded token usage and configured input, cached-input,
@@ -467,6 +565,45 @@ Existing records keep their captured prices and baseline. **Price not recorded**
 means the historical record has no price; configuring rates today does not
 backfill it.
 
+### Provider prompt-cache breakdown
+
+New Replay records expose `provider_cache` in both the list and detail APIs.
+Dashboard Insights shows it under **Provider Prompt Cache**, separately from
+Router response-cache hits and model-routing savings.
+
+Each of `uncached_input`, `cache_read`, `cache_write`, and `output` contains
+`tokens`, `provenance`, and an optional `cost` in the record's currency.
+`cache_write_5m` and `cache_write_1h` retain available retention-tier evidence;
+their costs are already included in `cache_write.cost` and must not be added
+again. The four main component costs sum to `actual_cost` for complete usage.
+
+`state` is `complete`, `partial`, `unavailable`, or `invalid`. Provenance preserves
+`authoritative`, `derived`, `estimated`, and `unknown` evidence. Missing tokens
+and costs stay absent; an explicitly reported or priced zero remains zero.
+Estimated usage is not used to calculate cache savings. Missing prices do not
+erase token evidence, and historical records are not repriced.
+
+With complete usage and configured prices:
+
+- `no_cache_cost` prices all input at the **selected model's standard input
+  rate**, plus the recorded output at that model's output rate.
+- `cache_savings = no_cache_cost - actual_cost`. It can be negative when
+  cache-write premiums exceed cache-read savings.
+- Existing `baseline_cost` and `cost_savings` continue comparing model choices
+  using observed cache usage. They are distinct counterfactuals, not additional
+  provider cache savings.
+
+For example, 10 uncached input, 10 cache-read, 30 five-minute writes, 50 one-hour
+writes, and 2 output tokens at rates of 2, 1, 4, 8, and 10 per million cost
+`0.00057`. The same-model no-cache cost is `0.00022`, so provider cache savings
+are `-0.00035`. The input total remains 100; the tier counts partition the
+80 cache-write tokens.
+
+Partial, unavailable, or invalid usage does not produce a no-cache estimate or
+cache savings. A Router response-cache hit makes no new provider request, so
+its record has no `provider_cache`; Insights identifies it separately instead
+of showing replayed provider usage as new provider savings.
+
 Aggregates use `summary.by_currency`, a sorted array with `currency`,
 `total_saved`, `baseline_spend`, `actual_spend`, and `cost_record_count` for each
 currency. With one currency, the flat summary fields mirror that group. With
@@ -477,6 +614,33 @@ cross-currency total.
 `cost_record_count` counts complete estimates. `excluded_record_count` includes
 non-completed requests and records missing the data needed for a complete
 estimate; it does not imply that every excluded request lacks pricing.
+
+### Net provider prompt-cache saving
+
+The aggregate's `provider_cache` totals the same-model no-cache comparison over
+the records that match the request's filters:
+
+| Field | Meaning |
+| --- | --- |
+| `no_cache_spend` | Sum of `provider_cache.no_cache_cost`. |
+| `actual_spend` | Sum of the same records' actual provider cost. |
+| `net_savings` | `no_cache_spend - actual_spend`. |
+| `priced_records` | Records included in the totals. |
+| `excluded_records` | Matching records left out of the totals. |
+
+Only settled records are included: completed, not served from the Router
+response cache, with `complete` usage and a captured no-cache cost. The total
+is not a sum of per-request savings clamped at zero. A request whose cache
+writes cost more than its cache reads saved lowers `net_savings`, and the
+total can be negative. For example, one request that saves `0.00009` and
+another that loses `0.00035` give a net saving of `-0.00026`, not `0.00009`.
+The costs are the prices captured when each record settled; records are not
+repriced with today's rates.
+
+`by_currency`, `currency`, and the flat amounts follow the same rules as
+`summary`. `by_decision` and `by_selected_model` split the totals per
+decision or model and currency, without a top-N cut, so each currency's
+entries add up to its total.
 
 When bearer authentication is enabled, replay callers need `replay.read`.
 Prompt, response, tool, and other sensitive details remain redacted unless the

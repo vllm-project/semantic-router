@@ -23,6 +23,8 @@ import yaml
 
 from cli.bootstrap import SETUP_MODE_KEY, validate_setup_metadata
 from cli.catalog_provider_projection import provider_projection_errors
+from cli.config_contract import CANONICAL_VERSION
+from cli.config_recipe_scopes import recipe_scopes
 from cli.config_schema.validation import validate_config_structure
 from cli.config_yaml import safe_load_router_config
 from cli.model_catalog_validation import (
@@ -34,7 +36,6 @@ from cli.url_display import redact_url
 from cli.validator import validate_user_config
 
 PROPOSAL_SCHEMA = "vllm-sr/config-proposal/v1"
-CANONICAL_VERSION = "v0.3"
 GENERATOR = "vllm-sr-config-proposal"
 # Textual until the canonical side-effect-free config diff API replaces it.
 DIFF_SOURCE = "textual-unified-until-3477"
@@ -47,20 +48,20 @@ _INTENTS: dict[str, dict[str, str]] = {
         "fragment": "fragments/algorithm/selection/latency-aware.yaml",
         "source": "config/fragments/algorithm/selection/latency-aware.yaml",
         "summary": (
-            "Attach the maintained latency-aware selection algorithm to one "
+            "Attach the maintained latency-weighted multi_factor selector to one "
             "existing decision."
         ),
     },
 }
 
-# The privacy package keeps model cards and provider models on the document
-# surfaces that own them. recipes[].routing cannot take that block directly.
+# The privacy package keeps the facts of its provider models on the document
+# surfaces that own them, which a recipe cannot take directly.
 _WITHHELD_INTENTS = {
     "recipe.privacy": (
         "unsupported: intent 'recipe.privacy' is withheld until a mapper "
-        "places the privacy package's model cards and provider models on "
-        "the document surfaces that own them. recipes[].routing cannot "
-        "take that routing block directly."
+        "places the privacy package's provider models and their facts on "
+        "the document surfaces that own them; a recipe cannot take them "
+        "directly."
     ),
 }
 
@@ -311,11 +312,16 @@ def _fragment_algorithm(fragment: Any, relative: str) -> dict[str, Any]:
 def _attach_algorithm(
     candidate: dict[str, Any], decision_name: str, algorithm: dict[str, Any]
 ) -> None:
-    routing = candidate.get("routing")
-    decisions = routing.get("decisions") if isinstance(routing, dict) else None
-    if not isinstance(decisions, list):
+    decisions = [
+        decision
+        for _, recipe in recipe_scopes(candidate)
+        for decision in (
+            recipe["decisions"] if isinstance(recipe.get("decisions"), list) else []
+        )
+    ]
+    if not decisions:
         raise ProposalUnsupportedError(
-            "unsupported: canonical config has no routing.decisions list, "
+            "unsupported: canonical config has no recipes[].decisions, "
             "and proposals do not invent decisions"
         )
     matches = [

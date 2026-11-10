@@ -9,9 +9,7 @@ import (
 )
 
 const clientAuthRecipeYAML = `
-recipes:
   - name: privacy
-    routing: {}
 `
 
 // allowClientAuth admits client_auth for one test, as the Router will once
@@ -26,6 +24,9 @@ func allowClientAuth(t *testing.T) {
 func clientAuthDocument(auth string) []byte {
 	return []byte(recipeTestBaseYAML + clientAuthRecipeYAML + `
 entrypoints:
+  - model_names: [vllm-sr/default-alias]
+    recipe: default
+    default: true
   - model_names: [company/fast]
     recipe: privacy
     client_auth: ` + auth + `
@@ -35,7 +36,7 @@ entrypoints:
 func TestEntrypointClientAuthIsNotAvailableYet(t *testing.T) {
 	for _, auth := range []string{"{type: bearer_api_key, api_key_envs: [FAST_KEY]}", "null", ""} {
 		_, err := ParseYAMLBytes(clientAuthDocument(auth))
-		if err == nil || !strings.Contains(err.Error(), "entrypoints[0].client_auth: entrypoint client authentication is not available yet") {
+		if err == nil || !strings.Contains(err.Error(), "entrypoints[1].client_auth: entrypoint client authentication is not available yet") {
 			t.Fatalf("client_auth: %q gave error %v, want it rejected until it is enforced", auth, err)
 		}
 	}
@@ -52,7 +53,7 @@ func TestEntrypointClientAuthNeverExpandsAKeyIntoAnError(t *testing.T) {
 		`"${FAST_KEY}"`,
 	} {
 		_, err := ParseYAMLBytes(clientAuthDocument(auth))
-		if err == nil || !strings.Contains(err.Error(), "entrypoints[0].client_auth must not contain $ references") {
+		if err == nil || !strings.Contains(err.Error(), "entrypoints[1].client_auth must not contain $ references") {
 			t.Fatalf("client_auth: %s gave error %v, want the reference rejected", auth, err)
 		}
 		if strings.Contains(err.Error(), "expanded-secret") {
@@ -105,6 +106,9 @@ func TestEntrypointClientAuthKeepsDeclarationsIndependent(t *testing.T) {
 	allowClientAuth(t)
 	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + clientAuthRecipeYAML + `
 entrypoints:
+  - model_names: [vllm-sr/default-alias]
+    recipe: default
+    default: true
   - model_names: [company/fast, company/fast-v2]
     recipe: privacy
     client_auth:
@@ -123,7 +127,7 @@ entrypoints:
 			t.Fatalf("%s resolved to %+v (found=%v), want policy %+v", name, entry, ok, want)
 		}
 	}
-	for _, name := range []string{"company/public", DefaultEntrypointModel} {
+	for _, name := range []string{"company/public", "vllm-sr/default-alias"} {
 		entry, ok := cfg.ResolveEntrypoint(ChatAPI, name)
 		if !ok || entry.ClientAuth != nil {
 			t.Fatalf("%s resolved to %+v (found=%v), want a public entrypoint", name, entry, ok)
@@ -142,20 +146,20 @@ entrypoints:
 		t.Fatalf("round trip changed entrypoints: before=%+v after=%+v", cfg.Entrypoints, again.Entrypoints)
 	}
 
-	exportedAuth := CanonicalConfigFromRouterConfig(cfg).Entrypoints[0].ClientAuth
+	exportedAuth := CanonicalConfigFromRouterConfig(cfg).Entrypoints[1].ClientAuth
 	exportedAuth.APIKeyEnvs[0] = "CHANGED"
 	resolved, _ := cfg.ResolveEntrypoint(ChatAPI, "company/fast")
 	resolved.ClientAuth.APIKeyEnvs[1] = "CHANGED"
-	if !reflect.DeepEqual(cfg.Entrypoints[0].ClientAuth, want) {
-		t.Fatalf("export or resolution shares the normalized policy: %+v", cfg.Entrypoints[0].ClientAuth)
+	if !reflect.DeepEqual(cfg.Entrypoints[1].ClientAuth, want) {
+		t.Fatalf("export or resolution shares the normalized policy: %+v", cfg.Entrypoints[1].ClientAuth)
 	}
 }
 
 func TestValidateRawFieldsSeesFieldsDecodingDrops(t *testing.T) {
-	if err := ValidateRawFields(clientAuthDocument("null")); err == nil || !strings.Contains(err.Error(), "entrypoints[0].client_auth: entrypoint client authentication is not available yet") {
+	if err := ValidateRawFields(clientAuthDocument("null")); err == nil || !strings.Contains(err.Error(), "entrypoints[1].client_auth: entrypoint client authentication is not available yet") {
 		t.Fatalf("ValidateRawFields(client_auth: null) = %v, want the client_auth rejection", err)
 	}
-	if err := ValidateRawFields([]byte("global:\n  router:\n    auto_model_names: null\n")); err == nil || !strings.Contains(err.Error(), "global.router.auto_model_names was removed") {
+	if err := ValidateRawFields([]byte("global:\n  router:\n    auto_model_names: null\n")); err == nil || !strings.Contains(err.Error(), "global.router.auto_model_names: removed_field: the auto model names are removed") {
 		t.Fatalf("ValidateRawFields(removed field) = %v, want it rejected", err)
 	}
 	if err := ValidateRawFields([]byte(recipeTestBaseYAML)); err != nil {

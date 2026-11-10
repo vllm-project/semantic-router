@@ -2,6 +2,7 @@ package modelservice
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -17,9 +18,24 @@ const (
 	idleConnTimeout     = 90 * time.Second
 )
 
+// authorizingTransport sets an attached runtime's headers and credential on
+// each request.
+type authorizingTransport struct {
+	next      http.RoundTripper
+	authorize func(context.Context, *http.Request) error
+}
+
+func (t authorizingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	request = request.Clone(request.Context())
+	if err := t.authorize(request.Context(), request); err != nil {
+		return nil, err
+	}
+	return t.next.RoundTrip(request)
+}
+
 // newHTTPClient returns the base URL and an HTTP client for an endpoint:
 // unix:///path/to.sock, http://host:port or https://host:port.
-func newHTTPClient(endpoint string) (string, *http.Client, error) {
+func newHTTPClient(endpoint string, tlsConfig *tls.Config) (string, *http.Client, error) {
 	parsed, err := url.Parse(endpoint)
 	if err != nil {
 		return "", nil, fmt.Errorf("model runtime endpoint: %w", err)
@@ -39,6 +55,9 @@ func newHTTPClient(endpoint string) (string, *http.Client, error) {
 		}
 		return unixBaseURL, &http.Client{Transport: transport}, nil
 	case "http", "https":
+		if parsed.Scheme == "https" {
+			transport.TLSClientConfig = tlsConfig
+		}
 		transport.Proxy = http.ProxyFromEnvironment
 		transport.DialContext = (&net.Dialer{Timeout: dialTimeout, KeepAlive: 30 * time.Second}).DialContext
 		return strings.TrimRight(endpoint, "/"), &http.Client{Transport: transport}, nil

@@ -27,6 +27,12 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 		metrics.RecordCacheWriteSkipped("request_no_store")
 		return
 	}
+	// A cache hit runs no guard, so an answer is kept only as the guard let it
+	// through.
+	if reason := ctx.ResponseGuard.cacheSkipReason(); reason != "" {
+		metrics.RecordCacheWriteSkipped(reason)
+		return
+	}
 
 	// A cached non-2xx body would be replayed as a success and freeze a
 	// transient upstream failure for the entry lifetime.
@@ -59,8 +65,8 @@ func (r *OpenAIRouter) updateResponseCache(ctx *RequestContext, responseBody []b
 	}
 
 	ttlSeconds := -1
-	if r != nil && r.Config != nil {
-		ttlSeconds = r.Config.GetCacheTTLSecondsForDecisionObject(ctx.VSRSelectedDecision)
+	if plugin := requestResponseCache(ctx); plugin != nil && plugin.TTLSeconds != nil {
+		ttlSeconds = *plugin.TTLSeconds
 	}
 	ttlSeconds = applyResponseCacheRequestTTL(ctx, ttlSeconds)
 	ttlSeconds = applyRetentionTTLOverride(ttlSeconds, ctx)

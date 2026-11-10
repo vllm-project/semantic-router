@@ -7,15 +7,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestResolveMemoryRewriteTimeoutKeepsFraction(t *testing.T) {
-	cfg := &config.RouterConfig{
-		ExternalModels: []config.ExternalModelConfig{{
-			ModelRole:      config.ModelRoleMemoryRewrite,
-			ModelName:      "rewriter",
-			TimeoutSeconds: 0.8,
-			ModelEndpoint:  config.ClassifierVLLMEndpoint{Address: "127.0.0.1", Port: 8000},
-		}},
-	}
+func TestResolveMemoryRewriteTimeoutIsTheDeployments(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"rewriter": {
+		Provider: config.OpenAIChatProvider, Endpoint: "http://127.0.0.1:8000/v1", Model: "rewriter", TimeoutMs: 800,
+	}}
+	cfg.Memory.QueryRewrite = &config.MemoryQueryRewriteConfig{Deployment: "rewriter"}
 
 	resolved := resolveMemoryRewriteServiceConfig(cfg)
 	if resolved == nil {

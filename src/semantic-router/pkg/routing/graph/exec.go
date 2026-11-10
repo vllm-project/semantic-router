@@ -140,6 +140,10 @@ func Run(ctx context.Context, program *Program, in Input, opts Options) (*Outcom
 	spanCtx, span := tracing.StartSpan(runCtx, "graph.run",
 		trace.WithAttributes(attribute.String(attrProgram, program.Name)))
 	err := program.Steps.Run(spanCtx, x, st)
+	if cause := context.Cause(runCtx); err == nil && cause != nil {
+		st.Response = nil
+		err = cause
+	}
 	if err == nil && st.Response == nil {
 		err = ErrNoResponse
 	}

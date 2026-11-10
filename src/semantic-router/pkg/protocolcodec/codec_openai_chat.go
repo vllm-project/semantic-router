@@ -19,6 +19,7 @@ func (OpenAIChatCodec) Capabilities() llmprotocol.CapabilitySet {
 		llmprotocol.CapabilityFileInput,
 		llmprotocol.CapabilityTools, llmprotocol.CapabilityParallelTools, llmprotocol.CapabilityCustomTools,
 		llmprotocol.CapabilityReasoning,
+		llmprotocol.CapabilityReasoningContinuity,
 		llmprotocol.CapabilityStructuredJSON, llmprotocol.CapabilityStrictJSONSchema, llmprotocol.CapabilityStrictToolSchema,
 		llmprotocol.CapabilityStreaming, llmprotocol.CapabilityCacheAccounting,
 		llmprotocol.CapabilityReasoningAccounting, llmprotocol.CapabilityAuthoritativeUsage,
@@ -85,14 +86,15 @@ type chatStreamOptionsWire struct {
 }
 
 type chatMessageWire struct {
-	ID                 string               `json:"id,omitempty"`
-	Role               string               `json:"role"`
-	Content            json.RawMessage      `json:"content,omitempty"`
-	Refusal            *string              `json:"refusal,omitempty"`
-	Reasoning          *string              `json:"reasoning_content,omitempty"`
-	AlternateReasoning *string              `json:"reasoning,omitempty"`
-	Audio              *chatAudioOutputWire `json:"audio,omitempty"`
-	LegacyFunctionCall *chatLegacyCallWire  `json:"function_call,omitempty"`
+	ID                 string                    `json:"id,omitempty"`
+	Role               string                    `json:"role"`
+	Content            json.RawMessage           `json:"content,omitempty"`
+	Refusal            *string                   `json:"refusal,omitempty"`
+	Reasoning          *string                   `json:"reasoning_content,omitempty"`
+	AlternateReasoning *string                   `json:"reasoning,omitempty"`
+	ReasoningDetails   []chatReasoningDetailWire `json:"reasoning_details,omitempty"`
+	Audio              *chatAudioOutputWire      `json:"audio,omitempty"`
+	LegacyFunctionCall *chatLegacyCallWire       `json:"function_call,omitempty"`
 	// LiteLLM wraps upstream fields that do not fit the OpenAI schema in
 	// provider_specific_fields on response messages. The content is opaque
 	// provider metadata and is not replayed to the client. Client requests
@@ -210,7 +212,22 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 	if err := decodeChatRequestOptions(wire, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	return request, requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy), nil, nil
+	envelope := requestEnvelope(llmprotocol.OpenAIChatV1, body, request.Generation, policy)
+	// Decoding drops the text alias beside typed reasoning blocks, so the source
+	// bytes no longer describe the request and must not be replayed upstream.
+	if chatMessagesDropReasoningAlias(wire.Messages) {
+		envelope.Request = nil
+	}
+	return request, envelope, nil, nil
+}
+
+func chatMessagesDropReasoningAlias(messages []chatMessageWire) bool {
+	for _, message := range messages {
+		if len(message.ReasoningDetails) > 0 && (message.Reasoning != nil || message.AlternateReasoning != nil) {
+			return true
+		}
+	}
+	return false
 }
 
 func validateChatRequestWire(wire chatRequestWire) error {
@@ -376,7 +393,13 @@ func decodeChatRequestMessage(wire chatMessageWire, index int, policy llmprotoco
 	if err != nil {
 		return llmprotocol.Message{}, err
 	}
-	return assembleChatMessage(wire, index, role, contents, policy)
+	details, err := decodeChatReasoningDetails(wire.ReasoningDetails, role, policy.Limits)
+	if err != nil {
+		return llmprotocol.Message{}, err
+	}
+	// Returned history carries the same text in both forms. The typed blocks
+	// are what the provider needs back, so the alias is not forwarded twice.
+	return assembleChatMessage(wire, index, role, details, len(details) == 0, contents, policy)
 }
 
 func decodeChatResponseMessage(wire chatMessageWire, index int, policy llmprotocol.Policy) (llmprotocol.Message, error) {
@@ -394,7 +417,13 @@ func decodeChatResponseMessage(wire chatMessageWire, index int, policy llmprotoc
 	if err != nil {
 		return llmprotocol.Message{}, err
 	}
-	message, err := assembleChatMessage(wire, index, role, contents, policy)
+	details, err := decodeChatReasoningDetails(wire.ReasoningDetails, role, policy.Limits)
+	if err != nil {
+		return llmprotocol.Message{}, invalidProviderResponse("invalid_reasoning_detail", "Upstream reasoning detail is invalid")
+	}
+	// Clients render the plain reasoning text, and a format that cannot carry
+	// the typed blocks still translates it, so a reply keeps both.
+	message, err := assembleChatMessage(wire, index, role, details, true, contents, policy)
 	if err != nil {
 		return llmprotocol.Message{}, err
 	}
@@ -422,11 +451,13 @@ func assembleChatMessage(
 	wire chatMessageWire,
 	index int,
 	role llmprotocol.Role,
+	details []llmprotocol.Content,
+	keepReasoningText bool,
 	contents []llmprotocol.Content,
 	policy llmprotocol.Policy,
 ) (llmprotocol.Message, error) {
 	// Reasoning first, the order vLLM's own Messages and Responses output uses.
-	message := llmprotocol.Message{ID: wire.ID, Role: role}
+	message := llmprotocol.Message{ID: wire.ID, Role: role, Content: details}
 	name, err := decodeChatMessageName(wire.Name)
 	if err != nil {
 		return llmprotocol.Message{}, err
@@ -440,7 +471,7 @@ func assembleChatMessage(
 	if reasoning == nil {
 		reasoning = wire.AlternateReasoning
 	}
-	if reasoning != nil {
+	if reasoning != nil && keepReasoningText {
 		message.Content = append(message.Content, llmprotocol.Content{
 			Kind: llmprotocol.ContentReasoning, Text: *reasoning, Reasoning: llmprotocol.ReasoningScopeText,
 		})
