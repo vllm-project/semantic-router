@@ -63,7 +63,7 @@ curl -sS -i http://localhost:8899/v1/chat/completions \
 For other deployments, use their inference address and authentication. Check
 the answer plus `x-vsr-selected-recipe` and `x-vsr-selected-model`; HTTP success
 alone does not verify the output or route. See [routing
-receipts](../troubleshooting/vsr-headers) and [CLI previews and probes](../api/cli).
+receipts](../api/headers) and [CLI previews and probes](../api/cli).
 
 ### Model names the harness picks itself
 

@@ -543,7 +543,7 @@ reads them. Update gateways and clients:
 | `x-vsr-selected-modality` | The trace's `modality` member |
 | `x-session-id`, `x-claude-code-session-id` | `x-vsr-session-id`; `global.router.headers.session_id_headers` keeps the others accepted |
 
-The [VSR routing headers](../troubleshooting/vsr-headers) page lists the
+The [VSR routing headers](../api/headers) page lists the
 public set and every trace member.
 
 ## 4. Validate and start

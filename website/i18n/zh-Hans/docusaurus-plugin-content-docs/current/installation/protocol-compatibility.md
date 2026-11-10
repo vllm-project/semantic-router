@@ -154,7 +154,7 @@ providers:
 - 响应保持客户端协议的 JSON 或 SSE 形状。Provider 传输错误和不完整流会与成功的模型响应分开翻译。
 - 对于 Anthropic 兼容提供方，缺失的可空 `stop_sequence` 会被解释为 null，并产生有界的兼容性诊断。这适用于缓冲 Messages、`message_start.message` 和 `message_delta.delta`。显式 null 不产生诊断；停止原因为 `stop_sequence` 时，仍必须提供非空的匹配序列，终止增量仍必须包含 `stop_reason`。
 - OpenAI 兼容 Chat 提供方通过 `choices[].stop_reason` 返回匹配到的停止字符串时（例如 vLLM），Anthropic Messages 客户端会收到 `stop_sequence` 停止原因及该序列。Chat 和 Responses 客户端不受影响。
-- 适用时，`x-vsr-warnings` 以及 `x-vsr-trace` 的 `client_protocol` 和 `upstream_protocol` 成员会暴露翻译细节。参见 [VSR 路由标头](../troubleshooting/vsr-headers)。流式响应头发送后才发现的诊断会记录在转换告警指标和结构化调试日志中，不能添加到已经发送的响应头。
+- 适用时，`x-vsr-warnings` 以及 `x-vsr-trace` 的 `client_protocol` 和 `upstream_protocol` 成员会暴露翻译细节。参见 [VSR 路由标头](../api/headers)。流式响应头发送后才发现的诊断会记录在转换告警指标和结构化调试日志中，不能添加到已经发送的响应头。
 
 仓库在编解码器测试、Envoy ExtProc 边界，以及 18 单元格部署矩阵中成对验证全部三种协议：三种客户端格式 × 三种后端格式 × 缓冲或流式模式。完整的验证和扩展契约见[已实现的编解码器设计](../proposals/multi-protocol-adaptor)。
 

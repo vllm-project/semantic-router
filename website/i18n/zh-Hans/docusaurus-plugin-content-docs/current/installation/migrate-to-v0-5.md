@@ -494,7 +494,7 @@ providers:
 | `x-vsr-selected-modality` | trace 的 `modality` 成员 |
 | `x-session-id`、`x-claude-code-session-id` | `x-vsr-session-id`；`global.router.headers.session_id_headers` 让其他名称继续被接受 |
 
-[VSR 路由头部](../troubleshooting/vsr-headers)页面列出了公开集合和每个 trace 成员。
+[VSR 路由头部](../api/headers)页面列出了公开集合和每个 trace 成员。
 
 ## 4. 校验并启动 {#4-validate-and-start}
 

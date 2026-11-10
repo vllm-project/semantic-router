@@ -222,6 +222,10 @@ const movedDocs: { from: string[], to: string }[] = [
     from: ['overview/collective-intelligence'],
     to: 'overview/mom-model-family',
   },
+  {
+    from: ['troubleshooting/vsr-headers'],
+    to: 'api/headers',
+  },
 ]
 
 // Pages the current docs dropped without a replacement. The v0.4 docs still

@@ -374,7 +374,7 @@ var configContractForbiddenDocs = []docNeedles{
 		},
 	},
 	{
-		path: repoRel("website", "docs", "troubleshooting", "vsr-headers.md"),
+		path: repoRel("website", "docs", "api", "headers.md"),
 		needles: []string{
 			"computer_science",
 		},

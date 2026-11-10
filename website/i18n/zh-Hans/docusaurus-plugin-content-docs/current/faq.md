@@ -122,4 +122,4 @@ signal → policy / decision → algorithm / model → plugin → endpoint sched
 
 交付、路由正确性和回答质量是三个独立结果。明确说明未测量的部分，不要据此推断成功。
 
-[CLI 参考](api/cli)说明这里使用的全部参数，[VSR 标头](troubleshooting/vsr-headers)列出回执头，[API 与可观测性](tutorials/global/api-and-observability)介绍遥测方式。
+[CLI 参考](api/cli)说明这里使用的全部参数，[VSR 标头](api/headers)列出回执头，[API 与可观测性](tutorials/global/api-and-observability)介绍遥测方式。

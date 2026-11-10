@@ -125,4 +125,4 @@ signal → policy / decision → algorithm / model → plugin → endpoint sched
 
 Delivery, route correctness and answer quality are three separate outcomes; qualify the ones you did not measure instead of inferring success.
 
-The [CLI reference](api/cli) documents every flag shown here, [VSR headers](troubleshooting/vsr-headers) lists the receipt headers, and [API and Observability](tutorials/global/api-and-observability) covers the telemetry surfaces.
+The [CLI reference](api/cli) documents every flag shown here, [VSR headers](api/headers) lists the receipt headers, and [API and Observability](tutorials/global/api-and-observability) covers the telemetry surfaces.

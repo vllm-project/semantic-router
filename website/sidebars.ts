@@ -534,6 +534,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'api/cli',
         'api/router',
+        'api/headers',
         'api/configuration-schema',
         'api/apiserver',
         'api/openapi',
@@ -549,7 +550,6 @@ const sidebars: SidebarsConfig = {
       items: [
         'troubleshooting/network-tips',
         'troubleshooting/container-connectivity',
-        'troubleshooting/vsr-headers',
         'troubleshooting/common-errors',
       ],
     },

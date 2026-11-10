@@ -151,9 +151,9 @@ domains:
       - dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json
       - dashboard/frontend/src/generated/routerConfigContract.ts
       - dashboard/frontend/src/generated/vsrHeaders.ts
+      - tools/docs/generate_header_reference.py
       - website/docs/api/apiserver.md
-      - website/docs/troubleshooting/vsr-headers.md
-      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/troubleshooting/vsr-headers.md
+      - website/docs/api/headers.md
       - website/static/openapi/apiserver/**
     checks: [make generated-contract-check]
     verifications: [generated-contracts]
@@ -174,9 +174,8 @@ domains:
 
   # The Router's tests read these pages and files: the config tests load every
   # YAML example (src/semantic-router/pkg/config/docs_examples_test.go and,
-  # for the agent skill, agent_skill_examples_test.go), and the header
-  # registry tests check the generated header reference
-  # (src/semantic-router/pkg/headers).
+  # for the agent skill, agent_skill_examples_test.go) and check the
+  # generated header reference (docs_contract_test.go).
   router-checked-docs:
     owner: router-core
     documentation_check: true
@@ -184,8 +183,7 @@ domains:
       - website/docs/installation/protocol-compatibility.md
       - website/docs/installation/storage-overview.md
       - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/installation/storage-overview.md
-      - website/docs/troubleshooting/vsr-headers.md
-      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/troubleshooting/vsr-headers.md
+      - website/docs/api/headers.md
       - website/docs/system-one/**
       - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/system-one/**
       - website/docs/tutorials/signal/overview.md

@@ -204,7 +204,7 @@ whether it streams or not and whatever format the backend speaks. A stream
 whose backend names no model in its first event keeps the logical name. A
 reply the Router composes itself, from a Looper algorithm or its own refusal,
 names the logical model, the name `x-vsr-selected-model` reports. See
-[VSR routing headers](../troubleshooting/vsr-headers) for the stable
+[VSR routing headers](../api/headers) for the stable
 observability contract.
 
 The model names accepted by the Router come from canonical provider entries.

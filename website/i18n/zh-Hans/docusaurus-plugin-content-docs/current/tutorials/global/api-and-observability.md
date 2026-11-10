@@ -214,7 +214,7 @@ global:
         groups: [platform-sre]
 ```
 
-追踪头包含哪些内容，见 [VSR 路由头](../../troubleshooting/vsr-headers#the-trace)。
+追踪头包含哪些内容，见 [VSR 路由头](../../api/headers#the-trace)。
 
 ### 路由回放
 

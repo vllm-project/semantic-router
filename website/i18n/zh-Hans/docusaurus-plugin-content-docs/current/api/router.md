@@ -79,7 +79,7 @@ curl -sS http://localhost:8899/v1/chat/completions \
   }'
 ```
 
-响应保持客户端协议的形状。其模型、内容、token 用量以及可选的 Router 头取决于所选后端和配方。稳定的可观测性契约见 [VSR 路由头](../troubleshooting/vsr-headers)。
+响应保持客户端协议的形状。其模型、内容、token 用量以及可选的 Router 头取决于所选后端和配方。稳定的可观测性契约见 [VSR 路由头](../api/headers)。
 
 Router 接受的模型名来自规范 provider 条目。`name` 是决策和客户端使用的逻辑别名，`provider_model_id` 发送给上游 provider，`providers.models[].backend_refs[]` 标识物理端点：
 

@@ -142,7 +142,7 @@ curl -s -D - http://localhost:8899/v1/chat/completions \
 `x-vsr-selected-decision` names the route and `x-vsr-selected-model` the
 model; with `x-vsr-debug: true`, and when `global.router.headers.debug` allows
 the caller, the `signals` member of `x-vsr-trace` lists the signals that
-matched. See [Router headers](../troubleshooting/vsr-headers).
+matched. See [Router headers](../api/headers).
 
 ## Operate the stack
 

@@ -177,7 +177,7 @@ global:
 
 ## 查看匹配结果 {#see-what-matched}
 
-`POST /api/v1/routing/preview` 针对一个请求评估活动配方的每个信号，报告匹配的规则和决策，而不调用模型。在经过路由的响应上，`x-vsr-trace` 的 `signals` 成员以 `type:name` 列出匹配的规则，例如 `domain:math` 或 `pii:contact`，只发给 `global.router.headers.debug` 允许的调用方；`response_guard` 会把它的代码（例如 `hallucination`）加入 `x-vsr-warnings`。见 [VSR 路由头部](../../troubleshooting/vsr-headers)。
+`POST /api/v1/routing/preview` 针对一个请求评估活动配方的每个信号，报告匹配的规则和决策，而不调用模型。在经过路由的响应上，`x-vsr-trace` 的 `signals` 成员以 `type:name` 列出匹配的规则，例如 `domain:math` 或 `pii:contact`，只发给 `global.router.headers.debug` 允许的调用方；`response_guard` 会把它的代码（例如 `hallucination`）加入 `x-vsr-warnings`。见 [VSR 路由头部](../../api/headers)。
 
 ## 后续步骤 {#next-steps}
 

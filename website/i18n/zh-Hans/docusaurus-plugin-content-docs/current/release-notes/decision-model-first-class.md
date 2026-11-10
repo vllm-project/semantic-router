@@ -82,7 +82,7 @@ Router 早已用同一个模型家族，即 System One 决策模型，回答大�
 
 客户端发送的其他 `x-vsr-*` 头，以及提供方返回的每个 `x-vsr-*` 头，都会被 Router 丢弃。Router 从身份验证器读取的是 `x-vsr-delegated-credential`：启用 `global.services.authz.delegated_credential` 时，它和身份请求头一样被信任；任何上游都收不到这个请求头，只有委托上游会收到它的值。
 
-[响应头参考](../troubleshooting/vsr-headers)列出了注册表定义的每个响应头。
+[响应头参考](../api/headers)列出了注册表定义的每个响应头。
 
 ## 已移除的测试配置 {#removed-test-profiles}
 

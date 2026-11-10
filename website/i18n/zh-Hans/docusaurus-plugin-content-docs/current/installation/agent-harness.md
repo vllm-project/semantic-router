@@ -63,7 +63,7 @@ curl -sS -i http://localhost:8899/v1/chat/completions \
 
 其他部署请使用对应的推理地址和身份验证。检查回答及 `x-vsr-selected-recipe`、
 `x-vsr-selected-model`；HTTP 成功不代表输出有效或路由正确。详见
-[路由回执](../troubleshooting/vsr-headers)和 [CLI 预览与探测](../api/cli)。
+[路由回执](../api/headers)和 [CLI 预览与探测](../api/cli)。
 
 ## 运行任务前设置预算 {#set-budgets-before-running-a-task}
 

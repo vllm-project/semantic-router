@@ -359,7 +359,7 @@ global:
         groups: [platform-sre]
 ```
 
-See [VSR routing headers](../../troubleshooting/vsr-headers#the-trace) for
+See [VSR routing headers](../../api/headers#the-trace) for
 what the trace carries.
 
 ### Router Replay

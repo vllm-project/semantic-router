@@ -273,5 +273,5 @@ answered rides in one debug header, `x-vsr-trace`, and only for a caller
 
 A judge's truncation is the `match.judge.truncated` span event, not a trace
 member. `POST /api/v1/routing/preview` evaluates the same rules for a request
-without calling a model. [VSR routing headers](../troubleshooting/vsr-headers)
+without calling a model. [VSR routing headers](../api/headers)
 lists every header and trace member.

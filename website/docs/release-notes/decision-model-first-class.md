@@ -246,7 +246,7 @@ authenticator is `x-vsr-delegated-credential`, trusted like the identity
 headers when `global.services.authz.delegated_credential` is enabled; no
 upstream receives the header, and only a delegated upstream its value.
 
-The [response headers reference](../troubleshooting/vsr-headers) lists every
+The [response headers reference](../api/headers) lists every
 header the registry defines.
 
 ## Removed test profiles

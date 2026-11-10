@@ -191,4 +191,4 @@ Router 按阶段合并调用：
 - `confidence`、`algorithm` 和 `ranking` 说明决策及其模型是如何选出的；
 - `modality` 列出选中决策的输出类型，例如 `(text image)`。
 
-评审的截断是 span 事件 `match.judge.truncated`，不是 trace 成员。`POST /api/v1/routing/preview` 会针对一个请求评估同样的规则，而不调用模型。[VSR 路由头部](../troubleshooting/vsr-headers)列出了每个头部和 trace 成员。
+评审的截断是 span 事件 `match.judge.truncated`，不是 trace 成员。`POST /api/v1/routing/preview` 会针对一个请求评估同样的规则，而不调用模型。[VSR 路由头部](../api/headers)列出了每个头部和 trace 成员。

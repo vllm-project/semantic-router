@@ -9,12 +9,18 @@ DOCS_VENV ?= $(CURDIR)/website/.venv
 DOCS_VENV_PYTHON = $(DOCS_VENV)/bin/python
 DOCS_PYTHON ?= $(if $(wildcard $(DOCS_VENV_PYTHON)),$(DOCS_VENV_PYTHON),$(if $(wildcard $(CURDIR)/.venv-agent/bin/python),$(CURDIR)/.venv-agent/bin/python,python3))
 
-.PHONY: docs-cli docs-cli-check docs-cli-test docs-community-check docs-community-test docs-generated-check
+.PHONY: docs-cli docs-cli-check docs-cli-test docs-headers docs-headers-check docs-community-check docs-community-test docs-generated-check
 docs-cli: ## Generate the CLI command reference from the registered Click command tree
 	@$(DOCS_PYTHON) tools/docs/generate_cli_reference.py
 
 docs-cli-check: ## Reject a stale CLI command reference without rewriting it
 	@$(DOCS_PYTHON) tools/docs/generate_cli_reference.py --check
+
+docs-headers: ## Generate the Router header reference from the header registry export
+	@$(DOCS_PYTHON) tools/docs/generate_header_reference.py
+
+docs-headers-check: ## Reject a stale Router header reference without rewriting it
+	@$(DOCS_PYTHON) tools/docs/generate_header_reference.py --check
 
 docs-cli-test: ## Test command discovery and CLI reference drift detection
 	@$(DOCS_PYTHON) -m unittest discover -s tools/docs/tests -p 'test_*.py'
@@ -27,7 +33,7 @@ docs-community-test: ## Test offline snapshot provenance and stale-refresh rejec
 	@node --test website/scripts/lib/generated-source.test.mjs
 
 docs-generated-check: MODEL_CATALOG_PYTHON = $(DOCS_PYTHON)
-docs-generated-check: model-catalog-generated-check docs-cli-check docs-config-check docs-community-check agent-skill-check ## Check generated website contracts without native builds or rewriting
+docs-generated-check: model-catalog-generated-check docs-cli-check docs-headers-check docs-config-check docs-community-check agent-skill-check ## Check generated website contracts without native builds or rewriting
 
 .PHONY: docs-python-install docs-install docs-build
 docs-python-install: ## Install generated-reference dependencies in an isolated documentation environment

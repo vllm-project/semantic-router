@@ -220,7 +220,7 @@ model. On a routed response, the `signals` member of `x-vsr-trace` lists the
 matched rules as `type:name`, such as `domain:math` or `pii:contact`, for a
 caller `global.router.headers.debug` allows; a `response_guard` adds its codes,
 such as `hallucination`, to `x-vsr-warnings`. See
-[VSR routing headers](../../troubleshooting/vsr-headers).
+[VSR routing headers](../../api/headers).
 
 ## Next Steps
 

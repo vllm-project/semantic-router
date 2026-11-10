@@ -2017,7 +2017,7 @@ and refuses `modality`.
 - The [release note](../release-notes/decision-model-first-class) covers the
   breaking changes, the behavior to expect, the header mapping and the deleted
   test profiles.
-- The [header reference](../troubleshooting/vsr-headers) and its trace-member
+- The [header reference](../api/headers) and its trace-member
   table are generated from the registry.
 
 ### 7.6 The agent skill

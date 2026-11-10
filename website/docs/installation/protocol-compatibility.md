@@ -378,7 +378,7 @@ schema, streaming, tools, or error translation.
   `request_params.default_max_tokens` replaces the 4096 for these requests.
 - `x-vsr-warnings` and the `client_protocol` and `upstream_protocol` members of
   `x-vsr-trace` expose translation details when applicable. See
-  [VSR routing headers](../troubleshooting/vsr-headers).
+  [VSR routing headers](../api/headers).
   Diagnostics discovered after streaming headers have been sent are recorded
   in translation-warning metrics and structured debug logs; they cannot be
   added to the already-sent response header.
