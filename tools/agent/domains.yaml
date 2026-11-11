@@ -1006,71 +1006,28 @@ profiles:
       - src/semantic-router/pkg/config/masking_plugin.go
       - src/semantic-router/pkg/extproc/req_filter_masking.go
       - src/semantic-router/pkg/classification/classifier_signal_application.go
-  structure-routing:
-    display_name: Structure Routing
+  signal-routing:
+    display_name: Signal Routing
     owner: e2e
-    coverage_role: structure-routing
+    coverage_role: structure-context-conversation-complexity-preference-routing
     selection: pr
     paths:
       - e2e/testcases/signal_routing_helpers.go
-      - e2e/profiles/structure-routing/**
+      - e2e/profiles/signal-routing/**
       - e2e/testcases/structure_routing.go
-      - src/semantic-router/pkg/classification/keyword_classifier*.go
-      - src/semantic-router/pkg/classification/keyword_text.go
-  conversation-routing:
-    display_name: Conversation Routing
-    owner: e2e
-    coverage_role: conversation-routing
-    selection: pr
-    paths:
-      - e2e/testcases/signal_routing_helpers.go
-      - e2e/profiles/conversation-routing/**
       - e2e/testcases/conversation_routing.go
-      - src/semantic-router/pkg/classification/classifier_signal_conversation.go
-  complexity-routing:
-    display_name: Complexity Routing
-    owner: e2e
-    coverage_role: complexity-routing
-    selection: pr
-    paths:
-      - e2e/testcases/signal_routing_helpers.go
-      - e2e/profiles/complexity-routing/**
       - e2e/testcases/complexity_routing.go
       - e2e/testcases/testdata/complexity_routing_cases.json
-  routing-errors:
-    display_name: Routing Error Contracts
-    owner: e2e
-    coverage_role: gateway-router-error-codes-without-provider-fallback
-    selection: pr
-    paths:
-      - e2e/profiles/routing-errors/**
-      - e2e/testcases/routing_error_codes*.go
-      - src/semantic-router/pkg/extproc/routing_failure*.go
-      - src/semantic-router/pkg/extproc/processor_req_body.go
-      - src/semantic-router/pkg/extproc/req_filter_classification_runtime.go
-  long-context-routing:
-    display_name: Long Context Routing
-    owner: e2e
-    coverage_role: long-context-routing
-    selection: pr
-    paths:
-      - e2e/testcases/signal_routing_helpers.go
-      - e2e/profiles/long-context-routing/**
       - e2e/testcases/context_routing.go
       - e2e/testcases/testdata/context_routing_cases.json
+      - e2e/testcases/preference_routing.go
+      - e2e/testcases/testdata/preference_routing_cases.json
+      - src/semantic-router/pkg/classification/keyword_classifier*.go
+      - src/semantic-router/pkg/classification/keyword_text.go
+      - src/semantic-router/pkg/classification/classifier_signal_conversation.go
       - src/semantic-router/pkg/classification/context_classifier.go
       - src/semantic-router/pkg/classification/calibrated_token_counter.go
       - src/semantic-router/pkg/classification/request_context_estimate.go
-  preference-routing:
-    display_name: Preference Routing
-    owner: e2e
-    coverage_role: preference-routing
-    selection: pr
-    paths:
-      - e2e/testcases/signal_routing_helpers.go
-      - e2e/profiles/preference-routing/**
-      - e2e/testcases/preference_routing.go
-      - e2e/testcases/testdata/preference_routing_cases.json
   external-gateway-responses:
     display_name: External Gateway Responses
     owner: e2e
@@ -1102,11 +1059,16 @@ profiles:
   remote-embedding:
     display_name: Remote Embeddings
     owner: e2e
-    coverage_role: openai-compatible-remote-embedding-provider
+    coverage_role: openai-compatible-remote-embedding-provider-and-gateway-router-error-codes
     selection: pr
     paths:
       - e2e/profiles/remote-embedding/**
       - e2e/testcases/remote_embedding_routing.go
+      # The Router's error codes through Envoy without a provider default.
+      - e2e/testcases/routing_error_codes*.go
+      - src/semantic-router/pkg/extproc/routing_failure*.go
+      - src/semantic-router/pkg/extproc/processor_req_body.go
+      - src/semantic-router/pkg/extproc/req_filter_classification_runtime.go
   looper:
     display_name: Looping Algorithms
     owner: e2e
@@ -1224,7 +1186,7 @@ profiles:
   route-action:
     display_name: Route Actions
     owner: e2e
-    coverage_role: decision-route-action-contracts
+    coverage_role: decision-route-action-and-response-guard-contracts
     selection: pr
     paths:
       - e2e/profiles/route-action/**
@@ -1233,6 +1195,18 @@ profiles:
       - src/semantic-router/pkg/config/validator_decision_action*.go
       - src/semantic-router/pkg/dsl/validator_route_action.go
       - src/semantic-router/pkg/extproc/req_filter_model_eligibility.go
+      # The response-guard recipe, formerly the response-jailbreak profile.
+      - e2e/testcases/response_jailbreak_window.go
+      - e2e/testcases/response_jailbreak_signal.go
+      - deploy/kubernetes/response-jailbreak/**
+      - src/semantic-router/pkg/extproc/res_filter_response_guard*.go
+      - src/semantic-router/pkg/classification/classifier_response_conditions.go
+      - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
+      - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
+      - src/semantic-router/pkg/classification/classifier_signal_application.go
+      - src/semantic-router/pkg/config/signal_stage.go
+      - src/semantic-router/pkg/config/validator_signal_stage.go
+      - tools/test/services/provider-mocker/provider_mocker/systemone.py
   response-api:
     display_name: Responses API
     owner: e2e
@@ -1361,21 +1335,3 @@ profiles:
       - e2e/profiles/jailbreak-onerror/**
       - e2e/testcases/jailbreak_onerror_block.go
       - deploy/kubernetes/jailbreak-onerror/**
-  response-jailbreak:
-    display_name: Response Guard
-    owner: e2e
-    coverage_role: response-jailbreak-window
-    selection: pr
-    paths:
-      - e2e/profiles/response-jailbreak/**
-      - e2e/testcases/response_jailbreak_window.go
-      - e2e/testcases/response_jailbreak_signal.go
-      - deploy/kubernetes/response-jailbreak/**
-      - src/semantic-router/pkg/extproc/res_filter_response_guard*.go
-      - src/semantic-router/pkg/classification/classifier_response_conditions.go
-      - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
-      - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
-      - src/semantic-router/pkg/classification/classifier_signal_application.go
-      - src/semantic-router/pkg/config/signal_stage.go
-      - src/semantic-router/pkg/config/validator_signal_stage.go
-      - tools/test/services/provider-mocker/provider_mocker/systemone.py
