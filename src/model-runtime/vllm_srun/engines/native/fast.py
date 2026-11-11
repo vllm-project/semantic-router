@@ -53,7 +53,7 @@ from .models.branch import (
     is_branches,
     is_static,
 )
-from .models.common import attention
+from .models.common import AllKeys, attention
 from .models.forest import Forest, forest_attention, forest_gated_delta
 from .models.lora import LoRALinear
 from .models.packed import Packed, is_packed, packed_rule
@@ -288,7 +288,7 @@ def _qwen3_5_forward(
     layer: Qwen3_5Layer,
     hidden_states: torch.Tensor,
     rotary: tuple[torch.Tensor, torch.Tensor],
-    full_mask: torch.Tensor | Tree | Branches | StaticBranches | None,
+    full_mask: torch.Tensor | Tree | Branches | StaticBranches | AllKeys | None,
     linear_mask: torch.Tensor | Tree | Branches | StaticBranches | None,
     kernels: KernelSet,
 ) -> torch.Tensor:
@@ -592,7 +592,7 @@ def _gated_attention(
     p: dict[str, Any],
     normed: torch.Tensor,
     rotary: tuple[torch.Tensor, torch.Tensor],
-    mask: torch.Tensor | Tree | Branches | StaticBranches | None,
+    mask: torch.Tensor | Tree | Branches | StaticBranches | AllKeys | None,
     kernels: KernelSet,
     rows: torch.Tensor | None = None,
 ) -> torch.Tensor:
@@ -726,7 +726,7 @@ class Masks:
 
     def build(
         self, attention_mask: torch.Tensor, padded: bool
-    ) -> dict[str, torch.Tensor | None]:
+    ) -> dict[str, torch.Tensor | AllKeys | None]:
         if not padded:
             return {"full": None, "linear": None}
         length = attention_mask.shape[1]
@@ -756,14 +756,21 @@ class NoncausalMasks(Masks):
     """The masks of a noncausal backbone (``noncausal_masks``) from host-known padding.
 
     Both are read from the attention mask on the device without a read-back, so
-    a graph captures them: the full-attention key mask is always given, and the
-    gated-delta layers get the 2D mask only when the batch is padded.
+    a graph captures them: the full-attention key mask is given up to
+    ``unmasked_above`` tokens (always when None), and the gated-delta layers get
+    the 2D mask only when the batch is padded. Graphs hold at most
+    ``MAX_GRAPH_TOKENS`` tokens, so a threshold no lower keeps every captured
+    shape and its eager runs on the key mask.
     """
+
+    def __init__(self, unmasked_above: int | None = None):
+        super().__init__()
+        self.unmasked_above = unmasked_above
 
     def build(
         self, attention_mask: torch.Tensor, padded: bool
-    ) -> dict[str, torch.Tensor | None]:
-        full, linear = noncausal_masks(attention_mask, padded)
+    ) -> dict[str, torch.Tensor | AllKeys | None]:
+        full, linear = noncausal_masks(attention_mask, padded, self.unmasked_above)
         return {"full": full, "linear": linear}
 
 

@@ -22,6 +22,13 @@ PADDING_MASK_RANK = 2
 SDPA_GQA_MAX_HEAD_DIM = 256
 
 
+class AllKeys:
+    """A noncausal mask of unpadded rows: every query attends to every key, so SDPA runs with no mask."""
+
+
+ALL_KEYS = AllKeys()
+
+
 class RMSNorm(nn.Module):
     """``weight * normalize(x)`` (Qwen3)."""
 
@@ -165,12 +172,14 @@ def attention(
     query: torch.Tensor,
     key: torch.Tensor,
     value: torch.Tensor,
-    mask: torch.Tensor | Tree | Branches | StaticBranches | Packed | None,
+    mask: torch.Tensor | Tree | Branches | StaticBranches | Packed | AllKeys | None,
     *,
     groups: int,
     scaling: float,
 ) -> torch.Tensor:
     """SDPA as Transformers dispatches it: GQA in-kernel only without a mask; returns [B, T, H, D].
+
+    No mask is causal; ``ALL_KEYS`` runs SDPA without a mask and not causal.
 
     A shared-context ``Tree`` as the mask runs the tree attention instead, and
     state-once ``Branches`` the branched attention, a ``Packed`` layout one
@@ -184,6 +193,9 @@ def attention(
         return packed_attention(
             kernels, query, key, value, mask, groups=groups, scaling=scaling
         )
+    causal = mask is None
+    if mask is ALL_KEYS:
+        mask = None
     enable_gqa = False
     if groups > 1:
         if mask is None and key.shape[-1] == value.shape[-1] <= SDPA_GQA_MAX_HEAD_DIM:
@@ -191,7 +203,7 @@ def attention(
         else:
             key = repeat_kv(key, groups)
             value = repeat_kv(value, groups)
-    is_causal = query.shape[2] > 1 and mask is None
+    is_causal = causal and query.shape[2] > 1
     output: torch.Tensor = kernels("sdpa")(
         query,
         key,
