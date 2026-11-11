@@ -57,6 +57,9 @@ type Model struct {
 	// Family replaces the family a decision model's card reports (decision2,
 	// or vela2 for a Labelled model) when set.
 	Family string
+	// Answer, when set, answers a decision model's questions about a state's
+	// text in place of the fixed answers; ok false keeps the fixed one.
+	Answer func(state, id string, question api.Question) (answer api.Answer, ok bool)
 }
 
 // Runtime is the fake runtime state; Handler serves it.
@@ -499,6 +502,11 @@ func (r *Runtime) decideState(body api.DecisionRequest) (int, api.DecisionRespon
 	answers := make(map[string]api.Answer, len(body.Questions))
 	for id, question := range body.Questions {
 		answers[id] = jointAnswer(model, question, len(body.Questions))
+		if model.Answer != nil {
+			if answer, ok := model.Answer(answerText(body.State), id, question); ok {
+				answers[id] = answer
+			}
+		}
 		if question.Preset != nil || (question.Type != nil && !slices.Contains(SystemOneTypes, *question.Type)) {
 			answers[id] = api.Answer{Type: question.Type, Error: itemError("invalid_question")}
 		}
