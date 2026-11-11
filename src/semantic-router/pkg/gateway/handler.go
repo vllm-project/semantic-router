@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/netip"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -100,6 +101,9 @@ type Options struct {
 	// MaxRequestBodyBytes bounds a request body. The local Envoy template
 	// buffers up to 500 MiB per connection.
 	MaxRequestBodyBytes int64
+	// ReadTimeout bounds reading a request: the listener's timeout, which
+	// bounds a whole call. Zero leaves it unbounded.
+	ReadTimeout time.Duration
 	// Ready reports whether the gateway can serve; /ready answers 503 until
 	// it does and again while it drains. Nil means always ready.
 	Ready func() bool
@@ -129,6 +133,13 @@ func NewHandler(opts Options) (*Handler, error) {
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.serveProbe(w, r) {
 		return
+	}
+	if h.opts.ReadTimeout > 0 && r.Body != nil && r.Body != http.NoBody {
+		// The listener's timeout bounds a whole call, so it bounds reading
+		// the body too: a client that stalls it holds neither the connection
+		// nor the configuration generation the request pins. Once the body
+		// ends, the server lifts the deadline.
+		_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(h.opts.ReadTimeout))
 	}
 	cw := &countingWriter{ResponseWriter: w}
 	x := &exchange{record: newAccessRecord(r)}
@@ -175,6 +186,10 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 	body, err := readBody(r, h.opts.MaxRequestBodyBytes)
 	if errors.Is(err, errBodyTooLarge) {
 		writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")
+		return
+	}
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		writeError(w, http.StatusRequestTimeout, "request_timeout", "The request body did not arrive in time.")
 		return
 	}
 	if err != nil {

@@ -1,6 +1,8 @@
 package gateway
 
 import (
+	"bufio"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -14,10 +16,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"golang.org/x/net/http2"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
 func serveForTest(t *testing.T, handler http.Handler, opts ServerOptions) (string, func()) {
@@ -114,6 +120,109 @@ func TestServerSpeaksHTTP1AndH2C(t *testing.T) {
 	}}
 	if got := get(t, h2c, "http://"+addr); got != "HTTP/2.0" {
 		t.Fatalf("h2c client got %q", got)
+	}
+}
+
+type pinFunc func() (Serving, func(), error)
+
+func (f pinFunc) Pin(context.Context, string) (Serving, func(), error) { return f() }
+
+// slowUpstream answers after 400 ms unless the call is canceled first.
+type slowUpstream struct{}
+
+func (slowUpstream) Execute(ctx context.Context, _ *routing.Call, _ string) (*upstream.Result, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(400 * time.Millisecond):
+		return &upstream.Result{Response: okUpstream("{}", http.Header{"Content-Type": {"application/json"}})()}, nil
+	}
+}
+
+// A listener's timeout bounds a whole call, so it bounds a stalled request
+// body too: the gateway answers instead of holding the connection, and the
+// configuration generation the request pinned, forever.
+func TestServerTimesOutAStalledRequestBody(t *testing.T) {
+	released := make(chan struct{}, 1)
+	handler, err := NewHandler(Options{
+		Serving: pinFunc(func() (Serving, func(), error) {
+			serving := Serving{Engine: routing.NewEngine(&fakeProcessor{}, routing.DefaultOptions), Upstream: slowUpstream{}}
+			return serving, func() { released <- struct{}{} }, nil
+		}),
+		Listener:    "http-8899",
+		ReadTimeout: 200 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr, stop := serveForTest(t, handler, ServerOptions{IdleTimeout: 200 * time.Millisecond})
+	defer stop()
+	const head = "POST /v1/chat/completions HTTP/1.1\r\nHost: localhost\r\nContent-Length: 100\r\n\r\n{\"model\":"
+	http1 := func() (int, error) {
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			return 0, err
+		}
+		defer func() { _ = conn.Close() }()
+		if _, err = io.WriteString(conn, head); err != nil {
+			return 0, err
+		}
+		resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+		if err != nil {
+			return 0, err
+		}
+		return resp.StatusCode, resp.Body.Close()
+	}
+	h2c := func() (int, error) {
+		body, stall := io.Pipe()
+		defer func() { _ = stall.Close() }()
+		go func() { _, _ = stall.Write([]byte(`{"model":`)) }()
+		req, err := http.NewRequest(http.MethodPost, "http://"+addr+"/v1/chat/completions", body)
+		if err != nil {
+			return 0, err
+		}
+		req.ContentLength = 100
+		resp, err := (&http.Client{Transport: &http2.Transport{AllowHTTP: true, DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, network, addr)
+		}}}).Do(req)
+		if err != nil {
+			return 0, err
+		}
+		return resp.StatusCode, resp.Body.Close()
+	}
+	for name, send := range map[string]func() (int, error){"HTTP/1.1": http1, "h2c": h2c} {
+		answered := make(chan int, 1)
+		go func() {
+			status, err := send()
+			if err != nil {
+				t.Errorf("%s: %v", name, err)
+			}
+			answered <- status
+		}()
+		select {
+		case status := <-answered:
+			if status != http.StatusRequestTimeout {
+				t.Fatalf("%s: stalled body answered %d, want 408", name, status)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s: a stalled body held the connection past the listener timeout", name)
+		}
+		select {
+		case <-released:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s: the request kept its configuration generation", name)
+		}
+	}
+	// The deadline ends with the body: an answer slower than the timeout
+	// still arrives.
+	resp, err := http.Post("http://"+addr+"/v1/chat/completions", "application/json", strings.NewReader(`{"model":"m"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	<-released
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("a complete request with a slow answer got %d", resp.StatusCode)
 	}
 }
 

@@ -102,17 +102,18 @@ func listenNative(cfg *config.RouterConfig, bindAddress string, base gateway.Opt
 		}
 	}
 	for _, spec := range cfg.Listeners {
-		opts := base
-		opts.Listener = spec.Name
-		handler, err := gateway.NewHandler(opts)
-		if err != nil {
-			closeBound()
-			return nil, err
-		}
 		serverOpts, err := listenerServerOptions(cfg, spec)
 		if err != nil {
 			closeBound()
 			return nil, fmt.Errorf("listener %s: %w", spec.Name, err)
+		}
+		opts := base
+		opts.Listener = spec.Name
+		opts.ReadTimeout = serverOpts.IdleTimeout
+		handler, err := gateway.NewHandler(opts)
+		if err != nil {
+			closeBound()
+			return nil, err
 		}
 		address := spec.Address
 		if bindAddress != "" {

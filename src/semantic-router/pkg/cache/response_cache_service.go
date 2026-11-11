@@ -34,6 +34,9 @@ func DefaultResponseCacheServiceOptions() ResponseCacheServiceOptions {
 type inflightExact struct {
 	done      chan struct{}
 	expiresAt time.Time
+	// expiry ends the lease of a leader that never stores, such as one whose
+	// request failed or was canceled.
+	expiry *time.Timer
 }
 
 type SingleflightLease struct {
@@ -444,13 +447,19 @@ func (s *ResponseCacheService) acquireSingleflight(key string) (bool, <-chan str
 		if now.Before(active.expiresAt) {
 			return false, active.done
 		}
-		close(active.done)
-		delete(s.inflight, key)
+		s.endSingleflightLocked(key, active)
 	}
 	active := &inflightExact{
 		done:      make(chan struct{}),
 		expiresAt: now.Add(s.options.SingleflightLease),
 	}
+	active.expiry = time.AfterFunc(s.options.SingleflightLease, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.inflight[key] == active {
+			s.endSingleflightLocked(key, active)
+		}
+	})
 	s.inflight[key] = active
 	return true, active.done
 }
@@ -458,10 +467,15 @@ func (s *ResponseCacheService) acquireSingleflight(key string) (bool, <-chan str
 func (s *ResponseCacheService) completeSingleflight(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	active, ok := s.inflight[key]
-	if !ok {
-		return
+	if active, ok := s.inflight[key]; ok {
+		s.endSingleflightLocked(key, active)
 	}
+}
+
+// endSingleflightLocked wakes key's waiters and removes its entry. Callers
+// hold s.mu.
+func (s *ResponseCacheService) endSingleflightLocked(key string, active *inflightExact) {
+	active.expiry.Stop()
 	close(active.done)
 	delete(s.inflight, key)
 }
