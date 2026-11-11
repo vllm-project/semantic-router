@@ -150,6 +150,21 @@ function buildCompactListSummary(items: string[], maxVisibleItems: number) {
     : visibleItems.join(' · ')
 }
 
+// The agent session a request belongs to, so a session search shows which rows matched.
+const SESSION_COLUMN: Column<InsightsRecord> = {
+  key: 'session_id',
+  header: 'Session',
+  width: '170px',
+  render: (row) =>
+    row.session_id ? (
+      <span className={styles.requestId} title={row.session_id}>
+        {formatCompactIdentifier(row.session_id)}
+      </span>
+    ) : (
+      '-'
+    ),
+}
+
 export function createInsightsTableColumns(): Column<InsightsRecord>[] {
   return [
     {
@@ -168,6 +183,7 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
         </Link>
       ),
     },
+    SESSION_COLUMN,
     {
       key: 'timestamp',
       header: 'Created',

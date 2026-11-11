@@ -4,7 +4,34 @@ import { Link } from 'react-router-dom'
 import { buildConversationLabels } from './insightsConversationIdentity'
 import { getInsightsRecordPath } from './insightsPageSupport'
 import type { InsightsTrajectory } from './insightsPageTypes'
+import type { InsightsTrajectoryRoute } from './insightsPageRoutingTypes'
 import styles from './InsightsPage.module.css'
+
+// What the Router did with a request's model and why, in words; the recorded code stays in the cell's title.
+const ACTION_TEXT: Record<string, string> = {
+  establish_baseline: 'Picked the first model',
+  stay: 'Kept the model',
+  switch: 'Switched model',
+  hard_lock: 'Held the model',
+}
+const REASON_TEXT: Record<string, string> = {
+  new_session: 'New session',
+  new_conversation: 'New conversation',
+  session_scope_protect: "Kept this session's model",
+  previous_model_not_in_candidates: 'The previous model is not a candidate here',
+  switch_allowed: 'A better model was allowed',
+  stay_has_best_adjusted_score: 'The current model still scores best',
+  rescue_underpowered_model: 'Moved up from a model that fell short',
+  idle_reset: 'The session was idle, so it started over',
+  tool_loop: 'Inside a tool call loop',
+  observe_only: 'Observed only',
+}
+
+function reasonText(route: InsightsTrajectoryRoute) {
+  const code = route.session_reason || ''
+  if (code === 'session_scope_protect' && route.agent) return "Kept this agent's model"
+  return REASON_TEXT[code] || code || route.selection_reasoning || 'Not recorded'
+}
 
 export default function InsightsSessionRoutes({
   trajectory,
@@ -66,11 +93,13 @@ export default function InsightsSessionRoutes({
                     {route.previous_model ? `${route.previous_model} → ` : ''}
                     {route.selected_model || 'No backend selected'}
                   </td>
-                  <td>
-                    {route.session_action || 'Not recorded'}
-                    {route.session_policy_applied ? ' · protection applied' : ''}
+                  <td title={route.session_action || undefined}>
+                    {ACTION_TEXT[route.session_action || ''] ||
+                      route.session_action ||
+                      'Not recorded'}
+                    {route.session_policy_applied ? ' · by session protection' : ''}
                   </td>
-                  <td>{route.session_reason || route.selection_reasoning || 'Not recorded'}</td>
+                  <td title={route.session_reason || undefined}>{reasonText(route)}</td>
                   <td>
                     {route.lifecycle_state}
                     {route.response_status ? ` · HTTP ${route.response_status}` : ''}
