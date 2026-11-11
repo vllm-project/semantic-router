@@ -110,6 +110,14 @@ type chatChunkWire struct {
 	SearchResults json.RawMessage `json:"search_results,omitempty"`
 }
 
+// chatUsageChunkWire is the usage-only chunk that ends a stream whose client
+// asked for usage. OpenAI sends its choices as an empty list, and clients find
+// the chunk by that list, so it is never left out.
+type chatUsageChunkWire struct {
+	chatChunkWire
+	Choices []chatChunkChoiceWire `json:"choices"`
+}
+
 // vllmServingMetadata is chatResponseWire.vllmServingMetadata for a chunk.
 func (wire chatChunkWire) vllmServingMetadata() map[string]bool {
 	fields := map[string]bool{
@@ -1091,11 +1099,10 @@ func (encoder *chatStreamEncoder) encodeCompletion(
 		return nil, nil, err
 	}
 	if streamUsageRequested(encoder.context) && event.Usage != nil && event.Usage.State == llmprotocol.UsageAvailable {
-		usageChunk := chatChunkWire{
+		usageFrame, err := encodeChatUsageFrame(encoder.context, chatChunkWire{
 			ID: event.ResponseID, Object: "chat.completion.chunk", Model: event.Model,
 			Usage: encodeChatUsage(*event.Usage),
-		}
-		usageFrame, err := encodeChatStreamFrame(encoder.context, usageChunk)
+		})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1111,6 +1118,15 @@ func encodeChatStreamFrame(context llmprotocol.StreamContext, chunk chatChunkWir
 	}
 	chunk.Obfuscation = obfuscation
 	return encodeSSE("", chunk)
+}
+
+func encodeChatUsageFrame(context llmprotocol.StreamContext, chunk chatChunkWire) ([]byte, error) {
+	obfuscation, err := newStreamObfuscation(context)
+	if err != nil {
+		return nil, err
+	}
+	chunk.Obfuscation = obfuscation
+	return encodeSSE("", chatUsageChunkWire{chatChunkWire: chunk, Choices: []chatChunkChoiceWire{}})
 }
 
 func (encoder *chatStreamEncoder) Finalize(reason error) ([][]byte, llmprotocol.Diagnostics, error) {
