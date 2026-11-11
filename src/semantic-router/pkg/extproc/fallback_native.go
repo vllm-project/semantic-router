@@ -284,6 +284,8 @@ func (f *sessionFallback) succeeded(status int) {
 	ctx.ResponseVendor = resolveResponseVendor(candidate.dispatch.profile)
 	ctx.RequestModel = candidate.model
 	ctx.VSRSelectedModel = candidate.model
+	// The response phases credit this success to the request's backend.
+	ctx.primaryBackendName = candidate.dispatch.backendName
 	ctx.ResponsePath = headers.ResponsePathFallback
 
 	orch := r.fallbackOrchestratorForContext(ctx)

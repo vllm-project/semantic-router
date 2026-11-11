@@ -213,7 +213,13 @@ def test_quiet_engine_summary_is_one_ready_line_and_how_to_stop(capsys):
     terminal.set_quiet_logs(True)
     try:
         runtime_lifecycle.log_runtime_summary(
-            [{"name": "http-8899", "port": 8899, "systemone": {"models": [MODEL]}}],
+            [
+                {
+                    "name": "http-8899",
+                    "port": 8899,
+                    "apis": {"systemone": {"models": [MODEL]}},
+                }
+            ],
             resolve_runtime_stack(),
             dashboard_disabled=True,
             enable_observability=False,

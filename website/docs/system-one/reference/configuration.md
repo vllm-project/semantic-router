@@ -39,7 +39,7 @@ A `systemone` rule, under `recipes[].signals.systemone`:
 | `predicate` | The bound the answer must meet: `gt`, `gte`, `lt`, `lte` |
 | `deployment` | The deployment that answers |
 | `stage` | `request` (default) or `response` |
-| `input` | `history`, `previous_turns` (0 to 32), `tool_results`, `answer`, `context`, `image`, `audio`, `video` |
+| `input` | `history`, `previous_turns` (0 to 32), `tool_results`, `request` (`false` leaves the current user turn out), `answer`, `context`, `image`, `audio`, `video` |
 | `coverage` | `truncate` (default) or `full` |
 | `on_unscanned` | With `coverage: full`: `match`, `no_match` or `unknown` (default) |
 | `timeout_ms` | Up to 60,000 |
@@ -53,7 +53,7 @@ the fields its type allows:
 | `fact_check`, `user_feedbacks` | `labels`, `predicate` |
 | `jailbreak` | `predicate`, `stage`, `input.history`, `on_unknown` |
 | `safety` | `labels` (harm categories), `predicate`, `stage` |
-| `pii` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results`, `on_unknown` |
+| `pii` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results`, `input.request`, `on_unknown` |
 | `hallucination`, `refusal` | `predicate` |
 | `turn_relation` | `labels`, `input.previous_turns` (default 4) |
 | `complexity` | `labels` |
@@ -81,7 +81,7 @@ Each feature writes the block where it finds similar items:
 | `judge.question` | A custom question instead of a preset: `choice` (the candidates are its options), `noul` or `score` |
 | `judge.deployment` | The deployment that answers; without one, the decision model |
 | `judge.top_k`, `judge.min_score`, `judge.min_ratio` | Which judged candidates are kept: the best `top_k`, those at least `min_score`, those at least `min_ratio` of the best |
-| `judge.max_candidates` | The most candidates the judge reads: 255 (also the most) for a choice judge, 64 by default for a per-candidate judge; below 1, or above 255 on a choice judge, fails to load |
+| `judge.max_candidates` | The most candidates the judge reads: 255 (also the most) for a choice judge, 64 by default and at most 4096 for a per-candidate judge; below 1 or above the most fails to load |
 | `judge.on_error` | `skip` (default; keep the recall result, or the candidates as they came without recall) or `fail` (the feature's match fails) |
 | `judge.timeout_ms` | The judge call's deadline; else the deployment's `timeout_ms`, else 1000 ms |
 

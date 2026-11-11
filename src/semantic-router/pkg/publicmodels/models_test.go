@@ -1,6 +1,7 @@
 package publicmodels
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -124,5 +125,55 @@ func TestModelDiscoveryExposesEffectiveSourceAndSelectableBackend(t *testing.T) 
 	models = NewOpenAIModelList(cfg, 0).Data
 	if models[0].ID != "ours" || models[0].Routing.Source != config.EntrypointExplicit || !models[0].Routing.DefaultRoute {
 		t.Fatalf("explicit default metadata=%+v", models[0])
+	}
+}
+
+// With list_backend_models the list names exactly what a direct request is
+// served for, sorted: a LoRA adapter one model declares is listed, a name two
+// models declare is not, even as a backendless model, and a model without a
+// backend is listed only when an external gateway serves it.
+func TestBackendModelListingMatchesDirectRequests(t *testing.T) {
+	const document = `
+version: v0.5
+global:
+  router:
+    list_backend_models: true
+providers:
+  defaults:
+    model: zeta
+  models:
+    - name: zeta
+      loras: [{name: shared}]
+      backend_refs: [{provider: vllm, endpoint: "10.0.0.2:8000"}]
+    - name: alpha
+      loras: [{name: shared}, {name: only-alpha}]
+      backend_refs: [{provider: vllm, endpoint: "10.0.0.1:8000"}]
+    - name: notes-only
+      context_window_size: 32768
+    - name: shared
+      context_window_size: 32768
+recipes:
+  - name: default
+`
+	listed := func(document string) string {
+		cfg, err := config.ParseYAMLBytes([]byte(document))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ids []string
+		for _, model := range NewOpenAIModelList(cfg, 0).Data {
+			ids = append(ids, model.ID)
+		}
+		return strings.Join(ids, ",")
+	}
+	if got, want := listed(document), "vllm-sr/auto,alpha,only-alpha,zeta"; got != want {
+		t.Fatalf("listing = %s, want %s", got, want)
+	}
+	// With no listener and no model selection, an external gateway serves a
+	// model that has no backend here.
+	external := strings.Replace(document, "    list_backend_models: true\n",
+		"    list_backend_models: true\n    model_selection: {enabled: false}\nlisteners: []\n", 1)
+	if got, want := listed(external), "vllm-sr/auto,alpha,notes-only,only-alpha,zeta"; got != want {
+		t.Fatalf("external-gateway listing = %s, want %s", got, want)
 	}
 }

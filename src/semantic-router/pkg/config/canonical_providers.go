@@ -23,16 +23,23 @@ type CanonicalProviderDefaults struct {
 // is (its facts). The facts overlay the built-in catalog card named by
 // catalog, or describe a custom model.
 type CanonicalProviderModel struct {
-	Name             string                `yaml:"name"`
-	Catalog          string                `yaml:"catalog,omitempty"`
-	Deployment       string                `yaml:"deployment,omitempty"`
-	Reasoning        *CanonicalReasoning   `yaml:"reasoning,omitempty"`
-	ProviderModelID  string                `yaml:"provider_model_id,omitempty"`
-	BackendRefs      []CanonicalBackendRef `yaml:"backend_refs,omitempty"`
-	Pricing          ModelPricing          `yaml:"pricing,omitempty"`
-	Reliability      ProviderReliability   `yaml:"reliability,omitempty"`
-	APIFormat        string                `yaml:"api_format,omitempty"`
-	ExternalModelIDs map[string]string     `yaml:"external_model_ids,omitempty"`
+	Name            string                `yaml:"name"`
+	Catalog         string                `yaml:"catalog,omitempty"`
+	Deployment      string                `yaml:"deployment,omitempty"`
+	Reasoning       *CanonicalReasoning   `yaml:"reasoning,omitempty"`
+	ProviderModelID string                `yaml:"provider_model_id,omitempty"`
+	BackendRefs     []CanonicalBackendRef `yaml:"backend_refs,omitempty"`
+	Pricing         ModelPricing          `yaml:"pricing,omitempty"`
+	Reliability     ProviderReliability   `yaml:"reliability,omitempty"`
+	// APIFormat is the API the model's backends serve, by API name:
+	// chat_completions (the default), responses, messages, images or
+	// systemone. openai and anthropic are accepted as aliases of
+	// chat_completions and messages.
+	APIFormat string `yaml:"api_format,omitempty"`
+	// Schema is the version of that API the backends speak, one of the API's
+	// schema IDs; omitted, the API's default (systemone/0.2 for systemone).
+	Schema           string            `yaml:"schema,omitempty"`
+	ExternalModelIDs map[string]string `yaml:"external_model_ids,omitempty"`
 	ModelFacts       `yaml:",inline"`
 }
 

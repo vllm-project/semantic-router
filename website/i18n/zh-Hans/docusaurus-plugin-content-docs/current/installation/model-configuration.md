@@ -149,7 +149,7 @@ providers:
 | `per_try_timeout` | 无 | 每次尝试直到响应开始的时间。 |
 | `first_byte_timeout` | 无 | 等待第一个响应字节的时间，这样在开始前就卡住的流仍可重试。仅 standalone 模式。 |
 | `retry_count` | `0` | 第一次尝试之后的重试次数，最多 5 次。 |
-| `retry_on` | `connect-failure,refused-stream` | 何时重试，使用 Envoy 的条件：`5xx`、`gateway-error`、`reset`、`connect-failure`、`refused-stream`、`retriable-status-codes`、`retriable-4xx`、`reset-before-request`。 |
+| `retry_on` | `connect-failure,refused-stream` | 何时重试，使用 Envoy 的条件名称。两种网关都会处理 `5xx`、`gateway-error`、`reset`、`connect-failure`、`refused-stream`、`retriable-status-codes`、`retriable-4xx`、`reset-before-request` 和 `envoy-ratelimited`。Envoy 的其他名称（`retriable-headers`、`http3-post-connect-failure`，以及 gRPC 的 `cancelled`、`deadline-exceeded`、`internal`、`resource-exhausted`、`unavailable`）可以加载，但 standalone 网关会忽略它们。Envoy 不认识的名称会导致配置加载失败。 |
 | `retriable_status_codes` | 无 | 在 `retriable-status-codes` 下重试的状态码，例如 `429`。 |
 | `retry_back_off_base`、`retry_back_off_max` | `25ms`，基数的十倍 | 重试之间随机指数等待的上下界。 |
 | `retry_after_max` | 无 | 按响应要求的 `Retry-After` 秒数等待，但不超过这个上限。 |

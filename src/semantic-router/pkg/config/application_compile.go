@@ -147,7 +147,7 @@ func (c *RouterConfig) applicationRuleSpecs() []applicationRuleSpec {
 		specs = append(specs, applicationRuleSpec{
 			signalType: SignalTypePII, preset: presets.PII, name: r.Name, description: r.Description,
 			deployment: r.Deployment, ignoreLabels: r.IgnoreLabels, predicate: r.Predicate,
-			input: SystemOneInput{History: r.Input.History, ToolResults: r.Input.ToolResults}, onUnscanned: SystemOneUnscannedMatch,
+			input: SystemOneInput{History: r.Input.History, ToolResults: r.Input.ToolResults, Request: r.Input.Request}, onUnscanned: SystemOneUnscannedMatch,
 			onUnknown: r.OnUnknown, timeoutMs: r.TimeoutMs,
 		})
 	}

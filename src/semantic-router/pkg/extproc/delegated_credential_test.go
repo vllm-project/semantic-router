@@ -465,6 +465,7 @@ func TestALooperRunRefusedForTheDelegatedCredentialAnswers401(t *testing.T) {
     deployments:
       checker:
         provider: systemone
+        schema: vllm-sr/4.0
         endpoint: http://checker.invalid/v1/systemone
         model: checker
         auth: {credential: delegated}

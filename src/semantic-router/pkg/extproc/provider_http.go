@@ -69,6 +69,7 @@ func providerEndpointPath(profile *config.ProviderProfile, format llmprotocol.Wi
 // configuredProviderAuthorizer uses only configured backend credentials.
 // Router-own preprocessing, probes and shadow calls never forward client
 // keys, and a delegated backend refuses them: they have no user's credential.
+// Like request routing, they send no key to a provider whose auth is none.
 func configuredProviderAuthorizer(
 	cfg *config.RouterConfig,
 	profile *config.ProviderProfile,
@@ -85,7 +86,7 @@ func configuredProviderAuthorizer(
 		})
 		return nil, principal.ErrRouterCall
 	}
-	if cfg == nil {
+	if cfg == nil || providerAuth.Strategy == "none" {
 		return nil, nil
 	}
 	return func(_ context.Context, request *http.Request) error {
