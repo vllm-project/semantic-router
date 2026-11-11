@@ -49,6 +49,7 @@ type maskingEcho struct {
 
 func init() {
 	pkgtestcases.Register("masking-cross-protocol", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "An equivalent PII-bearing request through Chat, Responses and Anthropic all reach the mock backend with a placeholder and no raw value",
 		Tags:        []string{"masking", "pii", "cross-protocol", "functional"},
 		Fn:          testMaskingCrossProtocol,
@@ -59,6 +60,7 @@ func init() {
 		Fn:          testMaskingKeepsEchoedPlaceholder,
 	})
 	pkgtestcases.Register("masking-classifier-unavailable-fails-closed", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "A PII deployment error on a masking-enabled decision returns 503 and dispatches nothing",
 		Tags:        []string{"masking", "pii", "fail-closed"},
 		Fn:          testMaskingClassifierUnavailableFailsClosed,

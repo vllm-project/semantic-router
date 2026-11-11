@@ -63,6 +63,34 @@ class SelectionTests(unittest.TestCase):
                 self.assertNotIn("e2e.response-api-redis", selected)
                 self.assertNotIn("e2e.response-api-redis-cluster", selected)
 
+    def test_request_path_changes_run_the_p0_cases_of_their_e2e_profiles(self):
+        guards = ("envoy-ai-gateway", "masking", "pii-remote-backend")
+
+        def scopes(paths, **options):
+            plan = make_plan(paths, source_sha=SHA, **options)
+            return {
+                record["profile"]: record["baseline_suite"]
+                for record in plan["verifications"]
+                if record["executor"] == "e2e" and record["profile"] in guards
+            }
+
+        source = "src/semantic-router/pkg/extproc/processor.go"
+        self.assertEqual(scopes([source]), dict.fromkeys(guards, "p0"))
+        # A profile whose own files change, or that another domain selects,
+        # keeps its standard cases beside the request-path change.
+        self.assertEqual(
+            scopes([source, "e2e/profiles/masking/values.yaml"]),
+            {
+                "envoy-ai-gateway": "p0",
+                "masking": "standard",
+                "pii-remote-backend": "p0",
+            },
+        )
+        self.assertEqual(
+            scopes([source, "e2e/testcases/cache.go"])["envoy-ai-gateway"], "standard"
+        )
+        self.assertEqual(scopes([source], full=True), dict.fromkeys(guards, "full"))
+
     def test_no_route_contract_keeps_an_isolated_required_gateway_profile(self):
         for path in (
             "e2e/profiles/routing-errors/values.yaml",
