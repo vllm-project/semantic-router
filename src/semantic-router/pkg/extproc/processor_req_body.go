@@ -342,10 +342,8 @@ func (r *OpenAIRouter) unavailableModelResponse(
 	model string,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
-	if r != nil && r.Config != nil {
-		if len(r.Config.GetEndpointsForModel(model)) > 0 {
-			return nil
-		}
+	if r != nil && r.Config.RoutesModelToBackend(model) {
+		return nil
 	}
 	requestID := ""
 	if ctx != nil {
