@@ -138,7 +138,11 @@ export const seconds = (value: unknown): string =>
 export const active = (status: string) => status === 'queued' || status === 'running'
 
 export function qualityApplies(target: TargetMetrics): boolean {
-  return target.result_kind !== 'cache-observation-v1' && target.result_kind !== 'mixed'
+  return (
+    target.result_kind !== 'cache-observation-v1' &&
+    target.result_kind !== 'session-observation-v1' &&
+    target.result_kind !== 'mixed'
+  )
 }
 
 export function hasScoredOutcomes(target: TargetMetrics): boolean {

@@ -48,6 +48,11 @@ function MetricsTable({
   running: boolean
   summary?: boolean
 }) {
+  const observationOnly = (target: TargetMetrics) =>
+    target.result_kind === 'cache-observation-v1' || target.result_kind === 'session-observation-v1'
+  const observationOnlyCohort = targets.length > 0 && targets.every(observationOnly)
+  const mixedObservationCohort = targets.some(observationOnly) && !observationOnlyCohort
+
   return (
     <div className={styles.tableScroll}>
       <table>
@@ -56,7 +61,13 @@ function MetricsTable({
             <th>Target</th>
             <th>{summary ? 'Macro accuracy' : 'Accuracy'}</th>
             <th>Correct / denominator</th>
-            <th>Scored / planned</th>
+            <th>
+              {observationOnlyCohort
+                ? 'Observed / planned'
+                : mixedObservationCohort
+                  ? 'Scored or observed / planned'
+                  : 'Scored / planned'}
+            </th>
             <th>Failures</th>
             <th>Observed model cost</th>
             <th>Tokens</th>
@@ -87,8 +98,16 @@ function MetricsTable({
                     </small>
                   )}
               </td>
-              <td>{preview ? '—' : `${number(target.correct)} / ${number(target.total)}`}</td>
-              <td>{preview ? '—' : `${number(target.scored)} / ${number(target.total)}`}</td>
+              <td>
+                {preview || observationOnly(target)
+                  ? '—'
+                  : `${number(target.correct)} / ${number(target.total)}`}
+              </td>
+              <td>
+                {preview
+                  ? '—'
+                  : `${number(observationOnly(target) ? target.observed : target.scored)} / ${number(target.total)}`}
+              </td>
               <td>{number(target.failed)}</td>
               <td>{money(target.cost_usd)}</td>
               <td>{number(tokenTotal(target.tokens))}</td>
@@ -100,6 +119,114 @@ function MetricsTable({
         </tbody>
       </table>
     </div>
+  )
+}
+
+function SessionObservationDetails({ targets }: { targets: TargetMetrics[] }) {
+  const observations = targets.flatMap((target) =>
+    target.session_observation ? [{ id: target.id, metrics: target.session_observation }] : [],
+  )
+  if (!observations.length) return null
+
+  return (
+    <section>
+      <h3>Session-routing observations</h3>
+      {observations.map(({ id, metrics }) => (
+        <div key={id} className={styles.tableScroll}>
+          <h4>{id}</h4>
+          <table>
+            <thead>
+              <tr>
+                <th>Sessions complete / planned</th>
+                <th>Turns attempted / planned</th>
+                <th>Turns completed</th>
+                <th>HTTP success rate</th>
+                <th>Latency p50 / p95</th>
+                <th>Model continuity</th>
+                <th>Tool-loop switch violations</th>
+                <th>Threshold validation</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{`${number(metrics.completed_sessions)} / ${number(metrics.planned_sessions)}`}</td>
+                <td>{`${number(metrics.attempted_turns)} / ${number(metrics.planned_turns)}`}</td>
+                <td>{number(metrics.completed_turns)}</td>
+                <td>{percent(metrics.success_rate)}</td>
+                <td>
+                  {`${number(metrics.latency_ms.p50, 2)} / ${number(metrics.latency_ms.p95, 2)} ms`}
+                </td>
+                <td>
+                  {`${percent(metrics.selected_model_continuity_rate)} (${number(metrics.selected_model_transitions)} assessed transitions)`}
+                </td>
+                <td>
+                  {`${number(metrics.tool_loop_switch_violations)} / ${number(metrics.assessed_tool_loop_transitions)} assessed`}
+                </td>
+                <td>{metrics.validation.status}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className={styles.muted}>
+            Session recovery after a failed request was not measured. Idle resumption:{' '}
+            {number(metrics.session_recovery.idle_resumption.successful)} HTTP successes of{' '}
+            {number(metrics.session_recovery.idle_resumption.planned)} planned; the request reused
+            the same session ID{' '}
+            {number(metrics.session_recovery.idle_resumption.request_session_id_reused)} times.
+            {metrics.unknown_selected_model_turns > 0
+              ? ` Selected model was unknown for ${number(metrics.unknown_selected_model_turns)} attempted turns.`
+              : ''}
+            {!metrics.usage_complete ? ' Usage is incomplete or unknown.' : ' Usage is complete.'}
+            {` Cache evidence qualifications: ${
+              Object.entries(metrics.cache_evidence_qualification_counts)
+                .map(([qualification, count]) => `${qualification}: ${number(count)}`)
+                .join(', ') || 'Unknown'
+            }.`}
+            {` Cache evidence unknown for ${number(metrics.cache_evidence_unknown_turns)} planned turns.`}
+          </p>
+          <details className={styles.details}>
+            <summary>Workload and Router response phases</summary>
+            <div className={styles.tableScroll}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Benchmark workload phase</th>
+                    <th>Turns attempted / planned</th>
+                    <th>HTTP successes</th>
+                    <th>Latency p50 / p95</th>
+                    <th>Sent-request phases</th>
+                    <th>Observed Router response phases</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(metrics.phase_metrics).map(([phase, phaseMetrics]) => (
+                    <tr key={phase}>
+                      <th scope="row">{phase}</th>
+                      <td>
+                        {`${number(phaseMetrics.attempted_turns)} / ${number(phaseMetrics.planned_turns)}`}
+                      </td>
+                      <td>{number(phaseMetrics.http_successes)}</td>
+                      <td>
+                        {`${number(phaseMetrics.latency_ms.p50, 2)} / ${number(phaseMetrics.latency_ms.p95, 2)} ms`}
+                      </td>
+                      <td>
+                        {Object.entries(phaseMetrics.request_phase_counts)
+                          .map(([requestPhase, count]) => `${requestPhase}: ${number(count)}`)
+                          .join(', ') || 'Unknown'}
+                      </td>
+                      <td>
+                        {Object.entries(phaseMetrics.router_phase_counts)
+                          .map(([routerPhase, count]) => `${routerPhase}: ${number(count)}`)
+                          .join(', ') || 'Unknown'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      ))}
+    </section>
   )
 }
 
@@ -456,6 +583,7 @@ export default function RunDetails({
             ) : (
               <p className={styles.muted}>Summary metrics will appear as results are persisted.</p>
             )}
+            {metrics.length > 0 && <SessionObservationDetails targets={metrics} />}
             <p className={styles.muted}>
               {metrics.some((target) => !qualityApplies(target))
                 ? 'Accuracy is not applicable to observation-only or mixed cohorts.'

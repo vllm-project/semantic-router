@@ -19,6 +19,7 @@ from .grading import (
     BINARY_RESULT,
     CACHE_OBSERVATION_RESULT,
     MCQ_GRADER_VERSION,
+    SESSION_OBSERVATION_RESULT,
     TOKEN_COVERAGE_RESULT,
     WEIGHTED_RUBRIC_RESULT,
     ResultKind,
@@ -89,6 +90,7 @@ def _validate(adapter):
     if adapter.result_kind not in {
         BINARY_RESULT,
         CACHE_OBSERVATION_RESULT,
+        SESSION_OBSERVATION_RESULT,
         WEIGHTED_RUBRIC_RESULT,
         TOKEN_COVERAGE_RESULT,
     }:
@@ -146,12 +148,14 @@ def _initialize():
             agent_task,
             cache_probe,
             draco,
+            session_routing,
         )
 
         for diagnostic in (
             draco.adapter(),
             agent_task.adapter(),
             cache_probe.adapter(),
+            session_routing.adapter(),
         ):
             _validate(diagnostic)
             found[diagnostic.id] = diagnostic

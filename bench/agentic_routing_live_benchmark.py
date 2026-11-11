@@ -24,7 +24,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from router_trace import routing_headers
+if __package__:
+    from .router_trace import routing_headers
+else:
+    from router_trace import routing_headers
 
 HTTP_OK = 200
 HTTP_REDIRECT_START = 300

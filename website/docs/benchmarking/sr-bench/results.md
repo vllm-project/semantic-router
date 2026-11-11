@@ -297,6 +297,35 @@ Null nested cache fields, unsupported response formats and transport/accounting/
 budget failures retain their existing strict handling. This projection does not
 retire either the original probe or its release-report consumers.
 
+## Session-routing observations
+
+`live-session-routing-v1` declares `session-observation-v1`. These custom cases
+measure request and routing behavior, not answer correctness. Accuracy and score
+are null, and the Dashboard labels quality **Not applicable**. They do not change
+the published benchmark IDs or weights.
+
+The `session_observation` report keeps planned, attempted, completed, failed and
+undispatched turn counts separate. The HTTP success rate uses every frozen turn
+as its denominator, so a partial run is a lower bound. Latency uses successful
+responses; p95 is assessable only for a complete session run. Selected-model
+continuity and tool-loop switch violations use only transitions with known
+models. Missing model, usage and cache evidence remains unknown.
+
+Each turn records three distinct phase values: `benchmark_phase` comes from the
+frozen schedule, `request_phase` is derived from the messages actually sent, and
+`router_phase` is present only when the Router response supplies its phase
+header. The `previous_response_id_sent` field reflects the actual outgoing
+request body, not the presence of a response ID in a native report. Phase
+metrics keep those sources separate.
+
+Threshold validation is a routing and transport check, not a quality grade.
+`session_recovery.error_recovery_status` remains `not_measured`: a failed call
+ends that frozen session case. Idle-resumption counts show whether a later
+request was attempted and reused the same client session ID; they do not prove
+Router recovery or session retirement. The `stateful-heavy` schedule labels
+prompt phases and does not send Responses API state. Retry and provider-state
+controls that require unsupported behavior are rejected.
+
 ## Scripted agent-task diagnostics
 
 `agent-task-chat-v1` declares `token-coverage-v1`. A task's credit is the native
