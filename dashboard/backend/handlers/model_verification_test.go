@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -768,5 +769,42 @@ func TestModelVerificationServiceMasksConfigLoaderFailures(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "secret") {
 		t.Fatalf("config loader error leaked: %v", err)
+	}
+}
+
+// A Messages model is verified in the Anthropic dialect whether its
+// configuration spells api_format anthropic or messages: the loader keeps the
+// canonical name.
+func TestModelVerificationSpeaksAnthropicToMessagesModelsAsLoaded(t *testing.T) {
+	t.Parallel()
+
+	raw, err := os.ReadFile("../../../src/semantic-router/pkg/config/testdata/migrate_releases/v0.4.0-config/after.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, apiFormat := range []string{"anthropic", "messages"} {
+		document := strings.Replace(string(raw), "api_format: anthropic", "api_format: "+apiFormat, 1)
+		config, err := routerconfig.ParseYAMLBytes([]byte(document))
+		if err != nil {
+			t.Fatalf("%s: %v", apiFormat, err)
+		}
+		target, err := resolveModelVerificationTarget(config, "qwen3-32b")
+		if err != nil {
+			t.Fatalf("%s: %v", apiFormat, err)
+		}
+		if target.dialect != "anthropic" {
+			t.Fatalf("%s: dialect %q", apiFormat, target.dialect)
+		}
+		payload, err := buildModelVerificationPayload(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var request map[string]any
+		if err := json.Unmarshal(payload, &request); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := request["max_tokens"]; !ok || request["messages"] == nil {
+			t.Fatalf("%s: payload %s is not an Anthropic Messages request", apiFormat, payload)
+		}
 	}
 }

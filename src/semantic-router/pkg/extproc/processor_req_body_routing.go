@@ -294,9 +294,9 @@ func (r *OpenAIRouter) applyDispatchRequestParams(
 
 func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {
 	switch strings.ToLower(strings.TrimSpace(apiFormat)) {
-	case "", config.APIFormatOpenAI, "openai.chat", string(llmprotocol.OpenAIChatV1):
+	case "", config.APIFormatChatCompletions, config.APIFormatOpenAI, "openai.chat", string(llmprotocol.OpenAIChatV1):
 		return llmprotocol.OpenAIChatV1, nil
-	case config.APIFormatAnthropic, "anthropic.messages", string(llmprotocol.AnthropicMessagesV1):
+	case config.APIFormatMessages, config.APIFormatAnthropic, "anthropic.messages", string(llmprotocol.AnthropicMessagesV1):
 		return llmprotocol.AnthropicMessagesV1, nil
 	case config.APIFormatResponses, "openai.responses", string(llmprotocol.OpenAIResponsesV1):
 		return llmprotocol.OpenAIResponsesV1, nil

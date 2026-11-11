@@ -63,6 +63,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 func (p *Profile) GetTestCases() []string {
 	return []string{
 		"masking-cross-protocol",
+		"masking-keeps-echoed-placeholder",
 		"masking-classifier-unavailable-fails-closed",
 	}
 }

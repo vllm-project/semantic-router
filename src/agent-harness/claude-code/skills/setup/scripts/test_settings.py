@@ -440,5 +440,15 @@ class Manifest(unittest.TestCase):
             settings.parse_value("runtime", "cloud")
 
 
+class RuntimeModelOption(unittest.TestCase):
+    def test_a_model_is_trimmed_and_empty_clears_it(self):
+        self.assertEqual(
+            settings.parse_value("runtimeModel", " vllm-sr/vela3-flash "),
+            "vllm-sr/vela3-flash",
+        )
+        self.assertEqual(settings.parse_value("runtimeModel", ""), "")
+        self.assertEqual(settings.defaults()["runtimeModel"], "")
+
+
 if __name__ == "__main__":
     unittest.main()

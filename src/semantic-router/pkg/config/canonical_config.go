@@ -177,6 +177,9 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	}
 
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
+	if err := normalizeListenerAPIs(cfg.Listeners); err != nil {
+		return nil, err
+	}
 	cfg.ModelConfig = make(map[string]ModelParams)
 	cfg.GlobalPlugins = copyDecisionPlugins(global.Plugins)
 	if err := applyCanonicalRecipeState(&cfg, canonical); err != nil {

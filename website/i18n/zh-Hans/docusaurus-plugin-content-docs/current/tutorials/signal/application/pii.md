@@ -47,6 +47,7 @@ recipes:
         - name: tool_result_pii
           input:
             tool_results: true
+            request: false
     decisions:
       - name: keep-private
         priority: 200
@@ -66,6 +67,7 @@ recipes:
 | `ignore_labels` | 规则永不计入的标签 |
 | `input.history` | 同时读取之前的用户轮次 |
 | `input.tool_results` | 同时读取请求中的工具结果 |
+| `input.request` | 设为 `false` 时不读取当前用户轮次，规则只读取它指定的之前用户轮次或工具结果 |
 | `on_unknown` | 模型没有给出答案时规则报告什么：`no_match`（默认）或 `match` |
 | `deployment`、`timeout_ms` | 回答问题的部署，以及答案的截止时间 |
 
@@ -74,6 +76,8 @@ recipes:
 ### 读取什么 {#what-it-reads}
 
 问题读取当前用户轮次；设置 `input.history` 时读取之前的用户轮次，设置 `input.tool_results` 时读取文本工具结果；工具调用和非文本内容不会被读取。它还会读取 `global.router.routing_input` 从路由文本中移除的内容，所以个人数据无法藏在伪造的记忆块里。
+
+编码智能体的用户轮次带有其运行框架（harness）自身的指令：例如 Claude Code 2.1.317 会在第一条用户消息的提醒中放入一行带邮箱地址的提交尾注（commit trailer）。针对智能体工具返回内容的规则应同时设置 `input.request: false` 和 `input.tool_results: true`，如上面的 `tool_result_pii`，这样它只读取工具结果，不读取当前轮次及 `routing_input` 从中移除的内容。在请求带有工具结果之前，这样的规则不会被询问，也不会匹配。
 
 它读取完整输入，输入超过一次前向计算的长度时分窗口读取。模型没有读到的文本（超过其输入或扫描预算，或被截断）按个人数据计入，所以无法检查的文本不能当作干净文本通过。在信号截止时间前没有完成的扫描没有答案，只有设置 `on_unknown: match` 时才匹配。
 
@@ -113,6 +117,7 @@ global:
         provider: systemone
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: SYSTEMONE_API_KEY}
     system:
       decision_model: {deployment: d3-remote}

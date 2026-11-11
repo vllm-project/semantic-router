@@ -111,7 +111,6 @@ func TestDecisionConfidenceMetricsRespectScoredStatus(t *testing.T) {
 			name:    "catch_all",
 			rule:    config.RuleNode{Operator: "AND"},
 			signals: &SignalMatches{},
-			scored:  true,
 		},
 		{
 			name:    "predicate",

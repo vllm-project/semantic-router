@@ -46,8 +46,9 @@ is not asked, and a stage with no question makes no call.
 
 ## Caps
 
-- **Judges** read at most `judge.max_candidates` candidates: 64 by default for
-  a per-candidate judge, at most 255 (the default) for a choice judge. Overflow
+- **Judges** read at most `judge.max_candidates` candidates: 64 by default and
+  at most 4096 for a per-candidate judge, at most 255 (the default) for a
+  choice judge. Overflow
   is truncated by recall rank, or in listed order without recall, never failed;
   `vsr_match_judge_truncated_total` counts it.
 - **Recall** bounds what a judge sees: a cache judge confirms its top 3

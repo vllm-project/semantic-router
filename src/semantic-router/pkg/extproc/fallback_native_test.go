@@ -94,6 +94,30 @@ func TestNativeFallbackSwitchesToTheCandidateOnItsSuccess(t *testing.T) {
 	require.Len(t, ctx.FallbackRecord.Attempts, 2)
 }
 
+// The candidate's success belongs to the candidate's backend. The primary
+// failed and was never seen to succeed, so its breaker stays open and the next
+// request's chain skips it, as behind Envoy.
+func TestNativeFallbackSuccessLeavesThePrimaryBreakerOpen(t *testing.T) {
+	policy := fallback.DefaultEnabledPolicy()
+	policy.CircuitBreaker.ConsecutiveFailures = 1
+	session := nativeFallbackSession(t, policy, "model-primary", "model-fallback-1")
+	ctx := session.ctx
+	_, err := session.router.prepareProviderDispatch(ctx.SemanticRequest, "model-primary", "", false, ctx)
+	require.NoError(t, err)
+	breaker := session.router.FallbackOrchestrator.CircuitBreaker()
+
+	step, err := session.Fallback().Next(context.Background(), failedWith(http.StatusServiceUnavailable, "unavailable"))
+	require.NoError(t, err)
+	require.NotNil(t, step.Call)
+	require.Equal(t, fallback.StateOpen, breaker.GetState("backend-primary"))
+
+	_, err = session.ResponseHeaders(routing.Header{{Name: ":status", Value: "200"}, {Name: "content-type", Value: "application/json"}}, false)
+	require.NoError(t, err)
+	require.Equal(t, "model-fallback-1", ctx.VSRSelectedModel)
+	require.Equal(t, fallback.StateOpen, breaker.GetState("backend-primary"), "the candidate's success closed the failed primary's breaker")
+	require.Equal(t, fallback.StateClosed, breaker.GetState("backend-fallback-1"))
+}
+
 func TestNativeFallbackEndsWithThePrimaryContext(t *testing.T) {
 	session := nativeFallbackSession(t, fallback.DefaultEnabledPolicy(), "model-primary", "model-fallback-1")
 	ctx := session.ctx

@@ -20,15 +20,26 @@ listeners:
     tls:
       cert_file: certs/tls.crt
       key_file: certs/tls.key
-    # Standalone mode: accept only these request models (exact `model` values);
-    # others get 403 model_not_allowed. Absent or empty accepts every model.
-    models: [vllm-sr/exhaustive-default]
-    # Native System One inference has its own explicit public-model scope.
-    systemone:
-      models: [decision-public]
-      # The longest the listener waits for a model it calls directly, however
-      # long a request's options.deadline_ms asks for (10 minutes by default).
-      max_deadline_ms: 600000
+    # The APIs the listener serves, by API name; other paths answer 404.
+    # Without apis a listener serves chat_completions, responses, messages and
+    # images, and not systemone. openai and anthropic are accepted as aliases
+    # of chat_completions and messages.
+    apis:
+      # Standalone mode: accept only these request models (exact `model`
+      # values); others get 403 model_not_allowed. Omitted, every LLM model.
+      chat_completions:
+        models: [vllm-sr/exhaustive-default]
+      responses:
+        models: [vllm-sr/exhaustive-default]
+      # System One decisions, in the schema the listener speaks to its clients:
+      # vllm-sr/5.0 by default, or vllm-sr/4.0 for clients of the earlier API.
+      systemone:
+        schema: vllm-sr/5.0
+        models: [decision-public]
+        # The longest the listener waits for a model it calls directly,
+        # however long a request's options.deadline_ms asks for (10 minutes by
+        # default).
+        max_deadline_ms: 600000
     # Standalone mode drops client identity headers unless the listener trusts
     # them: here, from an authenticating proxy on a private network.
     identity:
@@ -44,7 +55,7 @@ providers:
       reasoning:
         family: qwen3
       provider_model_id: qwen3-8b-instruct
-      api_format: openai
+      api_format: chat_completions
       reliability:
         lb_policy: least_request
         retry_count: 2
@@ -110,7 +121,7 @@ providers:
     # request semantics into the weighted qwen3-8b replica pool above.
     - name: remote-openai-reference
       provider_model_id: remote-openai-reference
-      api_format: openai
+      api_format: chat_completions
       backend_refs:
         - name: remote-primary
           endpoint: https://api.example.com/v1
@@ -129,7 +140,7 @@ providers:
           weight: 100
     - name: gateway-routed-reference
       provider_model_id: gateway-routed-reference
-      api_format: openai
+      api_format: chat_completions
       backend_refs:
         # A delegated upstream gateway: it receives the requesting user's
         # delegated credential as its Bearer token instead of a static key,
@@ -154,7 +165,7 @@ providers:
         modes: [enabled, disabled]
         default_mode: enabled
       provider_model_id: qwen3-32b-instruct
-      api_format: anthropic
+      api_format: messages
       pricing:
         currency: USD
         prompt_per_1m: 1.2
@@ -180,7 +191,7 @@ providers:
       tags: [premium, analysis]
     - name: llava-omni
       provider_model_id: llava-omni-preview
-      api_format: openai
+      api_format: chat_completions
       pricing:
         currency: USD
         prompt_per_1m: 2.5
@@ -247,8 +258,11 @@ providers:
     - name: native-d3
       api_format: systemone
       deployment: decision-remote
+    # schema is the version of the API the backends speak: vllm-sr/5.0 for
+    # vllm-sr serve; omitted, systemone/0.2, the published standard.
     - name: native-vega
       api_format: systemone
+      schema: vllm-sr/5.0
       provider_model_id: vllm-sr/Decision-2.0-Vega-27B
       backend_refs:
         - provider: systemone-compatible
@@ -551,6 +565,17 @@ recipes:
           deployment: primary
           timeout_ms: 300
           on_unknown: match
+        # An agent's user turn carries its harness's own instructions, such
+        # as a commit trailer with an email address, so this rule reads only
+        # what the agent's tools brought back, and is not asked before them.
+        - name: tool_output_pii
+          description: Personal data in the output of an agent's tools.
+          predicate:
+            gte: 0.8
+          input:
+            tool_results: true
+            request: false
+          deployment: primary
         # The masking plugin of static_business_route masks what this rule
         # detects in the request as it is sent.
         - name: business_contact_pii
@@ -711,6 +736,17 @@ recipes:
             tool_results: true
           coverage: full
           on_unscanned: unknown
+        # A question about what an agent's tools brought back leaves the user
+        # turn out, and is not asked before the first tool result.
+        - name: tool_output_failure
+          description: Whether the output of the agent's tools shows a failed command or a failing test.
+          deployment: decision-kai
+          question:
+            type: noul
+            instructions: Does this tool output show a failed command or a failing test?
+          input:
+            tool_results: true
+            request: false
         # Image and video parts of the current turn go to a deployment that
         # declares the input modality (input.audio is refused until one can).
         - name: chart_request
@@ -2757,11 +2793,15 @@ global:
       # a model_runtime deployment; requests are never routed to it. The key
       # comes from auth.api_key_env or auth.api_key_file, sent as
       # "Authorization: Bearer <key>" unless auth sets another header or prefix.
-      # timeout_ms bounds one attempt (at most 60000 for systemone).
+      # timeout_ms bounds one attempt (at most 60000 for systemone). schema
+      # names the API the endpoint speaks: vllm-sr/5.0 is vllm-sr serve's,
+      # which carries a stage's states in one batch, presets, set and span
+      # questions and its model card.
       decision-remote:
         provider: systemone
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth:
           api_key_env: SYSTEMONE_DECISION_KEY
         timeout_ms: 3000
@@ -2774,6 +2814,7 @@ global:
         provider: systemone
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth:
           credential: delegated
         timeout_ms: 3000
@@ -2785,6 +2826,7 @@ global:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth:
           header: Ocp-Apim-Subscription-Key
           prefix: ""
@@ -2793,6 +2835,27 @@ global:
           question_types: [choice, noul, score]
           presets: [pii, halu]
           modalities: [text, image, video]
+      # A hosted API that speaks the published System One standard,
+      # systemone/0.2 (the default schema): one request per call, so a stage's
+      # states go in calls of their own, at most max_concurrency (default 8)
+      # in flight within the caller's deadline. deviations declares how the
+      # endpoint departs from its schema: state_text sends an object state as
+      # its canonical JSON text, for an API that takes only text states. The
+      # standard carries no presets, set or span questions, video or proof of
+      # full input coverage, so rules that need them fail to load against it.
+      decision-standard:
+        provider: systemone
+        endpoint: https://api.example.com/v1/systemone
+        model: d3
+        schema: systemone/0.2
+        deviations: [state_text]
+        max_concurrency: 8
+        auth:
+          api_key_env: SYSTEMONE_STANDARD_KEY
+        timeout_ms: 6000
+        capabilities:
+          question_types: [choice, noul, score]
+          modalities: [text, image]
       # A chat model: POST <endpoint>/chat/completions. limits bounds the
       # request and response bodies; generation sets the max_tokens and
       # temperature of its completions, and generation.reasoning names a

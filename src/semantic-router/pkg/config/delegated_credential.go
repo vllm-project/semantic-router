@@ -71,7 +71,7 @@ func validateDelegatedCredentialHeader(credential DelegatedCredentialConfig, ide
 		identity.GetUserIDHeader(), identity.GetUserGroupsHeader(),
 		headers.AuthzUserID, headers.AuthzUserGroups, headers.AuthzTeamID, headers.AuthzTenantID,
 	} {
-		reserved = reserved || strings.EqualFold(header, strings.TrimSpace(name))
+		reserved = reserved || strings.EqualFold(header, name)
 	}
 	if reserved {
 		return fmt.Errorf(

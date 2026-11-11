@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { hide, secretsIn } from './lib/redact'
+import { hide, piiIn, secretsIn } from './lib/redact'
 
 // Netlify's secret scan fails the website's deploy on a key-shaped literal anywhere in the repository,
 // so the fake provider keys and tokens here are joined from their parts at run time.
@@ -83,5 +83,34 @@ test('ordinary prose, code and Markdown keep their words', () => {
     'https://example.com/path?a=b',
   ]) {
     expect(hidden(text)).toBe(text)
+  }
+})
+
+// The model tags the 2.32 of a pinned version as an IP address; hiding it broke the requirements file Claude read.
+const ipSpan = (text: string, value: string) => {
+  const start = [...text].length - [...text.slice(text.indexOf(value))].length
+  return { label: 'IP_ADDRESS', start, end: start + [...value].length, text: value, probability: 0.9 }
+}
+
+test('an IP span keeps its tag only when it is shaped like an address', () => {
+  for (const [text, value, kept] of [
+    ['requests==2.32.3', '2.32', false],
+    ['pin numpy 1.26.4 here', '1.26.4', false],
+    ['connect to 10.0.0.12 now', '10.0.0.12', true],
+    ['listen on 192.168.1.20:8080', '192.168.1.20:8080', true],
+    ['the host fe80::1 answered', 'fe80::1', true],
+  ] as const) {
+    expect(piiIn(text, [ipSpan(text, value)], 0.5).length).toBe(kept ? 1 : 0)
+  }
+  expect(hide('requests==2.32.3', piiIn('requests==2.32.3', [ipSpan('requests==2.32.3', '2.32')], 0.5)).text).toBe('requests==2.32.3')
+})
+
+test('an IP span the model cut short hides the whole address', () => {
+  for (const [text, value, hidden] of [
+    ['connect to 192.168.1.20 now', '192.168.1', 'connect to [vsr:ip] now'],
+    ['the host is 10.0.0.12.', '10.0.0', 'the host is [vsr:ip].'],
+    ['listen on 192.168.1.20:8080', '168.1.20', 'listen on [vsr:ip]:8080'],
+  ] as const) {
+    expect(hide(text, piiIn(text, [ipSpan(text, value)], 0.5)).text).toBe(hidden)
   }
 })
