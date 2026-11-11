@@ -222,6 +222,10 @@ Responses requires a detail level on every input image. An image that arrives
 without one, as every Messages image and tool-result image does, reaches a
 Responses backend with `detail: auto`, the Responses default.
 
+Messages has no image detail level and no document file name. Toward an
+`anthropic` backend, an image `detail` other than `auto` and a file `filename`
+are omitted, and `x-vsr-warnings` reports each as `dropped`.
+
 When Chat history is translated to an Anthropic Messages backend, empty text
 blocks are omitted:
 
@@ -415,6 +419,15 @@ tools or error translation.
   `choices[].stop_reason`, as vLLM does, Anthropic Messages clients receive a
   `stop_sequence` stop reason with that sequence. Chat and Responses clients
   are unaffected.
+- A Chat provider ends a forced named tool call with `finish_reason: "stop"`.
+  Anthropic Messages clients receive `stop_reason: "tool_use"` for a turn that
+  ends that way and carries `tool_use` blocks. A turn that ends at the output
+  limit, on a stop sequence, or on a refusal keeps that reason.
+- An Anthropic `model_context_window_exceeded` stop reaches Chat clients as
+  `finish_reason: "length"` and Responses clients as an incomplete response
+  with reason `max_output_tokens`, as vLLM reports output that reaches
+  `max_model_len`. The Router reports an `approximated` diagnostic for
+  `response.stop_reason`. A `pause_turn` stop still fails for these clients.
 - When an OpenAI-compatible Chat provider reports an error inside a
   successful stream, with an integer HTTP status as its `code` as vLLM does,
   streamed clients receive the provider's message:
@@ -462,10 +475,14 @@ The Router handles them as follows:
 Each accepted but unforwarded field appears as a `dropped` entry in
 `x-vsr-warnings`.
 
-In Responses output, `usage.input_tokens_details.cache_write_tokens` is omitted
-when the backend does not report a cache-write count. Reported zero and positive
-counts are preserved. This avoids emitting `null`, which Codex CLI 0.163.0
-rejects, without treating unknown usage as a measured zero.
+In Responses output, `usage.input_tokens_details.cached_tokens` is always an
+integer, as the Responses schema requires: a backend that reports no cache-read
+count, such as vLLM's Chat server without `--enable-prompt-tokens-details`,
+gives `0`, which is also what vLLM's own Responses server sends.
+`cache_write_tokens` is omitted when the backend does not report a cache-write
+count. Reported zero and positive counts are preserved. Codex CLI fails a turn
+on a `null` count (0.163.0 for `cache_write_tokens`, 0.166.0 for
+`cached_tokens`) and on a details object without `cached_tokens`.
 
 Codex sends each step of its history as separate items: reasoning, the
 assistant message and every call. Toward Chat and Messages backends, the

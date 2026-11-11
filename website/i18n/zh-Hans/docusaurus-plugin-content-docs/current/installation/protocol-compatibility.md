@@ -98,6 +98,8 @@ Router 在编码后端请求之前检查所需语义。所选后端格式无法�
 
 此表描述编解码器表示，而不是模型能力。例如，OpenAI 兼容服务器可以接受 Chat 请求形状，同时对特定模型拒绝图像或工具。在将它们加入路由池之前，先限定实际端点和模型 revision。
 
+Messages 没有图像 detail 级别，也没有文档文件名。发往 `anthropic` 后端时，`auto` 以外的图像 `detail` 和文件 `filename` 会被省略，`x-vsr-warnings` 会将其分别报告为 `dropped`。
+
 对于使用 Chat Completions 或 Responses 后端的 Anthropic Messages 客户端，
 `thinking.type: adaptive` 使用后端模型的默认推理行为，`output_config.effort` 会保留。
 `thinking.display: omitted` 会从转换后的响应中移除推理内容，包括流式输出。显式设置
@@ -161,6 +163,8 @@ providers:
 - 响应保持客户端协议的 JSON 或 SSE 形状。Provider 传输错误和不完整流会与成功的模型响应分开翻译。
 - 对于 Anthropic 兼容提供方，缺失的可空 `stop_sequence` 会被解释为 null，并产生有界的兼容性诊断。这适用于缓冲 Messages、`message_start.message` 和 `message_delta.delta`。显式 null 不产生诊断；停止原因为 `stop_sequence` 时，仍必须提供非空的匹配序列，终止增量仍必须包含 `stop_reason`。
 - OpenAI 兼容 Chat 提供方通过 `choices[].stop_reason` 返回匹配到的停止字符串时（例如 vLLM），Anthropic Messages 客户端会收到 `stop_sequence` 停止原因及该序列。Chat 和 Responses 客户端不受影响。
+- Chat 提供方以 `finish_reason: "stop"` 结束强制指定的工具调用。对于以这种方式结束且包含 `tool_use` 块的轮次，Anthropic Messages 客户端会收到 `stop_reason: "tool_use"`。因达到输出上限、命中停止序列或拒绝而结束的轮次保留原停止原因。
+- Anthropic 的 `model_context_window_exceeded` 停止以 `finish_reason: "length"` 到达 Chat 客户端，并以原因为 `max_output_tokens` 的 incomplete 响应到达 Responses 客户端，与 vLLM 报告输出达到 `max_model_len` 的方式一致。Router 会为 `response.stop_reason` 报告 `approximated` 诊断。`pause_turn` 停止对这些客户端仍会失败。
 - 适用时，`x-vsr-warnings` 以及 `x-vsr-trace` 的 `client_protocol` 和 `upstream_protocol` 成员会暴露翻译细节。参见 [VSR 路由标头](../api/headers)。流式响应头发送后才发现的诊断会记录在转换告警指标和结构化调试日志中，不能添加到已经发送的响应头。
 
 仓库在编解码器测试、Envoy ExtProc 边界，以及 18 单元格部署矩阵中成对验证全部三种协议：三种客户端格式 × 三种后端格式 × 缓冲或流式模式。完整的验证和扩展契约见[已实现的编解码器设计](../proposals/multi-protocol-adaptor)。
@@ -177,6 +181,8 @@ Codex CLI 使用 Responses 端点并发送若干兼容性字段，Router 按下�
 | `text.verbosity` | 转发到 `responses` 后端，映射为 `openai` Chat 后端的 `verbosity`，在 `anthropic` Messages 后端上报告为 `dropped`。仅接受 `low`、`medium` 和 `high`。 |
 
 每个被接受但未转发的字段都会作为 `dropped` 项出现在 `x-vsr-warnings` 中。
+
+在 Responses 输出中，`usage.input_tokens_details.cached_tokens` 始终是 Responses schema 要求的整数：后端未报告缓存读取计数时（例如未启用 `--enable-prompt-tokens-details` 的 vLLM Chat 服务）为 `0`，这也是 vLLM 自身 Responses 服务的输出。后端未报告缓存写入计数时省略 `cache_write_tokens`。已报告的零和正数计数会保留。Codex CLI 遇到 `null` 计数或缺少 `cached_tokens` 的详情对象时会使该轮失败。
 
 Codex 也可以请求推理摘要。Router 会将 `reasoning.summary` 转发到 Responses 后端。
 Chat Completions 或 Messages 后端不能请求摘要，因此 Router 接受该轮请求，并在
