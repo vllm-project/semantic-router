@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import zipfile
 from pathlib import Path
 
@@ -841,3 +842,130 @@ def test_loading_freezes_the_heap(example_plugin, keyword_package, background):
     finally:
         runtime.stop()
         gc.unfreeze()
+
+
+def test_stopping_runtime_during_load_prevents_late_activation(
+    example_plugin, keyword_package, monkeypatch
+):
+    from vllm_sr_example.engine import CountsEngine
+    from vllm_srun.scheduler.scheduler import Scheduler
+
+    load_started = threading.Event()
+    release_load = threading.Event()
+    scheduler_started = threading.Event()
+
+    original_load = CountsEngine.load
+    original_scheduler_start = Scheduler.start
+
+    def blocked_load(self, *args, **kwargs):
+        load_started.set()
+        if not release_load.wait(timeout=10):
+            raise TimeoutError("test did not release the blocked engine load")
+        return original_load(self, *args, **kwargs)
+
+    def observed_scheduler_start(self):
+        scheduler_started.set()
+        return original_scheduler_start(self)
+
+    monkeypatch.setattr(CountsEngine, "load", blocked_load)
+    monkeypatch.setattr(Scheduler, "start", observed_scheduler_start)
+
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=str(keyword_package),
+                    name="keywords",
+                    device="cpu",
+                    engine="example_counts",
+                ),
+            ),
+        )
+    )
+
+    stop_thread = None
+
+    try:
+        runtime.start(background=True)
+
+        assert load_started.wait(
+            timeout=5
+        ), "background loader never reached the engine load"
+
+        stop_thread = threading.Thread(target=runtime.stop)
+        stop_thread.start()
+
+        assert runtime._stopping.wait(timeout=5), "runtime shutdown signal was not set"
+
+        # Shutdown has begun while the engine is still blocked.
+        release_load.set()
+
+        stop_thread.join(timeout=15)
+        assert not stop_thread.is_alive(), "Runtime.stop() did not finish"
+
+        if runtime._thread is not None:
+            runtime._thread.join(timeout=10)
+            assert not runtime._thread.is_alive(), "background loader did not finish"
+
+        assert (
+            not scheduler_started.is_set()
+        ), "scheduler started after runtime shutdown began"
+
+        assert (
+            runtime.served[0].scheduler is None
+        ), "served model retained a scheduler after shutdown"
+
+        assert not runtime.health.ready, "runtime became ready after shutdown began"
+
+    finally:
+        release_load.set()
+        runtime.stop()
+
+        if stop_thread is not None:
+            stop_thread.join(timeout=15)
+
+
+def test_stop_waits_for_a_load_in_flight_within_its_timeout(
+    example_plugin, keyword_package, monkeypatch
+):
+    from vllm_sr_example.engine import CountsEngine
+
+    load_started = threading.Event()
+    release_load = threading.Event()
+    original_load = CountsEngine.load
+
+    def blocked_load(self, *args, **kwargs):
+        load_started.set()
+        release_load.wait(timeout=30)
+        return original_load(self, *args, **kwargs)
+
+    monkeypatch.setattr(CountsEngine, "load", blocked_load)
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=str(keyword_package),
+                    name="keywords",
+                    device="cpu",
+                    engine="example_counts",
+                ),
+            ),
+        )
+    )
+    try:
+        runtime.start(background=True)
+        assert load_started.wait(timeout=5)
+        began = time.monotonic()
+        # The server exits at once on this entry, as for a forward past the grace.
+        assert runtime.stop(0.2) == ["keywords: its load has not finished"]
+        assert time.monotonic() - began < 5
+        release_load.set()
+        assert runtime._thread is not None
+        runtime._thread.join(timeout=10)
+        assert not runtime._thread.is_alive()
+        served = runtime.served[0]
+        assert served.scheduler is None and served.model is None
+        assert not runtime.health.ready
+    finally:
+        release_load.set()
+        runtime.stop()

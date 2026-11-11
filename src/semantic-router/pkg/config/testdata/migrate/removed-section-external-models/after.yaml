@@ -1,0 +1,35 @@
+# The external[] model with model_role memory_rewrite is the openai_chat
+# deployment the memory query rewrite names: its llm_endpoint a base URL, its
+# timeout, limits and generation settings carried, its key moved to an
+# environment variable. Nothing reads any other external model.
+version: v0.5
+providers:
+  defaults: {model: general}
+  models:
+    - name: general
+      backend_refs: [{name: local, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+recipes:
+  - name: default
+    decisions:
+      - name: route
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general}]
+global:
+  model_catalog:
+    deployments:
+      rewriter:
+        provider: openai_chat
+        endpoint: http://llm.example.com:8000/v1
+        model: qwen3
+        auth:
+          api_key_env: VLLM_SR_REWRITER_API_KEY
+        timeout_ms: 30000
+        limits:
+          max_response_bytes: 1048576
+        generation:
+          max_tokens: 64
+          temperature: 0.2
+  stores:
+    memory:
+      query_rewrite: {deployment: rewriter}

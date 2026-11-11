@@ -61,7 +61,7 @@ SIGNAL keyword probe { keywords: ["__probe__"] }
 SIGNAL hallucination ungrounded_claims { use_nli: true }
 ROUTE grounded { PRIORITY 1 WHEN keyword("probe") MODEL "m:1b" }
 `)
-	if len(errs) == 0 || !strings.Contains(errs[0].Error(), "use_nli is retired") {
+	if len(errs) == 0 || !strings.Contains(errs[0].Error(), "use_nli") {
 		t.Fatalf("use_nli must be refused, got %v", errs)
 	}
 }

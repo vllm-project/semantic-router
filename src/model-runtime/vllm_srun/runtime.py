@@ -64,15 +64,27 @@ from .registry import builtin
 from .registry.resolve import resolve
 from .scheduler import calibration
 from .scheduler.batching import Batcher, SharedContext
-from .scheduler.scheduler import Scheduler, SchedulerLimits
+from .scheduler.scheduler import STOP_SECONDS, Forward, Scheduler, SchedulerLimits
 from .supervision.metrics import RuntimeMetrics
 from .supervision.readiness import STATES, Health, golden_check
+from .systemone import IMPLICIT_ROLES, REQUEST_ROLES, normalize_presets, read_roles
 from .timing import RunTiming, ServerTiming
 
 log = logging.getLogger("vllm_srun")
 AUTO_ENGINE = "auto"
 # The families whose input limit max_model_len may lower: each reads it from package.max_input_tokens.
 MAX_MODEL_LEN_FAMILIES = frozenset({"decision1", "decision2", "decision3"})
+# The watchdog looks at the forwards in flight this often, or four times per forward timeout if shorter.
+WATCH_SECONDS = 1.0
+
+
+@dataclass(frozen=True)
+class _Stall:
+    """A forward the watchdog flagged, the health state it replaced and the reason the model reports."""
+
+    forward: Forward
+    replaced: tuple[str, str | None]
+    reason: str
 
 
 def _bf16_parameters(spec: ModelSpec, config: ModelConfig, dtype: str) -> int:
@@ -206,6 +218,7 @@ SURFACE_FIELDS = {
         "images",
         "videos",
         "assets",
+        "roles",
         "options",
     },
     "classify": {"model", "input", "head", "options"},
@@ -331,6 +344,7 @@ class ServedModel:
         self.cache = ResultCache(runtime.config.result_cache_entries)
         self.kernel_choices: KernelChoices | None = None
         self.unpinned: str | None = None
+        self._stall: _Stall | None = None
 
     # -- names ---------------------------------------------------------------
 
@@ -487,25 +501,33 @@ class ServedModel:
         )
         try:
             self._start(process, execute)
+
+            with self.runtime._lifecycle_lock:
+                if self.runtime._stopping.is_set():
+                    raise _RuntimeStoppingError(
+                        "runtime shutdown began during model initialization"
+                    )
+
+                metrics = self.runtime.metrics
+                metrics.model_info.labels(
+                    model=self.label,
+                    revision=model.info.revision or "local",
+                    family=family.name,
+                    engine=self.engine,
+                    accelerator=placement.accelerator.name,
+                    device=placement.device.label,
+                    dtype=self.precision,
+                    numerics=self.numerics,
+                ).set(1)
+                metrics.model_memory.labels(model=self.label).set(
+                    model.engine_model.memory_bytes()
+                )
+                self.health.set("ready", self.unpinned)
+
         except BaseException:
             self.stop()
             self.scheduler = self.model = None
             raise
-        metrics = self.runtime.metrics
-        metrics.model_info.labels(
-            model=self.label,
-            revision=model.info.revision or "local",
-            family=family.name,
-            engine=self.engine,
-            accelerator=placement.accelerator.name,
-            device=placement.device.label,
-            dtype=self.precision,
-            numerics=self.numerics,
-        ).set(1)
-        metrics.model_memory.labels(model=self.label).set(
-            model.engine_model.memory_bytes()
-        )
-        self.health.set("ready", self.unpinned)
         log.info(
             "serving %s on %s (max_num_seqs %d, max_num_batched_tokens %d from %s, "
             "batch_window_ms %g, dtype %s, shared context %s, %s numerics)",
@@ -542,7 +564,7 @@ class ServedModel:
             and not model.engine_model.approximate_kernels
             else "approximate"
         )
-        self.scheduler = Scheduler(
+        scheduler = Scheduler(
             model,
             batcher,
             SchedulerLimits(
@@ -562,19 +584,23 @@ class ServedModel:
                 f"model worker failed: {type(error).__name__}: {error}", self
             ),
         )
-        self.scheduler.start()
+
+        with self.runtime._lifecycle_lock:
+            if self.runtime._stopping.is_set():
+                raise _RuntimeStoppingError(
+                    "runtime shutdown began during model loading"
+                )
+            self.scheduler = scheduler
+            self.scheduler.start()
         self.health.set("warming", "running the golden check")
         assert self.family is not None and self.package is not None
-        goldens = self.family.golden(self.package)
-        if self.dtype != "auto":
-            # References are recorded at the published precision.
-            goldens = [{**golden, "expected": {}} for golden in goldens]
         self.health.golden = golden_check(
             self.golden_surface,
             model.golden_compare,
-            goldens,
+            self.family.golden(self.package),
             placement.device.accelerator,
             placement.accelerator.golden_reference(placement.device),
+            self.dtype,
         )
         if self.dtype != "auto" and self.health.golden.status == "unverified":
             self.health.golden = replace(
@@ -638,16 +664,70 @@ class ServedModel:
             "%s runs without its recorded kernel choices: %s", self.label, reason
         )
 
-    def stop(self) -> None:
-        """Stop the worker, then free the model once no forward can still use it."""
-        stopped = self.scheduler.stop() if self.scheduler is not None else True
-        if self.model is not None:
-            if stopped:
-                self.model.close()
-            else:
-                log.warning(
-                    "%s: a forward is still running; the model stays open", self.label
-                )
+    def stop(self, timeout: float = STOP_SECONDS) -> str | None:
+        """Stop the worker, then free the model once no forward can still use it.
+
+        What still runs after ``timeout`` seconds, if anything; the model then stays open.
+        """
+        stopped = self.scheduler.stop(timeout) if self.scheduler is not None else True
+        if self.model is None:
+            return None
+        if stopped:
+            self.model.close()
+            return None
+        forward = self.scheduler.forward if self.scheduler is not None else None
+        running = (
+            f"a forward of {forward.describe()} has run for "
+            f"{time.monotonic() - forward.started:.0f} s"
+            if forward is not None
+            else "its worker has not stopped"
+        )
+        log.warning("%s: %s; the model stays open", self.label, running)
+        return f"{self.label}: {running}"
+
+    @property
+    def stalled(self) -> str | None:
+        """Why the model is stalled: the watchdog flagged its forward in flight, which has not returned."""
+        stall = self._stall
+        if stall is None or self.scheduler is None:
+            return None
+        return stall.reason if self.scheduler.forward is stall.forward else None
+
+    def watch(self, timeout: float, now: float) -> None:
+        """Flag the forward in flight once it has run longer than ``timeout`` seconds, until it returns.
+
+        A stalled model reports ``degraded`` and takes no requests; once the
+        forward returns, it takes back the state the flag replaced, unless
+        another state was set meanwhile.
+        """
+        forward = self.scheduler.forward if self.scheduler is not None else None
+        stall = self._stall
+        if forward is not None and now - forward.started > timeout:
+            if stall is not None and stall.forward is forward:
+                return
+            reason = (
+                f"a forward has run longer than --forward-timeout-seconds "
+                f"({timeout:g} s): {forward.describe()}"
+            )
+            replaced = self.health.exchange("degraded", reason)
+            if stall is not None and replaced == ("degraded", stall.reason):
+                replaced = stall.replaced
+            self._stall = _Stall(forward, replaced, reason)
+            self.runtime.metrics.stalled_forwards.labels(model=self.label).inc()
+            log.error(
+                "%s: %s; GET /health/live and GET /health answer 503 until it returns",
+                self.label,
+                reason,
+            )
+        elif stall is not None:
+            self.health.set_if(("degraded", stall.reason), *stall.replaced)
+            self._stall = None
+            log.warning(
+                "%s: the forward that ran longer than --forward-timeout-seconds "
+                "returned after %.0f s",
+                self.label,
+                now - stall.forward.started,
+            )
 
     def _family(self, ref: PackageRef, options: RegistryOptions) -> ModelFamily:
         names = (
@@ -883,6 +963,10 @@ class ProcessHealth:
         }
 
 
+class _RuntimeStoppingError(Exception):
+    """Loading was cancelled because runtime shutdown began."""
+
+
 class Runtime:
     def __init__(self, config: ServeConfig, metrics: RuntimeMetrics | None = None):
         self.config = config
@@ -898,6 +982,10 @@ class Runtime:
             raise ValueError("served model names must be unique")
         self.health = ProcessHealth(self)
         self._thread: threading.Thread | None = None
+        # The model the background load is loading now; ``stop`` leaves it to the load.
+        self._loading: ServedModel | None = None
+        # Held to start a model's worker or report it ready, and to set ``_stopping``.
+        self._lifecycle_lock = threading.Lock()
         self._stopping = threading.Event()
 
     # -- lifecycle -----------------------------------------------------------
@@ -911,6 +999,10 @@ class Runtime:
                 capped["to"],
             )
         media.configure(self.config.media_workers)
+        if self.config.forward_timeout_seconds > 0:
+            threading.Thread(
+                target=self._watch, name="vllm-srun-watchdog", daemon=True
+            ).start()
         if background:
             self._thread = threading.Thread(
                 target=self._load_all, name="vllm-srun-load", daemon=True
@@ -924,11 +1016,52 @@ class Runtime:
             self._thread.join(timeout)
         return self.health.ready
 
-    def stop(self) -> None:
-        self._stopping.set()
-        for served in self.served:
-            served.stop()
+    def stop(self, timeout: float = STOP_SECONDS) -> list[str]:
+        """Stop every model, waiting up to ``timeout`` seconds in all for the forwards in flight.
+
+        What still runs then, one entry per model; those models stay open. A
+        load in flight starts no worker once stopping is set and frees its own
+        model: it is waited for first, within the same ``timeout``, and if it
+        is still running then, its model is left to it.
+        """
+        deadline = time.monotonic() + timeout
+        with self._lifecycle_lock:
+            self._stopping.set()
+        loader = self._thread
+        if loader is not None and loader is not threading.current_thread():
+            loader.join(max(0.0, deadline - time.monotonic()))
+        loading = self._loading if loader is not None and loader.is_alive() else None
+        abandoned = (
+            [] if loading is None else [f"{loading.label}: its load has not finished"]
+        )
+        models = [served for served in self.served if served is not loading]
+        # Every worker stops taking work before any is waited for, so a hung
+        # forward leaves the other models the whole timeout.
+        for served in models:
+            if served.scheduler is not None:
+                served.scheduler.stop(0)
+        for served in models:
+            running = served.stop(max(0.0, deadline - time.monotonic()))
+            if running is not None:
+                abandoned.append(running)
         media.stop()
+        return abandoned
+
+    def stalls(self) -> list[str]:
+        """Why the process is not live: each model whose forward has run past the forward timeout."""
+        return [
+            f"{served.label}: {reason}"
+            for served in self.served
+            if (reason := served.stalled) is not None
+        ]
+
+    def _watch(self) -> None:
+        """Flag stalled forwards (``ServedModel.watch``) until the runtime stops."""
+        timeout = self.config.forward_timeout_seconds
+        while not self._stopping.wait(min(WATCH_SECONDS, timeout / 4)):
+            now = time.monotonic()
+            for served in self.served:
+                served.watch(timeout, now)
 
     def load(self) -> None:
         """Load every model in order, then ``freeze_heap``; the first failure is raised (foreground start)."""
@@ -961,8 +1094,11 @@ class Runtime:
             for served in pending:
                 if self._stopping.is_set():
                     return
+                self._loading = served
                 try:
                     served.load()
+                except _RuntimeStoppingError:
+                    return
                 except (PackageError, UnsupportedDeviceError, VerificationError) as exc:
                     log.error("loading %s failed: %s", served.label, exc)
                     served.health.set("failed", f"{type(exc).__name__}: {exc}")
@@ -980,6 +1116,8 @@ class Runtime:
                             f"retrying after {failure} (attempt {attempt} of {attempts})",
                         )
                         retry.append(served)
+                finally:
+                    self._loading = None
                 self._ready_gauge()
             freeze_heap()
             if not retry:
@@ -991,7 +1129,10 @@ class Runtime:
             pending = retry
 
     def _ready_gauge(self) -> None:
-        self.metrics.ready.set(1 if self.health.ready else 0)
+        with self._lifecycle_lock:
+            if self._stopping.is_set():
+                return
+            self.metrics.ready.set(1 if self.health.ready else 0)
 
     # -- routing -------------------------------------------------------------
 
@@ -1073,7 +1214,7 @@ class Runtime:
     ) -> Prepared:
         """Validate a surface request and plan it for its model (runs off the event loop).
 
-        ``part`` marks one state of a decisions request with several (``states``).
+        ``part`` marks one entry of a decisions batch (``states``).
         """
         if surface not in SURFACES:
             raise RuntimeServiceError("invalid_request", f"unknown surface {surface!r}")
@@ -1097,13 +1238,34 @@ class Runtime:
                 f"model {served.label} does not serve /v1/{surface}",
             )
         deadline, return_meta, received = self._options(served, surface, body, received)
+        roles = IMPLICIT_ROLES
+        if surface == "decisions":
+            try:
+                roles = read_roles(body)
+            except ValueError as exc:
+                raise RuntimeServiceError("invalid_request", str(exc)) from exc
+            if isinstance(body.get("questions"), dict):
+                body = {
+                    **body,
+                    "questions": normalize_presets(
+                        body["questions"], served.model.info.presets
+                    ),
+                }
         request = SurfaceRequest(surface, body, deadline, return_meta, received, part)
+        token = REQUEST_ROLES.set(roles)
         try:
-            plan = served.model.plan_surface(surface, request)
+            if served.cache.entries > 0:
+                plan = served.model.plan_cached_surface(
+                    surface, request, served.cache.get
+                )
+            else:
+                plan = served.model.plan_surface(surface, request)
         except UnsupportedSurfaceError as exc:
             raise RuntimeServiceError("unsupported_surface", str(exc)) from exc
         except ValueError as exc:
             raise RuntimeServiceError.invalid(exc) from exc
+        finally:
+            REQUEST_ROLES.reset(token)
         return Prepared(served, request, plan)
 
     def finish(
@@ -1214,8 +1376,8 @@ class Runtime:
         A group holds a model's tasks, whatever their deadlines: each job
         keeps its own. A lone request planned off the event loop runs
         on its planning thread when its model's scheduler is idle. A decisions
-        request with further ``states`` runs as one request per state, in its
-        model's group, and their answers join into its response.
+        batch (``states``) runs as one request per entry, in its model's
+        group, and their answers join into its response.
         """
         if timing is None:
             timing = ServerTiming()
@@ -1252,8 +1414,8 @@ class Runtime:
     ) -> list[tuple[int, dict[str, Any]]]:
         received = time.monotonic()
         parts: list[tuple[str, Any, bool]] = []
-        # Per request: where its parts start, and its states' names or the
-        # error it already has.
+        # Per request: where its parts start, and its batch entries' names or
+        # the error it already has.
         joins: list[tuple[int, list[str] | None, _Outcome | None]] = []
         for surface, sent in requests:
             body = sent
@@ -1282,9 +1444,9 @@ class Runtime:
             elif states is None:
                 joined.append(outcomes[start])
             else:
-                joined.append(
-                    join_states(outcomes[start : start + 1 + len(states)], states)
-                )
+                end = start + len(states)
+                entries = [body for _, body, _ in parts[start:end]]
+                joined.append(join_states(outcomes[start:end], states, entries))
         return joined
 
     async def _serve_parts(
@@ -1348,13 +1510,16 @@ class Runtime:
         for member, (_, prepared) in enumerate(members):
             items, member_slots = [], []
             for position, item in enumerate(prepared.plan.items):
+                observed = prepared.plan.cache_lookups.get(position)
                 key = (
                     getattr(item, "cache_key", None)
-                    if served.cache.entries > 0
+                    if served.cache.entries > 0 or observed is not None
                     else None
                 )
                 if key is not None:
-                    hit, value = served.cache.get(key)
+                    hit, value = (
+                        observed if observed is not None else served.cache.get(key)
+                    )
                     self.metrics.result_cache.labels(
                         model=served.label, outcome="hit" if hit else "miss"
                     ).inc()

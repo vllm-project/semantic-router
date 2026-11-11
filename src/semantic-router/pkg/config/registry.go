@@ -17,7 +17,6 @@ const (
 	PurposeEmbedding             ModelPurpose = "embedding"              // Generate text embeddings
 	PurposeSafety                ModelPurpose = "safety"                 // Detect unsafe content
 	PurposeHazard                ModelPurpose = "hazard"                 // Identify independent content hazards
-	PurposeReranking             ModelPurpose = "reranking"              // Rank query-document pairs
 	PurposeSemanticSimilarity    ModelPurpose = "semantic-similarity"    // Compute semantic similarity
 	PurposeRoutingSignals        ModelPurpose = "routing-signals"        // Answer several built-in routing signals in one call
 )
@@ -25,6 +24,10 @@ const (
 // Vela3SignalModel is the registry path of Vela 3.0 vela3-fast, the default
 // model of every built-in signal it answers.
 const Vela3SignalModel = "models/vela3-fast"
+
+// VelaEmbeddingModel is the registry path of Vela Embedding, the model of the
+// pre-declared vela-embedding deployment.
+const VelaEmbeddingModel = "models/Vela-1.0-Encoder-307M-Embedding"
 
 // Vela2SignalModel is the registry path of Vela 2.0 0.3B, the default model
 // before Vela 3.0.
@@ -279,7 +282,7 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:                    []string{"vela", "feedback", "classification", "merged", "multilingual", "long-context"},
 	},
 	{
-		LocalPath:               "models/Vela-1.0-Encoder-307M-Embedding",
+		LocalPath:               VelaEmbeddingModel,
 		RepoID:                  "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
 		Revision:                "1e57cebf5a7b7fec6e6973f05bbca97c5cca4436",
 		DownloadExcludePatterns: velaTrainingArtifactPatterns,
@@ -342,18 +345,6 @@ var DefaultModelRegistry = []ModelSpec{
 		MaxContextLength:        32768,
 		Tags:                    []string{"vela", "multilingual", "long-context", "hazard", "multi-label-classification"},
 		NumClasses:              12,
-	},
-	{
-		LocalPath:               "models/Vela-1.0-Encoder-307M-Reranker",
-		RepoID:                  "vllm-sr/Vela-1.0-Encoder-307M-Reranker",
-		Revision:                "a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf",
-		DownloadExcludePatterns: velaTrainingArtifactPatterns,
-		Aliases:                 []string{"Vela-1.0-Encoder-307M-Reranker"},
-		Purpose:                 PurposeReranking,
-		Description:             "Rank multilingual query-document pairs with selectable encoder depth and representation size.",
-		ParameterSize:           "307M encoder + reranker",
-		MaxContextLength:        32768,
-		Tags:                    []string{"vela", "multilingual", "long-context", "reranker", "2d-matryoshka", "early-exit"},
 	},
 	// Domain/Intent Classification
 	{

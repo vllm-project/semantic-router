@@ -11,328 +11,60 @@ translation:
 
 # 迁移模型资源
 
-早期版本通过 system 行、模块的 `model_id` 和 `model_ref`、`external[]` 模型、模块 backend、分类器的 `type`/`model` 字段以及绑定契约来选择模型。这些形式仍可加载：Router 把每一种都读作有名称的部署和绑定，使用与之前相同的模型，并为每个字段报告一条 `deprecated_model_field` 警告。本页是唯一出现早期形式的地方；文档其余部分都使用每组示例中的第二种形式。[为信号选择模型](choose-a-model-for-a-signal.md)说明了它们迁移到的形式，[发布说明](../release-notes/unified-model-resources.md)概述了这次变更。
+早期版本通过 `external[]` 模型、绑定对象、按规则的绑定键以及请求后端自己的连接字段来选择模型。Router 在加载时拒绝这些形式，每一种都给出一行错误并指明 `vllm-sr config migrate`，后者会把它改写为对应示例中的第二种形式。本页是唯一出现早期形式的地方；文档其余部分都使用每组示例中的第二种形式。[为信号选择模型](choose-a-model-for-a-signal.md)说明了它们迁移到的形式，[发布说明](../release-notes/unified-model-resources.md)概述了这次变更。
 
-用 `vllm-sr config validate --config config.yaml` 查看这些警告，或者直接用 Router：`router -validate-config -config config.yaml` 输出一行 JSON：`{"valid": true, "warnings": [{"code": "deprecated_model_field", "field": "...", "message": "..."}]}`。每条警告都指明字段以及 Router 把它读作什么，例如：
+用 `vllm-sr config validate --config config.yaml` 查看这些拒绝，或者直接用 Router：`router -validate-config -config config.yaml` 输出一行 JSON，其中 `error` 是这些拒绝，例如 `{"valid": false, "error": "<path>: removed_field: <what>; run vllm-sr config migrate (<becomes>)"}`。每一行都指明字段以及取代它的写法。
 
-```json
-{"code": "deprecated_model_field", "field": "global.model_catalog.system.prompt_guard", "message": "model paths are deprecated; read as bindings.jailbreak: Vela-1.0-Encoder-307M-Guard (model_runtime vllm-sr/Vela-1.0-Encoder-307M-Guard on cpu)"}
-```
-
-`vllm-sr config migrate --config config.yaml` 把较早的文件改写为 v0.3 布局，并请 Router 把本页列出的每个字段写成对应示例中的第二种形式；文件的其余部分保持原样。它需要能运行的 Router（`VLLM_SR_ROUTER_BINARY` 指向的 Router 二进制文件，或 Router 镜像）；使用 `--offline` 时模型字段保持不变。直接写在配置里的密钥会移到环境变量中，输出会给出需要设置的变量名。如果某个已弃用字段包含任何部署字段都无法表达的设置，模型字段保持原样，输出会说明是哪个设置。
+`vllm-sr config migrate --config config.yaml` 请 Router 改写文件：本页的每种形式，以及本版本移除的其他形式，都写成取代它的形式；文件的其余部分保持原样。它询问 `VLLM_SR_ROUTER_BINARY` 指定的 Router 二进制文件，否则询问 `vllm-sr serve` 默认运行的 Router 镜像（`VLLM_SR_ROUTER_IMAGE` 或 `VLLM_SR_IMAGE` 指定的镜像，否则是本 CLI 自己的发布版本），该镜像必须已在本机：migrate 从不拉取它，也从不询问正在运行的栈中的 Router。`external[]` 模型中直接写出的密钥会移到环境变量中，输出会给出需要设置的变量名。询问分类器头（契约为 `label_distribution.v1`、`label_scores.v1`、`label_decision.v1`、`score.v1` 或 `token_spans.v1`）的绑定会被删除，规则或绑定对 `classify` 或 `http` 部署的引用也会被删除：任何信号都不再询问分类器，由决策模型回答该信号。config v0.3 之前布局的文件也在同一次运行中迁移。
 
 ## 其他变化 {#what-else-changes}
 
-- `systemone` 决策模型现在也回答内置信号。以前这些信号在本地的 `vela3-fast` 上运行。除非配置写出阈值，它们的阈值为 0.5，加载时警告 `uncalibrated_threshold`。
-- 安全规则的 hazard 部分没有自己的模型时，在任何决策模型下都使用预先声明的 `hazard` 部署（Vela 1.0 Hazard）。以前，含有这种 hazard 部分的配置在 `systemone` 决策模型下无法加载。
+- `systemone` 决策模型现在也回答内置信号。以前这些信号在本地的 `vela3-fast` 上运行。除非配置写出阈值，它们的阈值为 0.5，加载时警告 `uncalibrated_preset`。
+- 只有被移除的学习型分类器使用的信号和模块（classifier、embedding、知识库和 preference 规则，domain、fact-check、feedback 和 modality 模块，安全规则的 hazard 部分）不再能加载。`vllm-sr config migrate` 会把它们改写为决策模型回答的应用信号，或说明应改写成什么。
+- prompt guard、PII 和幻觉检测模块同样不再能加载，它们的 system 行、admission 键、模块 backend 以及 `external[]` 中的 guard 字段也一样。决策模型回答 jailbreak、pii 和 hallucination 规则；模块的阈值成为读取它的规则的 predicate，绑定其他模型时以信号类型为键。
+- embedding 模型关键字（`mmbert`、`qwen3`、`multimodal`）、带远程 endpoint 的 `embeddings.semantic`、embedding 绑定以及按模型关键字的 admission 不再能加载。`vllm-sr config migrate` 会写出每一项所选的部署，并在使用它的地方写上它的名称；参见 [Embeddings](../model-runtime/guides/embeddings.md)。
 - 其他一切都解析到与之前相同的模型。
 
-早期形式和新形式为同一个信号指定模型时，新形式优先，早期字段被忽略并给出警告。同时写了 `deployment` 和 `model` 或 `model_path` 的规则，或者同时以信号类型和早期名称写出的绑定，会被拒绝。
+早期形式和新形式为同一个信号指定模型时，迁移保留新形式的值。同时写了 `deployment` 和 `model` 或 `model_path` 的规则，或者同时以信号类型和早期名称写出的绑定，会被拒绝。
 
-## System 行 {#system-lines}
-
-指向决策模型所用模型的 system 行直接删除；指向其他模型的 system 行变为一个部署和一个绑定。
-
-```yaml title="migrate-system-lines-before"
-global:
-  model_catalog:
-    system:
-      decision_model: {deployment: primary}
-      pii_classifier: models/vela3-fast
-      prompt_guard: models/Vela-1.0-Encoder-307M-Guard
-    modules:
-      prompt_guard: {enabled: true, model_ref: prompt_guard, use_cpu: true}
-      classifier:
-        pii: {model_ref: pii_classifier, use_cpu: true}
-```
-
-```yaml title="migrate-system-lines-after"
-global:
-  model_catalog:
-    deployments:
-      vela-guard:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Guard
-        revision: 087f9e401012df839c83717b746967ac7aebfa3e
-        device: cpu
-    system:
-      decision_model: {deployment: primary}
-    bindings:
-      jailbreak: vela-guard
-    modules:
-      prompt_guard: {enabled: true}
-```
-
-## 模块的 `model_id` {#module-model_id}
-
-```yaml title="migrate-model-id-before"
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain: {model_id: models/Vela-1.0-Encoder-307M-Domain, use_cpu: true}
-```
-
-```yaml title="migrate-model-id-after"
-global:
-  model_catalog:
-    deployments:
-      vela-domain:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
-        revision: f6354f54adcf38770f635ad903be2b00577f6c11
-        device: cpu
-    bindings:
-      domain: vela-domain
-```
-
-## `model_ref: ""` {#model_ref-}
-
-空的 `model_ref` 表示该模块不运行任何模型。改为关闭该模块，或者删除该信号。
-
-```yaml title="migrate-empty-model-ref-before"
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain: {model_ref: ""}
-```
-
-```yaml title="migrate-empty-model-ref-after"
-global:
-  model_catalog:
-    modules:
-      classifier:
-        domain: {enabled: false}
-```
-
-## 模块 backend 和 `external[]` 模型 {#module-backends-and-external-models}
-
-模块的 `backend` 和它指向的 `external[]` 模型合并为一个部署，其 `provider` 就是该服务使用的 API。
-
-```yaml title="migrate-module-backend-before"
-global:
-  model_catalog:
-    external:
-      - name: guard-service
-        model_role: guardrail
-        llm_endpoint: {address: guard.example.com, port: 443, protocol: https}
-        llm_timeout_seconds: 5
-    modules:
-      prompt_guard:
-        enabled: true
-        jailbreak_mapping_path: models/guard/jailbreak_type_mapping.json
-        backend: {protocol: http_classify, model: guard-service, contract: label_distribution.v1}
-```
-
-```yaml title="migrate-module-backend-after"
-global:
-  model_catalog:
-    deployments:
-      guard-service:
-        provider: classify
-        endpoint: https://guard.example.com:443
-        timeout_ms: 5000
-    bindings:
-      jailbreak: guard-service
-    modules:
-      prompt_guard:
-        enabled: true
-        jailbreak_mapping_path: models/guard/jailbreak_type_mapping.json
-```
-
-## `provider: http` 部署和绑定契约 {#provider-http-deployments-and-binding-contracts}
-
-```yaml title="migrate-http-deployment-before"
-global:
-  model_catalog:
-    external:
-      - name: guard-service
-        model_role: guardrail
-        llm_endpoint: {address: guard.example.com, port: 443, protocol: https}
-        llm_timeout_seconds: 5
-    deployments:
-      guard-http: {provider: http, external_model: guard-service}
-    modules:
-      prompt_guard: {enabled: true, positive_labels: [INJECTION]}
-routing:
-  model_bindings:
-    prompt_guard: {deployment: guard-http, contract: label_distribution.v1, adapter: http_classify}
-```
-
-```yaml title="migrate-http-deployment-after"
-global:
-  model_catalog:
-    deployments:
-      guard-http:
-        provider: classify
-        endpoint: https://guard.example.com:443
-        timeout_ms: 5000
-    modules:
-      prompt_guard: {enabled: true, positive_labels: [INJECTION]}
-routing:
-  model_bindings:
-    jailbreak: guard-http
-```
-
-## 绑定键和绑定对象 {#binding-keys-and-binding-objects}
+## 绑定对象 {#binding-objects}
 
 绑定以信号类型为键，值是一个部署名称。信号决定契约，provider 决定适配器。
 
 ```yaml title="migrate-binding-object-before"
-routing:
-  model_bindings:
-    domain_classifier: {deployment: kai, contract: label_distribution.v1, adapter: modernbert}
+recipes:
+  - name: default
+    model_bindings:
+      jailbreak: {deployment: kai, contract: decision.v1}
 ```
 
 ```yaml title="migrate-binding-object-after"
-routing:
-  model_bindings:
-    domain: kai
-```
-
-## 分类器规则 {#classifier-rules}
-
-`type`、`model`、`model_path` 和 `use_cpu` 变为规则的 `deployment`。provider 决定如何询问该规则。
-
-```yaml title="migrate-classifier-rules-before"
-global:
-  model_catalog:
-    external:
-      - name: judge
-        model_role: classification
-        llm_provider: openai
-        llm_endpoint: {address: llm.example.com, port: 443, protocol: https}
-        llm_model_name: gpt-4.1-mini
-      - name: risk-service
-        model_role: classification
-        llm_endpoint: {address: risk.example.com, port: 8080, protocol: http}
-routing:
-  signals:
-    classifiers:
-      - {name: safety-head, type: local, model_path: models/Vela-1.0-Encoder-307M-Safety, use_cpu: true, labels: [safe, unsafe]}
-      - {name: tool-risk, type: llm, model: judge, labels: [SAFE, RISKY], instructions: Choose RISKY only for destructive operations.}
-      - {name: remote-risk, type: sequence_classifier, model: risk-service, labels: [SAFE, RISKY]}
-```
-
-```yaml title="migrate-classifier-rules-after"
-global:
-  model_catalog:
-    deployments:
-      vela-safety:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Safety
-        revision: 6e70e725a5f4d86da10f5be5e4dfd1da0358bb85
-        device: cpu
-      judge: {provider: openai_chat, endpoint: https://llm.example.com:443/v1, model: gpt-4.1-mini}
-      risk-service: {provider: classify, endpoint: http://risk.example.com:8080}
-routing:
-  signals:
-    classifiers:
-      - {name: safety-head, deployment: vela-safety, labels: [safe, unsafe]}
-      - {name: tool-risk, deployment: judge, labels: [SAFE, RISKY], instructions: Choose RISKY only for destructive operations.}
-      - {name: remote-risk, deployment: risk-service, labels: [SAFE, RISKY]}
-```
-
-## 安全规则 {#safety-rules}
-
-```yaml title="migrate-safety-rules-before"
-global:
-  model_catalog:
-    external:
-      - name: binary-service
-        model_role: classification
-        llm_endpoint: {address: safety.example.com, port: 8080, protocol: http}
-      - name: hazard-service
-        model_role: classification
-        llm_endpoint: {address: hazard.example.com, port: 8080, protocol: http}
-routing:
-  signals:
-    safety:
-      - name: unsafe
-        model: binary-service
-        threshold: 0.5
-        hazard: {model: hazard-service, labels: [violence, privacy], categories: [privacy], threshold: 0.6}
-```
-
-```yaml title="migrate-safety-rules-after"
-global:
-  model_catalog:
-    deployments:
-      binary-service: {provider: classify, endpoint: http://safety.example.com:8080}
-      hazard-service: {provider: classify, endpoint: http://hazard.example.com:8080}
-routing:
-  signals:
-    safety:
-      - name: unsafe
-        deployment: binary-service
-        threshold: 0.5
-        hazard: {deployment: hazard-service, labels: [violence, privacy], categories: [privacy], threshold: 0.6}
+recipes:
+  - name: default
+    model_bindings:
+      jailbreak: kai
 ```
 
 ## 规则绑定 {#rule-bindings}
 
-为单条规则或为所有 complexity 规则写的绑定，变为这些规则的 `deployment`。
+为单条规则写的绑定，变为该规则的 `deployment`。
 
 ```yaml title="migrate-rule-bindings-before"
-routing:
-  model_bindings:
-    classifier.risk: {deployment: content-risk, contract: label_distribution.v1, adapter: http_classify}
-    complexity: {deployment: kai, contract: decision.v1}
-  signals:
-    classifiers:
-      - {name: risk, labels: [low, high]}
-    complexity:
-      - name: hard
-        threshold: 0.1
-        hard: {candidates: [prove this theorem]}
-        easy: {candidates: [say hello]}
+recipes:
+  - name: default
+    model_bindings:
+      safety.harmful: kai
+    signals:
+      safety:
+        - {name: harmful, predicate: {gte: 0.5}}
 ```
 
 ```yaml title="migrate-rule-bindings-after"
-routing:
-  signals:
-    classifiers:
-      - {name: risk, deployment: content-risk, labels: [low, high]}
-    complexity:
-      - name: hard
-        deployment: kai
-        threshold: 0.1
-        hard: {candidates: [prove this theorem]}
-        easy: {candidates: [say hello]}
-```
-
-## 远程 embedding {#remote-embeddings}
-
-```yaml title="migrate-embedding-endpoint-before"
-global:
-  model_catalog:
-    embeddings:
-      semantic:
-        embedding_config: {backend: openai_compatible, model_type: remote}
-        endpoint:
-          base_url: https://embedding.example.com/v1
-          model: BAAI/bge-m3
-          api_key_env: EMBEDDING_API_KEY
-          timeout_seconds: 5
-          max_retries: 2
-          dimensions: 1024
-```
-
-```yaml title="migrate-embedding-endpoint-after"
-global:
-  model_catalog:
-    deployments:
-      remote-embed:
-        provider: openai_embeddings
-        endpoint: https://embedding.example.com/v1
-        model: BAAI/bge-m3
-        auth: {api_key_env: EMBEDDING_API_KEY}
-        timeout_ms: 5000
-        max_retries: 2
-        capabilities: {dimensions: 1024}
-    embeddings:
-      default: remote-embed
+recipes:
+  - name: default
+    signals:
+      safety:
+        - {name: harmful, deployment: kai, predicate: {gte: 0.5}}
 ```
 
 ## 记忆查询改写模型 {#the-memory-rewrite-model}
@@ -365,56 +97,9 @@ global:
       query_rewrite: {deployment: rewriter}
 ```
 
-## RAG 重排序绑定 {#the-rag-reranker-binding}
-
-```yaml title="migrate-rag-reranker-before"
-global:
-  model_catalog:
-    deployments:
-      document-ranker:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
-        revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
-        device: cpu
-        input: {max_tokens: 4096, overflow: reject}
-routing:
-  model_bindings:
-    rag.reranker:
-      deployment: document-ranker
-      contract: relevance_scores.v1
-      adapter: vela_reranker
-      pair_scorer: {layer: 22, dimension: 768}
-  decisions:
-    - name: rag
-      plugins:
-        - type: rag
-          configuration: {enabled: true, backend: vectorstore, rerank: {top_k: 3}}
-```
-
-```yaml title="migrate-rag-reranker-after"
-global:
-  model_catalog:
-    deployments:
-      document-ranker:
-        provider: model_runtime
-        artifact: vllm-sr/Vela-1.0-Encoder-307M-Reranker
-        revision: a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf
-        device: cpu
-        input: {max_tokens: 4096, overflow: reject}
-routing:
-  decisions:
-    - name: rag
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: vectorstore
-            rerank: {deployment: document-ranker, top_k: 3, layer: 22, dimension: 768}
-```
-
 ## 部署字段 {#deployment-fields}
 
-顶层的 `question_types` 移到 `capabilities` 下，`served_name` 改为 `model`，直接写在配置中的密钥（`access_key`、后端的 `api_key`）改为 `auth.api_key_env`；在部署上也可以改为 `auth.api_key_file`。
+顶层的 `question_types` 移到 `capabilities` 下，部署或副本上的 `served_name` 改为 `model`。已移除的 `classify` 或 `http` provider 的部署会被删除：任何信号都不再询问分类器服务。
 
 ```yaml title="migrate-deployment-fields-before"
 global:
@@ -424,6 +109,7 @@ global:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         question_types: [choice, noul, score]
         auth: {api_key_env: GATEWAY_KEY}
       decision-kai:
@@ -440,6 +126,7 @@ global:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         capabilities: {question_types: [choice, noul, score]}
         auth: {api_key_env: GATEWAY_KEY}
       decision-kai:
@@ -476,20 +163,4 @@ providers:
           endpoint: https://gateway.example.com/anthropic
           auth: {header: x-api-key, prefix: "", api_key_env: ANTHROPIC_KEY}
           headers: {X-Org: acme}
-```
-
-## 准入键 {#admission-keys}
-
-```yaml title="migrate-admission-before"
-global:
-  model_catalog:
-    admission:
-      prompt_guard: {max_concurrency: 4, max_queue: 64, on_overflow: shed}
-```
-
-```yaml title="migrate-admission-after"
-global:
-  model_catalog:
-    admission:
-      jailbreak: {max_concurrency: 4, max_queue: 64, on_overflow: shed}
 ```

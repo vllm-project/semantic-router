@@ -1,3 +1,4 @@
+import { SIGNAL_TYPES } from '../generated/routerConfigContract'
 import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
 import type { FieldSchema } from './dslSchemaTypes'
 
@@ -12,56 +13,23 @@ export function getCuratedPluginFieldSchema(pluginType: string): FieldSchema[] {
   const capabilityFields = resolveCapabilityPluginFieldSchema(pluginType)
   if (capabilityFields) return capabilityFields
   switch (pluginType) {
-    case 'memory':
-      return getMemoryPluginFieldSchema()
     case 'system_prompt':
       return getSystemPromptPluginFieldSchema()
-    case 'hallucination':
-      return getHallucinationPluginFieldSchema()
+    case 'response_guard':
+      return getResponseGuardPluginFieldSchema()
     case 'router_replay':
       return getRouterReplayPluginFieldSchema()
-    case 'rag':
-      return getRAGPluginFieldSchema()
     case 'header_mutation':
       return getHeaderMutationPluginFieldSchema()
     case 'fast_response':
       return getFastResponsePluginFieldSchema()
     case 'tools':
       return getToolsPluginFieldSchema()
-    case 'tool_selection':
-      return getToolSelectionPluginFieldSchema()
     case 'request_params':
       return getRequestParamsPluginFieldSchema()
-    case 'response_jailbreak':
-      return getResponseJailbreakPluginFieldSchema()
     default:
       return [{ key: 'enabled', label: 'Enabled', type: 'boolean' }]
   }
-}
-
-function getMemoryPluginFieldSchema(): FieldSchema[] {
-  return [
-    { key: 'enabled', label: 'Enabled', type: 'boolean' },
-    {
-      key: 'retrieval_limit',
-      label: 'Retrieval Limit',
-      type: 'number',
-      placeholder: '5',
-      description: 'Max memories to retrieve',
-    },
-    {
-      key: 'similarity_threshold',
-      label: 'Similarity Threshold',
-      type: 'number',
-      placeholder: '0.7',
-    },
-    {
-      key: 'auto_store',
-      label: 'Auto Store',
-      type: 'boolean',
-      description: 'Automatically store conversation turns',
-    },
-  ]
 }
 
 function getSystemPromptPluginFieldSchema(): FieldSchema[] {
@@ -79,23 +47,88 @@ function getSystemPromptPluginFieldSchema(): FieldSchema[] {
       label: 'Mode',
       type: 'select',
       options: ['', 'replace', 'insert'],
-      description: 'Replace or insert before existing prompt',
+      description:
+        "Insert before the caller's system prompt (default), or replace every system and developer instruction the caller sent",
     },
   ]
 }
 
-function getHallucinationPluginFieldSchema(): FieldSchema[] {
+function getResponseGuardPluginFieldSchema(): FieldSchema[] {
   return [
-    { key: 'enabled', label: 'Enabled', type: 'boolean' },
     {
-      key: 'hallucination_action',
-      label: 'Action',
+      key: 'rules',
+      label: 'Rules',
+      type: 'object[]',
+      required: true,
+      description: 'Read in order over each answer; the first rule that blocks ends the read.',
+      addLabel: 'Add rule',
+      emptyLabel: 'No rules.',
+      itemLabel: 'Rule',
+      itemLabelKey: 'action',
+      fields: [
+        {
+          key: 'when',
+          label: 'When',
+          type: 'rule',
+          required: true,
+          options: [...SIGNAL_TYPES],
+          description:
+            'Signals by name: jailbreak, safety and systemone rules with stage: response, and every hallucination and refusal rule, read the answer; any other reads the request.',
+        },
+        {
+          key: 'action',
+          label: 'Action',
+          type: 'select',
+          required: true,
+          options: ['block', 'annotate', 'none'],
+          description:
+            'Refuse the answer with 403, deliver it with x-vsr-warnings, or only record it',
+        },
+        {
+          key: 'details',
+          label: 'Details',
+          type: 'boolean',
+          description: 'With annotate, also write a note at the head of the answer',
+        },
+      ],
+    },
+    {
+      key: 'on_unknown',
+      label: 'On Unknown',
       type: 'select',
-      options: ['', 'header', 'body', 'none'],
-      description: 'What to do when hallucination is detected',
+      options: ['', 'block', 'annotate', 'none'],
+      description:
+        'What a rule does when a response-stage signal it reads could not be read (default annotate)',
     },
   ]
 }
+
+// router_replay's shadow block: a sampled copy to a candidate model.
+const routerReplayShadowFields: FieldSchema[] = [
+  { key: 'model', label: 'Shadow Model', type: 'string', placeholder: 'candidate-model' },
+  { key: 'sample_rate', label: 'Sample Rate', type: 'number', placeholder: '0.05' },
+  { key: 'max_concurrency', label: 'Max Concurrency', type: 'number', placeholder: '2' },
+  { key: 'max_queue_depth', label: 'Max Queue Depth', type: 'number', placeholder: '8' },
+  { key: 'timeout_seconds', label: 'Timeout Seconds', type: 'number', placeholder: '30' },
+  {
+    key: 'max_response_bytes',
+    label: 'Max Response Bytes',
+    type: 'number',
+    placeholder: '1048576',
+  },
+  { key: 'max_retries', label: 'Max Retries', type: 'number', placeholder: '0' },
+  { key: 'capture_response_body', label: 'Capture Response Body', type: 'boolean' },
+  { key: 'max_capture_bytes', label: 'Max Capture Bytes', type: 'number', placeholder: '4096' },
+  { key: 'tls_skip_verify', label: 'Skip TLS Verification', type: 'boolean' },
+  {
+    key: 'forward_headers',
+    label: 'Forwarded Decision Headers',
+    type: 'string[]',
+    placeholder: 'x-tenant',
+    description:
+      'Decision header mutations the shadow copy may carry; credential headers are never forwarded',
+  },
+]
 
 function getRouterReplayPluginFieldSchema(): FieldSchema[] {
   return [
@@ -110,44 +143,12 @@ function getRouterReplayPluginFieldSchema(): FieldSchema[] {
       description: 'Store client tool-result text; requires personal data capture',
     },
     { key: 'max_body_bytes', label: 'Max Body Bytes', type: 'number', placeholder: '4096' },
-  ]
-}
-
-function getRAGPluginFieldSchema(): FieldSchema[] {
-  return [
-    { key: 'enabled', label: 'Enabled', type: 'boolean' },
     {
-      key: 'backend',
-      label: 'Backend',
-      type: 'string',
-      required: true,
-      placeholder: 'my_vector_store',
-      description: 'Backend name for retrieval',
-    },
-    {
-      key: 'top_k',
-      label: 'Top K',
-      type: 'number',
-      placeholder: '5',
-      description: 'Number of documents to retrieve',
-    },
-    {
-      key: 'similarity_threshold',
-      label: 'Similarity Threshold',
-      type: 'number',
-      placeholder: '0.7',
-    },
-    {
-      key: 'injection_mode',
-      label: 'Injection Mode',
-      type: 'select',
-      options: ['', 'tool_role', 'system_prompt'],
-    },
-    {
-      key: 'on_failure',
-      label: 'On Failure',
-      type: 'select',
-      options: ['', 'skip', 'block', 'warn'],
+      key: 'shadow',
+      label: 'Shadow',
+      type: 'object',
+      description: 'Send a sampled copy to a candidate model; the replay record keeps its outcome',
+      fields: routerReplayShadowFields,
     },
   ]
 }
@@ -208,132 +209,123 @@ function getToolsPluginFieldSchema(): FieldSchema[] {
   return [
     { key: 'enabled', label: 'Enabled', type: 'boolean' },
     {
-      key: 'mode',
-      label: 'Mode',
-      type: 'select',
-      options: ['passthrough', 'filtered', 'none'],
-      required: true,
-    },
-    {
-      key: 'semantic_selection',
-      label: 'Semantic Selection',
-      type: 'boolean',
-      description: 'Run semantic tool selection from the global tools database',
-    },
-    {
-      key: 'strip_tool_history',
-      label: 'Strip Tool History',
-      type: 'boolean',
-      description:
-        'With mode none, remove prior tool calls and results from the provider-bound body',
-    },
-    {
-      key: 'allow_tools',
-      label: 'Allow Tools',
-      type: 'string[]',
-      placeholder: 'Tool name to allow',
-    },
-    {
-      key: 'block_tools',
-      label: 'Block Tools',
-      type: 'string[]',
-      placeholder: 'Tool name to block',
-    },
-    {
-      key: 'strategy',
-      label: 'Retrieval Strategy',
-      type: 'string',
-      placeholder: 'default',
-    },
-    {
-      key: 'dynamic_retrieval',
-      label: 'Dynamic Retrieval',
+      key: 'policy',
+      label: 'Policy',
       type: 'object',
+      description: 'Allow, block or remove tools by name; runs before the selection',
       fields: [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
         {
-          key: 'strategy',
-          label: 'Strategy',
+          key: 'mode',
+          label: 'Mode',
           type: 'select',
-          options: ['semantic_only', 'hybrid_history'],
-        },
-        { key: 'history_window', label: 'History Window', type: 'number' },
-        {
-          key: 'weights',
-          label: 'Weights',
-          type: 'object',
-          fields: [
-            { key: 'semantic', label: 'Semantic', type: 'number' },
-            { key: 'history', label: 'History', type: 'number' },
-            { key: 'decision_prior', label: 'Decision Prior', type: 'number' },
-            { key: 'repetition_penalty', label: 'Repetition Penalty', type: 'number' },
-          ],
+          options: ['passthrough', 'filtered', 'none'],
         },
         {
-          key: 'min_history_confidence',
-          label: 'Minimum History Confidence',
-          type: 'number',
+          key: 'allow_tools',
+          label: 'Allow Tools',
+          type: 'string[]',
+          placeholder: 'Tool name to allow',
         },
         {
-          key: 'fallback_on_low_confidence',
-          label: 'Fallback on Low Confidence',
+          key: 'block_tools',
+          label: 'Block Tools',
+          type: 'string[]',
+          placeholder: 'Tool name to block',
+        },
+        {
+          key: 'strip_tool_history',
+          label: 'Strip Tool History',
           type: 'boolean',
+          description:
+            'With mode none, remove prior tool calls and results from the provider-bound body',
         },
       ],
     },
-  ]
-}
-
-function getToolSelectionPluginFieldSchema(): FieldSchema[] {
-  return [
-    { key: 'enabled', label: 'Enabled', type: 'boolean' },
     {
-      key: 'mode',
-      label: 'Mode',
-      type: 'select',
-      options: ['', 'add', 'filter'],
-      description: 'Add tools from a catalog or filter request-provided tools',
-    },
-    {
-      key: 'tools_db_path',
-      label: 'Tools DB Path',
-      type: 'string',
-      placeholder: 'config/tools_db.json',
-    },
-    { key: 'top_k', label: 'Top K', type: 'number', placeholder: '3' },
-    {
-      key: 'similarity_threshold',
-      label: 'Similarity Threshold',
-      type: 'number',
-      placeholder: '0.7',
-    },
-    {
-      key: 'strategy',
-      label: 'Strategy',
-      type: 'select',
-      options: ['', 'default', 'weighted', 'hybrid_history'],
-    },
-    {
-      key: 'relevance_threshold',
-      label: 'Relevance Threshold',
-      type: 'number',
-      placeholder: '0.5',
-    },
-    { key: 'preserve_count', label: 'Preserve Count', type: 'number', placeholder: '0' },
-    {
-      key: 'sticky',
-      label: 'Session-Scoped Sticky Selection',
+      key: 'select',
+      label: 'Select',
       type: 'object',
+      description:
+        'The decision model chooses the tools the request needs, among its own (filter) or a catalog (add)',
       fields: [
-        { key: 'enabled', label: 'Enabled', type: 'boolean' },
-        { key: 'max_tools', label: 'Max Tools', type: 'number', placeholder: '16' },
         {
-          key: 'max_new_tools_per_turn',
-          label: 'Max New Tools Per Turn',
-          type: 'number',
-          placeholder: '2',
+          key: 'mode',
+          label: 'Mode',
+          type: 'select',
+          options: ['filter', 'add'],
+          required: true,
         },
-        { key: 'pin_called_tools', label: 'Pin Called Tools', type: 'boolean' },
+        {
+          key: 'tools_db_path',
+          label: 'Tool Catalog',
+          type: 'string',
+          placeholder: 'config/tools_db.json',
+          description: 'Add mode: the catalog the decision model adds tools from',
+        },
+        {
+          key: 'match',
+          label: 'Match',
+          type: 'object',
+          fields: [
+            {
+              key: 'recall',
+              label: 'Recall',
+              type: 'object',
+              description: 'Narrows a long tool list by BM25 before the judge',
+              fields: [
+                { key: 'method', label: 'Method', type: 'select', options: ['bm25'] },
+                { key: 'top_k', label: 'Top K', type: 'number' },
+                { key: 'min_similarity', label: 'Min Similarity', type: 'number' },
+              ],
+            },
+            {
+              key: 'judge',
+              label: 'Judge',
+              type: 'object',
+              fields: [
+                { key: 'preset', label: 'Preset', type: 'string', placeholder: 'tool_rank' },
+                { key: 'deployment', label: 'Deployment', type: 'string' },
+                { key: 'top_k', label: 'Top K', type: 'number', placeholder: '3' },
+                { key: 'min_ratio', label: 'Min Ratio', type: 'number', placeholder: '0.1' },
+                { key: 'min_score', label: 'Min Score', type: 'number' },
+                {
+                  key: 'max_candidates',
+                  label: 'Max Candidates',
+                  type: 'number',
+                  placeholder: '255',
+                  description: 'At most 255 tools are offered; more are truncated, never refused',
+                },
+              ],
+            },
+          ],
+        },
+        {
+          key: 'need_threshold',
+          label: 'Need Threshold',
+          type: 'number',
+          placeholder: '0.5',
+          description: 'Below this P(tool_need), no tools are kept or added',
+        },
+        {
+          key: 'preserve_count',
+          label: 'Preserve Count',
+          type: 'number',
+          description: "Filter mode: the request's first tools are always kept",
+        },
+        {
+          key: 'on_error',
+          label: 'On Error',
+          type: 'select',
+          options: ['keep', 'strip', 'skip', 'fail'],
+          description: 'Filter: keep, strip or fail; add: skip or fail',
+        },
+        {
+          key: 'input',
+          label: 'Input',
+          type: 'object',
+          fields: [{ key: 'history', label: 'Read Earlier User Turns', type: 'boolean' }],
+        },
+        { key: 'timeout_ms', label: 'Timeout (ms)', type: 'number', placeholder: '1000' },
       ],
     },
   ]
@@ -361,32 +353,6 @@ function getRequestParamsPluginFieldSchema(): FieldSchema[] {
       type: 'number',
       placeholder: '1',
       description: 'Maximum allowed value for n (number of completions)',
-    },
-    {
-      key: 'strip_unknown',
-      label: 'Strip Unknown',
-      type: 'boolean',
-      description: 'Remove fields not in the OpenAI spec',
-    },
-  ]
-}
-
-function getResponseJailbreakPluginFieldSchema(): FieldSchema[] {
-  return [
-    { key: 'enabled', label: 'Enabled', type: 'boolean' },
-    {
-      key: 'threshold',
-      label: 'Threshold',
-      type: 'number',
-      placeholder: '0.8',
-      description: 'Minimum classifier score required to flag the response',
-    },
-    {
-      key: 'action',
-      label: 'Action',
-      type: 'select',
-      options: ['', 'block', 'header', 'none'],
-      description: 'Block the response, emit warning headers, or do nothing',
     },
   ]
 }

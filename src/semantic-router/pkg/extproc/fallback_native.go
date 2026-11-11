@@ -87,14 +87,34 @@ func (f *sessionFallback) Next(callCtx context.Context, outcome routing.Outcome)
 			return step, nil
 		}
 		// A candidate that cannot be prepared is skipped, unless the request's
-		// time has run out, as in the response-phase fallback.
+		// time has run out or the request cannot pay for it, as in the
+		// response-phase fallback.
 		if !prepared.CanFallback {
 			if record.FinalStatus == "" {
 				record.FinalStatus = fallbackHaltStatus(err)
 			}
-			return f.end(), nil
+			return f.refusal(f.end())
 		}
 	}
+}
+
+// refusal answers a chain that ended at a candidate refused for want of the
+// request's delegated credential with the request's 401, as the
+// response-phase fallback answers it; any other end keeps step.
+func (f *sessionFallback) refusal(step routing.FallbackStep) (routing.FallbackStep, error) {
+	r, ctx := f.session.router, f.session.ctx
+	refused := r.encodeImmediateResponseForClient(r.delegatedCredentialRefusal(ctx), ctx)
+	if refused == nil {
+		return step, nil
+	}
+	appendConfigVersionToImmediateResponse(refused, ctx)
+	appendRoutedResponseHeaders(refused, ctx)
+	effect, err := routingEffect(refused)
+	if err != nil {
+		return routing.FallbackStep{}, err
+	}
+	step.Immediate = routing.RenderImmediate(effect.Immediate, routing.DefaultLimits)
+	return step, nil
 }
 
 // prepare builds the candidate's call from the primary's dispatch state.
@@ -264,6 +284,8 @@ func (f *sessionFallback) succeeded(status int) {
 	ctx.ResponseVendor = resolveResponseVendor(candidate.dispatch.profile)
 	ctx.RequestModel = candidate.model
 	ctx.VSRSelectedModel = candidate.model
+	// The response phases credit this success to the request's backend.
+	ctx.primaryBackendName = candidate.dispatch.backendName
 	ctx.ResponsePath = headers.ResponsePathFallback
 
 	orch := r.fallbackOrchestratorForContext(ctx)

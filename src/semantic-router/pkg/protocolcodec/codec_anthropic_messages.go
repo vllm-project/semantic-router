@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -472,11 +473,14 @@ func decodeAnthropicMessage(wire anthropicMessageWire, policy llmprotocol.Policy
 	}
 	result := make([]llmprotocol.Message, 0, 3)
 	ordinary := make([]llmprotocol.Content, 0, len(contents))
+	withToolResults := role == llmprotocol.RoleUser && slices.ContainsFunc(contents, func(content llmprotocol.Content) bool {
+		return content.Kind == llmprotocol.ContentToolResult
+	})
 	flush := func() {
 		if len(ordinary) == 0 {
 			return
 		}
-		result = append(result, llmprotocol.Message{Role: role, Content: ordinary})
+		result = append(result, llmprotocol.Message{Role: role, Content: ordinary, WithToolResults: withToolResults})
 		ordinary = nil
 	}
 	for _, content := range contents {

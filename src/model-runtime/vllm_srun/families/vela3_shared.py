@@ -19,6 +19,8 @@ from ..registry.artifacts import package_file
 # Both families' package description.
 CONFIG_FILE = "vela3_config.json"
 PRESETS = ("pii", "halu")
+# The span heads both families have: the router head only, never a broad one.
+SPAN_HEADS = ("router",)
 # The fields a preset question keeps; its instructions and labels are the preset's.
 PRESET_KEPT = ("over", "threshold", "overflow", "require_full_input")
 # vela3_encoder._REL_Q, character for character.

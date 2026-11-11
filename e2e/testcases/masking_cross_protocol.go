@@ -17,9 +17,9 @@ import (
 )
 
 // This profile has no PII model to host, so it drives PII detection through
-// the same remote token_spans.v1 stub server ("mock-pii-spans") the
-// pii-remote-backend profile uses, and the same "provider-mocker" echo backend used
-// throughout this suite as the chat backend. Its default completion
+// provider-mocker's System One fixture, the one the pii-remote-backend profile
+// uses, and the same "provider-mocker" echo backend used throughout this
+// suite as the chat backend. Its default completion
 // is a deterministic JSON echo of what it received
 // (provider-mocker chat_request.py, build_chat_content):
 // {"user":["<raw text of every user message>"], ...}.
@@ -29,7 +29,7 @@ import (
 // suppresses.
 const (
 	maskingSpanMarker  = "__PII_SPAN__"
-	maskingErrorMarker = "__PII_ERROR__"
+	maskingErrorMarker = "__SYSTEMONE_UNAVAILABLE__"
 	maskingRawEmail    = "alice@corp.example"
 	// An explicit entrypoint, not a concrete model: a concrete model name
 	// bypasses every recipe-local decision and plugin, so masking would never
@@ -53,8 +53,13 @@ func init() {
 		Tags:        []string{"masking", "pii", "cross-protocol", "functional"},
 		Fn:          testMaskingCrossProtocol,
 	})
+	pkgtestcases.Register("masking-keeps-echoed-placeholder", pkgtestcases.TestCase{
+		Description: "A placeholder or a vSR mark the client sends back reaches the backend as it is, even when the classifier reads part of it as personal data",
+		Tags:        []string{"masking", "pii", "functional"},
+		Fn:          testMaskingKeepsEchoedPlaceholder,
+	})
 	pkgtestcases.Register("masking-classifier-unavailable-fails-closed", pkgtestcases.TestCase{
-		Description: "A classifier error on a masking-enabled decision returns 503 and dispatches nothing",
+		Description: "A PII deployment error on a masking-enabled decision returns 503 and dispatches nothing",
 		Tags:        []string{"masking", "pii", "fail-closed"},
 		Fn:          testMaskingClassifierUnavailableFailsClosed,
 	})
@@ -82,9 +87,9 @@ func testMaskingCrossProtocol(
 	}
 	defer session.Close()
 
-	// The stub reports exactly one span, over the first occurrence of the
+	// The fixture reports exactly one span, over the first occurrence of the
 	// marker's argument, so the value appears once: a second occurrence would
-	// stay raw and the assertion below would blame masking for the stub.
+	// stay raw and the assertion below would blame masking for the fixture.
 	prompt := fmt.Sprintf("%s EMAIL_ADDRESS %s please forward the invoice", maskingSpanMarker, maskingRawEmail)
 	cases := []maskingWireCase{
 		{
@@ -154,9 +159,54 @@ func testMaskingCrossProtocol(
 	return nil
 }
 
-// testMaskingClassifierUnavailableFailsClosed drives the remote classifier
-// into its declared-error path (mock-pii-spans returns a 200 carrying an
-// error member) on a masking-enabled decision, and asserts the request is
+// testMaskingKeepsEchoedPlaceholder sends back a placeholder from an earlier
+// turn, the way an agent repeats one in a file it writes, and a [vsr:name]
+// mark the vSR Claude Code plugin leaves in a tool's output. The stub reports
+// a PERSON span over the inside of each, "PERSON_0" or "vsr:name", as a
+// detector that reads it as a name would. Each must reach the backend as
+// sent, not as "[[PERSON_0]]". The router also masks the other copies of a
+// detected value (coverRepeatedValues), so the marker's bare argument may come
+// back masked, and only the text before it is asserted.
+func testMaskingKeepsEchoedPlaceholder(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	opts pkgtestcases.TestCaseOptions,
+) error {
+	session, err := fixtures.OpenServiceSession(ctx, client, opts)
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+
+	received := map[string]string{}
+	for _, placeholder := range []string{"PERSON_0", "vsr:name"} {
+		reply := "Send the reply that starts with Hi [" + placeholder + "], "
+		prompt := reply + maskingSpanMarker + " PERSON " + placeholder
+		echoed, err := runMaskingWireCase(ctx, session, maskingWireCase{
+			name: "chat completions " + placeholder,
+			path: "/v1/chat/completions",
+			body: map[string]interface{}{
+				"model":    maskingEntrypoint,
+				"messages": []map[string]interface{}{{"role": "user", "content": prompt}},
+			},
+		})
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(echoed, reply) || strings.Contains(echoed, "[[") {
+			return fmt.Errorf("the backend did not receive [%s] as sent: %q", placeholder, echoed)
+		}
+		received[placeholder] = echoed
+	}
+	if opts.SetDetails != nil {
+		opts.SetDetails(map[string]interface{}{"received": received})
+	}
+	return nil
+}
+
+// testMaskingClassifierUnavailableFailsClosed drives the remote PII
+// deployment into its unavailable path (the System One fixture answers the
+// call with 503) on a masking-enabled decision, and asserts the request is
 // refused rather than dispatched unmasked (D4).
 func testMaskingClassifierUnavailableFailsClosed(
 	ctx context.Context,
@@ -213,8 +263,8 @@ func runMaskingRawRequest(
 	if path == "/v1/messages" {
 		request.Header.Set("anthropic-version", "2023-06-01")
 	}
-	// v0.4 demotes the selected-decision header behind x-vsr-debug (#2205);
-	// opt in so the assertions can prove the masking decision was selected.
+	// Opt in to x-vsr-trace, so a failing assertion shows how the request was
+	// routed beside the selected decision.
 	request.Header.Set("x-vsr-debug", "true")
 	response, err := session.HTTPClient(45 * time.Second).Do(request)
 	if err != nil {

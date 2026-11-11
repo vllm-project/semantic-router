@@ -1,0 +1,1 @@
+providers.models[claude].backend_refs[0]: removed_field: providers.models[claude].backend_refs[0].base_url, api_key_env, auth_header, auth_prefix and extra_headers are removed; run `vllm-sr config migrate` (endpoint (a full URL), auth {header, prefix, api_key_env} and headers, as a deployment connects)

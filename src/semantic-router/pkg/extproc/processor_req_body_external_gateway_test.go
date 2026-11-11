@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -51,9 +52,14 @@ func assertExternalGatewayDispatchMutation(t *testing.T, response *ext_proc.Proc
 	if got := headersByName[":path"]; got != "/v1/chat/completions" {
 		t.Fatalf("converted request path = %q, want /v1/chat/completions", got)
 	}
-	for _, name := range []string{headers.SelectedModel, "authorization", "x-api-key"} {
+	for _, name := range []string{headers.VSRRouteModel, "authorization", "x-api-key"} {
 		if value, ok := headersByName[name]; ok {
 			t.Fatalf("external gateway-owned header %q was mutated to %q", name, value)
+		}
+	}
+	for _, name := range common.GetHeaderMutation().GetRemoveHeaders() {
+		if strings.EqualFold(name, "authorization") || strings.EqualFold(name, "x-api-key") {
+			t.Fatalf("external gateway-owned header %q was removed", name)
 		}
 	}
 
