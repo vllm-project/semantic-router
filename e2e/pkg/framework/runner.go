@@ -366,6 +366,9 @@ func (r *Runner) printResults(results []TestResult) {
 		if result.Error != nil {
 			fmt.Printf("  Error: %v\n", result.Error)
 		}
+		if !result.Passed && os.Getenv("GITHUB_ACTIONS") == "true" {
+			fmt.Println(failureAnnotation(r.profile.Name(), result))
+		}
 	}
 
 	fmt.Println(strings.Repeat("=", 80))
@@ -580,4 +583,17 @@ func prebuiltFixtureImage(dockerfile string) string {
 	default:
 		return ""
 	}
+}
+
+// failureAnnotation is a GitHub Actions error line for a failed case, so it
+// shows in the check run with its profile and case name instead of only in
+// the job log.
+func failureAnnotation(profile string, result TestResult) string {
+	message := "failed"
+	if result.Error != nil {
+		message = result.Error.Error()
+	}
+	escape := strings.NewReplacer("%", "%25", "\r", "%0D", "\n", "%0A").Replace
+	title := strings.NewReplacer(",", "%2C", ":", "%3A").Replace(escape(profile + " / " + result.Name))
+	return fmt.Sprintf("::error title=E2E %s::%s", title, escape(message))
 }
