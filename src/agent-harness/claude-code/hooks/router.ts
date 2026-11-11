@@ -42,7 +42,7 @@ export async function checkRouterModel($: EngineInterface, runtime: Runtime) {
   if (model === undefined || model.types.includes('score')) return
   await update($, noScore, () => model.id)
   $.ui.toast(
-    `vSR router: ${model.id} answers no score questions, so subagents keep their default model · serve one that does, such as vela3-lite · /vsr:setup`,
+    `vSR router: ${model.id} answers no score questions, so subagents keep their default model · vela3-lite does · /vsr:setup`,
   )
 }
 
