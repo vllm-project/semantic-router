@@ -58,7 +58,8 @@ translation:
 | `--batch-window-ms` | `2.0` | `--max-num-seqs` 大于 1 时，第一个请求到达后调度器再等多久收集更多请求。 |
 | `--dtype` | `auto` | `auto`（模型发布时的精度）、`float32`、`bfloat16` 或 `float16`（仅 GPU）。 |
 | `--enable-shared-context`、`--no-enable-shared-context` | 由模型家族决定 | 多问题决策请求的共享状态只算一次。只有 Decision 2.0 默认开启。 |
-| `--max-request-bytes` | `8388608` | 请求体上限。 |
+| `--max-request-bytes` | `33554432` | 请求体上限。 |
+| `--systemone-schema` | `vllm-sr/5.0` | `/v1/systemone` 和 `/v1/systemone/batch` 使用的 System One schema；`vllm-sr/4.0` 同时接受旧契约的请求形式。 |
 | `--max-bundle-tasks` | `64` | 一个 `/v1/bundle` 请求最多带多少任务。 |
 | `--load-attempts` | `5` | 一个模型加载几次之后就算 `failed`；包损坏或自检失败不重试。 |
 | `--load-retry-seconds` | `5` | 加载失败的模型第一次重载前等多久，之后翻倍，最多 300 秒。 |

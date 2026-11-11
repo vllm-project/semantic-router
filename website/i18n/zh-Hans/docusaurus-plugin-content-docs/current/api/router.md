@@ -32,8 +32,10 @@ Router 数据面在配置的监听器上接收模型请求。默认的 standalon
 | `GET` | `/v1/systemone/models` | 原生模型发现 | 列出该 listener 发布的 System One 模型 |
 
 Engine 模式关闭配方路由，并提供原生 System One 接口。在
-`listeners[].systemone.models` 中发布原生模型 ID；Chat 的 `models` 名单不会授权
-原生访问。两类接口都使用 listener 的 API keys。完整请求见
+listener 在 `apis` 中列出 `systemone`（`listeners[].apis.systemone`，可加 `models`）时提供原生 API；
+LLM API 的 `models` 不会授权原生访问。所有 API 都使用 listener 的 API keys，`apis.systemone.schema`
+设置 listener 使用的 System One schema（默认 `vllm-sr/5.0`，或 `vllm-sr/4.0`），见
+[System One schema](../system-one/use/schemas.md)。完整请求见
 [模型运行时快速开始](../model-runtime/get-started/quickstart.md)。
 
 其他 `/v1/*` 路径默认拒绝。特别是 `/v1/files`、`/v1/vector_stores` 和路由回放路径在公网推理监听器上不可用。Router 自有的文件和向量存储操作使用管理监听器上的 `/api/v1/storage/files` 和 `/api/v1/storage/vector-stores`。其他 `/openai/*` 操作，例如 embeddings 和读取已存储的 response，返回 `404`。

@@ -87,7 +87,8 @@ a frontend attaches to, or for direct runtime development:
 | `--dtype` | `auto` | `auto` (the precision the model was published in), `float32`, `bfloat16` or `float16` (GPUs only). |
 | `--enable-shared-context`, `--no-enable-shared-context` | the family's | Compute the shared state of a multi-question decision request once. On by default for Decision 2.0 only. |
 | `--max-model-len` | the package's limit | Most input tokens one question of a Decision model may have, at most the package's limit; a longer question fails with `max_length_exceeded`. Decision models only. See [Engine arguments](../deploy/engine-args.md#input-limit). |
-| `--max-request-bytes` | `8388608` | Largest request body. |
+| `--max-request-bytes` | `33554432` | Largest request body. |
+| `--systemone-schema` | `vllm-sr/5.0` | The System One schema `/v1/systemone` and `/v1/systemone/batch` speak; `vllm-sr/4.0` also accepts the earlier contract's request forms. |
 | `--max-bundle-tasks` | `64` | Most tasks in one `/v1/bundle` request. |
 | `--load-attempts` | `5` | Loads of a model before it stays `failed`; a damaged package or a failed self-check is not retried. |
 | `--load-retry-seconds` | `5` | Wait before the first reload of a model that failed to load, doubling up to 300 s. |

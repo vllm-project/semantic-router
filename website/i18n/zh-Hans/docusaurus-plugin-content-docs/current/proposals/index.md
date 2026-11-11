@@ -53,6 +53,7 @@ translation:
 | [Open Intelligence Index 1.0 与 Unified Model Arena](./open-intelligence-index-and-model-arena) | 2026-09-09 | 已实现 | 定义六个开放核心基准、完整案例指数、物理/虚拟排名、运营方证据、路由目标和基准版本迁移。 |
 | [统一模型目录与评估指数](./unified-model-catalog-and-evaluation-index) | 2026-09-04 | 已实现 | 统一提供商、协议、模型、推理、展示、Day-0 和基准比较元数据。 |
 | [Standalone 模式](./standalone-mode) | 2026-10-06 | 已实现 | Router 自己提供 OpenAI 兼容接口并代理到后端，standalone 与 extproc 模式共用一个路由核心（[#4623](https://github.com/vllm-project/semantic-router/issues/4623)）。 |
+| [System One API schema](./system-one-api-schemas) | 2026-11-11 | 已实现 | 每个决策模型 API 都有带版本的 schema（`systemone/0.2`、`vllm-sr/5.0`、`vllm-sr/4.0`），listener 和上游共用一个 API 注册表，并通过与 schema 无关的 IR 只用一层 codec（[#6143](https://github.com/vllm-project/semantic-router/issues/6143)）。 |
 | [统一配置契约 v0.3](./unified-config-contract-v0-3) | 2026-03-17 | 已实现 | 跨编写和部署面的单一配置契约。 |
 | [多协议适配器架构](./multi-protocol-adaptor) | 2026-02-18 | 已实现 | 与协议无关地访问路由引擎。 |
 | [独立 HTTP Gateway](./standalone-http-gateway) | 2026-08-31 | 已取代 | 链接路由器包的独立网关二进制；已被 [Standalone 模式](./standalone-mode) 取代。 |

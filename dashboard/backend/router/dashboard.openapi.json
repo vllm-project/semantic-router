@@ -9242,6 +9242,26 @@
         "x-vllm-sr-schema-status": "undocumented"
       }
     },
+    "/v1/systemone/batch": {
+      "post": {
+        "operationId": "postV1SystemoneBatch",
+        "summary": "POST /v1/systemone/batch",
+        "tags": [
+          "systemone"
+        ],
+        "security": [],
+        "responses": {
+          "default": {
+            "description": "Response body is not yet described by the Dashboard contract."
+          }
+        },
+        "x-vllm-sr-sensitivity": "public",
+        "x-vllm-sr-resource-owner": "public",
+        "x-vllm-sr-audit-mode": "none",
+        "x-vllm-sr-csrf": false,
+        "x-vllm-sr-schema-status": "undocumented"
+      }
+    },
     "/v1/systemone/models": {
       "get": {
         "operationId": "getV1SystemoneModels",
