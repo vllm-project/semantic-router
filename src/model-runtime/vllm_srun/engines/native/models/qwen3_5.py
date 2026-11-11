@@ -32,6 +32,8 @@ from .branch import (
     state_once_mask,
 )
 from .common import (
+    ALL_KEYS,
+    AllKeys,
     GatedMLP,
     GatedRMSNorm,
     ZeroCenteredRMSNorm,
@@ -166,7 +168,7 @@ class GatedAttention(nn.Module):
         self,
         hidden_states: torch.Tensor,
         rotary: tuple[torch.Tensor, torch.Tensor],
-        mask: torch.Tensor | Tree | Branches | StaticBranches | Packed | None,
+        mask: torch.Tensor | Tree | Branches | StaticBranches | Packed | AllKeys | None,
         kernels: KernelSet,
     ) -> torch.Tensor:
         input_shape = hidden_states.shape[:-1]
@@ -213,7 +215,9 @@ class Qwen3_5Layer(nn.Module):
         self,
         hidden_states: torch.Tensor,
         rotary: tuple[torch.Tensor, torch.Tensor],
-        full_mask: torch.Tensor | Tree | Branches | StaticBranches | Packed | None,
+        full_mask: (
+            torch.Tensor | Tree | Branches | StaticBranches | Packed | AllKeys | None
+        ),
         linear_mask: torch.Tensor | Tree | Branches | StaticBranches | Packed | None,
         kernels: KernelSet,
     ) -> torch.Tensor:
@@ -373,12 +377,23 @@ def rope_index(
 
 
 def noncausal_masks(
-    attention_mask: torch.Tensor, padded: bool | None = None
-) -> tuple[torch.Tensor, torch.Tensor | None]:
-    """The full-attention padding mask ``[B, 1, 1, L]`` (always given) and the gated-delta padding mask.
+    attention_mask: torch.Tensor,
+    padded: bool | None = None,
+    unmasked_above: int | None = None,
+) -> tuple[torch.Tensor | AllKeys, torch.Tensor | None]:
+    """The full-attention padding mask ``[B, 1, 1, L]`` and the gated-delta padding mask.
 
     ``padded`` (host-known) skips reading the mask back; None derives it from the mask.
+    Unpadded rows of more than ``unmasked_above`` tokens in all attend to every key
+    (``ALL_KEYS``): SDPA then takes flash attention with GQA in-kernel, not the
+    memory-efficient kernel the key mask forces, which is not bit-identical.
     """
+    if (
+        padded is False
+        and unmasked_above is not None
+        and attention_mask.numel() > unmasked_above
+    ):
+        return ALL_KEYS, None
     full = attention_mask.bool()[:, None, None, :]
     if padded is None:
         return full, recurrent_mask(attention_mask, attention_mask.shape[1])
@@ -410,7 +425,7 @@ class Qwen3_5Backbone(nn.Module):
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor | None,
-        masks: dict[str, torch.Tensor | None] | None = None,
+        masks: dict[str, torch.Tensor | AllKeys | None] | None = None,
     ) -> torch.Tensor:
         """``masks`` (``{"full", "linear"}``, built from host-known padding) replaces the masks derived
         from ``attention_mask``, which read the mask back to the host."""
@@ -422,7 +437,8 @@ class Qwen3_5Backbone(nn.Module):
             .expand(4, batch, -1)
         )
         if masks is not None:
-            full_mask, linear_mask = masks["full"], masks["linear"]
+            full_mask = masks["full"]
+            linear_mask = cast(torch.Tensor | None, masks["linear"])
         elif self.noncausal:
             assert (
                 attention_mask is not None
@@ -439,7 +455,7 @@ class Qwen3_5Backbone(nn.Module):
         self,
         hidden_states: torch.Tensor,
         rope_positions: torch.Tensor,
-        full_mask: torch.Tensor | Tree | Packed | None,
+        full_mask: torch.Tensor | Tree | Packed | AllKeys | None,
         linear_mask: torch.Tensor | Tree | Packed | None,
     ) -> torch.Tensor:
         """Every layer and the final norm over input embeddings, with rotary positions ``[3, B, L]``."""

@@ -156,6 +156,12 @@ class NativeEngineModel(EngineModel):
             not options.exact_kernels_only and spec.dtype.approximate_kernels
         )
         self.kernels.use_variants(spec.kernel_variants)
+        # Unpadded noncausal forwards longer than a graph holds attend to every key.
+        self.unmasked_above = (
+            fast.MAX_GRAPH_TOKENS
+            if self.kernels.allow_approximate and self.device.type == "cuda"
+            else None
+        )
         fused_int4 = self.kernels.allow_approximate and torch.version.hip is None
         nvfp4: list[quantized.NVFP4Linear] = []
         for layer in self._quantized():
@@ -272,7 +278,11 @@ class NativeEngineModel(EngineModel):
         ):
             self.fast["lora"] = fast.install_lean_lora(backbone)
         if options.fused_kernels or options.graphs:
-            self.masks = fast.NoncausalMasks() if self.noncausal else fast.Masks()
+            self.masks = (
+                fast.NoncausalMasks(self.unmasked_above)
+                if self.noncausal
+                else fast.Masks()
+            )
         if options.graphs and not quantized.capture_safe(backbone):
             self.fast["graphs_skipped"] = (
                 "Ada's per-row FP8 product needs PyTorch 2.12 in a graph"
@@ -895,7 +905,7 @@ class NativeEngineModel(EngineModel):
         self, input_ids: torch.Tensor, attention_mask: torch.Tensor, padded: bool
     ) -> torch.Tensor:
         """The backbone under the noncausal full-attention mask (eager)."""
-        full, linear = noncausal_masks(attention_mask, padded)
+        full, linear = noncausal_masks(attention_mask, padded, self.unmasked_above)
         hidden: torch.Tensor = self.backbone(
             input_ids, attention_mask, masks={"full": full, "linear": linear}
         )
