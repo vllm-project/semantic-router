@@ -120,15 +120,17 @@ The command shows the changes and asks before writing them:
   `.claude/settings.local.json`). The other settings stay as they are. The
   file holds the key when one is set, so only you can read it afterwards. In a
   git repository, `--scope project` adds the file and the command's undo record
-  to `.git/info/exclude` when git would otherwise track them.
+  to `.git/info/exclude` when git would otherwise track them, and refuses to
+  write a key into a settings file git already tracks.
 - Codex: the `~/.codex/vllm-sr.config.toml` profile, which holds a `vllm-sr`
   provider, selects it and turns off hosted web search, which the Router does
   not serve. `~/.codex/config.toml` is not touched.
 
 It then checks the Router configuration given with `--config` and prints the
-settings below that are missing, without changing it, and sends one tool call
-in the harness's protocol: `System Two: ok` names the model that answered and
-whether it called the tool. With the vSR plugin installed it warns while the
+settings below that are missing, without changing it, and sends one streamed
+tool call in the harness's protocol, as the harness does: `System Two: ok` names
+the model that answered and whether it called the tool, and a stream that ends
+in an error fails the check. With the vSR plugin installed it warns while the
 plugin's router app is on, and when the listener also serves System One it
 prints the setting that points vSR at it. `--dry-run` prints the plan and writes
 nothing.
@@ -136,8 +138,9 @@ nothing.
 `--status-line` also sets Claude Code's status line to show which models
 answered this session, the last first, such as `vllm-sr ⇢ qwen36 (4) ·
 qwen38-27b (2)`. Claude Code asks for `vllm-sr/auto`, so its own model display
-names only the entrypoint. The line reads the session's transcript, where each
-reply keeps the model that wrote it, so it needs no Router access. The script
+names only the entrypoint. The line reads the session's transcript and its
+subagents' transcripts, where each reply keeps the model that wrote it, so it
+needs no Router access. The script
 sits beside the settings as `vllm-sr-status-line.py`, and `--undo` puts back
 the status line you had before.
 `--undo` puts back what each key, or the Codex profile, held before the first
@@ -218,21 +221,30 @@ listeners:
     address: 0.0.0.0
     port: 8899
     systemone:
-      models: [vela3-fast]       # the public names vSR may ask for
+      models: [vela3-lite]       # the public names vSR may ask for
 global:
   model_catalog:
     deployments:
       primary:
         provider: model_runtime
-        public_name: vela3-fast
-        artifact: vllm-sr/vela3-fast
+        public_name: vela3-lite
+        artifact: vllm-sr/vela3-lite
 ```
 
+vSR's apps are measured on vela3-lite. Models of the runtime's `vela3` family,
+such as vela3-fast, answer no `score` question, which vSR's router app asks,
+and score risky commands far below the line guard holds at, so publish
+vela3-lite for vSR.
+
 ```bash
-echo '{"runtime": "remote", "runtimeModel": "vela3-fast",
+echo '{"runtime": "remote", "runtimeModel": "vela3-lite",
   "runtimeUrl": "http://localhost:8899/v1/decisions"}' \
   | claude plugin configure vsr@vllm-sr --values-stdin
 ```
+
+System One checks the listener's API keys too. On a listener with keys, add
+`"runtimeToken"` with the key, which `vllm-sr connect` fills in from
+`$VLLM_SR_API_KEY` in the command it prints.
 
 A Router rule about what the agent reads, such as a prompt injection in a file
 or a web page, should read the tool results and leave the user turn out

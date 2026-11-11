@@ -94,6 +94,11 @@ def claude_code(
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
+    if scope == "project" and from_env and hc.tracked_by_git(path, Path.cwd()):
+        raise click.ClickException(
+            f"git tracks {path}, so the API key would reach its history. Untrack it"
+            f" (git rm --cached {path}) or connect with --scope user."
+        )
     values = hc.claude_env(gateway, model, token)
     changes = []
     if status_line:
@@ -108,7 +113,7 @@ def claude_code(
             echo(f"Added {kept} to this repository's .git/info/exclude.")
     if from_env:
         warning(f"{path} now holds the API key from ${api_key_env}.")
-    _check_vsr(env, gateway, doc)
+    _check_vsr(env, gateway, doc, api_key_env if from_env else None)
     _probe(gateway, "claude-code", model, token)
     echo("Start a new Claude Code session to use it.")
 
@@ -204,9 +209,12 @@ def _check_router(harness: str, doc: dict | None) -> None:
         echo("  " + finding.snippet.replace("\n", "\n  "))
 
 
-def _check_vsr(env: dict[str, str], gateway: str, doc: dict | None) -> None:
+def _check_vsr(
+    env: dict[str, str], gateway: str, doc: dict | None, key_env: str | None = None
+) -> None:
     """With the vSR plugin installed, its router app should leave model choice to the
-    gateway, and it can ask the System One the same listener serves."""
+    gateway, and it can ask the System One the same listener serves. key_env names
+    the variable holding the listener's key, which System One checks too."""
     plugin = _vsr_plugin(env)
     if plugin is None:
         return
@@ -224,10 +232,17 @@ def _check_vsr(env: dict[str, str], gateway: str, doc: dict | None) -> None:
         values = json.dumps(
             {"runtime": "remote", "runtimeUrl": decisions, "runtimeModel": published[0]}
         )
+        # the shell fills in the key, so it is never printed here
+        feed = (
+            f"printf '{values[:-1].replace('%', '%%')}, \"runtimeToken\": \"%s\"}}'"
+            f' "${key_env}"'
+            if key_env
+            else f"echo '{values}'"
+        )
         echo(
             f"This listener also serves System One ({', '.join(published)}). To let vSR"
             f" ask it instead of {inputs.get('runtimeUrl') or 'its own runtime'}, run:\n"
-            f"  echo '{values}' | claude plugin configure vsr@vllm-sr --values-stdin"
+            f"  {feed} | claude plugin configure vsr@vllm-sr --values-stdin"
         )
 
 

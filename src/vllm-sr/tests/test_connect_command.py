@@ -19,22 +19,37 @@ hc = importlib.import_module("cli.harness_connect")
 rc = importlib.import_module("cli.harness_router_check")
 chat_client = importlib.import_module("cli.chat_client")
 
-MESSAGES_REPLY = {
-    "type": "message",
-    "content": [{"type": "tool_use", "id": "t", "name": "get_time", "input": {}}],
-}
-RESPONSES_REPLY = {
-    "object": "response",
-    "status": "completed",
-    "output": [{"type": "function_call", "name": "get_time"}],
-}
+MESSAGES_EVENTS = [
+    {"type": "message_start", "message": {"type": "message", "content": []}},
+    {
+        "type": "content_block_start",
+        "index": 0,
+        "content_block": {
+            "type": "tool_use",
+            "id": "t",
+            "name": "get_time",
+            "input": {},
+        },
+    },
+    {"type": "message_stop"},
+]
+RESPONSES_EVENTS = [
+    {
+        "type": "response.completed",
+        "response": {
+            "object": "response",
+            "status": "completed",
+            "output": [{"type": "function_call", "name": "get_time"}],
+        },
+    }
+]
 
 
 @pytest.fixture
 def gateway():
-    """A stub gateway that records each request and answers like the Router."""
+    """A stub gateway that records each request and streams like the Router."""
     seen = []
-    replies = {"/v1/messages": MESSAGES_REPLY, "/v1/responses": RESPONSES_REPLY}
+    replies = {"/v1/messages": MESSAGES_EVENTS, "/v1/responses": RESPONSES_EVENTS}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -43,13 +58,13 @@ def gateway():
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["content-length"])))
             seen.append((self.path, body, self.headers.get("authorization")))
-            reply = replies.get(self.path)
-            self.send_response(200 if reply is not None else 404)
-            self.send_header("content-type", "application/json")
+            events = replies.get(self.path)
+            self.send_response(200 if events is not None else 404)
+            self.send_header("content-type", "text/event-stream")
             self.send_header("x-vsr-selected-model", "agent-model")
             self.end_headers()
-            payload = reply if reply is not None else {"error": "not_found"}
-            self.wfile.write(json.dumps(payload).encode())
+            for event in events or [{"type": "error"}]:
+                self.wfile.write(f"data: {json.dumps(event)}\n\n".encode())
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -149,6 +164,17 @@ def test_codex_profile_holds_the_provider_and_undo_restores_the_old_one(tmp_path
     hc.undo_changes(tmp_path)
     assert profile.read_text() == 'model = "gpt-5"\n'
 
+    profile.write_text('model = "gpt-5"')  # no final line break
+    hc.apply_changes([change], tmp_path)
+    profile.write_text(
+        profile.read_text() + "\n[tui]\nscreen_reader_detection_done = true\n"
+    )
+    hc.undo_changes(tmp_path)
+    assert tomllib.loads(profile.read_text()) == {
+        "model": "gpt-5",
+        "tui": {"screen_reader_detection_done": True},
+    }
+
 
 def test_undo_removes_what_it_created_and_keeps_what_changed_since(tmp_path):
     profile = tmp_path / "p.config.toml"
@@ -220,6 +246,20 @@ def test_router_check_for_claude_code():
     assert rc.check_router_config(complete, "claude-code") == []
     off = _router(["tools.defer_loading"], _learning(rc.CLAUDE_HEADERS, enabled=False))
     assert rc.check_router_config(off, "claude-code")
+    openai = _router(
+        ["tools.defer_loading", "content.file"],
+        _learning(rc.CLAUDE_HEADERS),
+        api_format="openai",
+    )
+    (need,) = [f.need for f in rc.check_router_config(openai, "claude-code")]
+    assert need.startswith("tool_result.is_error, messages[].role, or")
+    unknown = _router(
+        ["tools.defer_loading"], _learning(rc.CLAUDE_HEADERS), api_format=""
+    )
+    assert (
+        "api_format is not set"
+        in rc.check_router_config(unknown, "claude-code")[0].need
+    )
 
 
 def test_router_check_for_codex():
@@ -250,6 +290,7 @@ def test_probe_sends_one_tool_call_in_each_protocol(gateway):
     assert result.detail == "called the tool"
     path, body, auth = seen[-1]
     assert path == "/v1/messages" and body["tools"][0]["input_schema"]
+    assert body["stream"] is True
     assert auth == "Bearer tok"
     assert rc.probe_gateway(url, "codex", "vllm-sr/auto", "tok").ok
     path, body, _ = seen[-1]
@@ -259,10 +300,17 @@ def test_probe_sends_one_tool_call_in_each_protocol(gateway):
 
 def test_probe_refuses_a_200_that_is_not_a_reply(gateway):
     url, _, replies = gateway
-    replies["/v1/messages"] = {}
-    replies["/v1/responses"] = {"object": "response", "status": "failed"}
+    replies["/v1/messages"] = MESSAGES_EVENTS[:1]  # never finished
+    replies["/v1/responses"] = [{"type": "response.failed", "response": {}}]
     assert not rc.probe_gateway(url, "claude-code", "m", "t").ok
     assert not rc.probe_gateway(url, "codex", "m", "t").ok
+    # a stream that fails where a block closes still began with a 200
+    replies["/v1/messages"] = [
+        *MESSAGES_EVENTS[:2],
+        {"type": "error", "error": {"type": "lossy_translation"}},
+    ]
+    result = rc.probe_gateway(url, "claude-code", "m", "t")
+    assert not result.ok and "lossy_translation" in result.detail
 
 
 def test_cli_dry_run_writes_nothing_and_hides_the_key(tmp_path, gateway, monkeypatch):
@@ -339,6 +387,27 @@ def test_cli_project_scope_keeps_the_key_out_of_git(tmp_path, gateway, monkeypat
     assert status.stdout == ""
 
 
+def test_cli_refuses_a_key_in_a_settings_file_git_tracks(
+    tmp_path, gateway, monkeypatch
+):
+    url, _, _ = gateway
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    monkeypatch.chdir(tmp_path)
+    settings = tmp_path / ".claude" / "settings.local.json"
+    settings.parent.mkdir()
+    settings.write_text("{}")
+    subprocess.run(["git", "add", "-f", str(settings)], check=True)
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-secret")
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    result = CliRunner().invoke(
+        main,
+        ["connect", "claude-code", "--scope", "project", "--base-url", url, "--yes"],
+    )
+    assert result.exit_code != 0
+    assert "git tracks" in result.output
+    assert settings.read_text() == "{}"
+
+
 def test_cli_takes_the_gateway_from_the_configurations_listener(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
@@ -362,6 +431,13 @@ def test_vsr_is_pointed_at_the_listeners_system_one(monkeypatch, capsys):
     assert '"runtimeUrl": "http://localhost:8899/v1/decisions"' in shown
     assert '"runtimeModel": "vela3-fast"' in shown
 
+    # System One checks the listener's key too; the shell fills it in
+    connect_command._check_vsr({}, "http://localhost:8899", doc, "VLLM_SR_API_KEY")
+    shown = capsys.readouterr().out
+    assert (
+        '"runtimeToken": "%s"}\' "$VLLM_SR_API_KEY" | claude plugin configure' in shown
+    )
+
     inputs["runtimeUrl"] = "http://localhost:8899/v1/decisions"
     connect_command._check_vsr({}, "http://localhost:8899", doc)
     assert "System One" not in capsys.readouterr().out
@@ -373,11 +449,27 @@ def test_status_line_names_the_models_that_answered(tmp_path):
     transcript = tmp_path / "session.jsonl"
     lines = [
         {"type": "user", "message": {"role": "user", "content": "hi"}},
-        {"type": "assistant", "message": {"id": "m1", "model": "qwen36"}},
-        {"type": "assistant", "message": {"id": "m2", "model": "qwen38-27b"}},
+        {
+            "type": "assistant",
+            "timestamp": "T1",
+            "message": {"id": "m1", "model": "qwen36"},
+        },
+        {
+            "type": "assistant",
+            "timestamp": "T2",
+            "message": {"id": "m2", "model": "qwen38-27b"},
+        },
         # one reply is written as one line per content block
-        {"type": "assistant", "message": {"id": "m2", "model": "qwen38-27b"}},
-        {"type": "assistant", "message": {"id": "m3", "model": "qwen38-27b"}},
+        {
+            "type": "assistant",
+            "timestamp": "T2",
+            "message": {"id": "m2", "model": "qwen38-27b"},
+        },
+        {
+            "type": "assistant",
+            "timestamp": "T3",
+            "message": {"id": "m3", "model": "qwen38-27b"},
+        },
     ]
     transcript.write_text("\n".join(json.dumps(line) for line in lines) + "\n")
 
@@ -393,6 +485,27 @@ def test_status_line_names_the_models_that_answered(tmp_path):
     assert (
         run({"transcript_path": str(transcript)})
         == "vllm-sr ⇢ qwen38-27b (2) · qwen36 (1)"
+    )
+    # a subagent keeps its replies in its own transcript beside the session's
+    subagent = tmp_path / "session" / "subagents" / "agent-a1.jsonl"
+    subagent.parent.mkdir(parents=True)
+    replies = [
+        ("T4", "s1", "haiku-like"),
+        ("T5", "s2", "qwen36"),
+        ("T6", "s3", "qwen36"),
+    ]
+    subagent.write_text(
+        "".join(
+            json.dumps(
+                {"type": "assistant", "timestamp": t, "message": {"id": i, "model": m}}
+            )
+            + "\n"
+            for t, i, m in replies
+        )
+    )
+    assert (
+        run({"transcript_path": str(transcript)})
+        == "vllm-sr ⇢ qwen36 (3) · haiku-like (1) · qwen38-27b (2)"
     )
     assert run({"transcript_path": str(tmp_path / "missing.jsonl")}) == "vllm-sr"
 

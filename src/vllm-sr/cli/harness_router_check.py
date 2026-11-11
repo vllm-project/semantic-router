@@ -6,6 +6,7 @@ gateway can serve other clients too.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -20,6 +21,11 @@ MAYBE_ANTHROPIC = (
     " (if a model it can pick is served over Anthropic Messages;"
     " its api_format is not set here)"
 )
+MAYBE_OPENAI = (
+    " (if a model is served over an OpenAI API; its api_format is not set here)"
+)
+# what Claude Code sends that an openai backend cannot carry as sent
+OPENAI_LOSSY = ("tool_result.is_error", "messages[].role", "content.file")
 PROBE_TOOL = {
     "name": "get_time",
     "description": "Return the current time.",
@@ -108,8 +114,8 @@ def _sets_default_max_tokens(decision: dict) -> bool:
     )
 
 
-def _claude_findings(router: dict) -> list[RouterFinding | None]:
-    return [
+def _claude_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
+    findings = [
         _lossy_finding(
             router,
             "tools.defer_loading",
@@ -119,6 +125,19 @@ def _claude_findings(router: dict) -> list[RouterFinding | None]:
         ),
         _protection_finding(router, CLAUDE_HEADERS),
     ]
+    formats = set(_model_formats(doc).values())
+    allowed = router.get("allow_lossy_translation") or []
+    missing = [f for f in OPENAI_LOSSY if f not in allowed]
+    if missing and formats & {"openai", ""}:
+        findings.append(
+            RouterFinding(
+                f"{', '.join(missing)}, or the Router refuses Claude Code's error tool results,"
+                " system turns and files toward an openai backend"
+                + ("" if "openai" in formats else MAYBE_OPENAI),
+                f"global:\n  router:\n    allow_lossy_translation: [{', '.join(missing)}]",
+            )
+        )
+    return findings
 
 
 def _codex_findings(doc: dict, router: dict) -> list[RouterFinding | None]:
@@ -178,7 +197,7 @@ def check_router_config(doc: dict, harness: str) -> list[RouterFinding]:
     """What this harness needs from a v0.5 Router configuration and does not find."""
     router = _get(doc, "global", "router") or {}
     found = (
-        _claude_findings(router)
+        _claude_findings(doc, router)
         if harness == "claude-code"
         else _codex_findings(doc, router)
     )
@@ -220,22 +239,44 @@ def _probe_request(harness: str, model: str) -> tuple[str, dict, dict]:
     )
 
 
-def _answer_problem(harness: str, answer: Any) -> str:
-    """Why a 200 answer is not a usable reply in the harness's protocol, or ""."""
-    if not isinstance(answer, dict):
-        return "the answer is not a JSON object"
+def _reply_of(harness: str, events: list[dict]) -> tuple[dict | None, str]:
+    """The finished reply a stream carries, or None and why it is not one."""
+    for event in events:
+        if event.get("type") in ("error", "response.failed"):
+            return None, f"the stream ended in an error: {json.dumps(event)[:300]}"
     if harness == "claude-code":
-        if answer.get("type") != "message" or not isinstance(
-            answer.get("content"), list
-        ):
-            return "the answer is not a Messages reply"
-        return ""
-    if answer.get("object") != "response" or answer.get("status") not in (
-        "completed",
-        "incomplete",
-    ):
-        return f"the answer is not a finished Responses reply (status {answer.get('status')!r})"
-    return ""
+        if not any(event.get("type") == "message_stop" for event in events):
+            return None, "the stream did not finish a Messages reply"
+        blocks = [
+            event.get("content_block") or {}
+            for event in events
+            if event.get("type") == "content_block_start"
+        ]
+        return {"content": blocks}, ""
+    done = next(
+        (
+            event["response"]
+            for event in events
+            if event.get("type") in ("response.completed", "response.incomplete")
+            and isinstance(event.get("response"), dict)
+        ),
+        None,
+    )
+    if done is None:
+        return None, "the stream did not finish a Responses reply"
+    return done, ""
+
+
+def _events(response: requests.Response) -> list[dict]:
+    """The JSON data of each server-sent event in the body."""
+    events = []
+    for line in response.iter_lines(decode_unicode=True):
+        if line and line.startswith("data:") and line[5:].strip() != "[DONE]":
+            try:
+                events.append(json.loads(line[5:]))
+            except ValueError:
+                continue
+    return [event for event in events if isinstance(event, dict)]
 
 
 def _called_tool(harness: str, answer: dict) -> bool:
@@ -251,7 +292,8 @@ def _called_tool(harness: str, answer: dict) -> bool:
 def probe_gateway(
     gateway: str, harness: str, model: str, token: str, timeout: float = 120
 ) -> ProbeResult:
-    """One tool-call request in the harness's own protocol."""
+    """One streamed tool-call request in the harness's own protocol, since both
+    harnesses stream and some failures show only where a stream ends."""
     path, extra, body = _probe_request(harness, model)
     url = gateway.rstrip("/") + path
     headers = {
@@ -260,20 +302,24 @@ def probe_gateway(
         **extra,
     }
     try:
-        response = requests.post(url, json=body, headers=headers, timeout=timeout)
+        with requests.post(
+            url,
+            json={**body, "stream": True},
+            headers=headers,
+            timeout=timeout,
+            stream=True,
+        ) as response:
+            if response.status_code != requests.codes.ok:
+                return ProbeResult(
+                    False,
+                    detail=f"{url}: HTTP {response.status_code} {response.text[:300]}",
+                )
+            events = _events(response)
     except requests.RequestException as exc:
         return ProbeResult(False, detail=f"{url}: {exc}")
-    if response.status_code != requests.codes.ok:
-        return ProbeResult(
-            False, detail=f"{url}: HTTP {response.status_code} {response.text[:300]}"
-        )
-    try:
-        answer = response.json()
-    except ValueError:
-        answer = None
-    problem = _answer_problem(harness, answer)
-    if problem:
-        return ProbeResult(False, detail=f"{url}: {problem}: {response.text[:300]}")
+    answer, problem = _reply_of(harness, events)
+    if answer is None:
+        return ProbeResult(False, detail=f"{url}: {problem}")
     warnings = [
         w.strip()
         for w in response.headers.get("x-vsr-warnings", "").split(",")

@@ -123,20 +123,32 @@ def set_json_env(text: str, values: dict[str, Any]) -> str:
     return json.dumps(settings, indent=2) + "\n" if settings else ""
 
 
+def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", "-C", str(cwd), *args], capture_output=True, text=True, check=False
+    )
+
+
+def tracked_by_git(path: Path, cwd: Path) -> bool:
+    """True when git already tracks path, which no exclude rule can keep out."""
+    return _git(cwd, "ls-files", "--error-unmatch", "--", str(path)).returncode == 0
+
+
 def keep_out_of_git(paths: list[Path], cwd: Path) -> list[Path]:
     """Add each path git would track to the repository's own exclude file, which is
     never committed, so a key in a project's settings stays out of its history."""
-
-    def git(*args: str) -> subprocess.CompletedProcess:
-        return subprocess.run(
-            ["git", "-C", str(cwd), *args], capture_output=True, text=True, check=False
-        )
-
     # check-ignore exits 1 for a path git would track, 128 outside a repository
-    tracked = [p for p in paths if git("check-ignore", "-q", str(p)).returncode == 1]
+    tracked = [
+        p
+        for p in paths
+        if _git(cwd, "check-ignore", "-q", str(p)).returncode == 1
+        and not tracked_by_git(p, cwd)
+    ]
     if tracked:
-        top = Path(git("rev-parse", "--show-toplevel").stdout.strip()).resolve()
-        exclude = cwd / git("rev-parse", "--git-path", "info/exclude").stdout.strip()
+        top = Path(_git(cwd, "rev-parse", "--show-toplevel").stdout.strip()).resolve()
+        exclude = (
+            cwd / _git(cwd, "rev-parse", "--git-path", "info/exclude").stdout.strip()
+        )
         exclude.parent.mkdir(parents=True, exist_ok=True)
         with exclude.open("a", encoding="utf-8") as handle:
             for path in tracked:
@@ -151,25 +163,32 @@ STATUS_LINE_SOURCE = """\
 
 import json
 import sys
+from pathlib import Path
 
 
 def main() -> str:
     session = json.load(sys.stdin)
+    transcript = Path(session.get("transcript_path") or "")
+    # each subagent keeps its own transcript in a folder beside the session's
+    paths = [transcript, *sorted(transcript.with_suffix("").glob("subagents/*.jsonl"))]
     replies = {}
-    with open(session.get("transcript_path") or "", encoding="utf-8") as transcript:
-        for line in transcript:
-            if '"assistant"' not in line:
-                continue
-            try:
-                message = json.loads(line).get("message") or {}
-            except ValueError:
-                continue
-            model = message.get("model")
-            if model and model != "<synthetic>":
-                replies[message.get("id") or len(replies)] = model
+    for path in paths:
+        with open(path, encoding="utf-8") as lines:
+            for line in lines:
+                if '"assistant"' not in line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except ValueError:
+                    continue
+                message = record.get("message") or {}
+                model = message.get("model")
+                if model and model != "<synthetic>":
+                    key = message.get("id") or len(replies)
+                    replies[key] = (record.get("timestamp") or "", model)
     if not replies:
         return "vllm-sr: no reply yet"
-    models = list(replies.values())
+    models = [model for _, model in sorted(replies.values())]
     counts = {model: models.count(model) for model in dict.fromkeys(reversed(models))}
     return "vllm-sr ⇢ " + " · ".join(f"{model} ({n})" for model, n in counts.items())
 
@@ -288,7 +307,10 @@ def undo_changes(manifest_dir: Path) -> list[str]:
             elif key == "file" and now and now.startswith(written):
                 # the Codex TUI appends tables of its own, such as [tui], to the profile
                 tail = now[len(written) :].lstrip("\n")
-                restore[key] = (entry["before"] or "") + tail
+                before = entry["before"] or ""
+                if before and not before.endswith("\n"):
+                    before += "\n"
+                restore[key] = before + tail
             else:
                 what = path if key == "file" else f"{key} in {path}"
                 report.append(f"kept {what}: it was changed after vllm-sr connect")
