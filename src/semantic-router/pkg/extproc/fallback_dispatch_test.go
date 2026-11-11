@@ -24,6 +24,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -319,6 +320,75 @@ func TestFallbackCrossProtocolOpenAIToAnthropic(t *testing.T) {
 	if clientBody.Usage.PromptTokens != 15 || clientBody.Usage.CompletionTokens != 12 {
 		t.Errorf("usage not translated correctly: prompt=%d completion=%d", clientBody.Usage.PromptTokens, clientBody.Usage.CompletionTokens)
 	}
+}
+
+// The trace names the protocol of the upstream that answered: after a
+// fallback to an Anthropic candidate, Anthropic, as in the native gateway.
+func TestFallbackCrossProtocolTraceNamesTheCandidateProtocol(t *testing.T) {
+	router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+	ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-2"})
+	ctx.UpstreamStatusCode = http.StatusBadGateway
+	router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
+		return []byte(`{"id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"hi"}],"model":"claude","stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`), http.StatusOK, nil
+	}
+
+	resp := router.handleUpstreamTransportError([]byte(`{"error":{"message":"bad gateway"}}`), ctx)
+	require.NotNil(t, resp.GetImmediateResponse())
+	require.Equal(t, "model-fallback-2", ctx.VSRSelectedModel)
+	trace := fallbackTrace(t, resp, ctx)
+	require.Equal(t, "openai", trace[headers.TraceClientProtocol])
+	require.Equal(t, "anthropic", trace[headers.TraceUpstreamProtocol])
+}
+
+// Behind Envoy the fallback answers in place of the failed primary's headers,
+// so the candidate's own response time, from its dispatch, is its first
+// response time. A streaming client's candidate is called buffered, so its
+// time is the whole answer, not a first token, and is not recorded.
+func TestFallbackRecordsTheCandidatesFirstResponseTime(t *testing.T) {
+	for _, streaming := range []bool{false, true} {
+		latency.RemoveModelFromTTFTCache("model-primary")
+		latency.RemoveModelFromTTFTCache("model-fallback-1")
+		router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+		ctx := testFallbackRequestContext("model-primary", []string{"model-primary", "model-fallback-1"})
+		ctx.ProcessingStartTime = time.Now().Add(-2 * time.Second)
+		ctx.ExpectStreamingResponse = streaming
+		ctx.SemanticRequest.Stream = streaming
+		router.fallbackCaller = func(context.Context, string, []byte, map[string]string) ([]byte, int, error) {
+			time.Sleep(20 * time.Millisecond)
+			return []byte(`{"id":"c1","object":"chat.completion","created":1,"model":"model-fallback-1","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`), http.StatusOK, nil
+		}
+
+		resp, err := router.handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{ResponseHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "503"}}},
+		}}, ctx)
+		require.NoError(t, err)
+		require.NotNil(t, resp.GetImmediateResponse())
+		_, primaryRecorded := latency.GetTTFTPercentile("model-primary", 90)
+		require.False(t, primaryRecorded, "the primary failed")
+		ttft, recorded := latency.GetTTFTPercentile("model-fallback-1", 90)
+		if streaming {
+			require.False(t, recorded, "a buffered answer is not a first token")
+			continue
+		}
+		require.True(t, recorded, "the candidate that answered has no first-response time")
+		require.True(t, ttft >= 0.02 && ttft < 1, "ttft = %.3fs, want the candidate's own time, not the request's", ttft)
+		require.Equal(t, ttft, ctx.TTFTSeconds)
+	}
+}
+
+// A candidate that fails after the request switched to it, at its finalized
+// stream or wire validation, rolls the protocol back with the model, so the
+// primary's error is read in the primary's protocol. Reaching that failure at
+// the boundary takes a response over the codec's 64 MiB body limit, so this
+// checks the rollback itself.
+func TestFallbackRollbackRestoresThePrimaryProtocol(t *testing.T) {
+	router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+	ctx := testFallbackRequestContext("model-fallback-2", []string{"model-primary", "model-fallback-2"})
+	ctx.TargetFormat = llmprotocol.AnthropicMessagesV1
+
+	router.rollbackFallbackContext(ctx, "model-primary", http.StatusBadGateway, "", nil, false, llmprotocol.OpenAIChatV1)
+	require.Equal(t, "model-primary", ctx.VSRSelectedModel)
+	require.Equal(t, llmprotocol.OpenAIChatV1, ctx.TargetFormat)
 }
 
 func TestFallbackSafetyGateStreamingCommitted(t *testing.T) {

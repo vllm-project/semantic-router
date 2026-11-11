@@ -9,7 +9,7 @@ weighted or lexicographic objective.
 | Factor | Source | Direction |
 | --- | --- | --- |
 | Quality | Versioned Overall, capability, or operator index | Higher is better |
-| Latency | Observed TTFT or TPOT at the selected percentile | Lower is better |
+| Latency | TTFT or TPOT observed on successful responses, at the selected percentile | Lower is better |
 | Cost | Input/output pricing applied to this request's token budget | Lower is better |
 | Load | Current in-flight requests in this Router process | Lower is better |
 
