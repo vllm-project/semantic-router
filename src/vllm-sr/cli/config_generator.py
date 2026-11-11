@@ -12,7 +12,11 @@ from cli.catalog_provider_projection import project_provider_models_for_envoy
 from cli.config_contract import iter_routing_profiles
 from cli.consts import DEFAULT_LISTENER_PORT
 from cli.durations import envoy_duration
-from cli.envoy_backend_pool import is_ip_address, project_envoy_backend_group
+from cli.envoy_backend_pool import (
+    default_backend_ca_file,
+    is_ip_address,
+    project_envoy_backend_group,
+)
 from cli.models import Model, UserConfig
 from cli.utils import get_logger
 
@@ -297,8 +301,9 @@ def generate_envoy_config_from_user_config(
     # Extract models and their endpoints
     # Group endpoints by model for cluster creation
     models = []
+    default_ca_file = default_backend_ca_file(user_config)
     for model in project_provider_models_for_envoy(user_config):
-        backend_group = project_envoy_backend_group(model)
+        backend_group = project_envoy_backend_group(model, default_ca_file)
         endpoints = list(backend_group.endpoints)
         has_https = backend_group.has_https
         uses_dns = backend_group.uses_dns
@@ -336,6 +341,7 @@ def generate_envoy_config_from_user_config(
                 "endpoints": endpoints,
                 "cluster_type": cluster_type,
                 "has_https": has_https,
+                "tls": backend_group.tls,
                 "path_prefix": path_prefix,
                 "route_request_headers": route_request_headers,
                 "auto_host_rewrite": auto_host_rewrite,

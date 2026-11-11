@@ -450,6 +450,9 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "tls": {
+          "$ref": "#/$defs/DeploymentTLS"
         }
       },
       "additionalProperties": false,
@@ -742,6 +745,9 @@
         },
         "reasoning_effort": {
           "type": "string"
+        },
+        "tls": {
+          "$ref": "#/$defs/ProviderDefaultsTLS"
         }
       },
       "additionalProperties": false,
@@ -2673,6 +2679,12 @@
         },
         "circuit_breaker": {
           "$ref": "#/$defs/CircuitBreakerConfig"
+        },
+        "forward_request_headers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -4072,6 +4084,12 @@
           },
           "type": "object"
         },
+        "forward_request_headers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "timeout_ms": {
           "type": "integer"
         },
@@ -4917,6 +4935,15 @@
         },
         "preserve_last_n": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProviderDefaultsTLS": {
+      "properties": {
+        "ca_file": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

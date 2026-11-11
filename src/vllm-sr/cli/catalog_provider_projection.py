@@ -9,7 +9,10 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from cli.api_registry import ALIASES
-from cli.envoy_backend_pool import project_envoy_backend_group
+from cli.envoy_backend_pool import (
+    default_backend_ca_file,
+    project_envoy_backend_group,
+)
 from cli.model_catalog import DEFAULT_CHANNEL, _load_catalog_document
 from cli.model_catalog_types import ModelCatalogError
 from cli.models import BackendAuth, BackendRef, Model, UserConfig
@@ -112,9 +115,10 @@ def validate_provider_model_configuration(
         user_config,
         allow_backendless_physical=allow_backendless_physical,
     )
+    default_ca_file = default_backend_ca_file(user_config)
     for model in projected_models:
         try:
-            project_envoy_backend_group(model)
+            project_envoy_backend_group(model, default_ca_file)
         except ValueError as backend_error:
             raise CatalogProviderProjectionError(str(backend_error)) from backend_error
 

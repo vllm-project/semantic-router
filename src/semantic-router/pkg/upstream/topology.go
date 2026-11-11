@@ -1,11 +1,15 @@
 package upstream
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"net"
 	"net/netip"
 	"reflect"
 	"strconv"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // LBPolicy selects how a cluster spreads requests over its endpoints.
@@ -158,6 +162,23 @@ type TLSSpec struct {
 	// ServerName is sent as SNI and is the name the server certificate must
 	// match.
 	ServerName string
+	// CAFile, when set, is the PEM bundle that replaces the system roots, as
+	// Envoy's trusted_ca does.
+	CAFile string
+	// CertFile and KeyFile, when set, are the client certificate the
+	// cluster presents.
+	CertFile string
+	KeyFile  string
+}
+
+// clientFiles loads the files the spec names: the roots that replace the
+// system pool, nil without a CA file, and the client certificate.
+func (t *TLSSpec) clientFiles() (*x509.CertPool, []tls.Certificate, error) {
+	files, err := (&config.DeploymentTLS{CAFile: t.CAFile, CertFile: t.CertFile, KeyFile: t.KeyFile}).ClientConfig()
+	if err != nil {
+		return nil, nil, err
+	}
+	return files.RootCAs, files.Certificates, nil
 }
 
 // Header is one header name and value.
