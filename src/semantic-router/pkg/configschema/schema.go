@@ -16,6 +16,7 @@ import (
 
 	"github.com/invopop/jsonschema"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiregistry"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -301,6 +302,15 @@ func modelBindingSchema() *jsonschema.Schema {
 
 func setCoreEnums(root *jsonschema.Schema) {
 	setPropertyConst(root, root, "version", ConfigVersion)
+	setDefinitionPropertyEnum(root, "CanonicalProviderModel", "api_format", apiregistry.AcceptedNames())
+	setDefinitionPropertyEnum(root, "CanonicalProviderModel", "schema", apiregistry.SchemaIDs())
+	if apis := definitionProperty(root, "Listener", "apis"); apis != nil {
+		names := make([]any, 0, len(apiregistry.AcceptedNames()))
+		for _, name := range apiregistry.AcceptedNames() {
+			names = append(names, name)
+		}
+		apis.PropertyNames = &jsonschema.Schema{Enum: names}
+	}
 	setDefinitionPropertyEnum(root, "CanonicalRouterGlobal", "config_source", []string{
 		string(routerconfig.ConfigSourceFile),
 		string(routerconfig.ConfigSourceKubernetes),

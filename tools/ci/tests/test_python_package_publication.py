@@ -17,7 +17,11 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
 
 from check_cli_wheel import check_wheel  # noqa: E402
-from prepare_dev_package import prepare_version, record_source_revision  # noqa: E402
+from prepare_dev_package import (  # noqa: E402
+    development_epoch,
+    prepare_version,
+    record_source_revision,
+)
 from validate_workflows import load_workflows, needs  # noqa: E402
 from workflow_policy_validation import validate_main_publishers  # noqa: E402
 
@@ -44,6 +48,40 @@ class DevelopmentVersionTests(unittest.TestCase):
         self.assertEqual(versions[0], "0.3.0.dev20260914000000")
         self.assertEqual(versions[0], versions[1])
         self.assertLess(versions[1], versions[2])
+
+    def test_each_main_commit_sorts_after_its_parent(self) -> None:
+        start = int(datetime(2026, 11, 10, tzinfo=timezone.utc).timestamp())
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+
+            def git(*args: str, offset: int = 0) -> None:
+                subprocess.run(
+                    ["git", *args],
+                    cwd=root,
+                    env={
+                        **os.environ,
+                        "GIT_AUTHOR_NAME": "ci",
+                        "GIT_AUTHOR_EMAIL": "ci@example.com",
+                        "GIT_COMMITTER_NAME": "ci",
+                        "GIT_COMMITTER_EMAIL": "ci@example.com",
+                        "GIT_COMMITTER_DATE": f"{start + offset} +0000",
+                        "GIT_CONFIG_GLOBAL": os.devnull,
+                        "GIT_CONFIG_NOSYSTEM": "1",
+                    },
+                    check=True,
+                    capture_output=True,
+                )
+
+            git("init", "-q", "-b", "main")
+            epochs = []
+            # Two merges in one second, a clock one minute behind, then normal time.
+            for offset in (100, 100, 40, 200):
+                git("commit", "-q", "--allow-empty", "-m", str(offset), offset=offset)
+                epochs.append(development_epoch(cwd=root))
+            self.assertEqual([epoch - start for epoch in epochs], [100, 101, 102, 200])
+            git("clone", "-q", "--depth=1", f"file://{root}", "shallow")
+            with self.assertRaisesRegex(ValueError, "complete commit history"):
+                development_epoch(cwd=root / "shallow")
 
     def test_rejects_non_release_base_without_editing(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -87,7 +125,7 @@ class PythonPublisherContractTests(unittest.TestCase):
         publisher = main.jobs["pypi"]
         self.assertEqual(publisher["uses"], "./.github/workflows/pypi-publish.yml")
         self.assertEqual(publisher["with"]["channel"], "dev")
-        for job_name in ("pypi", "images", "helm"):
+        for job_name in ("pypi", "images", "latest", "helm"):
             job = main.jobs[job_name]
             self.assertIn("ci", needs(job))
             self.assertIn("!cancelled()", job["if"])
@@ -137,7 +175,7 @@ class PythonPublisherContractTests(unittest.TestCase):
         self.assertIn("github.repository == 'vllm-project/semantic-router'", condition)
         self.assertIn("github.event_name == 'push'", condition)
         self.assertIn(
-            "inputs.channel == 'dev' && inputs.prebuilt-dist && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'",
+            "inputs.channel == 'dev' && inputs.prebuilt-dist && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'",
             condition,
         )
         self.assertIn(

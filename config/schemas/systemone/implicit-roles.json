@@ -1,0 +1,25 @@
+{
+  "description": "vllm-sr/4.0's implicit roles: the role each key of an object state names, whatever its case. The Router (systemoneprotocol.ImplicitRoles) and the model runtime (STATE_KEY_ROLES) read every case alike, so roles the Router writes for a 4.0 request read exactly as the request did.",
+  "cases": [
+    {
+      "state": {"request": "Again, the export.", "history": "How do I export?"},
+      "roles": {"request": "user", "history": "context"}
+    },
+    {
+      "state": {"Prompt": "Is the sky green?", "Response": "Yes."},
+      "roles": {"Prompt": "user", "Response": "answer"}
+    },
+    {
+      "state": {"response": "Yes.", "request": "Is the sky green?"},
+      "roles": {"response": "answer", "request": "user"}
+    },
+    {
+      "state": {"USER": "Hi.", "Source": "A document.", "previous_answer": "Earlier.", "TOOLS": "[]", "Answer": "Now."},
+      "roles": {"USER": "user", "Source": "context", "previous_answer": "context", "TOOLS": "context", "Answer": "answer"}
+    },
+    {
+      "state": {"Context": "Refunds within 30 days.", "document": "Policy.", "candidate": "Ninety days."},
+      "roles": {"Context": "context", "document": "context", "candidate": "context"}
+    }
+  ]
+}

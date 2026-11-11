@@ -54,11 +54,13 @@ global:
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         revision: cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764
         replicas: [{device: cpu}, {endpoint: http://worker-2.example.com:8100, model: kai}]
+        outlier_detection: {consecutive_timeouts: 3, base_ejection_ms: 30000, max_ejection_ms: 300000, max_ejection_percent: 50}
       # Connection block: an attached model_runtime and every remote provider.
       remote-example:
         provider: systemone              # or openai_chat, openai_embeddings
         endpoint: https://api.example.com/v1/systemone  # full URL; unix:///abs.sock for an attached runtime
         model: vllm-sr/d3-ultra          # the remote model; an attached runtime's served model
+        schema: vllm-sr/5.0
         auth: {header: Authorization, prefix: Bearer, api_key_env: EXAMPLE_KEY}  # or api_key_file: /abs/path
         headers: {X-Org: acme}           # non-secret headers only
         timeout_ms: 1500                 # per attempt
@@ -82,8 +84,9 @@ global:
 | `device` | `cpu`、`auto`（主机上最好的设备）、`cuda`、`rocm`，或单个设备，例如 `cuda:0` |
 | `input` | 部署的输入预算：`max_tokens`，以及 `overflow`（`reject`、`truncate` 或 `window`） |
 | `replicas` | 同一逻辑部署的多个 worker：每个是一个 `device`，或在别处启动的 worker 的 `endpoint` 和 `model` |
+| `outlier_detection` | 某个副本的请求连续 `consecutive_timeouts` 次（默认 3；0 表示关闭）超出调用方的截止时间时，它离开调度 `base_ejection_ms`（30000），每连续一次时间翻倍，最长 `max_ejection_ms`（基础时长的十倍）；同时被剔除的副本最多占 `max_ejection_percent`（50）。见 [剔除持续超时的副本](../model-runtime/deploy/placement-and-scaling.md#eject-a-replica-that-keeps-timing-out) |
 | `public_name` | 部署在推理 API 上的名称 |
-| `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context`、`max_model_len` | 引擎参数；参见[引擎参数](../model-runtime/engine-args.md) |
+| `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context`、`max_model_len` | 引擎参数；参见[引擎参数](../model-runtime/deploy/engine-args.md) |
 
 ### 连接块 {#connection-block}
 
@@ -127,7 +130,7 @@ recipes:
 
 ## 阈值 {#thresholds}
 
-规则未写出的 predicate 来自回答的模型：`vela3-fast` 或 Vela 2.0 各尺寸校准的阈值；其他模型（本地或 `systemone`）没有校准值，使用 0.5（加载时警告指明该规则的 `uncalibrated_preset`）。你写出的 `predicate` 按原值使用。
+规则未写出的 predicate 来自回答的模型：`vela3-fast` 或 Vela 2.0 各尺寸校准的阈值；其他模型（本地或 `systemone`）没有校准值，使用 0.5（加载时警告指明该规则的 `uncalibrated_preset`）。这一默认值适用于 domain、用户反馈、modality 和 PII 规则，以及读取其预设正向选项（`FACT_CHECK_NEEDED`、`unsafe`、`refusal`、`jailbreak`）的规则；其他没有 predicate 的规则以模型自己的选择为准，hallucination 规则以模型自己的 span 阈值为准。你写出的 `predicate` 按原值使用。
 
 ## 准入 {#admission}
 
@@ -173,6 +176,7 @@ global:
         provider: systemone
         endpoint: https://judge.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: JUDGE_KEY}
         timeout_ms: 5000
 recipes:
@@ -194,6 +198,7 @@ global:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth:
           header: Ocp-Apim-Subscription-Key
           prefix: ""                     # no Bearer prefix
@@ -245,6 +250,7 @@ global:
         provider: systemone
         endpoint: https://app.vllm-sr.ai/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: VSR_APP_KEY}
 ```
 

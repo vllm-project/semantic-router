@@ -42,9 +42,10 @@ func (c *Classifier) preparedSystemOneRules() []askedRule {
 // publishing the generation, and what the load could not tell about the
 // deployment that answers each rule (config.CheckSystemOneAnswerer). Without
 // runtime services there is no card of a model_runtime deployment to check.
-// A systemone deployment's questions are checked against the question types
-// and modalities it declares; its API's listing may add more, so a
-// deployment that declares none is checked per request.
+// A systemone deployment's questions are checked against the card its API
+// lists, read now, else the question types and presets it declares, and
+// against the modalities it declares; one whose API lists no question types
+// and that declares none is checked per request.
 func (c *Classifier) prepareSystemOneSignals() error {
 	services := c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil
 	cards := make(map[string]modelservice.ModelCard)
@@ -53,15 +54,15 @@ func (c *Classifier) prepareSystemOneSignals() error {
 		name, deployment := c.systemOneRuleDeployment(rule)
 		path := c.Config.ScopePath("signals.systemone[" + rule.Name + "]")
 		definition := modelservice.TaskDefinition{ID: config.SignalTypeSystemOne, Stage: rule.EffectiveStage()}
-		check := func(questionTypes, modalities []string) error {
-			return config.CheckSystemOneAnswerer(path, name, rule, questionTypes, modalities)
+		check := func(card modelservice.ModelCard, modalities []string) error {
+			return config.CheckSystemOneAnswerer(path, name, rule, card.AnsweredTypes(), modalities)
 		}
 		if asked.preset != "" {
 			path = c.Config.ApplicationRulePath(asked.signalType, rule.Name)
 			definition = modelservice.TaskDefinition{ID: modelservice.PresetTask(asked.preset), Stage: rule.EffectiveStage(), Preset: asked.preset}
 			application := config.ApplicationRule{Type: asked.signalType, Preset: asked.preset, Rule: rule}
-			check = func(questionTypes, modalities []string) error {
-				return config.CheckApplicationAnswerer(path, c.Config.ScopePath(""), name, application, questionTypes, modalities)
+			check = func(card modelservice.ModelCard, modalities []string) error {
+				return config.CheckApplicationAnswerer(path, c.Config.ScopePath(""), name, application, card.AnsweredTypes(), card.Presets, modalities)
 			}
 		}
 		if asked.path != "" {
@@ -69,18 +70,24 @@ func (c *Classifier) prepareSystemOneSignals() error {
 		}
 		question := askedQuestion(asked)
 		if deployment.IsSystemOne() {
-			declared := deployment.DeclaredQuestionTypes()
-			if len(declared) == 0 {
+			card := modelservice.DeploymentCard(deployment)
+			if remote := c.systemOne(); remote != nil {
+				var err error
+				if card, err = remote.PrepareCard(context.Background(), name); err != nil {
+					return fmt.Errorf("%s: %w", path, err)
+				}
+			}
+			if len(card.QuestionTypes) == 0 {
 				continue
 			}
 			var modalities []string
 			if len(deployment.DeclaredModalities()) > 0 {
 				modalities = deployment.DeclaredModalities()
 			}
-			if err := check(declared, modalities); err != nil {
+			if err := check(card, modalities); err != nil {
 				return err
 			}
-			if _, err := modelservice.CompileTask(definition, question, modelservice.RemoteCard(deployment.Model, declared, deployment.DeclaredPresets())); err != nil {
+			if _, err := modelservice.CompileTask(definition, question, card); err != nil {
 				return fmt.Errorf("%s: systemone deployment %q: %w", path, name, err)
 			}
 			continue
@@ -105,7 +112,7 @@ func (c *Classifier) prepareSystemOneSignals() error {
 			}
 			cards[name] = card
 		}
-		if err := check(card.AnsweredTypes(), card.ReadModalities()); err != nil {
+		if err := check(card, card.ReadModalities()); err != nil {
 			return err
 		}
 		if _, err := modelservice.CompileTask(definition, question, card); err != nil {

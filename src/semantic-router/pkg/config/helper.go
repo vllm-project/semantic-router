@@ -166,19 +166,19 @@ func (c *RouterConfig) GetMostExpensivePricedModel() (modelName string, promptPe
 	return modelName, pricing.PromptPer1M, pricing.CompletionPer1M, pricing.Currency, true
 }
 
-// GetModelAPIFormat returns the explicitly configured wire format for the
-// model, or APIFormatOpenAI when the model has no override.
+// GetModelAPIFormat returns the API the model is reached on, by its canonical
+// name, or APIFormatChatCompletions when the model has no override.
 func (c *RouterConfig) GetModelAPIFormat(modelName string) string {
 	if c == nil || c.ModelConfig == nil {
-		return APIFormatOpenAI
+		return APIFormatChatCompletions
 	}
 	if modelConfig, ok := c.ModelConfig[modelName]; ok && modelConfig.APIFormat != "" {
-		return modelConfig.APIFormat
+		return CanonicalAPIFormat(modelConfig.APIFormat)
 	}
 	if _, baseConfig, ok := c.resolveLoRABaseModel(modelName); ok && baseConfig.APIFormat != "" {
-		return baseConfig.APIFormat
+		return CanonicalAPIFormat(baseConfig.APIFormat)
 	}
-	return APIFormatOpenAI
+	return APIFormatChatCompletions
 }
 
 // GetModelAccessKey returns the access key for the given model.

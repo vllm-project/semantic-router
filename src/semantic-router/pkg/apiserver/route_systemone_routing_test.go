@@ -38,7 +38,7 @@ listeners:
   - name: public
     port: 8899
     api_keys: [public-test-key]
-    systemone: {models: [public-native]}
+    apis: {chat_completions: {}, responses: {}, messages: {}, images: {}, systemone: {schema: vllm-sr/4.0, models: [public-native]}}
 providers:
   models:
     - name: fast

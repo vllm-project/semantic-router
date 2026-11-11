@@ -129,7 +129,7 @@ spec:
 
 `spec.config.routing` 已移除；设置它的资源会被拒绝。
 
-其余 `spec.config` 字段是 Operator 对共享 Router 设置的 adapter，例如响应缓存、分类器、工具、可观测性和推理家族。它们会被转换为规范 `global` 和提供商段落。查阅 CRD 参考，不要把本地 `config.yaml` 中的字段复制到任意 CR 路径。
+其余 `spec.config` 字段是 Operator 对共享 Router 设置的 adapter，例如响应缓存、推理强度、API 和可观测性。它们会被转换为规范 `global` 和提供商段落。查阅 CRD 参考，不要把本地 `config.yaml` 中的字段复制到任意 CR 路径。
 
 ## 后端发现
 

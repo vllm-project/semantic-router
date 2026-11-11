@@ -18,19 +18,25 @@ MIGRATE = "run `vllm-sr config migrate`"
 REMOVED_ALGORITHM_TYPE = "removed_algorithm_type"
 REMOVED_FIELD = "removed_field"
 
+_DISTINCT_MODELS = (
+    "over the first modelRef of each model; static when every candidate is one model"
+)
 _TRAINED_SELECTOR = (
-    "type: systemone, or static for a decision with one candidate; "
-    "the trained model is not used"
+    "type: systemone over the first modelRef of each model, or static when every "
+    "candidate is one model; the trained model is not used"
 )
 
 # What each removed type becomes, in the Router's form order.
 REMOVED_ALGORITHM_TYPES = {
     "confidence": "type: escalate, with its method and threshold under escalate.accept",
     "cascade": "type: escalate, with its stages and quality under escalate",
-    "prompt": "type: systemone, which asks the decision model with the same instructions",
+    "prompt": (
+        "type: systemone, which asks the decision model with the same "
+        f"instructions, {_DISTINCT_MODELS}"
+    ),
     "router_dc": (
         "type: systemone, which asks the decision model to choose by the "
-        "candidates' descriptions, or static for a decision with one candidate"
+        f"candidates' descriptions, {_DISTINCT_MODELS}"
     ),
     "automix": "type: multi_factor, weighted {quality: 1-t, cost: t} by cost_quality_tradeoff t",
     "hybrid": "type: multi_factor, weighted by hybrid's automix and cost weights",

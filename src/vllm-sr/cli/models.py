@@ -7,6 +7,15 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Annotated, Any, Dict, List, Literal, Optional
 
+from .api_registry import (
+    API_NAMES,
+    DEFAULT_LISTENER_APIS,
+    LISTENER_SCHEMAS,
+    SCHEMAS,
+    canonical_api,
+    upstream_schema,
+)
+from .api_registry import SETTINGS as API_SETTINGS
 from .models_systemone import SystemOneRule
 from .models_native import CalibrationArtifact
 from .models_predicates import NumericPredicate
@@ -86,27 +95,54 @@ class ListenerIdentity(BaseModel):
     )
 
 
-class ListenerSystemOne(BaseModel):
-    """Explicit public models for native System One inference."""
+class ListenerAPI(BaseModel):
+    """One API a listener serves: its schema (only for a versioned API, systemone), the models it accepts
+    (omitted: every model of its kind) and the API's own settings."""
 
-    model_config = ConfigDict(extra="forbid")
-    models: List[str] = Field(min_length=1)
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    schema_: Optional[str] = Field(
+        default=None,
+        alias="schema",
+        description="The version of a versioned API the listener speaks: for "
+        "systemone, vllm-sr/5.0 (the default) or vllm-sr/4.0, which also "
+        "accepts the earlier contract's request forms.",
+    )
+    models: Optional[List[str]] = Field(
+        default=None,
+        description="The only request models this API accepts, by exact "
+        "'model' value; others are rejected with HTTP 403 model_not_allowed. "
+        "Omitted, every model of the API's kind.",
+    )
     max_deadline_ms: Optional[int] = Field(
         default=None,
         gt=0,
-        description="The longest this listener waits for a model it calls "
-        "directly, however long a request's options.deadline_ms asks for. "
-        "Omitted, 600000 (10 minutes).",
+        description="systemone: the longest this listener waits for a model it "
+        "calls directly, however long a request's options.deadline_ms asks "
+        "for. Omitted, 600000 (10 minutes).",
     )
 
     @field_validator("models")
     @classmethod
     def exact_model_names(cls, names):
+        if names is None:
+            return names
+        if not names:
+            raise ValueError(
+                "models lists no model; omit it to accept every model of the API"
+            )
         if any(not name or name != name.strip() for name in names):
-            raise ValueError("systemone.models requires exact non-empty public names")
+            raise ValueError("models requires exact non-empty model names")
         if len(set(names)) != len(names):
-            raise ValueError("systemone.models must not contain duplicate names")
+            raise ValueError("models must not contain duplicate names")
         return names
+
+
+# Listener fields apis replaced, and what replaces them.
+REMOVED_LISTENER_FIELDS = {
+    "models": "apis: {chat_completions: {models: [...]}, responses: {models: [...]}, messages: {models: [...]}, images: {models: [...]}}",
+    "systemone": "apis: {systemone: {schema: vllm-sr/4.0, models: [...], max_deadline_ms: ...}} next to the LLM APIs it serves",
+}
 
 
 class Listener(BaseModel):
@@ -123,17 +159,14 @@ class Listener(BaseModel):
         "'Authorization: Bearer <key>' or, for Azure OpenAI clients, "
         "'api-key: <key>'; other requests are rejected with HTTP 401.",
     )
-    models: Optional[List[str]] = Field(
+    apis: Optional[Dict[str, ListenerAPI]] = Field(
         default=None,
-        description="The only request models this listener accepts, by exact "
-        "'model' value; other models are rejected with HTTP 403 "
-        "model_not_allowed and /v1/models lists only these. Empty accepts "
-        "every model. Standalone mode enforces it; --gateway extproc rejects it.",
-    )
-    systemone: Optional[ListenerSystemOne] = Field(
-        default=None,
-        description="Publish native System One inference for these exact public "
-        "model IDs. Omitted keeps the API private; Chat model access is unchanged.",
+        description="The APIs this listener serves, by API name: "
+        "chat_completions, responses, messages, images and systemone (openai "
+        "and anthropic are aliases of chat_completions and messages). Other "
+        "API paths answer 404. Omitted, the listener serves chat_completions, "
+        "responses, messages and images, and not systemone. A model "
+        "allow-list is enforced in standalone mode; --gateway extproc rejects it.",
     )
     tls: Optional[ListenerTLS] = Field(
         default=None,
@@ -144,6 +177,74 @@ class Listener(BaseModel):
         default=None,
         description="The identity sources this listener trusts; by default none.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_removed_fields(cls, data):
+        if isinstance(data, dict):
+            for field, becomes in REMOVED_LISTENER_FIELDS.items():
+                if field in data:
+                    raise ValueError(
+                        f"{field} is removed; run `vllm-sr config migrate` ({becomes})"
+                    )
+        return data
+
+    @field_validator("apis")
+    @classmethod
+    def resolve_apis(cls, apis):
+        """Each API by its name, an alias read as its API; one API named twice, or an entry the API does not
+        take, is refused."""
+        if apis is None:
+            return apis
+        if not apis:
+            raise ValueError(
+                "apis names no API; name the APIs the listener serves, or omit apis to serve "
+                "chat_completions, responses, messages and images"
+            )
+        resolved: dict[str, ListenerAPI] = {}
+        named: dict[str, str] = {}
+        for key in sorted(apis):
+            name = canonical_api(key)
+            if name in named:
+                first, second = named[name], key
+                if first == name:
+                    first, second = second, first
+                raise ValueError(
+                    f"{first} and {second} name the same API, {name}; keep one ({first} is an alias of {name})"
+                )
+            entry = apis[key]
+            if entry.schema_ is not None:
+                schemas = LISTENER_SCHEMAS.get(name)
+                if schemas is None:
+                    raise ValueError(
+                        f"apis.{key}.schema: api {name} has one schema, {SCHEMAS[name][0]}, so a listener names none"
+                    )
+                if entry.schema_ not in schemas:
+                    raise ValueError(
+                        f"apis.{key}.schema: a listener serves api {name} in {' or '.join(schemas)}, not {entry.schema_!r}"
+                    )
+            if (
+                entry.max_deadline_ms is not None
+                and "max_deadline_ms" not in API_SETTINGS.get(name, ())
+            ):
+                raise ValueError(
+                    f"apis.{key}.max_deadline_ms: the {name} API takes no max_deadline_ms setting"
+                )
+            named[name] = key
+            resolved[name] = entry
+        return resolved
+
+    def served_apis(self) -> tuple[str, ...]:
+        """The APIs the listener serves, by name."""
+        if self.apis is None:
+            return DEFAULT_LISTENER_APIS
+        return tuple(name for name in API_NAMES if name in self.apis)
+
+    def systemone_models(self) -> Optional[List[str]]:
+        """The models the listener's systemone API names; None when it serves systemone for every model, or
+        serves no systemone."""
+        entry = (self.apis or {}).get("systemone")
+        return None if entry is None else entry.models
 
 
 class KeywordSignal(BaseModel):
@@ -849,9 +950,19 @@ class PromptCachePluginConfig(BaseModel):
 
 
 class FastResponsePluginConfig(BaseModel):
-    """Configuration for fast_response plugin."""
+    """Configuration for fast_response plugin.
 
-    message: str
+    enabled: false turns off the fast_response a decision inherits.
+    """
+
+    enabled: bool = True
+    message: Optional[str] = None
+
+    @model_validator(mode="after")
+    def message_when_enabled(self):
+        if self.enabled and self.message is None:
+            raise ValueError("message is required")
+        return self
 
 
 class RequestParamsPluginConfig(BaseModel):
@@ -863,7 +974,6 @@ class RequestParamsPluginConfig(BaseModel):
     ] = None
     max_tokens_limit: Optional[int] = Field(default=None, ge=1)
     max_n: Optional[int] = Field(default=None, ge=1)
-    strip_unknown: Optional[bool] = None
 
 
 ResponseGuardAction = Literal["block", "annotate", "none"]
@@ -890,12 +1000,20 @@ class ResponseGuardPluginConfig(BaseModel):
 
     Each rule reads named signals over the answer (and the request); a rule
     whose response-stage signal could not be read takes on_unknown.
+    enabled: false turns off the guard a decision inherits.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    rules: List[ResponseGuardRule] = Field(min_length=1)
+    enabled: bool = True
+    rules: List[ResponseGuardRule] = Field(default_factory=list)
     on_unknown: Optional[ResponseGuardAction] = None
+
+    @model_validator(mode="after")
+    def rules_when_enabled(self):
+        if self.enabled and not self.rules:
+            raise ValueError("rules: at least one rule is required")
+        return self
 
 
 class ToolsPolicyConfig(BaseModel):
@@ -1595,6 +1713,12 @@ class FallbackPolicy(FallbackOverride):
     circuit_breaker: Optional[FallbackCircuitBreaker] = None
 
 
+class CandidateIteration(BaseModel):
+    """A decision's candidate iteration; the CLI checks only its models."""
+
+    models: List[ModelRef] = Field(default_factory=list)
+
+
 class Decision(BaseModel):
     """Routing decision configuration."""
 
@@ -1611,6 +1735,7 @@ class Decision(BaseModel):
     output_contract: Optional[str] = None
     output_contract_spec: Optional[OutputContractSpec] = None
     modelRefs: List[ModelRef] = Field(default_factory=list, alias="modelRefs")
+    candidateIterations: List[CandidateIteration] = Field(default_factory=list)
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
     adaptations: Optional[DecisionAdaptationsConfig] = None
     reliability: Optional[DecisionReliability] = None
@@ -2154,7 +2279,7 @@ class Model(ModelFacts):
     """A providers.models[] entry: its transport, and the facts routing reads
     about it."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     name: str
     catalog: Optional[str] = None
@@ -2164,8 +2289,35 @@ class Model(ModelFacts):
     backend_refs: List["BackendRef"] = Field(default_factory=list)
     pricing: Optional[ModelPricing] = None
     reliability: Optional[ProviderReliability] = None
-    api_format: Optional[str] = None
+    api_format: Optional[str] = Field(
+        default=None,
+        description="The API the model's backends serve: chat_completions "
+        "(the default), responses, messages, images or systemone; openai and "
+        "anthropic are aliases of chat_completions and messages.",
+    )
+    schema_: Optional[str] = Field(
+        default=None,
+        alias="schema",
+        description="The version of that API the backends speak; omitted, the "
+        "API's default (systemone/0.2 for systemone).",
+    )
     external_model_ids: Optional[Dict[str, str]] = None
+
+    @field_validator("api_format")
+    @classmethod
+    def canonical_api_format(cls, value):
+        return None if value is None else canonical_api(value)
+
+    @model_validator(mode="after")
+    def validate_schema(self):
+        if self.schema_ is not None:
+            if self.deployment:
+                raise ValueError(
+                    "schema: a model on a deployment speaks that deployment's API; "
+                    "schema applies to a model its backend_refs reach"
+                )
+            upstream_schema(self.api_format or "chat_completions", self.schema_)
+        return self
 
     def declares_facts(self) -> bool:
         return any(getattr(self, field) is not None for field in MODEL_FACT_FIELDS)

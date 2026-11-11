@@ -139,6 +139,10 @@ var bindings = func() map[bindingKey]Binding {
 	all[bindingKey{FamilyVela2, Jailbreak, StageResponse}] = Binding{}
 	all[bindingKey{FamilyVela2, PII, StageRequest}] = Binding{ModelPreset: "pii"}
 	all[bindingKey{FamilyVela2, Hallucination, StageResponse}] = Binding{ModelPreset: "halu"}
+	// A model of no known family, such as a remote API's, answers a span
+	// preset with its own question where its card lists one.
+	all[bindingKey{"", PII, StageRequest}] = Binding{ModelPreset: "pii"}
+	all[bindingKey{"", Hallucination, StageResponse}] = Binding{ModelPreset: "halu"}
 	return all
 }()
 

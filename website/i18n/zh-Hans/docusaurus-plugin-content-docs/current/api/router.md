@@ -32,9 +32,11 @@ Router 数据面在配置的监听器上接收模型请求。默认的 standalon
 | `GET` | `/v1/systemone/models` | 原生模型发现 | 列出该 listener 发布的 System One 模型 |
 
 Engine 模式关闭配方路由，并提供原生 System One 接口。在
-`listeners[].systemone.models` 中发布原生模型 ID；Chat 的 `models` 名单不会授权
-原生访问。两类接口都使用 listener 的 API keys。完整请求见
-[模型运行时快速开始](../model-runtime/quickstart.md)。
+listener 在 `apis` 中列出 `systemone`（`listeners[].apis.systemone`，可加 `models`）时提供原生 API；
+LLM API 的 `models` 不会授权原生访问。所有 API 都使用 listener 的 API keys，`apis.systemone.schema`
+设置 listener 使用的 System One schema（默认 `vllm-sr/5.0`，或 `vllm-sr/4.0`），见
+[System One schema](../system-one/use/schemas.md)。完整请求见
+[模型运行时快速开始](../model-runtime/get-started/quickstart.md)。
 
 其他 `/v1/*` 路径默认拒绝。特别是 `/v1/files`、`/v1/vector_stores` 和路由回放路径在公网推理监听器上不可用。Router 自有的文件和向量存储操作使用管理监听器上的 `/api/v1/storage/files` 和 `/api/v1/storage/vector-stores`。其他 `/openai/*` 操作，例如 embeddings 和读取已存储的 response，返回 `404`。
 
@@ -55,11 +57,11 @@ Router 在模型读取请求的 `options` 之前，先按此 API 检查它们。
 （`true` 或 `false`）；`null` 表示不设置任何选项。其他选项或类型不符的值返回
 `400` 和 `invalid_request`，消息中会指出该项。`options.profile` 已在
 [#5071](https://github.com/vllm-project/semantic-router/pull/5071) 中移除：请求按其
-deployment 的[引擎参数](../model-runtime/engine-args.md)运行，`meta` 报告 `dtype` 和
+deployment 的[引擎参数](../model-runtime/deploy/engine-args.md)运行，`meta` 报告 `dtype` 和
 `numerics`，不再报告 `profile`。
 
 Router 调用的模型运行时 HTTP API 属于单个发布版本，不作此类承诺。Router 只接受恰好提供其契约版本的运行时；见
-[挂到你自己跑的 runtime](../model-runtime/deploy.md#attach-to-a-runtime-you-run)。
+[挂到你自己跑的 runtime](../model-runtime/deploy/connect-the-router.md#attach-to-a-runtime-you-run)。
 
 ## 发送路由请求 {#send-a-routed-request}
 
@@ -79,7 +81,7 @@ curl -sS http://localhost:8899/v1/chat/completions \
   }'
 ```
 
-响应保持客户端协议的形状。其模型、内容、token 用量以及可选的 Router 头取决于所选后端和配方。稳定的可观测性契约见 [VSR 路由头](../troubleshooting/vsr-headers)。
+响应保持客户端协议的形状。其模型、内容、token 用量以及可选的 Router 头取决于所选后端和配方。稳定的可观测性契约见 [VSR 路由头](../api/headers)。
 
 Router 接受的模型名来自规范 provider 条目。`name` 是决策和客户端使用的逻辑别名，`provider_model_id` 发送给上游 provider，`providers.models[].backend_refs[]` 标识物理端点：
 
@@ -165,7 +167,12 @@ Images API（`api_format: images`）上应答，还是在 Responses API 上通�
 API 不支持流式输出。未到达图像决策的请求（没有匹配任何决策、匹配到以文本应答的决策，
 或直接指定模型而非 `vllm-sr/auto` 这样的入口）会在调用任何模型之前收到 `400`
 `image_route_required`。到达图像决策的 Chat Completions 或 Anthropic Messages 请求会收到
-`400` `unsupported_capability`，因为这两种 API 都无法返回图像。
+`400` `unsupported_capability`，因为这两种 API 都无法返回图像。一次 Responses API
+调用只生成一张图像，因此 `n` 大于 1 时，决策中需要有一个在 Images API 上应答的模型；
+如果决策的模型全部在 Responses API 上，请求会在调用任何模型之前收到 `400`
+`unsupported_capability`，除非该决策的
+[`request_params`](../tutorials/plugin/request-params) `max_n` 将 `n` 限制为 1，
+或其 `blocked_params` 移除了 `n`。
 
 ### Azure OpenAI 客户端 {#azure-openai-clients}
 

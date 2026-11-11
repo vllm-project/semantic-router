@@ -33,3 +33,6 @@ global:
   stores:
     response_cache:
       backend_type: memory
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

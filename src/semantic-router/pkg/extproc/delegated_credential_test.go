@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -210,8 +212,8 @@ func TestDelegatedDispatchPresentsTheCredentialUnderTheProviderAuthHeader(t *tes
 	profile := delegatedCredentialProfile(t, router, "gateway-model_gateway")
 	state := &routeHeaderState{profile: profile}
 	ctx := &RequestContext{
-		Headers:             map[string]string{"authorization": "Bearer raw-client-token", headers.UserOpenAIKey: "per-user-key"},
-		delegatedCredential: "gw-key",
+		Headers:      map[string]string{"authorization": "Bearer raw-client-token", headers.UserOpenAIKey: "per-user-key"},
+		TraceContext: principal.ForRequest(context.Background(), "gw-key"),
 	}
 	if response := router.appendProviderCredential(state, "gateway-model", "gateway-model_gateway", ctx); response != nil {
 		t.Fatalf("delegated dispatch returned %#v", response)
@@ -264,8 +266,8 @@ global:
 	router := &OpenAIRouter{Config: cfg, CredentialResolver: newTestCredentialResolver(cfg)}
 	state := &routeHeaderState{profile: delegatedCredentialProfile(t, router, "claude-gateway_gateway")}
 	ctx := &RequestContext{
-		Headers:             map[string]string{"authorization": "Bearer raw-client-token"},
-		delegatedCredential: "gw-key",
+		Headers:      map[string]string{"authorization": "Bearer raw-client-token"},
+		TraceContext: principal.ForRequest(context.Background(), "gw-key"),
 	}
 	if response := router.appendProviderCredential(state, "claude-gateway", "claude-gateway_gateway", ctx); response != nil {
 		t.Fatalf("delegated dispatch returned %#v", response)
@@ -433,11 +435,80 @@ func TestDelegatedCredentialIsNotResolvedThroughTheCredentialChain(t *testing.T)
 	router.CredentialResolver = authz.NewCredentialResolver(authz.NewStaticConfigProvider(router.Config))
 	profile := delegatedCredentialProfile(t, router, "gateway-model_gateway")
 	state := &routeHeaderState{profile: profile}
-	ctx := &RequestContext{Headers: map[string]string{}, delegatedCredential: "gw-key"}
+	ctx := &RequestContext{Headers: map[string]string{}, TraceContext: principal.ForRequest(context.Background(), "gw-key")}
 	if response := router.appendProviderCredential(state, "gateway-model", "gateway-model_gateway", ctx); response != nil {
 		t.Fatalf("fail-closed chain interfered with the delegated backend: %#v", response)
 	}
 	if len(state.setHeaders) != 1 || string(state.setHeaders[0].GetHeader().GetRawValue()) != "Bearer gw-key" {
 		t.Fatalf("set headers = %#v", state.setHeaders)
+	}
+}
+
+// A Looper run that a hop or an accept check made for the request was refused
+// in, for want of the request's delegated credential, answers 401 in both
+// gateway modes, whether another model's answer came back or none did.
+func TestALooperRunRefusedForTheDelegatedCredentialAnswers401(t *testing.T) {
+	const escalate = `
+      modelRefs: [{model: model-a}, {model: model-b}]
+      algorithm:
+        type: escalate
+        escalate:
+          accept: ACCEPT`
+	const confidence = `{confidence: {method: avg_logprob, gte: 0.6}}`
+	const contract = `global:
+  services:
+    authz:
+      delegated_credential:
+        enabled: true
+`
+	const checker = `  model_catalog:
+    deployments:
+      checker:
+        provider: systemone
+        schema: vllm-sr/4.0
+        endpoint: http://checker.invalid/v1/systemone
+        model: checker
+        auth: {credential: delegated}
+`
+	for _, tc := range []struct {
+		name, accept, deployments string
+		delegated                 []string
+	}{
+		{name: "the hop to the one delegated model", accept: confidence, delegated: []string{"model-b"}},
+		{name: "every hop", accept: confidence, delegated: []string{"model-a", "model-b"}},
+		{name: "the accept check", accept: `{systemone: {deployment: checker, gte: 0.5}}`, deployments: checker},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			backend := &looperBackend{}
+			server := httptest.NewServer(backend)
+			t.Cleanup(server.Close)
+			decision := strings.ReplaceAll(strings.TrimPrefix(strings.Replace(escalate, "ACCEPT", tc.accept, 1), "\n"), "\n", "\n  ")
+			yaml := strings.NewReplacer(
+				"BACKEND", strings.TrimPrefix(server.URL, "http://"),
+				"DECISION", "  "+decision+"\n",
+				"global:\n", contract+tc.deployments,
+			).Replace(looperEquivalenceConfig)
+			for _, model := range tc.delegated {
+				backendRef := "{name: fake-" + strings.TrimPrefix(model, "model-") + ", endpoint: " + strings.TrimPrefix(server.URL, "http://") + ", protocol: http, provider: vllm"
+				yaml = strings.Replace(yaml, backendRef+"}", backendRef+", auth: {credential: delegated}}", 1)
+			}
+			cfg, err := config.ParseYAMLBytes([]byte(yaml))
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			router := newLooperRouter(t, cfg)
+			harness := &looperHarness{router: router, backend: backend, set: router.upstreamSet()}
+			for _, adapter := range []string{"extproc", "sessions"} {
+				record := harness.serve(t, looperAdapters[adapter](router), looperClientRequest)
+				if record.Response.Status != http.StatusUnauthorized || !strings.Contains(string(record.Response.Body), delegatedCredentialCode) {
+					t.Errorf("%s: reply = %d %s, want 401 %s", adapter, record.Response.Status, record.Response.Body, delegatedCredentialCode)
+				}
+				for _, call := range record.Calls {
+					if slices.Contains(tc.delegated, call.Model) {
+						t.Errorf("%s: %s was called without the credential", adapter, call.Model)
+					}
+				}
+			}
+		})
 	}
 }
