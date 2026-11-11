@@ -67,7 +67,7 @@ providers:
           protocol: http
 ```
 
-Canonical v0.3 has no user-authored global family registry. The legacy
+Canonical v0.5 has no user-authored global family registry. The legacy
 `providers.defaults.reasoning_families` plus per-model `reasoning_family`
 combination migrates to `providers.models[].reasoning`: built-in IDs become a
 `family` reference, while custom definitions are copied inline onto each custom
@@ -100,25 +100,29 @@ family cannot be selected with `use_reasoning: false`.
 After the Model has a family, configure its decision reference:
 
 ```yaml
-routing:
-  decisions:
-    - name: complex-request
-      rules:
-        operator: AND
-        conditions:
-          - type: complexity
-            name: needs_reasoning:hard
-      modelRefs:
-        - model: private-reasoner
-          use_reasoning: true
-          reasoning_mode: enabled
-          reasoning_effort: high
+recipes:
+  - name: default
+    decisions:
+      - name: complex-request
+        rules:
+          operator: AND
+          conditions:
+            - type: complexity
+              name: needs_reasoning
+              label: hard
+        modelRefs:
+          - model: private-reasoner
+            use_reasoning: true
+            reasoning_mode: enabled
+            reasoning_effort: high
 ```
 
 The effort must be listed by the family and allowed by every Provider binding
 for that Model. `reasoning_mode` must agree with `use_reasoning`. Omit an effort
 to use the family default, or set `providers.defaults.reasoning_effort` when
-one valid deployment-wide default should take precedence.
+one valid deployment-wide default should take precedence. The default applies
+to every Model whose family lists it, so those Models' Provider bindings must
+allow it too; a Model whose family does not list it keeps the family default.
 
 A `modelRefs` entry without `use_reasoning` counts as `use_reasoning: false`.
 For a Model with a family, the decision's choice replaces the client's: the

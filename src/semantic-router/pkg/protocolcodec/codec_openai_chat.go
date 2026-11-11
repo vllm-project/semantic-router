@@ -167,7 +167,7 @@ type chatToolCallWire struct {
 }
 
 type chatFunctionCallWire struct {
-	Name               string    `json:"name"`
+	Name               string    `json:"name,omitempty"`
 	Arguments          string    `json:"arguments,omitempty"`
 	TokenizedArguments *[]string `json:"TokenizedArguments,omitempty"`
 }
@@ -231,11 +231,15 @@ func chatMessagesDropReasoningAlias(messages []chatMessageWire) bool {
 }
 
 func validateChatRequestWire(wire chatRequestWire) error {
+	logprobs := wire.Logprobs
+	if bytes.Equal(bytes.TrimSpace(logprobs), []byte("false")) {
+		logprobs = nil // false asks for the default: no log probabilities
+	}
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"prompt_cache_retention": wire.PromptCacheRetention,
 		"prompt_cache_options":   wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
 		"audio": wire.Audio, "function_call": wire.FunctionCall, "functions": wire.Functions,
-		"logit_bias": wire.LogitBias, "logprobs": wire.Logprobs, "modalities": wire.Modalities,
+		"logit_bias": wire.LogitBias, "logprobs": logprobs, "modalities": wire.Modalities,
 		"moderation": wire.Moderation, "prediction": wire.Prediction, "service_tier": wire.ServiceTier,
 		"top_logprobs":       wire.TopLogprobs,
 		"web_search_options": wire.WebSearchOptions,

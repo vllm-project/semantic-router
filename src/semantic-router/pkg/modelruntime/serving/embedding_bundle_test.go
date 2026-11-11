@@ -21,7 +21,7 @@ func TestBundledEmbeddingsOfOneTextFlushAtOnce(t *testing.T) {
 		"emb": {Embedding: &runtimetest.Embedder{Dimensions: []int{8}}},
 	})
 	provider, err := runtime.Embedding(context.Background(), config.ResolvedModelBinding{
-		Recipe: "default", Name: "embedding", Binding: config.ModelBinding{Deployment: "emb", Contract: "embedding.v1"},
+		Recipe: "default", Name: "embedding", Contract: "embedding.v1", Binding: config.ModelBinding{Deployment: "emb"},
 		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime:8100", Input: config.ModelInputBudget{Overflow: "truncate"}},
 	}, 0, 0)
 	if err != nil {

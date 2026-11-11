@@ -343,20 +343,19 @@ func TestFinalizeProviderDispatchResponsePreservesPromptCacheProtocolError(t *te
 	if envelope.Error.Code != promptCacheErrorTargetUnsupported {
 		t.Fatalf("error code = %q", envelope.Error.Code)
 	}
-	if got := immediateHeaderValue(immediate, headers.VSRPromptCacheAction); got != promptCacheActionRejected {
-		t.Fatalf("prompt cache action header = %q", got)
-	}
-	if got := immediateHeaderValue(immediate, headers.VSRPromptCacheReason); got != promptCacheReasonUnsupportedTarget {
-		t.Fatalf("prompt cache reason header = %q", got)
+	appendRoutedResponseHeaders(immediate, ctx)
+	want := promptCacheActionRejected + ";reason=" + promptCacheReasonUnsupportedTarget
+	if got := traceOf(t, immediate.GetImmediateResponse().GetHeaders().GetSetHeaders())[headers.TracePromptCache]; got != want {
+		t.Fatalf("prompt_cache = %s, want %s", got, want)
 	}
 
 	nonDebug := router.createErrorResponse(400, protocolError.Message)
-	addPromptCacheReceiptToImmediateResponse(nonDebug, &RequestContext{
+	appendRoutedResponseHeaders(nonDebug, &RequestContext{
 		PromptCacheAction: promptCacheActionRejected,
 		PromptCacheReason: promptCacheReasonUnsupportedTarget,
 	})
-	if got := immediateHeaderValue(nonDebug, headers.VSRPromptCacheAction); got != "" {
-		t.Fatalf("non-debug prompt cache action header = %q", got)
+	if got := traceOf(t, nonDebug.GetImmediateResponse().GetHeaders().GetSetHeaders()); got != nil {
+		t.Fatalf("non-debug trace = %v", got)
 	}
 }
 

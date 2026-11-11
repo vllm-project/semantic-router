@@ -16,7 +16,7 @@ translation:
 
 - `global.router.learning.adaptation`：在线模型选择学习。
 - `global.router.learning.protection`：会话和对话稳定性。
-- `routing.decisions[].adaptations`：按决策的应用、观察或绕过控制。
+- `recipes[].decisions[].adaptations`：按决策的应用、观察或绕过控制。
 - 路由回放：可选诊断和结果，用于离线配方学习；持久化需要耐用的回放后端。
 
 当决策应保持语义，但重复请求应考虑当前模型、工具循环状态、前缀缓存证据、交接成本、切换历史或运行时结果时，使用路由学习。
@@ -122,13 +122,10 @@ base selector
 
 ## 请求头与回放 {#header-and-replay}
 
-`x-vsr-learning-*` 请求头族有意保持紧凑：
+`x-vsr-trace` 的 `learning` 成员有意保持紧凑：每个方法带有它的 `action`、`scope` 和 `reason`。
 
 ```http
-x-vsr-learning-methods: adaptation,protection
-x-vsr-learning-actions: adaptation=propose_switch,protection=allow_switch
-x-vsr-learning-scopes: protection=conversation
-x-vsr-learning-reasons: adaptation=sampled_win,protection=switch_allowed
+x-vsr-trace: learning=(adaptation;action=propose_switch;reason=sampled_win protection;action=allow_switch;scope=conversation;reason=switch_allowed)
 ```
 
 启用路由回放时，基础模型、提案模型、最终模型、缓存热度、切换成本、候选分数、采样值和哈希身份诊断等详细字段会存储在那里，并以 `x-vsr-replay-id` 为键。

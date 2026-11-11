@@ -21,7 +21,8 @@ func TestShortRequestUsageDoesNotInflateLongContextSignal(t *testing.T) {
 				}},
 			},
 		},
-	}, nil, nil, nil)
+	})
+
 	require.NoError(t, err)
 	router := &OpenAIRouter{Classifier: classifier}
 

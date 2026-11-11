@@ -8,7 +8,7 @@ import (
 )
 
 const canonicalReasoningActivationYAML = `
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: private-model
@@ -25,7 +25,8 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing: {}
+recipes:
+  - name: default
 `
 
 func TestCanonicalInlineReasoningActivationParameterRoundTrips(t *testing.T) {

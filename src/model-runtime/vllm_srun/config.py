@@ -8,6 +8,7 @@ sets its own.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
@@ -174,6 +175,11 @@ class ServeConfig:
     images and videos for the process's models, off the threads that plan
     requests next to the device worker; 0 decodes in the planning threads, None
     picks a count from the CPUs the process may use (``media.auto_workers``).
+    A model whose forward has run longer than ``forward_timeout_seconds`` is
+    stalled: the process is neither live nor ready until the forward returns
+    (0 turns the watchdog off). A stopping server waits up to
+    ``shutdown_grace_seconds`` for requests and forwards in flight, then exits
+    even if a forward is still running.
     """
 
     models: tuple[ModelConfig, ...] = ()
@@ -185,7 +191,10 @@ class ServeConfig:
     max_queue: int = 256
     max_queued_tokens: int = 1 << 22
     engine_args: EngineArgs = field(default_factory=EngineArgs)
-    max_request_bytes: int = 8 << 20
+    max_request_bytes: int = 32 << 20
+    # The System One schema /v1/systemone and /v1/systemone/batch speak:
+    # vllm-sr/5.0, or vllm-sr/4.0 for clients of the earlier contract.
+    systemone_schema: str = "vllm-sr/5.0"
     max_bundle_tasks: int = 64
     load_attempts: int = 5
     load_retry_seconds: float = 5.0
@@ -198,14 +207,29 @@ class ServeConfig:
     autotune_cache: str | None = None
     exit_on_device_error: bool = True
     media_workers: int | None = None
+    forward_timeout_seconds: float = 300.0
+    shutdown_grace_seconds: float = 8.0
 
     def __post_init__(self) -> None:
+        if self.systemone_schema not in ("vllm-sr/5.0", "vllm-sr/4.0"):
+            raise ValueError(
+                f"systemone_schema is vllm-sr/5.0 or vllm-sr/4.0, not {self.systemone_schema!r}"
+            )
         if self.media_workers is not None and (
             isinstance(self.media_workers, bool)
             or not isinstance(self.media_workers, int)
             or self.media_workers < 0
         ):
             raise ValueError("media_workers must be a non-negative integer")
+        for name in ("forward_timeout_seconds", "shutdown_grace_seconds"):
+            value = getattr(self, name)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value < 0
+            ):
+                raise ValueError(f"{name} must be a non-negative number of seconds")
 
     def served_models(self) -> tuple[ModelConfig, ...]:
         """The models this process serves, in load order."""

@@ -22,7 +22,7 @@ func newMCPShutdownDashboard(t *testing.T) *Server {
 	t.Setenv("VLLM_SR_RECIPE_STORE_DIR", filepath.Join(tempDir, "recipe-store"))
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", "")
 	configPath := filepath.Join(tempDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	upstream := httptest.NewServer(http.NotFoundHandler())

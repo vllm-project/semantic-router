@@ -24,7 +24,6 @@ from cli.models import (
     ProjectionScore,
     ProjectionScoreInput,
     Reasoning,
-    RoutingModel,
     UserConfig,
 )
 from cli.validator import validate_user_config
@@ -36,7 +35,7 @@ from pydantic import ValidationError as PydanticValidationError
 def recipe_config(*, recipe_model: str = "model-a", recipe_name: str = "private"):
     return UserConfig.model_validate(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "providers": {
                 "defaults": {"model": "model-a"},
                 "models": [
@@ -48,37 +47,36 @@ def recipe_config(*, recipe_model: str = "model-a", recipe_name: str = "private"
                     }
                 ],
             },
-            "routing": {
-                "modelCards": [{"name": "model-a"}],
-                "decisions": [
-                    {
-                        "name": "default-route",
-                        "description": "default",
-                        "priority": 1,
-                        "rules": {"operator": "AND", "conditions": []},
-                        "modelRefs": [{"model": "model-a"}],
-                    }
-                ],
-            },
             "entrypoints": [
-                {"model_names": ["amd/rocm-v1-private"], "recipe": recipe_name}
+                {"model_names": ["amd/rocm-v1-private"], "recipe": recipe_name},
+                {"model_names": ["vllm-sr/auto"], "recipe": "default", "default": True},
             ],
             "recipes": [
                 {
                     "name": "private",
-                    "routing": {
-                        "decisions": [
-                            {
-                                "name": "private-route",
-                                "description": "private",
-                                "priority": 1,
-                                "tier": 7,
-                                "rules": {"operator": "AND", "conditions": []},
-                                "modelRefs": [{"model": recipe_model}],
-                            }
-                        ]
-                    },
-                }
+                    "decisions": [
+                        {
+                            "name": "private-route",
+                            "description": "private",
+                            "priority": 1,
+                            "tier": 7,
+                            "rules": {"operator": "AND", "conditions": []},
+                            "modelRefs": [{"model": recipe_model}],
+                        }
+                    ],
+                },
+                {
+                    "name": "default",
+                    "decisions": [
+                        {
+                            "name": "default-route",
+                            "description": "default",
+                            "priority": 1,
+                            "rules": {"operator": "AND", "conditions": []},
+                            "modelRefs": [{"model": "model-a"}],
+                        }
+                    ],
+                },
             ],
         }
     )
@@ -88,6 +86,69 @@ def test_recipe_model_references_are_validated():
     errors = validate_user_config(recipe_config(recipe_model="missing-model"))
 
     assert any("unknown model 'missing-model'" in error.message for error in errors)
+
+
+@pytest.mark.parametrize(
+    ("ref", "message"),
+    [
+        ({"model": "ghost"}, "Decision 'support' references unknown model 'ghost'"),
+        (
+            {"model": "general", "lora_name": "undeclared"},
+            "Decision 'support' references unknown LoRA 'undeclared' for model 'general'",
+        ),
+        ({"model": "general", "lora_name": "declared"}, None),
+        ({"model": "declared"}, None),
+    ],
+)
+def test_candidate_iteration_models_are_checked_as_the_router_checks_them(ref, message):
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.5",
+            "providers": {
+                "defaults": {"model": "general"},
+                "models": [
+                    {
+                        "name": "general",
+                        "backend_refs": [
+                            {"endpoint": "127.0.0.1:8000", "provider": "vllm"}
+                        ],
+                        "loras": [{"name": "declared"}],
+                    }
+                ],
+            },
+            "recipes": [
+                {
+                    "name": "default",
+                    "decisions": [
+                        {
+                            "name": "support",
+                            "priority": 1,
+                            "rules": {"operator": "AND", "conditions": []},
+                            "modelRefs": [{"model": "general"}],
+                            "candidateIterations": [
+                                {
+                                    "variable": "candidate",
+                                    "source": "models",
+                                    "models": [ref],
+                                    "outputs": [
+                                        {"type": "model", "value": "candidate"}
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    errors = [
+        (error.field, error.message)
+        for error in validate_user_config(config, log_summary=False)
+    ]
+
+    field = "recipes.default.decisions.support.candidateIterations[0].models"
+    assert errors == ([(field, message)] if message else [])
 
 
 def test_catalog_model_cannot_override_reasoning_binding():
@@ -107,7 +168,6 @@ def test_catalog_model_cannot_override_reasoning_binding():
 def _catalog_backed_qwen_config() -> UserConfig:
     config = recipe_config()
     config.providers.models[0].catalog = "qwen/qwen3.8-27b"
-    config.routing.model_cards[0].name = "qwen/qwen3.8-27b"
     return config
 
 
@@ -136,14 +196,14 @@ def _catalog_backed_qwen_config() -> UserConfig:
 )
 def test_catalog_card_widening_is_rejected_before_serve(overlay, field, added):
     config = _catalog_backed_qwen_config()
-    card = config.routing.model_cards[0]
+    card = config.providers.models[0]
     for name, value in overlay.items():
         setattr(card, name, value)
 
     errors = validate_user_config(config, log_summary=False)
 
     assert any(
-        error.field == f"routing.modelCards[0].{field}"
+        error.field == f"providers.models[{card.name}].{field}"
         and "widen a built-in claim" in error.message
         and added in error.message
         for error in errors
@@ -152,21 +212,20 @@ def test_catalog_card_widening_is_rejected_before_serve(overlay, field, added):
 
 def test_catalog_card_claims_may_be_narrowed():
     config = _catalog_backed_qwen_config()
-    config.routing.model_cards[0].capabilities = ["chat", "reasoning"]
-    config.routing.model_cards[0].modalities = {"input": ["text"], "output": ["text"]}
+    config.providers.models[0].capabilities = ["chat", "reasoning"]
+    config.providers.models[0].modalities = {"input": ["text"], "output": ["text"]}
 
     errors = validate_user_config(config, log_summary=False)
 
     assert not any(
-        error.field and error.field.startswith("routing.modelCards[0].")
-        for error in errors
+        error.field and error.field.startswith("providers.models[") for error in errors
     )
 
 
 def test_custom_card_sharing_builtin_name_may_declare_its_own_claims():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "providers": {
                 "defaults": {"model": "qwen/qwen3.8-27b"},
                 "models": [
@@ -175,14 +234,11 @@ def test_custom_card_sharing_builtin_name_may_declare_its_own_claims():
                         "backend_refs": [
                             {"endpoint": "127.0.0.1:8000", "provider": "vllm"}
                         ],
+                        "capabilities": ["chat", "text"],
                     }
                 ],
             },
-            "routing": {
-                "modelCards": [
-                    {"name": "qwen/qwen3.8-27b", "capabilities": ["chat", "text"]}
-                ]
-            },
+            "recipes": [{"name": "default"}],
         }
     )
 
@@ -193,7 +249,7 @@ def test_custom_card_sharing_builtin_name_may_declare_its_own_claims():
 
 def test_config_validate_reports_unverified_catalog_claim(tmp_path: Path):
     config = _catalog_backed_qwen_config()
-    config.routing.model_cards[0].capabilities = [
+    config.providers.models[0].capabilities = [
         "chat",
         "reasoning",
         "tools",
@@ -212,7 +268,7 @@ def test_config_validate_reports_unverified_catalog_claim(tmp_path: Path):
 
     assert result.exit_code != 0
     assert "capabilities widen a built-in claim" in result.output
-    assert "routing.modelCards[0].capabilities" in result.output
+    assert "capabilities" in result.output
 
 
 def test_inline_reasoning_allows_an_implicit_mode_contract():
@@ -259,31 +315,31 @@ def test_inline_effort_flags_ignore_a_disabled_sentinel_level():
     }
 
 
-def test_declared_lora_alias_can_have_metadata_only_model_card():
+def test_lora_adapter_is_declared_on_its_provider_model():
     config = recipe_config()
-    config.routing.model_cards[0].loras = [LoRAAdapter(name="general-expert")]
-    config.routing.model_cards.append(RoutingModel(name="general-expert"))
+    config.providers.models[0].loras = [LoRAAdapter(name="general-expert")]
 
     errors = validate_user_config(config)
 
     assert not any(
-        error.field == "routing.modelCards.general-expert.name" for error in errors
+        error.field and error.field.startswith("providers.models") for error in errors
     )
 
 
 def test_routing_only_model_card_can_supply_default_model():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "providers": {"defaults": {"model": "private-model"}},
-            "routing": {
-                "modelCards": [
+            "version": "v0.5",
+            "providers": {
+                "defaults": {"model": "private-model"},
+                "models": [
                     {
                         "name": "private-model",
                         "description": "Metadata-only routing model",
                     }
-                ]
+                ],
             },
+            "recipes": [{"name": "default"}],
         }
     )
 
@@ -293,108 +349,88 @@ def test_routing_only_model_card_can_supply_default_model():
 def test_routing_only_decision_refs_remain_external_gateway_metadata():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "providers": {},
-            "routing": {
-                "modelCards": [{"name": "private-model"}],
-                "decisions": [
-                    {
-                        "name": "external-route",
-                        "priority": 100,
-                        "modelRefs": [{"model": "private-model"}],
-                    }
-                ],
-            },
+            "version": "v0.5",
+            "providers": {"models": [{"name": "private-model"}]},
+            "recipes": [
+                {
+                    "name": "default",
+                    "decisions": [
+                        {
+                            "name": "external-route",
+                            "priority": 100,
+                            "modelRefs": [{"model": "private-model"}],
+                        }
+                    ],
+                }
+            ],
         }
     )
 
     assert validate_user_config(config, log_summary=False) == []
 
 
-def test_blank_routing_model_card_identity_is_rejected():
+def test_blank_provider_model_identity_is_rejected():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "providers": {},
-            "routing": {"modelCards": [{"name": " "}]},
+            "version": "v0.5",
+            "providers": {"models": [{"name": " "}]},
+            "recipes": [{"name": "default"}],
         }
     )
 
     errors = validate_user_config(config, log_summary=False)
 
     assert any(
-        error.field == "routing.modelCards[0].name"
-        and error.message == "Model card name cannot be empty"
+        error.field == "providers.models[0].name"
+        and error.message == "Provider model name cannot be empty"
         for error in errors
     )
 
 
-def test_routing_only_exception_does_not_allow_unbound_card_with_provider_models():
-    config = recipe_config()
-    config.routing.model_cards.append(RoutingModel(name="unbound-metadata"))
-
-    errors = validate_user_config(config, log_summary=False)
-
-    assert any(
-        error.field == "routing.modelCards.unbound-metadata.name" for error in errors
-    )
-
-
-def test_empty_provider_model_requires_backend_or_metadata():
+def test_name_only_provider_model_describes_a_routing_target():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "listeners": [],
             "providers": {"models": [{"name": "bare"}]},
-            "routing": {},
+            "recipes": [{"name": "default"}],
         }
     )
 
     errors = validate_user_config(config, log_summary=False)
 
-    assert any(
-        error.field == "providers.models.bare"
-        and "must define backend_refs or model metadata" in error.message
-        for error in errors
-    )
+    assert not any(error.field == "providers.models.bare" for error in errors)
 
 
-def test_empty_pricing_block_does_not_count_as_provider_model_metadata():
+def test_empty_pricing_block_is_a_name_only_provider_model():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "listeners": [],
             "providers": {"models": [{"name": "bare", "pricing": {}}]},
-            "routing": {},
+            "recipes": [{"name": "default"}],
         }
     )
 
     errors = validate_user_config(config, log_summary=False)
 
-    assert any(
-        error.field == "providers.models.bare"
-        and "must define backend_refs or model metadata" in error.message
-        for error in errors
-    )
+    assert not any(error.field == "providers.models.bare" for error in errors)
 
 
 def test_explicit_zero_pricing_counts_as_provider_model_metadata():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "listeners": [],
             "providers": {
                 "models": [
                     {
                         "name": "free-model",
-                        "pricing": {
-                            "prompt_per_1m": 0,
-                            "completion_per_1m": 0,
-                        },
+                        "pricing": {"prompt_per_1m": 0, "completion_per_1m": 0},
                     }
                 ]
             },
-            "routing": {},
+            "recipes": [{"name": "default"}],
         }
     )
 
@@ -426,7 +462,7 @@ def test_operator_evaluation_preserves_profile_and_reasoning_effort():
 
 
 def test_omitted_provider_defaults_do_not_invent_reasoning_effort():
-    config = UserConfig.model_validate({"version": "v0.3"})
+    config = UserConfig.model_validate({"version": "v0.5"})
 
     assert config.providers.defaults.reasoning_effort is None
     assert config.providers.defaults.model_dump(exclude_none=True) == {}
@@ -435,7 +471,7 @@ def test_omitted_provider_defaults_do_not_invent_reasoning_effort():
 def test_recipe_decision_tier_survives_schema_parse():
     config = recipe_config()
 
-    assert config.recipes[0].routing.decisions[0].tier == 7
+    assert config.recipes[0].decisions[0].tier == 7
 
 
 def test_entrypoints_must_reference_known_recipe():
@@ -465,10 +501,11 @@ def test_entrypoint_names_cannot_collide_with_provider_models():
     )
 
 
-def test_recipes_only_default_profile_is_allowed():
+def test_a_single_recipe_may_be_named_default():
     config = recipe_config()
-    config.routing.decisions = []
+    config.recipes = [config.recipes[0]]
     config.recipes[0].name = "default"
+    config.entrypoints = [config.entrypoints[0]]
     config.entrypoints[0].recipe = "default"
 
     errors = validate_user_config(config)
@@ -479,10 +516,10 @@ def test_recipes_only_default_profile_is_allowed():
     assert not any("unknown recipe 'default'" in error.message for error in errors)
 
 
-def test_explicit_default_recipe_conflicts_with_top_level_strategy():
+def test_two_recipes_named_default_are_rejected():
     config = recipe_config()
-    config.routing.decisions = []
-    config.routing.strategy = "priority"
+    config.default_recipe.decisions = []
+    config.default_recipe.strategy = "priority"
     config.recipes[0].name = "default"
     config.entrypoints[0].recipe = "default"
 
@@ -506,7 +543,7 @@ def test_decision_adaptation_mode_boundaries_apply_inside_recipes():
 
 def test_recipe_remom_synthesis_model_must_be_in_model_refs():
     config = recipe_config()
-    config.recipes[0].routing.decisions[0].algorithm = AlgorithmConfig(
+    config.recipes[0].decisions[0].algorithm = AlgorithmConfig(
         type="remom",
         remom=ReMoMAlgorithmConfig(
             breadth_schedule=[2],
@@ -521,7 +558,7 @@ def test_recipe_remom_synthesis_model_must_be_in_model_refs():
 
 def test_recipe_fusion_rejects_quorum_above_panel_size():
     config = recipe_config()
-    config.recipes[0].routing.decisions[0].algorithm = AlgorithmConfig(
+    config.recipes[0].decisions[0].algorithm = AlgorithmConfig(
         type="fusion",
         fusion=FusionAlgorithmConfig(min_successful_responses=2),
     )
@@ -533,7 +570,7 @@ def test_recipe_fusion_rejects_quorum_above_panel_size():
 
 def test_recipe_workflow_rejects_quorum_above_parallelism():
     config = recipe_config()
-    config.recipes[0].routing.decisions[0].algorithm = AlgorithmConfig(
+    config.recipes[0].decisions[0].algorithm = AlgorithmConfig(
         type="workflows",
         workflows=WorkflowsAlgorithmConfig(
             mode="dynamic",
@@ -569,7 +606,7 @@ def test_entrypoint_identifiers_are_trimmed_and_deduplicated():
 
 def test_duplicate_signal_names_are_isolated_across_recipes():
     config = recipe_config()
-    config.routing.signals.keywords = [
+    config.default_recipe.signals.keywords = [
         KeywordSignal(
             name="shared-keyword",
             operator="OR",
@@ -577,7 +614,7 @@ def test_duplicate_signal_names_are_isolated_across_recipes():
             case_sensitive=False,
         )
     ]
-    config.recipes[0].routing.signals.keywords = [
+    config.recipes[0].signals.keywords = [
         KeywordSignal(
             name="shared-keyword",
             operator="OR",
@@ -599,8 +636,8 @@ def test_identical_signals_can_be_shared_across_recipes():
         keywords=["shared"],
         case_sensitive=False,
     )
-    config.routing.signals.keywords = [signal]
-    config.recipes[0].routing.signals.keywords = [signal]
+    config.default_recipe.signals.keywords = [signal]
+    config.recipes[0].signals.keywords = [signal]
 
     errors = validate_user_config(config)
 
@@ -609,7 +646,7 @@ def test_identical_signals_can_be_shared_across_recipes():
 
 def test_signal_references_cannot_cross_recipe_boundaries():
     config = recipe_config()
-    config.recipes[0].routing.signals.keywords = [
+    config.recipes[0].signals.keywords = [
         KeywordSignal(
             name="private-only",
             operator="OR",
@@ -617,7 +654,7 @@ def test_signal_references_cannot_cross_recipe_boundaries():
             case_sensitive=False,
         )
     ]
-    config.routing.decisions[0].rules.conditions = [
+    config.default_recipe.decisions[0].rules.conditions = [
         Condition(type="keyword", name="private-only")
     ]
 
@@ -632,7 +669,7 @@ def test_signal_references_cannot_cross_recipe_boundaries():
 
 def test_signal_references_cannot_cross_signal_families():
     config = recipe_config()
-    config.routing.signals.keywords = [
+    config.default_recipe.signals.keywords = [
         KeywordSignal(
             name="shared-name",
             operator="OR",
@@ -640,7 +677,7 @@ def test_signal_references_cannot_cross_signal_families():
             case_sensitive=False,
         )
     ]
-    config.routing.decisions[0].rules.conditions = [
+    config.default_recipe.decisions[0].rules.conditions = [
         Condition(type="authz", name="shared-name")
     ]
 
@@ -656,7 +693,7 @@ def test_signal_references_cannot_cross_signal_families():
 def authz_config(reference: str) -> UserConfig:
     return UserConfig.model_validate(
         {
-            "version": "v0.3",
+            "version": "v0.5",
             "providers": {
                 "defaults": {"model": "model-a"},
                 "models": [
@@ -668,29 +705,33 @@ def authz_config(reference: str) -> UserConfig:
                     }
                 ],
             },
-            "routing": {
-                "modelCards": [{"name": "model-a"}],
-                "signals": {
-                    "role_bindings": [
+            "recipes": [
+                {
+                    "name": "default",
+                    "signals": {
+                        "role_bindings": [
+                            {
+                                "name": "admins",
+                                "role": "admin",
+                                "subjects": [
+                                    {"kind": "Group", "name": "platform-admins"}
+                                ],
+                            }
+                        ]
+                    },
+                    "decisions": [
                         {
-                            "name": "admins",
-                            "role": "admin",
-                            "subjects": [{"kind": "Group", "name": "platform-admins"}],
+                            "name": "admin-route",
+                            "priority": 100,
+                            "rules": {
+                                "operator": "AND",
+                                "conditions": [{"type": "authz", "name": reference}],
+                            },
+                            "modelRefs": [{"model": "model-a"}],
                         }
-                    ]
-                },
-                "decisions": [
-                    {
-                        "name": "admin-route",
-                        "priority": 100,
-                        "rules": {
-                            "operator": "AND",
-                            "conditions": [{"type": "authz", "name": reference}],
-                        },
-                        "modelRefs": [{"model": "model-a"}],
-                    }
-                ],
-            },
+                    ],
+                }
+            ],
         }
     )
 
@@ -709,7 +750,7 @@ def test_authz_conditions_reference_the_role_a_binding_grants():
 
 def test_nested_signal_conditions_validate_only_leaf_references():
     config = recipe_config()
-    config.routing.signals.keywords = [
+    config.default_recipe.signals.keywords = [
         KeywordSignal(
             name="nested-keyword",
             operator="OR",
@@ -717,7 +758,7 @@ def test_nested_signal_conditions_validate_only_leaf_references():
             case_sensitive=False,
         )
     ]
-    config.routing.decisions[0].rules.conditions = [
+    config.default_recipe.decisions[0].rules.conditions = [
         Condition(
             operator="OR",
             conditions=[Condition(type="keyword", name="nested-keyword")],
@@ -734,7 +775,7 @@ def test_nested_signal_conditions_validate_only_leaf_references():
 
 def test_decision_names_can_repeat_across_recipes():
     config = recipe_config()
-    config.recipes[0].routing.decisions[0].name = "default-route"
+    config.recipes[0].decisions[0].name = "default-route"
 
     errors = validate_user_config(config)
 
@@ -754,50 +795,9 @@ def test_nullable_global_sections_do_not_crash_validation():
     validate_user_config(config)
 
 
-def test_malformed_global_sections_are_reported():
-    config = recipe_config()
-    config.global_ = {"router": [], "integrations": "bad"}
-
-    errors = validate_user_config(config)
-
-    assert any(error.field == "global.router" for error in errors)
-    assert any(error.field == "global.integrations" for error in errors)
-
-
-def test_malformed_alias_values_are_reported_without_crashing():
-    config = recipe_config()
-    config.global_ = {
-        "router": {"auto_model_names": 123},
-        "integrations": {
-            "looper": {
-                "fusion": {"model_names": "bad"},
-            }
-        },
-    }
-
-    errors = validate_user_config(config)
-
-    assert any(error.field == "global.router.auto_model_names" for error in errors)
-    assert any(
-        error.field == "global.integrations.looper.fusion.model_names"
-        for error in errors
-    )
-
-
-def test_removed_alias_fields_require_entrypoint_configuration():
-    config = recipe_config()
-    config.global_ = {"router": {"auto_model_names": [" amd/custom-auto "]}}
-    config.entrypoints[0].model_names = ["amd/custom-auto"]
-
-    errors = validate_user_config(config)
-
-    assert any("was removed" in error.message for error in errors)
-
-
 def test_configured_model_names_keep_exact_collision_semantics():
     config = recipe_config()
     config.providers.models[0].name = " model-a "
-    config.routing.model_cards[0].name = " model-a "
     config.entrypoints[0].model_names = ["model-a"]
 
     errors = validate_user_config(config)
@@ -811,10 +811,10 @@ def test_configured_model_names_keep_exact_collision_semantics():
 
 def test_projection_dependencies_cannot_cross_recipe_profiles():
     config = recipe_config()
-    config.routing.projections.scores = [
+    config.default_recipe.projections.scores = [
         ProjectionScore(name="base-score", method="weighted_sum", inputs=[])
     ]
-    config.recipes[0].routing.projections.scores = [
+    config.recipes[0].projections.scores = [
         ProjectionScore(
             name="derived-score",
             method="weighted_sum",
@@ -837,7 +837,7 @@ def test_projection_dependencies_cannot_cross_recipe_profiles():
 def test_projection_outputs_can_repeat_across_recipes():
     config = recipe_config()
     output = ProjectionMappingOutput(name="shared-band", gte=0)
-    config.routing.projections.mappings = [
+    config.default_recipe.projections.mappings = [
         ProjectionMapping(
             name="default-band",
             source="base-score",
@@ -845,7 +845,7 @@ def test_projection_outputs_can_repeat_across_recipes():
             outputs=[output],
         )
     ]
-    config.recipes[0].routing.projections.mappings = [
+    config.recipes[0].projections.mappings = [
         ProjectionMapping(
             name="recipe-band",
             source="recipe-score",
@@ -859,33 +859,29 @@ def test_projection_outputs_can_repeat_across_recipes():
     assert not any("duplicate projection output" in error.message for error in errors)
 
 
-def test_domain_auto_generation_is_scoped_per_recipe():
+def test_a_recipe_names_only_the_domains_it_declares():
     config = recipe_config()
-    config.routing.signals.domains = [
-        Domain(
-            name="top-level-domain",
-            description="Top-level only",
-            mmlu_categories=["math"],
-        )
+    config.default_recipe.signals.domains = [
+        Domain(name="top-level-domain", description="Top-level only", labels=["math"])
     ]
-    config.recipes[0].routing.decisions[0].rules.conditions = [
-        Condition(type="domain", name="recipe-generated-domain")
+    config.recipes[0].decisions[0].rules.conditions = [
+        Condition(type="domain", name="undeclared-domain")
     ]
 
     errors = validate_user_config(config)
 
-    assert not any("recipe-generated-domain" in error.message for error in errors)
+    assert any("undeclared-domain" in error.message for error in errors)
 
 
 def test_domain_references_cannot_cross_recipe_boundaries():
     config = recipe_config()
-    config.routing.signals.domains = [
+    config.default_recipe.signals.domains = [
         Domain(name="top-level-domain", description="Top-level only")
     ]
-    config.recipes[0].routing.signals.domains = [
+    config.recipes[0].signals.domains = [
         Domain(name="recipe-domain", description="Recipe-owned")
     ]
-    config.routing.decisions[0].rules.conditions = [
+    config.default_recipe.decisions[0].rules.conditions = [
         Condition(type="domain", name="recipe-domain")
     ]
 
@@ -899,10 +895,10 @@ def test_domain_references_cannot_cross_recipe_boundaries():
 
 def test_domain_names_can_have_different_definitions_across_recipes():
     config = recipe_config()
-    config.routing.signals.domains = [
+    config.default_recipe.signals.domains = [
         Domain(name="shared-domain", description="Custom definition")
     ]
-    config.recipes[0].routing.decisions[0].rules.conditions = [
+    config.recipes[0].decisions[0].rules.conditions = [
         Condition(type="domain", name="shared-domain")
     ]
 
@@ -913,40 +909,88 @@ def test_domain_names_can_have_different_definitions_across_recipes():
 
 def test_default_entrypoint_override_and_reset():
     config = recipe_config()
+    config.entrypoints = [
+        entry for entry in config.entrypoints if entry.recipe != "default"
+    ]
     assert effective_entrypoints(config)[0].model_names == ["vllm-sr/auto"]
     config.entrypoints.append(
-        Entrypoint(recipe="default", model_names=["our/router", "MoM"])
+        Entrypoint(recipe="default", model_names=["our/router", "MoM"], default=True)
     )
     assert [
         entry.model_names
         for entry in effective_entrypoints(config)
         if entry.recipe == "default"
     ] == [["our/router", "MoM"]]
-    config.entrypoints = [
-        entry for entry in config.entrypoints if entry.recipe != "default"
-    ]
-    assert effective_entrypoints(config)[0].model_names == ["vllm-sr/auto"]
 
 
-def test_systemone_listener_scope_is_explicit_and_nonempty():
-    listener = Listener(
-        name="public", address="0.0.0.0", port=8000, models=["chat-only"]
-    )
-    assert listener.systemone is None
-    for models in ([], [""], [" padded "], ["one", "one"]):
-        with pytest.raises(PydanticValidationError):
-            Listener(
-                name="public",
-                address="0.0.0.0",
-                port=8000,
-                systemone={"models": models},
-            )
+def test_listener_apis_are_named_by_the_api_registry():
     listener = Listener(
         name="public",
         address="0.0.0.0",
         port=8000,
-        models=["chat-only"],
-        systemone={"models": ["decision-public"]},
+        apis={"openai": {"models": ["chat-only"]}},
     )
-    assert listener.models == ["chat-only"]
-    assert listener.systemone.models == ["decision-public"]
+    assert listener.served_apis() == ("chat_completions",)
+    assert listener.apis["chat_completions"].models == ["chat-only"]
+    assert listener.systemone_models() is None
+    assert Listener(name="public", port=8000).served_apis() == (
+        "chat_completions",
+        "responses",
+        "messages",
+        "images",
+    )
+    for models in ([], [""], [" padded "], ["one", "one"]):
+        with pytest.raises(PydanticValidationError):
+            Listener(name="public", port=8000, apis={"systemone": {"models": models}})
+    listener = Listener(
+        name="public",
+        port=8000,
+        apis={
+            "chat_completions": {"models": ["chat-only"]},
+            "systemone": {
+                "schema": "vllm-sr/4.0",
+                "models": ["decision-public"],
+                "max_deadline_ms": 120000,
+            },
+        },
+    )
+    assert listener.systemone_models() == ["decision-public"]
+    assert listener.apis["systemone"].schema_ == "vllm-sr/4.0"
+    for apis, message in (
+        (
+            {"openai": {}, "chat_completions": {}},
+            "openai and chat_completions name the same API, chat_completions",
+        ),
+        (
+            {"messages": {}, "anthropic": {}},
+            "anthropic and messages name the same API, messages",
+        ),
+        ({"realtime": {}}, "api 'realtime' is not supported"),
+        ({"chat_completions": {"schema": "openai/v1"}}, "has one schema"),
+        (
+            {"systemone": {"schema": "systemone/0.2"}},
+            "a listener serves api systemone in vllm-sr/5.0 or vllm-sr/4.0",
+        ),
+        ({"responses": {"max_deadline_ms": 5}}, "takes no max_deadline_ms"),
+        ({}, "apis names no API"),
+    ):
+        with pytest.raises(PydanticValidationError, match=message):
+            Listener(name="public", port=8000, apis=apis)
+    for removed in ({"models": ["m"]}, {"systemone": {"models": ["m"]}}):
+        with pytest.raises(
+            PydanticValidationError, match="run `vllm-sr config migrate`"
+        ):
+            Listener(name="public", port=8000, **removed)
+
+
+def test_listener_names_are_unique():
+    listeners = [
+        Listener(name="http", address="0.0.0.0", port=8000),
+        Listener(name="http", address="0.0.0.0", port=8001),
+    ]
+    with pytest.raises(
+        PydanticValidationError, match="listener 'http' is defined twice"
+    ):
+        UserConfig(version="v0.5", listeners=listeners)
+    listeners[1].name = "http-8001"
+    assert len(UserConfig(version="v0.5", listeners=listeners).listeners) == 2

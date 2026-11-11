@@ -16,8 +16,8 @@ func TestLegacyEndpointURLKeepsAFullAddress(t *testing.T) {
 		{"embedder.example.com", 0, "", "http://embedder.example.com"},
 		{"::1", 8000, "", "http://[::1]:8000"},
 	} {
-		if got := LegacyEndpointURL(tc.address, tc.port, tc.protocol); got != tc.want {
-			t.Errorf("LegacyEndpointURL(%q, %d, %q) = %q, want %q", tc.address, tc.port, tc.protocol, got, tc.want)
+		if got := legacyEndpointURL(tc.address, tc.port, tc.protocol); got != tc.want {
+			t.Errorf("legacyEndpointURL(%q, %d, %q) = %q, want %q", tc.address, tc.port, tc.protocol, got, tc.want)
 		}
 	}
 }

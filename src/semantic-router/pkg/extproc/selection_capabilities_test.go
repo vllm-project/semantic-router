@@ -239,7 +239,7 @@ func selectCapabilityTestDispatch(router *OpenAIRouter, request *llmprotocol.Req
 
 func capabilityRankingTestRouter(t *testing.T, primaryFormat string, cScore float64) (*OpenAIRouter, *config.Decision, *capabilityCountingSelector) {
 	t.Helper()
-	router, decision := candidateEffortTestRouter(t, config.DecisionAlgorithmAutoMix, "high")
+	router, decision := candidateEffortTestRouter(t, config.DecisionAlgorithmStatic, "high")
 	original := decision.ModelRefs[0].Model
 	base := router.Config.ModelConfig[original]
 	delete(router.Config.ModelConfig, original)
@@ -276,11 +276,14 @@ func capabilityRankingTestRouter(t *testing.T, primaryFormat string, cScore floa
 		{Model: "C", ModelReasoningControl: config.ModelReasoningControl{UseReasoning: extprocBoolPtr(true), ReasoningEffort: "high"}},
 	}
 	router.Config.Decisions = []config.Decision{*decision}
-	cfg := selection.DefaultAutoMixConfig()
-	cfg.CostAwareRouting, cfg.UsePOMDPRouter = false, false
-	selector := selection.NewAutoMixSelector(cfg)
+	// A quality-only multi_factor selector stands in for the decision's static
+	// selector so the fixture can count its calls; it ranks by the index.
+	selector := selection.NewMultiFactorSelector(buildMultiFactorSelectionConfig(&config.MultiFactorSelectionConfig{
+		Weights: &config.MultiFactorWeightsConfig{Quality: 1},
+		Quality: &config.QualityEvidenceConfig{Index: index, OnMissing: config.QualityEvidenceOnMissingExclude},
+	}))
 	selector.InitializeFromConfig(router.Config.ModelConfig)
 	counter := &capabilityCountingSelector{Selector: selector}
-	router.ModelSelector.Register(selection.MethodAutoMix, counter)
+	router.ModelSelector.Register(selection.MethodStatic, counter)
 	return router, decision, counter
 }

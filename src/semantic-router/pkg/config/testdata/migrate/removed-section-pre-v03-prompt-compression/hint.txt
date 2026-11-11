@@ -1,0 +1,1 @@
+prompt_compression: removed_section: top-level prompt_compression belongs to the layout before config v0.3; run `vllm-sr config migrate` (its place in the v0.5 layout)

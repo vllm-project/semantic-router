@@ -80,8 +80,8 @@ func (c *RedisCache) FindSimilarWithThreshold(model string, query string, thresh
 	return result.ResponseBody, result.Found, err
 }
 
-func (c *RedisCache) executeFTSearch(ctx context.Context, model string, embeddingBytes []byte) (redis.FTSearchResult, error) {
-	knnQuery := partitionedKNNQuery(model, c.config.Search.TopK, c.config.Index.VectorField.Name)
+func (c *RedisCache) executeFTSearch(ctx context.Context, model string, embeddingBytes []byte, topK int) (redis.FTSearchResult, error) {
+	knnQuery := partitionedKNNQuery(model, topK, c.config.Index.VectorField.Name)
 	searchOptions := &redis.FTSearchOptions{
 		Return: []redis.FTSearchReturn{
 			{FieldName: "vector_distance"},
@@ -101,12 +101,18 @@ func (c *RedisCache) executeFTSearch(ctx context.Context, model string, embeddin
 	return c.client.FTSearchWithArgs(ctx, c.indexName, knnQuery, searchOptions).Result()
 }
 
-// LookupSimilarWithThreshold returns response data and similarity atomically.
+// LookupSimilarWithThreshold returns the most similar entry within threshold.
 func (c *RedisCache) LookupSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error) {
+	return bestSimilar(c.LookupSimilar(ctx, model, query, SimilarityBounds{MinSimilarity: threshold, TopK: 1}))
+}
+
+// LookupSimilar returns the entries most similar to query, with their
+// responses, from one search.
+func (c *RedisCache) LookupSimilar(ctx context.Context, model string, query string, bounds SimilarityBounds) (SimilarEntries, error) {
 	start := time.Now()
 
 	if !c.enabled {
-		return LookupResult{}, nil
+		return SimilarEntries{}, nil
 	}
 	if ctx == nil {
 		ctx = context.Background()
@@ -115,87 +121,80 @@ func (c *RedisCache) LookupSimilarWithThreshold(ctx context.Context, model strin
 	queryEmbedding, err := c.getEmbedding(ctx, query)
 	if err != nil {
 		metrics.RecordCacheOperation("redis", "find_similar", "error", time.Since(start).Seconds())
-		return LookupResult{}, fmt.Errorf("failed to generate embedding: %w", err)
+		return SimilarEntries{}, fmt.Errorf("failed to generate embedding: %w", err)
 	}
 
 	embeddingBytes := floatsToBytes(queryEmbedding)
-	searchResult, err := c.executeFTSearch(ctx, model, embeddingBytes)
+	searchResult, err := c.executeFTSearch(ctx, model, embeddingBytes, bounds.fetch(c.config.Search.TopK))
 	if err != nil {
-		logging.Infof("RedisCache.FindSimilarWithThreshold: search failed: %v", err)
+		logging.Infof("RedisCache.LookupSimilar: search failed: %v", err)
 		c.recordCacheMiss("error", time.Since(start))
 		if contextErr := contextErrorOnFailure(ctx, err); contextErr != nil {
-			return LookupResult{}, contextErr
+			return SimilarEntries{}, contextErr
 		}
-		return LookupResult{}, nil
+		return SimilarEntries{}, nil
 	}
 
 	if err := ctxErr(ctx); err != nil {
-		return LookupResult{}, err
+		return SimilarEntries{}, err
 	}
 	if searchResult.Total == 0 || len(searchResult.Docs) == 0 {
 		c.recordCacheMiss("miss", time.Since(start))
-		return LookupResult{}, nil
+		return SimilarEntries{}, nil
 	}
 
 	var queryBuffer [32]string
 	queryTokens := tokenizeForPolarity(query, queryBuffer[:0])
-	result := c.selectPolarityCandidate(searchResult.Docs, queryTokens, threshold)
-	if !result.Found {
+	entries := c.selectPolarityCandidates(searchResult.Docs, queryTokens, bounds)
+	if len(entries.Hits) == 0 {
 		logging.LogEvent("cache_miss", map[string]interface{}{
 			"backend":         "redis",
-			"best_similarity": result.Similarity,
-			"threshold":       threshold,
+			"best_similarity": entries.Closest,
+			"threshold":       bounds.MinSimilarity,
 			"model":           model,
 			"index":           c.indexName,
 		})
 		c.recordCacheMiss("miss", time.Since(start))
 		// The rejected candidate's score belongs to this lookup; see the
 		// in-memory backend for the full rationale.
-		return result, nil
+		return entries, nil
 	}
 
 	atomic.AddInt64(&c.hitCount, 1)
 	logging.LogEvent("cache_hit", map[string]interface{}{
 		"backend":    "redis",
-		"similarity": result.Similarity,
-		"threshold":  threshold,
+		"similarity": entries.Hits[0].Similarity,
+		"threshold":  bounds.MinSimilarity,
 		"model":      model,
 		"index":      c.indexName,
 	})
 	metrics.RecordCacheOperation("redis", "find_similar", "hit", time.Since(start).Seconds())
-	return result, nil
+	return entries, nil
 }
 
-// selectPolarityCandidate considers every fetched candidate before publishing a
-// hit, so a rejected nearest neighbor cannot hide a valid lower-ranked result.
-func (c *RedisCache) selectPolarityCandidate(docs []redis.Document, queryTokens []string, threshold float32) LookupResult {
-	var best LookupResult
-	var rejectedSimilarity float32
-	hasScore := false
+// selectPolarityCandidates considers every fetched candidate before
+// publishing hits, so a rejected nearest neighbor cannot hide a valid
+// lower-ranked result.
+func (c *RedisCache) selectPolarityCandidates(docs []redis.Document, queryTokens []string, bounds SimilarityBounds) SimilarEntries {
+	ranked := similarHits{bounds: bounds}
 	for _, doc := range docs {
 		similarity, validScore := c.searchResultSimilarity(doc)
 		if !validScore {
 			continue
 		}
-		if !hasScore || similarity > rejectedSimilarity {
-			rejectedSimilarity = similarity
-			hasScore = true
-		}
+		ranked.saw(similarity)
 		body, storedAt, expiresAt, ok := redisSearchPayload(doc)
-		if !ok || similarity < threshold ||
+		if !ok || similarity < bounds.MinSimilarity ||
 			!semanticCandidateMatchesPolarity(queryTokens, doc.Fields["query"]) {
 			continue
 		}
 		if !expiresAt.IsZero() && !time.Now().Before(expiresAt) {
 			continue
 		}
-		if !best.Found || similarity > best.Similarity {
-			best = lookupResultFromTimestamps(body, similarity, storedAt, expiresAt)
-			best.NegationGuard = negationGuardOutcomeFor(queryTokens, doc.Fields["query"])
-		}
+		hit := lookupResultFromTimestamps(body, similarity, storedAt, expiresAt)
+		hit.Query = doc.Fields["query"]
+		hit.NegationGuard = negationGuardOutcomeFor(queryTokens, hit.Query)
+		ranked.add(hit)
 	}
-	if !best.Found {
-		best.Similarity = rejectedSimilarity
-	}
-	return best
+	return ranked.entries()
 }

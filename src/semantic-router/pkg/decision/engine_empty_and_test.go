@@ -8,9 +8,7 @@ import (
 
 func TestDecisionEngine_EmptyANDActsAsCatchAll(t *testing.T) {
 	engine := NewDecisionEngine(
-		nil,
-		nil,
-		nil,
+
 		[]config.Decision{
 			{
 				Name:     "default-route",
@@ -21,8 +19,7 @@ func TestDecisionEngine_EmptyANDActsAsCatchAll(t *testing.T) {
 				},
 			},
 		},
-		"priority",
-	)
+		"priority")
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{})
 	if err != nil {
@@ -34,19 +31,16 @@ func TestDecisionEngine_EmptyANDActsAsCatchAll(t *testing.T) {
 	if result.Decision.Name != "default-route" {
 		t.Fatalf("Expected default-route, got %s", result.Decision.Name)
 	}
-	if result.Confidence != 0.0 {
-		t.Fatalf("Expected zero confidence for catch-all route, got %f", result.Confidence)
+	if result.Confidence != 0.0 || result.ConfidenceScored {
+		t.Fatalf("Expected an unscored zero confidence for catch-all route, got %f scored=%v", result.Confidence, result.ConfidenceScored)
 	}
 }
 
 func TestDecisionEngine_OmittedRulesActsAsCatchAll(t *testing.T) {
 	engine := NewDecisionEngine(
-		nil,
-		nil,
-		nil,
+
 		[]config.Decision{{Name: "default-route", Priority: 10}},
-		config.RoutingStrategyPriority,
-	)
+		config.RoutingStrategyPriority)
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{})
 	if err != nil {
@@ -55,16 +49,14 @@ func TestDecisionEngine_OmittedRulesActsAsCatchAll(t *testing.T) {
 	if result == nil || result.Decision.Name != "default-route" {
 		t.Fatalf("result = %#v, want default-route", result)
 	}
-	if result.Confidence != 0 {
-		t.Fatalf("confidence = %f, want 0", result.Confidence)
+	if result.Confidence != 0 || result.ConfidenceScored {
+		t.Fatalf("confidence = %f scored = %v, want an unscored 0", result.Confidence, result.ConfidenceScored)
 	}
 }
 
 func TestDecisionEngine_EmptyANDActsAsFallbackInConfidenceMode(t *testing.T) {
 	engine := NewDecisionEngine(
-		nil,
-		nil,
-		nil,
+
 		[]config.Decision{
 			{
 				Name:     "specific-route",
@@ -85,8 +77,7 @@ func TestDecisionEngine_EmptyANDActsAsFallbackInConfidenceMode(t *testing.T) {
 				},
 			},
 		},
-		"confidence",
-	)
+		"confidence")
 
 	t.Run("signal-backed route outranks catch-all", func(t *testing.T) {
 		result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
