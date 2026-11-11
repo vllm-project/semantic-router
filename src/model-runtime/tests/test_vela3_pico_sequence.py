@@ -16,9 +16,10 @@ import pytest
 from vllm_srun.families.vela2.encoder_layout import batch_indices
 from vllm_srun.families.vela2.layout import Tokens, read_parts
 from vllm_srun.families.vela2.request import Plan
-from vllm_srun.families.vela3_pico import sequence
+from vllm_srun.families.vela3_pico import fallback, sequence
 from vllm_srun.families.vela3_pico.request import DECISION, ROUTER, SPAN, Reader
 from vllm_srun.families.vela3_pico.routing import Routes
+from vllm_srun.families.vela3_shared import layout
 from vllm_srun.testing.vela3_pico import BYTE_MARKERS, BYTE_SPECIAL, byte_tokenizer
 
 CASES = json.loads(
@@ -154,3 +155,36 @@ def test_the_recorded_calls_cover_the_fit_boundary() -> None:
     budgets = [(c["max_len"], c["result"] is None) for c in CASES["one_pass"]]
     assert sum(missing for _, missing in budgets) == 7
     assert sum(not missing for _, missing in budgets) == 14
+
+
+@pytest.mark.parametrize("case", CASES["decisions"], ids=ids_of(CASES["decisions"]))
+def test_decisions_are_the_package_decision_inputs(case: dict[str, Any]) -> None:
+    config = {"decision": {"marker_ids": BYTE_MARKERS}, **BYTE_SPECIAL}
+    layouts = fallback.Layouts(
+        markers=dict(BYTE_MARKERS),
+        bos=BYTE_SPECIAL["bos_token_id"],
+        eos=BYTE_SPECIAL["eos_token_id"],
+        max_len=case["max_len"],
+        window=layout(config, 8192, 512),
+        evidence=layout(config, 32768, 512),
+    )
+    request = READER.read(case["state"], api({"q": case["question"]}))
+    assert not request.errors and request.asked[0].path == DECISION
+    state = TOKENS.ids(
+        case["state"]
+        if isinstance(case["state"], str)
+        else json.dumps(case["state"], ensure_ascii=False, separators=(",", ":"))
+    )
+    got = fallback._decision(request.asked[0], state, TOKENS, layouts)
+    if "error" in case:
+        assert case["error"].startswith("Unsupported")
+        assert got is None
+        return
+    assert got is not None
+    recorded = case["result"]
+    assert got.ids == recorded["ids"]
+    (placed,) = got.questions
+    assert placed.query == recorded["q_pos"]
+    assert placed.options == recorded["opt_pos"]
+    assert list(placed.pool) == recorded["pool"]
+    assert placed.question.names == recorded["names"]
