@@ -43,7 +43,7 @@ curl -s localhost:8100/v1/systemone -H 'content-type: application/json' -d '{
 运行时在 `GET /health` 中以 `api_version` 报告其契约（`5.0.0`）。
 
 :::note
-Router 拒绝任何其他契约的运行时：Router 和它的模型运行时来自同一个版本。[HTTP API 参考](../../model-runtime/reference/http-api.md#decisions)记录了运行时读取的每个字段；其 OpenAPI 契约是事实来源，[扩展参考](../reference/extension-reference.md)列出了 vllm-sr 在标准之上增加的每个字段。
+Router 拒绝任何其他契约的运行时：Router 和它的模型运行时来自同一个版本。[HTTP API 参考](../../model-runtime/reference/http-api.md#decisions)记录了运行时读取的每个字段；其 OpenAPI 契约是事实来源，[扩展参考](/docs/system-one/reference/extension-reference)列出了 vllm-sr 在标准之上增加的每个字段。
 :::
 
 ## 单个请求 {#a-single-request}
