@@ -166,7 +166,8 @@ include `systemone`, or a hosted one such as `https://app.vllm-sr.ai/v1/decision
 and set the listener's API key as the token when it takes one. A hosted API has no `/health`, so vSR
 checks that it is up through its model list instead.
 
-Redact hides names, emails, phone numbers, card numbers, IP addresses, addresses, ID numbers and
+Redact hides names, emails, phone numbers, card numbers, IP addresses (only text shaped like an IPv4 or
+IPv6 address, so a pinned version such as `2.32.3` stays), addresses, ID numbers and
 secrets (API keys, tokens, private keys, passwords in config files and connection URLs). It waits
 `redactWait` (3 s by default) for the decision model, and shield then waits `shieldWait` (2 s by
 default) on a `Read` or a fetched page; when redact ran out of time the model is still busy, so shield
