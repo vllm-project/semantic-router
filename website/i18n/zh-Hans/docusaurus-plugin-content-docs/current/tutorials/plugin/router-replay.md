@@ -345,7 +345,7 @@ make run-shadow-dataset GO_TOOL_ARGS="--dest /mnt/shadow-datasets \
 
 ## 查看结果 {#read-the-results}
 
-在 Dashboard 中打开 **Insights**，或使用[回放 API](../../api/router#router-replay) 过滤记录并查看会话。成本是[根据记录的 token 和配置的费率得出的估算](../../api/router#router-replay)，不是账单。缺失的价格和用量保持未知。
+在 Dashboard 中打开 **Insights**，或使用[回放 API](../../api/router#router-replay) 过滤记录并查看会话。搜索按请求 ID、配方或会话 ID 查找记录，因此 Agent Harness 发送的会话 ID（例如 Claude Code 的 `x-claude-code-session-id`）能找到该会话的每次调用。记录的会话路由历史按顺序列出会话的调用，并用 Agent 身份标头的短哈希标出每次调用所属的子代理，主对话显示为 `main`。只有 `identity.headers.agent` 指定了该标头时才会记录哈希（见[会话标识](../../api/session-identification)）；未设置时每次调用都显示为 `main`。成本是[根据记录的 token 和配置的费率得出的估算](../../api/router#router-replay)，不是账单。缺失的价格和用量保持未知。
 
 每条记录的 `route_diagnostics` 解释该路由：
 
