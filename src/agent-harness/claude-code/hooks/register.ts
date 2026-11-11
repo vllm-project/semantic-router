@@ -9,7 +9,7 @@ import { loadCalibration } from './lib/log'
 import { APP_NAMES } from './lib/apps'
 import { parseSettings, type Settings } from './lib/settings'
 import { inspectOutput, writeBackOf } from './output'
-import { countSpend, routeSpawn, routeStep } from './router'
+import { checkRouterModel, countSpend, routeSpawn, routeStep } from './router'
 import { loadLook, registerCommand, registerView } from './view'
 
 // A tool's result as Claude gets it: redacted and shielded, then kept for check.
@@ -33,6 +33,7 @@ export const register: Register = (on, options) => {
         .then(isUp => (isUp && settings.apps.guard ? checkGuardModel($, settings) : undefined))
         .catch(() => undefined)
     }
+    if (settings.apps.router) void checkRouterModel($, settings.runtime)
     return next(e)
   })
 
