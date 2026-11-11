@@ -292,6 +292,15 @@ func writeJSONActionField(builder *strings.Builder, key string, value interface{
 	return nil
 }
 
+// applyWorkflowOutputContract shapes a workflow's final answer by the
+// decision's output contract, on a first turn and on a resumed one alike.
+func applyWorkflowOutputContract(spec *config.OutputContractSpec, resp *ModelResponse, stepResults []workflowStepResult) {
+	applyJSONActionOutputContract(spec, resp, workflowStepModelResponses(stepResults))
+	applyFinalOutputContract(spec, resp)
+	applyWorkflowSingleChoiceFallback(spec, resp, stepResults)
+	applyFinalOutputContract(spec, resp)
+}
+
 func applyWorkflowSingleChoiceFallback(spec *config.OutputContractSpec, resp *ModelResponse, stepResults []workflowStepResult) {
 	if resp == nil || resp.HasToolCalls || !requestsSingleChoice(spec) {
 		return
