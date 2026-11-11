@@ -7,7 +7,7 @@
 ## Key Advantages
 
 - Caps expensive parameters (`max_tokens`, `n`) per route.
-- Blocks sensitive parameters such as `logprobs` / `top_logprobs` for tiers that should not expose token distributions.
+- Blocks unwanted parameters such as `temperature` / `top_p` or client `user` and `verbosity` before backend dispatch.
 - Can remove a client `prompt_cache_key` with `blocked_params: [prompt_cache_key]` before backend dispatch.
 
 ## What Problem Does It Solve?
@@ -16,7 +16,7 @@ Model routing can restrict which backend serves a request, but clients can still
 
 ## When to Use
 
-- a tier or route must not request logprobs or multiple completions
+- a tier or route must drop specific parameters (such as `temperature`, `top_p`, or `verbosity`) or multiple completions
 - you need a hard ceiling on `max_tokens` or `n` independent of client input
 
 ## Configuration
@@ -28,8 +28,8 @@ plugins:
   - type: request_params
     configuration:
       blocked_params:
-        - logprobs
-        - top_logprobs
+        - temperature
+        - top_p
       max_tokens_limit: 500
       max_n: 1
 ```
@@ -38,7 +38,7 @@ In DSL, the same plugin can appear as:
 
 ```dsl
 PLUGIN request_params {
-  blocked_params: ["logprobs", "top_logprobs"]
+  blocked_params: ["temperature", "top_p"]
   max_tokens_limit: 500
   max_n: 1
 }
