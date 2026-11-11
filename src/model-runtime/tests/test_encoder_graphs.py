@@ -124,7 +124,9 @@ def test_padded_graph_replays_are_the_eager_bucket_bit_for_bit():
     ids, mask = batch([13, 4], seed=6)
     with torch.inference_mode():
         outputs = [graphs.padded(ids, mask, (4,), False)[4] for _ in range(4)]
-        engine = backbone.encode(ids, backbone.padded(mask, 2, 13, device), (4,))
+        engine = backbone.encode(
+            ids.to(device), backbone.padded(mask, 2, 13, device), (4,)
+        )
         big = graphs.padded(ids.repeat(65, 1), mask.repeat(65, 1), (4,), False)
     assert graphs.receipt()["captures"] == 1 and graphs.receipt()["replays"] == 3
     assert all(torch.equal(outputs[0], value) for value in outputs[1:])
