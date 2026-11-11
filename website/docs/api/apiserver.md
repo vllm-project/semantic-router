@@ -102,7 +102,9 @@ configuration reload does not turn `/ready` back to `503`: the previous
 configuration serves until the new one's models are ready. The standalone
 listeners and the ext_proc gRPC port open only once those models are ready, so
 the listener's `/ready` and the gRPC health service never report ready before
-the management `/ready` does.
+the management `/ready` does. With `config_source: kubernetes`, both also wait
+until the first configuration from Kubernetes is active. Both report not ready
+once shutdown begins, while in-flight requests drain.
 
 For a Router with a runtime registry, `/ready` and `/startup-status` report that
 replica's observed startup state. Another replica's shared file or Redis record
@@ -333,9 +335,9 @@ connection pools when the providers' backends and the listeners are unchanged.
 A request in standalone mode is served by the version it started on, from routing through
 its fallback chain to the last byte. Such a Router binds its listeners at
 startup, so a change to the set of listeners or to a listener's `address`,
-`port` or `timeout` is rejected with code `restart_required` at that
-listener's path; restart the Router to apply it. Listener `api_keys` change
-without a restart.
+`port`, `timeout` or `tls` is rejected with code `restart_required` at that
+listener's path; restart the Router to apply it. A listener's `api_keys`,
+`apis` and `identity` change without a restart.
 
 The Router records every activation, from any source, in one history of the
 last 10 versions (`-config-history-limit` changes it). Every configuration file
@@ -403,6 +405,10 @@ API `input_image` part by `file_id`. Consult the live schema for limits and
 fields. They exist only on the management listener. `/v1/files` and
 `/v1/vector_stores` are not inference-listener aliases and are not registered
 by the Router API.
+
+Deleting a file first detaches it from every vector store it is attached to,
+so its chunks stop answering searches. If a detach fails, the delete returns
+`500` and the file and its attachments stay, so the delete can be retried.
 
 ## Discover and inspect plugins
 

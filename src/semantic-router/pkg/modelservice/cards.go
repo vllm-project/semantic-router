@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 // ModelCard is a served model's description from /v1/models: identity,
@@ -38,6 +39,20 @@ type ModelCard struct {
 	Ready          bool
 	Status         string
 	Reason         string
+	// Schema is the upstream schema a remote model's API speaks, empty for a
+	// model the model runtime serves.
+	Schema string
+}
+
+// ReportsInputCoverage reports whether the model's answers can prove they
+// read their whole input (input_coverage): every model the runtime serves
+// can, and a remote one when its schema carries it.
+func (c ModelCard) ReportsInputCoverage() bool {
+	if c.Schema == "" {
+		return true
+	}
+	codec, _, err := systemonecodec.Builtin().Resolve(systemonecodec.SchemaID(c.Schema), nil)
+	return err == nil && codec.Capabilities().Has(systemonecodec.CapabilityFullInput)
 }
 
 // EngineArgs are the engine arguments a served model's card reports: how it

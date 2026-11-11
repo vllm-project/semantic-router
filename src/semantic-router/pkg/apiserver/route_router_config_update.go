@@ -231,9 +231,17 @@ func validateParsedHotReloadCompatibilityInMode(
 		)
 	}
 	if mode == config.GatewayStandalone {
-		if currentCfg != nil && nextCfg != nil && !reflect.DeepEqual(currentCfg.Listeners, nextCfg.Listeners) {
+		if currentCfg == nil || nextCfg == nil {
+			return nil
+		}
+		var changes []string
+		for _, restart := range config.ListenerRestarts(currentCfg.Listeners, nextCfg.Listeners) {
+			changes = append(changes, restart.Path+": "+restart.Message)
+		}
+		if len(changes) > 0 {
 			return fmt.Errorf(
-				"listeners changed; standalone mode binds its listeners at startup, so the Router hot-reload API cannot activate them; restart the Router with this configuration",
+				"%s; standalone mode binds its listeners at startup, so the Router hot-reload API cannot activate this; restart the Router with this configuration",
+				strings.Join(changes, ", "),
 			)
 		}
 		return nil

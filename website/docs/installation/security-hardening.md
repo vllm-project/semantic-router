@@ -124,6 +124,7 @@ global:
         provider: systemone
         endpoint: https://decisions.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth:
           credential: delegated              # a decision-model deployment
 providers:

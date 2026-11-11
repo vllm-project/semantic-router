@@ -118,6 +118,11 @@ type Message struct {
 	Content         []Content
 	ReasoningEffort string // Anthropic per-message output_config.effort.
 	Name            string // Chat Completions participant name; formats without one drop it.
+	// WithToolResults marks user content the client sent in the same message
+	// as tool results, which decoding splits into a message of its own: text
+	// next to an Anthropic tool_result block. It continues the tool loop
+	// rather than starting a user turn. It is not a wire field.
+	WithToolResults bool `json:",omitempty"`
 }
 
 type InstructionBlock struct {

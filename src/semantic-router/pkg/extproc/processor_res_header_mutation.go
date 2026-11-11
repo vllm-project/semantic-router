@@ -56,7 +56,7 @@ func (builder *responseHeaderMutationBuilder) addString(key string, value string
 // response: x-vsr-schema-version stamps the contract revision and
 // x-vsr-response-path names how the response was produced. The path
 // defaults to "upstream" when the caller has not classified a more specific
-// path (cache, fast_response, looper, rate_limited, error, image_generation).
+// path (cache, fast_response, looper, blocked, rate_limited, error, fallback).
 func (builder *responseHeaderMutationBuilder) addKeystone(ctx *RequestContext) {
 	path := ctx.ResponsePath
 	if path == "" {

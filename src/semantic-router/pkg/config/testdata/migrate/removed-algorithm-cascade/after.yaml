@@ -5,8 +5,14 @@ version: v0.5
 listeners:
   - name: native
     port: 8801
-    systemone:
-      models: [vllm-sr/auto]
+    apis:
+      chat_completions: {}
+      responses: {}
+      messages: {}
+      images: {}
+      systemone:
+        schema: vllm-sr/4.0
+        models: [vllm-sr/auto]
 providers:
   models:
     - name: kai
@@ -18,6 +24,7 @@ providers:
       backend_refs:
         - provider: systemone-compatible
           endpoint: http://127.0.0.1:8900/v1
+      schema: vllm-sr/5.0
 global:
   model_catalog:
     deployments:

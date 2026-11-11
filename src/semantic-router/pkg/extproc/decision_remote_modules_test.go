@@ -62,6 +62,7 @@ global:
     deployments:
       hosted-d3:
         provider: systemone
+        schema: vllm-sr/4.0
         endpoint: API/v1/systemone
         model: vllm-sr/d3-ultra
         auth: {api_key_env: REMOTE_DECISION_TEST_KEY}

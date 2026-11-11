@@ -67,7 +67,7 @@ interface BuiltModel {
     provider: ProviderKind;
     api_key?: string;
   }>;
-  api_format?: "responses" | "anthropic";
+  api_format?: "responses" | "messages";
 }
 
 export interface SetupConfigCounts {
@@ -586,7 +586,7 @@ export function buildSetupConfig(
       name: model.name.trim(),
       provider_model_id: model.name.trim(),
       backend_refs: [backendRef],
-      ...(provider.apiFormat === "openai"
+      ...(provider.apiFormat === "chat_completions"
         ? {}
         : { api_format: provider.apiFormat }),
     };

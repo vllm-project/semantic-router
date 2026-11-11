@@ -38,7 +38,7 @@ translation:
 
 ## 上限 {#caps}
 
-- **评审**最多读取 `judge.max_candidates` 个候选：逐候选评审默认 64 个，choice 评审最多 255 个（也是默认值）。超出部分按召回排名截断，没有召回时按列出顺序截断，绝不失败；`vsr_match_judge_truncated_total` 会计数。
+- **评审**最多读取 `judge.max_candidates` 个候选：逐候选评审默认 64 个、最多 4096 个，choice 评审最多 255 个（也是默认值）。超出部分按召回排名截断，没有召回时按列出顺序截断，绝不失败；`vsr_match_judge_truncated_total` 会计数。
 - **召回**限定评审看到的内容：缓存评审确认其召回的前 3 个命中，RAG 评审确认前 20 个文档。
 - **工具**在策略过滤后超过 255 个时会被截断，或先用 `recall: {method: bm25}` 缩小范围。
 

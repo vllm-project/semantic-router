@@ -777,7 +777,26 @@
           "$ref": "#/$defs/ProviderReliability"
         },
         "api_format": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "chat_completions",
+            "responses",
+            "messages",
+            "images",
+            "systemone",
+            "openai",
+            "anthropic"
+          ]
+        },
+        "schema": {
+          "type": "string",
+          "enum": [
+            "openai/v1",
+            "anthropic/2023-06-01",
+            "vllm-sr/5.0",
+            "vllm-sr/4.0",
+            "systemone/0.2"
+          ]
         },
         "external_model_ids": {
           "additionalProperties": {
@@ -3181,14 +3200,19 @@
           },
           "type": "array"
         },
-        "models": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "systemone": {
-          "$ref": "#/$defs/ListenerSystemOne"
+        "apis": {
+          "$ref": "#/$defs/ListenerAPIs",
+          "propertyNames": {
+            "enum": [
+              "chat_completions",
+              "responses",
+              "messages",
+              "images",
+              "systemone",
+              "openai",
+              "anthropic"
+            ]
+          }
         },
         "tls": {
           "$ref": "#/$defs/ListenerTLS"
@@ -3198,6 +3222,35 @@
         }
       },
       "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerAPI": {
+      "properties": {
+        "schema": {
+          "type": "string",
+          "enum": [
+            "vllm-sr/5.0",
+            "vllm-sr/4.0"
+          ]
+        },
+        "models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_deadline_ms": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ListenerAPIs": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ListenerAPI"
+      },
       "type": "object"
     },
     "ListenerIdentity": {
@@ -3210,21 +3263,6 @@
             "type": "string"
           },
           "type": "array"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "ListenerSystemOne": {
-      "properties": {
-        "models": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "max_deadline_ms": {
-          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -4008,6 +4046,24 @@
         },
         "capabilities": {
           "$ref": "#/$defs/DeploymentCapabilities"
+        },
+        "schema": {
+          "type": "string",
+          "enum": [
+            "systemone/0.2",
+            "vllm-sr/5.0",
+            "vllm-sr/4.0"
+          ]
+        },
+        "deviations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_concurrency": {
+          "type": "integer",
+          "minimum": 1
         },
         "generation": {
           "$ref": "#/$defs/DeploymentGeneration"

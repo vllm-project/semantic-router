@@ -27,7 +27,7 @@
       "sensitivity": "none",
       "owner": "response_contract",
       "version": "v0.4",
-      "doc": "How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`."
+      "doc": "How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`."
     },
     {
       "name": "x-vsr-config-version",

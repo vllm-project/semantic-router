@@ -449,7 +449,7 @@ func TestCardAcceptsOnlyARuntimeOfItsOwnContractVersion(t *testing.T) {
 		"3.0.0":           "serves contract 3.0.0",
 		"4":               "serves contract 4",
 		"2.4.0":           "serves contract 2.4.0",
-		"5.0.0":           "serves contract 5.0.0",
+		"4.0.0":           "serves contract 4.0.0",
 		"":                "reports no contract version",
 	} {
 		runtime := fakeModels([]modelEntry{{Name: "decider", Model: "vllm-sr/Decision-2.0-Kai-0.6B"}})

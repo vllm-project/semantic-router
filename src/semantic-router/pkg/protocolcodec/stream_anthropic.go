@@ -813,7 +813,11 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicCompletion(
 	if event.Usage == nil {
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "usage_event_invalid", "terminal usage is invalid", nil)
 	}
-	stop := encodeAnthropicStop(event.StopReason)
+	toolUse := false
+	for _, kind := range encoder.blocks {
+		toolUse = toolUse || kind == llmprotocol.ContentToolCall
+	}
+	stop := encodeAnthropicStop(event.StopReason, toolUse)
 	deltaWire := &anthropicDeltaWire{Type: "message_delta", StopReason: &stop}
 	if event.StopReason == llmprotocol.StopSequence {
 		deltaWire.StopSequence = &event.MatchedStopSequence
