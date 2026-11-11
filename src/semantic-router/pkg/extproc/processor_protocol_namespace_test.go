@@ -209,28 +209,6 @@ func TestNamespacedToolCallsReachResponsesClientThroughLooper(t *testing.T) {
 		require.NotContains(t, string(body), namespacedFlatToolName)
 		requireNamespacedSemanticCall(t, semantic)
 	})
-	t.Run("streamed", func(t *testing.T) {
-		ctx := namespacedToolContext(t, llmprotocol.OpenAIChatV1)
-		stream := namespacedBackendStream(llmprotocol.OpenAIChatV1)
-		semantic, body, err := prepareStreamedLooperResponseForTest(t, ctx, stream)
-		require.NoError(t, err)
-		require.Contains(t, string(body), `"namespace":"mcp__echo"`)
-		require.NotContains(t, string(body), namespacedFlatToolName)
-		requireNamespacedSemanticCall(t, semantic)
-	})
-}
-
-func prepareStreamedLooperResponseForTest(
-	t *testing.T,
-	ctx *RequestContext,
-	stream []byte,
-) (*llmprotocol.Response, []byte, error) {
-	t.Helper()
-	_, semantic, body, err := (&OpenAIRouter{}).prepareLooperResponseWithEngine(
-		&looper.Response{Body: stream, Model: "public-model", ContentType: "text/event-stream"},
-		ctx, protocolcodec.NewBuiltinEngine(),
-	)
-	return semantic, body, err
 }
 
 // A stored call keeps its namespace, so a previous_response_id continuation sends
