@@ -2,9 +2,9 @@ import { atom, read, update } from 'claude-code'
 import type { AgentSpawnInput, EngineInterface, Hook, TurnCompleteInput, TurnStepInput } from 'claude-code'
 
 import type { Model, Spend, Steps, Tiers } from '../types'
-import { classify, numberAt, failureOf, QUICK_ANSWER_MS, type Reply } from './lib/classify'
+import { classify, modelOf, numberAt, failureOf, QUICK_ANSWER_MS, type Reply } from './lib/classify'
 import { effortFor, type Picked, pickEffort, raised, type StepsLines } from './lib/effort'
-import type { Settings } from './lib/settings'
+import type { Runtime, Settings } from './lib/settings'
 import { costOf } from './lib/prices'
 import { readEscalation } from './escalate'
 import { record, updateDecision } from './lib/state'
@@ -29,6 +29,21 @@ const STEPS = {
   type: 'score',
   instructions: 'How many reasoning steps does this task need?',
   criteria: ['one or two steps', 'several steps that build on each other', 'many steps or long careful reasoning'],
+}
+
+// A runtime model that answers no `score` question, such as vela3-fast: both router questions would fail on every
+// subagent, so the router steps aside for the session. Set once, at session start.
+const noScore = atom({ plugin: 'vsr', key: 'noScoreModel' } as const, '')
+
+// Reads which questions the runtime's model answers and, when it answers no `score` question, says once why the
+// router keeps every subagent on its default model.
+export async function checkRouterModel($: EngineInterface, runtime: Runtime) {
+  const model = await modelOf($, runtime)
+  if (model === undefined || model.types.includes('score')) return
+  await update($, noScore, () => model.id)
+  $.ui.toast(
+    `vSR router: ${model.id} answers no score questions, so subagents keep their default model · serve one that does, such as vela3-lite · /vsr:setup`,
+  )
 }
 
 // `floor`: the effort never drops below the one the subagent would have had.
@@ -124,7 +139,11 @@ export async function routeSpawn(
   const tiers = { easyBelow: router.easyBelow, hardFrom: router.hardFrom }
   const fallback = defaultOf(e.parentModel)
   const isEscalated = (await readEscalation($)) !== null
-  const asked = await classify($, settings.runtime, e.prompt, { complexity: COMPLEXITY, steps: STEPS }, QUICK_ANSWER_MS, parseAnswers)
+  const without = await read($, noScore)
+  const asked =
+    without === ''
+      ? await classify($, settings.runtime, e.prompt, { complexity: COMPLEXITY, steps: STEPS }, QUICK_ANSWER_MS, parseAnswers)
+      : { ok: false as const, why: `${without} answers no score questions`, latencyMs: 0 }
   const anchor = { id: e.tool_use_id, toolUseId: e.tool_use_id, at: await stamp($) }
   if (!asked.ok) {
     const why = isEscalated ? `${asked.why} · escalated, so one step up anyway` : asked.why

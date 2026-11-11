@@ -1,4 +1,5 @@
 import { expect, test } from 'claude-code/testing'
+import type { On } from 'claude-code'
 
 import {
   agentRow,
@@ -427,3 +428,35 @@ test('a route to the session\'s own tier names no model, so a pinned session mod
 
   expect(started.model).toBe('claude-opus-4-8')
 })
+
+// vela3-fast, as a Router listener lists it: its model answers no `score` question.
+const NO_SCORE = { data: [{ id: 'vela3-fast', question_types: ['choice', 'noul', 'span'] }] }
+
+test(
+  'a runtime model that answers no score question keeps every subagent on its default model, and says so once',
+  { options: { runtime: 'remote', runtimeUrl: 'http://sr.example/v1/decisions', runtimeModel: 'vela3-fast' } },
+  async ($, on) => {
+    const reply: Reply = { toasts: [] }
+    const asked: string[] = []
+    const rest = ((...args: Parameters<On>) => (args[0] === 'http.fetch' ? undefined : on(...args))) as On
+    const clock = engine(rest, reply)
+    on('http.fetch', (_, e) => {
+      const text = e.url.endsWith('/health') ? '{"status":"ok"}' : e.url.endsWith('/v1/systemone/models') ? JSON.stringify(NO_SCORE) : '{}'
+      if (e.init?.method === 'POST') asked.push(e.url)
+      return { value: { status: 200, ok: true, headers: {}, text } }
+    })
+    subagent(on)
+
+    await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+    await clock.advance(0)
+    const first = await $.agent.spawn(SPAWN)
+    const second = await $.agent.spawn({ ...SPAWN, tool_use_id: 'call-2' })
+
+    expect([first.model, second.model]).toEqual(['opus', 'opus'])
+    expect(asked).toEqual([])
+    expect(reply.toasts).toEqual([
+      'vSR router: vela3-fast answers no score questions, so subagents keep their default model · serve one that does, such as vela3-lite · /vsr:setup',
+    ])
+    expect(await paneText($, /no score/, 140)).toContain('vela3-fast answers no score questions')
+  },
+)

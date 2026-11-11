@@ -161,6 +161,9 @@ publishes a model, or a hosted one such as `https://app.vllm-sr.ai/v1/decisions`
 `runtimeUrl` at its `/v1/decisions`, set `runtimeModel` to one it lists at `/v1/systemone/models`,
 and set the listener's API key as the token when it takes one. A hosted API has no `/health`, so vSR
 checks that it is up through its model list instead.
+The router app asks two `score` questions, which vela3-lite answers and models of the runtime's
+`vela3` family, such as vela3-fast, do not: on a model that lists no `score` question type, vSR says
+so once at session start and leaves every subagent on its default model.
 
 Redact hides names, emails, phone numbers, card numbers, IP addresses, addresses, ID numbers and
 secrets (API keys, tokens, private keys, passwords in config files and connection URLs). It waits
