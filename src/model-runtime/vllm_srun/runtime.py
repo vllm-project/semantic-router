@@ -504,7 +504,7 @@ class ServedModel:
 
             with self.runtime._lifecycle_lock:
                 if self.runtime._stopping.is_set():
-                    raise _RuntimeStopping(
+                    raise _RuntimeStoppingError(
                         "runtime shutdown began during model initialization"
                     )
 
@@ -584,7 +584,9 @@ class ServedModel:
 
         with self.runtime._lifecycle_lock:
             if self.runtime._stopping.is_set():
-                raise _RuntimeStopping("runtime shutdown began during model loading")
+                raise _RuntimeStoppingError(
+                    "runtime shutdown began during model loading"
+                )
             self.scheduler = scheduler
             self.scheduler.start()
         self.health.set("warming", "running the golden check")
@@ -958,7 +960,7 @@ class ProcessHealth:
         }
 
 
-class _RuntimeStopping(Exception):
+class _RuntimeStoppingError(Exception):
     """Loading was cancelled because runtime shutdown began."""
 
 
@@ -977,6 +979,9 @@ class Runtime:
             raise ValueError("served model names must be unique")
         self.health = ProcessHealth(self)
         self._thread: threading.Thread | None = None
+        # The model the background load is loading now; ``stop`` leaves it to the load.
+        self._loading: ServedModel | None = None
+        # Held to start a model's worker or report it ready, and to set ``_stopping``.
         self._lifecycle_lock = threading.Lock()
         self._stopping = threading.Event()
 
@@ -1011,34 +1016,28 @@ class Runtime:
     def stop(self, timeout: float = STOP_SECONDS) -> list[str]:
         """Stop every model, waiting up to ``timeout`` seconds in all for the forwards in flight.
 
-        What still runs then, one entry per model; those models stay open.
+        What still runs then, one entry per model; those models stay open. A
+        load in flight starts no worker once stopping is set and frees its own
+        model: it is waited for first, within the same ``timeout``, and if it
+        is still running then, its model is left to it.
         """
+        deadline = time.monotonic() + timeout
         with self._lifecycle_lock:
             self._stopping.set()
-
-        thread = self._thread
-        if thread is not None and thread is not threading.current_thread():
-            thread.join()
-
+        loader = self._thread
+        if loader is not None and loader is not threading.current_thread():
+            loader.join(max(0.0, deadline - time.monotonic()))
+        loading = self._loading if loader is not None and loader.is_alive() else None
+        abandoned = (
+            [] if loading is None else [f"{loading.label}: its load has not finished"]
+        )
+        models = [served for served in self.served if served is not loading]
         # Every worker stops taking work before any is waited for, so a hung
         # forward leaves the other models the whole timeout.
-        for served in self.served:
+        for served in models:
             if served.scheduler is not None:
                 served.scheduler.stop(0)
-        deadline = time.monotonic() + timeout
-        abandoned = []
-        for served in self.served:
-            running = served.stop(max(0.0, deadline - time.monotonic()))
-            if running is not None:
-                abandoned.append(running)
-        media.stop()
-        return abandoned
-        for served in self.served:
-            if served.scheduler is not None:
-                served.scheduler.stop(0)
-        deadline = time.monotonic() + timeout
-        abandoned = []
-        for served in self.served:
+        for served in models:
             running = served.stop(max(0.0, deadline - time.monotonic()))
             if running is not None:
                 abandoned.append(running)
@@ -1092,9 +1091,10 @@ class Runtime:
             for served in pending:
                 if self._stopping.is_set():
                     return
+                self._loading = served
                 try:
                     served.load()
-                except _RuntimeStopping:
+                except _RuntimeStoppingError:
                     return
                 except (PackageError, UnsupportedDeviceError, VerificationError) as exc:
                     log.error("loading %s failed: %s", served.label, exc)
@@ -1113,6 +1113,8 @@ class Runtime:
                             f"retrying after {failure} (attempt {attempt} of {attempts})",
                         )
                         retry.append(served)
+                finally:
+                    self._loading = None
                 self._ready_gauge()
             freeze_heap()
             if not retry:
