@@ -6,12 +6,19 @@ import json
 import pytest
 import torch
 from torch import nn
+from vllm_srun.accel.cpu import CPUAccelerator
+from vllm_srun.config import EngineArgs
+from vllm_srun.engines.native.engine import NativeEngine
 from vllm_srun.engines.native.quantized import Int4Linear
 from vllm_srun.errors import PackageError
+from vllm_srun.families.decision3.family import Decision3Family
+from vllm_srun.plugins.base import DeviceInfo, EngineOptions, PackageRef
 from vllm_srun.quantization import parse
 from vllm_srun.testing.decision3 import pack_int4, write_quantized_fixture
 
 from tests.conftest import start_runtime
+
+CPU = DeviceInfo(accelerator="cpu", index=None, name="cpu")
 
 QUESTIONS = {
     "domain": {
@@ -32,9 +39,9 @@ STATES = (
 )
 
 
-def answers(package):
+def answers(package, dtype="auto"):
     """The answers to ``STATES`` and the engine's (int4 layers, parameters, bytes)."""
-    runtime = start_runtime(package)
+    runtime = start_runtime(package, engine_args=EngineArgs(dtype=dtype))
     try:
         out = []
         for state in STATES:
@@ -80,8 +87,9 @@ def test_an_int4_package_answers_as_its_dequantized_weights_do(
     plain = write_quantized_fixture(
         d3_text_package, tmp_path / "plain", symmetric=symmetric, dequantized=True
     )
-    got, (layers, parameters, size) = answers(packed)
-    want, (plain_layers, plain_parameters, plain_size) = answers(plain)
+    # W4A16: the packed weights multiply BF16 activations, as the plain package's do at bfloat16.
+    got, (layers, parameters, size) = answers(packed, "bfloat16")
+    want, (plain_layers, plain_parameters, plain_size) = answers(plain, "bfloat16")
     assert got == want
     # MLPs in all four layers, GDN projections in three, attention in one
     assert (layers, plain_layers) == (4 * 3 + 3 * 3 + 4, 0)
@@ -221,6 +229,39 @@ def test_an_fp8_package_needs_an_fp8_gpu(tmp_path, d3_text_package):
     packed = write_quantized_fixture(d3_text_package, tmp_path / "fp8", scheme="float8")
     with pytest.raises(Exception, match="FP8 weights need"):
         start_runtime(packed)
+
+
+class GPUBound(CPUAccelerator):
+    """Reads a model as for a GPU; ``_host`` only asks which device it is for."""
+
+    def torch_device(self, device):
+        return torch.device("cuda")
+
+
+@pytest.mark.parametrize("scheme", ["int4", "float8"])
+def test_a_gpu_bound_load_keeps_quantized_weights_in_the_file_mapping(
+    tmp_path, monkeypatch, d3_text_package, scheme
+):
+    from vllm_srun.engines.native import weights
+
+    packed = write_quantized_fixture(d3_text_package, tmp_path / scheme, scheme=scheme)
+    family = Decision3Family()
+    spec = family.describe(family.verify(PackageRef(packed)))
+    shared = {}
+    set_buffer = weights.set_buffer
+
+    def recorded(root, name, tensor, *args, **kwargs):
+        set_buffer(root, name, tensor, *args, **kwargs)
+        shared[name] = root.get_buffer(name).data_ptr() == tensor.data_ptr()
+
+    monkeypatch.setattr(weights, "set_buffer", recorded)
+    NativeEngine()._host(spec, GPUBound(), CPU, EngineOptions())
+    stored = {
+        name: same
+        for name, same in shared.items()
+        if name.endswith(("weight", "weight_packed"))
+    }
+    assert stored and all(stored.values())
 
 
 @pytest.mark.parametrize(

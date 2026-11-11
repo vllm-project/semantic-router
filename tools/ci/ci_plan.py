@@ -50,6 +50,8 @@ from verification_catalog import (
 )
 
 PROFILES = ("pr", "main", "nightly", "release")
+# The development CLI that a main publication uploads is the one this builds.
+PUBLISHED_PACKAGE = "cli-package"
 GIT_SHA_LENGTH = 40
 EXECUTORS = (
     "quality",
@@ -87,7 +89,7 @@ def resolve_image_sources(plan: dict) -> None:
         if plan["profile"] not in {"pr", "main", "nightly"}:
             # Explicit release qualification requires a published fixture.
             raise
-        # Main publication is explicit. PRs and weekly qualification can test
+        # Only main publishes fixtures. PRs and nightly qualification can test
         # exact fixture inputs before that publication, without promoting them.
         published["source"] = "candidate"
         plan["build_images"] = sorted({*plan["build_images"], MOCKER_IMAGE})
@@ -126,7 +128,9 @@ def make_plan(
     authorization = authorization or {}
     if publish and profile != "main":
         raise ValueError("development publication requires the main profile")
-    full = full or profile in {"nightly", "release"} or publish
+    # Publishing doesn't imply full qualification; a publication dispatch
+    # requests both.
+    full = full or profile in {"nightly", "release"}
     if (
         require_approval
         and authorization.get("authorized")
@@ -146,10 +150,12 @@ def make_plan(
         ids = list(requested)
     required_ids = list(ids)
     deferred = []
-    if profile == "main" and not publish:
+    if profile == "main" and not full:
         # Main continuously checks source. Reviewed PRs own affected product
-        # qualification; explicit publication and weekly/release own full runs.
+        # qualification; a full Main dispatch and nightly/release own full runs.
         ids = [name for name in ids if records[name]["execution"] == "automatic"]
+        if publish:
+            ids = [name for name in records if name in {*ids, PUBLISHED_PACKAGE}]
         required_ids = list(ids)
     elif require_approval and profile == "pr" and not requested:
         ids, deferred = partition(ids, records, authorization)
@@ -180,14 +186,14 @@ def make_plan(
     publish_python = profile == "release" or (profile == "main" and publish)
     publish_images = []
     if profile == "main" and publish:
-        # Publish a complete commit-addressed CLI/image set only on request.
+        # Every main publication is a complete commit-addressed CLI/image set.
         publish_images = list(PRODUCTION_RELEASE_IMAGES)
     elif profile == "nightly":
         publish_images = list(NIGHTLY_IMAGES)
     elif profile == "release":
         publish_images = list(PRODUCTION_RELEASE_IMAGES)
     path_images = list(selection.pr_images if required_ids else ())
-    if profile == "main" and not publish:
+    if profile == "main" and not full:
         path_images = []
     deferred_images = []
     if require_approval and profile == "pr" and not requested:
@@ -241,8 +247,10 @@ def make_plan(
         "build_images": build_images,
         "image_sources": image_sources,
         "publish_images": publish_images,
+        # The development chart only changes with its source, so a push
+        # publishes it when the chart changed; a full dispatch always does.
         "publish_helm": profile in {"nightly", "release"}
-        or (profile == "main" and publish),
+        or (profile == "main" and publish and (full or selection.signals["helm"])),
         "publish_python": publish_python,
         "multiarch": bool(publish_images),
         "not_applicable": load_catalog()["full_cpu"]["excluded"],
@@ -411,10 +419,11 @@ PERFORMANCE_BASES = {
     # current harness cannot compile there. #3852 introduced the paired Vela
     # CPU benchmarks.
     "0.4.0": "12597be5ffae2319d856f230d61ca26248eb9b3b",
-    # v0.4.0 predates the model runtime, so compare-model-baseline.sh could
-    # only record a reset. #4707 pinned the classify benchmarks to the Vela 1.0
-    # specialists, and its own Production Benchmarks job passed with them.
-    "0.5.0": "abae8ff99df2fdab372f0fb6d032b305907b9f44",
+    # v0.4.0 predates the model runtime, and every earlier main commit predates
+    # the decision model's preset questions, so compare-model-baseline.sh could
+    # only record a reset. #5886 answers the classify benchmarks' signals with
+    # the decision model, and its own Production Benchmarks job passed with it.
+    "0.5.0": "4952ca055d0f99adf746b67aa61cfb7223d0739b",
 }
 # The first release that serves the model benchmarks through the model
 # runtime. An older previous release can't be measured, only reset.

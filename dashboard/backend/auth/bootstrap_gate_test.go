@@ -211,7 +211,7 @@ func TestBootstrapRegister_OpenWindowStillHashesAndCreates(t *testing.T) {
 // cover what a frozen bool could not: the config changing under a live process.
 
 const (
-	setupModeConfigYAML = `version: v0.3
+	setupModeConfigYAML = `version: v0.5
 listeners:
   - name: http-8801
     address: 0.0.0.0
@@ -224,7 +224,7 @@ setup:
 
 	// activatedConfigYAML is the same file after activation strips the setup
 	// block, which is what SetupActivateHandler writes to disk.
-	activatedConfigYAML = `version: v0.3
+	activatedConfigYAML = `version: v0.5
 listeners:
   - name: http-8801
     address: 0.0.0.0

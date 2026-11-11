@@ -178,11 +178,11 @@ func runCacheCancellationCheck(ctx context.Context, localPort string, verbose bo
 	}
 	defer followUp.Body.Close()
 
-	if followUp.Header.Get("x-vsr-cache-hit") == "true" {
+	if followUp.Header.Get(responsePathHeader) == "cache" {
 		return fmt.Errorf("cancelled request published cache state: the same question hit with similarity %q",
-			followUp.Header.Get("x-vsr-cache-similarity"))
+			traceValue(followUp.Header, "cache_similarity"))
 	}
-	if _, simErr := parseCacheSimilarity(followUp.Header.Get("x-vsr-cache-similarity"), false); simErr != "" {
+	if _, simErr := parseCacheSimilarity(traceValue(followUp.Header, "cache_similarity"), false); simErr != "" {
 		return fmt.Errorf("cancellation probe follow-up: %s", simErr)
 	}
 
@@ -256,14 +256,12 @@ func testSingleCacheRequestForModel(ctx context.Context, testCase CacheTestCase,
 	}
 	defer resp.Body.Close()
 
-	// Check for cache hit header
-	cacheHitHeader := resp.Header.Get("x-vsr-cache-hit")
-	result.CacheHit = (cacheHitHeader == "true")
+	result.CacheHit = resp.Header.Get(responsePathHeader) == "cache"
 	result.SelectedRecipe = resp.Header.Get("x-vsr-selected-recipe")
 	result.SelectedDecision = resp.Header.Get("x-vsr-selected-decision")
-	result.SimilarityReported = resp.Header.Get("x-vsr-cache-similarity") != ""
+	result.SimilarityReported = traceValue(resp.Header, "cache_similarity") != ""
 
-	sim, simErr := parseCacheSimilarity(resp.Header.Get("x-vsr-cache-similarity"), result.CacheHit)
+	sim, simErr := parseCacheSimilarity(traceValue(resp.Header, "cache_similarity"), result.CacheHit)
 	if simErr != "" {
 		result.Error = simErr
 		return result
@@ -281,30 +279,30 @@ func testSingleCacheRequestForModel(ctx context.Context, testCase CacheTestCase,
 	return result
 }
 
-// parseCacheSimilarity validates one lookup's x-vsr-cache-similarity header and
+// parseCacheSimilarity validates one lookup's cache_similarity trace member and
 // returns the parsed score, or a non-empty error message.
 //
 // The contract (#2473): the score belongs to this request, rejected candidates
 // included. A hit is only served above the configured threshold, so its score
 // lands in (0,1]; a miss may omit the header, or report its best rejected
-// candidate, which must still be a finite score in [0,1]. The header rides the
-// x-vsr-debug surface.
+// candidate, which must still be a finite score in [0,1]. The score rides in
+// the trace, for a caller allowed the debug headers.
 //
 // A verifier outage (#3176) can reject even a full-similarity candidate; the
 // score alone does not establish that the candidate is safe to serve.
 func parseCacheSimilarity(simHeader string, cacheHit bool) (float64, string) {
 	if simHeader == "" {
 		if cacheHit {
-			return 0, "cache hit missing x-vsr-cache-similarity header (per-request score not surfaced)"
+			return 0, "cache hit missing the trace's cache_similarity (per-request score not surfaced)"
 		}
 		return 0, ""
 	}
 	sim, err := strconv.ParseFloat(simHeader, 64)
 	if err != nil {
-		return 0, fmt.Sprintf("unparsable x-vsr-cache-similarity %q: %v", simHeader, err)
+		return 0, fmt.Sprintf("unparsable cache_similarity %q: %v", simHeader, err)
 	}
 	if math.IsNaN(sim) || math.IsInf(sim, 0) {
-		return 0, fmt.Sprintf("non-finite x-vsr-cache-similarity %q", simHeader)
+		return 0, fmt.Sprintf("non-finite cache_similarity %q", simHeader)
 	}
 	if cacheHit {
 		if sim <= 0.0 || sim > 1.0 {
@@ -342,7 +340,7 @@ func sendChatRequestForModel(ctx context.Context, question, localPort, model str
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// x-vsr-cache-similarity is demoted to the debug surface; opt in.
+	// The cache similarity rides in the trace; opt in.
 	req.Header.Set("x-vsr-debug", "true")
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}

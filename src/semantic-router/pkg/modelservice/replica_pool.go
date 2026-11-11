@@ -37,6 +37,9 @@ const (
 	replicaRejected replicaOutcome = "rejected"
 	replicaCanceled replicaOutcome = "canceled"
 	replicaTimeout  replicaOutcome = "timeout"
+	// replicaExpired is an exchange past the deployment's own timeout_ms: a
+	// timeout that also backs the replica off and probes it, as a failure does.
+	replicaExpired replicaOutcome = "expired"
 )
 
 // replicaLoad belongs to a physical worker, so overlapping generations and
@@ -47,6 +50,15 @@ type replicaLoad struct {
 	work     int64
 	backoff  time.Time
 	failures int
+	// timeouts counts the exchanges in a row that ran out of their deadline,
+	// the earliest of them dispatched at streak; answered is the last
+	// successful answer. A replica ejected for its timeouts leaves dispatch
+	// until ejected, for longer with each of its ejections in a row.
+	timeouts  int
+	streak    time.Time
+	answered  time.Time
+	ejected   time.Time
+	ejections int
 	// Protected by the manager lock, shared across overlapping generations.
 	lastAssigned uint64
 }
@@ -62,12 +74,13 @@ type replicaPool struct {
 	workers     []replicaWorker
 	client      *Client
 	served      *servedModel
+	ejection    config.ReplicaEjection
 	mu          sync.Mutex
 	baseline    *ModelCard
 }
 
 func newReplicaPool(manager *Manager, name string, declaration config.ModelDeployment, workers []replicaWorker) *replicaPool {
-	p := &replicaPool{manager: manager, name: name, declaration: declaration.WithDefaults(), workers: workers}
+	p := &replicaPool{manager: manager, name: name, declaration: declaration.WithDefaults(), workers: workers, ejection: declaration.Ejection()}
 	generated, _ := api.NewClientWithResponses("http://model-runtime", api.WithHTTPClient(p))
 	p.client = &Client{endpoint: "pool", base: "http://model-runtime", httpClient: p, api: generated}
 	p.client.bundleTasks.Store(DefaultBundleTasks)
@@ -117,14 +130,45 @@ func comparableReplicaCard(card ModelCard) ModelCard {
 	return card
 }
 
+const backoffReason = "replica is in health backoff"
+
 // readyWorkers validates every ready observation before it can enter admission.
-// A changed or heterogeneous worker never silently receives a request.
+// A changed or heterogeneous worker never silently receives a request. Ejected
+// workers serve only while no other worker can: ejection never empties a pool.
 func (p *replicaPool) readyWorkers() ([]replicaWorker, map[string]string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	var ready []replicaWorker
-	reasons := make(map[string]string)
+	ready, ejected, reasons := p.classifyLocked(time.Now())
+	if len(ready) == 0 {
+		for _, w := range ejected {
+			delete(reasons, w.id)
+		}
+		ready = ejected
+	}
 	limit := int64(0)
+	for _, w := range ready {
+		current := w.member.group.client.bundleTasks.Load()
+		if limit == 0 || current < limit {
+			limit = current
+		}
+	}
+	if len(ready) > 0 {
+		p.client.bundleTasks.Store(limit)
+		inputs := map[string]int{p.name: p.baseline.MaxInputs}
+		scanning := map[string]bool{p.name: p.baseline.MaxScanTokens > 0}
+		p.client.maxInputs.Store(&inputs)
+		p.client.scanning.Store(&scanning)
+	}
+	p.served.ready.Store(len(ready) > 0)
+	readyGauge.WithLabelValues(p.name).Set(boolGauge(len(ready) > 0))
+	return ready, reasons
+}
+
+// classifyLocked sorts the compatible ready workers into those dispatch may
+// use and those ejected for their timeouts, and gives every other worker's
+// reason. A worker whose cool-down has ended returns to dispatch here.
+func (p *replicaPool) classifyLocked(now time.Time) (ready, ejected []replicaWorker, reasons map[string]string) {
+	reasons = make(map[string]string)
 	for _, w := range p.workers {
 		card, err := p.workerCard(w)
 		if err != nil {
@@ -141,28 +185,23 @@ func (p *replicaPool) readyWorkers() ([]replicaWorker, map[string]string) {
 		}
 		load := &w.member.served.load
 		load.mu.Lock()
-		cooling := time.Now().Before(load.backoff)
+		readmitted := load.expireLocked(now)
+		cooling, out := now.Before(load.backoff), !load.ejected.IsZero()
 		load.mu.Unlock()
-		if cooling {
-			reasons[w.id] = "replica is in health backoff"
-			continue
+		if readmitted {
+			p.readmitted(w, readmittedCooldown)
 		}
-		ready = append(ready, w)
-		current := w.member.group.client.bundleTasks.Load()
-		if limit == 0 || current < limit {
-			limit = current
+		switch {
+		case cooling:
+			reasons[w.id] = backoffReason
+		case out:
+			reasons[w.id] = ejectedReason
+			ejected = append(ejected, w)
+		default:
+			ready = append(ready, w)
 		}
 	}
-	if len(ready) > 0 {
-		p.client.bundleTasks.Store(limit)
-		inputs := map[string]int{p.name: p.baseline.MaxInputs}
-		scanning := map[string]bool{p.name: p.baseline.MaxScanTokens > 0}
-		p.client.maxInputs.Store(&inputs)
-		p.client.scanning.Store(&scanning)
-	}
-	p.served.ready.Store(len(ready) > 0)
-	readyGauge.WithLabelValues(p.name).Set(boolGauge(len(ready) > 0))
-	return ready, reasons
+	return ready, ejected, reasons
 }
 
 func (p *replicaPool) card(ctx context.Context) (ModelCard, error) {
@@ -224,7 +263,7 @@ func (p *replicaPool) status() DeploymentStatus {
 			physical := worker.member.group.status()[0]
 			status.State = physical.State
 			status.Reason = physical.Reason
-			if reasons[worker.id] == "replica is in health backoff" {
+			if reasons[worker.id] == backoffReason {
 				status.State = "backoff"
 				status.Reason = reasons[worker.id]
 			}
@@ -254,9 +293,12 @@ func (p *replicaPool) status() DeploymentStatus {
 				replica.Reason = reason
 			}
 			if w.member.served.ready.Load() {
-				if reason == "replica is in health backoff" {
+				switch reason {
+				case backoffReason:
 					replica.State = "backoff"
-				} else {
+				case ejectedReason:
+					replica.State = "ejected"
+				default:
 					replica.State = "incompatible"
 				}
 			}
@@ -345,28 +387,34 @@ func (p *replicaPool) retain(cost int64) (replicaWorker, func(replicaOutcome), e
 	replicaWorkGauge.WithLabelValues(p.name, w.id).Set(float64(load.work))
 	load.mu.Unlock()
 	w.member.group.refs++
+	dispatched := time.Now()
 	var once sync.Once
 	release := func(outcome replicaOutcome) {
 		once.Do(func() {
+			unwell := outcome == replicaFailed || outcome == replicaExpired
+			if outcome == replicaExpired {
+				outcome = replicaTimeout
+			}
 			load.mu.Lock()
 			load.inflight--
 			load.work -= cost
 			replicaInflightGauge.WithLabelValues(p.name, w.id).Set(float64(load.inflight))
 			replicaWorkGauge.WithLabelValues(p.name, w.id).Set(float64(load.work))
 			replicaRequestsTotal.WithLabelValues(p.name, w.id, string(outcome)).Inc()
-			switch outcome {
-			case replicaFailed:
+			switch {
+			case unwell:
 				load.failures++
 				delay := time.Duration(1<<min(load.failures-1, 5)) * 100 * time.Millisecond
 				load.backoff = time.Now().Add(delay)
-			case replicaOK:
+			case outcome == replicaOK:
 				load.failures = 0
 				load.backoff = time.Time{}
 			}
 			load.mu.Unlock()
-			if outcome == replicaFailed {
+			if unwell {
 				w.member.group.requestProbe()
 			}
+			p.recordTimeouts(w, outcome, dispatched)
 			p.manager.release([]*group{w.member.group})
 		})
 	}

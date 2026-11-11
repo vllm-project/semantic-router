@@ -61,23 +61,19 @@ var maintainedValuesConfigAssets = []string{
 	"deploy/kubernetes/llm-d/semantic-router-values/values.yaml",
 	repoRel("e2e", "profiles", "ai-gateway", "values.yaml"),
 	repoRel("e2e", "profiles", "authz-rbac", "values.yaml"),
-	repoRel("e2e", "profiles", "category-remote-backend", "values.yaml"),
 	repoRel("e2e", "profiles", "dashboard", "values.yaml"),
 	repoRel("e2e", "profiles", "dynamic-config", "values.yaml"),
-	repoRel("e2e", "profiles", "ml-model-selection", "values.yaml"),
 	repoRel("e2e", "profiles", "multi-endpoint", "values.yaml"),
-	repoRel("e2e", "profiles", "multimodal-routing", "values.yaml"),
 	repoRel("e2e", "profiles", "production-stack", "values.yaml"),
 	repoRel("e2e", "profiles", "rag-hybrid-search", "values.yaml"),
 	repoRel("e2e", "profiles", "response-api-redis-cluster", "values.yaml"),
 	repoRel("e2e", "profiles", "response-api-redis", "values.yaml"),
 	repoRel("e2e", "profiles", "response-api", "values.yaml"),
-	repoRel("e2e", "profiles", "routing-strategies", "values-mcp.yaml"),
 	repoRel("e2e", "profiles", "routing-strategies", "values.yaml"),
 	repoRel("e2e", "profiles", "streaming", "values.yaml"),
 }
 
-func TestMaintainedConfigAssetsUseCanonicalV03Contract(t *testing.T) {
+func TestMaintainedConfigAssetsUseCanonicalV05Contract(t *testing.T) {
 	for _, rel := range maintainedFullConfigAssets {
 		t.Run(rel, func(t *testing.T) {
 			validateMaintainedConfigAsset(t, rel, readMaintainedConfigAsset(t, rel))
@@ -230,7 +226,7 @@ func validateMaintainedConfigAsset(t *testing.T, rel string, data []byte) {
 
 // removedDomainPolicyKeys are per-domain policy keys from the pre-plugin config
 // schema. #681 moved these behaviours onto decision plugins and reduced
-// routing.signals.domains to metadata plus model scores, so the loader has
+// recipes[default].signals.domains to metadata plus model scores, so the loader has
 // ignored them ever since. A shipped asset that still sets one advertises a
 // knob the router does not have.
 var removedDomainPolicyKeys = []string{
@@ -256,25 +252,18 @@ func assertNoRemovedDomainPolicyKeys(t *testing.T, rel string, raw map[string]in
 	}
 }
 
-// assetDomainEntries returns routing.signals.domains, or nothing when the asset
-// declares no domain signal.
+// assetDomainEntries returns the domain signals of every recipe of the asset.
 func assetDomainEntries(raw map[string]interface{}) []map[string]interface{} {
-	routing, ok := raw["routing"].(map[string]interface{})
-	if !ok {
-		return nil
-	}
-	signals, ok := routing["signals"].(map[string]interface{})
-	if !ok {
-		return nil
-	}
-	domains, ok := signals["domains"].([]interface{})
-	if !ok {
-		return nil
-	}
-	entries := make([]map[string]interface{}, 0, len(domains))
-	for _, domain := range domains {
-		if typed, ok := domain.(map[string]interface{}); ok {
-			entries = append(entries, typed)
+	recipes, _ := raw["recipes"].([]interface{})
+	var entries []map[string]interface{}
+	for _, item := range recipes {
+		recipe, _ := item.(map[string]interface{})
+		signals, _ := recipe["signals"].(map[string]interface{})
+		domains, _ := signals["domains"].([]interface{})
+		for _, domain := range domains {
+			if typed, ok := domain.(map[string]interface{}); ok {
+				entries = append(entries, typed)
+			}
 		}
 	}
 	return entries

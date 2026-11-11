@@ -27,7 +27,7 @@ func (r *OpenAIRouter) looperRecipeByName(name config.RecipeName) (*config.Routi
 	if r == nil || r.Config == nil {
 		return nil, false
 	}
-	if name == config.DefaultRecipeName {
+	if r.Config.IsDefaultRecipe(name) {
 		recipe := r.Config.DefaultRecipe()
 		return recipe, recipe != nil
 	}

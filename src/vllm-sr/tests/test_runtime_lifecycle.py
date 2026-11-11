@@ -122,9 +122,40 @@ def test_runtime_summary_is_clean_human_stdout(capsys):
 
 def test_runtime_example_retains_automatic_model_for_default_routing(capsys):
     runtime_lifecycle._print_curl_example(
-        [{"port": 8899}], resolve_runtime_stack(), {"routing": {"decisions": []}}
+        [{"port": 8899}],
+        resolve_runtime_stack(),
+        {"recipes": [{"name": "default", "decisions": []}]},
     )
     assert '"model": "vllm-sr/auto"' in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("quiet_engine", [False, True])
+@pytest.mark.parametrize("dashboard_disabled", [False, True])
+@pytest.mark.parametrize("port_offset", [0, 200])
+def test_runtime_summary_grafana_access_matches_dashboard_availability(
+    monkeypatch, capsys, quiet_engine, dashboard_disabled, port_offset
+):
+    monkeypatch.setattr(runtime_lifecycle, "quiet_logs", lambda: quiet_engine)
+    layout = resolve_runtime_stack(port_offset=port_offset)
+
+    runtime_lifecycle.log_runtime_summary(
+        [{"port": 8899, "systemone": {"models": ["vllm-sr/test"]}}],
+        layout,
+        dashboard_disabled=dashboard_disabled,
+        enable_observability=True,
+        config={"global": {"router": {"enabled": not quiet_engine}}},
+    )
+
+    grafana_line = next(
+        line for line in capsys.readouterr().out.splitlines() if "Grafana" in line
+    )
+    assert "admin/admin" not in grafana_line
+    assert layout.grafana_url not in grafana_line
+    if dashboard_disabled:
+        assert "--dashboard" in grafana_line
+        assert "http://" not in grafana_line
+    else:
+        assert f"http://localhost:{8700 + port_offset}/monitoring" in grafana_line
 
 
 def test_router_startup_diagnostics_use_stderr(capsys):
@@ -448,12 +479,16 @@ def test_engine_summary_uses_published_native_name_port_and_key_placeholder(caps
     }
     runtime_lifecycle.log_runtime_summary(
         [
-            {"name": "chat-only", "port": 8899, "models": ["vllm-sr/auto"]},
+            {
+                "name": "chat-only",
+                "port": 8899,
+                "apis": {"chat_completions": {"models": ["vllm-sr/auto"]}},
+            },
             {
                 "name": "native",
                 "port": 8900,
                 "tls": {"cert_file": "server.crt"},
-                "systemone": {"models": ["judgment"]},
+                "apis": {"systemone": {"models": ["judgment"]}},
                 "api_keys": ["secret-do-not-print"],
             },
         ],
@@ -481,5 +516,5 @@ def test_engine_summary_without_native_grants_does_not_invent_an_example(
         listeners, resolve_runtime_stack(), {"global": {"router": {"enabled": False}}}
     )
     output = capsys.readouterr().out
-    assert "Configure listeners[].systemone.models" in output
+    assert "Configure listeners[].apis.systemone" in output
     assert "curl" not in output and '"model"' not in output

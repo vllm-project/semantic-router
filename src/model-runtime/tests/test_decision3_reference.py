@@ -1,9 +1,10 @@
 """The native Decision 3.0 path is bit-identical to Transformers 5.17 as the released d3 runtime drives it.
 
-The reference is ``Qwen3_5Model`` in BF16 with SDPA attention, the released
-runtime's noncausal full-attention hook (adapted from
-perplexity-ai/pplx-decider-v1.1-27b, Apache-2.0) and its matrix-product patch
-embedding, read at the last position by the FP32 readout.
+The reference is ``Qwen3_5Model`` with SDPA attention, the released runtime's
+noncausal full-attention hook (adapted from perplexity-ai/pplx-decider-v1.1-27b,
+Apache-2.0) and its matrix-product patch embedding, read at the last position
+by the FP32 readout: in FP32, as a CPU runs it at ``--dtype auto``, and in BF16,
+the released runtime's precision, as ``--dtype bfloat16`` runs it there.
 """
 
 import json
@@ -13,7 +14,10 @@ import pytest
 import torch
 import torch.nn.functional as F
 from safetensors.torch import load_file
+from vllm_srun.config import EngineArgs
 from vllm_srun.families.decision3 import package as pkg
+
+from tests.conftest import start_runtime
 
 transformers = pytest.importorskip("transformers")
 pytestmark = pytest.mark.reference
@@ -60,20 +64,38 @@ def linear_patch_embed(self, hidden_states):
     )
 
 
-@pytest.fixture(scope="module", params=["d3", "d3_pruned"])
+@pytest.fixture(
+    scope="module",
+    params=[
+        ("d3", "auto"),
+        ("d3_pruned", "auto"),
+        ("d3", "bfloat16"),
+        ("d3_pruned", "bfloat16"),
+    ],
+    ids="-".join,
+)
 def case(request):
-    """The runtime, the package and the reference model, for a package and one with a pruned backbone."""
+    """The runtime, the package and the reference model, for a package and one with a pruned backbone, per dtype."""
     from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5Model
 
-    package = request.getfixturevalue(f"{request.param}_package")
-    runtime = request.getfixturevalue(f"{request.param}_runtime")
+    name, dtype = request.param
+    package = request.getfixturevalue(f"{name}_package")
     model = Qwen3_5Model.from_pretrained(
-        str(package), dtype=torch.bfloat16, attn_implementation="sdpa"
+        str(package),
+        dtype=torch.float32 if dtype == "auto" else torch.bfloat16,
+        attn_implementation="sdpa",
     ).eval()
     enable_noncausal(model.language_model)
     embed = model.visual.patch_embed
     embed.forward = types.MethodType(linear_patch_embed, embed)
-    return runtime, package, model
+    if dtype == "auto":
+        yield request.getfixturevalue(f"{name}_runtime"), package, model
+        return
+    runtime = start_runtime(package, engine_args=EngineArgs(dtype=dtype))
+    try:
+        yield runtime, package, model
+    finally:
+        runtime.stop()
 
 
 def reference_probabilities(model, package, items):

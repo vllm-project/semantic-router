@@ -38,6 +38,17 @@ var (
 		[]string{"signal_type", "signal_name"},
 	)
 
+	// SignalScanCoverageTotal counts the guard rules (jailbreak, safety, pii)
+	// by how much of their input they read: full, partial (some windows) or
+	// none.
+	SignalScanCoverageTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vsr_signal_scan_coverage_total",
+			Help: "Guard signal rules by how much of their input the model read: full, partial or none",
+		},
+		[]string{"signal", "result"},
+	)
+
 	// DecisionEvaluationTotal tracks the total number of decision evaluations
 	DecisionEvaluationTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
@@ -110,6 +121,16 @@ var (
 		},
 		[]string{"plugin_type", "error_reason"},
 	)
+
+	// ResponseGuardBufferedTotal counts the streamed answers the Router held
+	// until the decision's response_guard had read them, by what became of each.
+	ResponseGuardBufferedTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_response_guard_buffered_total",
+			Help: "Streamed answers held for the decision's response_guard by decision and outcome: passed, annotated, blocked, over_limit or incomplete",
+		},
+		[]string{"decision_name", "outcome"},
+	)
 )
 
 // RecordSignalExtraction records a signal extraction event
@@ -133,6 +154,15 @@ func RecordSignalMatch(signalType, signalName string) {
 		signalName = consts.UnknownLabel
 	}
 	SignalMatchTotal.WithLabelValues(signalType, signalName).Inc()
+}
+
+// RecordSignalScanCoverage records how much of its input a guard rule,
+// "type:name", read.
+func RecordSignalScanCoverage(signal, result string) {
+	if signal == "" {
+		signal = consts.UnknownLabel
+	}
+	SignalScanCoverageTotal.WithLabelValues(signal, result).Inc()
 }
 
 // RecordDecisionEvaluation records a decision evaluation event
@@ -188,4 +218,13 @@ func RecordPluginError(pluginType, errorReason string) {
 		errorReason = "unknown"
 	}
 	PluginExecutionErrors.WithLabelValues(pluginType, errorReason).Inc()
+}
+
+// RecordResponseGuardBuffered records one streamed answer held for the
+// decision's response_guard and what became of it.
+func RecordResponseGuardBuffered(decisionName, outcome string) {
+	if decisionName == "" {
+		decisionName = consts.UnknownLabel
+	}
+	ResponseGuardBufferedTotal.WithLabelValues(decisionName, outcome).Inc()
 }

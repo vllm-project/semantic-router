@@ -30,21 +30,26 @@ from cli.sr_bench.agent_task_kernel import (  # noqa: F401 - retained source API
     tool_messages,
 )
 
+if __package__:
+    from .router_trace import routing_headers
+else:
+    from router_trace import routing_headers
+
 HTTP_OK = 200
 HTTP_REDIRECT_START = 300
 VSR_HEADERS = (
     "x-vsr-selected-model",
     "x-vsr-selected-decision",
-    "x-vsr-session-phase",
-    "x-vsr-selected-confidence",
+    "session_phase",
+    "confidence",
     "x-vsr-replay-id",
-    "x-vsr-context-token-count",
-    "x-vsr-matched-conversation",
-    "x-vsr-routing-latency-ms",
+    "context_tokens",
+    "matched_conversation",
+    "routing_latency_ms",
     "x-vsr-cost",
     "x-vsr-cost-currency",
 )
-NON_NEGATIVE_NUMBER_HEADERS = ("x-vsr-routing-latency-ms", "x-vsr-cost")
+NON_NEGATIVE_NUMBER_HEADERS = ("routing_latency_ms", "x-vsr-cost")
 COST_METRIC = "llm_model_cost_total"
 ROUTING_LATENCY_METRIC = "llm_model_routing_latency_seconds"
 COST_BASIS = "configured pricing (x-vsr-cost), not a provider bill"
@@ -58,9 +63,9 @@ CORE_ROUTER_HEADERS = (
 )
 DIAGNOSTIC_ROUTER_HEADERS = (
     *CORE_ROUTER_HEADERS,
-    "x-vsr-session-phase",
-    "x-vsr-selected-confidence",
-    "x-vsr-context-token-count",
+    "session_phase",
+    "confidence",
+    "context_tokens",
 )
 PROTOCOLS = ("chat", "responses")
 CONTINUATION_MODES = ("full-history", "previous-response-id")
@@ -172,6 +177,7 @@ def request_headers(args: argparse.Namespace, session_id: str) -> dict[str, str]
         "Content-Type": "application/json",
         "Accept": "application/json",
         "User-Agent": "vllm-sr-agent-task-live-benchmark",
+        "X-VSR-Debug": "true",
         args.session_header: session_id,
     }
     if args.api_key:
@@ -313,7 +319,7 @@ def response_record(
         parsed = {"raw_body": payload[:500]}
     return {
         "status": status,
-        "headers": {key.lower(): value for key, value in headers.items()},
+        "headers": routing_headers(headers),
         "json": parsed if isinstance(parsed, dict) else {},
         "payload": payload,
         "latency_ms": round((time.perf_counter() - started) * 1000, 3),
@@ -363,11 +369,11 @@ def dry_response(protocol: str, task: TaskSpec, turn_index: int) -> dict[str, An
         "headers": {
             "x-vsr-selected-model": "dry-model",
             "x-vsr-selected-decision": "dry-run",
-            "x-vsr-session-phase": turn.phase,
-            "x-vsr-selected-confidence": "0.0000",
+            "session_phase": turn.phase,
+            "confidence": "0.0000",
             "x-vsr-replay-id": f"dry-replay-{task.name}-{turn_index}",
-            "x-vsr-context-token-count": "42",
-            "x-vsr-routing-latency-ms": "0.250",
+            "context_tokens": "42",
+            "routing_latency_ms": "0.250",
             "x-vsr-cost": "0.00001",
             "x-vsr-cost-currency": "USD",
         },
@@ -487,7 +493,7 @@ def row_from_result(
         "cached_tokens": cached_tokens(response_json),
         "reasoning_tokens": reasoning_tokens(response_json),
         "finish_reason": finish_reason(response_json),
-        "routing_latency_ms": header_float(result, "x-vsr-routing-latency-ms"),
+        "routing_latency_ms": header_float(result, "routing_latency_ms"),
         "cost": header_float(result, "x-vsr-cost"),
         "cost_currency": (result.get("headers") or {}).get("x-vsr-cost-currency", ""),
         "answer_score": score,
@@ -498,6 +504,7 @@ def row_from_result(
         **{
             header: (result.get("headers") or {}).get(header, "")
             for header in VSR_HEADERS
+            if header != "routing_latency_ms"
         },
     }
 
@@ -727,13 +734,13 @@ def invalid_router_header_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def valid_router_header_value(header: str, value: str) -> bool:
-    if header == "x-vsr-selected-confidence":
+    if header == "confidence":
         try:
             parsed = float(value)
         except ValueError:
             return False
         return 0.0 <= parsed <= 1.0
-    if header == "x-vsr-context-token-count":
+    if header == "context_tokens":
         try:
             parsed = int(value)
         except ValueError:
@@ -745,7 +752,7 @@ def valid_router_header_value(header: str, value: str) -> bool:
         except ValueError:
             return False
         return parsed >= 0
-    if header == "x-vsr-session-phase":
+    if header == "session_phase":
         return value.strip() in {
             "user_turn",
             "tool_loop",

@@ -1,0 +1,1 @@
+recipes[default].model_bindings.pii: removed_field: recipes[default].model_bindings.pii.adapter and mapping_path are removed; run `vllm-sr config migrate` (pii: vela; the signal decides what the deployment answers)

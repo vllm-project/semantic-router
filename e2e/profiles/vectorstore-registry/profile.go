@@ -41,7 +41,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests Vector Store Registry metadata persistence using Postgres across pod restarts"
+	return "Tests that vector store records in Postgres and file bytes on the Router's data volume survive a pod restart"
 }
 
 // Setup deploys Postgres, the router, and gateway resources.
