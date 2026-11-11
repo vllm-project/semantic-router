@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 )
 
 func TestSameFormatResponsesBodyPublishesRouterOwnedID(t *testing.T) {
@@ -352,6 +356,65 @@ func TestMaterializeResponseObjectContextPreservesRetainedToolAndReasoningLifecy
 	}
 	assertRetainedToolLifecycle(t, request.Messages)
 	assertRetainedReasoningLifecycle(t, request.Messages)
+}
+
+func TestStoredCustomToolHistoryCanContinue(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input string
+	}{
+		{"text", "*** Begin Patch\n+hello\n*** End Patch"},
+		{"empty", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store, err := responsestore.NewMemoryStore(responsestore.StoreConfig{Enabled: true})
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, store.Close()) })
+			router := &OpenAIRouter{ResponseAPIFilter: NewResponseAPIFilter(store)}
+			inputJSON, err := json.Marshal(tc.input)
+			require.NoError(t, err)
+			body := fmt.Sprintf(`{"model":"m","store":true,"tools":[{"type":"custom","name":"patch"}],"input":[{"role":"user","content":"edit the file"},{"type":"custom_tool_call","id":"ct_0","call_id":"call_0","name":"patch","input":%s},{"type":"custom_tool_call_output","call_id":"call_0","output":"earlier result"}]}`, inputJSON)
+			ctx, _ := prepareCustomHistoryRequest(t, router, []byte(body))
+			provider := fmt.Sprintf(`{"id":"resp_provider","model":"m","status":"completed","output":[{"type":"custom_tool_call","id":"ct_1","call_id":"call_1","name":"patch","input":%s}]}`, inputJSON)
+			reply := router.handleNonStreamingResponseBody([]byte(provider), ctx, 0)
+			require.NotNil(t, ctx.SemanticResponse)
+			require.Nil(t, ctx.SemanticResponse.Error)
+
+			continuation := fmt.Sprintf(`{"model":"m","previous_response_id":%q,"tools":[{"type":"custom","name":"patch"}],"input":[{"type":"custom_tool_call_output","call_id":"call_1","output":"latest result"}]}`, ctx.SemanticResponse.ID)
+			_, dispatch := prepareCustomHistoryRequest(t, router, []byte(continuation))
+			resumed, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.OpenAIResponsesV1, dispatch)
+			require.NoError(t, err)
+			var calls []llmprotocol.ToolCall
+			for _, message := range resumed.Messages {
+				for _, content := range message.Content {
+					if content.ToolCall != nil {
+						calls = append(calls, *content.ToolCall)
+					}
+				}
+			}
+			require.Equal(t, []llmprotocol.ToolCall{
+				{Kind: llmprotocol.ToolKindCustom, ID: "call_0", Name: "patch", Arguments: tc.input},
+				{Kind: llmprotocol.ToolKindCustom, ID: "call_1", Name: "patch", Arguments: tc.input},
+			}, calls)
+			client := reply.GetResponseBody().GetResponse().GetBodyMutation().GetBody()
+			assertStoredResponseMatchesClientOutput(t, router.ResponseAPIFilter, ctx.SemanticResponse.ID, client, false)
+		})
+	}
+}
+
+func prepareCustomHistoryRequest(t *testing.T, router *OpenAIRouter, body []byte) (*RequestContext, []byte) {
+	t.Helper()
+	ctx := &RequestContext{SourceFormat: llmprotocol.OpenAIResponsesV1, TargetFormat: llmprotocol.OpenAIResponsesV1, TraceContext: t.Context(), RequestModel: "m"}
+	request, immediate := router.prepareProtocolRequest(body, ctx)
+	require.Nil(t, immediate)
+	changed, err := router.materializeResponseObjectContext(request, ctx)
+	require.NoError(t, err)
+	if changed {
+		request.Generation++
+	}
+	dispatch, err := router.encodeDispatchRequest(ctx)
+	require.NoError(t, err)
+	return ctx, dispatch
 }
 
 func assertRetainedToolLifecycle(t *testing.T, messages []llmprotocol.Message) {
