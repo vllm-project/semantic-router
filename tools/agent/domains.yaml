@@ -737,6 +737,21 @@ domains:
     verify: [make test-agent-task-bench]
     verifications: [bench-tools]
 
+  cache-probe-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/cache_token_probe.py
+      - bench/test_cache_token_probe.py
+      - src/vllm-sr/cli/sr_bench/cache_probe.py
+      - src/vllm-sr/cli/sr_bench/cache_probe_compatibility.py
+      - src/vllm-sr/tests/test_sr_bench_cache_probe.py
+      - src/vllm-sr/tests/test_sr_bench_cache_usage.py
+      - src/vllm-sr/tests/test_sr_bench_cache_compatibility.py
+      - tools/make/tooling.mk
+    checks: [make test-cache-probe-bench]
+    verify: [make test-cache-probe-bench]
+    verifications: [bench-tools]
+
   paper:
     owner: paper
     paths: [paper/**]

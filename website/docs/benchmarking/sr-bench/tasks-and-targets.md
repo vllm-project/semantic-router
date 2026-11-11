@@ -243,6 +243,100 @@ Record the pricing basis, and use exactly the same rates in paired runs.
 
 Preflight reports missing prerequisites before dispatch.
 
+## Repeated-prefix cache diagnostic
+
+The opt-in `cache-token-probe-v1` adapter runs the repeated-prefix workload from
+`bench/cache_token_probe.py`. It observes provider-reported cache fields without
+grading the answer. The bundled source snapshot preserves the system message,
+13,839-character prefix and indexed suffix.
+
+Prepare its single sequence on the worker host:
+
+```bash
+python -m cli.sr_bench.cache_probe \
+  --store ./data/sr-bench --repeats 6 > cache-probe-dataset.json
+```
+
+Preparation freezes the source and prefix digests, repeat count and native request
+settings. It requires no downloaded dataset or optional harness. The supported
+profiles are smoke/quick, and a sequence has 1-32 repeats. Use the returned dataset
+object in an ordinary live run manifest with `seed: 0` and
+`cost_policy: capability_only`. Select this custom diagnostic explicitly; it stays
+outside automatic source selection. These settings preserve the native defaults:
+
+```json
+{
+  "sampling": {"temperature": 0, "max_tokens": 16},
+  "limits": {
+    "concurrency": 1,
+    "max_calls_per_case": 6,
+    "total_timeout_s": 120
+  },
+  "benchmark_options": {
+    "cache-token-probe-v1": {
+      "thresholds": {
+        "min_success_rate": 1.0,
+        "min_cached_token_reporting": "reported_zero",
+        "min_cached_token_field_rate": 1.0,
+        "min_cached_prompt_ratio": 0.0
+      }
+    }
+  }
+}
+```
+
+Set every subject target to `session_mode: session_aware`. One Context sends the
+whole sequence with a stable session ID; different arms and runs get different
+IDs. A run supports one arm or a Router target followed by one direct backend.
+Use `kind: mom` and the real config hash for the Router, and `kind: single` for
+the backend. Paired URLs must differ, but a different URL does not establish
+model equivalence or matched cache state.
+
+The shared worker uses `x-vsr-session-id` and `x-conversation-id`. When comparing
+against the retained script on the current Router, pass
+`--session-header x-vsr-session-id` explicitly; the script keeps its original
+default. Router phase, config-hash and inference-count evidence comes from
+`x-vsr-trace`, not the retired individual debug headers.
+
+Native overrides use preparation's `--max-tokens`, `--temperature` and `--timeout`.
+The manifest's effective generation settings and request timeout must match that
+frozen source. Preflight rejects extra generation fields, stateless targets,
+concurrent execution and insufficient call budgets. The existing output, idle,
+case and run limits still apply.
+
+Both endpoints must support streaming. Errors, cancellation and output limits stop
+later dispatch; remaining repeats stay visible. The shared normalizer still rejects
+an explicit null nested cached-token count, which the retained script treats as
+missing. There is no buffered fallback or automatic retry.
+
+The adapter works in installed and copied-CLI workers. The retained native script,
+branch-image reports and GA consumers are unchanged. Read the
+[cache-observation results](./results.md#cache-observation-diagnostics) before
+interpreting thresholds; this slice does not establish full native parity or
+authorize retirement.
+
+For the retained release-report readers, freeze optional `evidence_ref` and
+`evidence_image_tag` strings beside `thresholds` in this adapter's benchmark
+options. They identify the operator's declared Router revision and image. They
+are not inferred from the worker or from a config-hash acknowledgement, and the
+direct-baseline arm does not inherit them. Target IDs supply the report labels.
+Changing these declarations changes the frozen plan.
+
+The ordinary report includes a versioned compatibility projection for a cache-only
+live Router sequence and its optional direct baseline. Extract it without running
+the probe again:
+
+```bash
+vllm-sr benchmark report RUN_ID > report.json
+jq -e '.cache_probe_compatibility // error("No cache probe projection")' \
+  report.json > cache-aggregate.json
+```
+
+The existing branch-image and GA commands accept `cache-aggregate.json` through
+their `--cache-aggregate` option. Their other evidence requirements still apply.
+Direct-only, mixed, preview and recovery runs have an unsupported projection with
+explicit validation failures rather than an inferred Router/baseline pair.
+
 ## Scripted agent-task Chat diagnostic
 
 The opt-in `agent-task-chat-v1` adapter runs the maintained tasks from

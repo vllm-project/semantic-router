@@ -17,6 +17,7 @@ from typing import Protocol
 
 from .grading import (
     BINARY_RESULT,
+    CACHE_OBSERVATION_RESULT,
     MCQ_GRADER_VERSION,
     TOKEN_COVERAGE_RESULT,
     WEIGHTED_RUBRIC_RESULT,
@@ -87,6 +88,7 @@ def _validate(adapter):
             raise ValueError("Invalid benchmark plugin callback")
     if adapter.result_kind not in {
         BINARY_RESULT,
+        CACHE_OBSERVATION_RESULT,
         WEIGHTED_RUBRIC_RESULT,
         TOKEN_COVERAGE_RESULT,
     }:
@@ -140,9 +142,17 @@ def _initialize():
                 not in {"scicode", "tau3", "terminal-bench-2.1"},
                 weight=BENCHMARK_WEIGHTS[identity],
             )
-        from . import agent_task, draco  # noqa: PLC0415 - adapter initialization cycle
+        from . import (  # noqa: PLC0415 - adapter initialization cycle
+            agent_task,
+            cache_probe,
+            draco,
+        )
 
-        for diagnostic in (draco.adapter(), agent_task.adapter()):
+        for diagnostic in (
+            draco.adapter(),
+            agent_task.adapter(),
+            cache_probe.adapter(),
+        ):
             _validate(diagnostic)
             found[diagnostic.id] = diagnostic
         # Only the operator's installed Python environment supplies entry points.

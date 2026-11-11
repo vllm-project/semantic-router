@@ -10,6 +10,7 @@ import {
   money,
   number,
   percent,
+  qualityApplies,
   seconds,
   tokenTotal,
 } from './model'
@@ -69,13 +70,16 @@ function MetricsTable({
               <td>
                 {preview
                   ? 'Preview only'
-                  : hasScoredOutcomes(target)
-                    ? percent(summary ? target.macro_accuracy : target.accuracy)
-                    : running
-                      ? 'Pending'
-                      : 'Incomplete'}
+                  : !qualityApplies(target)
+                    ? 'Not applicable'
+                    : hasScoredOutcomes(target)
+                      ? percent(summary ? target.macro_accuracy : target.accuracy)
+                      : running
+                        ? 'Pending'
+                        : 'Incomplete'}
                 {!preview &&
                   !summary &&
+                  qualityApplies(target) &&
                   hasScoredOutcomes(target) &&
                   Array.isArray(target.accuracy_ci95) && (
                     <small>
@@ -453,8 +457,10 @@ export default function RunDetails({
               <p className={styles.muted}>Summary metrics will appear as results are persisted.</p>
             )}
             <p className={styles.muted}>
-              Scores wait for every planned outcome; failures count as incorrect. Unknown usage and
-              cost remain “—”; incomplete evidence cannot establish a cost saving.
+              {metrics.some((target) => !qualityApplies(target))
+                ? 'Accuracy is not applicable to observation-only or mixed cohorts.'
+                : 'Scores wait for every planned outcome; failures count as incorrect.'}{' '}
+              Unknown usage and cost remain “—”; incomplete evidence cannot establish a cost saving.
             </p>
             {run.manifest.mode === 'live' && report && (
               <OutputDiagnostics targets={report.summary.targets} manifest={run.manifest} />

@@ -137,6 +137,10 @@ export const seconds = (value: unknown): string =>
   typeof value === 'number' && Number.isFinite(value) ? `${number(value, 2)} s` : '—'
 export const active = (status: string) => status === 'queued' || status === 'running'
 
+export function qualityApplies(target: TargetMetrics): boolean {
+  return target.result_kind !== 'cache-observation-v1' && target.result_kind !== 'mixed'
+}
+
 export function hasScoredOutcomes(target: TargetMetrics): boolean {
   const { total, completed, scored, failed, pending } = target
   return (

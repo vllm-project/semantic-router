@@ -62,7 +62,7 @@ class ReplayValidator:
         ):
             reject(
                 "unsupported_result_kind",
-                "Replay supports binary results only; weighted rubric diagnostics require a separate protocol.",
+                "Replay supports binary results only; non-binary diagnostics require a separate protocol.",
             )
         if any(m.get("output_policy", "bounded") == "native" for m in (bm, pm)):
             reject(

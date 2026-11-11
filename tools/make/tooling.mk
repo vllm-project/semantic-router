@@ -62,9 +62,12 @@ test-agent-crew: bench-test-deps ## Test the agent crew harness against its stub
 test-agent-task-bench: $(HARNESS_VENV_DEPS) vllm-sr-install-cli ## Test native agent tasks and their sr-bench CLI against local HTTP
 	@"$(AGENT_PYTHON)" -m pytest -q bench/test_agent_task_live_benchmark.py src/vllm-sr/tests/test_sr_bench_agent_task.py
 
+test-cache-probe-bench: $(HARNESS_VENV_DEPS) vllm-sr-install-cli ## Test native and sr-bench cache observations against local HTTP
+	@"$(AGENT_PYTHON)" -m pytest -q bench/test_cache_token_probe.py src/vllm-sr/tests/test_sr_bench_cache_probe.py src/vllm-sr/tests/test_sr_bench_cache_usage.py src/vllm-sr/tests/test_sr_bench_cache_compatibility.py
+
 test-looper-tts: $(HARNESS_VENV_DEPS) ## Test the offline Looper experiment and evidence contracts
 	@"$(AGENT_PYTHON)" -m unittest discover -s bench/looper_tts -t . -p 'test_*.py'
 
-test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-agent-task-bench ## Test every registered bench/ research tool
+test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-agent-task-bench test-cache-probe-bench ## Test every registered bench/ research tool
 
-.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-agent-task-bench test-bench-tools
+.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-agent-task-bench test-cache-probe-bench test-bench-tools

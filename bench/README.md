@@ -249,6 +249,20 @@ The branch-image and GA tools validate evidence; they do not build, deploy, or
 approve an image. Use immutable image tags or digests and record the reviewed
 source ref whenever those artifacts are used for a release decision.
 
+The opt-in sr-bench `cache-token-probe-v1` diagnostic runs the same repeated-prefix
+workload through the shared worker. It retains every planned repeat and reports
+cache-field evidence separately from answer quality. Streaming, strict stopping
+and unqualified legacy aliases differ from the buffered native tool. The native
+probe and its branch-image/GA consumers stay until runtime qualification and owner
+review establish replacement compatibility. See the
+[task guide](../website/docs/benchmarking/sr-bench/tasks-and-targets.md#repeated-prefix-cache-diagnostic)
+and [result contract](../website/docs/benchmarking/sr-bench/results.md#cache-observation-diagnostics).
+Its versioned `cache_probe_compatibility` report projection supplies the native
+Router/baseline summary and turn fields to the existing release-report readers.
+Extract that object as the `--cache-aggregate` input. Unknown or unqualified
+observations carry validation failures, and the rest of the release evidence
+remains required; a compatible cache report does not establish release readiness.
+
 ## Router Memory cold start
 
 `memory_coldstart/` replays a month of conversations from one synthetic user
@@ -312,6 +326,13 @@ python -m pytest \
 It installs the CLI prerequisite and compares the retained runner with sr-bench
 through a local HTTP endpoint, without models or credentials. Run
 `make verify DOMAIN=agent-task-bench` for the same explicit integration check.
+
+`make test-cache-probe-bench` compares native and sr-bench cache observations
+against local HTTP fixtures, checks the shared usage receipts, and runs both
+release-report cache readers against the resulting artifacts. Evaluation &
+Quality owns this check through `cache-probe-bench`; `make test-bench-tools` and
+the existing bench-tools CI job include it. `make verify DOMAIN=cache-probe-bench`
+runs the same check without models or containers.
 
 When changing a CLI, update its `--help`, tests, and this index only if the
 reader's choice of runner or first command changes. Detailed experiment design
