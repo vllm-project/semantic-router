@@ -274,6 +274,9 @@ func (d ModelDeployment) validateConnection(endpoint *url.URL, maxTimeoutMs int)
 	if err := validateConnectionHeaders(d.Headers, d.Auth); err != nil {
 		return err
 	}
+	if err := validateForwardRequestHeaders(d.ForwardRequestHeaders, d.Auth.HeaderName()); err != nil {
+		return err
+	}
 	return d.Auth.validate()
 }
 

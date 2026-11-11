@@ -2095,6 +2095,8 @@ recipes:
         consecutive_failures: 3
         cooldown_period: 30s
         half_open_probes: 1
+      # Replaces global.router.fallback's list for this recipe.
+      forward_request_headers: [x-user-id]
 
   - name: native-handwritten
     description: Complete typed requests use explicit native stages and an algorithm execution budget.
@@ -2156,6 +2158,11 @@ global:
         consecutive_failures: 3
         cooldown_period: 30s
         half_open_probes: 1
+      # Client request headers a fallback attempt the Router sends itself
+      # copies, when the client sent them, over a backend's static header of
+      # the same name. Credential, framing and identity headers and the
+      # Router's own cannot be listed.
+      forward_request_headers: [x-user-id, x-request-id]
     streamed_body:
       enabled: true
       max_bytes: 1048576
@@ -2827,7 +2834,10 @@ global:
       # The same API behind a gateway with its own header and path prefix;
       # prefix "" sends the bare key. capabilities declares the question types,
       # presets and input modalities the model answers and reads, used only
-      # when GET <endpoint>/models lists none for it.
+      # when GET <endpoint>/models lists none for it. forward_request_headers
+      # copies the client's x-user-id, which the gateway attributes usage by,
+      # onto each call made for a request; calls the Router makes on its own
+      # behalf carry none, and no answer is kept for another request.
       decision-gateway:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
@@ -2837,6 +2847,7 @@ global:
           header: Ocp-Apim-Subscription-Key
           prefix: ""
           api_key_file: /run/secrets/systemone-gateway-key
+        forward_request_headers: [x-user-id]
         capabilities:
           question_types: [choice, noul, score]
           presets: [pii, halu]
