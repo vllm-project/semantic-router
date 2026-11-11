@@ -41,8 +41,8 @@ func validateForwardedHeaderName(field, name string) error {
 // what can never be forwarded: an empty or invalid name, a pseudo-header, a
 // framing header, a credential (authHeaders are the auth headers of the
 // upstreams the list applies to), a header in the Router's or Envoy's own
-// namespace, an identity header the Router keeps from upstreams, and a name
-// listed twice.
+// namespace, an identity header (any x-authz- header, the authenticator's)
+// the Router keeps from upstreams, and a name listed twice.
 func validateForwardRequestHeaders(names []string, authHeaders ...string) error {
 	seen := make(map[string]bool, len(names))
 	for _, name := range names {
@@ -60,7 +60,7 @@ func validateForwardRequestHeaders(names []string, authHeaders ...string) error 
 			return fmt.Errorf("forward_request_headers cannot include %q: the Router sets the framing and body headers of its own request", trimmed)
 		case strings.HasPrefix(lower, headers.VSRPrefix) || strings.HasPrefix(lower, headers.EnvoyPrefix):
 			return fmt.Errorf("forward_request_headers cannot include %q: x-vsr- and x-envoy- headers belong to the Router and Envoy", trimmed)
-		case registrySensitivity(lower) == headers.SensitivityIdentity:
+		case strings.HasPrefix(lower, headers.AuthzPrefix) || registrySensitivity(lower) == headers.SensitivityIdentity:
 			return fmt.Errorf("forward_request_headers cannot include identity header %q, which the Router keeps from upstreams", trimmed)
 		case seen[lower]:
 			return fmt.Errorf("forward_request_headers lists %q twice", trimmed)

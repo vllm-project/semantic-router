@@ -90,6 +90,7 @@ func TestForwardRequestHeadersRefusesWhatNoCallMayCarry(t *testing.T) {
 		{"x-vsr-selected-model", `cannot include "x-vsr-selected-model": x-vsr- and x-envoy- headers belong to the Router and Envoy`},
 		{"X-Envoy-Max-Retries", `cannot include "X-Envoy-Max-Retries": x-vsr- and x-envoy- headers belong`},
 		{"x-authz-user-id", `cannot include identity header "x-authz-user-id", which the Router keeps from upstreams`},
+		{"X-Authz-Role", `cannot include identity header "X-Authz-Role", which the Router keeps from upstreams`},
 	}
 	for _, refusal := range refusals {
 		for _, tc := range []struct {

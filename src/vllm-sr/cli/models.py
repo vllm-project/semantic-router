@@ -1794,14 +1794,6 @@ FORWARD_FRAMING_HEADERS = frozenset(
         "expect",
     }
 )
-FORWARD_IDENTITY_HEADERS = frozenset(
-    {
-        "x-authz-user-id",
-        "x-authz-user-groups",
-        "x-authz-team-id",
-        "x-authz-tenant-id",
-    }
-)
 _HEADER_NAME = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+")
 
 
@@ -1836,7 +1828,7 @@ def _forwardable_request_headers(names: list[str]) -> list[str]:
                 f"forward_request_headers cannot include {stripped!r}: x-vsr- and "
                 "x-envoy- headers belong to the Router and Envoy"
             )
-        if lower in FORWARD_IDENTITY_HEADERS:
+        if lower.startswith("x-authz-"):
             raise ValueError(
                 f"forward_request_headers cannot include identity header "
                 f"{stripped!r}, which the Router keeps from upstreams"

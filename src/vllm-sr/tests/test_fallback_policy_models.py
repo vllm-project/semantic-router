@@ -114,6 +114,7 @@ def test_a_recipe_fallback_forwards_named_request_headers(tmp_path):
         ("Host", "framing and body headers"),
         ("x-vsr-selected-model", "belong to the Router and Envoy"),
         ("x-authz-user-id", "cannot include identity header"),
+        ("X-Authz-Role", "cannot include identity header"),
     ],
 )
 def test_a_recipe_fallback_refuses_headers_no_call_may_carry(name, message):
