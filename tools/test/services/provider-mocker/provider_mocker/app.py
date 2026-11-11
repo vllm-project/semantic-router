@@ -3,7 +3,16 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from . import chat, images, looper, messages, provider_boundary, responses, systemone
+from . import (
+    chat,
+    embeddings,
+    images,
+    looper,
+    messages,
+    provider_boundary,
+    responses,
+    systemone,
+)
 from .cache import SessionCacheTracker
 from .provider_boundary import RequestStore
 from .settings import Settings
@@ -22,6 +31,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     for router in (
         provider_boundary.router,
         systemone.router,
+        embeddings.router,
         chat.router,
         responses.router,
         messages.router,

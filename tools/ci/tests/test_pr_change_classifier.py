@@ -349,7 +349,7 @@ class SelectionTests(unittest.TestCase):
         }
         baseline = make_plan([], source_sha=SHA, full=True)
         self.assertTrue(set(cases).isdisjoint(baseline["expected_verification_ids"]))
-        self.assertEqual(len(baseline["verifications"]), 25)
+        self.assertEqual(len(baseline["verifications"]), 26)
         self.assertEqual(len(baseline["component_batches"]), 5)
         for identity, path in cases.items():
             with self.subTest(identity=identity):

@@ -11,14 +11,14 @@ import (
 )
 
 const (
-	// Conservative floors for the baseline kubernetes contract.
-	// These catch severe behavioral regressions without turning E2E into
-	// a model-benchmark gate.
-	minBaselineSemanticCacheHitRate     = 40.0
-	minBaselinePIIDetectionRate         = 65.0
-	minBaselineJailbreakDetectionRate   = 70.0
-	minBaselineDecisionPriorityAccuracy = 75.0
-	minBaselineDecisionFallbackAccuracy = 85.0
+	// Floors for the baseline kubernetes contract. These cases run on
+	// provider-mocker fixtures with pinned answers, so every request must
+	// pass; the release benchmarks measure model quality.
+	minBaselineSemanticCacheHitRate     = 100.0
+	minBaselinePIIDetectionRate         = 100.0
+	minBaselineJailbreakDetectionRate   = 100.0
+	minBaselineDecisionPriorityAccuracy = 100.0
+	minBaselineDecisionFallbackAccuracy = 100.0
 	// Progressive stress requests wait out the gateway's deadline, so an
 	// unanswered request is a gateway or Router failure, not slow inference.
 	minBaselineProgressiveStressOverallRate = 100.0

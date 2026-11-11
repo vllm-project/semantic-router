@@ -34,12 +34,12 @@ func TestWrapWithAcceptanceContractAppliesFlatThresholds(t *testing.T) {
 		t.Fatal("expected acceptance failure")
 	}
 
-	if !strings.Contains(err.Error(), "below minimum 75.00%") {
+	if !strings.Contains(err.Error(), "below minimum 100.00%") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if got := details["minimum_accuracy_rate"]; got != "75.00%" {
-		t.Fatalf("minimum_accuracy_rate = %v, want 75.00%%", got)
+	if got := details["minimum_accuracy_rate"]; got != "100.00%" {
+		t.Fatalf("minimum_accuracy_rate = %v, want 100.00%%", got)
 	}
 }
 
