@@ -42,43 +42,31 @@ func looperResponseWithLatencyAndUsage() *looper.Response {
 	}
 }
 
-// The looper aggregate latency and token usage (#2694) are intermediate
-// observability, so they must be demoted to the x-vsr-debug surface next to
-// the existing x-vsr-looper-* trace headers (#2205).
-func TestCreateLooperResponseIncludesLatencyAndUsageHeaders(t *testing.T) {
-	resp := looperResponseWithLatencyAndUsage()
-	reqCtx := &RequestContext{
-		Headers: map[string]string{headers.VSRDebug: "true"},
-	}
+// The Looper's aggregate latency and token usage are intermediate
+// observability, so they ride in the trace's looper member.
+func TestLooperTraceIncludesLatencyAndUsage(t *testing.T) {
+	trace := looperTraceFor(t, looperResponseWithLatencyAndUsage(), &RequestContext{})
 
-	response := (&OpenAIRouter{}).createLooperResponse(resp, reqCtx)
-	headerMap := headerValuesByName(response.GetImmediateResponse().Headers.SetHeaders)
-
-	assert.Equal(t, "123", headerMap[headers.VSRLooperLatencyMs])
-	assert.Equal(t, "10", headerMap[headers.VSRLooperPromptTokens])
-	assert.Equal(t, "20", headerMap[headers.VSRLooperCompletionTokens])
-	assert.Equal(t, "30", headerMap[headers.VSRLooperTotalTokens])
+	want := `("model-a" "model-b");algorithm=elo;model="model-b";iterations=2;latency_ms=123;prompt_tokens=10;completion_tokens=20;total_tokens=30`
+	assert.Equal(t, want, trace[headers.TraceLooper])
 }
 
-func TestCreateLooperResponseDefaultSurfaceExcludesLatencyAndUsageHeaders(t *testing.T) {
-	resp := looperResponseWithLatencyAndUsage()
+func TestLooperResponseKeepsTheTraceFromOtherCallers(t *testing.T) {
 	reqCtx := &RequestContext{}
+	response := (&OpenAIRouter{}).createLooperResponse(looperResponseWithLatencyAndUsage(), reqCtx)
+	appendRoutedResponseHeaders(response, reqCtx)
 
-	response := (&OpenAIRouter{}).createLooperResponse(resp, reqCtx)
 	headerMap := headerValuesByName(response.GetImmediateResponse().Headers.SetHeaders)
-
-	assert.NotContains(t, headerMap, headers.VSRLooperLatencyMs)
-	assert.NotContains(t, headerMap, headers.VSRLooperPromptTokens)
-	assert.NotContains(t, headerMap, headers.VSRLooperCompletionTokens)
-	assert.NotContains(t, headerMap, headers.VSRLooperTotalTokens)
+	assert.NotContains(t, headerMap, headers.VSRTrace)
+	assert.Equal(t, headers.ResponsePathLooper, headerMap[headers.VSRResponsePath])
 }
 
 // A zero LatencyMs or Usage field means "not measured" (e.g. a caller that
 // bypasses looper.ExecuteWithLatency, such as cmd/fusioneval) rather than a
-// genuine zero-cost execution. Omitting the header keeps "present" meaning
+// genuine zero-cost execution. Leaving it out keeps "present" meaning
 // "actually measured" instead of a bypassed measurement being indistinguishable
 // from a real zero.
-func TestCreateLooperResponseOmitsUnmeasuredZeroValueHeaders(t *testing.T) {
+func TestLooperTraceOmitsUnmeasuredZeroValues(t *testing.T) {
 	resp := &looper.Response{
 		Body:          []byte(`{"id":"chatcmpl-looper","model":"model-b","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`),
 		ContentType:   "application/json",
@@ -88,17 +76,7 @@ func TestCreateLooperResponseOmitsUnmeasuredZeroValueHeaders(t *testing.T) {
 		AlgorithmType: "elo",
 		// LatencyMs and Usage left at their zero values.
 	}
-	reqCtx := &RequestContext{
-		Headers: map[string]string{headers.VSRDebug: "true"},
-	}
+	trace := looperTraceFor(t, resp, &RequestContext{})
 
-	response := (&OpenAIRouter{}).createLooperResponse(resp, reqCtx)
-	headerMap := headerValuesByName(response.GetImmediateResponse().Headers.SetHeaders)
-
-	assert.NotContains(t, headerMap, headers.VSRLooperLatencyMs)
-	assert.NotContains(t, headerMap, headers.VSRLooperPromptTokens)
-	assert.NotContains(t, headerMap, headers.VSRLooperCompletionTokens)
-	assert.NotContains(t, headerMap, headers.VSRLooperTotalTokens)
-	// Unrelated trace headers must still be present.
-	assert.Equal(t, "model-b", headerMap[headers.VSRLooperModel])
+	assert.Equal(t, `("model-a" "model-b");algorithm=elo;model="model-b";iterations=2`, trace[headers.TraceLooper])
 }

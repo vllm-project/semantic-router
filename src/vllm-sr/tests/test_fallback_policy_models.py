@@ -1,4 +1,4 @@
-"""routing.decisions[].fallback and routing.fallback in the CLI's config models."""
+"""recipes[].decisions[].fallback and recipes[].fallback in the CLI's config models."""
 
 import sys
 from pathlib import Path
@@ -10,10 +10,10 @@ CLI_ROOT = Path(__file__).resolve().parents[1]
 if str(CLI_ROOT) not in sys.path:
     sys.path.insert(0, str(CLI_ROOT))
 
-from cli.models import Decision, FallbackOverride, RecipeRouting, Routing  # noqa: E402
+from cli.models import Decision, FallbackOverride, Recipe  # noqa: E402
 from cli.parser import parse_user_config  # noqa: E402
 
-_DOCUMENT = """version: v0.3
+_DOCUMENT = """version: v0.5
 providers:
   models:
     - name: small
@@ -24,28 +24,26 @@ providers:
       backend_refs:
         - endpoint: 10.0.0.2:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: small
-    - name: large
-  fallback:
-    enabled: true
-    max_attempts: 3
-    circuit_breaker: {consecutive_failures: 3, cooldown_period: 30s}
-  decisions:
-    - name: escalate
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: small
-        - model: large
-      fallback:
-        max_attempts: 2
-        total_timeout: 20s
-        per_attempt_timeout: 8s
-        retryable_status_codes: [429, 503]
+recipes:
+  - name: default
+    fallback:
+      enabled: true
+      max_attempts: 3
+      circuit_breaker: {consecutive_failures: 3, cooldown_period: 30s}
+    decisions:
+      - name: escalate
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: small
+          - model: large
+        fallback:
+          max_attempts: 2
+          total_timeout: 20s
+          per_attempt_timeout: 8s
+          retryable_status_codes: [429, 503]
 """
 
 
@@ -53,20 +51,22 @@ def test_a_config_with_decision_and_recipe_fallback_parses(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(_DOCUMENT)
     parsed = parse_user_config(str(config_path), log_summary=False)
-    assert parsed.routing.fallback.circuit_breaker.consecutive_failures == 3
-    override = parsed.routing.decisions[0].fallback
+    assert parsed.default_recipe.fallback.circuit_breaker.consecutive_failures == 3
+    override = parsed.default_recipe.decisions[0].fallback
     assert override.max_attempts == 2
     assert override.total_timeout == "20s"
     assert override.retryable_status_codes == [429, 503]
 
 
 def test_recipe_routing_takes_a_fallback_policy():
-    recipe = RecipeRouting.model_validate(
-        {"fallback": {"total_timeout": 20_000_000_000}}
+    recipe = Recipe.model_validate(
+        {"name": "default", "fallback": {"total_timeout": 20_000_000_000}}
     )
     assert recipe.fallback.total_timeout == 20_000_000_000
     assert (
-        Routing.model_validate({"fallback": {"enabled": False}}).fallback.enabled
+        Recipe.model_validate(
+            {"name": "default", "fallback": {"enabled": False}}
+        ).fallback.enabled
         is False
     )
 

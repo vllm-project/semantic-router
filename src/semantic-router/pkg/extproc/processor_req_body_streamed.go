@@ -162,7 +162,7 @@ func (h *StreamedBodyHandler) intermediateResponse() *ext_proc.ProcessingRespons
 	if h.ctx != nil && h.ctx.FullDuplexRequestBody {
 		return nil
 	}
-	if headerValueCI(h.ctx, headers.SRBenchExpectedConfigHash) != "" {
+	if headerValueCI(h.ctx, headers.VSRBenchExpectedConfigHash) != "" {
 		return proto.Clone(sharedContinueEmptyBody).(*ext_proc.ProcessingResponse)
 	}
 	return sharedContinueEmptyBody

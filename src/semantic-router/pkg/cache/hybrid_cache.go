@@ -116,8 +116,8 @@ type HybridCacheOptions struct {
 	// Milvus settings
 	Milvus *config.MilvusConfig
 
-	// Embedding settings
-	EmbeddingModel string // "mmbert" (default), "qwen3" or "multimodal"
+	// EmbeddingDeployment names the deployment entries are embedded with.
+	EmbeddingDeployment string
 
 	// (Deprecated) Milvus settings configuration path
 	MilvusConfigPath string
@@ -222,7 +222,7 @@ func milvusCacheOptionsFromHybridOptions(options HybridCacheOptions) MilvusCache
 		Enabled:             true,
 		SimilarityThreshold: options.SimilarityThreshold,
 		TTLSeconds:          options.TTLSeconds,
-		EmbeddingModel:      options.EmbeddingModel,
+		EmbeddingDeployment: options.EmbeddingDeployment,
 		EmbeddingProvider:   options.EmbeddingProvider,
 	}
 

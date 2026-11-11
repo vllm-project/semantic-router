@@ -37,7 +37,7 @@ var routingFailures = []routingFailure{
 // request exercises no_route; the small backend context window separately
 // lets a default recipe request outgrow all available candidates.
 const workflowEntrypointConfig = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -51,49 +51,49 @@ providers:
           endpoint: 127.0.0.1:18000
           protocol: http
           provider: vllm
-routing:
-  modelCards:
-    - name: gpt-oss
       context_window_size: 64
-  signals:
-    keywords:
-      - name: plan_keywords
-        operator: OR
-        keywords: ["plan"]
-  decisions:
-    - name: default_route
-      priority: 10
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: gpt-oss
 recipes:
+  - name: default
+    signals:
+      keywords:
+        - name: plan_keywords
+          operator: OR
+          keywords: ["plan"]
+    decisions:
+      - name: default_route
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: gpt-oss
   - name: workflow
-    routing:
-      signals:
-        keywords:
-          - name: plan_keywords
-            operator: OR
-            keywords: ["plan"]
-      decisions:
-        - name: workflow_route
-          priority: 20
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: plan_keywords
-          modelRefs:
-            - model: gpt-oss
-          algorithm:
-            type: workflows
-            workflows:
-              mode: static
-              roles:
-                - name: worker
-                  models: [gpt-oss]
+    signals:
+      keywords:
+        - name: plan_keywords
+          operator: OR
+          keywords: ["plan"]
+    decisions:
+      - name: workflow_route
+        priority: 20
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: plan_keywords
+        modelRefs:
+          - model: gpt-oss
+        algorithm:
+          type: workflows
+          workflows:
+            mode: static
+            roles:
+              - name: worker
+                models: [gpt-oss]
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [team/workflow]
     recipe: workflow
 global:

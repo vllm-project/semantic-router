@@ -27,7 +27,7 @@ func TestRunRouterProcessRefusesUnwritableStorageBeforeModelDownloads(t *testing
 	}
 	dir := filepath.Join(file, "data")
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	document := fmt.Sprintf(`version: v0.3
+	document := fmt.Sprintf(`version: v0.5
 global:
   stores:
     vector_store:

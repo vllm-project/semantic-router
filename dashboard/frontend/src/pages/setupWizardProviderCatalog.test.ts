@@ -32,7 +32,7 @@ describe('setup wizard provider catalog', () => {
     expect(isSetupRuntimeProvider('ollama')).toBe(true)
     expect(getSetupProviderOption('ollama').initialBaseUrl).toBe(DEFAULT_SETUP_OLLAMA_BASE_URL)
     expect(isSetupRuntimeProvider('openai-compatible')).toBe(false)
-    expect(getSetupProviderOption('anthropic').apiFormat).toBe('anthropic')
+    expect(getSetupProviderOption('anthropic').apiFormat).toBe('messages')
     expect(getSetupProviderOption('anthropic').initialBaseUrl).toBe('https://api.anthropic.com')
   })
 })

@@ -2,7 +2,6 @@ package modelservice
 
 import (
 	"encoding/json"
-	"fmt"
 	"maps"
 	"net/http"
 	"slices"
@@ -11,15 +10,17 @@ import (
 )
 
 // questionFailure is a System One API's failure of a whole call on one of its
-// questions: the question's ID and why it failed.
+// questions: the question's ID, the batch entry it failed about ("" when the
+// API names none) and why it failed.
 type questionFailure struct {
 	question string
+	state    string
 	code     string
 }
 
 // failedQuestion reads a failed call's answer: the question a System One API
-// names when it fails a call on it, as
-// {"error": {"code": "question_failed", "question": "<id>", "question_error": ...}}.
+// names when it fails a call on it and, in a batch, its entry, as
+// {"error": {"code": "question_failed", "question": "<id>", "state": "<entry>", "question_error": ...}}.
 func failedQuestion(status int, body []byte) (questionFailure, bool) {
 	if status < http.StatusBadRequest || status >= http.StatusInternalServerError || status == http.StatusTooManyRequests {
 		return questionFailure{}, false
@@ -28,6 +29,7 @@ func failedQuestion(status int, body []byte) (questionFailure, bool) {
 		Error struct {
 			Code          string          `json:"code"`
 			Question      string          `json:"question"`
+			State         string          `json:"state"`
 			QuestionError json.RawMessage `json:"question_error"`
 		} `json:"error"`
 	}
@@ -37,7 +39,7 @@ func failedQuestion(status int, body []byte) (questionFailure, bool) {
 	if answer.Error.Code != "question_failed" || answer.Error.Question == "" {
 		return questionFailure{}, false
 	}
-	return questionFailure{question: answer.Error.Question, code: questionErrorCode(answer.Error.QuestionError)}, true
+	return questionFailure{question: answer.Error.Question, state: answer.Error.State, code: questionErrorCode(answer.Error.QuestionError)}, true
 }
 
 // questionErrorCode is the item error a failed question carries: the API's
@@ -56,12 +58,25 @@ func questionErrorCode(raw json.RawMessage) string {
 	return "question_failed"
 }
 
-// answer hands the failed question its error, about every state that asked
-// it.
+// about is whether f is about state: the entry the API named, or every state
+// when it names none.
+func (f questionFailure) about(state *fusedState) bool {
+	return f.state == "" || f.state == state.name
+}
+
+// fails is whether f fails question id about state: its question or, when
+// the API refused the input of the entry it names (invalid_input, as the
+// model runtime refuses an entry's image), every question of that entry.
+func (f questionFailure) fails(state *fusedState, id string) bool {
+	return f.about(state) && (id == f.question || f.state != "" && f.code == "invalid_input")
+}
+
+// answer hands f's error to every question f fails, about every state that
+// asked it.
 func (f questionFailure) answer(task *bundleTask, responses []Response) {
 	for index, state := range task.decision.states {
 		for _, question := range state.request.Questions {
-			if question.ID == f.question {
+			if f.fails(state, question.ID) {
 				responses[index].Answers[question.ID] = Answer{Type: question.Type, Error: f.code}
 			}
 		}
@@ -69,111 +84,65 @@ func (f questionFailure) answer(task *bundleTask, responses []Response) {
 }
 
 // remotePlan is how a fused task went in one System One call: the call's
-// body, the task's state it asked as the request's own, and the states it
-// left out because it asked nothing else about them.
+// body and the task's states it asked about.
 type remotePlan struct {
-	body    api.DecisionRequest
-	own     int
-	skipped map[int]bool
+	body  api.DecisionRequest
+	asked []*fusedState
 }
 
 func sentAs(task *bundleTask) remotePlan {
-	return remotePlan{body: *task.task.Decisions}
+	return remotePlan{body: *task.task.Decisions, asked: task.decision.states}
 }
 
-// without is the plan that asks every question of p but id. ok is false when
-// p does not ask id or asks nothing else. When the request's own state was
-// asked only id, the first of its further states takes its place.
-func (p remotePlan) without(task *bundleTask, id string) (remotePlan, bool) {
-	rest := remotePlan{body: p.body, own: p.own, skipped: maps.Clone(p.skipped)}
-	if rest.skipped == nil {
-		rest.skipped = make(map[int]bool)
+// questions is what p asks about one of its states.
+func (p remotePlan) questions(state *fusedState) map[string]api.Question {
+	if p.body.States == nil {
+		return p.body.Questions
 	}
-	var asked bool
-	rest.body.Questions, asked = dropQuestion(p.body.Questions, id)
-	states := make(map[string]api.DecisionState)
-	if p.body.States != nil {
-		for name, state := range *p.body.States {
-			questions, dropped := dropQuestion(state.Questions, id)
-			asked = asked || dropped
-			if len(questions) == 0 {
-				rest.skipped[task.stateIndex(name)] = true
-				continue
-			}
-			state.Questions = questions
-			states[name] = state
+	return (*p.body.States)[state.name].Questions
+}
+
+// without is the plan that asks every question of p that failed does not
+// fail, about the states it asks anything else about: a standard request
+// about one of them, a batch about several. ok is false when failed fails
+// none of p's questions, or all of them.
+func (p remotePlan) without(failed questionFailure) (remotePlan, bool) {
+	rest := make(map[*fusedState]map[string]api.Question, len(p.asked))
+	var asked []*fusedState
+	dropped := false
+	for _, state := range p.asked {
+		questions := maps.Clone(p.questions(state))
+		maps.DeleteFunc(questions, func(id string, _ api.Question) bool { return failed.fails(state, id) })
+		dropped = dropped || len(questions) < len(p.questions(state))
+		if len(questions) > 0 {
+			rest[state] = questions
+			asked = append(asked, state)
 		}
 	}
-	if !asked {
+	if !dropped || len(asked) == 0 {
 		return p, false
 	}
-	if len(rest.body.Questions) == 0 {
-		names := slices.Sorted(maps.Keys(states))
-		if len(names) == 0 {
-			return p, false
-		}
-		rest.skipped[p.own] = true
-		promoted := states[names[0]]
-		rest.body.State, rest.body.Questions = promoted.State, promoted.Questions
-		rest.body.Images, rest.body.Videos = promoted.Images, promoted.Videos
-		rest.own = task.stateIndex(names[0])
-		delete(states, names[0])
-	}
-	rest.body.States = nil
-	if len(states) > 0 {
-		rest.body.States = &states
-	}
-	return rest, true
+	body := decisionsAbout(p.body, asked, func(state *fusedState) map[string]api.Question { return rest[state] })
+	return remotePlan{body: body, asked: asked}, true
 }
 
 // decode reads the answers of a call made with p about each of the task's
 // states; a state p left out has none.
 func (p remotePlan) decode(task *bundleTask, status int, data []byte) ([]Response, error) {
-	body, err := decodeSystemOneBody(status, data)
+	body, err := decodeSystemOneBody(status, data, p.body.States != nil)
+	if err != nil {
+		return nil, err
+	}
+	answered, err := decodeStates(body, p.asked)
 	if err != nil {
 		return nil, err
 	}
 	responses := make([]Response, len(task.decision.states))
 	for index, state := range task.decision.states {
-		switch {
-		case p.skipped[index]:
-			responses[index] = Response{Model: body.Model, Answers: make(map[string]Answer)}
-		case index == p.own:
-			responses[index] = decodeResponse(body, state.request.Questions)
-		default:
-			var entry api.DecisionStateResponse
-			found := false
-			if body.States != nil {
-				entry, found = (*body.States)[state.name]
-			}
-			if !found {
-				return nil, fmt.Errorf("%w: the System One response has no answers about state %q", ErrFailed, state.name)
-			}
-			responses[index] = decodeResponse(api.DecisionResponse{
-				Model: entry.Model, Answers: entry.Answers, Sets: entry.Sets, Spans: entry.Spans,
-				Thresholds: entry.Thresholds, SpanHeads: entry.SpanHeads, Usage: entry.Usage,
-			}, state.request.Questions)
+		responses[index] = Response{Model: body.Model, Answers: make(map[string]Answer)}
+		if at := slices.Index(p.asked, state); at >= 0 {
+			responses[index] = answered[at]
 		}
 	}
 	return responses, nil
-}
-
-// stateIndex is the index of the task's state a request names name; the
-// request's own state is "".
-func (t *bundleTask) stateIndex(name string) int {
-	for index, state := range t.decision.states {
-		if state.name == name {
-			return index
-		}
-	}
-	return -1
-}
-
-func dropQuestion(questions map[string]api.Question, id string) (map[string]api.Question, bool) {
-	if _, ok := questions[id]; !ok {
-		return questions, false
-	}
-	rest := maps.Clone(questions)
-	delete(rest, id)
-	return rest, true
 }

@@ -1,0 +1,18 @@
+version: v0.5
+providers:
+  models:
+    - name: general
+      backend_refs:
+        - name: local
+          endpoint: 127.0.0.1:8000
+          weight: 1
+  defaults:
+    model: general
+global:
+  router:
+    strategy: priority
+recipes:
+  - name: default
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

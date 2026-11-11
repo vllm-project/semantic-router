@@ -9,8 +9,13 @@ import (
 
 func resolveWorkflowsExecutionConfig(req *Request) workflowsExecutionConfig {
 	cfg := defaultWorkflowsExecutionConfig()
-	if req != nil && req.Algorithm != nil && req.Algorithm.Workflows != nil {
-		applyWorkflowsAlgorithmConfig(&cfg, req.Algorithm.Workflows)
+	if req != nil && req.Algorithm != nil {
+		if req.Algorithm.Workflows != nil {
+			applyWorkflowsAlgorithmConfig(&cfg, req.Algorithm.Workflows)
+		}
+		if onError := strings.TrimSpace(req.Algorithm.OnError); onError != "" {
+			cfg.OnError = onError
+		}
 	}
 	return normalizeWorkflowsExecutionConfig(cfg)
 }
@@ -73,9 +78,6 @@ func applyWorkflowOutputConfig(cfg *workflowsExecutionConfig, src *config.Workfl
 	}
 	if src.IncludeIntermediateResponses != nil {
 		cfg.IncludeIntermediateResponses = *src.IncludeIntermediateResponses
-	}
-	if src.OnError != "" {
-		cfg.OnError = strings.TrimSpace(src.OnError)
 	}
 }
 

@@ -55,7 +55,7 @@ describe('decodeDashboardCapabilities', () => {
     ['a missing capability', { capabilities: response().capabilities.slice(1) }],
     ['an unknown state', response({ setup: { state: 'broken' } })],
     ['a non-boolean dimension', response({ evaluation: { reachable: 'yes' } })],
-    ['a non-string remediation', response({ mlPipeline: { remediation: 7 } })],
+    ['a non-string remediation', response({ mcp: { remediation: 7 } })],
   ])('rejects %s', (_label, payload) => {
     expect(() => decodeDashboardCapabilities(payload)).toThrow()
   })

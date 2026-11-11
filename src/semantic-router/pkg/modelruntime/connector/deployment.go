@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 )
 
 // ForDeployment connects to an attached or remote deployment through its
@@ -33,13 +34,23 @@ func ForDeployment(deployment config.ModelDeployment, defaults Options) (*Client
 }
 
 // DeploymentAuthorizer sets a deployment's headers and its credential, in
-// auth.header (default Authorization) after auth.prefix (default Bearer).
+// auth.header (default Authorization) after auth.prefix (default Bearer). A
+// delegated deployment's credential is the one the call's request carries
+// (package principal); a call without one is refused before it is sent.
 func DeploymentAuthorizer(auth *config.DeploymentAuth, headers map[string]string) func(context.Context, *http.Request) error {
-	return func(_ context.Context, request *http.Request) error {
+	return func(ctx context.Context, request *http.Request) error {
 		for name, value := range headers {
 			request.Header.Set(name, value)
 		}
 		if auth == nil {
+			return nil
+		}
+		if auth.Delegated() {
+			credential, err := principal.Delegated(ctx)
+			if err != nil {
+				return err
+			}
+			request.Header.Set(auth.HeaderName(), auth.HeaderValue(credential))
 			return nil
 		}
 		key, err := auth.Key()

@@ -1,0 +1,200 @@
+version: v0.5
+listeners: []
+providers:
+  defaults:
+    model: qwen2.5:3b
+  models:
+    - name: qwen2.5:3b
+      reasoning:
+        family: qwen3
+      backend_refs:
+        - name: ollama
+          endpoint: 127.0.0.1:11434
+          provider: ollama
+          weight: 1
+recipes:
+  - name: default
+    decisions:
+      - name: needs_fact_check
+        priority: 90
+        rules:
+          operator: AND
+          conditions:
+            - type: fact_check
+              name: needs_fact_check
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
+            weight: 100
+      - name: no_fact_check_needed
+        priority: 89
+        rules:
+          operator: AND
+          conditions:
+            - type: fact_check
+              name: no_fact_check_needed
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
+            weight: 100
+      - name: satisfied
+        priority: 88
+        rules:
+          operator: AND
+          conditions:
+            - type: user_feedback
+              name: satisfied
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
+            weight: 100
+      - name: need_clarification
+        priority: 87
+        rules:
+          operator: AND
+          conditions:
+            - type: user_feedback
+              name: need_clarification
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
+            weight: 100
+      - name: wrong_answer
+        priority: 86
+        rules:
+          operator: AND
+          conditions:
+            - type: user_feedback
+              name: wrong_answer
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
+            weight: 100
+      - name: want_different
+        priority: 85
+        rules:
+          operator: AND
+          conditions:
+            - type: user_feedback
+              name: want_different
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
+            weight: 100
+    signals:
+      domains:
+        - name: engineering
+          description: Technical questions
+          predicate:
+            gte: 0.5
+        - name: biology
+          description: Biology questions
+          predicate:
+            gte: 0.5
+        - name: math
+          description: Math questions
+          predicate:
+            gte: 0.5
+        - name: physics
+          description: Physics questions
+          predicate:
+            gte: 0.5
+        - name: computer science
+          description: Computer science questions
+          predicate:
+            gte: 0.5
+      fact_check:
+        - name: needs_fact_check
+          description: Query requires factual verification
+          predicate:
+            gte: 0.5
+        - name: no_fact_check_needed
+          description: Query does not require factual verification
+          labels: [NO_FACT_CHECK_NEEDED]
+          predicate:
+            gt: 0.5
+      user_feedbacks:
+        - name: satisfied
+          description: User is satisfied with the response
+          labels: [SAT]
+          predicate:
+            gte: 0.5
+        - name: need_clarification
+          description: User needs clarification
+          labels: [NEED_CLARIFICATION]
+          predicate:
+            gte: 0.5
+        - name: wrong_answer
+          description: User indicates the answer is wrong
+          labels: [WRONG_ANSWER]
+          predicate:
+            gte: 0.5
+        - name: want_different
+          description: User wants a different answer
+          labels: [WANT_DIFFERENT]
+          predicate:
+            gte: 0.5
+global:
+  model_catalog:
+    deployments:
+      domain-onnx:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Domain
+        provider: model_runtime
+        device: cpu
+        input:
+          max_tokens: 32768
+          overflow: reject
+      pii-onnx:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-PII
+        provider: model_runtime
+        device: cpu
+        input:
+          max_tokens: 32768
+          overflow: reject
+      guard-onnx:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Guard
+        provider: model_runtime
+        device: cpu
+        input:
+          max_tokens: 32768
+          overflow: reject
+      factcheck-onnx:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-FactCheck
+        provider: model_runtime
+        device: cpu
+        input:
+          max_tokens: 32768
+          overflow: reject
+      feedback-onnx:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Feedback
+        provider: model_runtime
+        device: cpu
+        input:
+          max_tokens: 32768
+          overflow: reject
+      embedding-onnx:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
+        provider: model_runtime
+        device: cpu
+        input:
+          max_tokens: 32768
+          overflow: reject
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
+      ttl_seconds: 86400
+      max_responses: 1000
+    router_replay:
+      store_backend: memory
+      ttl_seconds: 2592000
+      async_writes: true
+  stores:
+    response_cache:
+      backend_type: memory
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

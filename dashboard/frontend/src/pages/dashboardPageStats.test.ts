@@ -23,7 +23,7 @@ const config: RouterConfig = {
           {
             name: 'balanced-route',
             priority: 100,
-            plugins: [{ type: 'semantic-cache' }],
+            plugins: [{ type: 'response_cache' }],
           },
         ],
       },

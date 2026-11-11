@@ -8,6 +8,7 @@ import (
 	"context"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
@@ -18,6 +19,8 @@ var resourceManifests = []string{
 	"e2e/profiles/ai-gateway/gateway-resources/backend.yaml",
 	"deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml",
 	"e2e/profiles/ai-gateway/gateway-resources/responses-route.yaml",
+	// Serves the System One fixture the signal rules ask.
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 }
 
 // Profile validates the preference signal's contrastive rule matching in isolation.
@@ -32,6 +35,7 @@ func NewProfile() *Profile {
 			Name:                     "preference-routing",
 			SemanticRouterValuesFile: valuesFile,
 			ResourceManifests:        resourceManifests,
+			WaitDeployments:          []helpers.DeploymentRef{{Namespace: "default", Name: "provider-mocker"}},
 		}),
 	}
 }

@@ -43,7 +43,7 @@ _SEMANTIC_LABELS = {
     "credential": "credential source",
     "auth_header": "auth header",
     "auth_prefix": "auth prefix",
-    "extra_headers": "extra headers",
+    "extra_headers": "headers",
     "api_version": "API version",
     "chat_path": "chat path",
 }
@@ -68,9 +68,9 @@ def backend_route_semantics(
         # use separate aliases/clusters.
         tls_server_name=(str(endpoint["address"]) if endpoint["is_https"] else ""),
         credential=_credential_identity(backend),
-        auth_header=backend.auth_header or "",
-        auth_prefix=backend.auth_prefix or "",
-        extra_headers=tuple(sorted((backend.extra_headers or {}).items())),
+        auth_header=(backend.auth.header if backend.auth else None) or "",
+        auth_prefix=(backend.auth.prefix if backend.auth else None) or "",
+        extra_headers=tuple(sorted((backend.headers or {}).items())),
         api_version=backend.api_version or "",
         chat_path=backend.chat_path or "",
     )
@@ -113,7 +113,7 @@ def _project_backend_endpoint(
     backend: BackendRef,
     index: int,
 ) -> dict[str, Any] | None:
-    endpoint_str = backend.base_url or backend.endpoint or ""
+    endpoint_str = backend.endpoint or ""
     if not endpoint_str:
         return None
     path = ""
@@ -175,7 +175,7 @@ def _project_backend_endpoint(
         "protocol": protocol,
         "is_https": is_https,
         "is_domain": is_domain,
-        "extra_headers": dict(backend.extra_headers or {}),
+        "extra_headers": dict(backend.headers or {}),
     }
 
 
@@ -317,6 +317,6 @@ def _credential_identity(backend: BackendRef) -> tuple[str, str]:
     """Compare credential bindings without ever including their value in errors."""
     if backend.api_key:
         return ("inline", backend.api_key)
-    if backend.api_key_env:
-        return ("environment", backend.api_key_env)
+    if backend.auth is not None and backend.auth.api_key_env:
+        return ("environment", backend.auth.api_key_env)
     return ("", "")

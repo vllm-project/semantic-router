@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -10,41 +11,48 @@ import (
 
 func TestDecompileRoutingPreservesRawPluginConfigMaps(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
-version: v0.3
-routing:
-  modelCards:
-    - name: "test-model"
-  signals:
-    domains:
-      - name: test
-        description: test
-  decisions:
-    - name: plugin_route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: test
-      modelRefs:
-        - model: test-model
-      plugins:
-        - type: semantic-cache
-          configuration:
-            enabled: true
-            similarity_threshold: 0.81
-        - type: router_replay
-          configuration:
-            enabled: true
-            max_records: 1000
-            capture_request_body: true
-            capture_response_body: true
-            max_body_bytes: 4096
+version: v0.5
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: test
+          labels: [other]
+          description: test
+    decisions:
+      - name: plugin_route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: test
+        modelRefs:
+          - model: test-model
+        plugins:
+          - type: response_cache
+            configuration:
+              enabled: true
+              semantic:
+                match:
+                  recall: {top_k: 3, min_similarity: 0.81}
+                  judge: {preset: same_request, min_score: 0.9}
+          - type: router_replay
+            configuration:
+              enabled: true
+              max_records: 1000
+              capture_request_body: true
+              capture_response_body: true
+              max_body_bytes: 4096
+providers:
+  models:
+    - name: test-model
 `)
 
 	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
 	assertDecompiledPluginConfigContains(t, dslText, []string{
-		`similarity_threshold: 0.81`,
+		`min_similarity: 0.81`,
+		`preset: "same_request"`,
 		`enabled: true`,
 		`max_records: 1000`,
 		`capture_request_body: true`,
@@ -63,20 +71,23 @@ func TestDecompileRoutingRoundTripsHeaderAndResponsePlugins(t *testing.T) {
 			Delete: []string{"x-remove"},
 		},
 	)
-	responsePayload := config.MustStructuredPayload(
-		config.ResponseJailbreakPluginConfig{
-			Enabled:   true,
-			Threshold: 0.7,
-			Action:    "block",
+	guard := config.ResponseGuardPluginConfig{
+		Rules: []config.ResponseGuardRule{
+			{When: config.RuleNode{Type: config.SignalTypeJailbreak, Name: "unsafe_completion"}, Action: config.ResponseGuardBlock},
+			{When: config.RuleNode{Operator: config.RuleOperatorAnd, Conditions: []config.RuleNode{
+				{Type: config.SignalTypeFactCheck, Name: "needs_fact_check"},
+				{Type: config.SignalTypeHallucination, Name: "ungrounded"},
+			}}, Action: config.ResponseGuardAnnotate, Details: true},
 		},
-	)
+		OnUnknown: config.ResponseGuardNone,
+	}
 	cfg := &config.RouterConfig{IntelligentRouting: config.IntelligentRouting{
 		Decisions: []config.Decision{{
 			Name:      "plugins",
 			ModelRefs: []config.ModelRef{{Model: "model-a"}},
 			Plugins: []config.DecisionPlugin{
 				{Type: config.DecisionPluginHeaderMutation, Configuration: headerPayload},
-				{Type: config.DecisionPluginResponseJailbreak, Configuration: responsePayload},
+				{Type: config.DecisionPluginResponseGuard, Configuration: config.MustStructuredPayload(guard)},
 			},
 		}},
 	}}
@@ -90,68 +101,71 @@ func TestDecompileRoutingRoundTripsHeaderAndResponsePlugins(t *testing.T) {
 		len(header.Delete) != 1 {
 		t.Fatalf("header mutation round trip = %#v", header)
 	}
-	response := decision.GetResponseJailbreakConfig()
-	if response == nil || !response.Enabled ||
-		response.Threshold != 0.7 ||
-		response.Action != "block" {
-		t.Fatalf("response jailbreak round trip = %#v", response)
+	if got := decision.GetResponseGuardConfig(); got == nil || !reflect.DeepEqual(*got, guard) {
+		t.Fatalf("response guard round trip = %#v, want %#v", got, guard)
 	}
 }
 
-func TestDecompileRoutingRoundTripsToolsDynamicRetrievalPluginConfig(t *testing.T) {
+func TestDecompileRoutingRoundTripsToolsPluginConfig(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
-version: v0.3
-routing:
-  modelCards:
-    - name: "test-model"
-  signals:
-    domains:
-      - name: test
-        description: test
-  decisions:
-    - name: plugin_route
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: test
-      modelRefs:
-        - model: test-model
-      plugins:
-        - type: tools
-          configuration:
-            enabled: true
-            mode: passthrough
-            semantic_selection: true
-            strategy: custom
-            dynamic_retrieval:
+version: v0.5
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: test
+          labels: [other]
+          description: test
+    decisions:
+      - name: plugin_route
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: test
+        modelRefs:
+          - model: test-model
+        plugins:
+          - type: tools
+            configuration:
               enabled: true
-              strategy: hybrid_history
-              history_window: 8
-              min_history_confidence: 0.4
-              fallback_on_low_confidence: true
-              weights:
-                semantic: 1.0
-                history: 0.7
-                decision_prior: 0.2
-                repetition_penalty: 0.1
+              policy:
+                mode: filtered
+                allow_tools: [docs.search, tickets.lookup]
+              select:
+                mode: filter
+                match:
+                  judge: {preset: tool_rank, top_k: 4, min_ratio: 0.2}
+                need_threshold: 0.6
+                preserve_count: 1
+                on_error: strip
+                input: {history: true}
+providers:
+  models:
+    - name: test-model
 `)
 
 	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
 	assertDecompiledPluginConfigContains(t, dslText, []string{
 		`PLUGIN tools`,
-		`strategy: "custom"`,
-		`dynamic_retrieval: {`,
-		`strategy: "hybrid_history"`,
-		`history_window: 8`,
-		`min_history_confidence: 0.4`,
-		`fallback_on_low_confidence: true`,
-		`weights: { decision_prior: 0.2, history: 0.7, repetition_penalty: 0.1, semantic: 1 }`,
+		`policy: { allow_tools: ["docs.search", "tickets.lookup"], mode: "filtered" }`,
+		`judge: { min_ratio: 0.2, preset: "tool_rank", top_k: 4 }`,
+		`need_threshold: 0.6`,
 	})
 
 	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
-	assertToolsPluginDynamicRetrievalRoundTrip(t, compiled.Decisions[0])
+	plugin := findDecisionPluginForTest(t, compiled.Decisions[0], "tools")
+	var pluginConfig config.ToolsPluginConfig
+	if err := config.UnmarshalPluginConfig(plugin.Configuration, &pluginConfig); err != nil {
+		t.Fatalf("tools decode error: %v", err)
+	}
+	spec := pluginConfig.Select
+	if !pluginConfig.Enabled || pluginConfig.Policy.EffectiveMode() != config.ToolsPolicyModeFiltered || spec == nil ||
+		spec.Match.Judge.TopK != 4 || spec.EffectiveNeedThreshold() != 0.6 || spec.PreserveCount != 1 ||
+		spec.EffectiveOnError() != config.ToolsSelectOnErrorStrip || !spec.Input.History {
+		t.Fatalf("round-tripped tools plugin = %+v / %+v", pluginConfig.Policy, spec)
+	}
 }
 
 func mustParseRoutingPluginConfigTest(t *testing.T, configYAML string) *config.RouterConfig {
@@ -200,16 +214,17 @@ func mustCompileRoutingPluginConfigTest(t *testing.T, dslText string) *config.Ro
 func assertSemanticCachePluginRoundTrip(t *testing.T, decision config.Decision) {
 	t.Helper()
 
-	plugin := findDecisionPluginForTest(t, decision, "semantic-cache")
-	var pluginConfig config.SemanticCachePluginConfig
+	plugin := findDecisionPluginForTest(t, decision, "response_cache")
+	var pluginConfig config.ResponseCachePluginConfig
 	if err := config.UnmarshalPluginConfig(plugin.Configuration, &pluginConfig); err != nil {
-		t.Fatalf("semantic-cache decode error: %v", err)
+		t.Fatalf("response_cache decode error: %v", err)
 	}
 	if !pluginConfig.Enabled {
-		t.Fatalf("semantic-cache.enabled = false, want true")
+		t.Fatalf("response_cache.enabled = false, want true")
 	}
-	if pluginConfig.SimilarityThreshold == nil || *pluginConfig.SimilarityThreshold != 0.81 {
-		t.Fatalf("semantic-cache.similarity_threshold = %#v", pluginConfig.SimilarityThreshold)
+	match := pluginConfig.SemanticMatch()
+	if match == nil || match.Recall == nil || *match.Recall.MinSimilarity != 0.81 || match.Judge == nil || match.Judge.Preset != "same_request" {
+		t.Fatalf("response_cache.semantic.match = %#v", match)
 	}
 }
 
@@ -229,29 +244,31 @@ func assertRouterReplayPluginRoundTrip(t *testing.T, decision config.Decision) {
 	}
 }
 
-func TestContextCompressionPluginNestedRoundTrip(t *testing.T) {
+func TestContextCompressNestedRoundTrip(t *testing.T) {
 	cfg := &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
 			Decisions: []config.Decision{{
 				Name:      "compress",
 				ModelRefs: []config.ModelRef{{Model: "model"}},
 				Plugins: []config.DecisionPlugin{{
-					Type: config.DecisionPluginContextCompression,
+					Type: config.DecisionPluginContext,
 					Configuration: config.MustStructuredPayload(map[string]interface{}{
 						"enabled": true,
-						"mode":    "auto",
-						"targets": map[string]interface{}{
-							"tool_outputs": map[string]interface{}{
-								"mode":          "extractive",
-								"min_tokens":    2000,
-								"target_tokens": 1000,
+						"compress": map[string]interface{}{
+							"mode": "auto",
+							"targets": map[string]interface{}{
+								"tool_outputs": map[string]interface{}{
+									"mode":          "extractive",
+									"min_tokens":    2000,
+									"target_tokens": 1000,
+								},
+								"rag":          map[string]interface{}{"mode": "preserve"},
+								"current_user": map[string]interface{}{"mode": "truncate"},
 							},
-							"rag":          map[string]interface{}{"mode": "preserve"},
-							"current_user": map[string]interface{}{"mode": "truncate"},
-						},
-						"request_controls": map[string]interface{}{
-							"enabled": true,
-							"allowed": []string{"bypass", "target"},
+							"request_controls": map[string]interface{}{
+								"enabled": true,
+								"allowed": []string{"bypass", "target"},
+							},
 						},
 					}),
 				}},
@@ -260,24 +277,16 @@ func TestContextCompressionPluginNestedRoundTrip(t *testing.T) {
 	}
 	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
 	assertDecompiledPluginConfigContains(t, dslText, []string{
-		"PLUGIN context_compression",
+		"PLUGIN context",
 		"tool_outputs:",
 		"request_controls:",
 	})
 	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
-	plugin := findDecisionPluginForTest(
-		t,
-		compiled.Decisions[0],
-		config.DecisionPluginContextCompression,
-	)
-	var pluginConfig config.ContextCompressionPluginConfig
-	if err := config.UnmarshalPluginConfig(plugin.Configuration, &pluginConfig); err != nil {
-		t.Fatalf("context_compression decode error: %v", err)
-	}
-	if pluginConfig.Targets == nil ||
-		pluginConfig.Targets.ToolOutputs.TargetTokens != 1000 ||
-		pluginConfig.Targets.CurrentUser.Mode != "truncate" {
-		t.Fatalf("context_compression targets = %#v", pluginConfig.Targets)
+	plugin := compiled.Decisions[0].GetContextConfig()
+	if plugin == nil || plugin.Compress == nil || plugin.Compress.Targets == nil ||
+		plugin.Compress.Targets.ToolOutputs.TargetTokens != 1000 ||
+		plugin.Compress.Targets.CurrentUser.Mode != "truncate" {
+		t.Fatalf("context compress = %#v", plugin)
 	}
 }
 
@@ -449,61 +458,33 @@ ROUTE invalid_prompt_cache {
 	}
 }
 
-func assertToolsPluginDynamicRetrievalRoundTrip(t *testing.T, decision config.Decision) {
-	t.Helper()
-
-	plugin := findDecisionPluginForTest(t, decision, "tools")
-	var pluginConfig config.ToolsPluginConfig
-	if err := config.UnmarshalPluginConfig(plugin.Configuration, &pluginConfig); err != nil {
-		t.Fatalf("tools decode error: %v", err)
-	}
-	if !pluginConfig.Enabled {
-		t.Fatal("tools.enabled = false, want true")
-	}
-	assertRoundTripToolsPluginBasics(t, &pluginConfig)
-	assertDynamicRetrievalConfig(t, pluginConfig.DynamicRetrieval)
-}
-
-func assertRoundTripToolsPluginBasics(t *testing.T, cfg *config.ToolsPluginConfig) {
-	t.Helper()
-
-	if cfg.Mode != config.ToolsPluginModePassthrough {
-		t.Fatalf("tools.mode = %q", cfg.Mode)
-	}
-	if cfg.SemanticSelection == nil || !*cfg.SemanticSelection {
-		t.Fatalf("tools.semantic_selection = %#v", cfg.SemanticSelection)
-	}
-	assertToolsPluginStrategy(t, cfg)
-}
-
 func TestDecompileRoutingRoundTripsToolsStripHistory(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
-version: v0.3
-routing:
-  modelCards:
-    - name: "local-guard"
-  decisions:
-    - name: privacy_route
-      priority: 100
-      modelRefs:
-        - model: local-guard
-      plugins:
-        - type: tools
-          configuration:
-            enabled: true
-            mode: none
-            strip_tool_history: true
+version: v0.5
+recipes:
+  - name: default
+    decisions:
+      - name: privacy_route
+        priority: 100
+        modelRefs:
+          - model: local-guard
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              policy: {mode: none, strip_tool_history: true}
+providers:
+  models:
+    - name: local-guard
 `)
 
 	dslText := mustDecompileRoutingPluginConfigTest(t, cfg)
 	assertDecompiledPluginConfigContains(t, dslText, []string{
 		`PLUGIN tools`,
-		`mode: "none"`,
-		`strip_tool_history: true`,
+		`policy: { mode: "none", strip_tool_history: true }`,
 	})
 	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
-	toolsCfg := compiled.Decisions[0].GetToolsConfig()
-	if toolsCfg == nil || !toolsCfg.StripToolHistory {
+	if policy := compiled.Decisions[0].GetToolsConfig().ActivePolicy(); policy == nil || !policy.StripToolHistory {
 		t.Fatal("tools.strip_tool_history was not preserved")
 	}
 }
