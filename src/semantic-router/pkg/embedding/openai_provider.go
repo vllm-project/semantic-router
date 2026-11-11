@@ -314,7 +314,7 @@ func decodeEmbeddingResponse(body io.Reader, maxResponseBytes int64) (embeddings
 
 	decoder := json.NewDecoder(bytes.NewReader(responseBody))
 	var decoded embeddingsResponse
-	if err := decoder.Decode(&decoded); err != nil {
+	if err = decoder.Decode(&decoded); err != nil {
 		return embeddingsResponse{}, fmt.Errorf("decode embedding response: %w", err)
 	}
 	// Decode consumes only the first JSON value, so a response body that
