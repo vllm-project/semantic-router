@@ -41,7 +41,7 @@ translation:
 | `stage` | `request`（默认）或 `response` |
 | `input` | `history`、`previous_turns`（0 到 32）、`tool_results`、`request`（`false` 时不读取当前用户轮次）、`answer`、`context`、`image`、`audio`、`video` |
 | `coverage` | `truncate`（默认）或 `full` |
-| `on_unscanned` | 使用 `coverage: full` 时：`match`、`no_match` 或 `unknown`（默认） |
+| `on_unscanned` | 使用 `coverage: full` 时：`match`、`no_match`、`unknown`（默认）或 `best_effort`；`jailbreak` 和 `pii` 规则默认为 `best_effort` |
 | `timeout_ms` | 最长 60,000 |
 
 应用规则接受 `name`、`description`、`deployment`、`timeout_ms`，以及其类型允许的字段：

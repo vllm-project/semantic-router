@@ -115,7 +115,7 @@ rewrites them to `systemone`.
 | `stage` | `request` (default) or `response`. |
 | `input` | What the rule reads besides the current user turn; see [Read more than the current turn](#read-more-than-the-current-turn). |
 | `coverage` | `truncate` (default) reads what fits the model's input; `full` reads all of it. |
-| `on_unscanned` | `coverage: full` only: what an answer that could not read the whole input means: `match`, `no_match` or `unknown` (default). |
+| `on_unscanned` | `coverage: full` only: what an answer that could not read the whole input means: `match`, `no_match` or `unknown` (default); `best_effort` reads as `unknown` here, since a `systemone` rule reads its input in one call. |
 | `timeout_ms` | The answer's deadline, up to 60000 ms; else the deployment's, else 1000 ms. |
 
 ### What a rule matches

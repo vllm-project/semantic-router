@@ -117,6 +117,7 @@ Highest priority first:
 | `effective_input_tokens` | automatic_output | Rendered input tokens of the final automatic-output dispatch, chat template included. |
 | `effective_max_output_tokens` | automatic_output | Output token limit of the final automatic-output dispatch, reasoning included. |
 | `signals` | signals | Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`. |
+| `scan_coverage` | signals | Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts. |
 | `context_tokens` | signals | Token count the `context` signal measured. |
 | `category` | classification | Domain category the classifier chose, such as `math`. |
 | `reasoning` | classification | Reasoning mode chosen for the request: `on` or `off`. |
