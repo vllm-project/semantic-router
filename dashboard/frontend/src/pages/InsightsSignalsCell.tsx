@@ -22,12 +22,14 @@ function probabilityOf(record: InsightsRecord, type: string, value: string) {
 // A row's signal matches, two at most: each name over a hairline bar filled to its
 // recorded probability, with the rest counted and named in the title.
 export default function InsightsSignalsCell({ record }: { record: InsightsRecord }) {
-  // the matches with a recorded probability come first, since only they draw a bar
+  // the matches with a recorded probability come first, since only they draw a bar, and
+  // each group in name order, so every row lists the same signals in the same place
   const matches = recordedSignalMatches(record.signals)
     .map((match) => ({ ...match, probability: probabilityOf(record, match.type, match.value) }))
     .sort(
       (left, right) =>
-        Number(right.probability !== undefined) - Number(left.probability !== undefined),
+        Number(right.probability !== undefined) - Number(left.probability !== undefined) ||
+        left.text.localeCompare(right.text),
     )
   if (matches.length === 0) return <span>-</span>
   const all = matches.map((match) => match.text).join(', ')

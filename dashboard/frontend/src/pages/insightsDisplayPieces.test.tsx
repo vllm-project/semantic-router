@@ -183,6 +183,8 @@ describe('Insights display pieces', () => {
     expect(html).toContain('aria-label="73%"')
     expect(html).toContain('+2 more')
     expect(html.match(/role="img"/g)).toHaveLength(2)
+    // every row lists its signals in the same order, whatever order they were recorded in
+    expect(html.indexOf('Difficulty')).toBeLessThan(html.indexOf('Injection'))
   })
 
   it('draws a match without a recorded probability as text alone', () => {
