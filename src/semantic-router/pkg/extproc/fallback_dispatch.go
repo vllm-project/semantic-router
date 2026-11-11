@@ -336,6 +336,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	// The response-phase fallback answers with a buffered immediate response.
 	candidate, prepared, err := r.prepareFallbackCandidate(callCtx, candidateRef, ctx, true)
 	if err != nil {
+		logSkippedFallbackCandidate(ctx, candidateRef, prepared, err)
 		return nil, prepared, err
 	}
 	candidateModel, dispatch, reqCopy, requestBody := candidate.model, candidate.dispatch, candidate.request, candidate.body
@@ -613,6 +614,19 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	return immediateResp, evalResult, nil
 }
 
+// logSkippedFallbackCandidate says why a candidate was dropped before its
+// call. The chain's record lists such a candidate as visited, with no attempt.
+func logSkippedFallbackCandidate(
+	ctx *RequestContext, candidateRef *config.ModelRef, prepared fallback.EvaluationResult, err error,
+) {
+	logging.ComponentWarnEvent("extproc", "fallback_candidate_skipped", map[string]interface{}{
+		"request_id":      ctx.RequestID,
+		"candidate_model": candidateModelIdentity(*candidateRef),
+		"error":           err.Error(),
+		"can_fallback":    prepared.CanFallback,
+	})
+}
+
 // fallbackCandidate is a fallback candidate's request, prepared the way the
 // primary dispatch was prepared.
 type fallbackCandidate struct {
@@ -671,11 +685,9 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 			effort = r.getReasoningEffort(ctx.decisionForCandidate(candidateModel), candidateModel)
 		}
 		reqCopy.ReasoningEffort = effort
-		mode := candidateRef.ReasoningMode
-		if mode == "" {
-			mode = r.getReasoningMode(ctx.decisionForCandidate(candidateModel), candidateModel, true)
-		}
-		reqCopy.ReasoningMode = llmprotocol.ReasoningMode(mode)
+		reqCopy.ReasoningMode, reqCopy.ReasoningBudgetTokens = r.candidateReasoningMode(
+			ctx, candidateRef, dispatch.targetFormat, reqCopy.ReasoningBudgetTokens,
+		)
 	} else {
 		reqCopy.ReasoningEffort = ""
 		reqCopy.ReasoningMode = ""
@@ -756,6 +768,33 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		model: candidateModel, ref: candidateRef, dispatch: dispatch, request: reqCopy, body: requestBody,
 		engine: engine,
 	}, fallback.EvaluationResult{CanFallback: true}, nil
+}
+
+// candidateReasoningMode is the reasoning mode, and the thinking budget that
+// goes with it, of a candidate with reasoning on. Only the Messages wire
+// carries a mode, and enabled thinking there needs a budget, so a budgetless
+// enabled mode becomes adaptive, as for the primary. Chat Completions and
+// Responses carry none: their provider adapter turns use_reasoning into the
+// backend's own control, and a mode left on the request fails validation
+// before the call.
+func (r *OpenAIRouter) candidateReasoningMode(
+	ctx *RequestContext,
+	candidateRef *config.ModelRef,
+	target llmprotocol.WireFormat,
+	budget *int64,
+) (llmprotocol.ReasoningMode, *int64) {
+	if target != llmprotocol.AnthropicMessagesV1 {
+		return "", budget
+	}
+	mode := candidateRef.ReasoningMode
+	if mode == "" {
+		candidateModel := candidateModelIdentity(*candidateRef)
+		mode = r.getReasoningMode(ctx.decisionForCandidate(candidateModel), candidateModel, true)
+	}
+	if mode == "" {
+		return "", budget
+	}
+	return messagesThinkingBudget(target, llmprotocol.ReasoningMode(mode), budget)
 }
 
 func (r *OpenAIRouter) settleFallbackCandidateUsage(ctx *RequestContext, attemptDuration time.Duration) {
