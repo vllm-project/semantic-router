@@ -552,7 +552,7 @@ test('a session start says once when the decision model would let a force push r
 
   expect(reply.seen).toEqual(['Tool: Bash\nCommand: git push --force origin main'])
   expect(reply.toasts).toEqual([
-    'vSR guard: the decision model scores "git push --force origin main" 0.02 for review, under the 0.90 line, so guard would let commands like it run; its fixed rules still hold · guard is measured on vela3-lite · /vsr:setup',
+    'vSR guard: this model scores "git push --force origin main" 0.02 < 0.90, so guard would let it run · fixed rules still hold · /vsr:setup',
   ])
 })
 

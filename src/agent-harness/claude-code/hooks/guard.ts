@@ -59,7 +59,7 @@ export async function checkGuardModel($: EngineInterface, settings: Settings) {
   const asked = await classify($, settings.runtime, `Tool: Bash\nCommand: ${CANARY}`, GUARD_QUESTIONS, ANSWER_MS, parseGuard)
   if (!asked.ok || asked.value.review >= line) return
   $.ui.toast(
-    `vSR guard: the decision model scores "${CANARY}" ${fixed(asked.value.review)} for review, under the ${fixed(line)} line, so guard would let commands like it run; its fixed rules still hold · guard is measured on vela3-lite · /vsr:setup`,
+    `vSR guard: this model scores "${CANARY}" ${fixed(asked.value.review)} < ${fixed(line)}, so guard would let it run · fixed rules still hold · /vsr:setup`,
   )
 }
 type Judged = { part: string } & Guarded
