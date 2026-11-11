@@ -711,7 +711,10 @@ def test_worker_failure_updates_health_and_isolates_the_model(
                 assert health.status_code == 503
                 check("Health", health.json())
                 assert health.json()["models"]["broken"]["status"] == "degraded"
-                assert "injected worker planning failure" in health.json()["reason"]
+                assert health.json()["reason"] == (
+                    "broken: model worker failed: "
+                    "RuntimeError: injected worker planning failure"
+                )
                 assert (await client.get("/health/live")).status_code == 200
                 refused = await client.post(
                     "/v1/classify", json={"model": "broken", "input": ["refund"]}
