@@ -17,6 +17,8 @@ const (
 	DefaultScanWindowOverlap          = 512
 	DefaultSystemOneScanWindowTokens  = 4096
 	DefaultSystemOneScanWindowOverlap = 256
+	DefaultScanWindowParallel         = 4
+	MaxScanWindowParallel             = 64
 	MinModelInputTokens               = 256
 	MaxModelInputTokens               = 1 << 20
 )
@@ -40,9 +42,10 @@ type DeploymentRoutingView struct {
 
 // DeploymentScanWindow sizes the windows a guard rule (jailbreak, safety,
 // pii) reads a long input in: windows of Tokens, each overlapping the one
-// before by Overlap, read tail first, then head, then the middle. Windows are
-// sized in bytes as routing views are, so the model's validated length
-// bounds a window whatever Tokens says and however dense the text.
+// before by Overlap, read tail first, then head, then the middle, each in a
+// call of its own with at most MaxParallel in flight. Windows are sized in
+// bytes as routing views are, so the model's validated length bounds a
+// window whatever Tokens says and however dense the text.
 type DeploymentScanWindow struct {
 	// Tokens is the size of one window in tokens of prose, as four bytes
 	// each (default 8192; 4096 for a systemone deployment).
@@ -51,6 +54,10 @@ type DeploymentScanWindow struct {
 	// is read whole by one of them (default 512; 256 for a systemone
 	// deployment); less than half a window.
 	Overlap *int `yaml:"overlap,omitempty" json:"overlap,omitempty" jsonschema:"minimum=0"`
+	// MaxParallel is how many windows of a request's guard scans the
+	// deployment reads at a time (default 4). The windows read when the
+	// signals' deadline ends are the ones a partial scan decides on.
+	MaxParallel int `yaml:"max_parallel,omitempty" json:"max_parallel,omitempty" jsonschema:"minimum=1,maximum=64"`
 }
 
 // RoutingViewTokens is the routing view's bound and head share the
@@ -89,6 +96,15 @@ func (d ModelDeployment) ScanWindowTokens() (int, int) {
 	return tokens, min(overlap, tokens/2-1)
 }
 
+// ScanWindowParallel is how many of a request's guard windows the
+// deployment reads at a time.
+func (d ModelDeployment) ScanWindowParallel() int {
+	if window := d.ScanWindow; window != nil && window.MaxParallel > 0 {
+		return window.MaxParallel
+	}
+	return DefaultScanWindowParallel
+}
+
 func (d ModelDeployment) validateInputViews() error {
 	if d.RoutingView == nil && d.ScanWindow == nil {
 		return nil
@@ -111,6 +127,9 @@ func (d ModelDeployment) validateInputViews() error {
 		tokens, _ := d.ScanWindowTokens()
 		if overlap := window.Overlap; overlap != nil && (*overlap < 0 || *overlap >= tokens/2) {
 			return fmt.Errorf("scan_window.overlap must be at least 0 and less than half of scan_window.tokens (%d)", tokens)
+		}
+		if window.MaxParallel < 0 || window.MaxParallel > MaxScanWindowParallel {
+			return fmt.Errorf("scan_window.max_parallel must be between 1 and %d", MaxScanWindowParallel)
 		}
 	}
 	return nil
