@@ -11,6 +11,7 @@ import (
 	http_ext "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
@@ -190,5 +191,26 @@ func TestBridgeBufferedResponsesBodyLeavesOtherBodiesAlone(t *testing.T) {
 				t.Fatalf("body was bridged: %q", bridged)
 			}
 		})
+	}
+}
+
+// A response guard holds a stream until it has read the whole answer. A
+// provider that ignored stream: true still answers one object, so the held read
+// has to bridge it too: otherwise the guard releases an empty stream and a
+// complete answer reaches the client as stream_incomplete.
+func TestHeldStreamBridgesABufferedAnswer(t *testing.T) {
+	router, ctx := guardedStreamingRouter(t, 0.01, config.ResponseGuardBlock, llmprotocol.OpenAIResponsesV1)
+	if mode := answerHeaders(t, router, ctx, "application/json").GetModeOverride().GetResponseBodyMode(); mode != http_ext.ProcessingMode_BUFFERED {
+		t.Fatalf("response body mode = %v, want BUFFERED", mode)
+	}
+	if ctx.ResponseGuardHold == nil {
+		t.Fatal("an enforcing guard must hold the stream")
+	}
+	client, _ := answerBody(t, router, ctx, [][]byte{[]byte(bufferedResponsesBody())})
+	if !strings.Contains(client, "event: response.completed") || !strings.Contains(client, `"text":"hello"`) {
+		t.Fatalf("client stream = %q, want the buffered answer as its terminal event", client)
+	}
+	if strings.Contains(client, "stream_incomplete") {
+		t.Fatalf("a complete upstream answer must not be reported as incomplete: %q", client)
 	}
 }
