@@ -125,6 +125,10 @@ or an error answer) lets the command run with a `SKIPPED` row, as redact and shi
 the fixed rules below and a score already over the line hold it. With `until done` guard waits up to
 60 s and holds a command it could not check. A command of more than 12 parts is always held.
 
+The 0.9 line is measured on vela3-lite. Another model can score the same command far lower: vela3-fast
+gives `git push --force origin main` 0.02. So at session start vSR asks the decision model about that
+command once, and when it scores under the line a toast says guard would let commands like it run.
+
 Some commands are always held, whatever the score and even while the decision model is offline:
 recursive deletes of `/`, your home directory or a top-level system directory, `mkfs`, `dd` to a
 device (not `/dev/null` and the like), fork bombs, recursive permission changes on `/`, and scripts
@@ -161,8 +165,13 @@ include `systemone`, or a hosted one such as `https://app.vllm-sr.ai/v1/decision
 `runtimeUrl` at its `/v1/decisions`, set `runtimeModel` to one it lists at `/v1/systemone/models`,
 and set the listener's API key as the token when it takes one. A hosted API has no `/health`, so vSR
 checks that it is up through its model list instead.
+The router app asks two `score` questions, which vela3-lite answers and models of the runtime's
+`vela3` family, such as vela3-fast, do not: on a model that lists no `score` question type, vSR says
+so once at session start and the router app steps aside, so a subagent keeps its default model unless
+escalate moves it up.
 
-Redact hides names, emails, phone numbers, card numbers, IP addresses, addresses, ID numbers and
+Redact hides names, emails, phone numbers, card numbers, IP addresses (only text shaped like an IPv4 or
+IPv6 address, so a pinned version such as `2.32.3` stays), addresses, ID numbers and
 secrets (API keys, tokens, private keys, passwords in config files and connection URLs). It waits
 `redactWait` (3 s by default) for the decision model, and shield then waits `shieldWait` (2 s by
 default) on a `Read` or a fetched page; when redact ran out of time the model is still busy, so shield
