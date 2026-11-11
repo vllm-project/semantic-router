@@ -623,3 +623,48 @@ def test_unresolvable_cgroup_falls_back_to_the_root_files(tmp_path):
     _write_cgroup(tmp_path, "memory.current", content=str(used))
     missing = tmp_path / "no-cgroup"
     assert gpu._cgroup_limit_bytes(str(tmp_path), str(missing)) == limit - used
+
+
+def test_v2_remaining_excludes_inactive_file_cache(tmp_path):
+    limit = int(24.0 * GIB)
+    anon = int(1.0 * GIB)
+    inactive = int(11.2 * GIB)
+    _write_cgroup(tmp_path, "memory.max", content=str(limit))
+    _write_cgroup(tmp_path, "memory.current", content=str(anon + inactive))
+    _write_cgroup(
+        tmp_path,
+        "memory.stat",
+        content=f"anon {anon}\nactive_file 0\ninactive_file {inactive}\n",
+    )
+    proc = _write_cgroup(tmp_path, "cgroup", content="0::/\n")
+    assert gpu._cgroup_limit_bytes(str(tmp_path), str(proc)) == limit - anon
+
+
+def test_v1_remaining_excludes_inactive_file_cache(tmp_path):
+    limit = int(8.0 * GIB)
+    anon = int(1.0 * GIB)
+    inactive = int(6.0 * GIB)
+    _write_cgroup(
+        tmp_path, "memory/memory.limit_in_bytes", content="9223372036854771712\n"
+    )
+    _write_cgroup(
+        tmp_path,
+        "memory/kubepods/pod123/memory.limit_in_bytes",
+        content=str(limit),
+    )
+    _write_cgroup(
+        tmp_path,
+        "memory/kubepods/pod123/memory.usage_in_bytes",
+        content=str(anon + inactive),
+    )
+    _write_cgroup(
+        tmp_path,
+        "memory/kubepods/pod123/memory.stat",
+        content=f"total_anon {anon}\ntotal_active_file 0\ntotal_inactive_file {inactive}\n",
+    )
+    proc = _write_cgroup(
+        tmp_path,
+        "cgroup",
+        content="2:memory:/kubepods/pod123\n1:name=systemd:/kubepods/pod123\n",
+    )
+    assert gpu._cgroup_limit_bytes(str(tmp_path), str(proc)) == limit - anon

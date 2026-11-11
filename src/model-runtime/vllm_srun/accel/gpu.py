@@ -107,6 +107,23 @@ def _ancestor_dirs(root: str, rel: str | None) -> list[str]:
     return dirs
 
 
+def _inactive_file_bytes(prefix: str, key: str) -> int:
+    """Reclaimable file cache in bytes under ``prefix/memory.stat`` for ``key``."""
+    try:
+        with open(prefix + "/memory.stat", encoding="utf-8") as stream:
+            for line in stream:
+                parts = line.split()
+                if len(parts) != 2 or parts[0] != key:
+                    continue
+                try:
+                    return max(0, int(parts[1]))
+                except ValueError:
+                    return 0
+    except OSError:
+        return 0
+    return 0
+
+
 def _v2_remaining(directory: str) -> int | None:
     """Remaining bytes under a v2 limit (``memory.max`` minus ``memory.current``)."""
     prefix = directory.rstrip("/") or "/"
@@ -128,6 +145,10 @@ def _v2_remaining(directory: str) -> int | None:
             current = int(stream.read().strip())
     except (OSError, ValueError):
         current = 0
+    # Inactive file cache is the reclaimable working-set component (what the
+    # kubelet uses); active file may be mapped weights still in use, so it
+    # stays counted.
+    current = max(0, current - _inactive_file_bytes(prefix, "inactive_file"))
     return max(0, limit - max(0, current))
 
 
@@ -148,6 +169,10 @@ def _v1_remaining(directory: str) -> int | None:
             current = int(stream.read().strip())
     except (OSError, ValueError):
         current = 0
+    # Inactive file cache is the reclaimable working-set component (what the
+    # kubelet uses); active file may be mapped weights still in use, so it
+    # stays counted.
+    current = max(0, current - _inactive_file_bytes(prefix, "total_inactive_file"))
     return max(0, limit - max(0, current))
 
 
