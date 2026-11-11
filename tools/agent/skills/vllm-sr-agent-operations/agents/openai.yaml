@@ -1,4 +1,4 @@
 interface:
   display_name: "vLLM-SR Agent Operations"
-  short_description: "Deploy, validate, benchmark, and optimize vLLM-SR"
-  default_prompt: "Use $vllm-sr-agent-operations to deploy and continuously improve this routing recipe."
+  short_description: "Deploy, configure, verify, maintain, troubleshoot and optimize vLLM-SR"
+  default_prompt: "Use $vllm-sr-agent-operations to install vLLM Semantic Router, verify a routed request, and keep it healthy and tuned."

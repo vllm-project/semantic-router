@@ -22,11 +22,14 @@ func (b *partitionRecordingBackend) AddEntry(
 	return nil
 }
 
-func (b *partitionRecordingBackend) LookupSimilarWithThreshold(
-	_ context.Context, model string, _ string, _ float32,
-) (LookupResult, error) {
+func (b *partitionRecordingBackend) LookupSimilar(
+	_ context.Context, model string, query string, _ SimilarityBounds,
+) (SimilarEntries, error) {
 	body, ok := b.entries[model]
-	return LookupResult{Found: ok, ResponseBody: body}, nil
+	if !ok {
+		return SimilarEntries{}, nil
+	}
+	return SimilarEntries{Hits: []LookupResult{{Found: true, ResponseBody: body, Query: query}}}, nil
 }
 
 func TestLegacyAdapterPartitionsSemanticEntriesByCompatibilityFingerprint(t *testing.T) {
@@ -47,9 +50,10 @@ func TestLegacyAdapterPartitionsSemanticEntriesByCompatibilityFingerprint(t *tes
 		t.Fatal(err)
 	}
 	lookup := func(fingerprint string) bool {
-		result, err := adapter.LookupSemantic(context.Background(), SemanticLookup{
+		result, err := semanticHit(adapter.LookupSemantic(context.Background(), SemanticLookup{
 			Identity: identity(fingerprint),
-		})
+			Bounds:   atThreshold(0),
+		}))
 		if err != nil {
 			t.Fatal(err)
 		}

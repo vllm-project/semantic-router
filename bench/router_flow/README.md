@@ -62,7 +62,7 @@ options change the evaluated request and must be recorded with the result.
 Each run writes:
 
 - `samples.jsonl`, containing per-item responses, grades when present, latency,
-  token usage, and looper headers;
+  token usage, and the Router's x-vsr-trace;
 - `summary.json`, containing aggregate counts and metrics by arm and category.
 
 ## Render a development report

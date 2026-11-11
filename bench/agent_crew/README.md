@@ -16,8 +16,10 @@ thing that changes is the model name each agent sends:
 | `all-local` | `local` everywhere | the cost floor, and what it loses |
 
 Every measurement comes from the router: `x-vsr-selected-model`,
-`x-vsr-selected-decision`, `x-vsr-routing-latency-ms` and `x-vsr-cost` on each
-response, plus the `/metrics` delta per run. The crew computes none of them.
+`x-vsr-selected-decision`, `x-vsr-cost` and the `routing_latency_ms` member of
+`x-vsr-trace` on each response, plus the `/metrics` delta per run. The crew
+computes none of them. It asks for the trace with `x-vsr-debug: true`, so the
+router's `global.router.headers.debug` must allow it.
 
 The pull-request fixture and its seeded defects are development fixtures for
 comparing arms on identical work. They are not a code-review benchmark and

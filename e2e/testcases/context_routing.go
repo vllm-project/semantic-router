@@ -23,7 +23,7 @@ func init() {
 func testContextRouting(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	return runSignalRoutingTest(ctx, client, opts, signalRoutingConfig{
 		TestDataPath:   "e2e/testcases/testdata/context_routing_cases.json",
-		MatchedHeader:  "x-vsr-matched-context",
+		SignalType:     "context",
 		TargetDecision: targetContextDecision,
 		ResultsTitle:   "CONTEXT ROUTING TEST RESULTS",
 		LogLabel:       "Context",

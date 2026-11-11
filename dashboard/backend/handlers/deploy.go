@@ -32,7 +32,7 @@ type DeployRequest struct {
 	BaseYAML string `json:"baseYaml,omitempty"`
 	// Mode controls how the DSL-owned config surface is applied. Merge is the
 	// backward-compatible default for partial API fragments. Replace atomically
-	// replaces routing, entrypoints, and recipes while preserving the static
+	// replaces recipes, entrypoints and model facts while preserving the static
 	// deployment config outside that surface.
 	Mode DeployMode `json:"mode,omitempty"`
 }
@@ -50,6 +50,13 @@ type DeployResponse struct {
 	Status  string `json:"status"`
 	Version string `json:"version"`
 	Message string `json:"message,omitempty"`
+}
+
+// deployedResponse answers a deploy with the Router's warnings about the
+// deployed config.
+type deployedResponse struct {
+	DeployResponse
+	Warnings []routerconfig.ConfigWarning `json:"warnings,omitempty"`
 }
 
 // ConfigVersion represents a backup version entry
@@ -268,8 +275,8 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 		return
 	}
 
-	// The Router resolves ${VAR} references with its own environment, which the Dashboard may not share.
-	if err := routerconfig.ValidateYAMLBytesDeferringEnv(yamlBytes); err != nil {
+	warnings, err := validateMergedDeploy(yamlBytes)
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -332,11 +339,11 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	if configActivationDeferred() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
-		_ = json.NewEncoder(w).Encode(DeployResponse{
+		_ = json.NewEncoder(w).Encode(deployedResponse{DeployResponse: DeployResponse{
 			Status:  "persisted",
 			Version: version,
 			Message: "Configuration saved to the Kubernetes ConfigMap. Roll out Router and Envoy to activate it.",
-		})
+		}, Warnings: warnings})
 		return
 	}
 
@@ -348,15 +355,31 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	})
 
 	if restartMessage != "" {
-		writeRestartRequiredResponse(w, version, restartMessage)
+		writeRestartRequiredResponse(w, version, restartMessage, warnings)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(DeployResponse{
+	_ = json.NewEncoder(w).Encode(deployedResponse{DeployResponse: DeployResponse{
 		Status:  "success",
 		Version: version,
 		Message: "Config deployed successfully. Router and Envoy have been updated.",
-	})
+	}, Warnings: warnings})
+}
+
+// validateMergedDeploy checks a merged deploy document as the Router loads
+// it with its own environment, which the Dashboard may not share, and returns
+// the Router's warnings about it.
+func validateMergedDeploy(data []byte) ([]routerconfig.ConfigWarning, error) {
+	if err := routerconfig.ValidateYAMLBytesDeferringEnv(data); err != nil {
+		return nil, err
+	}
+	// Warnings are advisory: a typed parse may refuse a ${VAR} reference
+	// that the deferred check accepted.
+	cfg, err := routerconfig.ParseYAMLBytesDeferringEnv(data)
+	if err != nil {
+		return []routerconfig.ConfigWarning{}, nil
+	}
+	return savedConfigWarnings(cfg), nil
 }
 
 func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
@@ -408,41 +431,84 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 	return mergedYAML, nil
 }
 
-// mergeDSLOwnedNodes applies only the configuration surface owned by the DSL.
-// Node-level merging makes the transport forward-compatible: a new signal or
-// projection is carried without adding another field-by-field merge branch.
+// mergeDSLOwnedNodes applies only the configuration surface owned by the DSL:
+// recipes, entrypoints and the model facts on providers.models. Recipes and
+// entrypoints have identity and ordering semantics, so a supplied list is
+// replaced as one unit; in merge mode an omitted list remains untouched and a
+// supplied recipe keeps the fields of the base recipe of its name it omits.
 func mergeDSLOwnedNodes(baseRoot, fragmentRoot *yaml.Node, mode DeployMode) error {
-	preserveBaseDecisionAdaptations(baseRoot, fragmentRoot)
-	fragmentRouting := mappingValueNode(fragmentRoot, "routing")
-	if mode == DeployModeReplace {
-		if fragmentRouting == nil {
-			return fmt.Errorf("compiled routing fragment must contain routing")
-		}
-		setMappingValueNode(baseRoot, "routing", fragmentRouting)
-		for _, section := range []string{"entrypoints", "recipes"} {
-			if value := mappingValueNode(fragmentRoot, section); value != nil {
-				setMappingValueNode(baseRoot, section, value)
-			} else {
-				deleteMappingValueNode(baseRoot, section)
-			}
-		}
-		return nil
+	preserveBaseDecisionFields(baseRoot, fragmentRoot)
+	if mode == DeployModeReplace && mappingValueNode(fragmentRoot, "recipes") == nil {
+		return fmt.Errorf("compiled routing fragment must contain recipes")
 	}
-
-	if fragmentRouting != nil {
-		baseRouting := mappingValueNode(baseRoot, "routing")
-		if baseRouting == nil {
-			setMappingValueNode(baseRoot, "routing", fragmentRouting)
-		} else if err := mergeMappingNodes(baseRouting, fragmentRouting); err != nil {
-			return fmt.Errorf("failed to merge routing fragment: %w", err)
+	if mode != DeployModeReplace {
+		if err := mergeBaseRecipes(baseRoot, fragmentRoot); err != nil {
+			return err
 		}
 	}
-
-	// Scoped lists have identity and ordering semantics, so a supplied list is
-	// replaced as one unit. An omitted list remains untouched in merge mode.
-	for _, section := range []string{"entrypoints", "recipes"} {
+	for _, section := range []string{"recipes", "entrypoints"} {
 		if value := mappingValueNode(fragmentRoot, section); value != nil {
 			setMappingValueNode(baseRoot, section, value)
+		} else if mode == DeployModeReplace {
+			deleteMappingValueNode(baseRoot, section)
+		}
+	}
+	return mergeFragmentModelFacts(baseRoot, fragmentRoot)
+}
+
+func mergeBaseRecipes(baseRoot, fragmentRoot *yaml.Node) error {
+	base := sequenceItemsByName(mappingValueNode(baseRoot, "recipes"))
+	for _, recipe := range sequenceItems(mappingValueNode(fragmentRoot, "recipes")) {
+		baseRecipe, ok := base[itemName(recipe)]
+		if !ok {
+			continue
+		}
+		merged := cloneYAMLNode(baseRecipe)
+		if err := mergeMappingNodes(merged, recipe); err != nil {
+			return fmt.Errorf("failed to merge recipe %s: %w", itemName(recipe), err)
+		}
+		*recipe = *merged
+	}
+	return nil
+}
+
+// mergeFragmentModelFacts makes the fragment's providers.models facts the
+// facts of the deployed models, as dsl.MergeRoutingIntoBase does: a base model
+// keeps its transport, and a model only the fragment names joins as a fact-only
+// entry.
+func mergeFragmentModelFacts(baseRoot, fragmentRoot *yaml.Node) error {
+	declared := sequenceItems(mappingValueNode(mappingValueNode(fragmentRoot, "providers"), "models"))
+	if len(declared) == 0 {
+		return nil
+	}
+	providers, err := ensureMappingNode(baseRoot, "providers")
+	if err != nil {
+		return err
+	}
+	models := mappingValueNode(providers, "models")
+	if models == nil {
+		setMappingValueNode(providers, "models", &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"})
+		models = mappingValueNode(providers, "models")
+	}
+	if models.Kind != yaml.SequenceNode {
+		return fmt.Errorf("config providers.models must be a YAML sequence")
+	}
+	base := sequenceItemsByName(models)
+	for _, model := range sequenceItems(models) {
+		for _, field := range routerconfig.ModelFactFields() {
+			deleteMappingValueNode(model, field)
+		}
+	}
+	for _, model := range declared {
+		target, ok := base[itemName(model)]
+		if !ok {
+			models.Content = append(models.Content, model)
+			continue
+		}
+		for _, field := range routerconfig.ModelFactFields() {
+			if value := mappingValueNode(model, field); value != nil {
+				setMappingValueNode(target, field, value)
+			}
 		}
 	}
 	return nil
@@ -509,7 +575,7 @@ func looksLikeFullCanonicalDeployBase(raw []byte) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if mappingValueNode(root, "routing") == nil {
+	if mappingValueNode(root, "recipes") == nil {
 		return false, nil
 	}
 
@@ -614,7 +680,7 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 	})
 
 	if restartMessage != "" {
-		writeRestartRequiredResponse(w, version, restartMessage)
+		writeRestartRequiredResponse(w, version, restartMessage, nil)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -637,7 +703,7 @@ func canonicalizeYAMLForDiff(raw []byte) string {
 	}
 
 	if looksLikeFullBase, err := looksLikeFullCanonicalDeployBase(raw); err == nil && looksLikeFullBase {
-		if configData, decodeErr := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](raw); decodeErr == nil {
+		if configData, decodeErr := decodeConfigDocument[routerconfig.CanonicalConfig](raw); decodeErr == nil {
 			if canonical, marshalErr := marshalYAMLBytes(configData); marshalErr == nil {
 				return string(canonical)
 			}

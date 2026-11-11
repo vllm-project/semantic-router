@@ -1,11 +1,15 @@
 """Envoy configuration generator for vLLM Semantic Router."""
 
+import json
 import os
+import re
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
+from cli.api_registry import served_path_regex
 from cli.catalog_provider_projection import project_provider_models_for_envoy
+from cli.config_contract import iter_routing_profiles
 from cli.consts import DEFAULT_LISTENER_PORT
 from cli.durations import envoy_duration
 from cli.envoy_backend_pool import is_ip_address, project_envoy_backend_group
@@ -75,9 +79,9 @@ def _check_decision_reliability(user_config: UserConfig) -> None:
     headers, which the template's ext_proc filter always allows.
     """
 
-    scopes = [("routing", user_config.routing.decisions)] + [
-        (f"recipes[{recipe.name!r}].routing", recipe.routing.decisions)
-        for recipe in user_config.recipes
+    scopes = [
+        (f"recipes[{name!r}]", recipe.decisions)
+        for name, recipe in iter_routing_profiles(user_config)
     ]
     for scope, decisions in scopes:
         for decision in decisions:
@@ -94,12 +98,95 @@ def _check_decision_reliability(user_config: UserConfig) -> None:
                 )
 
 
+_DEFAULT_IDENTITY_HEADERS = (
+    "x-authz-user-id",
+    "x-authz-user-groups",
+    "x-authz-team-id",
+    "x-authz-tenant-id",
+)
+_HEADER_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+
+
+def _identity_headers(user_config: UserConfig) -> list[str]:
+    """Name the headers that carry a caller's identity.
+
+    They are the x-authz-* set and the names global.services.authz.identity
+    reads the user and groups from. Only an authenticating proxy in front of a
+    listener that trusts them may set them, and no provider receives them.
+    """
+
+    global_config = user_config.global_ if isinstance(user_config.global_, dict) else {}
+    services = global_config.get("services")
+    authz = services.get("authz") if isinstance(services, dict) else None
+    identity = authz.get("identity") if isinstance(authz, dict) else None
+    names = list(_DEFAULT_IDENTITY_HEADERS)
+    for field in ("user_id_header", "user_groups_header"):
+        value = identity.get(field) if isinstance(identity, dict) else None
+        if value is None or not str(value).strip():
+            continue
+        name = str(value).strip().lower()
+        if not _HEADER_NAME_PATTERN.match(name):
+            raise ValueError(
+                f"global.services.authz.identity.{field} {value!r} is not a "
+                "header name the Envoy listener can remove"
+            )
+        if name not in names:
+            names.append(name)
+    return names
+
+
+def _trusts_identity_headers(listener) -> bool:
+    """Report whether a listener keeps the identity headers clients send."""
+
+    identity = getattr(listener, "identity", None)
+    if identity is None:
+        return False
+    if identity.trusted_peers:
+        raise ValueError(
+            f"listener '{listener.name}': identity.trusted_peers is checked in "
+            "standalone mode, and the --gateway extproc Envoy listener does not "
+            "check the peer address; serve with --gateway standalone, or keep "
+            "identity.trust_headers alone behind a proxy that removes the "
+            "identity headers clients send"
+        )
+    return bool(identity.trust_headers)
+
+
 def _route_request_headers(endpoint: dict) -> list[dict[str, str]]:
     headers: dict[str, str] = {}
     for key, value in (endpoint.get("extra_headers") or {}).items():
         if key and value is not None:
             headers[str(key)] = str(value)
     return [{"key": key, "value": value} for key, value in sorted(headers.items())]
+
+
+DEFAULT_DELEGATED_CREDENTIAL_HEADER = "x-vsr-delegated-credential"
+
+
+def _delegated_credential_headers(user_config: UserConfig) -> list[str]:
+    """Name the delegated credential headers Envoy strips ahead of ext_proc.
+
+    The credential is an authenticator output, never a client input. The
+    default name is always stripped; a configured
+    global.services.authz.delegated_credential.header is stripped too.
+    """
+    configured = None
+    services = (user_config.global_ or {}).get("services")
+    authz = services.get("authz") if isinstance(services, dict) else None
+    credential = authz.get("delegated_credential") if isinstance(authz, dict) else None
+    if isinstance(credential, dict):
+        configured = credential.get("header")
+    names = [DEFAULT_DELEGATED_CREDENTIAL_HEADER]
+    if isinstance(configured, str) and configured.strip():
+        header = configured.strip().lower()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", header):
+            raise ValueError(
+                "global.services.authz.delegated_credential.header must be a "
+                f"plain header name, got {configured!r}"
+            )
+        if header not in names:
+            names.append(header)
+    return names
 
 
 def generate_envoy_config_from_user_config(
@@ -146,28 +233,52 @@ def generate_envoy_config_from_user_config(
                     "mode, and --gateway extproc does not terminate TLS; serve "
                     "with --gateway standalone or remove tls from the listener"
                 )
-            if getattr(listener, "models", None):
+            restricted = [
+                name
+                for name, entry in (listener.apis or {}).items()
+                if name != "systemone" and entry.models is not None
+            ]
+            if restricted:
                 raise ValueError(
-                    f"listener '{listener.name}': models is enforced in "
-                    "standalone mode, and the --gateway extproc Envoy listener "
-                    "does not enforce it; serve with --gateway standalone or "
-                    "remove models from the listener"
+                    f"listener '{listener.name}': apis.{restricted[0]}.models is "
+                    "enforced in standalone mode, and the --gateway extproc Envoy "
+                    "listener does not enforce it; serve with --gateway standalone "
+                    "or remove models from the listener's apis"
                 )
+            if "systemone" in (listener.apis or {}):
+                raise ValueError(
+                    f"listener '{listener.name}': apis.systemone is served in "
+                    "standalone mode, and the --gateway extproc Envoy listener "
+                    "does not serve the System One API; serve with --gateway "
+                    "standalone or remove systemone from the listener's apis"
+                )
+            gate = {}
+            if listener.apis is not None:
+                served = listener.served_apis()
+                gate = {
+                    "served_path_regex": served_path_regex(served),
+                    "unserved_body": json.dumps(
+                        {
+                            "detail": f"listener {json.dumps(listener.name)} does not serve "
+                            f"this path; it serves {', '.join(served)}"
+                        }
+                    ),
+                }
             listeners.append(
                 {
+                    **gate,
                     "name": listener.name,
                     "address": os.getenv(
                         ENVOY_CONTAINER_LISTENER_ADDRESS_ENV, listener.address
                     ),
                     "port": listener.port,
-                    "timeout": (
-                        listener.timeout if hasattr(listener, "timeout") else "300s"
-                    ),
+                    "timeout": envoy_duration(listener.timeout or "300s"),
                     "api_keys": (
                         list(listener.api_keys)
                         if getattr(listener, "api_keys", None)
                         else []
                     ),
+                    "trust_identity_headers": _trusts_identity_headers(listener),
                 }
             )
     else:
@@ -179,6 +290,7 @@ def generate_envoy_config_from_user_config(
                 "port": DEFAULT_LISTENER_PORT,
                 "timeout": "300s",
                 "api_keys": [],
+                "trust_identity_headers": False,
             }
         )
 
@@ -239,6 +351,7 @@ def generate_envoy_config_from_user_config(
     # Prepare template data
     template_data = {
         "listeners": listeners,
+        "identity_headers": _identity_headers(user_config),
         "extproc_host": extproc_host,
         "extproc_port": 50051,
         "extproc_cluster_type": "LOGICAL_DNS" if extproc_host_is_domain else "STATIC",
@@ -250,6 +363,7 @@ def generate_envoy_config_from_user_config(
         ),
         "router_api_host_is_domain": router_api_host_is_domain,
         "models": models,
+        "delegated_credential_headers": _delegated_credential_headers(user_config),
         "use_original_dst": False,  # Use static clusters for now
     }
     _check_decision_reliability(user_config)

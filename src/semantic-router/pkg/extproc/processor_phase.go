@@ -22,6 +22,7 @@ func (r *OpenAIRouter) requestHeadersReply(
 	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	return response, nil
 }
@@ -43,6 +44,7 @@ func (r *OpenAIRouter) requestBodyReply(
 	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	r.persistImmediateResponseObject(response, ctx)
 	return response, nil
@@ -58,6 +60,7 @@ func (r *OpenAIRouter) responseHeadersReply(
 		return nil, err
 	}
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	return response, nil
 }
@@ -73,6 +76,7 @@ func (r *OpenAIRouter) responseBodyReply(
 		return nil, err
 	}
 	appendConfigVersionToImmediateResponse(response, ctx)
+	appendRoutedResponseHeaders(response, ctx)
 	r.bindBenchmarkConfigResponse(response, ctx)
 	return response, nil
 }

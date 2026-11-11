@@ -36,19 +36,20 @@ translation:
 ## 配置
 
 ```yaml
-routing:
-  decisions:
-    - name: business_route
-      description: Route business and management questions.
-      priority: 110
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: business_route
+        description: Route business and management questions.
+        priority: 110
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
 ```
 
 即使只有一个条件，也请保持路由命名且可复用。如果策略以后变复杂，可以添加显式布尔组，而不改变周围的路由结构。

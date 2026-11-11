@@ -308,10 +308,11 @@ records are removed during subsequent writes.
 volume. Other deployment methods need a PostgreSQL connection and credentials
 in `global.services.router_replay.postgres`.
 
-- To disable default capture, set `global.services.router_replay.enabled: false`.
-  Individual decisions can still opt in.
-- To disable capture for a decision, set its `router_replay` plugin to
-  `configuration: {enabled: false}`. There is no recipe-level Replay override.
+- To disable default capture, set `enabled: false` on the `router_replay`
+  plugin in `global.plugins`. A recipe or a decision can still opt in.
+- To disable capture for one recipe or decision, set its `router_replay` plugin
+  to `configuration: {enabled: false}`. A decision's plugin overrides its
+  recipe's, which overrides `global.plugins`, field by field.
 - Set `capture_personal_data: false` globally or in the decision plugin to omit
   content when PII is detected or its status is unknown. Balance declares no
   PII rule, so with that setting its records keep no request or response
@@ -328,10 +329,11 @@ for capture limits and access controls.
 vllm-sr serve
 ```
 
-Connect models in the Dashboard, choose a recipe, assign its decision pools,
-and publish an entrypoint. Use **Preview** to inspect signals, decisions, and
-candidate selection. Then send a real request through the entrypoint to verify
-backend execution and latency.
+Connect models in the Dashboard, open **Build → Mixture-of-Models → Recipes**,
+and choose **Create model** on a recipe under **Built-in recipes**. Name its
+entrypoint and assign each decision's pool; Vault's `guard` needs none. Use
+**Preview** to inspect signals, decisions, and candidate selection. Then send a
+real request through the entrypoint to verify backend execution and latency.
 
 When upgrading to policy 4.0, Speed, Cost, Accuracy and Vault keep their
 decisions, but the decision model now selects them: named questions replace the
@@ -368,7 +370,7 @@ scores just above the `confidential` threshold, and a correction wrapped in a
 translation request scores just above `quoted`. Validate representative
 traffic, and prefer a larger decision model where routing errors are costly.
 Context accounting includes conversation history and output reserves but remains
-an estimate rather than a provider-tokenizer guarantee. Learned signals can
+an estimate rather than a provider-tokenizer guarantee. Model-judged signals can
 misclassify requests, so validate representative traffic before rollout.
 
 Balance's effort boundaries and its code lane were chosen with Vela 2.0 4B on

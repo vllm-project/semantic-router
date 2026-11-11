@@ -33,6 +33,7 @@
 {{- end }}
 {{- $customModelsMount := false -}}
 {{- $customConfigMount := false -}}
+{{- $customDataMount := eq (include "semantic-router.customDataMount" .) "true" -}}
 {{- range .Values.extraVolumeMounts -}}
 {{- if eq (.mountPath | default "") "/app/models" -}}
 {{- $customModelsMount = true -}}
@@ -194,6 +195,10 @@ spec:
         - name: models-volume
           mountPath: /app/models
         {{- end }}
+        {{- if not $customDataMount }}
+        - name: router-data
+          mountPath: /var/lib/vsr
+        {{- end }}
         {{- if and $standalone $tlsSecret }}
         # A Secret volume rather than a subPath mount: Kubernetes replaces its
         # files in place when the Secret changes, and the Router reloads the
@@ -275,6 +280,16 @@ spec:
           claimName: {{ include "semantic-router.pvcName" . }}
       {{- else }}
       - name: models-volume
+        emptyDir: {}
+      {{- end }}
+      {{- end }}
+      {{- if not $customDataMount }}
+      {{- if .Values.data.persistence.enabled }}
+      - name: router-data
+        persistentVolumeClaim:
+          claimName: {{ include "semantic-router.dataPvcName" . }}
+      {{- else }}
+      - name: router-data
         emptyDir: {}
       {{- end }}
       {{- end }}

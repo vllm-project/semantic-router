@@ -1,0 +1,19 @@
+# A trusted gateway backend and the gateway credential contract, the form
+# that auth: {credential: delegated} and delegated_credential replace.
+version: v0.5
+providers:
+  defaults: {model: gateway-model}
+  models:
+    - name: gateway-model
+      backend_refs:
+        - name: gateway
+          provider: openai-compatible
+          endpoint: https://gateway.example/v1
+          trusted_gateway: true
+recipes:
+  - name: default
+global:
+  services:
+    authz:
+      gateway_credential:
+        enabled: true

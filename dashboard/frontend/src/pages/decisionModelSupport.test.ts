@@ -43,12 +43,12 @@ describe('default decision deployment', () => {
 
   it('preserves existing resources and task overrides when changing the default', () => {
     const config = {
-      version: 'v0.3',
+      version: 'v0.5',
       global: {
         model_catalog: {
-          system: { decision_model: { deployment: 'judge' }, hazard: 'models/custom-hazard' },
+          system: { decision_model: { deployment: 'judge' } },
           deployments: { judge: { artifact: 'vllm-sr/Vela-2.0-4B', device: 'cuda:1' } },
-          modules: { prompt_guard: { model_binding: { deployment: 'judge' } } },
+          bindings: { jailbreak: 'judge' },
         },
       },
     }
@@ -57,8 +57,10 @@ describe('default decision deployment', () => {
     expect(chosen.global.model_catalog.deployments.judge).toEqual(
       config.global.model_catalog.deployments.judge,
     )
-    expect(chosen.global.model_catalog.modules).toEqual(config.global.model_catalog.modules)
-    expect(chosen.global.model_catalog.system.hazard).toBe('models/custom-hazard')
+    expect(chosen.global.model_catalog.bindings).toEqual({ jailbreak: 'judge' })
+    expect(chosen.global.model_catalog.system).toEqual({
+      decision_model: { deployment: 'vela-2-0-0-8b' },
+    })
     expect(config.global.model_catalog.system.decision_model).toEqual({ deployment: 'judge' })
   })
 

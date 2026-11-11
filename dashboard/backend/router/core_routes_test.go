@@ -104,7 +104,7 @@ func TestRegisterRecipeRoutesPassesStoreToRecipeService(t *testing.T) {
 func TestRegisterRecipeRoutesExposesUnmanagedDescriptor(t *testing.T) {
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", "")
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("version: v0.3\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("version: v0.5\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(config): %v", err)
 	}
 	mux := http.NewServeMux()
@@ -128,7 +128,7 @@ func TestRegisterRecipeRoutesExposesUnmanagedDescriptor(t *testing.T) {
 func TestRegisterRecipePackageRoutesEnforceCanonicalPathsAndMethods(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\nrouting:\n  modelCards: []\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\nrouting:\n  modelCards: []\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", "")
@@ -251,7 +251,7 @@ func assertRecipeActivationStartupRecovery(t *testing.T, cfg *config.Config, wan
 func TestRegisterRecipeRoutesKeepsImportAvailableWhenRuntimeConfigReadonly(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")
-	writeCoreRouteTestFile(t, configPath, "version: v0.3\n")
+	writeCoreRouteTestFile(t, configPath, "version: v0.5\n")
 	t.Setenv("VLLM_SR_ACTIVE_RECIPE_DIR", "")
 	t.Setenv("VLLM_SR_RECIPE_STORE_DIR", filepath.Join(dir, "recipe-store"))
 
@@ -291,7 +291,7 @@ func assertCoreRouteTestFile(t *testing.T, path, want string) {
 func TestRuntimeConfigCapabilityGuardsLocalWriteRoutes(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{
@@ -347,13 +347,7 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutes(t *testing.T) {
 func TestResolveToolsDBPathUsesRouterContractPath(t *testing.T) {
 	configDir := t.TempDir()
 	configPath := filepath.Join(configDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte(`
-version: v0.3
-global:
-  integrations:
-    tools:
-      tools_db_path: "/tmp/custom-tools.json"
-`), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte(toolsCatalogConfig("/tmp/custom-tools.json")), 0o644); err != nil {
 		t.Fatalf("WriteFile(config): %v", err)
 	}
 
