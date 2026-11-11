@@ -126,4 +126,4 @@ agent harness
 - [组件架构](component-architecture)：前端、模型运行时和 Engine 模式。
 - [路由流水线](signal-driven-decisions)：策略的各个层次。
 - [多模型混合](mom-model-family)：虚拟模型与多模型执行。
-- [快速开始](../installation/installation.md)：运行本地服务。
+- [快速开始](/zh-hans/docs/installation)：运行本地服务。

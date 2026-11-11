@@ -102,7 +102,7 @@ Router 把一个请求中由模型判断的信号一起发给决策模型，每�
 - **直接名字直通。** 具体的后端模型名会跳过配方信号、决策、插件、缓存、学习和会话路由。
 - **无匹配时回退。** 配方中没有决策匹配时，Router 使用已配置的默认提供方模型。
 
-配置契约见[入口与配方](../tutorials/global/entrypoints-and-recipes)。
+配置契约见[入口与配方](/zh-hans/docs/tutorials/global/entrypoints-and-recipes)。
 
 ## 示例：携带工具的编码调用 {#example-a-coding-call-with-tools}
 
@@ -113,7 +113,7 @@ Router 把一个请求中由模型判断的信号一起发给决策模型，每�
 5. 响应回到 harness，由它执行工具并推进下一步。
 
 :::note 多轮路由
-请谨慎配置会话标识和会话保护。进行中的工具循环或无法迁移的提供方状态会限制模型切换，但被策略排除的模型绝不会仅仅为了保持连续性而被恢复。见 [agent harness 指南](../installation/agent-harness)。
+请谨慎配置会话标识和会话保护。进行中的工具循环或无法迁移的提供方状态会限制模型切换，但被策略排除的模型绝不会仅仅为了保持连续性而被恢复。见 [agent harness 指南](/zh-hans/docs/installation/agent-harness)。
 :::
 
 ## 工作负载、Router 与模型池 {#workload-router-and-pool}
