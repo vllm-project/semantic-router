@@ -254,13 +254,13 @@ async def test_observation_excludes_credentials(client):
     headers = {
         "Authorization": "Bearer fixture-secret",
         "x-api-key": "fixture-secret",
-        "x-vsr-e2e-trace": "kept",
+        "x-e2e-trace": "kept",
         "x-vsr-test-session-id": "safe-observation",
     }
     await client.post("/v1/messages", json=body(), headers=headers)
     observed = (await client.get("/debug/last-request", headers=headers)).json()
     assert observed["headers"] == {
-        "x-vsr-e2e-trace": "kept",
+        "x-e2e-trace": "kept",
         "x-vsr-test-session-id": "safe-observation",
     }
     assert "fixture-secret" not in json.dumps(observed)

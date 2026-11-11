@@ -42,9 +42,12 @@ ROUTER_MAX_TOKEN_COUNT = float(2**63 - 1)
 
 # The Router expands environment references in every config string before it
 # parses token counts (pkg/config/env_substitution.go): ${NAME},
-# ${NAME:-default}, ${NAME-default}, $NAME, and $$ for a literal dollar. A
-# braced reference needs its closing brace; any other dollar stays literal.
-_ENV_REFERENCE = re.compile(r"\$\{[^}]*\}|\$[A-Za-z0-9_]+")
+# ${NAME:-default}, ${NAME-default}, $NAME, and $$ for a literal dollar. NAME
+# is uppercase and a braced reference needs its closing brace; any other
+# dollar stays literal.
+_ENV_REFERENCE = re.compile(
+    r"\$\{[A-Z_][A-Z0-9_]*(?::?-[^}]*)?\}|\$[A-Z_][A-Z0-9_]*(?![A-Za-z0-9_])"
+)
 
 
 def normalize_token_count(value: object, field: str) -> str | None:

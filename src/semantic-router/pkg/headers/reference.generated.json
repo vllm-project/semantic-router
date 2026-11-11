@@ -1,0 +1,1072 @@
+{
+  "schema_version": "3",
+  "trace_limit_bytes": 4096,
+  "debug_modes": [
+    "none",
+    "any",
+    "authenticated"
+  ],
+  "headers": [
+    {
+      "name": "x-vsr-schema-version",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "response_contract",
+      "version": "v0.4",
+      "doc": "Response-header contract revision; currently `3`."
+    },
+    {
+      "name": "x-vsr-response-path",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "response_contract",
+      "version": "v0.4",
+      "doc": "How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`."
+    },
+    {
+      "name": "x-vsr-config-version",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "config",
+      "version": "v0.5",
+      "doc": "Version of the configuration snapshot that served the request."
+    },
+    {
+      "name": "x-vsr-config-hash",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "config",
+      "version": "v0.4",
+      "doc": "SHA-256 of the active runtime document, on routing previews and `GET /api/v1/config`."
+    },
+    {
+      "name": "x-vsr-warnings",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "response_contract",
+      "version": "v0.5",
+      "doc": "Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`."
+    },
+    {
+      "name": "x-vsr-selected-recipe",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "routing",
+      "version": "v0.4",
+      "doc": "Recipe the effective entrypoint selected; omitted for concrete backend models."
+    },
+    {
+      "name": "x-vsr-selected-decision",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "routing",
+      "version": "v0.1",
+      "doc": "Decision the decision engine selected; omitted when no decision matched."
+    },
+    {
+      "name": "x-vsr-selected-model",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "routing",
+      "version": "v0.1",
+      "doc": "Model alias the Router selected."
+    },
+    {
+      "name": "x-vsr-replay-id",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "router_replay",
+      "version": "v0.2",
+      "doc": "Router Replay record id, when the record was persisted."
+    },
+    {
+      "name": "x-vsr-cost",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "cost",
+      "version": "v0.4",
+      "doc": "Usage priced with the served model's configured pricing; buffered responses only."
+    },
+    {
+      "name": "x-vsr-cost-currency",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "cost",
+      "version": "v0.4",
+      "doc": "Currency of `x-vsr-cost`, from `pricing.currency`."
+    },
+    {
+      "name": "x-ratelimit-limit",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "rate_limit",
+      "version": "v0.2",
+      "doc": "Limit of the rate-limit window that rejected the request."
+    },
+    {
+      "name": "x-ratelimit-remaining",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "rate_limit",
+      "version": "v0.2",
+      "doc": "Requests left in that window."
+    },
+    {
+      "name": "x-ratelimit-reset",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "rate_limit",
+      "version": "v0.2",
+      "doc": "Unix time the window resets at."
+    },
+    {
+      "name": "x-request-id",
+      "direction": [
+        "request",
+        "response",
+        "provider request"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "observability",
+      "version": "v0.1",
+      "doc": "Request correlation id, forwarded to providers; the native gateway adds one when absent, and the management API echoes it."
+    },
+    {
+      "name": "x-content-type-options",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "router_replay",
+      "version": "v0.4",
+      "doc": "`nosniff` on Router Replay management responses."
+    },
+    {
+      "name": "x-envoy-upstream-service-time",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "gateway_parity",
+      "version": "v0.5",
+      "doc": "Envoy's upstream time on responses in Envoy mode; gateway-parity checks ignore its value."
+    },
+    {
+      "name": "x-envoy-overloaded",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "upstream",
+      "version": "v0.5",
+      "doc": "`true` on the 503 a full circuit breaker returns, as Envoy sets it."
+    },
+    {
+      "name": "x-vsr-trace",
+      "direction": [
+        "response"
+      ],
+      "surface": "debug",
+      "sensitivity": "none",
+      "owner": "debug_headers",
+      "version": "v0.5",
+      "doc": "Routing details as an RFC 8941 dictionary of at most 4 KB, for a caller `global.router.headers.debug` allows."
+    },
+    {
+      "name": "x-vsr-session-id",
+      "direction": [
+        "request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "session",
+      "version": "v0.5",
+      "doc": "Session id the client pins; without it the Router reads the headers `global.router.headers.session_id_headers` names, in order."
+    },
+    {
+      "name": "x-session-id",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "session",
+      "version": "v0.3",
+      "doc": "Client session id `session_id_headers` accepts by default; providers receive it."
+    },
+    {
+      "name": "x-claude-code-session-id",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "session",
+      "version": "v0.3",
+      "doc": "Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it."
+    },
+    {
+      "name": "x-conversation-id",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_learning",
+      "version": "v0.4",
+      "doc": "Client conversation id; Router Learning `scope: conversation` protects it, and providers receive it."
+    },
+    {
+      "name": "x-vsr-memory",
+      "direction": [
+        "request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "memory",
+      "version": "v0.5",
+      "doc": "`off` keeps Router-managed memory out of the request."
+    },
+    {
+      "name": "x-vsr-skip-processing",
+      "direction": [
+        "request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "skip_processing",
+      "version": "v0.3",
+      "doc": "`true` opts the request out of Router processing when `global.router.skip_processing.enabled` is set."
+    },
+    {
+      "name": "x-vsr-debug",
+      "direction": [
+        "request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "debug_headers",
+      "version": "v0.4",
+      "doc": "`true` asks for `x-vsr-trace` on the response; honored only for a caller `global.router.headers.debug` allows."
+    },
+    {
+      "name": "x-vsr-cache-control",
+      "direction": [
+        "request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "response_cache",
+      "version": "v0.4",
+      "doc": "Response-cache directives for the request, when the plugin's `request_controls` allow them."
+    },
+    {
+      "name": "x-vsr-compression-control",
+      "direction": [
+        "request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "context",
+      "version": "v0.4",
+      "doc": "Context-compression directives for the request, when the plugin's `request_controls` allow them."
+    },
+    {
+      "name": "x-vsr-protection-release",
+      "direction": [
+        "request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_learning",
+      "version": "v0.5",
+      "doc": "Any non-empty value asks router-learning protection for a fresh decision on the request's protection key; `global.router.learning.protection.release.header` can rename it."
+    },
+    {
+      "name": "x-vsr-bench-expected-config-hash",
+      "direction": [
+        "request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "benchmark",
+      "version": "v0.5",
+      "doc": "Configuration hash an evaluation request requires; another active configuration fails it with 412."
+    },
+    {
+      "name": "x-vsr-bench-max-inference-calls",
+      "direction": [
+        "request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "benchmark",
+      "version": "v0.5",
+      "doc": "Provider-call limit of an evaluation request; only `1` is supported."
+    },
+    {
+      "name": "x-vsr-route-model",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "routing",
+      "version": "v0.5",
+      "doc": "Route key: the model whose route the gateway sends the provider request on; the Router drops a client's value and sets its own."
+    },
+    {
+      "name": "x-vsr-upstream-host",
+      "direction": [
+        "provider response"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "kv_transfer",
+      "version": "v0.5",
+      "doc": "Endpoint Envoy reports on the provider response for KV registry writes; removed before the client."
+    },
+    {
+      "name": "x-vsr-kv-source-pod",
+      "direction": [
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "kv_transfer",
+      "version": "v0.4",
+      "doc": "Address of the pod that holds the source model's KV cache."
+    },
+    {
+      "name": "x-vsr-kv-cache-id",
+      "direction": [
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "kv_transfer",
+      "version": "v0.4",
+      "doc": "Opaque id of the source KV block."
+    },
+    {
+      "name": "x-vsr-kv-mapper-id",
+      "direction": [
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "kv_transfer",
+      "version": "v0.4",
+      "doc": "Mapper artifact for the source and target model pair."
+    },
+    {
+      "name": "x-vsr-systemone-backend",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "systemone",
+      "version": "v0.5",
+      "doc": "Marks a System One request one Router forwards to another, which refuses to forward it again."
+    },
+    {
+      "name": "x-vsr-outcome-source",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "router_learning",
+      "version": "v0.4",
+      "doc": "Outcome provenance a trusted control plane attests to the management API."
+    },
+    {
+      "name": "x-forwarded-for",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "native_gateway",
+      "version": "v0.5",
+      "doc": "Client address chain; the native gateway's access log records it, and providers receive it."
+    },
+    {
+      "name": "x-forwarded-proto",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "native_gateway",
+      "version": "v0.5",
+      "doc": "Scheme of the client connection; the native gateway sets it when absent, as Envoy does."
+    },
+    {
+      "name": "x-envoy-upstream-rq-timeout-ms",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "reliability",
+      "version": "v0.5",
+      "doc": "Route timeout the Router sets from the decision's `reliability` block."
+    },
+    {
+      "name": "x-envoy-upstream-rq-per-try-timeout-ms",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "reliability",
+      "version": "v0.5",
+      "doc": "Per-try timeout the Router sets from the decision's `reliability` block."
+    },
+    {
+      "name": "x-envoy-max-retries",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "reliability",
+      "version": "v0.4",
+      "doc": "Retry count the Router sets from the decision's `reliability` block, and `0` on evaluation requests."
+    },
+    {
+      "name": "x-envoy-retry-on",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "reliability",
+      "version": "v0.5",
+      "doc": "Retry conditions the Router sets from the decision's `reliability` block."
+    },
+    {
+      "name": "x-envoy-retriable-status-codes",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "reliability",
+      "version": "v0.5",
+      "doc": "Retriable status codes the Router sets from the decision's `reliability` block."
+    },
+    {
+      "name": "x-envoy-hedge-on-per-try-timeout",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "benchmark",
+      "version": "v0.4",
+      "doc": "`false` on evaluation requests, so a per-try timeout never hedges."
+    },
+    {
+      "name": "x-envoy-internal",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "ingress",
+      "version": "v0.5",
+      "doc": "Envoy's internal-request marker; the edge drops it from client requests."
+    },
+    {
+      "name": "x-envoy-retriable-header-names",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "ingress",
+      "version": "v0.5",
+      "doc": "Envoy retry control; the edge drops it from client requests."
+    },
+    {
+      "name": "x-envoy-retry-grpc-on",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "ingress",
+      "version": "v0.5",
+      "doc": "Envoy retry control; the edge drops it from client requests."
+    },
+    {
+      "name": "x-envoy-upstream-alt-stat-name",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "ingress",
+      "version": "v0.5",
+      "doc": "Envoy stats control; the edge drops it from client requests."
+    },
+    {
+      "name": "x-envoy-upstream-rq-timeout-alt-response",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "ingress",
+      "version": "v0.5",
+      "doc": "Envoy timeout control; the edge drops it from client requests."
+    },
+    {
+      "name": "x-envoy-expected-rq-timeout-ms",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "ingress",
+      "version": "v0.5",
+      "doc": "Envoy timeout control; the edge drops it from client requests."
+    },
+    {
+      "name": "x-envoy-force-trace",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "ingress",
+      "version": "v0.5",
+      "doc": "Envoy tracing control; the edge drops it from client requests."
+    },
+    {
+      "name": "x-envoy-ip-tags",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "ingress",
+      "version": "v0.5",
+      "doc": "Envoy IP tagging control; the edge drops it from client requests."
+    },
+    {
+      "name": "x-envoy-original-url",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "ingress",
+      "version": "v0.5",
+      "doc": "Envoy redirect control; the edge drops it from client requests."
+    },
+    {
+      "name": "x-envoy-ratelimited",
+      "direction": [
+        "provider response"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "upstream",
+      "version": "v0.5",
+      "doc": "Marks a provider response an Envoy rate limit rejected; the native upstream can retry it."
+    },
+    {
+      "name": "x-authz-user-id",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "identity",
+      "owner": "authz",
+      "version": "v0.2",
+      "doc": "Authenticated user id; `identity.user_id_header` names another header."
+    },
+    {
+      "name": "x-authz-user-groups",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "identity",
+      "owner": "authz",
+      "version": "v0.2",
+      "doc": "Authenticated user's groups, comma-separated; `identity.user_groups_header` names another header."
+    },
+    {
+      "name": "x-authz-team-id",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "identity",
+      "owner": "authz",
+      "version": "v0.4",
+      "doc": "Authenticated team id; partitions the response cache."
+    },
+    {
+      "name": "x-authz-tenant-id",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "identity",
+      "owner": "authz",
+      "version": "v0.4",
+      "doc": "Authenticated tenant id; partitions the response cache."
+    },
+    {
+      "name": "x-vsr-outcome-principal",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "identity",
+      "owner": "router_learning",
+      "version": "v0.4",
+      "doc": "Opaque attested identity that isolates outcome-ingest rate limits; never persisted."
+    },
+    {
+      "name": "x-user-openai-key",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "authz",
+      "version": "v0.2",
+      "doc": "Per-user OpenAI key the authenticator injects."
+    },
+    {
+      "name": "x-user-anthropic-key",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "authz",
+      "version": "v0.2",
+      "doc": "Per-user Anthropic key the authenticator injects."
+    },
+    {
+      "name": "x-user-azure-openai-key",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "authz",
+      "version": "v0.2",
+      "doc": "Per-user Azure OpenAI key the authenticator injects."
+    },
+    {
+      "name": "x-user-bedrock-key",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "authz",
+      "version": "v0.2",
+      "doc": "Per-user AWS Bedrock token the authenticator injects."
+    },
+    {
+      "name": "x-user-gemini-key",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "authz",
+      "version": "v0.2",
+      "doc": "Per-user Google Gemini key the authenticator injects."
+    },
+    {
+      "name": "x-user-vertex-ai-key",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "authz",
+      "version": "v0.2",
+      "doc": "Per-user Vertex AI token the authenticator injects."
+    },
+    {
+      "name": "x-user-minimax-key",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "authz",
+      "version": "v0.3",
+      "doc": "Per-user MiniMax key the authenticator injects."
+    },
+    {
+      "name": "x-user-cloudflare-workers-ai-key",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "authz",
+      "version": "v0.4",
+      "doc": "Per-user Cloudflare Workers AI token the authenticator injects."
+    },
+    {
+      "name": "x-vsr-delegated-credential",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "authz",
+      "version": "v0.5",
+      "doc": "The requesting user's credential the authenticator attaches; only an upstream with `auth.credential: delegated` receives its value, under its own auth header, and `delegated_credential.header` names another header."
+    },
+    {
+      "name": "x-vsr-internal-auth",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "looper",
+      "version": "v0.4",
+      "doc": "In-process request authentication; the Router drops it from every client request."
+    },
+    {
+      "name": "authorization",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "credentials",
+      "version": "v0.1",
+      "doc": "Bearer credential: a client's key for the Router, and the provider credential the Router sets."
+    },
+    {
+      "name": "api-key",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "credentials",
+      "version": "v0.2",
+      "doc": "Azure OpenAI key: a client's authenticates to the Router and is removed, and the Router sets the provider's."
+    },
+    {
+      "name": "x-api-key",
+      "direction": [
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "credentials",
+      "version": "v0.2",
+      "doc": "Provider credential of Anthropic-style APIs."
+    },
+    {
+      "name": "x-goog-api-key",
+      "direction": [
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "credentials",
+      "version": "v0.4",
+      "doc": "Provider credential of Google APIs."
+    },
+    {
+      "name": "api-subscription-key",
+      "direction": [
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "credentials",
+      "version": "v0.4",
+      "doc": "Provider credential a catalog provider names."
+    },
+    {
+      "name": "ocp-apim-subscription-key",
+      "direction": [
+        "provider request"
+      ],
+      "surface": "internal",
+      "sensitivity": "secret",
+      "owner": "credentials",
+      "version": "v0.5",
+      "doc": "Azure API Management credential, which a model connection sets through `auth`."
+    }
+  ],
+  "dropped_from_clients": [
+    "x-vsr-schema-version",
+    "x-vsr-response-path",
+    "x-vsr-config-version",
+    "x-vsr-config-hash",
+    "x-vsr-warnings",
+    "x-vsr-selected-recipe",
+    "x-vsr-selected-decision",
+    "x-vsr-selected-model",
+    "x-vsr-replay-id",
+    "x-vsr-cost",
+    "x-vsr-cost-currency",
+    "x-vsr-trace",
+    "x-vsr-route-model",
+    "x-vsr-upstream-host",
+    "x-vsr-kv-source-pod",
+    "x-vsr-kv-cache-id",
+    "x-vsr-kv-mapper-id",
+    "x-vsr-systemone-backend",
+    "x-vsr-outcome-source",
+    "x-vsr-outcome-principal",
+    "x-vsr-internal-auth"
+  ],
+  "trace_members": [
+    {
+      "key": "config_hash",
+      "owner": "benchmark",
+      "doc": "SHA-256 of the runtime document that served a config-bound evaluation request."
+    },
+    {
+      "key": "inference_calls",
+      "owner": "benchmark",
+      "doc": "Provider calls a config-bound evaluation request made."
+    },
+    {
+      "key": "model_usage",
+      "owner": "benchmark",
+      "doc": "Per-model usage receipt of a config-bound evaluation request, as JSON."
+    },
+    {
+      "key": "confidence",
+      "owner": "routing",
+      "doc": "Model-derived score of the selected decision, such as `0.91`."
+    },
+    {
+      "key": "algorithm",
+      "owner": "routing",
+      "doc": "Selector or executor that chose the model after the decision matched, such as `static`."
+    },
+    {
+      "key": "routing_latency_ms",
+      "owner": "routing",
+      "doc": "Time spent choosing the model, in milliseconds."
+    },
+    {
+      "key": "fallback_attempts",
+      "owner": "fallback",
+      "doc": "Attempts cross-model fallback made, the primary included, when a fallback candidate served the response."
+    },
+    {
+      "key": "on_unknown",
+      "owner": "routing",
+      "doc": "Decisions whose unknown result `rules.on_unknown` resolved, each with its `policy`."
+    },
+    {
+      "key": "client_protocol",
+      "owner": "protocol",
+      "doc": "Client wire protocol, such as `anthropic`."
+    },
+    {
+      "key": "upstream_protocol",
+      "owner": "protocol",
+      "doc": "Provider wire protocol, such as `openai`."
+    },
+    {
+      "key": "effective_input_tokens",
+      "owner": "automatic_output",
+      "doc": "Rendered input tokens of the final automatic-output dispatch, chat template included."
+    },
+    {
+      "key": "effective_max_output_tokens",
+      "owner": "automatic_output",
+      "doc": "Output token limit of the final automatic-output dispatch, reasoning included."
+    },
+    {
+      "key": "signals",
+      "owner": "signals",
+      "doc": "Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`."
+    },
+    {
+      "key": "scan_coverage",
+      "owner": "signals",
+      "doc": "Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts."
+    },
+    {
+      "key": "context_tokens",
+      "owner": "signals",
+      "doc": "Token count the `context` signal measured."
+    },
+    {
+      "key": "category",
+      "owner": "classification",
+      "doc": "Domain category the classifier chose, such as `math`."
+    },
+    {
+      "key": "reasoning",
+      "owner": "classification",
+      "doc": "Reasoning mode chosen for the request: `on` or `off`."
+    },
+    {
+      "key": "modality",
+      "owner": "routing",
+      "doc": "Output kinds of the selected decision's output contract, such as `(image)` or `(text image)`; omitted for a decision that declares none."
+    },
+    {
+      "key": "system_prompt",
+      "owner": "system_prompt",
+      "doc": "Present when a `system_prompt` plugin injected text into the request."
+    },
+    {
+      "key": "cache_similarity",
+      "owner": "response_cache",
+      "doc": "Similarity score of the response-cache lookup."
+    },
+    {
+      "key": "retention",
+      "owner": "retention",
+      "doc": "The matched decision's retention directive: the `drop`, `ttl_turns`, `keep_current_model` and `prefer_prefix` it sets."
+    },
+    {
+      "key": "prompt_cache",
+      "owner": "prompt_cache",
+      "doc": "Outcome of the `prompt_cache` plugin, with its `reason` and the `inserted` and `preserved` marker counts."
+    },
+    {
+      "key": "tools",
+      "owner": "tools",
+      "doc": "Outcome of the `tools` plugin's selection, with its `candidates`, `kept` and `latency_ms`."
+    },
+    {
+      "key": "response_guard",
+      "owner": "response_guard",
+      "doc": "Outcome of the selected decision's `response_guard`, such as `blocked`, with `buffered` when the Router held a streamed answer until the guard read it."
+    },
+    {
+      "key": "session_phase",
+      "owner": "router_learning",
+      "doc": "Protection phase: `user_turn`, `tool_loop` or `provider_state`."
+    },
+    {
+      "key": "learning",
+      "owner": "router_learning",
+      "doc": "Router Learning methods, each with its `action`, `scope` and `reason`."
+    },
+    {
+      "key": "looper",
+      "owner": "looper",
+      "doc": "Models the Looper called, with its `algorithm`, final `model`, `iterations`, `latency_ms` and token counts."
+    },
+    {
+      "key": "ranking",
+      "owner": "routing",
+      "doc": "The matched decision the selected one beat, with the `reason` that settled it."
+    },
+    {
+      "key": "truncated",
+      "owner": "response_contract",
+      "doc": "Present when members were left out to keep the trace within 4 KB."
+    }
+  ],
+  "trace_example": "confidence=0.91, algorithm=static, routing_latency_ms=3.2, signals=(\"context:long-context\" \"projection:use-reasoning-model\"), session_phase=tool_loop",
+  "warning_codes": [
+    {
+      "code": "hallucination",
+      "doc": "A `response_guard` rule over a `hallucination` signal flagged the answer."
+    },
+    {
+      "code": "unverified_factual",
+      "doc": "The answer was factual, but a `hallucination` rule had no context to check it against."
+    },
+    {
+      "code": "response_jailbreak",
+      "doc": "A `response_guard` rule over a response-stage `jailbreak` signal flagged the answer."
+    },
+    {
+      "code": "response_guard",
+      "doc": "A `response_guard` rule over any other signal flagged the answer."
+    },
+    {
+      "code": "protocol",
+      "doc": "Protocol translation changed or dropped part of the request, with its `action`, `reason` and `field`."
+    },
+    {
+      "code": "truncated",
+      "doc": "Protocol warnings left out to keep the header within 4 KB, with their `count`."
+    }
+  ]
+}

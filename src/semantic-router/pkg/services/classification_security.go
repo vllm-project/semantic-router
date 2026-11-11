@@ -2,11 +2,13 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
 // SecurityRequest represents a request for security detection
@@ -25,22 +27,21 @@ type SecurityOptions struct {
 
 // SecurityResponse represents the response from security detection
 type SecurityResponse struct {
-	Recipe           string               `json:"recipe,omitempty"`
-	IsJailbreak      bool                 `json:"is_jailbreak"`
-	RiskScore        *float64             `json:"risk_score"`
-	DetectionTypes   []string             `json:"detection_types"`
-	Confidence       *float64             `json:"confidence"`
-	ScoresAvailable  bool                 `json:"scores_available"`
-	Decision         *tasks.LabelDecision `json:"decision,omitempty"`
-	Recommendation   string               `json:"recommendation"`
-	Reasoning        string               `json:"reasoning,omitempty"`
-	PatternsDetected []string             `json:"patterns_detected"`
-	ProcessingTimeMs int64                `json:"processing_time_ms"`
+	Recipe           string   `json:"recipe,omitempty"`
+	IsJailbreak      bool     `json:"is_jailbreak"`
+	RiskScore        *float64 `json:"risk_score"`
+	DetectionTypes   []string `json:"detection_types"`
+	Confidence       *float64 `json:"confidence"`
+	ScoresAvailable  bool     `json:"scores_available"`
+	Recommendation   string   `json:"recommendation"`
+	Reasoning        string   `json:"reasoning,omitempty"`
+	PatternsDetected []string `json:"patterns_detected"`
+	ProcessingTimeMs int64    `json:"processing_time_ms"`
 }
 
-// CheckSecurity performs security detection. ctx is forwarded to the
-// configured jailbreak backend so a remote (http_chat/http_classify) call can
-// be cancelled if the caller (e.g. the HTTP request) is cancelled first.
+// CheckSecurity asks the jailbreak preset about the text, at its calibrated
+// threshold. ctx is forwarded to the decision model, so the call is cancelled
+// when the caller (e.g. the HTTP request) is.
 func (s *ClassificationService) CheckSecurity(ctx context.Context, req SecurityRequest) (*SecurityResponse, error) {
 	s.runtimeMutex.RLock()
 	defer s.runtimeMutex.RUnlock()
@@ -54,22 +55,28 @@ func (s *ClassificationService) CheckSecurity(ctx context.Context, req SecurityR
 	if scopeErr != nil {
 		return nil, scopeErr
 	}
-	if req.Recipe != "" && (classifier == nil || !classifier.IsJailbreakEnabled()) {
+	if req.Recipe != "" && classifier == nil {
 		return nil, ErrClassifierUnavailable
 	}
 	if classifier == nil {
 		return nil, fmt.Errorf("security detector is unavailable")
 	}
 
-	verdict, err := classifier.CheckForJailbreakVerdict(ctx, req.Text, classifier.Config.PromptGuard.Threshold)
+	answer, err := classifier.AskPreset(ctx, config.SignalTypeJailbreak, presets.Jailbreak, req.Text)
+	if errors.Is(err, modelservice.ErrUnavailable) {
+		return nil, fmt.Errorf("%w: security detection failed: %w", ErrClassifierUnavailable, err)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("security detection failed: %w", err)
 	}
+	canonical, _ := presets.Lookup(presets.Jailbreak, presets.StageRequest)
+	attack := canonical.Positive[0]
+	risk := answer.Probabilities[attack]
+	detected := risk >= classifier.Config.PresetThreshold(config.SignalTypeJailbreak, presets.Jailbreak)
 
 	processingTime := time.Since(start).Milliseconds()
 	includeReasoning := req.Options != nil && req.Options.IncludeReasoning
-
-	response := buildSecurityVerdictResponse(verdict, includeReasoning, processingTime)
+	response := buildSecurityResponse(detected, attack, float32(answer.Probabilities[answer.Choice]), float32(risk), includeReasoning, processingTime)
 	response.Recipe = recipe
 	return response, nil
 }
@@ -79,33 +86,18 @@ func (s *ClassificationService) CheckSecurity(ctx context.Context, req SecurityR
 // from the classifier confidence: a confident benign prediction yields a low
 // risk_score rather than a misleadingly high one (issue #2591).
 func buildSecurityResponse(isJailbreak bool, jailbreakType string, confidence, riskScore float32, includeReasoning bool, processingTimeMs int64) *SecurityResponse {
-	return buildSecurityVerdictResponse(classification.JailbreakVerdict{Detected: isJailbreak, Label: jailbreakType, Confidence: &confidence, RiskScore: &riskScore}, includeReasoning, processingTimeMs)
-}
-
-func buildSecurityVerdictResponse(verdict classification.JailbreakVerdict, includeReasoning bool, processingTimeMs int64) *SecurityResponse {
-	response := &SecurityResponse{IsJailbreak: verdict.Detected, Decision: verdict.Decision, ProcessingTimeMs: processingTimeMs, DetectionTypes: []string{}, PatternsDetected: []string{}}
-	if verdict.Confidence != nil {
-		value := float64(*verdict.Confidence)
-		response.Confidence = &value
+	confidenceValue, riskValue := float64(confidence), float64(riskScore)
+	response := &SecurityResponse{
+		IsJailbreak: isJailbreak, Confidence: &confidenceValue, RiskScore: &riskValue, ScoresAvailable: true,
+		ProcessingTimeMs: processingTimeMs, DetectionTypes: []string{}, PatternsDetected: []string{}, Recommendation: "allow",
 	}
-	if verdict.RiskScore != nil {
-		value := float64(*verdict.RiskScore)
-		response.RiskScore = &value
-	}
-	response.ScoresAvailable = response.Confidence != nil && response.RiskScore != nil
-	if verdict.Detected {
-		response.DetectionTypes = append(response.DetectionTypes, verdict.Label)
-		response.PatternsDetected = append(response.PatternsDetected, verdict.Label)
+	if isJailbreak {
+		response.DetectionTypes = append(response.DetectionTypes, jailbreakType)
+		response.PatternsDetected = append(response.PatternsDetected, jailbreakType)
 		response.Recommendation = "block"
 		if includeReasoning {
-			if verdict.Confidence != nil {
-				response.Reasoning = fmt.Sprintf("Detected %s pattern with confidence %.3f", verdict.Label, *verdict.Confidence)
-			} else {
-				response.Reasoning = fmt.Sprintf("Model selected the %s safety label; probabilities are unavailable", verdict.Label)
-			}
+			response.Reasoning = fmt.Sprintf("Detected %s pattern with confidence %.3f", jailbreakType, confidence)
 		}
-	} else {
-		response.Recommendation = "allow"
 	}
 	return response
 }

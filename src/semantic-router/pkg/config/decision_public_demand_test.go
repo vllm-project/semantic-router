@@ -4,7 +4,7 @@ import "testing"
 
 func TestDecisionPublicIdentityNeverUsesRuntimePrivateNames(t *testing.T) {
 	for _, artifact := range []string{"/srv/private/model", "models/private-model", "./org/model", "../org/model", ""} {
-		resource := ModelDeployment{Provider: ModelRuntimeProvider, Artifact: artifact, ServedName: "internal-runtime-name"}
+		resource := ModelDeployment{Provider: ModelRuntimeProvider, Artifact: artifact, Model: "internal-runtime-name"}
 		if got := resource.PublicModelName(); got != "" {
 			t.Fatalf("local artifact leaked: %s", got)
 		}
@@ -20,9 +20,11 @@ func TestDecisionPublicIdentityNeverUsesRuntimePrivateNames(t *testing.T) {
 
 func TestSystemOneListenerIsExactModelDemand(t *testing.T) {
 	cfg := DefaultGlobalConfig()
+	// The response cache's semantic tier would demand the embedding model.
+	cfg.SemanticCache.InUse = false
 	cfg.ModelDeployments["published"] = ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "org/decision", PublicName: "public-model"}
 	cfg.ModelDeployments["unused"] = ModelDeployment{Provider: ModelRuntimeProvider, Artifact: "org/other"}
-	cfg.Listeners = []Listener{{Name: "public", SystemOne: &ListenerSystemOne{Models: []string{"public-model"}}}}
+	cfg.Listeners = []Listener{{Name: "public", APIs: ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"public-model"}}}}}
 	used := ModelRuntimeDeploymentsInUse(&cfg)
 	if len(used) != 1 || used["published"].Artifact != "org/decision" {
 		t.Fatalf("explicit API grant must be the sole demand: %+v", used)

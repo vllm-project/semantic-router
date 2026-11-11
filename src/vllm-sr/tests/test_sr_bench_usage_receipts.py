@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
@@ -9,7 +8,8 @@ from cli.sr_bench.engine import Engine
 from cli.sr_bench.report import make_report
 from cli.sr_bench.store import Store
 from cli.sr_bench.transport import CallFailure, mom_usage, normalize_usage
-from test_sr_bench import Target, manifest, target, wait_run
+from cli.vsr_trace import TRACE_HEADER
+from test_sr_bench import Target, manifest, target, usage_trace, wait_run
 
 __all__: list[str] = ["target"]
 
@@ -22,8 +22,10 @@ UNKNOWN_RECEIPT: dict[str, object] = {
 
 class UnknownUsageTarget(Target):
     def end_headers(self) -> None:
-        self.send_header("x-vsr-model-usage", json.dumps(UNKNOWN_RECEIPT))
-        self.send_header("x-vsr-inference-call-count", "1")
+        self.send_header(
+            keyword=TRACE_HEADER,
+            value=usage_trace(UNKNOWN_RECEIPT) + ", inference_calls=1",
+        )
         self.send_header("x-vsr-selected-model", "model")
         super().end_headers()
 
@@ -31,8 +33,7 @@ class UnknownUsageTarget(Target):
 def test_incomplete_empty_receipt_is_unknown_and_never_a_direct_call() -> None:
     result = mom_usage(
         response_headers={
-            "x-vsr-model-usage": json.dumps(UNKNOWN_RECEIPT),
-            "x-vsr-inference-call-count": "1",
+            TRACE_HEADER: usage_trace(UNKNOWN_RECEIPT) + ", inference_calls=1",
             "x-vsr-selected-model": "model",
         },
         response_usage=normalize_usage({"prompt_tokens": 10, "completion_tokens": 3}),
@@ -72,7 +73,7 @@ def test_incomplete_empty_receipt_is_unknown_and_never_a_direct_call() -> None:
 def test_unknown_receipt_does_not_admit_invalid_contracts(receipt: object) -> None:
     with pytest.raises(CallFailure):
         mom_usage(
-            response_headers={"x-vsr-model-usage": json.dumps(receipt)},
+            response_headers={TRACE_HEADER: usage_trace(receipt)},
             response_usage=None,
             prices={},
         )
@@ -107,6 +108,13 @@ def test_unknown_accounting_respects_frozen_bounds(
     assert not engine.threads[run["id"]].is_alive()
     assert wait_run(store, run["id"])["status"] == status
     assert len(target.requests) == 1
+    headers = target.request_headers[0]
+    assert headers["x-vsr-bench-expected-config-hash"] == target.ack
+    assert headers.get("x-vsr-bench-max-inference-calls") == (
+        str(bound) if bound is not None else None
+    )
+    assert "x-sr-bench-expected-config-hash" not in headers
+    assert "x-sr-bench-max-inference-calls" not in headers
     call = store.calls(run["id"])[0]
     assert call["model_usage"] == []
     assert call["usage"] is call["cost_usd"] is call["inference_call_count"] is None

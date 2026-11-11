@@ -19,7 +19,7 @@ const config: RouterConfig = {
       name: 'balanced',
       routing: {
         signals: {
-          decision: [{ name: 'task', question: { type: 'choice' } }],
+          systemone: [{ name: 'task', question: { type: 'choice' } }],
           pii: [{ name: 'personal_data' }],
           context: [{ name: 'long_input' }],
         },
@@ -28,7 +28,7 @@ const config: RouterConfig = {
     },
     {
       name: 'private',
-      routing: { signals: { decision: [{ name: 'task', question: { type: 'set' } }] } },
+      routing: { signals: { systemone: [{ name: 'task', question: { type: 'set' } }] } },
     },
   ],
 }
@@ -127,7 +127,7 @@ describe('configured routing overview', () => {
       buildIntelligenceRoutingScopes({
         routing: {
           signals: {
-            decision: [{ name: 'difficulty', question: { type: 'score' } }],
+            systemone: [{ name: 'difficulty', question: { type: 'score' } }],
             pii: [],
             context: [{}],
           },

@@ -12,10 +12,10 @@ Choose two things independently:
 
 Chat provider models run behind reachable endpoints on the same host, in a
 cluster, or at a hosted API. vLLM-SR does not provision those generation
-backends. Its own decision, classifier, embedding, and reranking models use
-managed or attached [model-runtime deployments](../model-runtime/deploy.md).
+backends. Its own decision and embedding models use managed or attached
+[model-runtime deployments](../model-runtime/deploy/connect-the-router.md).
 For decision serving without Chat backends, start in
-[Engine mode](../model-runtime/quickstart.md).
+[Engine mode](../model-runtime/get-started/quickstart.md).
 
 ## Choose the Router topology
 
@@ -53,7 +53,7 @@ rules every path follows are defined in
 
 Hardware is an overlay, not a separate Router topology. A GPU-backed model
 server can connect to either a Docker or Kubernetes Router deployment. Keep the
-Router on CPU unless measurements show that its local embeddings or classifiers
+Router on CPU unless measurements show that its decision model or embeddings
 benefit from GPU acceleration.
 
 Test a model endpoint directly before sending traffic through the Router. A

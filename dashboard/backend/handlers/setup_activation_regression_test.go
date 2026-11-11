@@ -42,8 +42,8 @@ func setupActivationRegressionRuntime(t *testing.T) (string, string, func() []st
 func TestSetupActivationRendersOmittedReasoningAndRecordsTheActivation(t *testing.T) {
 	configPath, root, containerCLICalls := setupActivationRegressionRuntime(t)
 	patch := createValidSetupPatch()
-	routing := patch["routing"].(map[string]interface{})
-	decisions := routing["decisions"].([]map[string]interface{})
+	recipe := patch["recipes"].([]map[string]interface{})[0]
+	decisions := recipe["decisions"].([]map[string]interface{})
 	refs := decisions[0]["modelRefs"].([]map[string]interface{})
 	delete(refs[0], "use_reasoning")
 	body := mustJSONRaw(t, SetupConfigRequest{Config: mustJSONRaw(t, patch)})

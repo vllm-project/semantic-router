@@ -23,7 +23,7 @@ const (
 
 func init() {
 	pkgtestcases.Register("prompt-cache-key-affinity", pkgtestcases.TestCase{
-		Description: "A repeated prompt_cache_key keeps a hybrid tie on the model that served the key; a new or absent key does not",
+		Description: "A repeated prompt_cache_key keeps a multi_factor tie on the model that served the key; a new or absent key does not",
 		Tags:        []string{"routing", "selection", "response-api", "agents"},
 		Fn:          testPromptCacheKeyAffinity,
 	})

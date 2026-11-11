@@ -15,7 +15,7 @@ import (
 // RouteHeader is the request header whose value selects the upstream route:
 // the local Envoy template's route table matches it exactly on provider model
 // names.
-const RouteHeader = headers.SelectedModel
+const RouteHeader = headers.VSRRouteModel
 
 // Engine is the transport-agnostic routing core shared by every gateway mode.
 type Engine interface {

@@ -75,7 +75,6 @@ async function main() {
   // Test: Compile valid DSL
   console.log("\n=== Test: signalCompile (valid DSL) ===");
   const dslSource = `MODEL qwen {
-  modality: "text"
   capabilities: ["chat"]
 }
 

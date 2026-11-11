@@ -18,7 +18,8 @@ from cli.sr_bench import agent_task
 from cli.sr_bench.contracts import SESSION_AWARE
 from cli.sr_bench.service import Server
 from cli.sr_bench.store import Store
-from cli.sr_bench.transport import SESSION_PHASES
+from cli.sr_bench.transport import SESSION_ID_HEADER, SESSION_PHASES
+from cli.vsr_trace import TRACE_HEADER, parse_trace
 from cli_test_base import CLITestBase
 from mock_upstream import (
     DEFAULT_PROVIDER_MOCKER_IMAGE,
@@ -137,19 +138,20 @@ class TestAgentTaskRouterIntegration(MockUpstreamMixin, CLITestBase):
             self.write_minimal_canonical_config(
                 port=LISTENER_PORT,
                 model_name=MODEL,
-                base_url=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
+                endpoint=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
                 provider="openai",
                 api_only=True,
             )
         )
         config = yaml.safe_load(path.read_text())
+        config["global"].setdefault("router", {})["headers"] = {"debug": "any"}
         config["global"].setdefault("router", {})["learning"] = {
             "enabled": True,
             "adaptation": {"enabled": False},
             "protection": {
                 "enabled": True,
                 "scope": "session",
-                "identity": {"headers": {"session": "x-session-id"}},
+                "identity": {"headers": {"session": SESSION_ID_HEADER}},
             },
         }
         path.write_text(yaml.safe_dump(config, sort_keys=False))
@@ -186,6 +188,8 @@ class TestAgentTaskRouterIntegration(MockUpstreamMixin, CLITestBase):
                 "full-history",
                 "--suite",
                 "smoke",
+                "--session-header",
+                SESSION_ID_HEADER,
                 "--session-prefix",
                 self.runtime_stack.stack_name + "-native",
                 "--timeout",
@@ -195,11 +199,11 @@ class TestAgentTaskRouterIntegration(MockUpstreamMixin, CLITestBase):
                 "--extra-header",
                 "x-vsr-debug=true",
                 "--extra-header",
-                f"x-sr-bench-expected-config-hash={config_hash}",
+                f"x-vsr-bench-expected-config-hash={config_hash}",
                 "--require-router-header",
                 "x-vsr-selected-model",
                 "--require-router-header",
-                "x-vsr-session-phase",
+                "session_phase",
                 "--min-success-rate",
                 "1",
                 "--output-dir",
@@ -336,12 +340,15 @@ class TestAgentTaskRouterIntegration(MockUpstreamMixin, CLITestBase):
                     model="vllm-sr/auto",
                     request_headers={
                         "x-vsr-debug": "true",
-                        "x-session-id": self.runtime_stack.stack_name + "-readiness",
+                        SESSION_ID_HEADER: self.runtime_stack.stack_name + "-readiness",
                     },
                 )
-                self.assertIn("protection", headers.get("x-vsr-learning-methods", ""))
-                self.assertIn(
-                    "protection=session", headers.get("x-vsr-learning-scopes", "")
+                trace = parse_trace(headers.get(TRACE_HEADER))
+                self.assertIn("learning", trace)
+                self.assertEqual(trace["learning"].items, ["protection"])
+                self.assertRegex(
+                    headers.get(TRACE_HEADER, ""),
+                    r"\blearning=\(protection(?:;[^ )]+)*;scope=session[;)]",
                 )
                 config_hash = self._router_hash()
                 base_url = f"http://127.0.0.1:{LISTENER_PORT + self.runtime_stack.port_offset}/v1"
@@ -357,7 +364,7 @@ class TestAgentTaskRouterIntegration(MockUpstreamMixin, CLITestBase):
                             "task_instances": native["task_instances"],
                             "mean_credit": native["task_score_mean"],
                             "observed_phases": [
-                                row["x-vsr-session-phase"] for row in native_rows
+                                row["session_phase"] for row in native_rows
                             ],
                         },
                         sort_keys=True,
@@ -392,7 +399,7 @@ class TestAgentTaskRouterIntegration(MockUpstreamMixin, CLITestBase):
         shared_phases: dict[str, list[str]] = defaultdict(list)
         for row in native_rows:
             native_sessions[row["task"]].add(row["session_id"])
-            native_phases[row["task"]].append(row["x-vsr-session-phase"])
+            native_phases[row["task"]].append(row["session_phase"])
         for turn, call in zip(quality["turns"], calls, strict=True):
             shared_sessions[turn["task"]].add(call["session_id"])
             shared_phases[turn["task"]].append(turn["observed_phase"])

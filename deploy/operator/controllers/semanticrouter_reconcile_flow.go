@@ -33,38 +33,52 @@ import (
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 )
 
+// isRunningOnOpenShift reports whether the cluster serves route.openshift.io.
+// Only a successful List (the group exists) or a NoMatch error (it does not)
+// is cached as a verdict. A transient API error - 429, 5xx, cancelled context -
+// proves nothing either way, so the answer stays unset and the next reconcile
+// asks again instead of pinning the wrong platform for the process lifetime.
 func (r *SemanticRouterReconciler) isRunningOnOpenShift(ctx context.Context) bool {
-	r.isOpenShiftOnce.Do(func() {
-		logger := log.FromContext(ctx)
-
-		route := &metav1.PartialObjectMetadata{}
-		route.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   "route.openshift.io",
-			Version: "v1",
-			Kind:    "Route",
-		})
-
-		err := r.List(ctx, &metav1.PartialObjectMetadataList{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "route.openshift.io/v1",
-				Kind:       "Route",
-			},
-		}, &client.ListOptions{Limit: 1})
-
-		isOpenShift := err == nil || !meta.IsNoMatchError(err)
-		r.isOpenShift = &isOpenShift
-
-		if isOpenShift {
-			logger.Info("Detected OpenShift platform - will use OpenShift-compatible security contexts")
-		} else {
-			logger.Info("Detected standard Kubernetes platform - will use standard security contexts")
-		}
-	})
-
+	r.isOpenShiftMu.Lock()
+	defer r.isOpenShiftMu.Unlock()
 	if r.isOpenShift != nil {
 		return *r.isOpenShift
 	}
-	return false
+
+	logger := log.FromContext(ctx)
+
+	route := &metav1.PartialObjectMetadata{}
+	route.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "route.openshift.io",
+		Version: "v1",
+		Kind:    "Route",
+	})
+
+	err := r.List(ctx, &metav1.PartialObjectMetadataList{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "route.openshift.io/v1",
+			Kind:       "Route",
+		},
+	}, &client.ListOptions{Limit: 1})
+
+	detected := false
+	switch {
+	case err == nil:
+		detected = true
+	case meta.IsNoMatchError(err):
+		detected = false
+	default:
+		logger.V(1).Info("Cannot determine whether the cluster is OpenShift yet", "error", err)
+		return false
+	}
+
+	r.isOpenShift = &detected
+	if detected {
+		logger.Info("Detected OpenShift platform - will use OpenShift-compatible security contexts")
+	} else {
+		logger.Info("Detected standard Kubernetes platform - will use standard security contexts")
+	}
+	return detected
 }
 
 func (r *SemanticRouterReconciler) fetchSemanticRouter(ctx context.Context, req ctrl.Request) (*vllmv1alpha1.SemanticRouter, error) {
@@ -196,7 +210,7 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 		return err
 	}
 
-	if err := r.reconcileIngress(ctx, semanticrouter); err != nil {
+	if err := r.reconcileIngress(ctx, semanticrouter, gatewayMode); err != nil {
 		logger.Error(err, "Failed to reconcile Ingress")
 		return err
 	}
@@ -205,7 +219,7 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 	if r.isOpenShift != nil {
 		isOpenShift = *r.isOpenShift
 	}
-	if err := reconcileRoute(ctx, r.Client, r.Scheme, semanticrouter, isOpenShift); err != nil {
+	if err := reconcileRoute(ctx, r.Client, r.Scheme, semanticrouter, isOpenShift, gatewayMode); err != nil {
 		logger.Error(err, "Route reconciliation failed")
 		return err
 	}

@@ -48,6 +48,56 @@
   color: #a1a1aa;
 }
 
+.summaryValueNegative {
+  color: #e31b23;
+}
+
+.providerCacheSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.spendTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.spendTable th,
+.spendTable td {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--color-text);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.spendTable th:first-child {
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.spendTable thead th {
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.spendTable tbody th {
+  font-weight: 500;
+}
+
+.spendTable .spendNegative {
+  color: #e31b23;
+}
+
 .summaryCardHighlight {
   border-color: rgba(255, 255, 255, 0.15);
   background: #18181b;

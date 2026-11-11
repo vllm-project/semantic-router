@@ -27,6 +27,7 @@ from cli.sr_bench.report import compare
 from cli.sr_bench.service import Server
 from cli.sr_bench.store import Store
 from cli.sr_bench.transport import PROVIDER_STATE_PHASE, SESSION_ID_HEADER
+from cli.vsr_trace import TRACE_HEADER
 
 from bench import agent_task_live_benchmark as native
 
@@ -221,7 +222,9 @@ class Handler(BaseHTTPRequestHandler):
         if not server.omit_model:
             self.send_header("x-vsr-selected-model", model)
         if not server.omit_phase:
-            self.send_header("x-vsr-session-phase", PROVIDER_STATE_PHASE)
+            self.send_header(
+                keyword=TRACE_HEADER, value=f'session_phase="{PROVIDER_STATE_PHASE}"'
+            )
         self.send_header("x-vsr-selected-decision", "local-fixture")
         self.end_headers()
         if fault == "cancel":
@@ -378,6 +381,8 @@ def test_native_and_cli_requests_grades_counts_and_phases_match(
             provider.base_url,
             "--model",
             "requested-entrypoint",
+            "--session-header",
+            SESSION_ID_HEADER,
             "--suite",
             suite,
             "--task-repetitions",

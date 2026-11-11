@@ -265,3 +265,25 @@ func boolToFloat64(b bool) float64 {
 func clampF(v, lo, hi float64) float64 {
 	return math.Max(lo, math.Min(v, hi))
 }
+
+// applyCacheAffinity adds the cache-affinity adjustments to candidate scores.
+// Cache observations remain model-level: each model's best score projects to
+// the estimator, and its adjustment applies to all of that model's exact
+// candidates.
+func applyCacheAffinity(scores CandidateScores, affinityCtx *CacheAffinityContext) {
+	modelScores := make(map[string]float64)
+	var refs []config.ModelRef
+	for _, row := range scores {
+		previous, exists := modelScores[row.Candidate.Model]
+		if !exists {
+			refs = append(refs, row.Candidate)
+		}
+		if !exists || row.Score > previous {
+			modelScores[row.Candidate.Model] = row.Score
+		}
+	}
+	affinity := ComputeCacheAffinityAdjustments(affinityCtx, refs, modelScores)
+	for i := range scores {
+		scores[i].Score += affinity.Adjustments[scores[i].Candidate.Model]
+	}
+}

@@ -28,12 +28,12 @@ func decodeOpenAITransportError(
 	format llmprotocol.WireFormat,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
 	var wire openAITransportErrorWire
-	_, vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	_, unknownFields, err := decodeProviderWireTolerant(body, &wire, policy)
 	if err != nil {
 		return llmprotocol.TransportError{}, nil, err
 	}
 	var diagnostics llmprotocol.Diagnostics
-	appendVendorExtensionDiagnostics(&diagnostics, policy, format, vendorExtensions)
+	appendUnknownFieldDiagnostics(&diagnostics, policy, format, unknownFields)
 	if wire.Error == nil {
 		return llmprotocol.TransportError{}, diagnostics, llmprotocol.NewError(
 			llmprotocol.ErrorUpstreamUnavailable,

@@ -4,7 +4,10 @@ import re
 import subprocess
 from pathlib import Path
 
-import tomllib
+try:
+    import tomllib
+except ImportError:  #  Python 3.10: tomllib was added in 3.11
+    import tomli as tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROUTER_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc"
@@ -13,7 +16,6 @@ MODEL_RUNTIME = REPO_ROOT / "src" / "model-runtime"
 STAGE = re.compile(r"^FROM\s+(?:--platform=\S+\s+)?(\S+)\s+AS\s+(\S+)\s*$", re.M)
 STAGES = (
     "router-build",
-    "image-routing-assets",
     "python-base",
     "torch-cpu",
     "torch-rocm-base",
@@ -179,10 +181,6 @@ def test_router_images_carry_no_onnx_runtime_or_prepared_bundles() -> None:
 def test_router_images_share_the_model_assets() -> None:
     router = stages()["vllm-sr"][1]
 
-    assert (
-        "COPY --link --from=image-routing-assets /out/ /app/share/image-routing/"
-        in (router)
-    )
     assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in router
     assert "ENV VLLM_SRUN_CACHE_DIR=/app/models/model-runtime" in router
     # The charts' root filesystem is read-only: GPU caches live in the model volume.
@@ -205,8 +203,8 @@ def test_vllm_sr_image_ships_the_cli_runtime_sync_and_catalog() -> None:
     ) in vllm_sr
     assert "config/recipes/privacy/" not in vllm_sr
     assert (
-        "COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json "
-        "/app/cli/config_schema/router-config-v0.3.schema.json"
+        "COPY src/semantic-router/pkg/configschema/router-config-v0.5.schema.json "
+        "/app/cli/config_schema/router-config-v0.5.schema.json"
     ) in vllm_sr
     # The script is not executable in git; the entrypoint needs the bit.
     assert (
@@ -244,7 +242,7 @@ def test_entrypoint_dispatches_flags_and_config_paths(tmp_path: Path) -> None:
     entrypoint = tmp_path / "start-router.sh"
     entrypoint.write_text(script, encoding="utf-8")
     config = tmp_path / "config.yaml"
-    config.write_text("version: v0.3\n", encoding="utf-8")
+    config.write_text("version: v0.5\n", encoding="utf-8")
 
     def run(*args: str) -> str:
         return (

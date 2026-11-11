@@ -121,7 +121,7 @@ func TestGoldenStreamTranslationMatrix(t *testing.T) {
 	if len(inputs) == 0 {
 		t.Fatalf("no stream protocol golden inputs found in %s", directory)
 	}
-	engine := NewBuiltinEngine()
+	engine := conformanceEngine()
 	for _, inputPath := range inputs {
 		runGoldenStreamInput(t, engine, directory, inputPath)
 	}
@@ -173,7 +173,7 @@ func TestGoldenStreamTranslationIsChunkBoundaryIndependent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	engine := NewBuiltinEngine()
+	engine := conformanceEngine()
 	for _, inputPath := range inputs {
 		prefix := strings.TrimSuffix(filepath.Base(inputPath), "-in.json")
 		source, err := goldenSourceFormat(prefix)

@@ -11,15 +11,17 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from router_trace import routing_headers
+
 HTTP_OK = 200
 HTTP_REDIRECT_START = 300
 REQUIRED_DIAGNOSTIC_HEADERS = (
     "x-vsr-selected-model",
     "x-vsr-selected-decision",
     "x-vsr-replay-id",
-    "x-vsr-session-phase",
-    "x-vsr-selected-confidence",
-    "x-vsr-context-token-count",
+    "session_phase",
+    "confidence",
+    "context_tokens",
 )
 
 
@@ -65,6 +67,7 @@ def request_headers(args: argparse.Namespace) -> dict[str, str]:
     session_id = args.session_id or f"branch-image-probe-{int(time.time())}"
     headers = {
         "Content-Type": "application/json",
+        "X-VSR-Debug": "true",
         args.session_header: session_id,
     }
     if args.api_key:
@@ -134,7 +137,7 @@ def response_record(
 
 
 def normalize_headers(headers: dict[str, str]) -> dict[str, str]:
-    return {key.lower(): value for key, value in headers.items()}
+    return routing_headers(headers)
 
 
 def error_message(parsed: Any, payload: str) -> str:
@@ -147,19 +150,19 @@ def error_message(parsed: Any, payload: str) -> str:
 
 
 def validate_header_value(header: str, value: str) -> bool:
-    if header == "x-vsr-selected-confidence":
+    if header == "confidence":
         try:
             parsed = float(value)
         except ValueError:
             return False
         return 0.0 <= parsed <= 1.0
-    if header == "x-vsr-context-token-count":
+    if header == "context_tokens":
         try:
             parsed = int(value)
         except ValueError:
             return False
         return parsed >= 0
-    if header == "x-vsr-session-phase":
+    if header == "session_phase":
         return value.strip() in {
             "user_turn",
             "tool_loop",
