@@ -28,7 +28,7 @@ Every response of the routing pipeline carries the headers that apply to it: ans
 | Header | Since | Description |
 | --- | --- | --- |
 | `x-vsr-schema-version` | v0.4 | Response-header contract revision; currently `3`. |
-| `x-vsr-response-path` | v0.4 | How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`. |
+| `x-vsr-response-path` | v0.4 | How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`. |
 | `x-vsr-config-version` | v0.5 | Version of the configuration snapshot that served the request. |
 | `x-vsr-config-hash` | v0.4 | SHA-256 of the active runtime document, on routing previews and `GET /api/v1/config`. |
 | `x-vsr-warnings` | v0.5 | Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. |
@@ -117,6 +117,7 @@ Highest priority first:
 | `effective_input_tokens` | automatic_output | Rendered input tokens of the final automatic-output dispatch, chat template included. |
 | `effective_max_output_tokens` | automatic_output | Output token limit of the final automatic-output dispatch, reasoning included. |
 | `signals` | signals | Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`. |
+| `scan_coverage` | signals | Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts. |
 | `context_tokens` | signals | Token count the `context` signal measured. |
 | `category` | classification | Domain category the classifier chose, such as `math`. |
 | `reasoning` | classification | Reasoning mode chosen for the request: `on` or `off`. |
@@ -133,7 +134,7 @@ Highest priority first:
 | `ranking` | routing | The matched decision the selected one beat, with the `reason` that settled it. |
 | `truncated` | response_contract | Present when members were left out to keep the trace within 4 KB. |
 
-- `confidence` is absent when the decision rests on policy leaves, aggregates several evidence leaves, or resolves through an error policy.
+- `confidence` is absent when the decision rests on policy leaves, aggregates several evidence leaves, resolves through an error policy, or is a catch-all.
 - `fallback_attempts` counts the same way in both gateway modes and is omitted when the primary answered.
 - `ranking` is omitted when only one decision matched; parse `decision_ranking` in Router Replay for the full ranking.
 - `learning` lists the Router Learning methods with their `action`. Show the actions as user-facing phrases such as `tool/protocol pinned`, `model switched`, or `learning bypassed`; fresh conversation or session-start diagnostics are usually useful only in debug views, as neutral status text.
@@ -194,7 +195,7 @@ These name an authenticated caller. A listener that doesn't trust identity heade
 
 ### Credentials
 
-Credentials, by name only. None reaches a client, and a per-user key reaches a provider only as its credential.
+Credentials, by name only. None reaches a client, and a provider receives only the credential its `auth` sets: a per-user key only as that credential, and never a client's own credential header.
 
 | Header | Hops |
 | --- | --- |

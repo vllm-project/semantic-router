@@ -72,7 +72,8 @@ becomes:
 Two forms still load, with a warning, because they are renames:
 `signals.decision` and `type: decision` conditions load as `systemone`
 (`renamed_signal_type`), and `algorithm.type: decision` loads as the
-`systemone` selector (`renamed_algorithm_type`). Migrate rewrites both.
+`systemone` selector (`renamed_algorithm_type`). Migrate rewrites both, and
+the Dashboard reads both the same way and saves them as `systemone`.
 
 ## 3. Review what changed
 
@@ -178,15 +179,19 @@ recipes:
 | `signals.decision`, `algorithm.type: decision` | `systemone` (loads with a warning) |
 | `domains[].mmlu_categories` | `domains[].labels` |
 | Domain conditions that declared their own domains | One `domains` rule per domain the conditions name |
-| `jailbreak` `threshold`, `direction`, `include_history` | `predicate`, `stage`, `input.history` |
+| A `domains` rule without `labels` or `mmlu_categories` named for a domain in another case, such as `Math` | The domain in lower case, in the rule and each condition, score input and partition that names it |
+| A `domains` rule without `labels` or `mmlu_categories` whose name is no domain | Dropped: the classifier reported domains, so it never matched; so are a decision that needs it, its term of an `OR` and a score input on it (migrate notes each). A rule a projection partition names stays, with `labels: [other]`, since the partition's default matched it. A name the load suggests a domain for, such as `maths`, keeps that error while a condition reads it |
+| `jailbreak` `threshold`, `direction`, `include_history` | `predicate`, `stage`, `input.history`; a `method: contrastive` threshold bounded a similarity gap, not a probability, and migrate notes to re-fit it |
 | `jailbreak` `method`, `jailbreak_patterns`, `benign_patterns` | Removed: the decision model reads the request. For a deterministic hard block, write the patterns as a [`keywords`](../tutorials/signal/heuristic/keyword) rule that a blocking decision reads |
 | `jailbreak` and `pii` rules under `on_error: block` | `on_unknown: match` on the rules |
+| `jailbreak` and `pii` rules under `on_error: allow` | `on_unknown: no_match` on the rules, since v0.5's rules fail closed by default |
+| `jailbreak` and `pii` rules under `on_unscanned: allow` or `block` | `on_unscanned: best_effort` (decide on the windows read) or `match` on the rules |
 | `safety` `threshold`, `labels`, `unsafe_labels`, `model` | `predicate`; `labels` name [harm categories](../system-one/reference/presets#harm-categories); `deployment` |
 | `safety` `hazard` | The [harm categories](../system-one/reference/presets#harm-categories) its `categories` name, in the rule's `labels`, with `hazard.threshold` as the `predicate`; the unsafe `threshold` has no counterpart, and a rule whose categories name none keeps the unsafe verdict (migrate notes both) |
-| `pii` `threshold`, `pii_types_allowed`, `include_history`, `source: tool_result` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results` |
+| `pii` `threshold`, `pii_types_allowed`, `include_history`, `source: tool_result` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results`; `source: tool_result` read the tool results alone, so it becomes `input: {tool_results: true, request: false}` and drops `include_history` |
 | `fact_check` rule named `no_fact_check_needed` without labels | `labels: [NO_FACT_CHECK_NEEDED]` with a predicate |
-| `user_feedbacks` and `modality` rules whose name chose the option | The option in `labels` |
-| `reasks`, `topic_continuity` | `turn_relation` with `labels` |
+| `user_feedbacks` and `modality` rules without `labels` whose name chose the option | The option in `labels`, unless a condition names one of the rule's options as its `label`, or a score input as `<rule>:<label>`: that rule is written for v0.5 and stays as it is |
+| `reasks`, `topic_continuity` | `turn_relation` with `labels`; a reask rule's streak over a `lookback_turns` above 1 has no counterpart, `input.previous_turns` stops at 32, and migrate notes both |
 | `complexity` example banks and thresholds; `name: difficulty:hard` conditions | `complexity`; `{name: difficulty, label: hard}` |
 | `modality` names `AR`, `DIFFUSION`, `BOTH`; the keyword fallback | `labels` `text`, `image`, `text_image`; the fallback becomes a `keywords` rule (review) |
 | `classifiers`, `preferences`, text `embeddings` rules | [`systemone` questions](../system-one/use/custom-questions#questions-that-replace-removed-signals) |
@@ -251,8 +256,8 @@ recipes:
 
 | Before | After |
 | --- | --- |
-| `prompt`, `router_dc` | `systemone`, which asks the decision model with the same instructions or the candidates' descriptions |
-| `knn`, `kmeans`, `svm`, `mlp` | `systemone`, or `static` for a decision with one candidate; the trained model is not used |
+| `prompt`, `router_dc` | `systemone`, which asks the decision model with the same instructions or the candidates' descriptions, or `static` as for `knn` |
+| `knn`, `kmeans`, `svm`, `mlp` | `systemone` over the first `modelRefs` entry of each model (migrate notes the LoRA adapters it drops), or `static` when every candidate is one model, as one candidate or one model's LoRA adapters are; the trained model is not used |
 | `automix`, `hybrid`, `latency_aware` | `multi_factor`, with weights migrate writes out |
 | `confidence` (Looper) | `escalate` with `escalate.accept.confidence` |
 | `cascade` (System One) | `escalate` with `escalate.stages` |
@@ -280,7 +285,8 @@ recipes:
 | A recipe's `data_policy` | The recipe's `router_replay` plugin: `enabled: false` for `replay: false`, `capture_personal_data: false` for `replay_personal_data: false`, on its decisions too |
 | `emits[].retention` | The decision's [`retention`](../tutorials/decision/retention) attribute |
 | `masking` `threshold` | `masking.signal`, naming a `pii` rule whose `predicate` applies |
-| `system_prompt` `mode: append` | `mode: replace`, which is what it did |
+| `system_prompt` `mode: append` | `mode: replace`, which drops every system and developer instruction the caller sent, where `append` replaced only the first system message |
+| `request_params` `strip_unknown` | Removed: the Router never read it, and it refuses a request field the client's wire format does not declare |
 
 `global.model_catalog.modules` is removed. Its `prompt_compression` compressed
 the text the routing signals read, which is now the `compress.signals` block of
@@ -356,6 +362,7 @@ global:
 | A bare `embeddings.default: <name>` | `embeddings.default: {deployment: <name>}` |
 | Embedding model keywords (`mmbert`, `qwen3`, ...) and the deployments they implied | Deployment names: `global.model_catalog.embeddings.default`, or a store's `embedding` block |
 | `embeddings.semantic`, `model_bindings.embedding` | `embeddings.default` |
+| An embedding model of an earlier release in `embeddings.semantic`, such as `models/mmbert-embed-32k-2d-matryoshka` | Its Vela 1.0 replacement, Vela Embedding: on the CPU the pre-declared `vela-embedding`. Re-embed what was indexed with the earlier model (migrate notes it) |
 | `embeddings.multimodal` | Removed: embeddings serve text recall; a decision about an image asks a `systemone` question with `input.image` |
 | `global.services.api.embeddings` and the Router's embeddings and similarity endpoints | Removed: the embedding deployment starts when a recall feature uses it |
 | A remote embedding's width and inputs | `capabilities.dimensions` and `capabilities.modalities` on its `openai_embeddings` deployment |
@@ -442,7 +449,7 @@ providers:
 | `provider: candle`, `ort` or `openvino` | `provider: model_runtime`, on its device, with its artifact's Hub repository; see [Migrate to the model runtime](../model-runtime/deploy/migrate) for `precision`, `profile` and the other engine fields |
 | `global.model_catalog.external[]` | Removed; the `memory_rewrite` model becomes an `openai_chat` deployment that `global.stores.memory.query_rewrite` names, and its access key an environment variable |
 | A backend's `base_url`, `api_key_env`, `auth_header`, `auth_prefix`, `extra_headers` | `endpoint` (a full URL), `auth: {header, prefix, api_key_env}`, `headers` |
-| `global.router.auto_model_names`, `auto_model_name` | An entrypoint of the default recipe with the names the earlier release served: `auto_model_names`, or else `vllm-sr/auto`, `auto` and the `auto_model_name`; beside the file's own entrypoint of the default recipe, whose names stay its own |
+| `global.router.auto_model_names`, `auto_model_name` | An entrypoint of the default recipe with the names the earlier release served: `auto_model_names`, or else `vllm-sr/auto`, `auto` and the `auto_model_name`, `MoM` unless set, so a file of an earlier release that writes neither gets `vllm-sr/auto`, `auto` and `MoM`, less a name a configured model takes, which a request for it now reaches; beside the file's own entrypoint of the default recipe, whose names stay its own, as does a name another entrypoint serves |
 | `global.router.include_config_models_in_list` | `global.router.list_backend_models` |
 | `global.integrations.looper.endpoint` | Removed: the Router makes a Looper's model calls in process |
 | `global.integrations.looper.<algorithm>.model_names` | An entrypoint of those names, for a recipe migrate writes: the default recipe with only its decisions of that algorithm |
@@ -460,7 +467,13 @@ with only those decisions, and an entrypoint of the names for it. With a second
 recipe, the default recipe's entrypoint is marked `default: true`. One thing
 changes: a request none of those decisions matches now goes to the default
 model, as on every entrypoint, where it used to fail. Names no decision ran
-served no request, and migrate drops them.
+served no request, and migrate drops them. A v0.3 file that lists no names for
+an algorithm the default recipe's decisions run served its built-in name,
+`vllm-sr/remom`, `vllm-sr/fusion` or `vllm-sr/flow`, and migrate writes that
+name the same way. A v0.3 file whose entrypoints name a name v0.4 served by
+default, such as `vllm-sr/auto`, `MoM` or `vllm-sr/fusion`, was written for
+main between v0.4 and v0.5: v0.4 refused those entrypoint names, and main
+served only entrypoints, so migrate writes no other name for it.
 
 ```yaml removed
 global:
@@ -482,7 +495,8 @@ recipes:
     description: The fusion decisions of recipe default
     # the signals and settings of recipe default, and only its fusion decisions
 entrypoints:
-  - model_names: [vllm-sr/auto]
+  # the auto model names, here of a file that writes none
+  - model_names: [vllm-sr/auto, auto, MoM]
     recipe: default
     default: true
   - model_names: [vllm-sr/fusion]
@@ -562,8 +576,10 @@ vllm-sr serve --config config.migrated.yaml
 - **Span-needing rules must resolve to a span-capable deployment.** `pii`,
   `hallucination`, `span` questions and masking fail to load with
   `span_required` on a deployment without spans, such as a d3 model.
-- **A `jailbreak` or `pii` rule whose model gives no answer does not match**,
-  unless it sets `on_unknown: match`.
+- **A request-stage `jailbreak` or `pii` rule whose model gives no answer
+  matches** (fails closed), unless it sets `on_unknown: no_match`. A long
+  input is read in windows, and a scan the deadline ends early decides on the
+  windows read, unless the rule sets `on_unscanned: match`.
 - **RAG relevance and tool selection are judged by the decision model**, and
   semantic cache hits are confirmed by its `same_request` question.
 - **The embedding model starts only when a recall feature needs it**, and the

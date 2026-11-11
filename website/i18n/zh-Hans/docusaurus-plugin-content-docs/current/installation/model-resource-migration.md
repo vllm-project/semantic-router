@@ -109,6 +109,7 @@ global:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         question_types: [choice, noul, score]
         auth: {api_key_env: GATEWAY_KEY}
       decision-kai:
@@ -125,6 +126,7 @@ global:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         capabilities: {question_types: [choice, noul, score]}
         auth: {api_key_env: GATEWAY_KEY}
       decision-kai:

@@ -55,9 +55,10 @@ global:
 | --- | --- | --- |
 | `timeout` | 整个调用的时长，包括流式响应；它同时限制停滞的流。`0s` 取消这两个限制。若只想取消某个模型的调用时长限制，请为该模型设置 `total_timeout: 0s`。 | `300s` |
 | `api_keys` | listener 要求的客户端 API key。 | 无 |
-| `models` | listener 接受的对话模型。 | 空：全部接受 |
-| `systemone.models` | listener 发布的原生 System One 模型，与 `models` 相互独立。 | 无 |
-| `systemone.max_deadline_ms` | System One 请求等待模型的最长时间。 | 10 分钟 |
+| `apis` | listener 提供的 API，按 API 名称：`chat_completions`、`responses`、`messages`、`images` 和 `systemone`（`openai` 和 `anthropic` 是 `chat_completions` 和 `messages` 的别名）。其他 API 路径返回 `404`，`detail` 中写明 listener。`systemone` 由 standalone 模式提供；`--gateway extproc` 拒绝提供它的 listener。 | 四个 LLM API，不含 `systemone` |
+| `apis.<api>.models` | 某个 API 只接受的请求模型。 | 该类全部模型 |
+| `apis.systemone.schema` | listener 对客户端使用的 System One schema：`vllm-sr/5.0`，或 `vllm-sr/4.0`（同时接受旧契约的全部请求形式）。见 [System One schema](../system-one/use/schemas.md)。 | `vllm-sr/5.0` |
+| `apis.systemone.max_deadline_ms` | System One 请求等待模型的最长时间。 | 10 分钟 |
 | `tls.cert_file`、`tls.key_file` | 单向 TLS。 | 关闭 |
 | `identity.trust_headers`、`identity.trusted_peers` | listener 在 standalone 模式下信任的身份来源。 | 无 |
 
@@ -257,6 +258,7 @@ api_key: ${MODEL_API_KEY}
 | `${VAR-default}` | `VAR` 未设置时取 `default` |
 | `$$` | 字面的 `$` |
 
+- `VAR` 是大写名称：由 `A`-`Z`、数字和 `_` 组成，且不以数字开头。其他 `$` 文本保持原样，例如 `$100`、模板中的 `{{range $i := ...}}` 或 `${user_content}` 占位符。
 - 自定义配方必须用 `--recipe-env NAME` 显式授权它需要的主机变量。
 - 在 Kubernetes 上，把敏感值放入 Secret，而不是 ConfigMap 或 Helm values。见[安全加固](security-hardening)。
 
@@ -303,7 +305,7 @@ Provider、存储和模型目录中的部署可以共享，而不会让策略状
 - **配方之间互不继承。** 每个配方都根据 `global` 解析自己的设置。
 - **部分覆盖。** `fallback: {enabled: false}` 保留其余 fallback 默认值。运行时的 strategy 默认值为 `priority`。
 - **插件按类型逐字段合并。** 映射逐键合并；列表或标量会替换下层的值。
-- **未匹配的请求。** 没有匹配决策的请求运行其配方分层后的插件；请求具体模型时运行 `global.plugins`。
+- **未匹配的请求。** 没有匹配决策的请求运行其配方分层后的插件；请求具体模型时运行 `global.plugins`，但跳过需要配方的部分：响应缓存、context 插件的检索、`response_guard` 和 masking。
 - **模型事实。** `capabilities`、`modalities`、`context_window_size`、`max_output_tokens` 和 `loras` 放在模型的 `providers.models[]` 条目上。
 
 如果没有决策匹配，配方使用 `providers.defaults.model`。虚拟入口名永远不会到达后端。

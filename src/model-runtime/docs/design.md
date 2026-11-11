@@ -252,6 +252,14 @@ A work item (`WorkItem`) has `ids` (its token IDs) and may have `cost`, the
 tokens it costs a forward when it has no token IDs (images, audio), and
 `cache_key`, a content hash of everything its result depends on: the runtime
 then answers a repeated item from the model's result cache without a forward.
+A family with expensive materialization may implement `plan_cached_surface`;
+its default delegates to `plan_surface`. Omni audio uses this hook to read the
+same result cache before preparing features. Hits are retained by item position
+in `SurfacePlan.cache_lookups`, so eviction cannot send an unmaterialized hit
+to the scheduler. Miss items are fully prepared and use the ordinary later
+cache lookup, allowing results published during preparation to avoid a forward.
+Media format validation still runs before lookup. Reference/golden execution always
+uses `plan_surface` without the cache.
 `Results` are one value per item or `DEADLINE` (the `Expired` instance) for an
 expired item or plan. Results are shared with the cache, so `finish_surface`
 never mutates them. `mypy --strict` checks the plugin interfaces, the
@@ -337,19 +345,24 @@ instruction set and whether its kernels compute BF16 natively, for example
 oneDNN not capped below them (`ONEDNN_MAX_CPU_ISA`): an AVX-512 BF16 host run
 with `ATEN_CPU_CAPABILITY=avx2 ONEDNN_MAX_CPU_ISA=AVX2` answers as an AVX2 host
 does and selects that host's reference. Device inventory architecture names
-stay unchanged.
+stay unchanged. References recorded at another `--dtype` than `auto` carry it
+(`cpu@bfloat16`, `cpu:x86_64:avx2:bf16_emulated@bfloat16`), and only a model
+served at that dtype is checked against them (`readiness.qualified`).
 
 `tools/golden_answers.py --record` writes both the generic device-class baseline
-and any qualified reference, with the PyTorch version each was recorded with
-(`torch`). It loads the model without comparing it to the references it
-replaces. The first generic baseline is preserved within a revision and
-PyTorch version; later hardware runs update only their qualified entries. A
+and any qualified reference, at its `--dtype`, with the PyTorch version each
+was recorded with (`torch`). It loads the model without comparing it to the
+references it replaces. The first generic baseline is preserved within a
+revision and PyTorch version; later hardware runs update only their qualified
+entries, and a hardware entry that answers as its baseline is not kept. A
 revision change clears all old references, and a PyTorch change starts a new
 baseline for its device class. Record the new revision on the intended
 baseline device before adding other hardware classes. Decision 3.0 computes in
-BF16 on CPU, where a new PyTorch can move its answers past the CPU tolerance:
-its CPU references are recorded with the PyTorch the CPU images pin, and a
-test fails when they are not.
+FP32 on CPUs, where its BF16 answers differ by CPU kernel by more than the CPU
+tolerance (`docs/records/d3-cpu-fp32.md`): one `cpu` reference covers every
+CPU class, and `--dtype bfloat16` checks the BF16 reference of its CPU class.
+A new PyTorch can move either, so both are recorded with the PyTorch the CPU
+images pin, and a test fails when they are not.
 
 ### 5.4 Engine arguments
 
@@ -361,7 +374,7 @@ A served model batches and computes as its engine arguments say (`EngineArgs`,
 | `max_num_seqs` | by device | Most rows one forward holds, across requests: one per question of a decision request, one per input or window otherwise; 1 runs every row alone |
 | `max_num_batched_tokens` | by device, calibrated | Tokens one forward may hold: the sum of its rows (each rounded up to 8) for a model that packs merged rows (`packs_merged_rows`), else its rows times its longest row |
 | `batch_window_ms` | 2.0 | How long the scheduler collects requests after the first, before it plans the queue |
-| `dtype` | `auto` | The precision the backbone computes in; `auto` is the one the model was published in |
+| `dtype` | `auto` | The precision the backbone computes in; `auto` is the one the model was published in, except Decision 3.0's FP32 on CPUs |
 | `enable_shared_context` | the family's | Shared-context trees for multi-question decision requests; on by default only where the family's records show no accuracy loss (Decision 2.0, and state-once Decision 3.0 packages, whose requests always branch from their state: there it only decides whether whole requests share forwards) |
 
 Limits left unset take the device's memory class (`scheduler/calibration.py`:
@@ -411,8 +424,8 @@ follow the same rule per question type (`DtypePolicy.approximate_kernels`):
 Decision 2.0 consents to CUDA's approximate fused kernels, and Vela 2.0 does
 not, because they change 7% of its span answers. Another `--dtype` holds every
 backbone weight in that dtype and runs the reference kernels without copies;
-the golden references apply only to `auto`, so its golden status is
-`unverified` (`dtypes.py`). Each family records the accuracy (label
+only references recorded at that dtype check it (Decision 3.0's BF16 on CPUs),
+so elsewhere its golden status is `unverified` (`dtypes.py`). Each family records the accuracy (label
 agreement, max |Δp| or embedding cosine against the reference path) and the
 latency of its reduced path. `vllm-sr config migrate` drops the legacy
 `precision: fp16` (the model runs in its published precision) and maps a

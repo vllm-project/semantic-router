@@ -279,6 +279,9 @@ func (s *ResponseCacheService) RecordSemantic(identity CacheIdentity, hit CacheR
 	case hit.Found:
 		s.semanticHits.Add(1)
 		s.l2Hits.Add(1)
+		if adapter, ok := s.store.(*LegacyBackendAdapter); ok {
+			adapter.servedSemantic(hit)
+		}
 	default:
 		hit.HitKind = HitKindMiss
 		s.misses.Add(1)

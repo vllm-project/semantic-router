@@ -88,6 +88,7 @@ global:
         provider: systemone
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: SYSTEMONE_API_KEY}
         timeout_ms: 1500
     system:
@@ -98,8 +99,9 @@ global:
 ```
 
 - `endpoint` 是 API 接收 `POST` 请求的 URL，包括任何路径前缀；`model` 是它用来回答的模型。
-- API 必须接受两种[请求形式](../use/api.md)：Router 把每个阶段的问题放在一次调用中发送，是一个条目数与该阶段所问对象数相同的批量请求（每个评审最多 `judge.max_candidates` 个），并且从不拆分。
-- 问题类型、预设和输入模态在 API 的 `GET <endpoint>/models` 列出该模型时取自那里；否则取自部署的 `capabilities`（`question_types`、`presets`、`modalities`）；再否则为针对文本的 `choice`、`noul` 和 `score`。
+- `schema` 是 API 使用的 [System One schema](../use/schemas.md#the-schema-an-upstream-speaks)：`systemone/0.2`，即已发布的标准（默认）；vllm-sr serve 用 `vllm-sr/5.0`；尚未升级的服务器用 `vllm-sr/4.0`。在 `vllm-sr/5.0` 和 `vllm-sr/4.0` 下，Router 把每个阶段的问题放在一次调用中发送，是一个条目数与该阶段所问对象数相同的批量请求（每个评审最多 `judge.max_candidates` 个）。在 `systemone/0.2` 下，它把阶段拆成每个 state 一次调用，最多 `max_concurrency`（默认 8）个同时进行，每次调用都在调用方的截止时间内。
+- `deviations` 声明后端经过测试的、对其 schema 的偏离；第一个是 `state_text`，用于只接受字符串 state 的标准 API。在 `systemone/0.2` 下，span、set、视频和完整覆盖规则在加载时失败，并写明规则和部署。
+- 当 schema 带模型卡（`vllm-sr/4.0` 下为 `GET <endpoint>/models`，`vllm-sr/5.0` 下为端点旁的 `GET /v1/models`）且列出该模型时，问题类型、预设和输入模态取自那里；否则取自部署的 `capabilities`（`question_types`、`presets`、`modalities`）；再否则为针对文本的 `choice`、`noul` 和 `score`。`question_types` 可以列出 `choice`、`noul`、`score`、`box`、`track`、`set` 和 `span`；`vllm-sr/auto` 池只把请求发给能回答其所需内容的模型（[按模型能回答的内容路由](../../tutorials/algorithm/looper/escalate.md#route-by-what-each-model-answers)）。
 - 没有自己 `timeout_ms` 的问题使用部署的值，否则为 1000 ms。缓慢、失败或不可达的 API 会让其问题成为未知；它本身绝不会让请求失败，除非是请求没有携带凭证的委托调用。
 
 :::warning
@@ -119,7 +121,7 @@ d3 家族不回答 span，所以这个示例把 `pii` 和 `hallucination` 留在
 | --- | --- |
 | 规则、绑定或功能引用的每个部署都已声明 | 该名称，以及已声明的名称 |
 | 部署能回答规则的问题类型 | 规则、部署及其能回答的类型 |
-| 需要 span 的规则或插件解析到支持 span 的部署 | `span_required` |
+| 需要 span 的规则或插件解析到支持 span 的部署，或其 `capabilities.presets` 列出相应 `pii` 或 `halu` 预设的部署 | `span_required` |
 | 规则的 `input.image`、`input.video` 或 `input.audio` 能被其部署读取 | `input_modality_unsupported` |
 | 预设在没有校准阈值的情况下被回答 | `uncalibrated_preset`（警告；规则使用 0.5） |
 | 内联写入的密钥（`auth.api_key`、`Authorization` 头） | 密钥应来自 `api_key_env` 或 `api_key_file` |

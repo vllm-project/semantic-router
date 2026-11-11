@@ -28,6 +28,9 @@ type DialFunc func(ctx context.Context, network, address string) (net.Conn, erro
 type poolKey struct {
 	tls        bool
 	serverName string
+	caFile     string
+	certFile   string
+	keyFile    string
 	connect    time.Duration
 	ipv4Only   bool
 }
@@ -37,6 +40,7 @@ func poolKeyFor(spec *ClusterSpec, connect time.Duration) poolKey {
 	if spec.TLS != nil {
 		key.tls = true
 		key.serverName = spec.TLS.ServerName
+		key.caFile, key.certFile, key.keyFile = spec.TLS.CAFile, spec.TLS.CertFile, spec.TLS.KeyFile
 	}
 	return key
 }
@@ -96,10 +100,14 @@ func (r *poolRegistry) newTransport(key poolKey) *http.Transport {
 		network = "tcp4"
 	}
 	var tlsConfig *tls.Config
+	var tlsErr error
 	if key.tls {
-		tlsConfig = r.tlsConfig(key)
+		tlsConfig, tlsErr = r.tlsConfig(key)
 	}
 	dial := func(ctx context.Context, address string) (net.Conn, error) {
+		if tlsErr != nil {
+			return nil, &connectError{err: tlsErr, handshake: true}
+		}
 		if enabled(key.connect) {
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithTimeout(ctx, key.connect)
@@ -139,14 +147,27 @@ func (r *poolRegistry) newTransport(key poolKey) *http.Transport {
 	return transport
 }
 
-func (r *poolRegistry) tlsConfig(key poolKey) *tls.Config {
+// tlsConfig is the client configuration of a security domain. Its CA file
+// replaces the registry's roots, as Envoy's trusted_ca replaces the system
+// bundle. New has already loaded the files, so an error here means one
+// changed since; the pool's connections then fail with it.
+func (r *poolRegistry) tlsConfig(key poolKey) (*tls.Config, error) {
+	files := TLSSpec{CAFile: key.caFile, CertFile: key.certFile, KeyFile: key.keyFile}
+	roots, certificates, err := files.clientFiles()
+	if err != nil {
+		return nil, err
+	}
+	if roots == nil {
+		roots = r.rootCAs
+	}
 	return &tls.Config{
 		ServerName:         key.serverName,
-		RootCAs:            r.rootCAs,
+		RootCAs:            roots,
+		Certificates:       certificates,
 		MinVersion:         tls.VersionTLS12,
 		MaxVersion:         tls.VersionTLS13,
 		ClientSessionCache: tls.NewLRUClientSessionCache(tlsSessionCacheSize),
-	}
+	}, nil
 }
 
 // connectError marks a failure to open a connection, so it classifies as a

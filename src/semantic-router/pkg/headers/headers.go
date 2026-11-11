@@ -84,15 +84,14 @@ const (
 	VSRResponsePath = "x-vsr-response-path"
 
 	// ResponsePath* are the valid values for VSRResponsePath.
-	ResponsePathUpstream        = "upstream"         // forwarded to and answered by the upstream model
-	ResponsePathCache           = "cache"            // served from semantic cache, no upstream call
-	ResponsePathFastResponse    = "fast_response"    // short-circuited by the fast_response plugin
-	ResponsePathLooper          = "looper"           // produced by the agent looper
-	ResponsePathImageGeneration = "image_generation" // produced by the image-generation path
-	ResponsePathBlocked         = "blocked"          // rejected by a guardrail (e.g. jailbreak/PII)
-	ResponsePathRateLimited     = "rate_limited"     // rejected by rate limiting
-	ResponsePathError           = "error"            // router-side error response
-	ResponsePathFallback        = "fallback"         // produced by upstream error fallback
+	ResponsePathUpstream     = "upstream"      // forwarded to and answered by the upstream model
+	ResponsePathCache        = "cache"         // served from semantic cache, no upstream call
+	ResponsePathFastResponse = "fast_response" // short-circuited by the fast_response plugin
+	ResponsePathLooper       = "looper"        // produced by the agent looper
+	ResponsePathBlocked      = "blocked"       // an answer the response_guard plugin refused
+	ResponsePathRateLimited  = "rate_limited"  // rejected by rate limiting
+	ResponsePathError        = "error"         // router-side error response
+	ResponsePathFallback     = "fallback"      // produced by upstream error fallback
 
 	// VSRSelectedRecipe identifies the isolated routing profile selected by the
 	// inbound virtual model. Concrete backend model requests omit this header.

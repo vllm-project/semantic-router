@@ -422,10 +422,7 @@ func (v *ValkeyStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		limit = v.config.DefaultRetrievalLimit
 	}
 
-	threshold := opts.Threshold
-	if threshold <= 0 {
-		threshold = v.config.DefaultSimilarityThreshold
-	}
+	threshold := opts.minSimilarity(v.config.DefaultSimilarityThreshold)
 
 	if err := valkeyValidateRetrieveOpts(opts); err != nil {
 		status = "error"

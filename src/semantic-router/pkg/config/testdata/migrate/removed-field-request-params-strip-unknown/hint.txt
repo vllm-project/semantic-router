@@ -1,0 +1,1 @@
+recipes[default].decisions[bounded].plugins[0]: removed_field: request_params strip_unknown is removed: the Router never read it; run `vllm-sr config migrate` (nothing; the Router refuses a request field its wire format does not declare)

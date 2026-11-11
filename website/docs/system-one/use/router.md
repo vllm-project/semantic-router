@@ -92,8 +92,8 @@ recipes:
 :::tip
 A late or failed answer leaves the rule unknown. A decision's
 `rules.on_unknown`, or a condition's `on_error`, says what that means; a
-`jailbreak` or `pii` rule with `on_unknown: match` matches when its model gives
-no answer.
+request-stage `jailbreak` or `pii` rule matches when its model gives no answer,
+unless it sets `on_unknown: no_match`.
 :::
 
 ## The `systemone` selector
@@ -235,10 +235,17 @@ The Router merges the calls of each stage:
   them makes several calls. A deployment shared by all of them still loads one
   model.
 
-A local runtime answers a failed question in place. A remote System One API
-fails the whole call and names the question; the Router then asks once more,
-within the same deadline, only the states that still have other questions, in
-the same two forms, so only the failed question's rule is unknown.
+A local runtime answers a failed question in place, and an entry whose input
+it refuses, such as an image over its limit, fails only that entry's
+questions, with `invalid_input`. A remote System One API fails the whole call
+and names the question and, in a batch, its entry (`state`); the Router then
+asks once more, within the same deadline, only the states that still have
+other questions, in the same two forms, so only the failed question's rule
+about that entry is unknown. When the question's error is `invalid_input`,
+the API refused that entry's input, and the retry leaves out the whole entry.
+If that retry fails the same question about another entry, the Router asks a
+last time without it about every entry, and the question is unknown about
+every state that asked it, as when an API names no entry.
 
 Answers to the same questions about the same state are reused: from a local
 runtime's result cache, and for up to 10 minutes from a remote API, until the
@@ -250,9 +257,12 @@ Every judge has a hard cap on the candidates it reads, `judge.max_candidates`:
 
 - a choice judge (`tool_rank`) offers at most 255 candidates, the protocol's
   option limit, which is also its default;
-- a per-candidate judge (`relevance`, `same_request`) judges 64 by default.
+- a per-candidate judge (`relevance`, `same_request`) judges 64 by default
+  and at most 4096, the states one bundle to a model runtime carries at its
+  default `--max-bundle-tasks` (64 tasks of 64 states).
 
-A value below 1, or above 255 on a choice judge, fails to load. Overflow never
+A value below 1, above 255 on a choice judge, or above 4096 on a per-candidate
+judge, fails to load. Overflow never
 fails a request: the judge reads the first `max_candidates` candidates by
 recall rank or, without a recall stage, in the order the feature lists them,
 most recent first.

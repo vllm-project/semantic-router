@@ -60,8 +60,10 @@ global:
         provider: systemone              # or openai_chat, openai_embeddings
         endpoint: https://api.example.com/v1/systemone  # full URL; unix:///abs.sock for an attached runtime
         model: vllm-sr/d3-ultra          # the remote model; an attached runtime's served model
+        schema: vllm-sr/5.0
         auth: {header: Authorization, prefix: Bearer, api_key_env: EXAMPLE_KEY}  # or api_key_file: /abs/path
         headers: {X-Org: acme}           # non-secret headers only
+        forward_request_headers: [x-user-id]  # client headers each call made for a request copies
         timeout_ms: 1500                 # per attempt
         max_retries: 1                   # transport retries within the caller's deadline
         tls: {ca_file: /etc/ssl/ca.pem, server_name: api.example.com, insecure_skip_verify: false}
@@ -83,7 +85,7 @@ global:
 | `device` | `cpu`、`auto`（主机上最好的设备）、`cuda`、`rocm`，或单个设备，例如 `cuda:0` |
 | `input` | 部署的输入预算：`max_tokens`，以及 `overflow`（`reject`、`truncate` 或 `window`） |
 | `replicas` | 同一逻辑部署的多个 worker：每个是一个 `device`，或在别处启动的 worker 的 `endpoint` 和 `model` |
-| `outlier_detection` | 某个副本的请求连续 `consecutive_timeouts` 次（默认 3；0 表示关闭）超出调用方的截止时间时，它离开调度 `base_ejection_ms`（30000），每连续一次时间翻倍，最长 `max_ejection_ms`（基础时长的十倍）；同时被剔除的副本最多占 `max_ejection_percent`（50）。见 [剔除持续超时的副本](../model-runtime/deploy/placement-and-scaling.md#eject-a-replica-that-keeps-timing-out) |
+| `outlier_detection` | 某个副本的请求连续 `consecutive_timeouts` 次（默认 3；0 表示关闭）超出截止时间（调用方的截止时间或部署的 `timeout_ms`）时，它离开调度 `base_ejection_ms`（30000），每连续一次时间翻倍，最长 `max_ejection_ms`（基础时长的十倍）；同时被剔除的副本最多占 `max_ejection_percent`（50）。见 [剔除持续超时的副本](../model-runtime/deploy/placement-and-scaling.md#eject-a-replica-that-keeps-timing-out) |
 | `public_name` | 部署在推理 API 上的名称 |
 | `max_num_seqs`、`max_num_batched_tokens`、`batch_window_ms`、`dtype`、`enable_shared_context`、`max_model_len` | 引擎参数；参见[引擎参数](../model-runtime/deploy/engine-args.md) |
 
@@ -97,6 +99,7 @@ global:
 | `model` | 远程 API 用来回答的模型；在挂接的运行时上是它提供服务的模型 | `systemone`、`openai_chat`、`openai_embeddings` 必填 |
 | `auth` | `header`（默认 `Authorization`）、`prefix`（默认 `Bearer`；`""` 表示发送不带前缀的密钥），以及 `api_key_env` 和 `api_key_file`（绝对路径，每次调用时读取，因此轮换后的密钥会生效）二者之一；或 `credential: delegated`：为客户端请求发起的每次调用都携带身份验证器为该用户签发的凭据（[安全加固](security-hardening#delegate-the-users-credential-to-an-upstream)） | 密钥从不写在配置中；`credential: delegated` 不带密钥，且不适用于 `model_runtime` |
 | `headers` | 其他非机密请求头 | 拒绝 `Authorization`、`Proxy-Authorization`、`X-Api-Key`、`Api-Key`、`Ocp-Apim-Subscription-Key`、`Cookie` 以及 `auth` 所用的请求头 |
+| `forward_request_headers` | 为客户端请求发起的每次调用从客户端请求中复制的请求头；参见[转发客户端请求头](#forward-client-headers) | 仅限 `systemone`、`openai_chat` 和 `openai_embeddings`；拒绝凭据、帧与身份请求头、`auth` 所用的请求头以及 Router 自己的请求头 |
 | `timeout_ms` | 单次尝试的时限 | systemone ≤ 60000；其他 ≤ 300000 |
 | `max_retries` | 首次尝试之后的传输层重试次数，不超出调用方的截止时间 | 0–10；挂接的运行时不支持 |
 | `tls` | `ca_file`、`server_name`、`cert_file` 和 `key_file`（客户端证书）、`insecure_skip_verify` | 仅限 `https`；文件为绝对路径 |
@@ -105,6 +108,15 @@ global:
 | `generation` | `openai_chat` 部署生成补全时的 `max_tokens`、`temperature` 和 `reasoning`（`{family, use_reasoning, reasoning_effort}`，`family` 为内置推理系列） | `max_tokens` ≤ 32768；`temperature` 0–2；`reasoning` 需要 `family` 和 `use_reasoning` |
 
 重定向会被拒绝，因此凭据永远不会随重定向发往其他主机。
+
+### 转发客户端请求头 {#forward-client-headers}
+
+对远程部署的调用只携带该部署的 `headers` 和凭据，不带客户端的任何请求头。要让其中一些透传过去，例如上游网关据以归属用量的 `x-user-id`，请把它们列在 `forward_request_headers` 中；[R4](#r4-system-one-behind-a-gateway-with-its-own-auth-header) 展示了这样一个网关。
+
+- **哪些调用。**为客户端请求发起的每次调用都会复制列出的、客户端带值发送的请求头，名称匹配不区分大小写：聊天请求或 System One API 请求的决策与信号问题、记忆查询改写、embedding。Router 以自己的名义发起的调用从不复制：模型列表、启动时的能力发现、预热或健康探测。
+- **优先级。**客户端的值替换 `headers` 中同名的值；客户端未发送时，`headers` 中的值作为默认值保留。`auth` 所用的请求头始终是 Router 自己的。
+- **回答。**转发请求头的 `systemone` 部署不为其他请求保留回答，与 `credential: delegated` 相同：它的 API 可能依据这些请求头作答。
+- **名称。**只有 `systemone`、`openai_chat` 和 `openai_embeddings` 部署接受该列表。它拒绝的名称与回退尝试的列表相同（[在回退尝试中携带客户端请求头](model-configuration.md#carry-client-headers-on-a-fallback-attempt)），部署自己的 `auth` 请求头也算作凭据。
 
 ## 绑定和规则部署 {#bindings-and-rule-deployments}
 
@@ -129,7 +141,7 @@ recipes:
 
 ## 阈值 {#thresholds}
 
-规则未写出的 predicate 来自回答的模型：`vela3-fast` 或 Vela 2.0 各尺寸校准的阈值；其他模型（本地或 `systemone`）没有校准值，使用 0.5（加载时警告指明该规则的 `uncalibrated_preset`）。你写出的 `predicate` 按原值使用。
+规则未写出的 predicate 来自回答的模型：`vela3-fast` 或 Vela 2.0 各尺寸校准的阈值；其他模型（本地或 `systemone`）没有校准值，使用 0.5（加载时警告指明该规则的 `uncalibrated_preset`）。这一默认值适用于 domain、用户反馈、modality 和 PII 规则，以及读取其预设正向选项（`FACT_CHECK_NEEDED`、`unsafe`、`refusal`、`jailbreak`）的规则；其他没有 predicate 的规则以模型自己的选择为准，hallucination 规则以模型自己的 span 阈值为准。你写出的 `predicate` 按原值使用。
 
 ## 准入 {#admission}
 
@@ -175,6 +187,7 @@ global:
         provider: systemone
         endpoint: https://judge.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: JUDGE_KEY}
         timeout_ms: 5000
 recipes:
@@ -196,10 +209,13 @@ global:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth:
           header: Ocp-Apim-Subscription-Key
           prefix: ""                     # no Bearer prefix
           api_key_file: /run/secrets/systemone-key
+        headers: {x-user-id: anonymous}  # sent when the client sends none
+        forward_request_headers: [x-user-id]  # the gateway attributes usage by it
         timeout_ms: 3000
         capabilities: {question_types: [choice, noul, score], presets: [pii, halu]}
     system:
@@ -247,6 +263,7 @@ global:
         provider: systemone
         endpoint: https://app.vllm-sr.ai/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: VSR_APP_KEY}
 ```
 

@@ -89,7 +89,7 @@ Choose one backend:
 | `external_api` | A service with a custom HTTP request contract | `endpoint`, `request_format` |
 | `mcp` | Rejected at startup until an MCP tool invoker exists | `server_name`, `tool_name` |
 | `openai` | OpenAI file search | `vector_store_id`, `api_key` |
-| `vectorstore` | The Router-managed vector-store service | `vector_store_id` |
+| `vectorstore` | The Router-managed vector-store service, with `global.stores.vector_store.enabled: true` | `vector_store_id` |
 | `hybrid` | A primary backend with an optional fallback | `primary`, plus backend-specific nested configuration |
 
 - **`hybrid.strategy`** defaults to `sequential`: the fallback runs only
@@ -127,7 +127,11 @@ without one counts as similarity 1.
 without the documents, `warn` also logs a warning, `block` refuses the request
 with `503`. A retrieval that finds nothing is not a failure. `cache_results`
 keeps the kept documents for `cache_ttl_seconds` (default 3600) per query,
-source and match block.
+source and match block; the unjudged documents a failed judge keeps under
+`on_error: skip` serve that request only and are not cached. A cached entry
+is served until it expires, even after its documents change in the backend
+or their file is detached from a vector store, so leave `cache_results` off
+where a deletion must take effect at once.
 
 :::caution
 Retrieved documents are sent to the model provider as context. Apply
@@ -184,16 +188,17 @@ about the latest user message, and the `match` block judges which matter:
   with no call. Without a judge answer, the segments are ranked lexically
   too.
 
-- `mode: auto` (the default) compresses a request over the budget, or with
-  segments over their target's `min_tokens`; `always` compresses every request.
+- `mode: auto` (the default) compresses the segments over their target's
+  `min_tokens`: always with `budget.max_tokens: auto`, and with a number only
+  when the request is over it. `always` compresses every request.
 - `targets` sets each segment kind's mode (`preserve`, `extractive`,
   `truncate`, `recoverable`) and its `min_tokens` and `target_tokens`.
   `target_tokens` must be lower than `min_tokens`. History, RAG, memory and
   current-user text are preserved unless their target is enabled.
-- `budget.max_tokens` is the most input tokens the request keeps: a request
-  over it is compressed down to it. `auto` (the default) is the model's context
-  window less `budget.reserve_output_tokens`, by default the request's output
-  limit. The reserve can grow but never drops below the requested output.
+- `budget.max_tokens` is the input size compression aims for. `auto` (the
+  default) is the model's context window less
+  `budget.reserve_output_tokens`, by default the request's output limit. The
+  reserve can grow but never drops below the requested output.
 - `failure_mode: fail_open` (the default) sends the request uncompressed when a
   rewrite fails; `fail_closed` refuses it. Neither bypasses the budget check:
   a request whose protected content cannot fit gets `400` with
@@ -262,9 +267,14 @@ global:
 
 `injection.mode: tool_role` (the default) adds one tool call and its result per
 source after the last user message: `vsr_rag_context` for documents and
-`vsr_memory_context` for memories, in source order. `system_prompt` adds them
-to the system prompt instead. Compression recognizes both as retrieved
-context.
+`vsr_memory_context` for memories, in source order. Compression reads them as
+retrieved context, under its `rag` and `memory` targets, and a captured
+[router replay](./router-replay) request body leaves them out, like other tool
+results, unless `capture_tool_results` is on. `system_prompt` adds them to the
+system prompt instead: they are part of the system message, which compression
+never shortens and a captured request body keeps. A decision whose `tools`
+policy is `mode: none` with `strip_tool_history: true` injects as
+`system_prompt` does, since the strip would remove the tool exchanges.
 
 ## Management and preview
 

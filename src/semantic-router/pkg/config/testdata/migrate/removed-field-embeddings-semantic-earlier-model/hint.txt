@@ -1,0 +1,1 @@
+global.model_catalog.embeddings.semantic: removed_field: embeddings.semantic is removed; run `vllm-sr config migrate` (embeddings.default names the embedding deployment; a store's embedding block names its own)

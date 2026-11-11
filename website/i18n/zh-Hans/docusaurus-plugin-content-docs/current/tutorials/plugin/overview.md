@@ -113,7 +113,7 @@ match:
 | `top_k`、`min_score`、`min_ratio` | 决定保留哪些候选，按分数从高到低排列。`min_score` 是绝对值；`min_ratio` 是相对最高分的比例，取值 (0, 1]。 |
 | `on_error` | `skip`（缺省）在 judge 失败或超时时保留召回结果，没有召回时保持候选原样。`fail` 让该功能的匹配失败。 |
 | `timeout_ms` | 限定这次调用；未设置时取部署的 `timeout_ms`，再缺省为 1000 毫秒。 |
-| `max_candidates` | 硬上限：choice judge 为 255，逐个候选提问的 judge 缺省为 64。 |
+| `max_candidates` | 硬上限：choice judge 为 255，逐个候选提问的 judge 缺省为 64、最多 4096。 |
 
 候选再多也不会让请求失败：judge 按召回排名，或按功能的顺序（最新的在前），读取前 `max_candidates` 个。每次截断都会在 trace span 上记一个 `match.judge.truncated` 事件，并计入 `vsr_match_judge_truncated_total`。
 
@@ -123,7 +123,7 @@ match:
 | `context.sources[rag].match` | `recall: {method: embedding, top_k: 20, min_similarity: 0.3}`，`judge: {preset: relevance, top_k: 6, min_score: 0.5}` | `recall: {method: bm25}` 和没有召回的 judge 读取本地知识库：基于内存向量库的 `vectorstore` 源。基于外部向量数据库的源用 `embedding` 召回 |
 | `context.sources[memory].match` | `recall: {method: embedding, top_k: 5, min_similarity: 0.7}` | 记忆存储的 `default_retrieval_limit` 和 `default_similarity_threshold` 替代召回缺省值。没有召回的 judge 读取用户最新的记忆 |
 | `context.compress.match` | `recall: {method: bm25}`，`judge: {preset: relevance}` | 请求的每个片段都是关于最新一条用户消息的候选；BM25 先为 judge 的 64 个名额预筛；保留多少由预算决定 |
-| `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | 最多 255 个工具；更多的会被截断，或由 `recall: {method: bm25}` 缩小 |
+| `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | 最多 255 个工具；更多的会被截断，或由 `recall: {method: bm25}` 缩小；没有 judge 的块在加载时失败 |
 
 每个阶段都计入 `vsr_match_recall_total`（feature、method、outcome）或 `vsr_match_judge_total`（feature、preset、outcome），并在 `vsr_match_stage_duration_seconds` 中计时。
 

@@ -74,7 +74,7 @@ global:
 | Decision 2.0 与 1.0 | 0.6B 到 27B | choice、noul、score | CPU（0.6B）或 GPU |
 | Vela 2.0 | 0.3B 到 9B | choice、noul、score、set、span；针对内置问题训练过 | CPU（0.3B）或 GPU |
 
-各模型能回答的问题类型不同。Decision 1.0、2.0 和 3.0 不返回 span，vela3-fast 不回答 `score` 问题。如果规则、评审或选择器的问题类型其部署无法回答，配置加载失败：span 问题（例如 PII 检测）报 `span_required`，其他类型报 `question_type_unsupported`。
+各模型能回答的问题类型不同。Decision 1.0、2.0 和 3.0 不返回 span，vela3-fast 不回答 `score` 问题。如果规则的问题类型其部署无法回答，配置加载失败：span 问题（例如 PII 检测）报 `span_required`，其他类型报 `question_type_unsupported`。评审或选择器的问题类型其部署无法回答时，加载失败的消息会点名该部署及其能回答的类型。
 
 每个模型在[支持的模型](../../model-runtime/supported-models/overview.md)下都有自己的页面；[支持矩阵](../reference/support-matrix.md)列出各家族对每个内置问题是训练回答、零样本回答还是无法回答。
 

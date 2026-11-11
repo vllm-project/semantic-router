@@ -22,8 +22,8 @@ Vela 3.0 on d3-mini: more accuracy than vela3-lite, with the built-in questions 
 | Parameters | 4.79B loaded |
 | Backbone | Qwen3.5 text |
 | Base package | [`vllm-sr/d3-mini`](https://huggingface.co/vllm-sr/d3-mini) at `566da0ea398e` |
-| Precision (`--dtype auto`) | BF16 on every device |
-| Weights | about 9.6 GB at BF16 |
+| Precision (`--dtype auto`) | BF16 on a GPU, FP32 on a CPU |
+| Weights | about 9.6 GB at BF16, 19.2 GB at FP32 |
 | Device memory | 16 GiB or more |
 | Reads | text, image, video |
 
@@ -54,9 +54,14 @@ This model has no calibrated thresholds: a built-in question without a
 
 ## Hardware
 
-No reference answers are recorded for this revision in the registry, so its
-self-check reports `unverified`; its records compare it with the package's
-own runtime.
+Each time it loads, the model compares its answers with the reference
+answers recorded for its revision. They are recorded for:
+
+- AMD GPU (ROCm) (`rocm`)
+
+On a CPU or an NVIDIA GPU no reference is recorded, so the model serves
+there with its self-check reported as `unverified`.
+
 [Choose a model](model-runtime/get-started/choose-a-model.md#hardware) lists the
 validated hardware.
 

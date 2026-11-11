@@ -21,8 +21,8 @@ A 2B Decision 3.0 model for your own questions about text, images and video.
 | Family | [Decision 3.0](model-runtime/supported-models/decision-3/overview.md) |
 | Parameters | 2.21B loaded |
 | Backbone | Qwen3.5 text |
-| Precision (`--dtype auto`) | BF16 on every device |
-| Weights | about 4.4 GB at BF16 |
+| Precision (`--dtype auto`) | BF16 on a GPU, FP32 on a CPU |
+| Weights | about 4.4 GB at BF16, 8.9 GB at FP32 |
 | Device memory | 8 GiB or more |
 | Reads | text, image, video |
 
@@ -60,6 +60,16 @@ answers recorded for its revision. They are recorded for:
 - CPU (`cpu`)
 - AMD GPU (ROCm) (`rocm`)
 
+Served with `--dtype bfloat16`, it compares them with the BF16
+references recorded for:
+
+- CPU (`cpu@bfloat16`)
+- x86-64 CPU with AVX2 (BF16 emulated) (`cpu:x86_64:avx2:bf16_emulated@bfloat16`)
+- x86-64 CPU with AVX-512 BF16 (`cpu:x86_64:avx512:bf16_native@bfloat16`)
+
+Where a hardware reference and its device class's are both recorded, the
+hardware one is checked.
+
 On an NVIDIA GPU no reference is recorded, so the model serves
 there with its self-check reported as `unverified`.
 
@@ -88,6 +98,13 @@ vllm-sr serve vllm-sr/d3-nano --engine --platform cpu
 
 Serve it on a CPU from the CPU image, as `--platform cpu` does: the ROCm
 image's PyTorch has no CPU LAPACK, which this backbone needs there.
+
+A CPU computes it in FP32: 8.9 GB of weights, twice its
+BF16 size. On a CPU that computes BF16 natively (AVX-512 BF16 or AMX) a
+request takes 1.2 to 3.5 times as long as at `--dtype bfloat16`, the larger
+sizes the most; on one that emulates BF16 (AVX2) FP32 is 3 to 6 times
+faster. `--dtype bfloat16` is checked against the BF16 reference of its CPU
+class (see Hardware).
 
 </TabItem>
 <TabItem value="rocm" label="AMD GPU" default>
