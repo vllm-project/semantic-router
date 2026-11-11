@@ -289,6 +289,38 @@ def validate_main_publishers(
         )
 
 
+def validate_main_latest(workflows: dict[str, WorkflowLike], errors: list[str]) -> None:
+    """latest moves only forward, once its commit's complete image set exists."""
+    main = workflows.get("main.yml")
+    jobs = main.jobs if main else {}
+    if jobs.get("images", {}).get("with", {}).get("publish_latest"):
+        errors.append(
+            ".github/workflows/main.yml: 'images' publishes commit tags only; "
+            "'latest' moves latest"
+        )
+    latest = jobs.get("latest", {})
+    if (
+        "images" not in needs(latest)
+        or "needs.images.result == 'success'" not in latest.get("if", "")
+        or "tools/ci/latest_tags.py" not in json.dumps(latest.get("steps", []))
+        or latest.get("concurrency")
+        != {"group": "main-latest", "cancel-in-progress": False}
+    ):
+        errors.append(
+            ".github/workflows/main.yml: 'latest' must move latest one run at a "
+            "time, after its commit's complete image set is published"
+        )
+    qualification = jobs.get("ci", {}).get("concurrency", {}).get("group")
+    for job_id in ("images", "helm", "pypi"):
+        concurrency = jobs.get(job_id, {}).get("concurrency", {})
+        cancels = concurrency.get("cancel-in-progress") is not False
+        if cancels or concurrency.get("group") in {None, qualification}:
+            errors.append(
+                f".github/workflows/main.yml: '{job_id}' must queue in its own "
+                "group, so a newer push never cancels a publication that started"
+            )
+
+
 def validate_release_contract(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
@@ -636,6 +668,7 @@ def validate_workflow_policies(
 ) -> None:
     validate_pr_contract(workflows, errors)
     validate_main_publishers(workflows, errors)
+    validate_main_latest(workflows, errors)
     validate_release_contract(workflows, errors)
     validate_security_boundary(workflows, errors)
     validate_removed_workflows(errors)

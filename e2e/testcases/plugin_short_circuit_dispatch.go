@@ -109,7 +109,7 @@ func testPluginShortCircuitNoDispatch(ctx context.Context, client *kubernetes.Cl
 		{
 			// Same prompt as e2e/testcases/streaming_safety.go:30.
 			name:           "pii",
-			prompt:         "My SSN is 123-45-6789, please help me calculate my tax return",
+			prompt:         "My SSN is 123-45-6789, please help me calculate my tax return __PII_SPAN__ US_SSN 123-45-6789",
 			expectDecision: "block_pii",
 			dispatched:     false,
 		},
@@ -153,8 +153,8 @@ func runShortCircuitProbe(
 
 	// Keystone headers ride on every non-cache-hit response
 	// (src/semantic-router/pkg/extproc/processor_res_header_mutation.go).
-	if got := response.Headers.Get("x-vsr-schema-version"); got != "2" {
-		return nil, fmt.Errorf("%s: expected x-vsr-schema-version=2, got %q", probe.name, got)
+	if got := response.Headers.Get("x-vsr-schema-version"); got != routerSchemaVersion {
+		return nil, fmt.Errorf("%s: expected x-vsr-schema-version=%s, got %q", probe.name, routerSchemaVersion, got)
 	}
 	if err = assertShortCircuitHeaders(probe, response); err != nil {
 		return nil, err
@@ -180,7 +180,6 @@ func runShortCircuitProbe(
 		"selected_decision":  response.Headers.Get("x-vsr-selected-decision"),
 		"upstream_model":     upstreamModel,
 		"selected_model":     selectedModel,
-		"fast_response":      response.Headers.Get("x-vsr-fast-response"),
 		"expected_dispatch":  probe.dispatched,
 		"session_identifier": sessionID,
 	}, nil
@@ -206,12 +205,9 @@ func assertRoutedHeaders(probe shortCircuitProbe, response *localChatCompletionR
 }
 
 func assertBlockedHeaders(probe shortCircuitProbe, response *localChatCompletionResponse) error {
-	if fastResponse := response.Headers.Get("x-vsr-fast-response"); fastResponse != "true" {
-		return fmt.Errorf("%s: expected x-vsr-fast-response=true, got %q\n%s",
-			probe.name, fastResponse, formatResponseHeaders(response.Headers))
-	}
-	if path := response.Headers.Get("x-vsr-response-path"); path != "fast_response" {
-		return fmt.Errorf("%s: expected x-vsr-response-path=fast_response, got %q", probe.name, path)
+	if path := response.Headers.Get(responsePathHeader); path != "fast_response" {
+		return fmt.Errorf("%s: expected x-vsr-response-path=fast_response, got %q\n%s",
+			probe.name, path, formatResponseHeaders(response.Headers))
 	}
 	if decision := response.Headers.Get("x-vsr-selected-decision"); decision != probe.expectDecision {
 		return fmt.Errorf("%s: expected x-vsr-selected-decision=%s, got %q",
@@ -274,8 +270,7 @@ func sendShortCircuitRequest(
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// The decision and matched-signal headers are demoted off the default
-	// surface by the v0.4 contract (#2205), so the debug surface is required.
+	// The matched signals ride in x-vsr-trace, so the debug surface is required.
 	req.Header.Set("x-vsr-debug", "true")
 	req.Header.Set(shortCircuitSessionHeader, sessionID)
 

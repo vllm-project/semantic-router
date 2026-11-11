@@ -30,21 +30,22 @@ grant permissions, bypass guardrails, or establish user identity.
 ## Configuration
 
 ```yaml
-routing:
-  signals:
-    metadata:
-      - name: consent-denied
-        key: consent
-        predicate:
-          equals: denied
-      - name: canary-cohort
-        key: cohort
-        predicate:
-          in: [beta, canary]
-      - name: has-workload-class
-        key: workload_class
-        predicate:
-          exists: true
+recipes:
+  - name: default
+    signals:
+      metadata:
+        - name: consent-denied
+          key: consent
+          predicate:
+            equals: denied
+        - name: canary-cohort
+          key: cohort
+          predicate:
+            in: [beta, canary]
+        - name: has-workload-class
+          key: workload_class
+          predicate:
+            exists: true
 ```
 
 Exactly one predicate comparator is required. Request metadata values are

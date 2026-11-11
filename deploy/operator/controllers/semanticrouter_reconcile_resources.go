@@ -242,7 +242,7 @@ func (r *SemanticRouterReconciler) reconcileHPA(ctx context.Context, sr *vllmv1a
 	return nil
 }
 
-func (r *SemanticRouterReconciler) reconcileIngress(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {
+func (r *SemanticRouterReconciler) reconcileIngress(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
 	if sr.Spec.Ingress.Enabled == nil || !*sr.Spec.Ingress.Enabled {
 		ing := &networkingv1.Ingress{}
 		err := r.Get(ctx, types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}, ing)
@@ -252,7 +252,7 @@ func (r *SemanticRouterReconciler) reconcileIngress(ctx context.Context, sr *vll
 		return nil
 	}
 
-	ing := r.generateIngress(sr)
+	ing := r.generateIngress(sr, gatewayMode)
 	if err := controllerutil.SetControllerReference(sr, ing, r.Scheme); err != nil {
 		return err
 	}

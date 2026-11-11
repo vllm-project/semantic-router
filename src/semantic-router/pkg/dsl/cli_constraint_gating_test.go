@@ -16,8 +16,8 @@ const constraintPriorityDSL = `SIGNAL keyword urgent { operator: "OR" keywords: 
 ROUTE bad_route { PRIORITY -1 WHEN keyword("urgent") MODEL "m:1b" }
 `
 
-const constraintThresholdDSL = `SIGNAL embedding emb { threshold: 1.5 candidates: ["x"] }
-ROUTE emb_route { PRIORITY 1 WHEN embedding("emb") MODEL "m:1b" }
+const constraintThresholdDSL = `SIGNAL keyword emb { operator: "OR" method: "bm25" keywords: ["x"] bm25_threshold: 1.5 }
+ROUTE emb_route { PRIORITY 1 WHEN keyword("emb") MODEL "m:1b" }
 `
 
 // warnings-only fixture: undefined signal reference is DiagWarning.

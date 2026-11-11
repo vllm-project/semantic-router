@@ -156,12 +156,13 @@ def test_metadata_keeps_loaded_identity_when_model_has_a_public_alias(
     try:
         request = {
             "model": "public-alias",
-            "state": STATE,
-            "questions": QUESTIONS,
-            "states": {"second": {"state": STATE, "questions": QUESTIONS}},
+            "states": {
+                "first": {"state": STATE, "questions": QUESTIONS},
+                "second": {"state": STATE, "questions": QUESTIONS},
+            },
             "options": {"return_meta": True},
         }
-        client = TestClient(create_app(runtime))
+        client = TestClient(create_app(runtime, systemone_schema="vllm-sr/4.0"))
         response = post(client, request, "/v1/systemone")
         assert response.status_code == 200
         body = response.json()
@@ -169,7 +170,7 @@ def test_metadata_keeps_loaded_identity_when_model_has_a_public_alias(
         info = runtime.lookup("public-alias").model.info
         assert info.id == "Decision-2.0-Tiny-Qwen3" and info.repo == repo_id
         expected_id = repo_id or info.id
-        for envelope in (body, body["states"]["second"]):
+        for envelope in (body, *body["states"].values()):
             assert envelope["model"] == "public-alias"
             assert envelope["meta"]["model_id"] == expected_id
             assert envelope["meta"]["revision"] == revision
@@ -178,11 +179,9 @@ def test_metadata_keeps_loaded_identity_when_model_has_a_public_alias(
         response = post(client, request, "/v1/systemone")
         hidden = response.json()
         assert response.status_code == 200 and "meta" not in hidden
-        assert "meta" not in hidden["states"]["second"]
-        assert hidden["answers"] == body["answers"]
-        assert (
-            hidden["states"]["second"]["answers"] == body["states"]["second"]["answers"]
-        )
+        for name, entry in hidden["states"].items():
+            assert "meta" not in entry
+            assert entry["answers"] == body["states"][name]["answers"]
     finally:
         runtime.stop()
 

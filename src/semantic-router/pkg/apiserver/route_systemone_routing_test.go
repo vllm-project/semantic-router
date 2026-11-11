@@ -33,43 +33,46 @@ func (r *diagnosticNativeRouter) RouteSystemOne(_ context.Context, model string,
 func TestSystemOneRouteDiagnosticsUseOperatorPermissionAndActiveGeneration(t *testing.T) {
 	t.Setenv("NATIVE_ROUTE_OPERATOR", "operator-test-key")
 	t.Setenv("NATIVE_ROUTE_VIEWER", "viewer-test-key")
-	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.3
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
 listeners:
   - name: public
     port: 8899
     api_keys: [public-test-key]
-    systemone: {models: [public-native]}
+    apis: {chat_completions: {}, responses: {}, messages: {}, images: {}, systemone: {schema: vllm-sr/4.0, models: [public-native]}}
 providers:
   models:
     - name: fast
       api_format: systemone
-      backend_refs: [{provider: systemone-compatible, base_url: https://example.invalid/v1}]
-routing: {}
+      backend_refs: [{provider: systemone-compatible, endpoint: 'https://example.invalid/v1'}]
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - {api: systemone, model_names: [native-auto, public-native], recipe: native}
 recipes:
+  - name: default
   - name: native
-    routing:
-      signals:
-        keywords: [{name: greeting, operator: OR, keywords: [hello]}]
-      decisions:
-        - name: classify
-          rules: {type: keyword, name: greeting}
-          modelRefs: [{model: fast}]
-          algorithm: &simple
-            type: cascade
-            budget: {deadline: 2s, max_calls: 1}
+    signals:
+      keywords: [{name: greeting, operator: OR, keywords: [hello]}]
+    decisions:
+      - name: classify
+        rules: {type: keyword, name: greeting}
+        modelRefs: [{model: fast}]
+        algorithm: &simple
+          type: escalate
+          budget: {deadline: 2s, max_calls: 1}
+          escalate:
             quality:
               type: uncalibrated
-              acceptance:
-                rules: [{question_type: choice, field: top_probability, predicate: {gte: 0}}]
-            stages: [{name: fast, kind: native, model: fast}]
-        - name: complex
-          rules: {}
-          modelRefs: [{model: fast}]
-          algorithm:
-            <<: *simple
-            budget: {deadline: 4s, max_calls: 2}
+              accept:
+                native: [{question_type: choice, field: top_probability, gte: 0}]
+            stages: [{name: fast, model: fast}]
+      - name: complex
+        rules: {}
+        modelRefs: [{model: fast}]
+        algorithm:
+          !!merge <<: *simple
+          budget: {deadline: 4s, max_calls: 2}
 `))
 	if err != nil {
 		t.Fatal(err)

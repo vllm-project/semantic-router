@@ -13,18 +13,17 @@ import (
 func (r *OpenAIRouter) applyPreDispatchToolsPolicy(
 	ctx *RequestContext,
 ) (bool, error) {
-	toolsCfg := resolveDecisionToolsConfig(ctx)
+	policy := resolveDecisionToolsConfig(r.Config, ctx).ActivePolicy()
 	request := ctx.SemanticRequest
-	if request == nil || toolsCfg == nil || !toolsCfg.Enabled ||
-		toolsCfg.EffectiveMode() != config.ToolsPluginModeNone {
+	if request == nil || policy.EffectiveMode() != config.ToolsPolicyModeNone {
 		return false, nil
 	}
-	changed, removed := stripSemanticToolPolicy(request, toolsCfg.StripToolHistory)
+	changed, removed := stripSemanticToolPolicy(request, policy.StripToolHistory)
 	if changed {
 		request.Generation++
 	}
 	if removed > 0 {
-		logging.Infof("[ToolsPlugin] Decision %q stripped %d prior tool-history messages or blocks", ctx.VSRSelectedDecision.Name, removed)
+		logging.Infof("[ToolsPlugin] Request %q stripped %d prior tool-history messages or blocks", ctx.RequestID, removed)
 	}
 	return changed, nil
 }

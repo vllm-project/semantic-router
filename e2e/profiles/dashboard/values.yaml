@@ -2,7 +2,7 @@
 # Replace chart defaults atomically so no placeholder backend or classifier
 # configuration can leak into this deliberately small canonical runtime.
 configOverride:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -16,45 +16,25 @@ configOverride:
             provider: vllm
             endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
             weight: 1
-  routing:
-    modelCards:
-      - name: base-model
         loras:
           - name: general-expert
             description: General-purpose adapter
-    decisions:
-      - name: other_decision
-        description: Default decision for Dashboard API probes
-        priority: 1
-        rules:
-          operator: AND
-          conditions: []
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
+  recipes:
+    - name: default
+      decisions:
+        - name: other_decision
+          description: Default decision for Dashboard API probes
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: base-model
+              lora_name: general-expert
+              use_reasoning: false
   global:
     router:
       strategy: priority
-    model_catalog:
-      kbs: []
-      modules:
-        prompt_guard:
-          enabled: false
-          jailbreak_mapping_path: ""
-        classifier:
-          domain:
-            enabled: false
-            category_mapping_path: ""
-          pii:
-            enabled: false
-            pii_mapping_path: ""
-    stores:
-      response_cache:
-        enabled: false
-    integrations:
-      tools:
-        enabled: false
 
 persistence:
   enabled: false

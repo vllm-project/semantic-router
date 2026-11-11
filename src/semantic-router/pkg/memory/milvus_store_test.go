@@ -341,8 +341,8 @@ func setupTestStore() (*MilvusStore, *MockMilvusClient) {
 	mockClient := &MockMilvusClient{}
 	// The qwen3 model type stores the test provider's full output
 	testEmbeddingConfig := EmbeddingConfig{
-		Provider: memoryTestEmbeddingProvider(),
-		Model:    EmbeddingModelQwen3,
+		Provider:   memoryTestEmbeddingProvider(),
+		Deployment: "qwen3-embedding",
 	}
 	options := MilvusStoreOptions{
 		Client:          mockClient,
@@ -1050,8 +1050,8 @@ func TestMilvusStore_Schema_UserIDPartitionKey(t *testing.T) {
 	}
 
 	testEmbeddingConfig := EmbeddingConfig{
-		Provider: memoryTestEmbeddingProvider(),
-		Model:    EmbeddingModelQwen3,
+		Provider:   memoryTestEmbeddingProvider(),
+		Deployment: "qwen3-embedding",
 	}
 
 	config := DefaultMemoryConfig()
@@ -1242,5 +1242,37 @@ func TestMilvusStore_Retrieve_ProjectScopeWidensPastLegacyCandidates(t *testing.
 			assert.Equal(t, tt.wantTopKs, gotTopKs)
 			assert.Equal(t, tt.wantEfs, gotEfs)
 		})
+	}
+}
+
+// A memory source's min_similarity is any cosine: a bound of zero or less
+// applies as written, and only an unset one takes the store's
+// default_similarity_threshold.
+func TestMilvusStore_Retrieve_KeepsANonPositiveMinSimilarity(t *testing.T) {
+	store, mockClient := setupTestStore()
+	mockClient.SearchFunc = func(context.Context, string, []string, string, []string, []entity.Vector, string, entity.MetricType, int, entity.SearchParam, ...client.SearchQueryOptionFunc) ([]client.SearchResult, error) {
+		return []client.SearchResult{{
+			ResultCount: 3,
+			Scores:      []float32{0.85, 0.3, -0.1},
+			Fields: []entity.Column{
+				entity.NewColumnVarChar("id", []string{"id1", "id2", "id3"}),
+				entity.NewColumnVarChar("content", []string{"c1", "c2", "c3"}),
+				entity.NewColumnVarChar("memory_type", []string{"semantic", "semantic", "semantic"}),
+			},
+		}}, nil
+	}
+	for _, tt := range []struct {
+		name string
+		opts RetrieveOptions
+		want int
+	}{
+		{name: "zero", opts: RetrieveOptions{Threshold: 0, ThresholdSet: true}, want: 2},
+		{name: "negative", opts: RetrieveOptions{Threshold: -0.2, ThresholdSet: true}, want: 3},
+		{name: "unset", opts: RetrieveOptions{}, want: 1},
+	} {
+		tt.opts.Query, tt.opts.UserID = "test", "u1"
+		results, err := store.Retrieve(context.Background(), tt.opts)
+		require.NoError(t, err)
+		assert.Len(t, results, tt.want, tt.name)
 	}
 }

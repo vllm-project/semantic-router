@@ -55,7 +55,7 @@ decisions:
               - type: image_fixture
                 fixture: routing_pixel
         expected_signals:
-          conversation: [accuracy_has_images]
+          input_modality: [accuracy_has_images]
         tags: [language:en, multimodal, image, shape:messages]
 
   - id: accuracy_workflow
@@ -66,7 +66,7 @@ decisions:
       - id: evidence_workstreams_en
         query: Research, compare, and synthesize the evidence, then break this into independent workstreams.
         expected_signals:
-          decision: [accuracy_mode:workstreams, accuracy_difficulty]
+          systemone: [accuracy_mode:workstreams, accuracy_difficulty]
         tags: [language:en, orchestration, accuracy]
       - id: root_cause_zh
         query: 请做根因分析并验证修复，把任务分解为独立工作流。
@@ -87,7 +87,7 @@ decisions:
         query: Research, compare, and synthesize the evidence, then break this into independent workstreams.
         repeat: 2600
         expected_signals:
-          decision: [accuracy_mode:workstreams]
+          systemone: [accuracy_mode:workstreams]
           context: [accuracy_long_context]
         tags: [collision, priority, stress:long-input, orchestration]
 
@@ -110,7 +110,7 @@ decisions:
         query: Compare competing hypotheses, request independent expert opinions, and reach a verdict.
         repeat: 2600
         expected_signals:
-          decision: [accuracy_mode:independent_review]
+          systemone: [accuracy_mode:independent_review]
           context: [accuracy_long_context]
         tags: [collision, priority, stress:long-input, deliberation]
 
@@ -122,9 +122,9 @@ decisions:
       - id: competing_hypotheses
         query: Compare competing hypotheses, request independent expert opinions, and reach a verdict.
         expected_signals:
-          decision: [accuracy_mode:independent_review, accuracy_difficulty]
+          systemone: [accuracy_mode:independent_review, accuracy_difficulty]
         expected_signal_values:
-          decision:accuracy_mode: {gte: 0.6, lte: 1}
+          systemone:accuracy_mode: {gte: 0.6, lte: 1}
         tags: [language:en, deliberation, accuracy]
       - id: adversarial_review
         query: Perform an adversarial review and challenge the proposed solution from both sides.
@@ -135,7 +135,7 @@ decisions:
 
   - id: accuracy_direct
     expected_decision: accuracy_direct
-    expected_algorithm: decision
+    expected_algorithm: systemone
     variants:
       - id: direct_explanation
         query: Explain how a mutex differs from a semaphore.
@@ -146,5 +146,5 @@ decisions:
       - id: negated_fanout
         query: Do not debate both sides or create workstreams; answer the question directly.
         expected_signals:
-          decision: [accuracy_mode:direct]
+          systemone: [accuracy_mode:direct]
         tags: [language:en, negation, single-model]

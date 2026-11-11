@@ -13,7 +13,6 @@ const EVALUATION_RUN_PERMISSION = 'evaluation.run'
 const EVALUATION_WRITE_PERMISSION = 'evaluation.write'
 const FEEDBACK_SUBMIT_PERMISSION = 'feedback.submit'
 const LOGS_READ_PERMISSION = 'logs.read'
-const ML_PIPELINE_MANAGE_PERMISSION = 'mlpipeline.manage'
 const MCP_READ_PERMISSION = 'mcp.read'
 const MCP_MANAGE_PERMISSION = 'mcp.manage'
 const REPLAY_READ_PERMISSION = 'replay.read'
@@ -53,10 +52,6 @@ export function canDeployConfig(user?: PermissionUser | null): boolean {
   return canAccessWithPermission(user, CONFIG_DEPLOY_PERMISSION)
 }
 
-export function canAccessMLSetup(user?: PermissionUser | null): boolean {
-  return canAccessWithPermission(user, ML_PIPELINE_MANAGE_PERMISSION)
-}
-
 export function canWriteEvaluation(user?: PermissionUser | null): boolean {
   return canAccessWithPermission(user, EVALUATION_WRITE_PERMISSION)
 }
@@ -80,7 +75,6 @@ export function canAccessDashboardPath(
   const normalizedPath = pathname.trim().toLowerCase()
 
   if (normalizedPath.startsWith('/users')) return canViewUsers(user)
-  if (normalizedPath.startsWith('/ml-setup')) return canAccessMLSetup(user)
   if (normalizedPath.startsWith('/topology')) {
     return canAccessWithPermission(user, TOPOLOGY_READ_PERMISSION, READ_CAPABLE_ROLES)
   }
