@@ -17,25 +17,17 @@ import { modelProviderPresetsFromCatalog } from './modelProviderCatalog'
 const serialized = (value: ConfigData): ConfigData => JSON.parse(JSON.stringify(value))
 
 describe('model pricing mutations', () => {
-  const cases: Array<[string, boolean, ConfigData]> = [
-    ['canonical', true, { providers: { models: [] } }],
-    ['legacy', false, { model_config: {} }],
-  ]
+  it('does not serialize untouched pricing', () => {
+    const result = serialized(
+      buildAddedModelConfig({ providers: { models: [] } }, 'private/model', newModelFormData()),
+    )
+    const model = result.providers?.models[0]
 
-  it.each(cases)(
-    'does not serialize untouched pricing for %s models',
-    (_label, canonical, config) => {
-      const result = serialized(
-        buildAddedModelConfig(config, 'private/model', newModelFormData(), canonical),
-      )
-      const model = canonical ? result.providers?.models[0] : result.model_config?.['private/model']
+    expect(model).toBeDefined()
+    expect(model).not.toHaveProperty('pricing')
+  })
 
-      expect(model).toBeDefined()
-      expect(model).not.toHaveProperty('pricing')
-    },
-  )
-
-  it('serializes explicitly entered zero rates for a canonical model', () => {
+  it('serializes explicitly entered zero rates', () => {
     const pricing = {
       currency: 'USD',
       prompt_per_1m: 0,
@@ -43,36 +35,25 @@ describe('model pricing mutations', () => {
       completion_per_1m: 0,
     }
     const result = serialized(
-      buildAddedModelConfig(
-        { providers: { models: [] } },
-        'private/model',
-        { ...newModelFormData(), pricing },
-        true,
-      ),
+      buildAddedModelConfig({ providers: { models: [] } }, 'private/model', {
+        ...newModelFormData(),
+        pricing,
+      }),
     )
 
     expect(result.providers?.models[0].pricing).toEqual(pricing)
   })
 
-  it.each([
-    ['canonical', true, { providers: { models: [] } } as ConfigData],
-    ['legacy', false, { model_config: {} } as ConfigData],
-  ])(
-    'persists an explicit free prompt rate with a safe currency for %s models',
-    (_label, canonical, config) => {
-      const result = serialized(
-        buildAddedModelConfig(
-          config,
-          'private/model',
-          { ...newModelFormData(), pricing: { prompt_per_1m: 0 } },
-          canonical,
-        ),
-      )
-      const model = canonical ? result.providers?.models[0] : result.model_config?.['private/model']
+  it('persists an explicit free prompt rate with a safe currency', () => {
+    const result = serialized(
+      buildAddedModelConfig({ providers: { models: [] } }, 'private/model', {
+        ...newModelFormData(),
+        pricing: { prompt_per_1m: 0 },
+      }),
+    )
 
-      expect(model?.pricing).toEqual({ prompt_per_1m: 0, currency: 'USD' })
-    },
-  )
+    expect(result.providers?.models[0].pricing).toEqual({ prompt_per_1m: 0, currency: 'USD' })
+  })
 })
 
 describe('catalog-backed model connection mutations', () => {
@@ -84,7 +65,7 @@ describe('catalog-backed model connection mutations', () => {
     expect(provider).toBeDefined()
 
     const result = serialized(
-      buildConnectedModelsConfig({ version: 'v0.3' }, [], {
+      buildConnectedModelsConfig({ version: 'v0.5' }, [], {
         provider: provider!,
         baseUrl: 'https://foundry.example.test',
         apiKey: '',
@@ -105,7 +86,7 @@ describe('catalog-backed model connection mutations', () => {
           {
             name: 'microsoft-foundry-primary',
             provider: 'microsoft-foundry',
-            base_url: 'https://foundry.example.test',
+            endpoint: 'https://foundry.example.test',
           },
         ],
       },
@@ -132,7 +113,7 @@ describe('effective model edit round trips', () => {
       ],
     },
   }
-  const normalized = (config = initial) => getNormalizedModels(config, true, catalog)[0]
+  const normalized = (config = initial) => getNormalizedModels(config, catalog)[0]
 
   it('shows inherited metadata and API format without persisting them on no-op save', () => {
     const model = normalized()
@@ -143,24 +124,19 @@ describe('effective model edit round trips', () => {
     expect(form.tags).toEqual(builtIn.tags ?? [])
     expect(model.reasoning_family).toBe('glm-5.3')
     expect(form.reasoning_family).toBe('')
-    expect(model.api_format).toBe('openai')
+    expect(model.api_format).toBe('chat_completions')
     expect(form.api_format).toBe('')
     validateModelStructuredFields(form)
-    expect(serialized(buildEditedModelConfig(initial, model, form, true))).toEqual(initial)
+    expect(serialized(buildEditedModelConfig(initial, model, form))).toEqual(initial)
   })
 
   it('writes only changed metadata, preserving fields that the form does not edit', () => {
     const model = normalized()
     const result = serialized(
-      buildEditedModelConfig(
-        initial,
-        model,
-        {
-          ...editModelFormData(model),
-          param_size: 'custom-size',
-        },
-        true,
-      ),
+      buildEditedModelConfig(initial, model, {
+        ...editModelFormData(model),
+        param_size: 'custom-size',
+      }),
     )
     expect(result.routing?.modelCards).toEqual([
       { ...initial.routing!.modelCards![0], param_size: 'custom-size' },
@@ -171,12 +147,7 @@ describe('effective model edit round trips', () => {
   it('clears an override to inherit while preserving other authored metadata', () => {
     const model = normalized()
     const result = serialized(
-      buildEditedModelConfig(
-        initial,
-        model,
-        { ...editModelFormData(model), description: '' },
-        true,
-      ),
+      buildEditedModelConfig(initial, model, { ...editModelFormData(model), description: '' }),
     )
     expect(result.routing?.modelCards).toEqual([{ name: builtIn.id, max_output_tokens: 8192 }])
     expect(normalized(result).description).toBe(builtIn.description)
@@ -189,10 +160,10 @@ describe('effective model edit round trips', () => {
     const form = editModelFormData(model)
     expect(form.api_format).toBe('responses')
     expect(
-      serialized(buildEditedModelConfig(config, model, form, true)).providers?.models[0].api_format,
+      serialized(buildEditedModelConfig(config, model, form)).providers?.models[0].api_format,
     ).toBe('responses')
     expect(
-      serialized(buildEditedModelConfig(config, model, { ...form, api_format: '' }, true)).providers
+      serialized(buildEditedModelConfig(config, model, { ...form, api_format: '' })).providers
         ?.models[0],
     ).not.toHaveProperty('api_format')
   })
@@ -203,12 +174,7 @@ describe('effective model edit round trips', () => {
       (entry) => entry.kind === 'physical' && entry.id !== builtIn.id,
     )!.id
     const result = serialized(
-      buildEditedModelConfig(
-        initial,
-        model,
-        { ...editModelFormData(model), catalog: nextID },
-        true,
-      ),
+      buildEditedModelConfig(initial, model, { ...editModelFormData(model), catalog: nextID }),
     )
     expect(result.routing?.modelCards).toEqual([])
     expect(result.providers?.models[0].catalog).toBe(nextID)
@@ -223,9 +189,7 @@ describe('effective model edit round trips', () => {
       reasoning_parameter: 'effort',
     })
     expect(() => validateModelStructuredFields(form)).not.toThrow()
-    const result = serialized(
-      buildAddedModelConfig({ providers: { models: [] } }, 'local', form, true),
-    )
+    const result = serialized(buildAddedModelConfig({ providers: { models: [] } }, 'local', form))
     expect(result.providers?.models[0]).not.toHaveProperty('reasoning')
   })
 })

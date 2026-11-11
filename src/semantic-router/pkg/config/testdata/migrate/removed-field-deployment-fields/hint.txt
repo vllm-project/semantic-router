@@ -1,0 +1,1 @@
+global.model_catalog.deployments.d3-remote.question_types: removed_field: question_types is removed; run `vllm-sr config migrate` (capabilities.question_types)

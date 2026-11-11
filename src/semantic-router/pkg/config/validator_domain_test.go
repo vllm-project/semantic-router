@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	yamlv3 "gopkg.in/yaml.v3"
@@ -16,19 +17,23 @@ func TestSupportedRoutingDomainNamesStayInSyncWithCommittedDomainContract(t *tes
 	}
 
 	var fragment struct {
-		Routing struct {
+		Recipes []struct {
 			Signals struct {
 				Domains []Category `yaml:"domains"`
 			} `yaml:"signals"`
-		} `yaml:"routing"`
+		} `yaml:"recipes"`
 	}
 	if err := yamlv3.Unmarshal(data, &fragment); err != nil {
 		t.Fatalf("unmarshal committed domain contract: %v", err)
 	}
 
 	got := SupportedRoutingDomainNames()
-	want := make([]string, 0, len(fragment.Routing.Signals.Domains))
-	for _, domain := range fragment.Routing.Signals.Domains {
+	if len(fragment.Recipes) != 1 {
+		t.Fatalf("the domain fragment declares %d recipes, want 1", len(fragment.Recipes))
+	}
+	domains := fragment.Recipes[0].Signals.Domains
+	want := make([]string, 0, len(domains))
+	for _, domain := range domains {
 		want = append(want, domain.Name)
 	}
 	slices.Sort(got)
@@ -73,7 +78,7 @@ func TestValidateDomainContractsAllowsAliasWithSupportedMMLUCategories(t *testin
 	}
 }
 
-func TestValidateDomainContractsRejectsUnsupportedMMLUCategory(t *testing.T) {
+func TestApplicationSignalContractsRejectALabelOutsideTheDomainPreset(t *testing.T) {
 	cfg := &RouterConfig{
 		IntelligentRouting: IntelligentRouting{
 			Signals: Signals{
@@ -82,40 +87,39 @@ func TestValidateDomainContractsRejectsUnsupportedMMLUCategory(t *testing.T) {
 		},
 	}
 
-	err := validateDomainContracts(cfg)
-	if err == nil {
-		t.Fatal("expected unsupported mmlu_categories error")
+	err := validateApplicationSignalContracts(cfg)
+	if err == nil || !strings.Contains(err.Error(), "computer_science") {
+		t.Fatalf("expected a label outside the domain preset to be rejected, got %v", err)
 	}
 }
 
-func TestValidateDomainContractsRejectsUnsupportedSoftmaxGroupImplicitDomain(t *testing.T) {
+func TestProjectionPartitionsRejectAMemberThatIsNoDomainRule(t *testing.T) {
 	cfg := &RouterConfig{
 		IntelligentRouting: IntelligentRouting{
 			Signals: Signals{
-				Categories: []Category{testDomainCategory("balance_demo_compact")},
+				Categories: []Category{testDomainCategory("math", "math")},
 			},
 			Projections: Projections{
 				Partitions: []ProjectionPartition{{
 					Name:      "domain_partition",
 					Semantics: "softmax_exclusive",
-					Members:   []string{"balance_demo_compact"},
-					Default:   "balance_demo_compact",
+					Members:   []string{"math", "science"},
+					Default:   "math",
 				}},
 			},
 		},
 	}
 
-	err := validateDomainContracts(cfg)
-	if err == nil {
-		t.Fatal("expected unsupported softmax domain member error")
+	if err := validateProjectionPartitions(cfg); err == nil {
+		t.Fatal("expected a partition member that names no domain rule to be rejected")
 	}
 }
 
-func TestValidateDomainContractsRejectsUndeclaredDecisionDomain(t *testing.T) {
+func TestDecisionContractsRejectAnUndeclaredDomainRule(t *testing.T) {
 	cfg := &RouterConfig{
 		IntelligentRouting: IntelligentRouting{
 			Signals: Signals{
-				Categories: []Category{testDomainCategory("math")},
+				Categories: []Category{testDomainCategory("math", "math")},
 			},
 			Decisions: []Decision{{
 				Name: "science_route",
@@ -127,17 +131,15 @@ func TestValidateDomainContractsRejectsUndeclaredDecisionDomain(t *testing.T) {
 		},
 	}
 
-	err := validateDomainContracts(cfg)
-	if err == nil {
-		t.Fatal("expected undeclared decision domain error")
+	err := validateDecisionContracts(cfg)
+	if err == nil || !strings.Contains(err.Error(), `unknown signal "science"`) {
+		t.Fatalf("expected undeclared decision domain error, got %v", err)
 	}
 }
 
 func testDomainCategory(name string, mmluCategories ...string) Category {
 	return Category{
-		CategoryMetadata: CategoryMetadata{
-			Name:           name,
-			MMLUCategories: mmluCategories,
-		},
+		Name:   name,
+		Labels: mmluCategories,
 	}
 }

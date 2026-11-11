@@ -1,6 +1,7 @@
 // topology/utils/api.ts - API calls for topology
 
 import { TestQueryResult, MatchedSignal, SignalType, EvaluatedRule, ConfigData, TestQueryMode } from '../types'
+import { withRoutingView } from '../../configPageCanonicalLayout'
 
 /**
  * Backend API response format for test-query
@@ -165,7 +166,7 @@ export async function fetchTopologyConfig() {
     throw new Error(`Failed to fetch config: ${configResponse.statusText}`)
   }
 
-  const config = await configResponse.json() as ConfigData
+  const config = withRoutingView(await configResponse.json() as ConfigData)
 
   if (!globalResponse.ok) {
     return config

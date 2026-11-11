@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 )
@@ -39,6 +40,7 @@ type semanticStreamItem struct {
 	reasoning        string
 	reasoningSig     string
 	toolCall         *llmprotocol.ToolCall
+	image            *llmprotocol.GeneratedImage
 	completed        bool
 	reasoningDetails map[int]llmprotocol.ReasoningDetail
 }
@@ -49,6 +51,9 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
 	recordStreamingTTFT(ctx)
+	if ctx.ResponseGuardHold != nil {
+		return r.handleHeldStreamBody(responseBody, endOfStream, ctx)
+	}
 	r.initializeSemanticResponseStream(ctx)
 	buffers := semanticStreamBuffers{}
 	buffers.push(responseBody, ctx)
@@ -141,9 +146,8 @@ func observeProtocolStream(
 	// Streaming headers have already been emitted. Keep late compatibility
 	// warnings observable through the same counter and structured diagnostics
 	// as buffered responses instead of retaining them only in request state.
-	for _, diagnostic := range diagnostics {
-		recordProtocolDiagnostic(ctx, normalizeProtocol(string(ctx.SourceFormat)), normalizeProtocol(string(ctx.TargetFormat)), diagnostic)
-	}
+	recordProtocolDiagnostics(ctx, diagnostics)
+	ctx.protocolDiagnosticsReported = len(ctx.ProtocolDiagnostics)
 	ctx.SemanticStreamState.observe(events)
 }
 
@@ -221,6 +225,8 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 		Context: ctx.TraceContext, Source: source, Target: target,
 		Options:     clientStreamOptions(ctx),
 		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
+		// The model the upstream reports, as buffered and same-format replies pass it through.
+		PreferProviderModel: true,
 	}
 	mutation := clientStreamMutation(ctx, source)
 	if responseID := responseObjectPublicID(ctx); responseID != "" {
@@ -331,6 +337,10 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				call := *event.ToolCall
 				item.toolCall = &call
 			}
+			if event.Content != nil && event.Content.GeneratedImage != nil {
+				image := *event.Content.GeneratedImage
+				item.image = &image
+			}
 		case llmprotocol.EventResponseCompleted:
 			state.terminal = true
 			state.stopSeq = event.MatchedStopSequence
@@ -391,6 +401,10 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 			call := *item.toolCall
 			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentToolCall, ToolCall: &call})
 		}
+		if item.image != nil {
+			image := *item.image
+			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentGeneratedImage, GeneratedImage: &image})
+		}
 		if len(contents) == 0 {
 			return nil, fmt.Errorf("semantic stream output item is empty")
 		}
@@ -411,8 +425,17 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 }
 
 func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, streamErr error) {
+	if semanticResponse := r.completeSemanticStream(ctx, streamErr); semanticResponse != nil {
+		r.commitStreamedAnswer(ctx, semanticResponse)
+	}
+}
+
+// completeSemanticStream settles a stream once it ended: its latency, usage
+// and inflight admission. It returns the answer the stream reconstructs, or
+// nil when the stream ended without one or was settled before.
+func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr error) *llmprotocol.Response {
 	if ctx == nil || ctx.StreamingComplete {
-		return
+		return nil
 	}
 	ctx.StreamingComplete = true
 	if streamErr != nil || ctx.SemanticStreamState == nil || !ctx.SemanticStreamState.terminal {
@@ -446,10 +469,24 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 			"error":      responseErr.Error(),
 		})
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
-		return
+		return nil
 	}
+	return semanticResponse
+}
+
+// commitStreamedAnswer keeps an answer the client received as it streamed:
+// the selected decision's response_guard, which neither blocks nor writes
+// notes, reads it and records what it found, and the answer reaches the
+// cache, memory, the Responses object and Router Replay. An answer the guard
+// could not read for want of the request's delegated credential reaches
+// Router Replay only.
+func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticResponse *llmprotocol.Response) {
 	recordPrimaryOutputDigest(ctx, semanticResponse)
-	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
+	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
+	if ctx.ResponseGuard != nil {
+		ctx.ResponseGuard.live = true
+	}
+	r.recordRouterReplayResponseGuard(ctx)
 	encoded, err := r.encodeClientResponse(*semanticResponse, ctx)
 	if err != nil {
 		logging.ComponentWarnEvent("extproc", "neutral_stream_replay_encode_failed", map[string]interface{}{
@@ -460,10 +497,21 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_encode_failed", true)
 		return
 	}
-	r.updateResponseCache(ctx, encoded)
 	r.updateKVAddressRegistry(ctx)
-	r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
-	r.persistResponseObject(ctx)
+	if principal.Refused(ctx.TraceContext) {
+		// The client already has the answer, so it is not refused, but
+		// nothing keeps an answer nothing checked.
+		logging.ComponentWarnEvent("extproc", "streamed_answer_not_kept", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"reason":     delegatedCredentialCode,
+		})
+		metrics.RecordCacheWriteSkipped(delegatedCredentialCode)
+		r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", delegatedCredentialCode, false)
+	} else {
+		r.updateResponseCache(ctx, encoded)
+		r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
+		r.persistResponseObject(ctx)
+	}
 	r.attachRouterReplayResponse(ctx, encoded, true)
 }
 
@@ -477,6 +525,7 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	}
 	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
 	if usage.invalid {
+		r.updateRouterReplayUsageCost(ctx, r.buildReplayUsageCost(ctx, usage))
 		return
 	}
 	totalTokens := responseUsageTotal(usage)

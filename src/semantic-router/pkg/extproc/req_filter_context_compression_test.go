@@ -141,9 +141,9 @@ func TestSemanticContextCompressionFailClosedReturnsError(t *testing.T) {
 	decision := &config.Decision{
 		Name: "fail-closed",
 		Plugins: []config.DecisionPlugin{{
-			Type: config.DecisionPluginContextCompression,
-			Configuration: config.MustStructuredPayload(map[string]interface{}{
-				"enabled": true, "failure_mode": "fail_closed",
+			Type: config.DecisionPluginContext,
+			Configuration: compressPayload(map[string]interface{}{
+				"failure_mode": "fail_closed",
 			}),
 		}},
 	}
@@ -195,16 +195,22 @@ func contextCompressionTestDecision(compressRAG bool) *config.Decision {
 	})
 }
 
-func contextCompressionDecision(extra map[string]interface{}) *config.Decision {
-	configuration := map[string]interface{}{"enabled": true}
-	for key, value := range extra {
-		configuration[key] = value
-	}
+func contextCompressionDecision(compress map[string]interface{}) *config.Decision {
 	return &config.Decision{
 		Name: "compressed-route",
 		Plugins: []config.DecisionPlugin{{
-			Type:          config.DecisionPluginContextCompression,
-			Configuration: config.MustStructuredPayload(configuration),
+			Type:          config.DecisionPluginContext,
+			Configuration: compressPayload(compress),
 		}},
 	}
+}
+
+// compressPayload is the configuration of an enabled context plugin that
+// compresses as compress says, ordering the targets by BM25 unless compress
+// names a match.
+func compressPayload(compress map[string]interface{}) *config.StructuredPayload {
+	if _, ok := compress["match"]; !ok {
+		compress["match"] = map[string]interface{}{"recall": map[string]interface{}{"method": "bm25"}}
+	}
+	return config.MustStructuredPayload(map[string]interface{}{"enabled": true, "compress": compress})
 }

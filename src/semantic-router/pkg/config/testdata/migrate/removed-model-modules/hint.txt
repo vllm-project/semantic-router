@@ -1,0 +1,1 @@
+global.model_catalog.modules.classifier.domain: removed_section: global.model_catalog.modules.classifier.domain is removed; run `vllm-sr config migrate` (drop it; its threshold is a domain rule's predicate)

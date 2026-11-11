@@ -25,6 +25,11 @@ on:
         required: false
         default: ""
         type: string
+      date:
+        description: The nightly run's publication date (YYYYMMDD), shared with its images.
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -43,6 +48,7 @@ jobs:
       chart: ${{ steps.package.outputs.chart }}
       version: ${{ steps.versions.outputs.chart_version }}
       app_version: ${{ steps.versions.outputs.app_version }}
+      current: ${{ steps.current.outputs.current }}
     steps:
       - uses: actions/checkout@v4
 
@@ -50,12 +56,27 @@ jobs:
         with:
           version: ${{ env.HELM_VERSION }}
 
+      # Chart.lock pins the dependency charts, so its hash keys their archives
+      # and a hit downloads nothing.
+      - name: Cache dependency charts
+        id: dependency-cache
+        uses: actions/cache@v4
+        with:
+          path: deploy/helm/semantic-router/charts/*.tgz
+          key: helm-dependencies-${{ hashFiles('deploy/helm/semantic-router/Chart.lock') }}
+
+      - name: Fetch dependency charts
+        env:
+          HELM_DEPENDENCIES_CACHED: ${{ steps.dependency-cache.outputs.cache-hit }}
+        run: deploy/helm/fetch-dependencies.sh "$CHART_PATH"
+
       - name: Resolve chart versions
         id: versions
         env:
           MODE: ${{ inputs.mode }}
           RELEASE_VERSION: ${{ inputs.version }}
           RELEASE_TAG: ${{ inputs.tag }}
+          RUN_DATE: ${{ inputs.date }}
         run: |
           case "$MODE" in
             release)
@@ -68,9 +89,12 @@ jobs:
               APP_VERSION="$RELEASE_TAG"
               ;;
             nightly)
-              DATE="$(date -u +'%Y%m%d')"
-              CHART_VERSION="0.0.0-nightly.${DATE}"
-              APP_VERSION="nightly-${DATE}"
+              if [[ ! "$RUN_DATE" =~ ^[0-9]{8}$ ]]; then
+                echo "::error::A nightly chart needs its run's date, the one its images carry"
+                exit 1
+              fi
+              CHART_VERSION="0.0.0-nightly.${RUN_DATE}"
+              APP_VERSION="nightly-${RUN_DATE}"
               ;;
             main)
               CHART_VERSION="0.0.0-latest"
@@ -89,7 +113,9 @@ jobs:
       - name: Package chart
         id: package
         run: |
-          helm package -u "${{ env.CHART_PATH }}" \
+          # The locked dependency charts are in charts/; -u would re-resolve
+          # them to their newest versions instead.
+          helm package "${{ env.CHART_PATH }}" \
             --version "${{ steps.versions.outputs.chart_version }}" \
             --app-version "${{ steps.versions.outputs.app_version }}" \
             --destination .
@@ -123,6 +149,20 @@ jobs:
           sha256sum "$CHART" > qualified-chart.sha256
           printf '%s\n' "$GITHUB_SHA" > chart-source.txt
 
+      - name: Publish only the chart main's head carries
+        id: current
+        if: inputs.mode == 'main'
+        run: |
+          # Overlapping runs share the one mutable 0.0.0-latest version, so each
+          # may push only the chart main holds, whichever run finishes last.
+          git fetch --quiet --depth=1 origin main
+          if git diff --quiet HEAD FETCH_HEAD -- "$CHART_PATH"; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::A newer main commit changed the chart; its run publishes 0.0.0-latest."
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           overwrite: true
@@ -140,6 +180,7 @@ jobs:
       always() && !cancelled() && !failure()
       && !inputs.build-only
       && (inputs.prebuilt-chart || needs.package.result == 'success')
+      && needs.package.outputs.current != 'false'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -161,11 +202,26 @@ jobs:
       - name: Publish chart
         env:
           CHART: ${{ inputs.prebuilt-chart && format('semantic-router-{0}.tgz', inputs.version) || needs.package.outputs.chart }}
+          MODE: ${{ inputs.mode }}
+          VERSION: ${{ needs.package.outputs.version }}
         run: |
           OWNER="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
           echo "${{ secrets.GITHUB_TOKEN }}" |
             helm registry login "${{ env.REGISTRY }}" \
               -u "${{ github.actor }}" --password-stdin
+          # A nightly chart version is published once; a re-run finds its own.
+          if [[ "$MODE" == nightly ]]; then
+            if helm show chart "oci://${{ env.REGISTRY }}/${OWNER}/charts/semantic-router" \
+              --version "$VERSION" > /dev/null 2> "$RUNNER_TEMP/published-chart.err"; then
+              echo "::notice::semantic-router $VERSION is already published; leaving it unchanged."
+              helm registry logout "${{ env.REGISTRY }}"
+              exit 0
+            fi
+            if ! grep -qiE 'not found|manifest unknown' "$RUNNER_TEMP/published-chart.err"; then
+              cat "$RUNNER_TEMP/published-chart.err" >&2
+              exit 1
+            fi
+          fi
           helm push "$CHART" \
             "oci://${{ env.REGISTRY }}/${OWNER}/charts"
           helm registry logout "${{ env.REGISTRY }}"

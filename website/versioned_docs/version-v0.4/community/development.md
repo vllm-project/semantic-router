@@ -159,6 +159,6 @@ offset.
 - Set `SR_LOG_LEVEL=debug` for Router diagnostics.
 - Run `vllm-sr config validate --config <file>` before debugging a configuration at
   runtime.
-- See [Common Errors](/docs/troubleshooting/common-errors) and
-  [Container Connectivity](/docs/troubleshooting/container-connectivity) for
+- See [Common Errors](/docs/v0.4/troubleshooting/common-errors) and
+  [Container Connectivity](/docs/v0.4/troubleshooting/container-connectivity) for
   startup and network failures.

@@ -4,11 +4,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
@@ -46,7 +53,7 @@ func TestAnthropicAdaptiveRequestDispatchesToChatAndResponses(t *testing.T) {
 			if dispatch.targetFormat != target {
 				t.Fatalf("target = %q, want %q", dispatch.targetFormat, target)
 			}
-			if err = router.candidateCapabilityMismatch(config.ModelRef{Model: "chat"}, &request, nil, nil, nil); err != nil {
+			if err = router.candidateCapabilityMismatch(config.ModelRef{Model: "chat"}, &request, nil, nil, nil, true); err != nil {
 				t.Fatalf("selection disagrees with dispatch: %v", err)
 			}
 			body, err := router.encodeDispatchRequest(ctx)
@@ -135,6 +142,102 @@ func TestAnthropicAdaptiveResponsesDropsCacheDirectiveWithWarning(t *testing.T) 
 	}
 	if !llmprotocol.RequiredCapabilities(request).Supports(llmprotocol.CapabilityCacheDirectives) {
 		t.Fatal("dispatch modified the public Anthropic request")
+	}
+}
+
+// Claude Code places its environment section in a system message after the
+// first user turn and later notices after the tool results they refer to.
+// Qwen3.5 and later templates raise on that position, and gpt-oss, MiniMax-M2
+// and Nemotron templates drop it. Chat and Responses backends receive the
+// messages in place by default, and as user text in the same place when the
+// operator lists messages[].role in allow_lossy_translation.
+func TestAnthropicMidConversationSystemMessagesBecomeUserTextOnlyWhenOptedIn(t *testing.T) {
+	for _, check := range []struct {
+		target   llmprotocol.WireFormat
+		key      string
+		inPlace  []string
+		userText []string
+	}{
+		{
+			llmprotocol.OpenAIChatV1, "messages",
+			[]string{"system", "user", "system", "assistant", "tool", "system"},
+			[]string{"system", "user", "assistant", "tool", "user"},
+		},
+		{
+			llmprotocol.OpenAIResponsesV1, "input",
+			[]string{"system", "user", "system", "function_call", "function_call_output", "system"},
+			[]string{"system", "user", "function_call", "function_call_output", "user"},
+		},
+	} {
+		for _, optedIn := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/opt_in=%t", check.target, optedIn), func(t *testing.T) {
+				router := routingTestRouter("chat")
+				if check.target == llmprotocol.OpenAIResponsesV1 {
+					model := router.Config.ModelConfig["chat"]
+					model.APIFormat = config.APIFormatResponses
+					router.Config.ModelConfig["chat"] = model
+				}
+				want, environment, notice := check.inPlace, 2, 5
+				if optedIn {
+					router.Config.AllowLossyTranslation = []string{llmprotocol.LossyFieldSystemMessageRole}
+					want, environment, notice = check.userText, 1, 4
+				}
+				request, envelope, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.AnthropicMessagesV1, []byte(`{
+					"model":"chat","max_tokens":64,"system":[{"type":"text","text":"You are a coding agent."}],
+					"tools":[{"name":"Read","input_schema":{"type":"object"}}],
+					"messages":[
+						{"role":"user","content":"Fix the build"},
+						{"role":"system","content":[{"type":"text","text":"# Environment\nWorking directory: /work"}]},
+						{"role":"assistant","content":[{"type":"tool_use","id":"call_1","name":"Read","input":{"file_path":"/work/Makefile"}}]},
+						{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_1","content":"all: build"}]},
+						{"role":"system","content":"Note: /work/Makefile changed on disk since you last read it."}
+					]
+				}`))
+				if err != nil {
+					t.Fatal(err)
+				}
+				ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, &request)
+				ctx.ProtocolEnvelope = envelope
+				if _, err = router.prepareProviderDispatch(&request, "chat", "", false, ctx); err != nil {
+					t.Fatal(err)
+				}
+				body, err := router.encodeDispatchRequest(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var wire map[string]json.RawMessage
+				var items []map[string]json.RawMessage
+				if err = json.Unmarshal(body, &wire); err != nil {
+					t.Fatal(err)
+				}
+				if err = json.Unmarshal(wire[check.key], &items); err != nil {
+					t.Fatal(err)
+				}
+				var labels []string
+				for _, item := range items {
+					var label string
+					if err = json.Unmarshal(item["role"], &label); err != nil {
+						_ = json.Unmarshal(item["type"], &label)
+					}
+					labels = append(labels, label)
+				}
+				if !reflect.DeepEqual(labels, want) ||
+					!bytes.Contains(items[environment]["content"], []byte("# Environment")) ||
+					!bytes.Contains(items[notice]["content"], []byte("changed on disk")) ||
+					bytes.Contains(items[0]["content"], []byte("# Environment")) {
+					t.Fatalf("backend conversation = %v: %s", labels, body)
+				}
+				reported := len(ctx.ProtocolDiagnostics) == 1 &&
+					ctx.ProtocolDiagnostics[0].Field == llmprotocol.LossyFieldSystemMessageRole &&
+					ctx.ProtocolDiagnostics[0].Action == llmprotocol.DiagnosticApproximated
+				if reported != optedIn || (!optedIn && len(ctx.ProtocolDiagnostics) != 0) {
+					t.Fatalf("diagnostics = %+v, want one messages[].role entry only when opted in", ctx.ProtocolDiagnostics)
+				}
+				if request.Messages[1].Role != llmprotocol.RoleSystem {
+					t.Fatal("dispatch modified the public Anthropic request")
+				}
+			})
+		}
 	}
 }
 
@@ -366,5 +469,59 @@ func TestAnthropicOmittedDisplayFiltersStreamingChatReasoning(t *testing.T) {
 	}
 	if bytes.Contains(public, []byte("private thinking")) || bytes.Contains(public, []byte("thinking_delta")) || !bytes.Contains(public, []byte("public answer")) {
 		t.Fatalf("stream leaked reasoning or lost answer: %s", public)
+	}
+}
+
+// TestSystemMessageProjectionKeepsTheCountOutOfTheMetricLabel sends requests
+// with one, two and three mid-conversation system messages. x-vsr-warnings
+// names each request's count, while llm_translation_lossy_total keeps one
+// series for the projection, so a conversation's length never adds a series.
+func TestSystemMessageProjectionKeepsTheCountOutOfTheMetricLabel(t *testing.T) {
+	router := routingTestRouter("chat")
+	router.Config.AllowLossyTranslation = []string{llmprotocol.LossyFieldSystemMessageRole}
+	const label = "N system messages sent as user text in place"
+	counter := metrics.TranslationLossyTotal.WithLabelValues("anthropic", "openai", "approximated", label)
+	before := testutil.ToFloat64(counter)
+	for count := 1; count <= 3; count++ {
+		messages := []string{`{"role":"user","content":"Fix the build"}`}
+		for range count {
+			messages = append(messages, `{"role":"system","content":"Note: a file changed on disk."}`, `{"role":"user","content":"go on"}`)
+		}
+		request, envelope, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.AnthropicMessagesV1,
+			[]byte(`{"model":"chat","max_tokens":64,"messages":[`+strings.Join(messages, ",")+`]}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx := routingTestContext(llmprotocol.AnthropicMessagesV1, &request)
+		ctx.ProtocolEnvelope = envelope
+		if _, err = router.prepareProviderDispatch(&request, "chat", "", false, ctx); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = router.encodeDispatchRequest(ctx); err != nil {
+			t.Fatal(err)
+		}
+		want := fmt.Sprintf(`protocol;action=approximated;reason="%d system messages sent as user text in place";field="messages[].role"`, count)
+		if got := responseWarnings(ctx); got != want {
+			t.Fatalf("x-vsr-warnings = %s, want %s", got, want)
+		}
+	}
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, family := range families {
+		if family.GetName() != "llm_translation_lossy_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			for _, pair := range metric.GetLabel() {
+				if pair.GetName() == "reason" && strings.Contains(pair.GetValue(), "system messages") && pair.GetValue() != label {
+					t.Errorf("llm_translation_lossy_total has a per-request series reason=%q", pair.GetValue())
+				}
+			}
+		}
+	}
+	if got := testutil.ToFloat64(counter) - before; got != 3 {
+		t.Fatalf("llm_translation_lossy_total{reason=%q} rose by %v, want 3", label, got)
 	}
 }

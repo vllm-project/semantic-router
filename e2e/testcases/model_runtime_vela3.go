@@ -50,6 +50,13 @@ var mrVela3Cases = []mrVela3Case{
 		prompt:   "My name is John Smith, my email is john.smith@example.com and my phone number is 555-123-4567. Please update my shipping address.",
 		decision: "pii_route",
 	},
+	{
+		// A text state is the user part as it is, even when it parses as JSON:
+		// the PII preset reads all of it, not only the answer.
+		name:     "personal data as JSON",
+		prompt:   `{"request": "My name is John Smith and my email is john.smith@example.com.", "answer": "Noted."}`,
+		decision: "pii_route",
+	},
 	{name: "order number", prompt: "Where is order A-778120? It was supposed to arrive last Tuesday."},
 	{name: "account", prompt: "Why was my subscription charged twice this month? Please check my billing history."},
 	{name: "small talk", prompt: "Tell me a fun fact about penguins.", decision: "default-route"},
@@ -121,7 +128,7 @@ func checkModelRuntimeVela3Case(
 		return "", err
 	}
 	want := vela3Matches(signals, answered)
-	matched := headerItems(response.Headers, "x-vsr-matched-decision-model")
+	matched := signalItems(response.Headers, "systemone")
 	var got []string
 	for item := range matched {
 		name, _, _ := strings.Cut(item, ":")
@@ -138,20 +145,23 @@ func checkModelRuntimeVela3Case(
 }
 
 // vela3Matches is what the Router lists for vela3-fast's answers
-// (classification.applyDecisionAnswer): a Noul signal's name when its answer
+// (classification.applySystemOneAnswer): a Noul signal's name when its answer
 // meets the predicate, and "signal:label" for each span label one of whose
-// spans meets it.
+// spans meets it, with the signal's name when one does.
 func vela3Matches(signals map[string]mrVela3Signal, answered modelruntime.DecisionsResponse) []string {
 	var want []string
 	for name, signal := range signals {
 		if signal.question.Type == "span" {
+			// A span rule is listed by name when a label it counts has a span
+			// above its threshold; its label references are not.
+			found := false
 			for _, label := range signal.question.Labels {
 				for _, span := range answered.Spans[name] {
-					if span.Label == label.Key && span.Probability >= signal.gte {
-						want = append(want, name+":"+label.Key)
-						break
-					}
+					found = found || (span.Label == label.Key && span.Probability >= signal.gte)
 				}
+			}
+			if found {
+				want = append(want, name)
 			}
 			continue
 		}
@@ -171,9 +181,9 @@ func vela3DecisionSignals(valuesPath string) (map[string]mrVela3Signal, error) {
 	}
 	var values struct {
 		Config struct {
-			Routing struct {
+			Recipes []struct {
 				Signals struct {
-					Decision []struct {
+					SystemOne []struct {
 						Name     string `yaml:"name"`
 						Question struct {
 							Type         string                `yaml:"type"`
@@ -183,16 +193,19 @@ func vela3DecisionSignals(valuesPath string) (map[string]mrVela3Signal, error) {
 						Predicate struct {
 							GTE float64 `yaml:"gte"`
 						} `yaml:"predicate"`
-					} `yaml:"decision"`
+					} `yaml:"systemone"`
 				} `yaml:"signals"`
-			} `yaml:"routing"`
+			} `yaml:"recipes"`
 		} `yaml:"config"`
 	}
 	if err := yaml.Unmarshal(data, &values); err != nil {
 		return nil, fmt.Errorf("%s: %w", valuesPath, err)
 	}
 	signals := map[string]mrVela3Signal{}
-	for _, rule := range values.Config.Routing.Signals.Decision {
+	if len(values.Config.Recipes) == 0 {
+		return nil, fmt.Errorf("%s: no recipe declares a signal", valuesPath)
+	}
+	for _, rule := range values.Config.Recipes[0].Signals.SystemOne {
 		signals[rule.Name] = mrVela3Signal{
 			question: modelruntime.Question{Type: rule.Question.Type, Instructions: rule.Question.Instructions, Labels: rule.Question.Labels},
 			gte:      rule.Predicate.GTE,

@@ -3,23 +3,23 @@ import yaml
 from cli.config_schema import schema_document
 from cli.config_schema.views import schema_view
 from cli.main import main
-from cli.models import RecipeRouting, RequestParamsPluginConfig, Routing, UserConfig
+from cli.models import Recipe, RequestParamsPluginConfig, UserConfig
 from cli.parser import parse_user_config
 from cli.validator_recipe_contracts import validate_recipe_contracts
 from click.testing import CliRunner
 from pydantic import ValidationError
 
 
-@pytest.mark.parametrize("model", [Routing, RecipeRouting])
-def test_recipe_policy_fields_preserve_false_and_independent_dimensions(model):
-    value = model.model_validate(
+def test_recipe_policy_fields_preserve_false_and_independent_dimensions():
+    value = Recipe.model_validate(
         {
+            "name": "default",
             "candidate_requirements": {"context": "known_limits"},
         }
     )
     dumped = value.model_dump(exclude_none=True, by_alias=True)
     assert dumped["candidate_requirements"] == {"context": "known_limits"}
-    assert model().candidate_requirements is None
+    assert Recipe(name="default").candidate_requirements is None
     assert "data_policy" not in dumped
 
 
@@ -35,30 +35,39 @@ def test_recipe_policy_fields_preserve_false_and_independent_dimensions(model):
     ],
 )
 def test_recipe_policy_fields_reject_invalid_contract(payload):
-    for model in (Routing, RecipeRouting):
-        with pytest.raises(ValidationError):
-            model.model_validate(payload)
+    with pytest.raises(ValidationError):
+        Recipe.model_validate({"name": "default", **payload})
 
 
 def test_personal_data_capture_override_does_not_require_a_pii_signal():
     config = UserConfig.model_validate(
         {
-            "version": "v0.3",
-            "global": {"services": {"router_replay": {"capture_personal_data": False}}},
-            "routing": {
-                "decisions": [
+            "version": "v0.5",
+            "global": {
+                "plugins": [
                     {
-                        "name": "everything",
-                        "priority": 1,
-                        "plugins": [
-                            {
-                                "type": "router_replay",
-                                "configuration": {"capture_personal_data": False},
-                            }
-                        ],
+                        "type": "router_replay",
+                        "configuration": {"capture_personal_data": False},
                     }
                 ]
             },
+            "recipes": [
+                {
+                    "name": "default",
+                    "decisions": [
+                        {
+                            "name": "everything",
+                            "priority": 1,
+                            "plugins": [
+                                {
+                                    "type": "router_replay",
+                                    "configuration": {"capture_personal_data": False},
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
         }
     )
     assert validate_recipe_contracts(config) == []
@@ -66,7 +75,7 @@ def test_personal_data_capture_override_does_not_require_a_pii_signal():
 
 def test_recipe_policy_schema_discovery():
     doc = schema_document()
-    for path in ("routing.candidate_requirements", "global.services.router_replay"):
+    for path in ("recipes.candidate_requirements", "global.services.router_replay"):
         result = schema_view(doc, view="section", path=path, expanded=True)
         assert result["x-vllm-sr-view"]["path"] == path
     requirements = doc["$defs"]["CandidateRequirements"]["properties"]
@@ -129,7 +138,7 @@ def _request_params_config(value, *, named=True):
         ]
     }
     document = {
-        "version": "v0.3",
+        "version": "v0.5",
         "providers": {
             "models": [
                 {
@@ -145,15 +154,15 @@ def _request_params_config(value, *, named=True):
                 }
             ]
         },
-        "routing": {"modelCards": [{"name": "local-model"}]},
+        "recipes": [{"name": "default"}],
     }
     if named:
-        document["recipes"] = [{"name": "balanced", "routing": routing}]
+        document["recipes"] = [{"name": "balanced", **routing}]
         document["entrypoints"] = [
             {"model_names": ["router/balanced"], "recipe": "balanced"}
         ]
     else:
-        document["routing"].update(routing)
+        document["recipes"][0].update(routing)
     return document
 
 
@@ -170,7 +179,7 @@ def test_request_params_default_cli_validation_and_config_roundtrip(
     assert result.exit_code == 0, result.output
 
     parsed = parse_user_config(str(path), log_summary=False)
-    routing = parsed.recipes[0].routing if named else parsed.routing
+    routing = parsed.recipes[0]
     assert routing.decisions[0].plugins[0].configuration == {
         "default_max_tokens": value
     }
@@ -196,24 +205,3 @@ def test_request_params_default_cli_rejects_invalid_values(tmp_path, value):
     result = CliRunner().invoke(main, ["config", "validate", "--config", str(path)])
     assert result.exit_code != 0, result.output
     assert "default_max_tokens" in result.output
-
-
-@pytest.mark.parametrize(
-    "policy",
-    [
-        {"candidate_requirements": {"context": "known_limits"}},
-        {"strategy": "confidence"},
-    ],
-)
-def test_policy_only_default_conflict_matches_router(policy):
-    cfg = UserConfig.model_validate(
-        {
-            "version": "v0.3",
-            "routing": policy,
-            "recipes": [{"name": "default", "routing": {}}],
-        }
-    )
-    errors = validate_recipe_contracts(cfg)
-    assert any(error.field == "recipes.default" for error in errors)
-    cfg.routing = Routing()
-    assert validate_recipe_contracts(cfg) == []

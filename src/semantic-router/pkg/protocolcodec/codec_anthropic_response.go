@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -33,6 +34,7 @@ type anthropicUsageWire struct {
 	OutputTokensDetails      anthropicOutputUsageDetailsWire  `json:"output_tokens_details"`
 	ServerToolUse            anthropicServerToolUsageWire     `json:"server_tool_use"`
 	ServiceTier              string                           `json:"service_tier"`
+	Speed                    string                           `json:"speed,omitempty"`
 	Iterations               []json.RawMessage                `json:"iterations,omitempty"`
 }
 
@@ -63,16 +65,21 @@ type anthropicTransportErrorWire struct {
 
 func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire anthropicResponseWire
-	if err := decodeProviderWire(body, &wire, policy); err != nil {
+	_, unknownFields, err := decodeProviderWireTolerant(body, &wire, policy)
+	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := validateAnthropicResponseResource(wire); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	diagnostics, err := anthropicStopSequenceDiagnostics(body, "", policy)
+	unknownFields = append(unknownFields, anthropicContentUnknownFields(wire.Content, policy)...)
+	var diagnostics llmprotocol.Diagnostics
+	appendUnknownFieldDiagnostics(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, unknownFields)
+	stopSequenceDiagnostics, err := anthropicStopSequenceDiagnostics(body, "", policy)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
+	diagnostics = appendDiagnostics(diagnostics, stopSequenceDiagnostics, policy.Limits.Diagnostics)
 	diagnostics = appendDiagnostics(diagnostics, anthropicResponseMetadataDiagnostics(wire, policy), policy.Limits.Diagnostics)
 	response, err := decodeAnthropicResponseResource(wire, policy)
 	if err != nil {
@@ -80,6 +87,25 @@ func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Pol
 	}
 	appendAnthropicResponseUsage(&response, wire.Usage, policy, &diagnostics)
 	return response, responseEnvelope(llmprotocol.AnthropicMessagesV1, body, response.Generation, response.SourceStopReason, policy), diagnostics, nil
+}
+
+// anthropicContentUnknownFields reports the members of reply content blocks
+// that their wire contract does not declare. The blocks are raw values decoded
+// one by one, so the resource-level strip cannot see inside them.
+func anthropicContentUnknownFields(raw json.RawMessage, policy llmprotocol.Policy) []string {
+	if !dropUnknownUpstreamFields(policy) || !jsonFieldPresent(raw) {
+		return nil
+	}
+	var blocks []json.RawMessage
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return nil
+	}
+	dropped := make(map[string]struct{})
+	for _, block := range blocks {
+		_, fields := stripUnknownUpstreamFields(block, reflect.TypeOf(anthropicContentWire{}))
+		addUnknownFieldPaths(dropped, "content[]", fields)
+	}
+	return sortedUnknownFieldPaths(dropped)
 }
 
 func anthropicResponseMetadataDiagnostics(wire anthropicResponseWire, policy llmprotocol.Policy) llmprotocol.Diagnostics {
@@ -137,9 +163,12 @@ func appendAnthropicResponseUsage(
 		"usage.server_tool_use": usage.ServerToolUse.WebFetchRequests != 0 ||
 			usage.ServerToolUse.WebSearchRequests != 0,
 		"usage.service_tier": usage.ServiceTier != "",
+		"usage.speed":        usage.Speed != "",
 		"usage.iterations":   len(usage.Iterations) > 0,
-	}, "provider usage metadata has no neutral accounting bucket")
+	}, anthropicUsageMetadataReason)
 }
+
+const anthropicUsageMetadataReason = "provider usage metadata has no neutral accounting bucket"
 
 func decodeAnthropicUsage(wire anthropicUsageWire, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) llmprotocol.Usage {
 	cacheWrite := wire.CacheCreationInputTokens
@@ -217,7 +246,7 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 	if err != nil {
 		return nil, diagnostics, err
 	}
-	stop := encodeAnthropicStop(response.StopReason)
+	stop := encodeAnthropicStop(response.StopReason, responsesOutputHasToolCall(response.Output))
 	wire := anthropicResponseWire{ID: response.ID, Type: "message", Role: "assistant", Model: response.Model, Content: content, StopReason: &stop, Usage: encodeAnthropicUsage(response.Usage)}
 	if response.StopReason == llmprotocol.StopSequence {
 		wire.StopSequence = &response.MatchedStopSequence
@@ -315,7 +344,13 @@ func decodeAnthropicStop(reason string) llmprotocol.StopReason {
 	}
 }
 
-func encodeAnthropicStop(reason llmprotocol.StopReason) string {
+// A Messages turn that carries tool_use blocks stops with tool_use, which is
+// what Messages clients run calls on. A Chat backend ends a forced named tool
+// call with "stop", the end of the turn.
+func encodeAnthropicStop(reason llmprotocol.StopReason, toolUse bool) string {
+	if reason == llmprotocol.StopEndTurn && toolUse {
+		return "tool_use"
+	}
 	switch reason {
 	case llmprotocol.StopMaxTokens:
 		return "max_tokens"
@@ -350,9 +385,12 @@ func (AnthropicMessagesCodec) DecodeTransportError(
 		return decodeSnowflakeTransportError(body, policy, llmprotocol.AnthropicMessagesV1)
 	}
 	var wire anthropicTransportErrorWire
-	if err := decodeProviderWire(body, &wire, policy); err != nil {
+	_, unknownFields, err := decodeProviderWireTolerant(body, &wire, policy)
+	if err != nil {
 		return llmprotocol.TransportError{}, nil, err
 	}
+	var diagnostics llmprotocol.Diagnostics
+	appendUnknownFieldDiagnostics(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, unknownFields)
 	if wire.Type != "error" {
 		return llmprotocol.TransportError{}, nil, invalidProviderResponse(
 			"invalid_upstream_error_envelope",
@@ -376,7 +414,7 @@ func (AnthropicMessagesCodec) DecodeTransportError(
 			Code:     wire.Error.Type, Message: wire.Error.Message,
 		},
 		ProviderRequestID: wire.RequestID,
-	}, nil, nil
+	}, diagnostics, nil
 }
 
 func (AnthropicMessagesCodec) EncodeTransportError(transportError llmprotocol.TransportError) []byte {

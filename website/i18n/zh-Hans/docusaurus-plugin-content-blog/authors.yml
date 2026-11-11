@@ -64,6 +64,12 @@ aayushsaini101:
   url: https://github.com/AayushSaini101
   image_url: https://github.com/AayushSaini101.png
 
+sharanharsoor:
+  name: Sharan Harsoor
+  title: Founder and maintainer of Runkite · ML Engineer
+  url: https://github.com/sharanharsoor
+  image_url: https://github.com/sharanharsoor.png
+
 shivjikumarjha:
   name: Shivji Kumar Jha
   title: Staff Engineer (Data & AI) @ Nutanix
@@ -91,3 +97,14 @@ Alex-Wengg:
   title: Fluid Inference
   url: https://github.com/Alex-Wengg
   image_url: https://github.com/Alex-Wengg.png
+
+LeON-Nie-code:
+  name: Leon Nie
+  url: https://github.com/LeON-Nie-code
+  image_url: https://avatars.githubusercontent.com/u/118652405?v=4
+
+theohsiung:
+  name: Theo Hsiung
+  title: Associate Research Scientist @ Delta Electronics
+  url: https://github.com/theohsiung
+  image_url: https://github.com/theohsiung.png

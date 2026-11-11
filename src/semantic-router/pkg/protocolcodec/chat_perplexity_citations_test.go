@@ -64,7 +64,7 @@ func TestChatStreamAcceptsPerplexityCitations(t *testing.T) {
 
 func TestChatCitationsStayStrictOnUnknownFields(t *testing.T) {
 	body := []byte(`{"id":"chatcmpl_1","object":"chat.completion","created":1,"model":"sonar","choices":[{"index":0,"message":{"role":"assistant","content":"answer"},"finish_reason":"stop"}],"source_links":["https://example.com/a"]}`)
-	if _, _, _, err := (OpenAIChatCodec{}).DecodeResponse(body, llmprotocol.DefaultPolicy()); err == nil {
+	if _, _, _, err := (OpenAIChatCodec{}).DecodeResponse(body, conformancePolicy()); err == nil {
 		t.Fatal("undeclared top-level field was accepted")
 	}
 }

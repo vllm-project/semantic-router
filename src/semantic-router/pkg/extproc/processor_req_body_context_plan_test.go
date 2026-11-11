@@ -20,9 +20,8 @@ func TestContextPlanOriginalHistoryPrecedesEnrichment(t *testing.T) {
 		llmprotocol.Message{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: "rag-call", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "document"}}}}}},
 	)
 	ctx.RAGToolCallIDs = map[string]struct{}{"rag-call": {}}
-	memory := llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "saved fact"}}}
-	request.Messages = append([]llmprotocol.Message{memory}, request.Messages...)
-	ctx.MemoryMessageIndexes = map[int]struct{}{0: {}}
+	request.Messages = append(request.Messages, memoryExchange("memory-call", "saved fact")...)
+	ctx.MemoryToolCallIDs = map[string]struct{}{"memory-call": {}}
 	before := append([]llmprotocol.Message(nil), request.Messages...)
 	if err := (&OpenAIRouter{}).applyContextTransformationPlan(ctx, request); err != nil {
 		t.Fatal(err)
@@ -31,7 +30,7 @@ func TestContextPlanOriginalHistoryPrecedesEnrichment(t *testing.T) {
 	if len(ir.OriginalHistory().Messages) != 1 || ir.OriginalHistory().Messages[0].Content[0].Text != "question" {
 		t.Fatal("enrichment contaminated original history")
 	}
-	if ir.Messages[0].Source != contextcompression.SourceMemory || ir.Messages[2].Source != contextcompression.SourceRAG || ir.Messages[3].Source != contextcompression.SourceRAG {
+	if ir.Messages[1].Source != contextcompression.SourceRAG || ir.Messages[2].Source != contextcompression.SourceRAG || ir.Messages[3].Source != contextcompression.SourceMemory || ir.Messages[4].Source != contextcompression.SourceMemory {
 		t.Fatal("injection provenance lost")
 	}
 	if !reflect.DeepEqual(before, request.Messages) {
@@ -63,5 +62,13 @@ func TestContextPlanRunsWithoutCompressionPlugin(t *testing.T) {
 	receipts := ctx.ContextRequestIR.Transformations.Receipts()
 	if len(receipts) != 2 || receipts[0].Kind != contextcompression.TransformSelectTurns || receipts[1].Kind != contextcompression.TransformCompress {
 		t.Fatal("pipeline order lost")
+	}
+}
+
+// memoryExchange is the tool call and result a memory source injects.
+func memoryExchange(callID, text string) []llmprotocol.Message {
+	return []llmprotocol.Message{
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: callID, Name: memoryContextToolName, Arguments: "{}"}}}},
+		{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: callID, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}}}}}},
 	}
 }

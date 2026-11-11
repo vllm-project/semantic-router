@@ -58,18 +58,47 @@ can increase the elapsed time of an individual worker.
   the original PR Gate. Contributors without write permission cannot authorize
   runs. Valid scopes accumulate for the same revision; a partial approval keeps
   the remaining scope pending.
-- **Main pushes:** run source/component checks selected by the automatic policy.
-  They do not automatically publish the development CLI or production images.
-  `Main` dispatched with `publish: true` runs complete qualification and
-  publishes the six production images, Helm chart, and development CLI. The
-  CLI is published only after its commit-addressed images exist. The six-image
-  publication set is dashboard, operator, operator-bundle, and the CPU, CUDA,
-  and ROCm router images; qualification can also need fixture images.
-- **Weekly qualification:** the existing `nightly-build.yml` entrypoint now runs
-  every Monday at 02:00 UTC, or on explicit dispatch. It uses the versioned full
-  CPU inventory and retains successful-run image/Helm publication. An absent
-  diff base does not make every repository file an affected product change.
-  Existing `nightly` profile and publication names remain compatibility identifiers.
+- **Main pushes:** run source/component checks selected by the automatic policy,
+  then publish the commit's complete development set: the six production
+  images under the commit SHA, `latest`, the development CLI, and the
+  `0.0.0-latest` chart when the push changed it. A push does not run the full
+  CPU inventory; the reviewed PR qualified the change and the nightly run
+  qualifies main. A newer push cancels an older push's run while it is queued
+  or qualifying (group `main-push`), so a burst of merges publishes only the
+  newest; its plan compares with the last commit whose CI Gate finished
+  (`main_push_base.py`), so the cancelled commits' changes are still checked.
+  Publication jobs queue in groups of their own and are never cancelled once
+  started. The `latest` job moves the tag once the complete set exists, one run at
+  a time, and skips an image whose `latest` already holds a newer main
+  commit's image, so a slower older run keeps only its SHA tags. The chart
+  publishes only if main's head carries the same chart. The CLI is published
+  only after its commit-addressed images exist, and its version (the commit
+  time, made strictly increasing along main's first-parent history) sorts
+  after its parent's. `Main` dispatched with `publish: true` runs complete
+  qualification first and always publishes the chart. Forks publish only on
+  dispatch. The six-image publication set is dashboard, operator,
+  operator-bundle, and the CPU, CUDA, and ROCm router images; qualification can
+  also need fixture images.
+- **Nightly qualification:** the `nightly-build.yml` entrypoint runs every day
+  at 02:00 UTC, or on explicit dispatch, against the newest main commit. It uses
+  the versioned full CPU inventory and retains successful-run image/Helm
+  publication under one date per run, shared by the images and the chart. A
+  date is published once: the `reserve` job compares any existing
+  `nightly-YYYYMMDD` tag with the run's sealed build receipts, and a run that
+  finds another qualification's images or chart publishes nothing. Re-running
+  a run's failed jobs still finishes its own partial publication; re-running
+  all jobs rebuilds the images, so it publishes nothing for an existing date. A
+  scheduled run skips a commit that another run already passed or is still
+  qualifying. A dispatch is explicit intent and cancels the qualification it
+  supersedes; a scheduled run waits for a running one instead, and neither
+  cancels a publication. `nightly-retry.yml` re-runs a failed first attempt's
+  failed jobs once, within minutes, while it is still main's newest commit and
+  no other qualification is running. Wait for that retry instead of re-running
+  a failure by hand: a manual re-run makes it stand down, and no run is retried
+  twice. An earlier failure therefore delays a commit's publication by at most
+  a day. An absent diff base does not make every repository file an affected
+  product change. Existing `nightly` profile and publication names remain
+  compatibility identifiers.
 - **Release and maintenance:** keep explicit artifact/version publication and
   repository maintenance separate from per-PR product qualification. The
   release workflow is an artifact/version pipeline; it does not itself invoke
@@ -89,8 +118,8 @@ there was no diff base. At the exact audit baseline, that expanded the plan to
 64 contracts and 39 E2E
 profiles, including optional deployments outside the versioned full CPU
 inventory. Without an explicit comparison base or supplied changed paths,
-weekly, release qualification, and Main publication now select the versioned
-baseline: 31 contracts and 11 E2E profiles after retiring CK, adding the
+nightly, release qualification, and a Main publication dispatch now select the
+versioned baseline: 31 contracts and 11 E2E profiles after retiring CK, adding the
 model-runtime contract, separating Operator source qualification from deployment,
 moving five authoring contracts to affected/manual selection, and retiring four
 full-inventory external gateways. Dynamo also retires from optional selection.
@@ -98,7 +127,7 @@ The release publication workflow does not itself invoke that test-plan mode.
 Other cataloged experimental profiles remain available through affected PR
 changes and explicit manual selection. The five
 retired external integrations have no runnable CI profile. A full PR
-run and explicit Main publication still retain affected-path additions.
+run and a Main publication dispatch still retain affected-path additions.
 
 Counts below compare the actual old and new versioned full CPU inventories.
 The old inventory has 38 contracts; the new one has 31. The table below counts
@@ -158,7 +187,7 @@ Job IDs below come from the YAML, including reusable caller jobs. A caller job
 does not represent another machine in addition to its called workflow's jobs.
 “Automatic” means selected by the changed-path policy; it does not mean that
 every PR runs that row. “Approved/full” means affected PR work after approval,
-or complete weekly/explicit publication qualification.
+or complete nightly/explicit publication qualification.
 
 ### Planning and entrypoints
 
@@ -167,8 +196,9 @@ or complete weekly/explicit publication qualification.
 | [pr.yml](../../../.github/workflows/pr.yml) | `ci`, `pr-gate` | One PR execution entry and a short job summarizing executed qualification. | With the publisher available, `pr-gate` is named CI Execution; its success alone does not satisfy PR Gate. Older branches retain the strict legacy gate until updated after the publisher lands on main. |
 | [ci-status.yml](../../../.github/workflows/ci-status.yml) | `publish` | Trusted main code publishes PR Gate and updates one bot comment with the deferred scope and authorization command. | At most two short jobs from normal `in_progress`/`completed` events per attempt. Missing authorization remains pending without a resident runner; actual failures fail, and complete passing evidence succeeds. |
 | [manual-ci.yml](../../../.github/workflows/manual-ci.yml) | `authorize`, `rerun` | Validates a comment and frozen revision, then reruns its original PR run. Trusted controller code reacts to requests and explains rejection or trigger failures on the PR. | Retain as the approval entrypoint; run only for `/ci run` comments. The two jobs separate authorization from Actions write permission; both may write command feedback. |
-| [main.yml](../../../.github/workflows/main.yml) | `ci`, `images`, `helm`, `pypi` | Merged-source checks and explicit coherent development publication. | Change push behavior to source/component checks only. Publication jobs run after `publish: true` qualification; preserve CLI/image revision coupling. |
-| [nightly-build.yml](../../../.github/workflows/nightly-build.yml) | `ci`, `docker`, `helm` | Broad detection outside the affected-path selection and promotion after successful qualification. | Change daily execution to Monday weekly execution; retain manual dispatch and full coverage. Keep the filename/profile for existing consumers. |
+| [main.yml](../../../.github/workflows/main.yml) | `ci`, `images`, `latest`, `helm`, `pypi` | Merged-source checks and coherent development publication of every merge. | A push runs source/component checks, then publishes its commit's images, moves `latest` only forward, and publishes the CLI; a `publish: true` dispatch qualifies fully first. Preserve CLI/image revision coupling. |
+| [nightly-build.yml](../../../.github/workflows/nightly-build.yml) | `head`, `ci`, `reserve`, `docker`, `helm` | Broad detection outside the affected-path selection and promotion after successful qualification. | Daily execution of the newest main commit under one date for images and chart, published once and never moved; a scheduled run skips a commit that another run already passed or is still qualifying. A dispatch cancels a superseded qualification, a scheduled run waits for one, and neither cancels a publication. Retain manual dispatch and full coverage. Keep the filename/profile for existing consumers. |
+| [nightly-retry.yml](../../../.github/workflows/nightly-retry.yml) | `retry` | Re-runs the failed jobs of a failed first Nightly Qualification attempt once, so one transient failure does not cost a day's publication. | One short job per failed run; it stands down when main has moved, another qualification is running, or someone already re-ran the run. |
 | [ci-changes.yml](../../../.github/workflows/ci-changes.yml) | `plan` | Resolves source/base, changed paths, approval, selected contracts, image dependencies, and display matrices. | Retain one planner. Approval changes execution eligibility without deleting required inventory. Scheduled full qualification uses the versioned inventory without treating all tracked files as affected changes. |
 | [ci.yml](../../../.github/workflows/ci.yml) | `plan`; `image-router`, `image-dashboard`, `image-operator`, `image-fixtures`, `image-distribution`; `quality`, `generated`, `security`, `core`, `storage`, `dashboard`, `operator-source`, `operator`, `local`, `recipes`, `platform`, `performance`, `package`, `tools`, `e2e-router`, `e2e-fixtures`, `e2e-dashboard`; `gate` | Connects producers to their actual consumers and reconciles independent receipts. | Retain the shared dispatcher. Merge compatible physical workers, not all jobs into an opaque shell script. Source checks start without waiting for images. Direct single-verification dispatch remains diagnostic. |
 
@@ -197,7 +227,7 @@ or complete weekly/explicit publication qualification.
 | Workflow | Jobs | Actual value | Decision and execution time |
 | --- | --- | --- | --- |
 | [build-artifacts.yml](../../../.github/workflows/build-artifacts.yml) | `image` matrix, `published` | Builds/seals OCI candidates once, or acquires the qualified provider fixture by digest. Artifacts carry source and build identity. | Retain the producer boundary. Gate expensive affected PR images on approval and stop routine Main image publication. Keep per-image build caches and exact artifact handoff; cache hits are not qualification evidence. |
-| [docker-publish.yml](../../../.github/workflows/docker-publish.yml) | `publish` matrix | Promotes the already-built OCI candidate with `skopeo`; checks published Dashboard images outside release mode. | Retain only as a gated publisher for explicit Main publication, weekly, and release. This is already promotion without rebuilding, so deleting it would not remove a second compilation. |
+| [docker-publish.yml](../../../.github/workflows/docker-publish.yml) | `publish` matrix | Promotes the already-built OCI candidate with `skopeo`; checks published Dashboard images outside release mode. | Retain only as a gated publisher for Main publication, nightly, and release. This is already promotion without rebuilding, so deleting it would not remove a second compilation. |
 | [helm-publish.yml](../../../.github/workflows/helm-publish.yml) | `package`, `publish` | Versions/packages/renders a chart and promotes an existing package when supplied. | Retain publication/build-only modes. A validated Helm package and deployed Kubernetes behavior answer different questions. |
 | [pypi-publish.yml](../../../.github/workflows/pypi-publish.yml) | `build`, `testpypi`, `pypi` | Builds when needed, verifies promoted distribution identity, and publishes to the selected package channel. | Retain explicit TestPyPI dispatch, gated development publication, and tag release publication. Reuse the qualified wheel/sdist; do not create a second unchecked development build. |
 | [release.yml](../../../.github/workflows/release.yml) | `validate`, `images`, `helm-build`, `python-build`, `docker`, `helm`, `pypi`, `release-notes` | Cross-surface versions and immutable catalog snapshots; build all artifacts before publishing tags/packages and release notes. | Retain tag-triggered publication and manual build-only rehearsal. Do not count these publication dependencies as another full CPU test suite or use them to excuse missing PR qualification. |
