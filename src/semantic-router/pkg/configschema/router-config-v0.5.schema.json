@@ -450,6 +450,9 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "tls": {
+          "$ref": "#/$defs/DeploymentTLS"
         }
       },
       "additionalProperties": false,
@@ -742,6 +745,9 @@
         },
         "reasoning_effort": {
           "type": "string"
+        },
+        "tls": {
+          "$ref": "#/$defs/ProviderDefaultsTLS"
         }
       },
       "additionalProperties": false,
@@ -4917,6 +4923,15 @@
         },
         "preserve_last_n": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProviderDefaultsTLS": {
+      "properties": {
+        "ca_file": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

@@ -133,6 +133,7 @@ func (registry *Registry) compileProvider(
 		return EffectiveProvider{}, err
 	}
 	input.Headers = cloneMap(input.Headers)
+	input.TLS = cloneProviderTLS(input.TLS)
 	input.Endpoints = endpoints
 	return EffectiveProvider{Instance: input, Definition: cloneProvider(definition)}, nil
 }

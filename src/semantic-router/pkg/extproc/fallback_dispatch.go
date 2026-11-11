@@ -908,11 +908,16 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 			timeout = remaining
 		}
 	}
+	tlsConfig, err := providerTLSConfig(dispatch.profile)
+	if err != nil {
+		return nil, 0, err
+	}
 	client, err := connector.New(base, authorize, connector.Options{
 		AttemptTimeout:   timeout,
 		MaxRequestBytes:  16 << 20,
 		MaxResponseBytes: 32 << 20,
 		MaxErrorBytes:    8 << 10,
+		TLSConfig:        tlsConfig,
 	})
 	if err != nil {
 		return nil, 0, err

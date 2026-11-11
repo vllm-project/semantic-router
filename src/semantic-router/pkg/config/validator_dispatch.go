@@ -31,6 +31,7 @@ var (
 		validateModelAdmissionContracts,
 		validateModelSignalTimeoutContracts,
 		validateModelDeploymentContracts,
+		validateBackendTLSFiles,
 		validateGlobalModelBindingContracts,
 		validateGlobalToolSessionsContracts,
 		validateGlobalRouterReplayCaptureContracts,

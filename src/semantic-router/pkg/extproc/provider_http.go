@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -52,6 +53,17 @@ func providerEndpointScheme(cfg *config.RouterConfig, backendName string, profil
 		return "https"
 	}
 	return "http"
+}
+
+// providerTLSConfig is the TLS client configuration of a Router-initiated
+// call to a backend: its tls block, so the Router trusts the CA, server name
+// and client certificate the backend's Envoy cluster uses. nil keeps the
+// system roots and the endpoint's host.
+func providerTLSConfig(profile *config.ProviderProfile) (*tls.Config, error) {
+	if profile == nil {
+		return nil, nil
+	}
+	return profile.TLS.ClientConfig()
 }
 
 // providerEndpointPath mirrors primary dispatch for router-initiated provider calls.

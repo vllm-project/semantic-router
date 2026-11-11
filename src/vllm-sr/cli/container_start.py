@@ -61,6 +61,7 @@ from cli.gateway_mode import (
     runs_envoy,
 )
 from cli.management_credential import stack_management_credential
+from cli.models import UserConfig
 from cli.parser import parse_user_config
 from cli.recipe_topology_contract import MANAGEMENT_CREDENTIAL_ENV
 from cli.runtime_stack import PORT_OFFSET_ENV, RuntimeStackLayout, resolve_runtime_stack
@@ -372,6 +373,9 @@ def _runtime_container_specs(
         raise ValueError("management API host port conflicts with a listener host port")
     setup_mode = str(common_env.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
     inherited_sensitive_env = _sensitive_runtime_env_names(common_env, runtime_paths)
+    backend_tls_mounts = _backend_tls_mounts(
+        parse_user_config(runtime_paths["effective_config_path"], log_summary=False)
+    )
     router_cmd = _build_router_runtime_command(
         runtime=runtime,
         router_image=image_by_service["router"],
@@ -386,6 +390,7 @@ def _runtime_container_specs(
         secret_names=router_secret_names,
         gateway=gateway,
         listeners=listeners,
+        backend_tls_mounts=backend_tls_mounts,
     )
 
     specs = [
@@ -415,6 +420,7 @@ def _runtime_container_specs(
             setup_mode=setup_mode,
             stack_layout=stack_layout,
             envoy_log_level=envoy_log_level,
+            backend_tls_mounts=backend_tls_mounts,
         )
         specs.append(("envoy", stack_layout.envoy_container_name, (envoy_cmd,)))
 
@@ -468,6 +474,7 @@ def _build_router_runtime_command(
     secret_names: tuple[str, ...] = (),
     gateway: str = GATEWAY_EXTPROC,
     listeners=(),
+    backend_tls_mounts=(),
 ):
     router_env = router_runtime_env(common_env, normalized_platform)
     compiler_cache = router_compiler_cache(
@@ -505,6 +512,7 @@ def _build_router_runtime_command(
             *_runtime_mount_specs(runtime_paths, include_models=True),
             *([compiler_cache.mount] if compiler_cache else []),
             runtime_paths["log_spool_router_mount"],
+            *backend_tls_mounts,
             *(
                 _listener_tls_mounts(
                     listeners, os.path.dirname(runtime_paths["source_config_path"])
@@ -552,6 +560,7 @@ def _build_envoy_runtime_command(
     setup_mode: bool,
     stack_layout: RuntimeStackLayout,
     envoy_log_level: str,
+    backend_tls_mounts=(),
 ):
     service_entrypoint, service_args = bounded_log_spool_entrypoint(
         "/usr/local/bin/envoy",
@@ -576,6 +585,7 @@ def _build_envoy_runtime_command(
         mount_specs=[
             f"{runtime_paths['envoy_config_path']}:/etc/envoy/envoy.yaml:z",
             runtime_paths["log_spool_envoy_mount"],
+            *backend_tls_mounts,
         ],
         port_mappings=_listener_port_mappings(listeners, stack_layout),
         entrypoint=service_entrypoint,
@@ -609,6 +619,31 @@ def _listener_tls_mounts(listeners, config_dir: str) -> list[str]:
                     f"{host_path} is not a file"
                 )
             mounts.append(f"{os.path.abspath(host_path)}:{container_path}:ro,z")
+    return mounts
+
+
+def _backend_tls_mounts(config: UserConfig) -> list[str]:
+    """Mount the files the backends' tls blocks name read-only, at the same
+    absolute path: Envoy reads them to verify a backend, and the Router for
+    its own calls to it."""
+    paths = []
+    defaults_tls = config.providers.defaults.tls
+    if defaults_tls is not None:
+        paths.append(("providers.defaults.tls.ca_file", defaults_tls.ca_file))
+    for model in config.providers.models:
+        for index, backend in enumerate(model.backend_refs):
+            for field in ("ca_file", "cert_file", "key_file"):
+                path = getattr(backend.tls, field, None) if backend.tls else None
+                if path:
+                    where = f"providers.models[{model.name!r}].backend_refs[{index}]"
+                    paths.append((f"{where}.tls.{field}", path))
+    mounts = []
+    for where, path in paths:
+        if not os.path.isfile(path):
+            raise ValueError(f"{where} {path} is not a file")
+        mount = f"{path}:{path}:ro,z"
+        if mount not in mounts:
+            mounts.append(mount)
     return mounts
 
 
