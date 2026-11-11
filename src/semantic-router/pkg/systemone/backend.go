@@ -17,15 +17,17 @@ import (
 )
 
 // ServingInvoker applies API identity before dispatching direct native models
-// or an auto recipe. Listener authorization stays in Handler.
-func ServingInvoker(cfg *config.RouterConfig, listener string, router Router, local Invoke, remote *upstream.Set) Invoke {
+// or an auto recipe, whose candidates are chosen by what cards tells they
+// answer. Listener authorization stays in Handler.
+func ServingInvoker(cfg *config.RouterConfig, listener string, router Router, local Invoke, remote *upstream.Set, cards Cards) Invoke {
 	backend := BackendInvoker(cfg, listener, local, remote)
+	members := poolMembers(cfg, listener, cards, remote)
 	return func(ctx context.Context, target string, body json.RawMessage) (int, []byte, error) {
 		if _, routed := cfg.ResolveEntrypoint(config.SystemOneAPI, target); routed {
 			if router == nil || !cfg.RoutingEnabled() {
 				return 0, nil, errors.New("native routing unavailable")
 			}
-			return router.RouteSystemOne(ctx, target, body, backend)
+			return router.RouteSystemOne(withMembers(ctx, members), target, body, backend)
 		}
 		if cfg.IsSystemOneBackend(target) {
 			return backend(ctx, target, body)
@@ -91,16 +93,8 @@ func BackendInvoker(cfg *config.RouterConfig, listener string, local Invoke, rem
 			}
 			key = credential
 		}
-		if key != "" {
-			name, prefix, authErr := profile.ResolveAuthHeader()
-			if authErr != nil {
-				return 0, nil, authErr
-			}
-			value := key
-			if prefix != "" {
-				value = prefix + " " + value
-			}
-			header.Set(name, value)
+		if authErr := setBackendKey(header, profile, key); authErr != nil {
+			return 0, nil, authErr
 		}
 		send := func(ctx context.Context, callPath string, callHeader http.Header, encoded []byte) (int, http.Header, []byte, error) {
 			sent := header.Clone()

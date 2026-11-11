@@ -78,7 +78,8 @@ listener 在一个 `apis` 映射中列出它提供的 API，键为注册表中�
 5. **state 是标准内容。** 它的键没有隐藏含义。区分角色的模型族读取显式的 `roles` 映射；没有 `roles` 时，整个 state 在所有模型族上都是用户内容。每个模型族保留自己把对象 state 渲染为模型输入的方式，就像 LLM 的对话模板：渲染是 API 背后的模型细节，模型的启动自检保持其输入不变。
 6. **三层名称；部分名称保持不变。** API 字段由两份规范定义。state 内的键由客户端决定；Router 自己构建多部分 state 时，沿用模型训练和校准时使用的 `request`、`history`、`previous_turns`、`previous_answer`、`tool_results`、`candidate`、`answer` 和 `context`。Router 配置中 `input:` 的名称是同一组。没有任何模型输入发生变化，因此无需重新校准。
 7. **遵循标准的限制和行为：** 状态码（400、带 `detail` 列表的 422、带 `Retry-After` 的 429 和 529）、长上下文请求头，以及最大 32 MiB 的请求体。
-8. **批量是单独的扩展端点** `POST /v1/systemone/batch`，其 `requests` 中是完整的标准请求；`/v1/systemone` 只接受一个请求。`/v1/decisions` 保留为原生端点，在 200 中给出每个问题的错误。
+8. **批量是单独的扩展端点** `POST /v1/systemone/batch`，其 `requests` 中是完整的标准请求；`/v1/systemone` 只接受一个请求。`/v1/decisions` 保留为原生端点，在 200 中给出每个问题的错误；没有任何有效问题的请求在 Router 和运行时上都返回 400 `invalid_request`，并列出每个问题的错误。
+9. **`vllm-sr/auto` 按能力路由。** 请求只发给能回答其全部问题类型、能读取其媒体（box 与图像、视频、完整输入等）的池成员，依据成员的模型卡或列表，否则依据其部署声明的 `capabilities`。没有成员能回答时，请求以 400 `unsupported_capability` 被拒绝，其 `detail` 写明缺少什么以及每个成员。
 
 ## 扩展集（vllm-sr/5.0） {#the-extension-set-vllm-sr50}
 
@@ -185,3 +186,4 @@ type Deviation interface {
 - **5.0 会破坏依赖隐式角色、第二种写法或 `/v1/systemone` 上 `states` 的外部客户端；** 4.0 listener 让它们继续工作。
 - **批量拆分会增加上游调用；** `max_concurrency` 和截止时间对其加以限制。
 - **后续：** 运行时仍要求 choice 和 score 至少两个选项，noul 需要 instructions 或带描述的 criteria，而标准允许一个选项和裸 noul。
+- **后续：** `vllm-sr/auto` 按能力路由 `box` 问题；`set`、`span` 和 `track` 的答案因模型家族而异（`sets`、`spans`），auto 会在后续改动中校验并路由它们。

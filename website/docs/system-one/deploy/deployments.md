@@ -132,7 +132,10 @@ global:
   `GET /v1/models` beside the endpoint under `vllm-sr/5.0`) and it lists the
   model; otherwise from the deployment's `capabilities` (`question_types`,
   `presets`, `modalities`); otherwise they are `choice`, `noul` and `score` over
-  text.
+  text. `question_types` may list `choice`, `noul`, `score`, `box`, `track`,
+  `set` and `span`; a `vllm-sr/auto` pool sends a request only to models that
+  answer what it needs
+  ([Route by what each model answers](../../tutorials/algorithm/looper/escalate.md#route-by-what-each-model-answers)).
 - A question without its own `timeout_ms` takes the deployment's, else
   1000 ms. A slow, failing or unreachable API leaves its questions unknown; it
   never fails the request by itself, except a delegated one the request carries

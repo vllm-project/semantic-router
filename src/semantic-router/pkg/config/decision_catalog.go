@@ -87,6 +87,14 @@ func (c *RouterConfig) DeploymentQuestionTypes(name string) []string {
 	return slices.Clone(questionTypes)
 }
 
+// DeploymentModalities are the input modalities the model a deployment serves
+// reads, as far as the configuration tells (deploymentAnswers); nil is
+// unknown.
+func (c *RouterConfig) DeploymentModalities(name string) []string {
+	_, modalities := c.deploymentAnswers(name)
+	return slices.Clone(modalities)
+}
+
 // catalogModel is the built-in decision model a model_runtime deployment
 // serves, when the catalog lists it.
 func (c *RouterConfig) catalogModel(name string) (DecisionCatalogModel, bool) {

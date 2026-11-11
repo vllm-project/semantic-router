@@ -112,9 +112,16 @@ The `quality` field names the configured acceptance method; it is not an
 accuracy score. Native discovery marks recipe entrypoints with `routing: true`
 and concrete models with `routing: false`.
 
-Malformed or unsupported auto questions return `400`. If no complete answer
-passes the declared acceptance rule, the request returns `503` with
-`systemone_unresolved`. Exhausting the shared physical-call limit returns
+Malformed or unsupported auto questions return `400` with `invalid_request`,
+and a message saying what auto cannot route. A request that no candidate model
+can answer returns `400` with `unsupported_capability`: for example, a `box`
+question when no model of the decision answers box questions or reads images.
+Its message names what is missing and each candidate, with what it lacks and
+where that came from (its card, its backend's listing, or what its deployment
+declares); see
+[Route by what each model answers](../tutorials/algorithm/looper/escalate.md#route-by-what-each-model-answers).
+If no complete answer passes the declared acceptance rule, the request returns
+`503` with `systemone_unresolved`. Exhausting the shared physical-call limit returns
 `503`; exhausting its deadline returns `504`. Both budget errors use
 `systemone_budget_exhausted` and include the reason and `model_calls` count.
 A model whose auth is `credential: delegated` answers `401`
@@ -137,8 +144,10 @@ Auto execution exports `sr_systemone_stage_total` and
 `sr_systemone_stage_duration_seconds` by configured algorithm, stage and model,
 plus `sr_systemone_auto_requests_total` and
 `sr_systemone_auto_duration_seconds`. These distinguish accepted, rejected,
-invalid and failed attempts; they measure serving behavior, not label-based
-evaluation quality. The auto duration covers the algorithm; preceding recipe
+invalid and failed attempts, and stages skipped because their model cannot
+answer the request (`outcome="incapable"`, also the request outcome when no
+candidate can). They measure serving behavior, not label-based evaluation
+quality. The auto duration covers the algorithm; preceding recipe
 signals are outside that metric.
 
 Other `/v1/*` paths fail closed. In particular, `/v1/files`,

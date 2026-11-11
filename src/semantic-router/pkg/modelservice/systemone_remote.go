@@ -181,6 +181,22 @@ func (r *RemoteSystemOne) Card(name string) (ModelCard, bool) {
 	return d.declaredCard(), true
 }
 
+// ListedCard is the card name's API lists for its model, when the listing has
+// answered; like Card, the first call reads the listing in the background.
+func (r *RemoteSystemOne) ListedCard(name string) (ModelCard, bool) {
+	d := r.deployment(name)
+	if d == nil {
+		return ModelCard{}, false
+	}
+	if card := d.listed.Load(); card != nil {
+		return *card, true
+	}
+	if d.started.CompareAndSwap(false, true) {
+		go d.readListing(r.ctx, listingTimeout)
+	}
+	return ModelCard{}, false
+}
+
 // PrepareCard reads name's listing once, for at most
 // preparationListingTimeout, and returns its card as Card does. An API that
 // does not list leaves the declared or System One types; it never fails the

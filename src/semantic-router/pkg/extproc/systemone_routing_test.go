@@ -112,7 +112,7 @@ recipes:
 	}
 	defer remote.Close(context.Background())
 	listener := &cfg.Listeners[0]
-	handler := systemone.Handler(cfg, listener, systemone.ServingInvoker(cfg, listener.Name, router, nil, remote))
+	handler := systemone.Handler(cfg, listener, systemone.ServingInvoker(cfg, listener.Name, router, nil, remote, nil))
 	body := `{"model":"vllm-sr/auto","state":"hello","questions":{"task":{"type":"choice","instructions":"Type?","criteria":{"chat":"Chat","code":"Code"}}}}`
 	r := httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(body))
 	w := httptest.NewRecorder()
@@ -294,7 +294,7 @@ recipes:
 		t.Fatal(err)
 	}
 	defer remote.Close(context.Background())
-	handler := systemone.Handler(cfg, &cfg.Listeners[0], systemone.ServingInvoker(cfg, "native", router, nil, remote))
+	handler := systemone.Handler(cfg, &cfg.Listeners[0], systemone.ServingInvoker(cfg, "native", router, nil, remote, nil))
 	body := `{"model":"vllm-sr/auto","state":"hello","questions":{"task":{"type":"choice","instructions":"Type?","criteria":{"chat":"Chat","code":"Code"}}}}`
 	request := httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(body))
 	response := httptest.NewRecorder()

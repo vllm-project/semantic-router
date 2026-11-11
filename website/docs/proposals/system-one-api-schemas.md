@@ -136,7 +136,15 @@ forms on the same paths, with no header:
 8. **Batches are a separate extension endpoint,** `POST /v1/systemone/batch`,
    whose `requests` hold complete standard requests; `/v1/systemone` takes
    exactly one request. `/v1/decisions` stays the native endpoint, with
-   per-question errors inside a 200.
+   per-question errors inside a 200; a request none of whose questions is
+   valid is 400 `invalid_request`, listing each question's error, on the
+   Router and the runtime alike.
+9. **`vllm-sr/auto` routes by capability.** A request goes only to pool
+   members that answer all of its question types and read its media (box and
+   image, video, full input, …), by the member's card or listing, else its
+   deployment's declared `capabilities`. If none can, it is refused with 400
+   `unsupported_capability`, whose `detail` names what is missing and each
+   member.
 
 ## The extension set (vllm-sr/5.0)
 
@@ -322,3 +330,6 @@ shows that external 4.0 traffic is gone.
 - **Follow-up:** the runtime still requires two options for a choice or a
   score, and instructions or described criteria for a noul, where the standard
   allows one option and a bare noul.
+- **Follow-up:** `vllm-sr/auto` routes `box` questions by capability; `set`,
+  `span` and `track` answers are family-specific (`sets`, `spans`), so auto
+  validates and routes them in a later change.

@@ -163,8 +163,8 @@ func TestSystemOneDeploymentsTakeOnlyTheirOwnFields(t *testing.T) {
 			"auth.prefix must be one word",
 		},
 		"an unknown question type": {
-			"question_types: [choice, noul, score]", "question_types: [choice, box]",
-			`capabilities.question_types lists "box"`,
+			"question_types: [choice, noul, score]", "question_types: [choice, rank]",
+			`capabilities.question_types lists "rank"`,
 		},
 		"a timeout past the decision limit": {
 			"timeout_ms: 3000", "timeout_ms: 90000",

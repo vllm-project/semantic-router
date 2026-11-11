@@ -222,6 +222,16 @@ func handle(config *routerconfig.RouterConfig, listener *routerconfig.Listener, 
 			publicSystemOneError(w, http.StatusServiceUnavailable, "systemone_unresolved")
 			return
 		}
+		var incapable *IncapableError
+		if routed && errors.As(err, &incapable) {
+			publicSystemOneErrorMessage(w, http.StatusBadRequest, "unsupported_capability", incapable.Error())
+			return
+		}
+		var malformed *RequestError
+		if routed && errors.As(err, &malformed) {
+			publicSystemOneErrorMessage(w, http.StatusBadRequest, "invalid_request", malformed.Error())
+			return
+		}
 		if errors.Is(err, context.DeadlineExceeded) {
 			if routed {
 				publicSystemOneError(w, http.StatusGatewayTimeout, "systemone_deadline_exceeded")

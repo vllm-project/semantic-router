@@ -134,6 +134,7 @@ func TestCanonicalNativeRoutingRejectsAmbiguousContracts(t *testing.T) {
 		{"missing LLM bound", "generation: {max_output_tokens: 256}", "generation: {max_output_tokens: 0}", "generation.max_output_tokens"},
 		{"raw score", "field: confidence", "field: value", "score value is not confidence"},
 		{"unsupported native type", "question_type: choice", "question_type: span", "question_type must be"},
+		{"a box rule on top probability", "question_type: choice, field: confidence", "question_type: box, field: top_probability", "a box answer has only a confidence"},
 		{"native Chat recipe", "api: systemone", "api: chat", "require an isolated native recipe"},
 	}
 	for _, test := range tests {

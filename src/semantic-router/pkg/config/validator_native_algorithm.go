@@ -156,12 +156,15 @@ func validateNativeAcceptance(accept *EscalateAccept) error {
 			return fmt.Errorf("accept.native[%d] must name a question or question_type", index)
 		}
 		switch rule.QuestionType {
-		case "", "choice", "score", "noul":
+		case "", "choice", "score", "noul", "box":
 		default:
-			return fmt.Errorf("accept.native[%d].question_type must be choice, score, or noul", index)
+			return fmt.Errorf("accept.native[%d].question_type must be choice, score, noul, or box", index)
 		}
 		if rule.Field != "confidence" && rule.Field != "top_probability" && rule.Field != "probability_margin" {
 			return fmt.Errorf("accept.native[%d].field must be confidence, top_probability, or probability_margin; score value is not confidence", index)
+		}
+		if rule.QuestionType == "box" && rule.Field != "confidence" {
+			return fmt.Errorf("accept.native[%d]: a box answer has only a confidence", index)
 		}
 		if rule.Field == "probability_margin" && rule.QuestionType != "" && rule.QuestionType != "noul" {
 			return fmt.Errorf("accept.native[%d]: probability_margin applies only to noul", index)

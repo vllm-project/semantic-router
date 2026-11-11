@@ -144,9 +144,10 @@ func (d ModelDeployment) validateSystemOne() error {
 	seen := make(map[string]bool)
 	for _, questionType := range d.DeclaredQuestionTypes() {
 		switch questionType {
-		case SystemOneQuestionChoice, SystemOneQuestionNoul, SystemOneQuestionScore, SystemOneQuestionSet, SystemOneQuestionSpan:
+		case SystemOneQuestionChoice, SystemOneQuestionNoul, SystemOneQuestionScore, SystemOneQuestionSet, SystemOneQuestionSpan,
+			SystemOneQuestionBox, SystemOneQuestionTrack:
 		default:
-			return fmt.Errorf("capabilities.question_types lists %q; the types are choice, noul, score, set and span", questionType)
+			return fmt.Errorf("capabilities.question_types lists %q; the types are choice, noul, score, box, track, set and span", questionType)
 		}
 		if seen[questionType] {
 			return fmt.Errorf("capabilities.question_types lists %q twice", questionType)
@@ -189,6 +190,9 @@ func (d ModelDeployment) validateSchema() error {
 		if (questionType == SystemOneQuestionSet && !capabilities.Has(systemonecodec.CapabilitySetQuestions)) ||
 			(questionType == SystemOneQuestionSpan && !capabilities.Has(systemonecodec.CapabilitySpan)) {
 			return fmt.Errorf("capabilities.question_types lists %s, which schema %s has no questions of; the Router asks a set question as one noul per label, and span rules need a vllm-sr/5.0 deployment", questionType, codec.ID())
+		}
+		if questionType == SystemOneQuestionTrack && !capabilities.Has(systemonecodec.CapabilityVideos) {
+			return fmt.Errorf("capabilities.question_types lists track, which schema %s has no questions of; a track question reads a video", codec.ID())
 		}
 	}
 	if len(d.DeclaredPresets()) > 0 && !capabilities.Has(systemonecodec.CapabilityPresets) {
