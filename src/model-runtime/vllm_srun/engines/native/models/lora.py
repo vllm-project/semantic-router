@@ -8,6 +8,8 @@ answers, so the adapter always stays separate on the exact path.
 
 from __future__ import annotations
 
+import math
+
 import torch
 from torch import nn
 
@@ -36,8 +38,37 @@ class LoRALinear(nn.Module):
         adapter_dtype = self.lora_A.weight.dtype
         if x.dtype != adapter_dtype and x.is_floating_point():
             x = x.to(adapter_dtype)
-        result = result + self.lora_B(self.lora_A(x)) * self.scaling
+        update = self.lora_B(self.lora_A(x))
+        if self.scaling != 1:
+            update = update * self.scaling
+        result = result + update
         return result.to(result_dtype)
+
+
+def fold_scaling(module: nn.Module) -> int:
+    """Fold each power-of-two LoRA scaling into its B factor; returns the layers folded.
+
+    Scaling by a power of two commutes with every rounding of the B product
+    and of the multiply that follows it, so ``B'(A(x))`` with ``B' = B * s``
+    equals ``B(A(x)) * s`` bit for bit and the multiply is dropped. A factor
+    the scaling would overflow or push into subnormals keeps its multiply.
+    """
+    folded = 0
+    for layer in module.modules():
+        if not isinstance(layer, LoRALinear) or layer.scaling == 1:
+            continue
+        scaling = float(layer.scaling)
+        if scaling <= 0 or not math.log2(scaling).is_integer():
+            continue
+        weight = layer.lora_B.weight
+        with torch.no_grad():
+            scaled = weight * scaling
+            if not torch.equal(scaled / scaling, weight):
+                continue
+            weight.data = scaled
+        layer.scaling = 1.0
+        folded += 1
+    return folded
 
 
 def attach(

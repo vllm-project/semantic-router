@@ -5,10 +5,12 @@
 MODEL_RUNTIME_DIR := src/model-runtime
 MODEL_RUNTIME_OPENAPI := $(MODEL_RUNTIME_DIR)/vllm_srun/api/openapi.yaml
 MODEL_RUNTIME_PYTHON ?= $(AGENT_PYTHON)
-MODEL_RUNTIME_TORCH ?= torch==2.10.0
+MODEL_RUNTIME_TORCH ?= torch==2.14.1
 MODEL_RUNTIME_TORCH_INDEX ?= https://download.pytorch.org/whl/cpu
 MODEL_RUNTIME_CLIENT_DIR := src/semantic-router/pkg/modelservice/api
 OAPI_CODEGEN_VERSION ?= v2.4.1
+SYSTEMONE_SCHEMAS_GENERATOR := tools/codegen/systemone/generate_schemas.py
+SYSTEMONE_PUBLISHED_SPEC ?=
 
 ##@ Model runtime
 
@@ -41,4 +43,15 @@ model-runtime-client-check: ## Fail when the generated Go client differs from th
 			echo "the generated model runtime client is stale; run make model-runtime-client-generate"; exit 1; \
 		fi
 
-.PHONY: model-runtime-install model-runtime-test model-runtime-test-gpu model-runtime-client-generate model-runtime-client-check
+systemone-schemas-generate: ## Regenerate the System One field tables, spec table, corpora and reference pages from config/schemas/systemone
+	@$(LOG_TARGET)
+	@python3 $(SYSTEMONE_SCHEMAS_GENERATOR)
+
+systemone-schemas-check: ## Fail when a generated System One output is stale or when the standard and the extension set define a field differently
+	@python3 $(SYSTEMONE_SCHEMAS_GENERATOR) --check
+
+systemone-schemas-drift: ## Compare our description of the System One standard with the published document (SYSTEMONE_PUBLISHED_SPEC=file skips the download)
+	@python3 $(SYSTEMONE_SCHEMAS_GENERATOR) --drift $(if $(SYSTEMONE_PUBLISHED_SPEC),--spec-file "$(SYSTEMONE_PUBLISHED_SPEC)")
+
+.PHONY: model-runtime-install model-runtime-test model-runtime-test-gpu model-runtime-client-generate model-runtime-client-check \
+	systemone-schemas-generate systemone-schemas-check systemone-schemas-drift

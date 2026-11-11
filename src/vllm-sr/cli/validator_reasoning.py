@@ -45,7 +45,7 @@ def validate_reasoning_controls(config: UserConfig) -> list[ValidationError]:
 
     errors = []
     for name, routing in iter_routing_profiles(config):
-        prefix = "routing" if name == "default" else f"recipes.{name}.routing"
+        prefix = f"recipes.{name}"
         for decision in routing.decisions:
             for index, model_ref in enumerate(decision.modelRefs):
                 message = _model_ref_error(

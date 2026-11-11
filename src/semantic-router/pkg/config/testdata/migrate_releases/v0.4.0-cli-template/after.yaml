@@ -1,0 +1,37 @@
+# src/vllm-sr/cli/templates/config.template.yaml at the v0.4.0 tag.
+# Minimal canonical YAML starter for vLLM Semantic Router.
+# Replace the model name and backend endpoint, then validate before applying.
+
+version: v0.5
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+    timeout: "300s"
+providers:
+  defaults:
+    model: "replace-with-your-model"
+  models:
+    - name: "replace-with-your-model"
+      backend_refs:
+        - name: "primary"
+          provider: vllm
+          endpoint: "host.docker.internal:8000"
+          protocol: "http"
+          weight: 100
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "Catch-all route for every request while you build out more specific signals and decisions."
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          # A provider model is routable only when a decision references it here.
+          - model: "replace-with-your-model"
+            use_reasoning: false
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

@@ -6,18 +6,20 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
 func TestPublicSystemOneNativeContractAndSeparateGrant(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"private-key": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test", ServedName: "private-served"}}
-	listener := &config.Listener{APIKeys: []string{"test-key"}, Models: []string{"chat-only"}, SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"private-key": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test", Model: "private-served"}}
+	listener := &config.Listener{APIKeys: []string{"test-key"}, APIs: config.ListenerAPIs{"chat_completions": {Models: []string{"chat-only"}}, "systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test"}}}}
 	calls := 0
 	handler := Handler(cfg, listener, func(_ context.Context, deployment string, body json.RawMessage) (int, []byte, error) {
 		calls++
@@ -62,7 +64,7 @@ func TestPublicSystemOneNativeContractAndSeparateGrant(t *testing.T) {
 func TestPublicSystemOneChecksOptionsBeforeAModelReadsThem(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
-	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test"}}}}
 	var forwarded []string
 	handler := Handler(cfg, listener, func(_ context.Context, _ string, body json.RawMessage) (int, []byte, error) {
 		forwarded = append(forwarded, string(body))
@@ -109,7 +111,7 @@ func TestPublicSystemOneChecksOptionsBeforeAModelReadsThem(t *testing.T) {
 }
 
 func TestPublicDiscoveryAndListenerSelectionFailClosed(t *testing.T) {
-	listeners := []config.Listener{{Name: "a", APIKeys: []string{"a"}, SystemOne: &config.ListenerSystemOne{Models: []string{"public-a"}}}, {Name: "b", APIKeys: []string{"b"}, SystemOne: &config.ListenerSystemOne{Models: []string{"public-b"}}}}
+	listeners := []config.Listener{{Name: "a", APIKeys: []string{"a"}, APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"public-a"}}}}, {Name: "b", APIKeys: []string{"b"}, APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"public-b"}}}}}
 	if _, err := SelectListener(listeners, ""); err == nil {
 		t.Fatal("must not union listeners")
 	}
@@ -130,6 +132,48 @@ func TestPublicDiscoveryAndListenerSelectionFailClosed(t *testing.T) {
 	Handler(cfg, nil, nil)(response, request)
 	if response.Code != 404 {
 		t.Fatal("unpublished listener exposed SystemOne")
+	}
+}
+
+// The listing gives the question types of each model it lists, where a
+// systemone deployment that names this API reads them (GET <endpoint>/models).
+func TestPublicDiscoveryListsTheQuestionTypesARemoteDeploymentReads(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/vela3-fast"}}
+	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/vela3-fast"}}}}
+	server := httptest.NewServer(Handler(cfg, listener, nil))
+	defer server.Close()
+	client := &config.RouterConfig{}
+	client.ModelDeployments = map[string]config.ModelDeployment{"engine": {Provider: config.SystemOneProvider, Schema: "vllm-sr/4.0", Endpoint: server.URL + "/v1/systemone", Model: "vllm-sr/vela3-fast"}}
+	remote, err := modelservice.NewRemoteSystemOne(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remote.Close()
+	card, err := remote.PrepareCard(context.Background(), "engine")
+	if err != nil || !slices.Equal(card.QuestionTypes, []string{"choice", "noul", "span"}) {
+		t.Fatalf("card %+v, %v; want the listed vela3-fast types", card, err)
+	}
+}
+
+// The listing also gives the input modalities of each model it lists, so a
+// remote deployment's image and video rules resolve to a model that reads them.
+func TestPublicDiscoveryListsTheModalitiesARemoteDeploymentReads(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/d3-ultra"}}
+	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/d3-ultra"}}}}
+	server := httptest.NewServer(Handler(cfg, listener, nil))
+	defer server.Close()
+	client := &config.RouterConfig{}
+	client.ModelDeployments = map[string]config.ModelDeployment{"engine": {Provider: config.SystemOneProvider, Schema: "vllm-sr/4.0", Endpoint: server.URL + "/v1/systemone", Model: "vllm-sr/d3-ultra"}}
+	remote, err := modelservice.NewRemoteSystemOne(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remote.Close()
+	card, err := remote.PrepareCard(context.Background(), "engine")
+	if err != nil || !slices.Equal(card.ReadModalities(), []string{"text", "image", "video"}) {
+		t.Fatalf("card %+v, %v; want the listed d3-ultra modalities", card, err)
 	}
 }
 
@@ -156,7 +200,7 @@ func TestPublicSystemOneRequiresNonemptyCredentialsOnProtectedListeners(t *testi
 		{name: "api key fallback", keys: []string{"", "test-key"}, authorization: "Bearer wrong-key", apiKey: "test-key", wantStatus: http.StatusOK},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			listener := &config.Listener{APIKeys: test.keys, SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+			listener := &config.Listener{APIKeys: test.keys, APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test"}}}}
 			for _, path := range []string{"/v1/systemone", "/v1/systemone/models"} {
 				t.Run(path, func(t *testing.T) {
 					calls := 0
@@ -190,7 +234,7 @@ func TestPublicSystemOneRequiresNonemptyCredentialsOnProtectedListeners(t *testi
 func TestPublicNativeBoundsAndSanitizesFailures(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
-	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test"}}}}
 	handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
 		return 429, []byte(`{"error":"/private/model/path"}`), io.ErrUnexpectedEOF
 	})
@@ -209,7 +253,7 @@ func TestPublicNativeBoundsAndSanitizesFailures(t *testing.T) {
 func TestPublicNativeRuntimeRejectionsKeepTheirCodeAndReason(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
-	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test"}}}}
 	rejection := func(code, reason string, limit int) string {
 		body := `{"error":{"code":"` + code + `","message":"videos[0]: model /private/models/test failed"`
 		if reason != "" {
@@ -262,7 +306,7 @@ func TestPublicNativeRuntimeRejectionsKeepTheirCodeAndReason(t *testing.T) {
 func TestPublicNativeRequestTokenRefusalsCarryTheLimit(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
-	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test"}}}}
 	for _, test := range []struct {
 		body        string
 		wantLimit   *int
@@ -317,7 +361,7 @@ func TestPublicNativeWaitFollowsTheRequestDeadline(t *testing.T) {
 		{&tenSeconds, ``, 10 * time.Second},
 		{&tenSeconds, `,"options":{"deadline_ms":120000}`, 10 * time.Second},
 	} {
-		listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}, MaxDeadlineMs: test.maxDeadlineMs}}
+		listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test"}, MaxDeadlineMs: test.maxDeadlineMs}}}
 		var wait time.Duration
 		handler := Handler(cfg, listener, func(ctx context.Context, _ string, _ json.RawMessage) (int, []byte, error) {
 			deadline, _ := ctx.Deadline()
@@ -327,7 +371,7 @@ func TestPublicNativeWaitFollowsTheRequestDeadline(t *testing.T) {
 		response := httptest.NewRecorder()
 		handler(response, httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(`{"model":"vllm-sr/test"`+test.options+`}`)))
 		if response.Code != 200 || wait > test.want || wait < test.want-time.Second {
-			t.Fatalf("limit %s, options %q: %d, waited %s, want %s", listener.SystemOne.MaxDeadline(), test.options, response.Code, wait, test.want)
+			t.Fatalf("limit %s, options %q: %d, waited %s, want %s", listener.APIs["systemone"].MaxDeadline(), test.options, response.Code, wait, test.want)
 		}
 	}
 }
@@ -335,7 +379,7 @@ func TestPublicNativeWaitFollowsTheRequestDeadline(t *testing.T) {
 func TestPublicNativeDeadlineSaysHowToWaitLonger(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
-	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test"}}}}
 	handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
 		return 0, nil, context.DeadlineExceeded
 	})
@@ -357,7 +401,7 @@ func TestPublicNativeDeadlineSaysHowToWaitLonger(t *testing.T) {
 func TestPublicNativeRefusalsTellClientsWhenToRetry(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
-	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test"}}}
+	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test"}}}}
 	for _, test := range []struct {
 		name       string
 		status     int

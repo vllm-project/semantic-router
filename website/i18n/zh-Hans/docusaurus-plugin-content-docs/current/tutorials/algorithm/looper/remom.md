@@ -90,7 +90,7 @@ flowchart TD
 
 ## 配置
 
-将公开名字映射到下方的默认路由。若需隔离策略，请将 `routing` 块放入命名 recipe，并修改入口的 recipe 引用。
+将公开名字映射到下方的配方。若需与其他配方隔离，请为它声明独立的 recipe，并修改入口的 recipe 引用。
 
 ```yaml
 entrypoints:
@@ -101,39 +101,41 @@ entrypoints:
 配置一条 ReMoM 决策：
 
 ```yaml
-routing:
-  decisions:
-    - name: reasoning_panel
-      description: Combine a bounded reasoning panel into one answer.
-      priority: 100
-      output_contract: Preserve any explicit output format exactly.
-      output_contract_spec:
-        type: reference_selection
-        reference:
-          source: candidate_responses
-          id_format: index
-        extract:
-          mode: exact
-          sources: [content]
-        postprocess:
-          - type: dereference_selected_reference
-      modelRefs:
-        - model: qwen3-32b
-        - model: deepseek-worker
-      algorithm:
-        type: remom
-        remom:
-          breadth_schedule: [3, 2]
-          model_distribution: weighted
+recipes:
+  - name: default
+    decisions:
+      - name: reasoning_panel
+        description: Combine a bounded reasoning panel into one answer.
+        priority: 100
+        output_contract: Preserve any explicit output format exactly.
+        output_contract_spec:
+          type: reference_selection
+          reference:
+            source: candidate_responses
+            id_format: index
+          extract:
+            mode: exact
+            sources: [content]
+          postprocess:
+            - type: dereference_selected_reference
+        modelRefs:
+          - model: qwen3-32b
+          - model: deepseek-worker
+        algorithm:
+          type: remom
+          remom:
+            breadth_schedule: [3, 2]
+            model_distribution: weighted
 ```
 
-`output_contract` 是决策范围的提示词文本。把它用于应同时作用于 ReMoM、Fusion 和 Flow 的基准或应用格式要求，而不是把任务特定提示词硬编码进算法。`output_contract_spec` 是路由器可执行的类型化契约，用于后处理与归一化；把运行时行为放在这里，而不是编码成提示词启发式。提取默认精确匹配 `content`；仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
+`output_contract` 是决策范围的提示词文本。把它用于应同时作用于 ReMoM、Fusion 和 Flow 的基准或应用格式要求，而不是把任务特定提示词硬编码进算法。`output_contract_spec` 是路由器可执行的类型化契约，用于后处理与归一化；把运行时行为放在这里，而不是编码成提示词启发式。只有 Fusion、ReMoM 和 Flow 决策接受它。解引用返回所选引用的内容，从不返回其推理内容。提取默认精确匹配 `content`；仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
 
 最小算法配置：
 
 ```yaml
 algorithm:
   type: remom
+  on_error: skip                       # skip or fail
   remom:
     breadth_schedule: [3, 2]            # Parallel calls before final synthesis
     model_distribution: weighted         # weighted, equal, round_robin, or first_only
@@ -149,7 +151,6 @@ algorithm:
     shuffle_seed: 42                     # Seed for response shuffling
     include_intermediate_responses: false # Include intermediate responses in output
     max_responses_per_round: null        # Limit responses per round
-    on_error: skip                       # skip or fail
 ```
 
 ### 参数
@@ -158,7 +159,7 @@ algorithm:
 |-----------|------|---------|-------------|
 | `breadth_schedule` | list[int] | **必填** | 最终合成调用之前的并行调用次数（例如 `[3, 2]`） |
 | `model_distribution` | string | `weighted` | 策略：`weighted`、`equal`、`round_robin`、`first_only` |
-| `temperature` | float | `1.0` | 模型调用的温度 |
+| `temperature` | float | 请求的值 | 模型调用的温度 |
 | `include_reasoning` | bool | `false` | 在合成提示中包含推理内容 |
 | `compaction_strategy` | string | `full` | 策略：`full` 或 `last_n_tokens` |
 | `compaction_tokens` | int | `1000` | `last_n_tokens` 压缩时保留的 token 数 |
@@ -167,10 +168,12 @@ algorithm:
 | `max_completion_tokens` | int | 请求默认值 | 应用到每个 ReMoM 子请求的最大补全 token 数 |
 | `round_timeout_seconds` | int | — | 在 `on_error: skip` 时，一轮最多等待的秒数，超时后使用部分响应 |
 | `min_successful_responses` | int | — | 并行轮次在达到该成功响应数后即可返回 |
-| `shuffle_seed` | int | `42` | 响应打乱的随机种子 |
-| `include_intermediate_responses` | bool | `true` | 在输出中包含中间响应 |
+| `shuffle_seed` | int | `0` | 响应打乱的随机种子 |
+| `include_intermediate_responses` | bool | `false` | 在输出中包含中间响应 |
 | `max_responses_per_round` | int | — | 每轮最多保留的响应数 |
-| `on_error` | string | `skip` | 失败时的行为：`skip` 或 `fail` |
+| `algorithm.on_error` | string | `skip` | 与 `type` 并列，而不在此块中：失败时的行为，`skip` 或 `fail` |
+
+没有 `remom` 块时，ReMoM 以 `breadth_schedule: [4]`、`temperature: 1.0`、`shuffle_seed: 42` 和 `include_intermediate_responses: true` 运行。
 
 每轮会与分配到的模型共享请求派生文本和中间文本，合成模型会收到收集到的结果。投产前请限制带宽、补全 token、并发和超时。完整示例见：
 [`config/fragments/algorithm/looper/remom.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/looper/remom.yaml)。

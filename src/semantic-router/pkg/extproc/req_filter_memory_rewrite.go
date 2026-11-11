@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -11,12 +10,16 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
-	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
-const defaultMemoryRewriteMaxResponseBytes int64 = 1024 * 1024
+const (
+	defaultMemoryRewriteMaxResponseBytes int64 = 1024 * 1024
+	memoryRewriteMaxRequestBytes         int64 = 1024 * 1024
+	memoryRewriteMaxErrorBytes           int64 = 64 * 1024
+)
 
 // ConversationMessage represents a message in conversation history.
 type ConversationMessage struct {
@@ -30,11 +33,11 @@ type ConversationMessage struct {
 type memoryRewriteServiceConfig struct {
 	Endpoint         string
 	Model            string
-	AccessKey        string
 	Timeout          time.Duration
 	MaxTokens        int
 	Temperature      float64
 	MaxResponseBytes int64
+	client           *connector.Client
 }
 
 // queryRewriteSystemPrompt is the system prompt for query rewriting.
@@ -150,37 +153,36 @@ func formatHistoryForPrompt(history []ConversationMessage) string {
 	return strings.Join(lines, "\n")
 }
 
-// resolveMemoryRewriteServiceConfig resolves only the internal
-// memory_rewrite system-model role. Request-facing Model assignments and
-// physical backend selection never enter this adapter.
+// resolveMemoryRewriteServiceConfig resolves the openai_chat deployment the
+// memory query rewrite names. Request-facing Model assignments and physical
+// backend selection never enter this adapter.
 func resolveMemoryRewriteServiceConfig(routerCfg *config.RouterConfig) *memoryRewriteServiceConfig {
 	if routerCfg == nil {
 		return nil
 	}
-
-	externalCfg := routerCfg.FindExternalModelByRole(config.ModelRoleMemoryRewrite)
-	if externalCfg == nil || externalCfg.ModelEndpoint.Address == "" {
+	name, deployment, ok := routerCfg.MemoryRewriteDeployment()
+	if !ok {
 		return nil
 	}
-
-	scheme := externalCfg.ModelEndpoint.Protocol
-	if scheme == "" {
-		scheme = "http"
+	client, err := connector.ForDeployment(deployment, connector.Options{
+		AttemptTimeout: 5 * time.Second, MaxRequestBytes: memoryRewriteMaxRequestBytes,
+		MaxResponseBytes: defaultMemoryRewriteMaxResponseBytes, MaxErrorBytes: memoryRewriteMaxErrorBytes,
+	})
+	if err != nil {
+		logging.Errorf("Memory: query rewrite deployment %q cannot connect: %v", name, err)
+		return nil
 	}
-	endpoint := fmt.Sprintf("%s://%s:%d", scheme, externalCfg.ModelEndpoint.Address, externalCfg.ModelEndpoint.Port)
-	maxResponseBytes := externalCfg.MaxResponseBytes
-	if maxResponseBytes <= 0 {
-		maxResponseBytes = defaultMemoryRewriteMaxResponseBytes
+	resolved := &memoryRewriteServiceConfig{
+		Endpoint: deployment.Endpoint, Model: deployment.Model, client: client,
+		Timeout: deployment.CallTimeout(), MaxResponseBytes: deployment.ResponseLimitOr(defaultMemoryRewriteMaxResponseBytes),
 	}
-	return &memoryRewriteServiceConfig{
-		Endpoint:         endpoint,
-		Model:            externalCfg.ModelName,
-		AccessKey:        externalCfg.AccessKey,
-		Timeout:          config.DurationFromSeconds(externalCfg.TimeoutSeconds),
-		MaxTokens:        externalCfg.MaxTokens,
-		Temperature:      externalCfg.Temperature,
-		MaxResponseBytes: maxResponseBytes,
+	if generation := deployment.Generation; generation != nil {
+		resolved.MaxTokens = generation.MaxTokens
+		if generation.Temperature != nil {
+			resolved.Temperature = *generation.Temperature
+		}
 	}
+	return resolved
 }
 
 // callMemoryRewriteService invokes the dedicated internal memory helper. It is
@@ -210,32 +212,11 @@ func callMemoryRewriteService(ctx context.Context, resolved *memoryRewriteServic
 	if err != nil {
 		return "", fmt.Errorf("encode memory rewrite request: %w", err)
 	}
-	url := fmt.Sprintf("%s/v1/chat/completions", strings.TrimSuffix(resolved.Endpoint, "/"))
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(encoded.Body))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	if resolved.AccessKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+resolved.AccessKey)
-	}
-
-	client := &http.Client{Timeout: getTimeout(resolved)}
-	resp, err := client.Do(httpReq)
+	ctx, cancel := context.WithTimeout(ctx, getTimeout(resolved))
+	defer cancel()
+	body, err := resolved.client.Do(ctx, memoryRewriteOperation, encoded.Body)
 	if err != nil {
 		return "", fmt.Errorf("LLM request failed: %w", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("LLM returned status %d", resp.StatusCode)
-	}
-
-	body, err := httputil.ReadLimitedBody(resp.Body, resolved.MaxResponseBytes)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	decoded, err := engine.TranslateResponse(
@@ -249,6 +230,11 @@ func callMemoryRewriteService(ctx context.Context, resolved *memoryRewriteServic
 		return "", fmt.Errorf("no choices in LLM response")
 	}
 	return memory.StripThinkTags(content), nil
+}
+
+// memoryRewriteOperation asks the deployment's chat completions API.
+var memoryRewriteOperation = connector.Operation{
+	Name: "memory_rewrite", Method: http.MethodPost, Path: "/chat/completions", SuccessStatusCode: http.StatusOK,
 }
 
 func semanticResponseText(response llmprotocol.Response) string {

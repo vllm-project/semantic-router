@@ -9,21 +9,28 @@ page covers preparing those tasks from Dashboard or the CLI, reserving named
 evaluation history before a holdout, registering targets, and supplying the
 judges and simulators that some benchmarks require.
 
-Open **Dashboard → Evaluation → Create evaluation** and choose benchmarks,
-an evaluation size, models or recipes, and limits. Benchmarks do not need to be
-downloaded first. **Review plan** automatically reuses verified data and prepares
-missing datasets and their supported data dependencies. The creation page shows
-progress through installation, download and freezing, then presents the frozen
-plan. **Start evaluation** begins model requests only after that review.
+## Prepare tasks
+
+Open **Dashboard → Evaluation → Create evaluation** and choose benchmarks, an
+evaluation size, models or recipes, and limits. Benchmarks don't need to be
+downloaded first:
+
+1. **Review plan** reuses verified data, and prepares missing datasets and
+   their supported data dependencies.
+2. The creation page shows progress through installation, download and
+   freezing, then presents the frozen plan.
+3. **Start evaluation** begins model requests, only after that review.
 
 For independent data management, **Datasets → Prepare dataset** uses the same
-shared worker. Accepted preparation jobs continue if the page closes. Completed
-datasets become available to both Dashboard and CLI.
+shared worker. Accepted preparation jobs continue if the page closes, and
+completed datasets become available to both Dashboard and the CLI.
 
-The CLI uses the same service operation by default. It waits for completion and
-writes the frozen manifest to standard output, so it can still be redirected to
-a file. `--url` selects a remote worker; downloads and frozen dataset files remain
-on that worker, not on the CLI host.
+### From the CLI
+
+The CLI uses the same service operation by default. It waits for completion
+and writes the frozen manifest to standard output, so it can still be
+redirected to a file. `--url` selects a remote worker; downloads and frozen
+dataset files stay on that worker, not on the CLI host.
 
 ```bash
 vllm-sr benchmark --store ./data/sr-bench dataset prepare \
@@ -31,16 +38,20 @@ vllm-sr benchmark --store ./data/sr-bench dataset prepare \
   --profile quick > quick-dataset.json
 ```
 
-Repeating `--benchmark` creates one service-owned collection job. It pins eligible
-existing sources, prepares only missing benchmarks with the same seed, and
-validates the final composition. Source or seed conflicts require explicit
-resolution; they are not treated as missing data. A failed job can be retried
-explicitly and can reuse verified completed items. Single-benchmark preparation
-and explicit `dataset combine` remain available.
+Repeating `--benchmark` creates one service-owned collection job:
+
+- **What it does.** It pins eligible existing sources, prepares only the
+  missing benchmarks with the same seed, and validates the final composition.
+- **Conflicts.** Source or seed conflicts need explicit resolution; they
+  aren't treated as missing data.
+- **Retries.** A failed job can be retried explicitly, and can reuse verified
+  completed items.
+- **Alternatives.** Single-benchmark preparation and explicit
+  `dataset combine` are still available.
 
 Use `--no-wait` to return the preparation job immediately. Closing the page or
-interrupting the CLI wait does not cancel the worker's preparation. Both clients
-can inspect the same jobs and prepared datasets:
+interrupting the CLI wait doesn't cancel the worker's preparation, and both
+clients can inspect the same jobs and prepared datasets:
 
 ```bash
 vllm-sr benchmark --url http://127.0.0.1:8090 dataset options
@@ -51,23 +62,30 @@ vllm-sr benchmark --url http://127.0.0.1:8090 dataset preparations PREPARATION_I
 vllm-sr benchmark --url http://127.0.0.1:8090 dataset show
 ```
 
-Preparation requires Evaluation write permission in Dashboard; reading options,
-progress and datasets requires read permission. Read-only Dashboard mode disables
-preparation, while benchmark and profile selection remain available for browsing.
-If access could not be checked, use **Refresh access** to retry the settings and
-account checks. Preparing data does not require model generation permission,
-start an evaluation, or make model requests. Automatic dependency installation is limited to the
-allowlisted data preparation packages. It does not install execution harnesses,
-build sandbox images, or provision model servers. Those remain explicit worker
-setup operations. Gated sources require access approval and the appropriate
-Hugging Face credential in the **worker environment**; browser or local CLI
-credentials are not uploaded. Installation and download failures remain visible
-on the preparation job and can be retried explicitly after the cause is fixed.
+### Permissions and dependencies
 
-Local file imports and advanced history options use the explicit `--local` mode.
-For this mode, install `vllm-sr[bench]` on the preparation host for Parquet sources.
-A local file is never implicitly uploaded to a remote worker, and `--local` cannot
-be combined with `--url` or `SR_BENCH_URL`:
+- **Permissions.** Preparation needs Evaluation write permission in Dashboard;
+  reading options, progress and datasets needs read permission. Read-only
+  Dashboard mode disables preparation, while benchmark and profile selection
+  stay available for browsing. If access couldn't be checked, use
+  **Refresh access** to retry the settings and account checks.
+- **No model calls.** Preparing data doesn't need model generation
+  permission, start an evaluation or make model requests.
+- **What it installs.** Automatic dependency installation is limited to the
+  allowlisted data preparation packages. Execution harnesses, sandbox images
+  and model servers stay explicit worker setup operations.
+- **Gated sources** need access approval and the appropriate Hugging Face
+  credential in the **worker environment**; browser or local CLI credentials
+  aren't uploaded.
+- **Failures.** Installation and download failures stay visible on the
+  preparation job, and can be retried explicitly once the cause is fixed.
+
+### Import local files
+
+Local file imports and advanced history options use the explicit `--local`
+mode. For it, install `vllm-sr[bench]` on the preparation host for Parquet
+sources. A local file is never implicitly uploaded to a remote worker, and
+`--local` can't be combined with `--url` or `SR_BENCH_URL`:
 
 ```bash
 vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
@@ -75,17 +93,18 @@ vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
   --source-path ./tasks.parquet --revision imported-v1
 ```
 
-Local task imports require `--source-path` and `--revision`; their actual bytes
-are hashed. `--limit` creates a labeled custom subset in either mode. Never edit
-a prepared file in place. New questions, selection rules or source bytes create
-a new identity.
+- **Local task imports** need `--source-path` and `--revision`; their actual
+  bytes are hashed.
+- **`--limit`** creates a labeled custom subset, in either mode.
+- **Never edit a prepared file in place.** New questions, selection rules or
+  source bytes create a new identity.
 
 ## Reserve named evaluation history
 
 For repeated evaluations, prepare native sources with `--source-partition` to
-record their upstream partition and canonical task identity. This partition is
-the source's `test`, `dev`, or other upstream task collection; it is independent
-of sr-bench's evaluation split and seed. Use the same partition and exact source
+record their upstream partition and canonical task identity. The partition is
+the source's `test`, `dev` or other upstream task collection, independent of
+sr-bench's evaluation split and seed. Use the same partition and exact source
 provenance throughout a history comparison.
 
 ```bash
@@ -99,43 +118,70 @@ vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
   --exclusion-snapshot history.json --evaluation-role holdout > standard.json
 ```
 
+### The exclusion snapshot
+
 Snapshot compilation reads only explicitly named prepared datasets and frozen
-run manifests from the selected local store. It reserves **all memberships**,
-including planned or failed cases; membership does not establish that a model
-generated a response or a person read it. The immutable snapshot contains task
-identity hashes, reference digests, and source provenance, without question or
-answer bodies. Named-reference reads are bounded; oversized inputs fail without
-publishing a selection.
+run manifests from the selected local store:
 
-Standard keeps the existing deterministic ordering and excludes the union of
-its original Quick membership and the frozen history **once**. Preparation
-either produces the exact requested count or fails before publishing a dataset.
-It never fills a shortfall with excluded tasks or changes the profile count.
-The snapshot and per-family counts become part of the new dataset identity;
-combining datasets and freezing plans preserve that provenance. Existing
-artifacts are unchanged. Preparation without the new options retains its
-original behavior and makes no additional history qualification.
+- **All memberships are reserved,** including planned or failed cases.
+  Membership doesn't establish that a model generated a response or that a
+  person read it.
+- **No question or answer bodies.** The immutable snapshot contains task
+  identity hashes, reference digests and source provenance.
+- **Bounded reads.** Named-reference reads are bounded; oversized inputs fail
+  without publishing a selection.
 
-This first identity policy requires exact source bytes, revision, normalizer and
+### The Standard holdout
+
+Standard keeps the existing deterministic ordering, and excludes the union of
+its original Quick membership and the frozen history **once**:
+
+- **Exact count or failure.** Preparation either produces the exact requested
+  count, or fails before publishing a dataset. It never fills a shortfall with
+  excluded tasks, or changes the profile count.
+- **Provenance.** The snapshot and per-family counts become part of the new
+  dataset identity, and combining datasets and freezing plans keep that
+  provenance. Existing artifacts are unchanged.
+- **Without the new options,** preparation keeps its original behavior, and
+  makes no extra history qualification.
+
+### Task identity
+
+The identity policy requires exact source bytes, revision, normalizer and
 upstream partition, with native task IDs (including the domain for τ³). GPQA
-uses the full hash of its native, unformatted question within that source. Older
-prepared artifacts without this identity, normalized imports, missing native
-IDs, and cross-source or cross-revision mappings fail explicitly; aliases and
-message hashes do not establish equivalence. They need separate provenance
-reconciliation before they can support an exclusion claim.
+uses the full hash of its native, unformatted question within that source.
 
-Freeze `--evaluation-role retest` explicitly for a family that is being retested.
-It can be used without a history snapshot and does not claim disjointness. A
-snapshot, if supplied, still excludes its memberships; retest is never an
-automatic fallback after exhaustion. An explicitly prepared GPQA retest can
-remain in the default protocol with a retest disclosure. Its aggregate must
-remain separate from any claimed unseen aggregate. The preparation role is
-separate from the existing evaluation split label.
+These fail explicitly, and need separate provenance reconciliation before they
+can support an exclusion claim:
 
-Named-history exclusion is a finite local provenance claim. It does not certify
-complete browsing or human exposure history, or absence of upstream contamination.
-Reports retain that limitation and identify explicit retest families; these
-options do not introduce a new unseen-only scoring aggregate.
+- older prepared artifacts without this identity;
+- normalized imports;
+- missing native IDs;
+- cross-source or cross-revision mappings.
+
+Aliases and message hashes don't establish equivalence.
+
+### Retests
+
+Freeze `--evaluation-role retest` explicitly for a family that's being
+retested:
+
+- **No disjointness claim.** It can be used without a history snapshot. A
+  snapshot, if supplied, still excludes its memberships, and retest is never
+  an automatic fallback after exhaustion.
+- **GPQA.** An explicitly prepared GPQA retest can stay in the default
+  protocol with a retest disclosure. Its aggregate must stay separate from any
+  claimed unseen aggregate.
+- **Separate labels.** The preparation role is separate from the existing
+  evaluation split label.
+
+:::caution
+Named-history exclusion is a finite, local provenance claim. It doesn't
+certify complete browsing or human exposure history, or the absence of
+upstream contamination. Reports keep that limitation and identify explicit
+retest families; these options don't introduce a new unseen-only scoring
+aggregate.
+:::
 
 ## Register targets
 
@@ -146,38 +192,56 @@ vllm-sr benchmark --store ./data/sr-bench target register --file targets.json
 vllm-sr benchmark target list
 ```
 
-`targets.json` is an array of target objects. Each has `id`, `kind` (`single` or
-`mom`), `base_url`, `model` and, when needed, `api_key_env`. Priced runs supply
-`prices` keyed by actual returned model identity. Every price entry has `input`,
-`cached_input`, `cache_write` and `output` rates in USD per million tokens.
-Record the pricing basis and use the exact same rates in paired runs.
+`targets.json` is an array of target objects:
 
-A MoM target also binds the expected runtime `config_hash`; preview uses its
-`preview_url`. Priced MoM runs declare `max_inference_calls`. The current direct
-MoM adapter requires one fully accounted inference call; unsupported compound
-usage cannot be priced from the final selected model alone. Dashboard can
-select registered targets but cannot edit their destinations or credentials.
+| Field | Holds |
+| --- | --- |
+| `id` | The target's ID |
+| `kind` | `single` or `mom` |
+| `base_url`, `model` | Where and what to call |
+| `api_key_env` | The credential's environment variable, when needed |
+| `prices` | For priced runs, keyed by the actual returned model identity. Every entry has `input`, `cached_input`, `cache_write` and `output` rates, in USD per million tokens. |
 
-A target with `session_mode: session_aware` sends one session identity per task
-on its subject calls. Configure the mode on each registered target; targets are
-`stateless` by default. See [the results guide](./results.md) for request headers
-and report labels.
+Record the pricing basis, and use exactly the same rates in paired runs.
 
-An operator can freeze native generation settings in a target's `request_params`.
-These settings override the run's `sampling` defaults, including temperature,
-reasoning options and output length when present. Inspect the effective profile
-before comparing targets. The run's output cap must accommodate a target's fixed
-`max_tokens`; lowering the cap does not rewrite that profile. Choose another
-operator-registered profile when different native settings are required.
+### MoM targets
 
-Judged benchmarks require a fixed single-model judge and
-`grader_version: sr-bench-reference-judge-v1`. τ³ also needs a fixed simulator
-and release `1.0.1`. Operators supply these in `benchmark-options.json` in the
-store. External adapters discover the pinned environments installed by
-`benchmark setup`. Set `SR_BENCH_{LCB,SCICODE,TERMINAL,TAU3}_PYTHON` and the
-corresponding `_ROOT` variables to override those locations. Exact source
-revisions and, for code or terminal tasks, digest-pinned sandbox images remain
-required. Preflight reports missing prerequisites before dispatch.
+- **Runtime binding.** A MoM target also binds the expected runtime
+  `config_hash`; preview uses its `preview_url`.
+- **Pricing.** Priced MoM runs declare `max_inference_calls`. The current
+  direct MoM adapter requires one fully accounted inference call; unsupported
+  compound usage can't be priced from the final selected model alone.
+- **Read-only in Dashboard.** Dashboard can select registered targets, but
+  can't edit their destinations or credentials.
+
+### Sessions and generation settings
+
+- **Sessions.** A target with `session_mode: session_aware` sends one session
+  identity per task on its subject calls. Configure the mode on each
+  registered target; targets are `stateless` by default. See
+  [the results guide](./results.md) for request headers and report labels.
+- **Frozen generation settings.** An operator can freeze native generation
+  settings in a target's `request_params`. They override the run's `sampling`
+  defaults, including temperature, reasoning options and output length when
+  present, so inspect the effective profile before comparing targets.
+- **Output caps.** The run's output cap must accommodate a target's fixed
+  `max_tokens`; lowering the cap doesn't rewrite that profile. Choose another
+  operator-registered profile when different native settings are needed.
+
+## Judges, simulators and harnesses
+
+- **Judged benchmarks** need a fixed single-model judge and
+  `grader_version: sr-bench-reference-judge-v1`.
+- **τ³** also needs a fixed simulator, and release `1.0.1`.
+- **Where they're set.** Operators supply these in `benchmark-options.json`
+  in the store.
+- **External adapters** discover the pinned environments installed by
+  `benchmark setup`. Set `SR_BENCH_{LCB,SCICODE,TERMINAL,TAU3}_PYTHON` and the
+  corresponding `_ROOT` variables to override those locations.
+- **Pinned sources.** Exact source revisions and, for code or terminal tasks,
+  digest-pinned sandbox images are still required.
+
+Preflight reports missing prerequisites before dispatch.
 
 ## Repeated-prefix cache diagnostic
 
@@ -227,6 +291,12 @@ IDs. A run supports one arm or a Router target followed by one direct backend.
 Use `kind: mom` and the real config hash for the Router, and `kind: single` for
 the backend. Paired URLs must differ, but a different URL does not establish
 model equivalence or matched cache state.
+
+The shared worker uses `x-vsr-session-id` and `x-conversation-id`. When comparing
+against the retained script on the current Router, pass
+`--session-header x-vsr-session-id` explicitly; the script keeps its original
+default. Router phase, config-hash and inference-count evidence comes from
+`x-vsr-trace`, not the retired individual debug headers.
 
 Native overrides use preparation's `--max-tokens`, `--temperature` and `--timeout`.
 The manifest's effective generation settings and request timeout must match that

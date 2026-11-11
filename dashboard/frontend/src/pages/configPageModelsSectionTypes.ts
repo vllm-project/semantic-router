@@ -5,7 +5,6 @@ import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupp
 
 export interface ConfigPageModelsSectionProps {
   config: ConfigData | null
-  isPythonCLI: boolean
   isReadonly: boolean
   canVerifyModels: boolean
   models: NormalizedModel[]

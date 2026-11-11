@@ -1,9 +1,8 @@
 // Package masking provides the e2e profile for the masking decision plugin
-// (#3566). It has no PII model to host, so it drives detection through the
-// same remote token_spans.v1 stub the pii-remote-backend profile uses, and
-// verifies the provider-bound bytes through provider-mocker's deterministic
-// request echo rather than Router Replay, which is deliberately blind on a
-// masking route (D3).
+// (#3566). It has no PII model to host, so it drives detection through
+// provider-mocker's System One fixture, and verifies the provider-bound bytes
+// through provider-mocker's deterministic request echo rather than Router
+// Replay, which is deliberately blind on a masking route (D3).
 package masking
 
 import (
@@ -15,26 +14,19 @@ import (
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
-const (
-	valuesFile           = "e2e/profiles/masking/values.yaml"
-	mappingConfigMapYAML = "deploy/kubernetes/pii-remote-backend/pii-mapping-configmap.yaml"
-)
+const valuesFile = "e2e/profiles/masking/values.yaml"
 
-// resourceManifests reuses two other profiles' manifests unchanged: the plain
-// provider-mocker chat backend and the remote PII stub server
-// (pii-remote-backend's mock-pii-spans). Both are generic fixtures, not
-// specific to the profile that first added them -- response-jailbreak reuses
-// the same provider-mocker manifest, and pii-remote-backend reuses
-// ai-gateway's backend manifest the same way.
+// resourceManifests reuses the plain provider-mocker manifest unchanged: it
+// is both the chat backend and the systemone deployment that answers the pii
+// rule. It is a generic fixture, not specific to the profile that first
+// added it -- response-jailbreak reuses the same manifest.
 var resourceManifests = []string{
 	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 	"deploy/kubernetes/masking/gwapi-resources.yaml",
-	"e2e/profiles/pii-remote-backend/manifests/mock-pii-spans.yaml",
 }
 
 var waitDeployments = []helpers.DeploymentRef{
 	{Namespace: "default", Name: "provider-mocker"},
-	{Namespace: "default", Name: "mock-pii-spans"},
 }
 
 // Profile validates the masking plugin end to end across Chat Completions,
@@ -48,7 +40,6 @@ func NewProfile() *Profile {
 		stack: gatewaystack.New(gatewaystack.Config{
 			Name:                     "masking",
 			SemanticRouterValuesFile: valuesFile,
-			PrerequisiteManifests:    []string{mappingConfigMapYAML},
 			ResourceManifests:        resourceManifests,
 			WaitDeployments:          waitDeployments,
 		}),
@@ -58,7 +49,7 @@ func NewProfile() *Profile {
 func (p *Profile) Name() string { return "masking" }
 
 func (p *Profile) Description() string {
-	return "Tests the masking decision plugin across Chat, Responses and Anthropic, and its fail-closed behavior when the PII classifier errors"
+	return "Tests the masking decision plugin across Chat, Responses and Anthropic, and its fail-closed behavior when the PII deployment errors"
 }
 
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
@@ -72,6 +63,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 func (p *Profile) GetTestCases() []string {
 	return []string{
 		"masking-cross-protocol",
+		"masking-keeps-echoed-placeholder",
 		"masking-classifier-unavailable-fails-closed",
 	}
 }

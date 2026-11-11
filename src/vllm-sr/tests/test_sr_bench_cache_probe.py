@@ -25,7 +25,13 @@ from cli.sr_bench.offline import export_training, regrade, replay
 from cli.sr_bench.report import compare, make_report
 from cli.sr_bench.service import Server
 from cli.sr_bench.store import Store
-from cli.sr_bench.transport import CACHE_OBSERVATION_VERSION, normalize_usage
+from cli.sr_bench.transport import (
+    CACHE_OBSERVATION_VERSION,
+    CONVERSATION_ID_HEADER,
+    SESSION_ID_HEADER,
+    normalize_usage,
+)
+from cli.vsr_trace import TRACE_HEADER
 from test_sr_bench import wait_run
 
 from bench import cache_token_probe as native
@@ -67,6 +73,7 @@ class Provider(ThreadingHTTPServer):
         self.fault_at: int = 1
         self.omit_model: bool = False
         self.config_hash: str | None = "fixture-config"
+        self.legacy_receipts: bool = False
         self.entered = threading.Event()
         self.release = threading.Event()
 
@@ -92,7 +99,14 @@ class Handler(BaseHTTPRequestHandler):
         provider.requests.append(
             {
                 "body": body,
-                "session_id": self.headers.get("x-session-id"),
+                "session_id": self.headers.get(SESSION_ID_HEADER),
+                "conversation_id": self.headers.get(CONVERSATION_ID_HEADER),
+                "expected_config_hash": self.headers.get(
+                    "x-vsr-bench-expected-config-hash"
+                ),
+                "max_inference_calls": self.headers.get(
+                    "x-vsr-bench-max-inference-calls"
+                ),
                 "path": self.path,
             }
         )
@@ -108,10 +122,16 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header(
             "Content-Type", "text/event-stream" if streamed else "application/json"
         )
-        if provider.config_hash is not None:
-            self.send_header("x-sr-bench-config-hash", provider.config_hash)
-        self.send_header("x-vsr-inference-call-count", "1")
-        self.send_header("x-vsr-session-phase", "user_turn")
+        if provider.legacy_receipts:
+            if provider.config_hash is not None:
+                self.send_header("x-sr-bench-config-hash", provider.config_hash)
+            self.send_header("x-vsr-inference-call-count", "1")
+            self.send_header("x-vsr-session-phase", "user_turn")
+        else:
+            trace = ['session_phase="user_turn"', "inference_calls=1"]
+            if provider.config_hash is not None:
+                trace.append(f"config_hash={json.dumps(provider.config_hash)}")
+            self.send_header(keyword=TRACE_HEADER, value=", ".join(trace))
         if not provider.omit_model:
             self.send_header("x-vsr-selected-model", "reported-model")
         self.end_headers()
@@ -276,6 +296,8 @@ def native_cli(
             provider.base_url,
             "--model",
             "requested-model",
+            "--session-header",
+            SESSION_ID_HEADER,
             "--repeats",
             str(repeats),
             "--timeout",
@@ -374,6 +396,7 @@ def test_native_and_cli_preserve_requests_and_qualified_observations(
         assert probe["repeats"][index]["response_status"] == HTTPStatus.OK
     sessions = {request["session_id"] for request in provider.requests}
     assert len(sessions) == 1 and None not in sessions
+    assert {request["conversation_id"] for request in provider.requests} == sessions
     assert sessions != {native_requests[0]["session_id"]}
     assert hashlib.sha256(native.probe_prompt().encode()).hexdigest() == PREFIX_SHA256
     calls = service.store.calls(report["run_id"])
@@ -810,6 +833,44 @@ def test_router_config_acknowledgement_is_not_inferred_from_configuration(
     assert probe["target"]["expected_config_hash"] == "expected-config"
     assert probe["repeats"][0]["config_hash"] is None
     assert probe["execution_complete"] is False
+
+
+@pytest.mark.parametrize("legacy_receipts", [False, True])
+def test_cache_observations_preserve_the_parent_trace_contract(
+    tmp_path: Path, provider: Provider, service: Server, legacy_receipts: bool
+) -> None:
+    provider.legacy_receipts = legacy_receipts
+    value = document(root=tmp_path, provider=provider, repeats=1)
+    value["targets"][0].update(
+        kind="mom", config_hash="fixture-config", max_inference_calls=1
+    )
+    result = run_cli(service=service, value=value)
+    assert result.returncode == (2 if legacy_receipts else 0), result.stderr
+    report = json.loads(result.stdout)
+    call = service.store.calls(report["run_id"])[0]
+    request = provider.requests[0]
+    assert request["expected_config_hash"] == "fixture-config"
+    assert request["max_inference_calls"] == "1"
+    assert request["session_id"] == request["conversation_id"] == call["session_id"]
+    assert call["provider_cache_observation"]["cached_tokens"] == 40
+    assert call["response_status"] == HTTPStatus.OK
+    assert report["summary"]["targets"][0]["scored"] == 0
+    assert report["summary"]["targets"][0]["sr_bench_score"] is None
+    if legacy_receipts:
+        assert call["phase_source"] == "request"
+        assert call["inference_call_count"] is None
+        assert call["config_hash"] is None
+        assert call["error"] == (
+            "Runtime configuration identity acknowledgement missing or mismatched"
+        )
+        assert report["cache_probe_compatibility"]["status"] == "incomplete"
+    else:
+        assert call["phase_source"] == "router"
+        assert call["config_hash"] == "fixture-config"
+        assert call["inference_call_count"] == 1
+        assert call["provider_model_observed"] is True
+        assert call["selected_model"] == "reported-model"
+        assert report["cache_probe_compatibility"]["status"] == "complete"
 
 
 @pytest.mark.parametrize("repeats", [0, -1, True, 1.5, 33, 10**12])

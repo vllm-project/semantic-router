@@ -29,9 +29,9 @@ class PreviewHandler(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         PreviewHandler.requests.append({"path": self.path, "body": body})
         text = body["messages"][-1]["content"]
-        payload = json.dumps(
-            {"decision_result": {"matched_signals": {"action": PREVIEW_ACTIONS[text]}}}
-        ).encode()
+        labels = [f"action:{action}" for action in PREVIEW_ACTIONS[text]]
+        matched = {"systemone": ["action", *labels] if labels else []}
+        payload = json.dumps({"decision_result": {"matched_signals": matched}}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(payload)))
@@ -66,10 +66,36 @@ class ScoreTest(unittest.TestCase):
         self.assertEqual(report["confusion"]["fix"]["explain"], 1)
         self.assertEqual(report["confusion"]["other"][signal_labeled_set.NO_MATCH], 1)
 
+    def test_predicted_label_reads_a_field_or_one_rules_labels(self) -> None:
+        response = {
+            "decision_result": {
+                "matched_signals": {
+                    "keywords": ["urgent"],
+                    "systemone": ["action", "action:fix", "tone", "tone:formal"],
+                }
+            }
+        }
+        self.assertEqual(
+            signal_labeled_set.predicted_label(response, "keywords"), "urgent"
+        )
+        self.assertEqual(
+            signal_labeled_set.predicted_label(response, "systemone:action"), "fix"
+        )
+        self.assertEqual(
+            signal_labeled_set.predicted_label(response, "systemone:intent"),
+            signal_labeled_set.NO_MATCH,
+        )
+
     def test_predicted_label_rejects_several_labels(self) -> None:
-        response = {"decision_result": {"matched_signals": {"action": ["fix", "test"]}}}
+        response = {
+            "decision_result": {
+                "matched_signals": {
+                    "systemone": ["action", "action:fix", "action:test"]
+                }
+            }
+        }
         with self.assertRaises(ValueError):
-            signal_labeled_set.predicted_label(response, "action")
+            signal_labeled_set.predicted_label(response, "systemone:action")
 
 
 class PreviewScoringTest(unittest.TestCase):

@@ -41,15 +41,16 @@ final say on whether learning may apply, observe, or bypass.
 Use `bypass` for hard boundaries:
 
 ```yaml
-routing:
-  decisions:
-    - name: local_privacy_policy
-      description: Keep privacy-sensitive traffic on the local model.
-      priority: 200
-      modelRefs:
-        - model: local-private-model
-      adaptations:
-        mode: bypass
+recipes:
+  - name: default
+    decisions:
+      - name: local_privacy_policy
+        description: Keep privacy-sensitive traffic on the local model.
+        priority: 200
+        modelRefs:
+          - model: local-private-model
+        adaptations:
+          mode: bypass
 ```
 
 Use component-level controls when adaptation and protection should behave

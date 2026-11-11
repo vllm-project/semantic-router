@@ -36,7 +36,7 @@ service:
 persistence:
   enabled: false
 config:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     defaults:
@@ -50,6 +50,13 @@ config:
             endpoint: vllm-14b.default.svc.cluster.local:8000
             weight: 1
             provider: vllm
+        param_size: 14b
+        description: Qwen2.5 14B — high-capability model
+        capabilities:
+          - chat
+          - code
+          - reasoning
+          - math
       - name: Qwen/Qwen2.5-7B-Instruct
         external_model_ids:
           vllm: Qwen/Qwen2.5-7B-Instruct
@@ -58,6 +65,11 @@ config:
             endpoint: vllm-7b.default.svc.cluster.local:8000
             weight: 1
             provider: vllm
+        param_size: 7b
+        description: Qwen2.5 7B — efficient model
+        capabilities:
+          - chat
+          - code
   evaluation:
     records:
       - model: Qwen/Qwen2.5-14B-Instruct
@@ -68,131 +80,118 @@ config:
         benchmark: vllm-sr/operator-rating@1.0.0
         metrics:
           score: 0.7
-  routing:
-    decisions:
-      - name: admin_unrestricted
-        description: Admin users get 14B with reasoning
-        priority: 300
-        rules:
-          operator: AND
-          conditions:
-            - type: authz
-              name: admin
-        modelRefs:
-          - model: Qwen/Qwen2.5-14B-Instruct
-            use_reasoning: true
-          - model: Qwen/Qwen2.5-7B-Instruct
-            use_reasoning: false
-      - name: premium_complex
-        description: Premium users + complex queries get 14B
-        priority: 250
-        rules:
-          operator: AND
-          conditions:
-            - type: authz
-              name: premium_user
-            - type: keyword
-              name: complex_analysis
-        modelRefs:
-          - model: Qwen/Qwen2.5-14B-Instruct
-            use_reasoning: true
-      - name: premium_code
-        description: Premium users + code requests get 14B
-        priority: 240
-        rules:
-          operator: AND
-          conditions:
-            - type: authz
-              name: premium_user
-            - type: keyword
-              name: code_request
-        modelRefs:
-          - model: Qwen/Qwen2.5-14B-Instruct
-            use_reasoning: false
-      - name: premium_default
-        description: Premium users simple queries get 7B
-        priority: 150
-        rules:
-          operator: AND
-          conditions:
-            - type: authz
-              name: premium_user
-        modelRefs:
-          - model: Qwen/Qwen2.5-7B-Instruct
-            use_reasoning: false
-      - name: free_default
-        description: Free users get 7B
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: authz
-              name: free_user
-        modelRefs:
-          - model: Qwen/Qwen2.5-7B-Instruct
-            use_reasoning: false
-    signals:
-      keywords:
-        - name: complex_analysis
-          operator: OR
-          keywords:
-            - analyze
-            - reasoning
-            - think step by step
-            - explain why
-            - compare
-            - evaluate
-        - name: code_request
-          operator: OR
-          keywords:
-            - write code
-            - implement
-            - function
-            - algorithm
-            - debug
-            - refactor
-      domains:
-        - name: code
-          description: Programming, debugging, and software engineering tasks
-        - name: general
-          description: General knowledge, conversation, and miscellaneous topics
-      role_bindings:
-        - name: admin-binding
-          description: Platform admins — full model access
-          subjects:
-            - kind: Group
-              name: platform-admins
-          role: admin
-        - name: premium-binding
-          description: Premium tier users
-          subjects:
-            - kind: Group
-              name: premium-tier
-          role: premium_user
-        - name: free-binding
-          description: Free tier users
-          subjects:
-            - kind: Group
-              name: free-tier
-          role: free_user
-    modelCards:
-      - name: Qwen/Qwen2.5-14B-Instruct
-        param_size: 14b
-        description: Qwen2.5 14B — high-capability model
-        capabilities:
-          - chat
-          - code
-          - reasoning
-          - math
-      - name: Qwen/Qwen2.5-7B-Instruct
-        param_size: 7b
-        description: Qwen2.5 7B — efficient model
-        capabilities:
-          - chat
-          - code
+  recipes:
+    - name: default
+      decisions:
+        - name: admin_unrestricted
+          description: Admin users get 14B with reasoning
+          priority: 300
+          rules:
+            operator: AND
+            conditions:
+              - type: authz
+                name: admin
+          modelRefs:
+            - model: Qwen/Qwen2.5-14B-Instruct
+              use_reasoning: true
+            - model: Qwen/Qwen2.5-7B-Instruct
+              use_reasoning: false
+        - name: premium_complex
+          description: Premium users + complex queries get 14B
+          priority: 250
+          rules:
+            operator: AND
+            conditions:
+              - type: authz
+                name: premium_user
+              - type: keyword
+                name: complex_analysis
+          modelRefs:
+            - model: Qwen/Qwen2.5-14B-Instruct
+              use_reasoning: true
+        - name: premium_code
+          description: Premium users + code requests get 14B
+          priority: 240
+          rules:
+            operator: AND
+            conditions:
+              - type: authz
+                name: premium_user
+              - type: keyword
+                name: code_request
+          modelRefs:
+            - model: Qwen/Qwen2.5-14B-Instruct
+              use_reasoning: false
+        - name: premium_default
+          description: Premium users simple queries get 7B
+          priority: 150
+          rules:
+            operator: AND
+            conditions:
+              - type: authz
+                name: premium_user
+          modelRefs:
+            - model: Qwen/Qwen2.5-7B-Instruct
+              use_reasoning: false
+        - name: free_default
+          description: Free users get 7B
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: authz
+                name: free_user
+          modelRefs:
+            - model: Qwen/Qwen2.5-7B-Instruct
+              use_reasoning: false
+      signals:
+        keywords:
+          - name: complex_analysis
+            operator: OR
+            keywords:
+              - analyze
+              - reasoning
+              - think step by step
+              - explain why
+              - compare
+              - evaluate
+          - name: code_request
+            operator: OR
+            keywords:
+              - write code
+              - implement
+              - function
+              - algorithm
+              - debug
+              - refactor
+        domains:
+          - name: code
+            description: Programming, debugging, and software engineering tasks
+            labels: ["computer science"]
+          - name: general
+            description: General knowledge, conversation, and miscellaneous topics
+            labels: [other]
+        role_bindings:
+          - name: admin-binding
+            description: Platform admins — full model access
+            subjects:
+              - kind: Group
+                name: platform-admins
+            role: admin
+          - name: premium-binding
+            description: Premium tier users
+            subjects:
+              - kind: Group
+                name: premium-tier
+            role: premium_user
+          - name: free-binding
+            description: Free tier users
+            subjects:
+              - kind: Group
+                name: free-tier
+            role: free_user
   global:
-    model_catalog:
-      kbs: []
+    model_catalog: {}
     router:
       clear_route_cache: true
       strategy: priority
@@ -227,8 +226,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
-          max_concurrency: 8
           metrics:
             enabled: true
             detailed_goroutine_tracking: true
@@ -257,14 +254,6 @@ config:
               - 50
               - 100
               - 200
-    stores:
-      response_cache:
-        enabled: false
-        embedding_model: mmbert
-      memory:
-        embedding_model: mmbert
-      vector_store:
-        embedding_model: mmbert
     integrations: {}
 resources:
   limits:

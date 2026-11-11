@@ -19,6 +19,8 @@ from cli.sr_bench.engine import Engine
 from cli.sr_bench.grading import SESSION_OBSERVATION_RESULT, validate_result
 from cli.sr_bench.report import make_report
 from cli.sr_bench.store import Store
+from cli.sr_bench.transport import SESSION_ID_HEADER
+from cli.vsr_trace import TRACE_HEADER
 from test_sr_bench import wait_run
 
 ROOT: Path = Path(__file__).resolve().parents[3]
@@ -58,7 +60,7 @@ class Handler(BaseHTTPRequestHandler):
         provider.requests.append(
             {
                 "body": body,
-                "session_id": self.headers.get("x-session-id"),
+                "session_id": self.headers.get(SESSION_ID_HEADER),
             }
         )
         if index == provider.fault_at:
@@ -76,7 +78,7 @@ class Handler(BaseHTTPRequestHandler):
         )
         self.send_header("x-vsr-selected-model", selected_model)
         self.send_header("x-vsr-selected-decision", "fixture-decision")
-        self.send_header("x-vsr-session-phase", "router-observed-phase")
+        self.send_header(TRACE_HEADER, "session_phase=provider_state")
         self.end_headers()
         if body.get("stream") is not True:
             response = {
@@ -301,7 +303,8 @@ def test_live_adapter_uses_one_sr_bench_session_and_reports_observations(
         assert len(observation["turns"]) == len(provider.requests)
         assert observation["turns"][0]["request_phase"] == "user_turn"
         assert observation["turns"][0]["previous_response_id_sent"] is False
-        assert observation["turns"][0]["router_phase"] == "unknown"
+        assert observation["turns"][0]["router_phase"] == "provider_state"
+        assert observation["turns"][0]["phase_source"] == "router"
         assert (
             observation["phase_metrics"]["user_turn"]["request_phase_counts"][
                 "user_turn"

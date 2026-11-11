@@ -104,10 +104,10 @@ func checkDecisionRuntimePrompt(
 		return "", err
 	}
 	kind := signals.Answers["request_kind"].Choice
-	matched := headerItems(response.Headers, "x-vsr-matched-decision-model")
+	matched := signalItems(response.Headers, "systemone")
 	for _, want := range []string{"answered", "attached_answered", "request_kind:" + kind} {
 		if !matched[want] {
-			return "", fmt.Errorf("x-vsr-matched-decision-model %v lacks %q, the runtimes' own answer", matched, want)
+			return "", fmt.Errorf("systemone signals %v lacks %q, the runtimes' own answer", matched, want)
 		}
 	}
 	if matched["offline"] {

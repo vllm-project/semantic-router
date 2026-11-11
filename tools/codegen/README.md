@@ -4,6 +4,8 @@ This directory owns build-time generators and templates for checked-in public
 contracts:
 
 - `configschema/`: Router JSON Schema and dashboard TypeScript contracts;
+- `headers/`: the header reference of the headers docs page and the dashboard
+  header constants, from the Router's header registry;
 - `openapi/`: the Router API specification;
 - `crd/`: the operator CRD reference;
 - `embed_generated_index.py`: the API endpoint index embedded in documentation;
