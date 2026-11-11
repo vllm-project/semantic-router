@@ -130,13 +130,12 @@ def codex(router_config, base_url, model, api_key_env, dry_run, undo, yes, profi
         return
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
-    change = hc.codex_change(home, profile, gateway, model, api_key_env)
+    key_env = api_key_env if from_env else None
+    change = hc.codex_change(home, profile, gateway, model, key_env)
     if not _run("codex", [change], home, "", doc, dry_run, yes):
         return
-    if not from_env:
-        warning(
-            f"Set ${api_key_env} before starting Codex: it reads the key from there."
-        )
+    if from_env:
+        echo(f"Codex reads the key from ${api_key_env}; keep it set when you start it.")
     echo(
         "Codex gets the gateway's routing and plugins (System Two); vSR's checks are"
         " not available for Codex yet."

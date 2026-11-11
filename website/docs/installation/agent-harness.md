@@ -284,6 +284,10 @@ wire_api = "responses"
 env_key = "VLLM_SR_API_KEY"
 ```
 
+Leave `env_key` out for a listener without keys: Codex refuses to start while
+the variable it names is unset, and `vllm-sr connect` writes it only when
+`VLLM_SR_API_KEY` is set.
+
 Codex does not know `vllm-sr/auto`, so it warns that it uses fallback model
 metadata. Set `model_context_window` in the profile when that guess should
 follow your backends.

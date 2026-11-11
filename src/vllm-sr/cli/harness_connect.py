@@ -197,10 +197,12 @@ def codex_home(env: dict[str, str]) -> Path:
 
 
 def codex_change(
-    home: Path, profile: str, gateway: str, model: str, key_env: str
+    home: Path, profile: str, gateway: str, model: str, key_env: str | None
 ) -> Change:
     """The profile file. Codex layers it over config.toml with --profile, and it
-    holds the provider too, so config.toml is not touched."""
+    holds the provider too, so config.toml is not touched. key_env is left out
+    for a listener without keys: Codex refuses to start while the variable a
+    provider names is unset."""
     text = (
         f"model = {json.dumps(model)}\n"
         f'model_provider = "{PROVIDER}"\n'
@@ -211,7 +213,7 @@ def codex_change(
         'name = "vLLM Semantic Router"\n'
         f"base_url = {json.dumps(gateway.rstrip('/') + '/v1')}\n"
         'wire_api = "responses"\n'
-        f"env_key = {json.dumps(key_env)}\n"
+        + (f"env_key = {json.dumps(key_env)}\n" if key_env else "")
     )
     return Change(home / f"{profile}.config.toml", "file", {"file": text})
 

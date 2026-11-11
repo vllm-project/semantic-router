@@ -289,10 +289,20 @@ def test_cli_writes_probes_and_undoes(tmp_path, gateway, monkeypatch):
     assert result.exit_code == 0, result.output
     assert "System Two: ok" in result.output
     assert seen[-1][0] == "/v1/responses"
-    assert (tmp_path / "vllm-sr.config.toml").exists()
+    # Codex refuses to start while a provider's env_key names an unset variable,
+    # so a listener without keys gets a profile without one
+    assert "env_key" not in (tmp_path / "vllm-sr.config.toml").read_text()
     result = CliRunner().invoke(main, ["connect", "codex", "--undo"])
     assert result.exit_code == 0, result.output
     assert not (tmp_path / "vllm-sr.config.toml").exists()
+
+    monkeypatch.setenv("VLLM_SR_API_KEY", "sk-test")
+    result = CliRunner().invoke(main, ["connect", "codex", "--base-url", url, "--yes"])
+    assert result.exit_code == 0, result.output
+    assert (
+        'env_key = "VLLM_SR_API_KEY"' in (tmp_path / "vllm-sr.config.toml").read_text()
+    )
+    assert seen[-1][2] == "Bearer sk-test"
 
 
 def test_cli_fails_when_the_gateway_refuses(tmp_path, gateway, monkeypatch):
