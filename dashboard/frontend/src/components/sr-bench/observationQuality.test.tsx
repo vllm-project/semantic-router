@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import RunDetails from './RunDetails'
-import { DEFAULT_LIMITS, hasScoredOutcomes } from './model'
+import { DEFAULT_LIMITS, hasScoredOutcomes, qualityApplies } from './model'
 import type { Report, Run, TargetMetrics } from './types'
 import { useRunEvidence } from './useRunEvidence'
 
@@ -160,7 +160,7 @@ function renderMetrics(
   )
 }
 
-describe('observation-only quality presentation', () => {
+describe('non-binary quality presentation', () => {
   it('shows missing cache evidence separately from the unknown counter', () => {
     const html = renderMetrics({
       ...sessionObservation,
@@ -224,6 +224,30 @@ describe('observation-only quality presentation', () => {
     )
     expect(html).toContain('>Not applicable<')
     expect(html).toContain('>failed<')
+  })
+
+  it('does not present MRCR sequence ratios as binary accuracy', () => {
+    const mrcr: TargetMetrics = {
+      ...observation,
+      result_kind: 'mrcr-sequence-ratio-v1',
+      total: 3,
+      completed: 3,
+      failed: 0,
+      pending: 0,
+      scored: 3,
+      observed: undefined,
+      correct: null,
+      accuracy: null,
+      accuracy_ci95: null,
+      complete: true,
+    }
+    expect(qualityApplies(mrcr)).toBe(false)
+    expect(hasScoredOutcomes(mrcr)).toBe(true)
+    const html = renderMetrics(mrcr)
+    expect(html).toContain('>Not applicable<')
+    expect(html).toContain('<td>3 / 3</td>')
+    expect(html).not.toContain('<td>— / 3</td>')
+    expect(html).not.toContain('95% CI')
   })
 
   it('keeps incomplete and pending quality states for ordinary ungraded runs', () => {

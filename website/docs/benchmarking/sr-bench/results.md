@@ -361,6 +361,51 @@ transport failures can change incomplete legacy results. Controlled HTTP fixture
 establish transport and reporting behavior, not model quality or permission to
 retire the retained runner.
 
+## Router Flow MRCR diagnostic
+
+`router-flow-mrcr` preserves EvalScope 1.8.1's `mrcr_score` sequence ratio and
+token-count bins as an opt-in diagnostic. Preparation needs an operator-supplied
+JSON, JSONL or Parquet source file and a declared `--revision`; it does not fetch
+the corpus. The prepared manifest records the file digest, declared revision,
+native EvalScope revision and selection parameters.
+
+From the repository root, install the extra with
+`pip install -e 'src/vllm-sr[mrcr]'`, then prepare the local source:
+
+```bash
+vllm-sr benchmark dataset prepare --benchmark router-flow-mrcr --local \
+  --source-path /path/to/mrcr.jsonl --revision SOURCE_REVISION --profile smoke
+```
+
+The smoke profile scans at most the first five source rows before filtering to
+two needles and context sizes greater than 65,536 and at most 262,144 tokens.
+The quick profile matches the formal eight-needle selection capped at 131,072
+context tokens, without a row cap. Context sizes use the native `o200k_base`
+content-token count; bin assignment adds reference-answer tokens and uses the
+native inclusive edge rules.
+
+The adapter passes native role/content messages through `context.call` and
+grades its final visible text. The registered EvalScope adapter sets
+`prefix_filter` to `None`, so its `lstrip(None)` removes leading whitespace
+before the prefix check, prefix removal and `SequenceMatcher` ratio. This uses
+sr-bench's streaming calls, frozen plans and failure accounting, not EvalScope's
+native runner or report pipeline. Incomplete output has no grade. The transport
+does not reproduce hidden tool calls or other configured EvalScope filters and
+extractors.
+
+Reports expose `mrcr.overall` and nonempty `mrcr.by_token_bin` cohorts. Scores
+are available only when every planned case in that cohort is graded; failures,
+cancellation and pending cases stay missing rather than zero. MRCR has no
+binary accuracy and is excluded from fixed published weights. Mixed runs keep
+per-benchmark results but have no combined quality score. Binary-only compare,
+replay, regrade and training export reject MRCR runs.
+The Dashboard marks binary accuracy as not applicable; the sequence-ratio
+cohorts remain in the report JSON.
+
+Local HTTP fixtures validate this transport and report contract. They do not
+establish corpus or model parity, and do not qualify the retained native runner
+for retirement; that still needs real-corpus validation and native-owner review.
+
 ## Weighted rubric diagnostics
 
 DRACO uses the versioned `weighted-rubric-v1` result kind. Its
