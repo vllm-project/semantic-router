@@ -63,8 +63,8 @@ func TestSystemOneForwardUsesActiveListenerAndRetainsGeneration(t *testing.T) {
 			makeSnapshot := func(key string, grants []string) *configsnapshot.Snapshot {
 				cfg := &config.RouterConfig{RouterOptions: config.RouterOptions{RouterEnabled: &routing}}
 				cfg.Listeners = []config.Listener{
-					{Name: "public", APIKeys: []string{key}, SystemOne: &config.ListenerSystemOne{Models: grants}},
-					{Name: "private", APIKeys: []string{"private-key"}, SystemOne: &config.ListenerSystemOne{Models: []string{"judge-next"}}},
+					{Name: "public", APIKeys: []string{key}, APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: grants}}},
+					{Name: "private", APIKeys: []string{"private-key"}, APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"judge-next"}}}},
 				}
 				cfg.ModelDeployments = map[string]config.ModelDeployment{
 					"primary": {Provider: config.ModelRuntimeProvider, Artifact: "example/judge", PublicName: "judge"},

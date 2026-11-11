@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -156,6 +158,46 @@ func mergeCanonicalGlobalOverride(
 		return CanonicalGlobal{}, fmt.Errorf("failed to merge global override: %w", err)
 	}
 	return resolved, nil
+}
+
+// refuseEmptyGlobalValue refuses an empty value in global or its mappings.
+// Merged onto the defaults, it would replace them with zero values.
+func refuseEmptyGlobalValue(global interface{}) error {
+	data, err := yaml.Marshal(DefaultCanonicalGlobal())
+	if err != nil {
+		return err
+	}
+	defaults, err := parseRawConfigMap(data)
+	if err != nil {
+		return err
+	}
+	path, replaced := emptyMappingValue(global, defaults, "global")
+	switch {
+	case path == "":
+		return nil
+	case len(nestedStringMap(replaced)) > 0:
+		return fmt.Errorf("%s is empty: remove it to keep its defaults, or give it fields", path)
+	default:
+		return fmt.Errorf("%s is empty: remove it to keep its default, or give it a value", path)
+	}
+}
+
+// emptyMappingValue returns the path of the first empty value in value or its
+// mappings, or "", and the default it replaces. Lists are replaced whole, so
+// their items are not checked.
+func emptyMappingValue(value, defaults interface{}, path string) (string, interface{}) {
+	switch value.(type) {
+	case nil:
+		return path, defaults
+	case map[string]interface{}, map[interface{}]interface{}:
+		fields, defaultFields := nestedStringMap(value), nestedStringMap(defaults)
+		for _, key := range slices.Sorted(maps.Keys(fields)) {
+			if empty, replaced := emptyMappingValue(fields[key], defaultFields[key], path+"."+key); empty != "" {
+				return empty, replaced
+			}
+		}
+	}
+	return "", nil
 }
 
 func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {

@@ -193,9 +193,9 @@ Router 合并每个阶段的调用：
 每个评审都有其读取候选数的硬上限 `judge.max_candidates`：
 
 - choice 评审（`tool_rank`）最多提供 255 个候选，即协议的选项上限，这也是其默认值；
-- 逐候选评审（`relevance`、`same_request`）默认评判 64 个。
+- 逐候选评审（`relevance`、`same_request`）默认评判 64 个，最多 4096 个，即模型 runtime 在缺省 `--max-bundle-tasks` 下一个 bundle 能装下的状态数（64 个任务，每个 64 个状态）。
 
-小于 1 的值，或 choice 评审上大于 255 的值，会导致加载失败。超出上限绝不会让请求失败：评审按召回排名读取前 `max_candidates` 个候选；没有召回阶段时，按功能列出的顺序读取（最新的在前）。
+小于 1 的值、choice 评审上大于 255 的值，或逐候选评审上大于 4096 的值，会导致加载失败。超出上限绝不会让请求失败：评审按召回排名读取前 `max_candidates` 个候选；没有召回阶段时，按功能列出的顺序读取（最新的在前）。
 
 - 每次截断都会在请求的 trace span 中添加 `match.judge.truncated` 事件，并计入 `vsr_match_judge_truncated_total`。
 - 经过策略过滤后仍超过 255 个的工具目录按列出顺序截断，或先用 `recall: {method: bm25}` 缩小范围。

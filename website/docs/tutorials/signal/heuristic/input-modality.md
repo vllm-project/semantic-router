@@ -7,11 +7,10 @@
 purely structural: the router inspects content-part types in user messages and
 never runs a classifier, embedding model, or any other ML inference.
 
-Input modality is independent of the intended *output* modality (the
-`modality` signal, which distinguishes `AR` from `DIFFUSION` generation) and
-of which payload is embedded for semantic matching (embedding
-`query_modality`). A request may contain several input modalities at once, and
-each configured rule matches independently.
+Input modality is independent of the *output* the request asks for, which
+the [`modality`](../application/modality.md) signal reads. A request may
+contain several input modalities at once, and each configured rule matches
+independently.
 
 ## Key Advantages
 
@@ -36,9 +35,11 @@ negations of the media rules to express text-only precisely.
 ## When to Use
 
 Use `input_modality` when the routing decision depends on what kinds of input
-are present — not on what the media contains. To route on the semantic
-content of an image, use an embedding signal with `query_modality: image`
-instead.
+are present — not on what the media contains. To route on what an image or a
+video shows, ask a [`systemone`](../systemone#read-more-than-the-current-turn)
+question with `input.image` or `input.video` instead; its deployment must read
+that medium, or the configuration is refused with
+`input_modality_unsupported`.
 
 ## Configuration
 
@@ -100,7 +101,7 @@ records, and the standard per-signal Prometheus metrics
 
 ## Related Signals
 
-- [`modality`](../application/modality.md) — the intended output modality
-  (`text`, `image`, `text_image`).
+- [`modality`](../application/modality.md) — the output the request asks
+  for: text, an image, text with an image, speech, audio or video.
 - [`conversation`](conversation.md) — request-shape facts such as message
   counts, tool definitions, and tool loops.

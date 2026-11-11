@@ -192,7 +192,9 @@ func (r *OpenAIRouter) resolveReplayRecorder(ctx *RequestContext, decisionName s
 
 // replayUserTurnIndex groups tool continuations with the user message that
 // started them. Protocol normalization represents tool results as RoleTool,
-// including Anthropic tool_result blocks and retained Responses history.
+// including Anthropic tool_result blocks and retained Responses history. Text
+// a client sent in the same message as tool results, such as a system reminder
+// next to an Anthropic tool_result, continues the loop as well.
 // Prefer the original snapshot so context trimming or Memory cannot renumber
 // turns. This history contains only messages actually available to the router.
 // Keep the invocation index as a fallback when no user history is visible.
@@ -205,7 +207,7 @@ func replayUserTurnIndex(ctx *RequestContext) int {
 	}
 	userMessages := 0
 	for _, message := range messages {
-		if message.Role == llmprotocol.RoleUser {
+		if message.Role == llmprotocol.RoleUser && !message.WithToolResults {
 			userMessages++
 		}
 	}

@@ -87,6 +87,42 @@ func TestStorageSamplesSurviveConfigMapReconciliation(t *testing.T) {
 	}
 }
 
+// A Secret password is text: one that reads as a number or a boolean must
+// reach the Router exactly as stored in the Secret.
+func TestStorageSecretPasswordsReachTheRouterAsWritten(t *testing.T) {
+	for _, backend := range []string{"redis", "milvus"} {
+		for _, password := range []string{"0123456789", "1e9", "12.50", "T", "true", "nan"} {
+			t.Run(backend+"/"+password, func(t *testing.T) {
+				r, sr, secret := storageSampleReconciler(t, backend)
+				secret.Data = map[string][]byte{"password": []byte(password)}
+				if err := r.Create(context.Background(), secret); err != nil {
+					t.Fatal(err)
+				}
+				if err := r.reconcileConfigMap(context.Background(), sr); err != nil {
+					t.Fatal(err)
+				}
+				cm := &corev1.ConfigMap{}
+				if err := r.Get(context.Background(), types.NamespacedName{Name: sr.Name + "-config", Namespace: sr.Namespace}, cm); err != nil {
+					t.Fatal(err)
+				}
+				cfg, err := routerconfig.ParseYAMLBytes([]byte(cm.Data["config.yaml"]))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var got string
+				if backend == "redis" {
+					got = cfg.SemanticCache.Redis.Connection.Password
+				} else {
+					got = cfg.SemanticCache.Milvus.Connection.Auth.Password
+				}
+				if got != password {
+					t.Fatalf("Router password = %q, want %q from the Secret", got, password)
+				}
+			})
+		}
+	}
+}
+
 func TestStorageSampleReconciliationRejectsUnresolvedSecrets(t *testing.T) {
 	for _, backend := range []string{"redis", "milvus", "hybrid"} {
 		for _, missing := range []string{"secret", "key"} {

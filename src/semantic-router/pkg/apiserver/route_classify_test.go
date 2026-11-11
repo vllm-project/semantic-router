@@ -5,14 +5,17 @@ package apiserver
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -510,12 +513,46 @@ func TestBatchClassificationOtherTaskTypesUnchanged(t *testing.T) {
 type batchFixtureService struct {
 	classificationService
 	response *services.UnifiedBatchResponse
+	err      error
 }
 
 func (s *batchFixtureService) HasUnifiedClassifier() bool { return true }
 
 func (s *batchFixtureService) ClassifyBatchUnifiedWithOptions(_ []string, _ interface{}) (*services.UnifiedBatchResponse, error) {
-	return s.response, nil
+	return s.response, s.err
+}
+
+// TestHandleBatchClassificationMapsClassifierErrorsLikeSingleText checks that
+// a batch answers a classifier failure with the status and code the
+// single-text endpoints give it, not a 500 for every failure.
+func TestHandleBatchClassificationMapsClassifierErrorsLikeSingleText(t *testing.T) {
+	for _, tc := range []struct {
+		cause  error
+		status int
+		code   string
+	}{
+		{binding.ErrInputLimit, http.StatusBadRequest, "INVALID_INPUT"},
+		{admission.ErrQueueFull, http.StatusTooManyRequests, "OVERLOADED"},
+		{services.ErrClassifierUnavailable, http.StatusServiceUnavailable, "CLASSIFIER_UNAVAILABLE"},
+		{errors.New("tokenizer crashed"), http.StatusInternalServerError, "CLASSIFICATION_ERROR"},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			apiServer := &ClassificationAPIServer{classificationSvc: &batchFixtureService{
+				err: fmt.Errorf("unified batch classification failed: %w", tc.cause),
+			}}
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/classify/batch", bytes.NewBufferString(`{"texts":["a"]}`))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			apiServer.handleBatchClassification(rr, req)
+			var body managementErrorResponse
+			if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if rr.Code != tc.status || body.Error.Code != tc.code {
+				t.Fatalf("batch answered %d %s, want %d %s: %s", rr.Code, body.Error.Code, tc.status, tc.code, rr.Body.String())
+			}
+		})
+	}
 }
 
 func TestHandleBatchClassificationReturnsResultsPerTaskType(t *testing.T) {

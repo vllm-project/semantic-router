@@ -281,25 +281,14 @@ func (encoder *responsesStreamEncoder) responsesCompletionWire(
 		Type:     "response.completed",
 		Response: &response,
 	}
-	switch event.StopReason {
-	case llmprotocol.StopMaxTokens, llmprotocol.StopContentFilter:
-		wire.Type = "response.incomplete"
-		wire.Response.Status = "incomplete"
-		reason := "max_output_tokens"
-		if event.StopReason == llmprotocol.StopContentFilter {
-			reason = "content_filter"
-		}
-		wire.Response.IncompleteDetails = &struct {
-			Reason string `json:"reason"`
-		}{Reason: reason}
-	case llmprotocol.StopPaused, llmprotocol.StopContextWindow, llmprotocol.StopCanceled, llmprotocol.StopUnknown:
-		var diagnostics llmprotocol.Diagnostics
-		if err := appendLossy(&diagnostics, encoder.policy, encoder.context.Source, encoder.context.Target, "response.stop_reason", "Responses cannot represent the source terminal reason"); err != nil {
-			return responsesEventWire{}, diagnostics, err
-		}
-		return wire, diagnostics, nil
+	var diagnostics llmprotocol.Diagnostics
+	if err := applyResponsesStopReason(&response, event.StopReason, encoder.context.Source, encoder.policy, &diagnostics); err != nil {
+		return responsesEventWire{}, diagnostics, err
 	}
-	return wire, nil, nil
+	if response.Status == "incomplete" {
+		wire.Type = "response.incomplete"
+	}
+	return wire, diagnostics, nil
 }
 
 func (encoder *responsesStreamEncoder) responsesFailureWire(

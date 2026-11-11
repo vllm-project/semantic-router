@@ -278,8 +278,8 @@ type RequestContext struct {
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
 	// values). It defaults to "upstream"; immediate-response paths (cache,
-	// fast_response, looper, rate-limit, error, image generation) set it
-	// explicitly so the emitted path is accurate. See issue #2203.
+	// fast_response, looper, rate-limit, error) set it explicitly so the
+	// emitted path is accurate. See issue #2203.
 	ResponsePath string
 
 	// RequestDemandSnapshots retains at most one content-free demand estimate for

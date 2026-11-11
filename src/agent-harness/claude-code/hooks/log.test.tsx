@@ -421,7 +421,7 @@ test('with no token no authorization header is sent', async ($, on) => {
   expect(reply.headers).toEqual([{ 'content-type': 'application/json' }])
 })
 
-test('requests go to the configured runtime URL, and its health check to the same base', {
+test('requests go to the configured runtime URL, and its health check and model lists to the same base', {
   options: { runtimeUrl: 'https://sr.example.com/api/v1/decisions', runtime: 'remote' },
 }, async ($, on) => {
   const reply: Reply = { review: 0.2, urls: [] }
@@ -431,7 +431,14 @@ test('requests go to the configured runtime URL, and its health check to the sam
   await clock.advance(0)
   await check($, 'ls')
 
-  expect(reply.urls).toEqual(['https://sr.example.com/api/health', 'https://sr.example.com/api/v1/decisions'])
+  // the router's and the guard's checks of the model at session start, then the command's own question
+  expect(reply.urls).toEqual([
+    'https://sr.example.com/api/health',
+    'https://sr.example.com/api/v1/systemone/models',
+    'https://sr.example.com/api/v1/models',
+    'https://sr.example.com/api/v1/decisions',
+    'https://sr.example.com/api/v1/decisions',
+  ])
   expect(await paneText($, /^model/, 120)).toBe('model  remote · https://sr.example.com/api/v1/decisions')
 })
 

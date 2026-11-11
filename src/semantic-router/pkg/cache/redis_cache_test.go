@@ -25,7 +25,7 @@ func TestRedisExtractSearchResultUsesConfiguredMetric(t *testing.T) {
 		metric     string
 		similarity float32
 	}{
-		{"COSINE", 0.625},  // 1 - d/2
+		{"COSINE", 0.25},   // 1 - d, the cosine
 		{"IP", 0.25},       // 1 - d
 		{"L2", 1.0 / 1.75}, // 1 / (1 + d)
 	}

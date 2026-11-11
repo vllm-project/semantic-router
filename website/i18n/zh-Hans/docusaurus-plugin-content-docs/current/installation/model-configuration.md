@@ -149,7 +149,7 @@ providers:
 | `per_try_timeout` | 无 | 每次尝试直到响应开始的时间。 |
 | `first_byte_timeout` | 无 | 等待第一个响应字节的时间，这样在开始前就卡住的流仍可重试。仅 standalone 模式。 |
 | `retry_count` | `0` | 第一次尝试之后的重试次数，最多 5 次。 |
-| `retry_on` | `connect-failure,refused-stream` | 何时重试，使用 Envoy 的条件：`5xx`、`gateway-error`、`reset`、`connect-failure`、`refused-stream`、`retriable-status-codes`、`retriable-4xx`、`reset-before-request`。 |
+| `retry_on` | `connect-failure,refused-stream` | 何时重试，使用 Envoy 的条件名称。两种网关都会处理 `5xx`、`gateway-error`、`reset`、`connect-failure`、`refused-stream`、`retriable-status-codes`、`retriable-4xx`、`reset-before-request` 和 `envoy-ratelimited`。Envoy 的其他名称（`retriable-headers`、`http3-post-connect-failure`，以及 gRPC 的 `cancelled`、`deadline-exceeded`、`internal`、`resource-exhausted`、`unavailable`）可以加载，但 standalone 网关会忽略它们。Envoy 不认识的名称会导致配置加载失败。 |
 | `retriable_status_codes` | 无 | 在 `retriable-status-codes` 下重试的状态码，例如 `429`。 |
 | `retry_back_off_base`、`retry_back_off_max` | `25ms`，基数的十倍 | 重试之间随机指数等待的上下界。 |
 | `retry_after_max` | 无 | 按响应要求的 `Retry-After` 秒数等待，但不超过这个上限。 |
@@ -250,8 +250,8 @@ recipes:
 | --- | --- | --- |
 | `enabled` | `false` | 失败的尝试是否转到下一个候选。 |
 | `max_attempts` | `3` | 跨候选的尝试次数，包括第一次。 |
-| `total_timeout` | `30s` | 整条链的时间。 |
-| `per_attempt_timeout` | `10s` | 每个候选的时间。不能超过 `total_timeout`。 |
+| `total_timeout` | `30s` | 从请求开始算起、仍会尝试其他候选的时间。每个候选最多得到剩余的时间，用完后不再开始新的候选。 |
+| `per_attempt_timeout` | `10s` | 第一次之后每个候选的时间。不能超过 `total_timeout`。 |
 | `retryable_status_codes` | `[502, 503, 504]` | 会转到下一个候选的状态码。 |
 | `circuit_breaker` | 3 次失败、`30s`、1 次探测 | 在冷却期内跳过持续失败的后端。仅用于全局和配方策略。 |
 
@@ -267,6 +267,12 @@ recipes:
 - **候选**始终是决策中对该请求仍有资格的排名模型。没有单独的回退列表，提供方模型也没有自己的回退：同一模型的其他副本改由其重试、剔除和健康检查来尝试。
 
 两种网关模式运行相同的策略，只有一处有意的差异：standalone 模式在完全没有后端应答时（例如连接被拒绝或超时）也会回退，而在 Envoy 之后，客户端会收到 Envoy 的回复。这样的失败计为 `503` 或 `504`，因此要在这类失败上回退，请在 `retryable_status_codes` 中保留这两个状态码。响应的任何部分一旦到达客户端，就不再回退。
+
+两个回退超时都不会缩短第一次尝试，它沿用提供方模型和决策的 `reliability` 超时。要在某个模型始终不应答时回退，请在 standalone 模式下为该提供方模型设置 `reliability.per_try_timeout`：
+
+- 超时计为 `504`，随后尝试下一个候选。
+- 该候选最多得到 `per_attempt_timeout` 和 `total_timeout` 剩余的时间，因此 `total_timeout` 要长于该 `per_try_timeout`。
+- 决策自己的 `per_try_timeout` 会限制它尝试的每个候选，因此较慢的候选也会以同样方式失败。
 
 在 Kubernetes 上，决策使用同样的 `reliability` 和 `fallback` 块，字段名也相同：位于 `IntelligentRoute` 的 `spec.decisions[]` 和 `SemanticRouter` 的 `spec.config.decisions[]` 中。应用资源时，CRD 会检查时长、重试次数和状态码。
 
