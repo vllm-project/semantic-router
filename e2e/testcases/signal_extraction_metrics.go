@@ -11,8 +11,8 @@ import (
 
 // signalExtractionMetric counts how often each declared rule was extracted,
 // labelled by signal type and rule name. It is the boundary evidence that a
-// response-stage rule ran: a streamed response is observed but never enforced,
-// so no header and no body change reports it.
+// response-stage rule ran on a response that streamed through as it arrived:
+// its headers left before the rule ran, so no header reports it.
 const signalExtractionMetric = "llm_signal_extraction_total"
 
 // readSignalExtractionCount scrapes the router's Prometheus endpoint and

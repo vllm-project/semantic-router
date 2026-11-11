@@ -29,7 +29,7 @@ func testStreamingPIIBlocked(ctx context.Context, client *kubernetes.Clientset, 
 		fmt.Println("[Streaming] Testing PII blocking in streamed body mode")
 	}
 	return checkStreamingBlock(ctx, client, opts,
-		"My SSN is 123-45-6789, please help me calculate my tax return",
+		"My SSN is 123-45-6789, please help me calculate my tax return __PII_SPAN__ US_SSN 123-45-6789",
 		"streaming-pii-blocked",
 		"block_pii", "Your request contains personal information that cannot be processed.",
 	)
@@ -99,8 +99,8 @@ func validateStreamingSafetyResponse(headers http.Header, body []byte, decision,
 		return fmt.Errorf("expected decision %q, got %q", decision, got)
 	}
 	blocked := refusal != ""
-	if (headers.Get("x-vsr-fast-response") == "true") != blocked {
-		return fmt.Errorf("unexpected fast-response header for decision %q", decision)
+	if (headers.Get(responsePathHeader) == "fast_response") != blocked {
+		return fmt.Errorf("unexpected response path %q for decision %q", headers.Get(responsePathHeader), decision)
 	}
 	text, err := decodeStructuredChatText(body)
 	if err != nil {

@@ -97,18 +97,14 @@ func TestSettingsFingerprintKeepsGlobalDefaultsSeparateFromRecipePolicy(t *testi
 	}
 }
 
-func TestSettingsFingerprintTracksGlobalReplayCaptureDefaults(t *testing.T) {
-	cfg := &config.RouterConfig{}
-	cfg.RouterReplay.Enabled = true
-	before := settingsFingerprint(cfg)
-	falseValue := false
-	cfg.RouterReplay.CapturePersonalData = &falseValue
-	if settingsFingerprint(cfg) == before {
-		t.Fatal("global Replay privacy default was omitted from the settings fingerprint")
+func TestSettingsFingerprintTracksGlobalPlugins(t *testing.T) {
+	replay := func(configuration map[string]interface{}) []config.DecisionPlugin {
+		return []config.DecisionPlugin{{Type: config.DecisionPluginRouterReplay, Configuration: config.MustStructuredPayload(configuration)}}
 	}
-	before = settingsFingerprint(cfg)
-	falseValue = true
+	cfg := &config.RouterConfig{GlobalPlugins: replay(map[string]interface{}{"enabled": true})}
+	before := settingsFingerprint(cfg)
+	cfg.GlobalPlugins = replay(map[string]interface{}{"enabled": true, "capture_personal_data": false})
 	if settingsFingerprint(cfg) == before {
-		t.Fatal("updated Replay privacy default was omitted from the settings fingerprint")
+		t.Fatal("global.plugins was omitted from the settings fingerprint")
 	}
 }

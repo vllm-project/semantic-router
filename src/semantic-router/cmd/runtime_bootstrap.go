@@ -44,6 +44,7 @@ type runtimeOptions struct {
 	secure                 bool
 	downloadOnly           bool
 	validateConfig         bool
+	migrateConfig          bool
 	gateway                config.GatewayMode
 	listenerAddress        string
 	configHistoryLimit     int
@@ -65,6 +66,7 @@ func parseRuntimeOptions() runtimeOptions {
 		namespace              = flag.String("namespace", kubernetesNamespaceDefault(), "Kubernetes namespace to watch for CRDs")
 		downloadOnly           = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
 		validateConfig         = flag.Bool("validate-config", false, "Validate the -config file as the Router loads it, print a JSON report on stdout and exit: 0 when it would load, 1 when it would not")
+		migrateConfig          = flag.Bool("migrate-config", false, "With -validate-config, also write the file with its deprecated model fields in the forms that replace them in the report's migrated field")
 		gatewayMode            = flag.String("gateway", string(config.GatewayExtProc), "What serves client traffic: extproc (the ext_proc gRPC server behind an Envoy-based gateway) or standalone (the OpenAI-compatible API on the configured listeners)")
 		listenerAddress        = flag.String("listener-address", "", "Standalone mode only: bind every listener on this address instead of its configured one, as in a container whose configured address governs the host port publication")
 		configHistoryLimit     = flag.Int("config-history-limit", configsnapshot.DefaultHistoryLimit, "How many configuration versions to keep for rollback, beside the configuration file")
@@ -86,6 +88,7 @@ func parseRuntimeOptions() runtimeOptions {
 		secure:                 *secure,
 		downloadOnly:           *downloadOnly,
 		validateConfig:         *validateConfig,
+		migrateConfig:          *migrateConfig,
 		gateway:                config.GatewayMode(*gatewayMode),
 		listenerAddress:        *listenerAddress,
 		configHistoryLimit:     *configHistoryLimit,
@@ -209,18 +212,6 @@ func writeStartupState(writer startupstatus.StatusWriter, state startupstatus.St
 			"error":   err.Error(),
 		})
 	}
-}
-
-func failStartup(writer startupstatus.StatusWriter, format string, args ...interface{}) {
-	message := fmt.Sprintf(format, args...)
-	_ = writer.Write(startupstatus.State{
-		Phase:   "error",
-		Ready:   false,
-		Message: message,
-	})
-	logging.ComponentFatalEvent("router", "startup_failed", map[string]interface{}{
-		"message": message,
-	})
 }
 
 func initializeTracing(cfg *config.RouterConfig) func(context.Context) error {
@@ -469,28 +460,6 @@ func cloneBoolPtr(value *bool) *bool {
 	return &clone
 }
 
-func logRuntimeLifecycleEvent(event modelruntime.Event) {
-	if event.Status != modelruntime.TaskFailed && event.Status != modelruntime.TaskSkipped {
-		return
-	}
-	payload := map[string]interface{}{
-		"task":        event.Task,
-		"best_effort": event.BestEffort,
-	}
-	if event.Error != nil {
-		payload["error"] = event.Error.Error()
-	}
-	if event.Status == modelruntime.TaskSkipped {
-		logging.ComponentWarnEvent("router", "runtime_lifecycle_task_skipped", payload)
-		return
-	}
-	if event.BestEffort {
-		logging.ComponentWarnEvent("router", "runtime_lifecycle_task_failed", payload)
-		return
-	}
-	logging.ComponentErrorEvent("router", "runtime_lifecycle_task_failed", payload)
-}
-
 func initializeVectorStoreIfEnabled(
 	cfg *config.RouterConfig,
 	shutdownHooks *[]func(context.Context) error,
@@ -531,14 +500,6 @@ func registerVectorStoreShutdownHook(
 			return err
 		}
 		return nil
-	})
-}
-
-func warmupRouterRuntime(ctx context.Context, server *extproc.Server) error {
-	return server.WarmupRouter(ctx, modelruntime.WarmupRouterOptions{
-		Component:      "router",
-		MaxParallelism: 2,
-		OnEvent:        logRuntimeLifecycleEvent,
 	})
 }
 

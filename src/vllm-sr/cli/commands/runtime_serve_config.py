@@ -11,11 +11,14 @@ cannot also trigger a reload in the departing process.
 
 from __future__ import annotations
 
+import os
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 import yaml
 
+from cli import router_validation
 from cli.bootstrap import is_setup_mode_config
 from cli.commands.runtime_mode_config import apply_instance_options
 from cli.commands.runtime_observability import (
@@ -37,11 +40,15 @@ from cli.commands.runtime_support import (
     validate_config_recipe_env_bindings,
     validate_setup_mode_flags,
 )
+from cli.commands.validate import ask_router, router_refusal
+from cli.container_images import pulled_this_run
 from cli.container_services import container_status_strict
 from cli.decision_model import (
     decision_model_deployment,
     gpu_requirement_error,
+    remote_decision_model,
 )
+from cli.gateway_mode import GATEWAY_ENV, resolve_gateway
 from cli.parser import parse_user_config
 from cli.recipe_activation_recovery import (
     active_recipe_package_config_path,
@@ -63,6 +70,8 @@ def _prepare_runtime_config_replacement(
     *,
     minimal: bool,
     readonly: bool,
+    served_image: Callable[[], str],
+    models_dir: Path | None = None,
 ) -> None:
     # Validate the candidate without publishing it to the running file watcher.
     # A restart owns the next generation; the departing process must not build it.
@@ -71,10 +80,44 @@ def _prepare_runtime_config_replacement(
         candidate.write_bytes(effective_data)
         prepared = parse_user_config(str(candidate), log_summary=False)
         errors = validate_user_config(prepared, log_summary=False)
+        if not errors and not is_setup_mode_config(candidate):
+            errors = _router_refusal(candidate, models_dir, served_image)
         if errors:
             raise ValueError("Invalid runtime config: " + "; ".join(map(str, errors)))
         validate_setup_mode_flags(is_setup_mode_config(candidate), minimal, readonly)
     stop_runtime_before_config_replacement(stack_layout)
+
+
+def _router_refusal(
+    candidate: Path, models_dir: Path | None, served_image: Callable[[], str]
+) -> list:
+    """Why the Router this serve starts would refuse the candidate, if it would.
+
+    The running config is only replaced by one the Router loads: its model
+    deployments, bindings and other load-time rules are the Router's to
+    check, and the image that checks them is the one this serve runs. When it
+    cannot run here the restart goes ahead, and the new Router refuses a bad
+    config at startup.
+    """
+
+    try:
+        image = served_image()
+    except router_validation.RouterValidationUnavailableError as error:
+        image, verdict, unavailable = "", None, str(error)
+    else:
+        verdict, unavailable = ask_router(
+            lambda: router_validation.validate_with_image(
+                candidate,
+                image,
+                gateway=resolve_gateway(os.getenv(GATEWAY_ENV)),
+                models_dir=models_dir,
+            )
+        )
+    if unavailable:
+        log.info(
+            f"The Router did not check the new config before the restart: {unavailable}"
+        )
+    return router_refusal(verdict, pulled=pulled_this_run(image))
 
 
 def _check_served_decision_model(
@@ -82,6 +125,8 @@ def _check_served_decision_model(
 ) -> None:
     """Fail before startup when the config's decision model needs a GPU it lacks."""
 
+    if remote_decision_model(document):
+        return
     try:
         deployment = decision_model_deployment(document)
     except ValueError as error:
@@ -107,9 +152,21 @@ def _prepare_docker_runtime_config(
     available_devices: tuple[int, ...] = (),
     model_options: dict | None = None,
     observability: bool | None = None,
+    image: str | None = None,
+    router_image: str | None = None,
+    image_pull_policy: str | None = None,
 ):
     if observability is None:
         observability = not minimal
+
+    def served_image() -> str:
+        return router_validation.served_router_image(
+            image=image,
+            router_image=router_image,
+            platform=platform,
+            pull_policy=image_pull_policy,
+        )
+
     stack_layout = resolve_runtime_stack()
     state_root_dir = Path(resolve_state_root_dir(str(config_path)))
     effective_config_path = _runtime_config_output_path(
@@ -165,7 +222,7 @@ def _prepare_docker_runtime_config(
         else:
             recover_runtime_tracing_projection(effective_config_path)
             effective_config_bytes = build_effective_config_bytes(
-                config_path, algorithm, source_setup_mode, platform
+                config_path, algorithm, source_setup_mode
             )
             effective_config_path = materialize_runtime_config(
                 config_path,
@@ -179,6 +236,8 @@ def _prepare_docker_runtime_config(
                     stack_layout,
                     minimal=minimal,
                     readonly=readonly,
+                    served_image=served_image,
+                    models_dir=state_root_dir / "models",
                 ),
             )
             active_bytes = effective_config_path.read_bytes()
@@ -195,7 +254,12 @@ def _prepare_docker_runtime_config(
         ):
             candidate_bytes = yaml.safe_dump(candidate, sort_keys=False).encode("utf-8")
             _prepare_runtime_config_replacement(
-                candidate_bytes, stack_layout, minimal=minimal, readonly=readonly
+                candidate_bytes,
+                stack_layout,
+                minimal=minimal,
+                readonly=readonly,
+                served_image=served_image,
+                models_dir=state_root_dir / "models",
             )
             write_journaled_runtime_config_projection(
                 effective_config_path, candidate_bytes
@@ -214,7 +278,12 @@ def _prepare_docker_runtime_config(
                 enable_observability=observability,
                 reset_projection=source_candidate_selected,
                 before_replace=lambda data: _prepare_runtime_config_replacement(
-                    data, stack_layout, minimal=minimal, readonly=readonly
+                    data,
+                    stack_layout,
+                    minimal=minimal,
+                    readonly=readonly,
+                    served_image=served_image,
+                    models_dir=state_root_dir / "models",
                 ),
             )
         return effective_config_path, setup_mode, runtime_lock
@@ -238,11 +307,16 @@ def _prepare_effective_serve_config(
     available_devices: tuple[int, ...] = (),
     model_options: dict | None = None,
     observability: bool | None = None,
+    image: str | None = None,
+    router_image: str | None = None,
+    image_pull_policy: str | None = None,
 ):
     """Prepare the target-specific active config and its optional runtime lock.
 
     *minimal* leaves the Dashboard out; *observability* (default: not
-    *minimal*) starts the local tracing and metrics collectors.
+    *minimal*) starts the local tracing and metrics collectors. A Docker
+    config is checked by the Router image *image*, *router_image* and
+    *image_pull_policy* select, as the start does.
     """
 
     if resolved_target != "docker" and recipe_env_bindings:
@@ -267,6 +341,9 @@ def _prepare_effective_serve_config(
             available_devices=available_devices,
             model_options=model_options,
             observability=observability,
+            image=image,
+            router_image=router_image,
+            image_pull_policy=image_pull_policy,
         )
         return effective_path, setup_mode, runtime_lock, None
 
@@ -276,7 +353,6 @@ def _prepare_effective_serve_config(
         config_path,
         algorithm,
         source_setup_mode,
-        platform,
         materialize_local_runtime=False,
     )
     apply_instance_options(

@@ -287,33 +287,20 @@ jobs:
               timeoutSeconds: 5
               failureThreshold: 60
             config:
-              routing:
-                strategy: priority
-                decisions:
-                  - name: operator_ci_route
-                    rules:
-                      operator: AND
-                    modelRefs:
-                      - model: operator-ci-model
-                        use_reasoning: false
-              embedding_models:
-                mmbert_model_path: "models/Vela-1.0-Encoder-307M-Embedding"
-                use_cpu: true
-                embedding_config:
-                  model_type: "mmbert"
-                  preload_embeddings: true
-                  enable_soft_matching: true
-                  min_score_threshold: "0.6"
-              semantic_cache:
+              recipes:
+                - name: default
+                  strategy: priority
+                  decisions:
+                    - name: operator_ci_route
+                      rules:
+                        operator: AND
+                      modelRefs:
+                        - model: operator-ci-model
+                          use_reasoning: false
+              response_cache:
                 enabled: true
                 backend_type: "memory"
-                embedding_model: "mmbert"
                 max_entries: 100
-              tools:
-                enabled: false
-              prompt_guard:
-                enabled: false
-              # Domain and PII inherit the operator's canonical Vela CPU defaults.
               api:
                 batch_classification:
                   max_batch_size: 50

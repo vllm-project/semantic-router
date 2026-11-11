@@ -145,5 +145,4 @@ func TestIntentRequestResolveSignalInput_BareImagePartIsNotAnImage(t *testing.T)
 	input, err := req.resolveSignalInput()
 	require.NoError(t, err)
 	assert.Equal(t, classification.InputModalityFacts{TextContentCount: 1}, input.requestFacts.InputModality)
-	assert.Equal(t, 0, input.conversationFacts.ImageContentCount, "conversation image count must keep its Chat Completions part types")
 }

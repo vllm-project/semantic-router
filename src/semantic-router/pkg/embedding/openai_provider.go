@@ -39,6 +39,9 @@ type OpenAICompatibleConfig struct {
 	Dimensions        int
 	ExpectedDimension int
 	HTTPClient        *http.Client
+	// Deployment, when set, is the openai_embeddings deployment whose
+	// connection block (auth, headers, tls, limits) every call uses.
+	Deployment *config.ModelDeployment
 }
 
 type OpenAICompatibleProvider struct {
@@ -94,7 +97,7 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 		return nil, fmt.Errorf("embedding endpoint model is required for backend %q", config.EmbeddingBackendOpenAICompatible)
 	}
 	if cfg.ExpectedDimension > 0 && cfg.Dimensions > 0 && cfg.ExpectedDimension != cfg.Dimensions {
-		return nil, fmt.Errorf("embedding endpoint dimensions (%d) must match target_dimension (%d)", cfg.Dimensions, cfg.ExpectedDimension)
+		return nil, fmt.Errorf("embedding endpoint dimensions (%d) must match the expected dimension (%d)", cfg.Dimensions, cfg.ExpectedDimension)
 	}
 	if cfg.TimeoutSeconds < 0 {
 		return nil, fmt.Errorf("embedding endpoint timeout_seconds must be non-negative")
@@ -128,6 +131,16 @@ func NewOpenAICompatibleProvider(cfg OpenAICompatibleConfig) (*OpenAICompatibleP
 		dimensions:        cfg.Dimensions,
 		expectedDimension: cfg.ExpectedDimension,
 		client:            client,
+	}
+	if cfg.HTTPClient == nil && cfg.Deployment != nil {
+		deployment := *cfg.Deployment
+		deployment.Endpoint = endpoint
+		remote, err := connector.ForDeployment(deployment, connector.Options{AttemptTimeout: timeout, MaxRetries: 0, MaxRequestBytes: 16 * 1024 * 1024, MaxResponseBytes: maxResponseBytes, MaxErrorBytes: maxErrorBodyBytes})
+		if err != nil {
+			return nil, err
+		}
+		provider.connector, provider.apiKey, provider.apiKeyEnv = remote, "", ""
+		return provider, nil
 	}
 	if cfg.HTTPClient == nil {
 		remote, err := connector.New(endpoint, func(_ context.Context, req *http.Request) error {

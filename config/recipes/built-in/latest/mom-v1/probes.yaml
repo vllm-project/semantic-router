@@ -61,15 +61,446 @@ coverage:
     tools: 100.0
     multi_turn: 100.0
 decisions:
-- id: balance_recovery
+- id: balance_long_context
   expected_recipe: balance
-  expected_decision: reasoning
-  expected_algorithm: multi_factor
+  expected_decision: long_context
+  expected_algorithm: static
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
-  objective: 'Recovery: an earlier answer that the user says was wrong goes to reasoning; the correction question
-    and the user feedback judgment must agree.'
+  objective: 'Long context: an input of 200K tokens or more goes to long_context before any other lane, including an
+    image or declared tools.'
+  variants:
+  - id: balance_long__over_240k_text_guard__boundary_orchestration_tools_collision
+    display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the result.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    query: 'Break this into independent workstreams: list the supplied inventory items by room, then use the inventory
+      lookup tool to fill in their listed owners. Combine the room lists into a short handover note.'
+    padding:
+      text: 'Inventory: room A; item R17; owner facilities; status available; maintenance date 2026-05-12.                                                                                                                                   |'
+      repeat: 4500
+      placement: after
+    tools:
+    - type: function
+      function:
+        name: lookup_inventory
+        description: Look up one item in the supplied long-context inventory.
+    tags:
+    - language:en
+    - stress:long-input
+    - context:over-240k
+    - shape:tools
+    - tools
+    - orchestration-words
+    - collision
+    - priority
+    expected_signals:
+      context:
+      - long_input
+  - id: balance_long__over_240k_image_guard__image_at_first_over_240k_token
+    display_prompt: Analyze the attached image with the long generated context and explain the most important visual finding.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 960001
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Conservative image context boundary check '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - supported
+    - context:240001
+    - tools
+    - shape:tools
+    - priority
+    tools:
+    - type: function
+      function:
+        name: lookup_context_item
+        description: Look up one item from the supplied context.
+    expected_signals:
+      context:
+      - long_input
+  - id: balance_long_context__long_report
+    query: Summarize the staffing changes in the reports above in five bullet points.
+    padding:
+      text: 'The quarterly report lists revenue, costs and staffing for each regional office, with notes on hiring, attrition
+        and budget changes. '
+      repeat: 10000
+      placement: before
+    expected_signals:
+      context:
+      - long_input
+    tags:
+    - language:en
+    - stress:long-input
+- id: balance_vision
+  expected_recipe: balance
+  expected_decision: vision
+  expected_algorithm: static
+  expected_plugins:
+  - request_params
+  - router_replay
+  plugin_match: exact
+  objective: 'Vision: a request that carries an image goes to vision, whatever its effort, tools or task.'
+  variants:
+  - id: balance_agentic__image_and_lookup
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: Inspect the dashboard image and use the lookup function for the selected service.
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tools:
+    - type: function
+      function:
+        name: lookup_service
+        description: Look up one service record.
+    tags:
+    - language:en
+    - shape:messages
+    - shape:tools
+    - tools
+    - multimodal
+    - image
+    - positive
+    expected_signals:
+      conversation:
+      - has_tools
+      input_modality:
+      - has_image
+      systemone:
+      - task:agentic
+  - id: balance_long__image_tools__image_tools_in_30k_60k_band
+    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected service,
+      and summarize the result.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 160000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded status
+          of that box, and return only the status as written in the returned record. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    - tools
+    - shape:tools
+    tools:
+    - type: function
+      function:
+        name: lookup_context_item
+        description: Look up one item from the supplied context.
+    expected_signals:
+      input_modality:
+      - has_image
+  - id: balance_long__image_tools__image_tools_in_60k_120k_band
+    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected service,
+      and summarize the result.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 300000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded status
+          of that box, and return only the status as written in the returned record. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    - tools
+    - shape:tools
+    tools:
+    - type: function
+      function:
+        name: lookup_context_item
+        description: Look up one item from the supplied context.
+    expected_signals:
+      input_modality:
+      - has_image
+  - id: balance_long__image_tools__image_tools_in_120k_240k_band
+    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected service,
+      and summarize the result.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 520000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded status
+          of that box, and return only the status as written in the returned record. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    - tools
+    - shape:tools
+    tools:
+    - type: function
+      function:
+        name: lookup_context_item
+        description: Look up one item from the supplied context.
+    expected_signals:
+      input_modality:
+      - has_image
+  - id: balance_hard__image_tradeoffs
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: Analyze the tradeoffs from first principles in this architecture image.
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - deliberate
+    - collision
+    - priority
+    expected_signals:
+      input_modality:
+      - has_image
+      projection:
+      - effort_high
+  - id: balance_fast__diagram_summary
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect them.
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - positive
+    expected_signals:
+      input_modality:
+      - has_image
+      projection:
+      - effort_off
+  - id: balance_fast__diagram_summary_zh
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 请用一句话说明图中从左到右的方框名称以及箭头的连接顺序。
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:zh
+    - shape:messages
+    - multimodal
+    - image
+    - paraphrase
+    expected_signals:
+      input_modality:
+      - has_image
+      projection:
+      - effort_off
+  - id: balance_long__image__image_in_30k_60k_band
+    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 160000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
+          them. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    expected_signals:
+      input_modality:
+      - has_image
+  - id: balance_long__image__image_in_60k_120k_band
+    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 300000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
+          them. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    expected_signals:
+      input_modality:
+      - has_image
+  - id: balance_long__image__image_in_120k_240k_band
+    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
+    playground:
+      enabled: false
+      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
+        in Playground.
+    generated_text:
+      message_index: 0
+      content_index: 1
+      target_text_bytes: 520000
+      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
+
+        '
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
+          them. '
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    tags:
+    - language:en
+    - shape:messages
+    - multimodal
+    - image
+    - stress:long-input
+    - collision
+    - priority
+    expected_signals:
+      input_modality:
+      - has_image
+  - id: balance_vision__screenshot_question
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: What does this screenshot show?
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    expected_signals:
+      input_modality:
+      - has_image
+    tags:
+    - language:en
+    - shape:messages
+  - id: balance_vision__chinese_document_image
+    messages:
+    - role: user
+      content:
+      - type: text
+        text: 请读一下这张图片里的表格，并总结要点。
+      - type: image_fixture
+        fixture: mom_v1_architecture
+    expected_signals:
+      input_modality:
+      - has_image
+    tags:
+    - language:zh
+    - shape:messages
+- id: balance_recovery
+  expected_recipe: balance
+  expected_decision: recovery
+  expected_algorithm: static
+  expected_plugins:
+  - request_params
+  - router_replay
+  plugin_match: exact
+  objective: 'Recovery: an earlier answer that the user says was wrong; the correction question and the user feedback
+    judgment must agree.'
   variants:
   - id: balance_recovery__wrong_calculation
     messages:
@@ -87,7 +518,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -107,7 +538,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -127,7 +558,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -147,7 +578,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -167,7 +598,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -182,7 +613,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -202,7 +633,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -222,7 +653,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -242,7 +673,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -262,7 +693,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -282,7 +713,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -302,7 +733,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -322,7 +753,7 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
@@ -362,18 +793,20 @@ decisions:
     expected_signals:
       conversation:
       - has_prior_answer
-      decision:
+      systemone:
       - correction
       user_feedback:
       - wrong_answer
 - id: balance_agentic
   expected_recipe: balance
-  expected_decision: reasoning
-  expected_algorithm: multi_factor
+  expected_decision: agentic
+  expected_algorithm: static
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
-  objective: 'Agentic: an active tool loop, or declared tools that the request needs, goes to reasoning.'
+  objective: 'Agentic: an active tool loop, a forced tool call, or declared tools the request needs, unless tool_choice
+    is none.'
   variants:
   - id: balance_agentic__tool_result_turn
     messages:
@@ -432,7 +865,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - task:agentic
   - id: balance_agentic__loop_without_tools
     messages:
@@ -474,7 +907,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - task:agentic
   - id: balance_agentic__lookup_status_zh
     query: 请使用状态查询函数返回所选服务的状态。
@@ -491,7 +924,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - task:agentic
   - id: balance_agentic__required_tool_choice
     query: Return the current service state.
@@ -515,170 +948,65 @@ decisions:
       - has_tools
       - tool_required
     notes: A forced tool call (tool_choice naming a function) is tool work, whatever the text asks.
-  - id: balance_agentic__image_and_lookup
+  - id: balance_agentic__correction_inside_tool_loop
     messages:
     - role: user
-      content:
-      - type: text
-        text: Inspect the dashboard image and use the lookup function for the selected service.
-      - type: image_fixture
-        fixture: mom_v1_architecture
+      content: Fix the premium discount in pricing.py and run the tests.
+    - role: assistant
+      content: ''
+      tool_calls:
+      - id: call_1
+        type: function
+        function:
+          name: run_command
+          arguments: '{"command": "python3 -m unittest -v"}'
+    - role: tool
+      tool_call_id: call_1
+      content: "FAILED (failures=1)\nAssertionError: 10.0 != 90.0"
+    - role: assistant
+      content: I changed the rate to 0.9 for premium customers; the tests should pass now.
+    - role: assistant
+      content: ''
+      tool_calls:
+      - id: call_2
+        type: function
+        function:
+          name: run_command
+          arguments: '{"command": "python3 -m unittest -v"}'
+    - role: tool
+      tool_call_id: call_2
+      content: "FAILED (failures=1)\nAssertionError: 10.0 != 90.0"
+    - role: user
+      content: That's wrong, the test still fails. Your fix didn't work, check it again.
     tools:
     - type: function
       function:
-        name: lookup_service
-        description: Look up one service record.
+        name: run_command
+        description: Run a shell command in the workspace
+        parameters:
+          type: object
+          properties:
+            command:
+              type: string
+          required:
+          - command
     tags:
     - language:en
+    - multi-turn
     - shape:messages
     - shape:tools
-    - tools
-    - multimodal
-    - image
-    - positive
+    - negative
+    - collision
     expected_signals:
       conversation:
-      - has_tools
-      decision:
-      - task:agentic
-  - id: balance_long__over_240k_text_guard__boundary_orchestration_tools_collision
-    display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
-      result.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    query: 'Break this into independent workstreams: list the supplied inventory items by room, then use the inventory
-      lookup tool to fill in their listed owners. Combine the room lists into a short handover note.'
-    padding:
-      text: 'Inventory: room A; item R17; owner facilities; status available; maintenance date 2026-05-12.                                                                                                                                   |'
-      repeat: 4500
-      placement: after
-    tools:
-    - type: function
-      function:
-        name: lookup_inventory
-        description: Look up one item in the supplied long-context inventory.
-    tags:
-    - language:en
-    - stress:long-input
-    - context:over-240k
-    - shape:tools
-    - tools
-    - orchestration-words
-    - collision
-    - priority
-  - id: balance_long__image_tools__image_tools_in_30k_60k_band
-    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
-      service, and summarize the result.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 160000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded
-          status of that box, and return only the status as written in the returned record. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-    - tools
-    - shape:tools
-    tools:
-    - type: function
-      function:
-        name: lookup_context_item
-        description: Look up one item from the supplied context.
-  - id: balance_long__image_tools__image_tools_in_60k_120k_band
-    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
-      service, and summarize the result.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 300000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded
-          status of that box, and return only the status as written in the returned record. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-    - tools
-    - shape:tools
-    tools:
-    - type: function
-      function:
-        name: lookup_context_item
-        description: Look up one item from the supplied context.
-  - id: balance_long__image_tools__image_tools_in_120k_240k_band
-    display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
-      service, and summarize the result.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 520000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Read the label of the middle box in the attached picture. Use the lookup tool to retrieve the recorded
-          status of that box, and return only the status as written in the returned record. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-    - tools
-    - shape:tools
-    tools:
-    - type: function
-      function:
-        name: lookup_context_item
-        description: Look up one item from the supplied context.
+      - tool_loop
+      - has_prior_answer
+      systemone:
+      - correction
+      user_feedback:
+      - wrong_answer
+    notes: A correction typed while a tool loop is active stays with agentic, although every other recovery condition
+      holds; recovery applies outside tool loops.
   - id: balance_long__tool_loop__tool_result_after_long_record
     display_prompt: Check every item in this long inventory record with the lookup tool, then report the unavailable
       ones.
@@ -727,30 +1055,22 @@ decisions:
       - tool_loop
 - id: balance_facts
   expected_recipe: balance
-  expected_decision: medium
-  expected_algorithm: multi_factor
+  expected_decision: facts
+  expected_algorithm: static
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
-  objective: 'Facts: answers that depend on facts most people would look up stay on medium, at low reasoning cost.'
+  objective: 'Facts: an answer that depends on facts most people would look up, for a facts, analysis or writing task
+    below maximum effort.'
   variants:
-  - id: balance_facts__nobel_laureate
-    query: Who won the Nobel Prize in Literature in 1998?
-    tags:
-    - language:en
-    - positive
-    expected_signals:
-      projection:
-      - effort_medium
-    notes: On Vela 2.0 0.8B the precise-facts answer stays below 0.8 for this well-known prize; effort keeps it on
-      medium.
   - id: balance_facts__census_figure
     query: What was the population of Tokyo in the 2020 census?
     tags:
     - language:en
     - positive
     expected_signals:
-      decision:
+      systemone:
       - precise_facts
       - task:facts
   - id: balance_facts__nobel_zh
@@ -759,7 +1079,7 @@ decisions:
     - language:zh
     - positive
     expected_signals:
-      decision:
+      systemone:
       - precise_facts
       - task:facts
   - id: balance_facts__release_years
@@ -768,7 +1088,7 @@ decisions:
     - language:en
     - positive
     expected_signals:
-      decision:
+      systemone:
       - precise_facts
       - task:facts
   - id: balance_facts__census_ja
@@ -777,7 +1097,7 @@ decisions:
     - language:ja
     - positive
     expected_signals:
-      decision:
+      systemone:
       - precise_facts
       - task:facts
   - id: balance_facts__treaty_es
@@ -786,17 +1106,18 @@ decisions:
     - language:es
     - positive
     expected_signals:
-      decision:
+      systemone:
       - precise_facts
       - task:facts
 - id: balance_frontier
   expected_recipe: balance
-  expected_decision: reasoning
-  expected_algorithm: multi_factor
+  expected_decision: frontier
+  expected_algorithm: systemone
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
-  objective: 'Frontier: research-level requests, at maximum effort, go to reasoning.'
+  objective: 'Frontier: research-level requests at maximum effort; the decision model chooses one of the assigned models.'
   variants:
   - id: balance_frontier__ising_duality
     query: In a 2D ferromagnetic Ising model on a square lattice, derive the exact critical temperature via the
@@ -807,7 +1128,7 @@ decisions:
     expected_signals:
       projection:
       - effort_max
-      decision:
+      systemone:
       - difficulty
   - id: balance_frontier__nof_disjointness
     query: Formulate and prove a sharp lower bound on the communication complexity of set disjointness for k-party
@@ -818,7 +1139,7 @@ decisions:
     expected_signals:
       projection:
       - effort_max
-      decision:
+      systemone:
       - difficulty
   - id: balance_frontier__rg_two_loop
     query: Derive the renormalization group flow of the O(N) model to two loops in 4 - epsilon dimensions and compute
@@ -829,10 +1150,10 @@ decisions:
     expected_signals:
       projection:
       - effort_max
-      decision:
+      systemone:
       - difficulty
     expected_signal_values:
-      decision:needs:
+      systemone:needs:
         gte: 0.5
         lte: 1
   - id: balance_frontier__byzantine_optimal
@@ -844,7 +1165,7 @@ decisions:
     expected_signals:
       projection:
       - effort_max
-      decision:
+      systemone:
       - difficulty
   - id: balance_frontier__onsager_zh
     query: 推导二维伊辛模型在方格点阵上的精确配分函数（Onsager 解），并证明临界温度处比热的对数发散。
@@ -854,7 +1175,7 @@ decisions:
     expected_signals:
       projection:
       - effort_max
-      decision:
+      systemone:
       - difficulty
   - id: balance_frontier__navier_stokes
     query: Prove global existence and smoothness of solutions to the three-dimensional incompressible Navier-Stokes
@@ -865,16 +1186,28 @@ decisions:
     expected_signals:
       projection:
       - effort_max
-      decision:
+      systemone:
       - difficulty
+  - id: balance_frontier__group_classification
+    query: Let G be a finite group of order p^2 q^2 for distinct primes p, q. Determine all such G that are not solvable,
+      or prove none exist, with a complete proof.
+    expected_signals:
+      projection:
+      - effort_max
+      systemone:
+      - difficulty
+      - task:stem
+    tags:
+    - language:en
 - id: balance_code
   expected_recipe: balance
-  expected_decision: medium
-  expected_algorithm: multi_factor
+  expected_decision: code
+  expected_algorithm: static
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
-  objective: 'Code: code that needs some reasoning stays on medium.'
+  objective: 'Code: a code task at medium or high effort.'
   variants:
   - id: balance_code__lru_cache
     query: Implement an LRU cache in Java with O(1) get and put, and explain the invariants.
@@ -882,10 +1215,10 @@ decisions:
     - language:en
     - positive
     expected_signals:
-      decision:
+      systemone:
       - task:code
     expected_signal_values:
-      decision:task:
+      systemone:task:
         gte: 0.5
         lte: 1
   - id: balance_code__lru_ttl_go
@@ -894,7 +1227,7 @@ decisions:
     - language:en
     - positive
     expected_signals:
-      decision:
+      systemone:
       - task:code
   - id: balance_code__manacher
     query: Write a Python function that finds the longest palindromic substring in linear time using Manacher's
@@ -903,7 +1236,7 @@ decisions:
     - language:en
     - positive
     expected_signals:
-      decision:
+      systemone:
       - task:code
   - id: balance_code__dijkstra_ts
     query: Implement Dijkstra's algorithm in TypeScript with a binary heap and explain its time complexity.
@@ -911,7 +1244,7 @@ decisions:
     - language:en
     - positive
     expected_signals:
-      decision:
+      systemone:
       - task:code
       projection:
       - effort_high
@@ -923,18 +1256,93 @@ decisions:
     - positive
     - collision
     expected_signals:
-      decision:
+      systemone:
       - task:code
       projection:
       - effort_high
+  - id: balance_code__interval_merge
+    query: Write a Go function that merges overlapping intervals and returns them sorted. Include tests.
+    expected_signals:
+      systemone:
+      - task:code
+      projection:
+      - effort_medium
+    tags:
+    - language:en
+  - id: balance_code__chinese_quicksort
+    query: 用 Python 写一个快速排序，并解释时间复杂度。
+    expected_signals:
+      systemone:
+      - task:code
+    tags:
+    - language:zh
+  - id: balance_standard__tcp
+    query: Explain how TCP congestion control works.
+    tags:
+    - language:en
+    - positive
+    expected_signals:
+      systemone:
+      - task:code
+      projection:
+      - effort_medium
+    notes: On Vela 2.0 0.8B explaining a network protocol is a code task at medium effort.
+  - id: balance_standard__tcp_zh
+    query: 解释一下 TCP 拥塞控制是如何工作的。
+    tags:
+    - language:zh
+    - positive
+    expected_signals:
+      systemone:
+      - task:code
+      projection:
+      - effort_medium
+    notes: On Vela 2.0 0.8B explaining a network protocol is a code task at medium effort.
+  - id: balance_standard__correction_without_answer
+    query: Your previous recommendation to expose the admin port publicly is wrong; correct it and propose a safer configuration.
+    tags:
+    - class:negative
+    - collision
+    - demo
+    - language:en
+    - recovery
+    notes: Correction wording without an earlier answer in the conversation is not recovery; on Vela 2.0 0.8B the request
+      is a code task at medium effort.
+    expected_signals:
+      systemone:
+      - task:code
+      projection:
+      - effort_medium
+  - id: balance_fast__clarification_follow_up
+    messages:
+    - role: user
+      content: 'Explain what the three entries in this vector clock mean, using the supplied counts as the example: process
+        A has 2 events, B has 0, and C has 1.'
+    - role: assistant
+      content: The vector clock has one event counter for each process.
+    - role: user
+      content: 'Explain what the three entries in this vector clock mean, using the supplied counts as the example: process
+        A has 2 events, B has 0, and C has 1.'
+    tags:
+    - language:en
+    - multi_turn
+    - recovery
+    - positive
+    expected_signals:
+      systemone:
+      - task:code
+      projection:
+      - effort_medium
+    notes: On Vela 2.0 0.8B explaining the vector-clock entries is a code task at medium effort.
 - id: balance_hard
   expected_recipe: balance
-  expected_decision: reasoning
+  expected_decision: hard
   expected_algorithm: multi_factor
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
-  objective: 'Hard: high effort, or a STEM problem that needs multi-step reasoning, goes to reasoning.'
+  objective: 'Hard: high effort, or a STEM problem rated multi-step, outside code and exact facts.'
   variants:
   - id: balance_hard__proof_zh
     query: 证明：任意两个连续整数的乘积是偶数，并推广到三个连续整数的乘积能被 6 整除。
@@ -944,7 +1352,7 @@ decisions:
     expected_signals:
       projection:
       - effort_high
-      decision:
+      systemone:
       - task:stem
   - id: balance_hard__letter_only_chemistry
     query: 'A chemist heats (E)-1,2-dideuterio-1-phenylpropene with a catalytic amount of a palladium(II) complex
@@ -967,7 +1375,7 @@ decisions:
     - collision
     notes: A letter-only reply still needs the reasoning effort.
     expected_signals:
-      decision:
+      systemone:
       - task:stem
       - difficulty
   - id: balance_hard__tradeoff_zh
@@ -1006,25 +1414,6 @@ decisions:
     expected_signals:
       projection:
       - effort_high
-  - id: balance_hard__image_tradeoffs
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: Analyze the tradeoffs from first principles in this architecture image.
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - deliberate
-    - collision
-    - priority
-    expected_signals:
-      projection:
-      - effort_high
   - id: balance_hard__economic_policy
     tags:
     - language:en
@@ -1045,7 +1434,7 @@ decisions:
     expected_signals:
       projection:
       - effort_high
-      decision:
+      systemone:
       - task:stem
   - id: balance_hard__sqrt3_de
     query: Beweise, dass die Wurzel aus 3 irrational ist, und verallgemeinere den Beweis auf die Wurzel jeder natürlichen
@@ -1056,7 +1445,7 @@ decisions:
     expected_signals:
       projection:
       - effort_high
-      decision:
+      systemone:
       - task:stem
       - needs:deliberation
   - id: balance_hard__bayes_fr
@@ -1098,41 +1487,79 @@ decisions:
       - effort_high
     notes: A request to analyze trade-offs and a root cause carefully is high effort even when the answer should be
       short.
+  - id: balance_hard__irrational_root
+    query: Prove that the square root of 2 is irrational.
+    expected_signals:
+      projection:
+      - effort_high
+      systemone:
+      - difficulty
+      - needs:deliberation
+      - task:stem
+    tags:
+    - language:en
+  - id: balance_hard__classic_proof
+    query: Prove that there are infinitely many prime numbers.
+    expected_signals:
+      projection:
+      - effort_high
+      systemone:
+      - difficulty
+      - needs:deliberation
+      - task:stem
+    tags:
+    - language:en
+  - id: balance_hard__probability
+    query: A bag has 3 red and 5 blue balls. You draw 3 without replacement. What is the probability that exactly two are
+      red? Show the steps.
+    expected_signals:
+      projection:
+      - effort_high
+    tags:
+    - language:en
+  - id: balance_hard__agentic_without_tools
+    query: Plan and execute a migration of our PostgreSQL database to a new cluster, run the commands, verify replication,
+      and roll back if checks fail.
+    expected_signals:
+      projection:
+      - effort_high
+    tags:
+    - language:en
+    - class:negative
+    notes: Without declared tools the request is planned in text, not routed to the agent lane.
+  - id: balance_frontier__open_conjecture
+    query: 'Prove or disprove: for every n >= 1 there is a prime between n^2 and (n+1)^2.'
+    expected_signals:
+      projection:
+      - effort_high
+      systemone:
+      - difficulty
+      - task:stem
+    tags:
+    - language:en
+    notes: On Vela 2.0 0.8B the effort estimate for this open conjecture is high, not max.
+  - id: balance_standard__sky_physics
+    query: Why is the sky blue? Explain the physics.
+    expected_signals:
+      systemone:
+      - task:stem
+      - difficulty
+      projection:
+      - effort_high
+    tags:
+    - language:en
+    - collision
+    notes: On Vela 2.0 0.8B this physics question is a STEM problem rated multi-step, at high effort.
 - id: balance_standard
   expected_recipe: balance
-  expected_decision: medium
+  expected_decision: standard
   expected_algorithm: multi_factor
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
-  objective: 'Standard: requests that need some reasoning stay on medium.'
+  objective: 'Standard: medium effort outside code and exact facts.'
   variants:
-  - id: balance_standard__tcp
-    query: Explain how TCP congestion control works.
-    tags:
-    - language:en
-    - positive
-    expected_signals:
-      projection:
-      - effort_medium
-  - id: balance_standard__tcp_zh
-    query: 解释一下 TCP 拥塞控制是如何工作的。
-    tags:
-    - language:zh
-    - positive
-  - id: balance_standard__correction_without_answer
-    query: Your previous recommendation to expose the admin port publicly is wrong; correct it and propose a safer
-      configuration.
-    tags:
-    - class:negative
-    - collision
-    - demo
-    - language:en
-    - recovery
-    notes: Correction wording without an earlier answer in the conversation is not recovery.
-    expected_signals:
-      projection:
-      - effort_medium
   - id: balance_long__deliberate__long_deliberate_context
     display_prompt: Summarize the key decisions in this long neutral record while preserving its factual constraints.
     playground:
@@ -1146,25 +1573,6 @@ decisions:
     - deliberate
     - stress:long-input
     - collision
-  - id: balance_fast__clarification_follow_up
-    messages:
-    - role: user
-      content: 'Explain what the three entries in this vector clock mean, using the supplied counts as the example:
-        process A has 2 events, B has 0, and C has 1.'
-    - role: assistant
-      content: The vector clock has one event counter for each process.
-    - role: user
-      content: 'Explain what the three entries in this vector clock mean, using the supplied counts as the example:
-        process A has 2 events, B has 0, and C has 1.'
-    tags:
-    - language:en
-    - multi_turn
-    - recovery
-    - positive
-    expected_signals:
-      projection:
-      - effort_medium
-    notes: On Vela 2.0 0.8B explaining the vector-clock entries is a medium-effort request.
   - id: balance_fast__correction_without_answer_es
     query: La respuesta es incorrecta; corrige la respuesta e inténtalo de nuevo.
     tags:
@@ -1209,52 +1617,39 @@ decisions:
       - effort_medium
     notes: Correction wording without an earlier answer is not recovery; on Vela 2.0 0.8B the Decision Balance effort
       estimate for it is medium.
-  - id: balance_long__over_240k_image_guard__image_at_first_over_240k_token
-    display_prompt: Analyze the attached image with the long generated context and explain the most important visual
-      finding.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 960001
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Conservative image context boundary check '
-      - type: image_fixture
-        fixture: mom_v1_architecture
+  - id: balance_facts__nobel_laureate
+    query: Who won the Nobel Prize in Literature in 1998?
     tags:
     - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - supported
-    - context:240001
-    - tools
-    - shape:tools
-    - priority
-    tools:
-    - type: function
-      function:
-        name: lookup_context_item
-        description: Look up one item from the supplied context.
+    - positive
     expected_signals:
       projection:
       - effort_medium
-    notes: On Vela 2.0 0.8B the Decision Balance effort estimate for this image request with a long record is medium.
+    notes: On Vela 2.0 0.8B the precise-facts answer stays below 0.8 for this well-known prize, so the request is not a
+      facts lane request; its medium effort selects standard.
+  - id: balance_standard__compound_interest
+    query: How much will 1,000 dollars grow to in 5 years at 4% interest compounded yearly?
+    expected_signals:
+      projection:
+      - effort_medium
+    tags:
+    - language:en
+  - id: balance_standard__chinese_api_comparison
+    query: 解释一下 REST 和 GraphQL 的区别，各适合什么场景。
+    expected_signals:
+      projection:
+      - effort_medium
+    tags:
+    - language:zh
 - id: balance_fast
   expected_recipe: balance
-  expected_decision: simple
-  expected_algorithm: multi_factor
+  expected_decision: fast
+  expected_algorithm: static
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
-  objective: 'Fast: requests that need no reasoning go to simple.'
+  objective: 'Fast: requests that need no reasoning, positively identified by the effort estimate.'
   variants:
   - id: balance_fast__greeting
     query: hi
@@ -1317,7 +1712,7 @@ decisions:
     expected_signals:
       projection:
       - effort_off
-      decision:
+      systemone:
       - task:code
   - id: balance_fast__brief_request
     query: 'Quick answer: what''s the time complexity of binary search?'
@@ -1348,41 +1743,6 @@ decisions:
       conversation:
       - has_prior_answer
     notes: A satisfied follow-up is not a correction.
-  - id: balance_fast__diagram_summary
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
-          them.
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - positive
-    expected_signals:
-      projection:
-      - effort_off
-  - id: balance_fast__diagram_summary_zh
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 请用一句话说明图中从左到右的方框名称以及箭头的连接顺序。
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:zh
-    - shape:messages
-    - multimodal
-    - image
-    - paraphrase
-    expected_signals:
-      projection:
-      - effort_off
   - id: balance_fast__brief_definition
     query: Answer briefly with a short definition of a readiness probe.
     tags:
@@ -1623,93 +1983,6 @@ decisions:
     - shape:messages
     - stress:long-input
     - capability
-  - id: balance_long__image__image_in_30k_60k_band
-    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 160000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
-          them. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-  - id: balance_long__image__image_in_60k_120k_band
-    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 300000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
-          them. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
-  - id: balance_long__image__image_in_120k_240k_band
-    display_prompt: Inspect the attached image within this long context and summarize its primary architecture flow.
-    playground:
-      enabled: false
-      reason: This synthetic long-context boundary fixture is materialized only for Eval and is intentionally disabled
-        in Playground.
-    generated_text:
-      message_index: 0
-      content_index: 1
-      target_text_bytes: 520000
-      text: 'Inventory record: item R17 is available in room A. The facilities team owns the item.
-
-        '
-    messages:
-    - role: user
-      content:
-      - type: text
-        text: 'Describe the picture in one sentence by naming the boxes from left to right and the arrows that connect
-          them. '
-      - type: image_fixture
-        fixture: mom_v1_architecture
-    tags:
-    - language:en
-    - shape:messages
-    - multimodal
-    - image
-    - stress:long-input
-    - collision
-    - priority
   - id: balance_long__text_from_120k_to_240k__tools_in_120k_240k_band
     display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
       result.
@@ -1842,11 +2115,56 @@ decisions:
       - effort_off
     notes: On Vela 2.0 0.8B the long record lowers the effort estimate, and the Decision Balance policy reads this as
       a direct summary.
+  - id: balance_fast__personal_data
+    query: Hi, I'm Dana Lee (dana.lee@example.com, +1 415 555 0100). Please draft a two-sentence out-of-office reply for
+      me.
+    tags:
+    - language:en
+    - signal:pii
+    notes: Personal data changes no route; the replay data policy keeps this request's content out of Replay.
+  - id: balance_fast__french_capital
+    query: What is the capital of France?
+    tags:
+    - language:en
+    - class:negative
+  - id: balance_fast__german_capital
+    query: Was ist die Hauptstadt von Deutschland?
+    tags:
+    - language:de
+    - class:negative
+  - id: balance_agentic__weather_tool
+    messages:
+    - role: user
+      content: What's the weather in Paris right now?
+    tools:
+    - type: function
+      function:
+        name: get_weather
+        description: Current weather for a city
+        parameters:
+          type: object
+          properties:
+            city:
+              type: string
+          required:
+          - city
+    expected_signals:
+      conversation:
+      - has_tools
+      projection:
+      - effort_off
+    tags:
+    - language:en
+    - shape:tools
+    - shape:messages
+    notes: On Vela 2.0 0.8B the request reads as chat at no effort, and neither tool question reaches its threshold; fast
+      answers it, and its model can still call the declared tool.
 - id: speed_fast
   expected_recipe: speed
   expected_decision: fast
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: speed_over_240k_text_guard__text_at_first_over_240k_band
@@ -2175,6 +2493,7 @@ decisions:
   expected_decision: tools
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: speed_over_240k_text_guard__boundary_orchestration_tools_collision
@@ -2207,7 +2526,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: The request comes before the long record, where the routing questions read it; the record does not replace
       the tool task.
@@ -2227,7 +2546,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: Actual tool execution or an active client tool loop selects the low-latency tool policy; an image or
       long record does not replace this task.
@@ -2269,7 +2588,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: Actual tool execution or an active client tool loop selects the low-latency tool policy; an image or
       long record does not replace this task.
@@ -2290,7 +2609,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: Actual tool execution or an active client tool loop selects the low-latency tool policy; an image or
       long record does not replace this task.
@@ -2330,7 +2649,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: speed_tools__tools_in_60k_120k_band
     display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
@@ -2368,7 +2687,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: speed_tools__tools_in_120k_240k_band
     display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
@@ -2406,7 +2725,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: speed_tools__active_tool_loop_without_redeclared_tools
     messages:
@@ -2458,7 +2777,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: Actual tool execution or an active client tool loop selects the low-latency tool policy; an image or
       long record does not replace this task.
@@ -2486,7 +2805,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: Actual tool execution or an active client tool loop selects the low-latency tool policy; an image or
       long record does not replace this task.
@@ -2528,7 +2847,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: speed_image_tools__image_tools_in_60k_120k_band
     display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
@@ -2568,7 +2887,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: speed_image_tools__image_tools_in_120k_240k_band
     display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
@@ -2608,7 +2927,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   expected_algorithm: multi_factor
 - id: speed_reasoning
@@ -2616,6 +2935,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: speed_heavy_workload__heavy_en
@@ -2629,7 +2949,7 @@ decisions:
     - positive
     - demo
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2641,7 +2961,7 @@ decisions:
     - positive
     - demo
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2652,7 +2972,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2666,7 +2986,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2677,7 +2997,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2688,7 +3008,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2702,7 +3022,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2714,7 +3034,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2727,7 +3047,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2741,7 +3061,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2754,7 +3074,7 @@ decisions:
     - heavy
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2766,7 +3086,7 @@ decisions:
     - collision
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2777,7 +3097,7 @@ decisions:
     - signal:complexity
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Substantive architecture analysis and competing failure modes require a reasoning-quality policy; response
       length alone is insufficient.
@@ -2800,7 +3120,7 @@ decisions:
     - priority
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
   - id: speed_image_tools__deliberate_image_tools_collision
     messages:
@@ -2826,7 +3146,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Tool execution remains matched, but the explicit hard/deliberate task selects the higher-priority
       reasoning policy.
@@ -2836,6 +3156,7 @@ decisions:
   expected_decision: economy
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: cost_over_240k_text_guard__text_at_first_over_240k_band
@@ -3125,7 +3446,7 @@ decisions:
     - hard-negative
     - collision
     expected_signals:
-      decision:
+      systemone:
       - quoted
   - id: cost_direct_economy__negated_reasoning_request
     query: Do not analyze the tradeoffs; give one direct sentence.
@@ -3143,6 +3464,7 @@ decisions:
   expected_decision: tools
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: cost_over_240k_text_guard__boundary_orchestration_tools_collision
@@ -3175,7 +3497,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: The request comes before the long record, where the routing questions read it; the record does not replace
       the tool task.
@@ -3204,7 +3526,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: The request authorizes a tool operation; cost ranking operates inside the tool-capable candidate set.
   - id: cost_image__image_tools_in_30k_60k_band
@@ -3244,7 +3566,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: cost_image__image_tools_in_60k_120k_band
     display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
@@ -3283,7 +3605,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: cost_image__image_tools_in_120k_240k_band
     display_prompt: Inspect the attached image within this long context, use the lookup tool to verify the selected
@@ -3322,7 +3644,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: cost_direct_economy__tools_in_30k_60k_band
     display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
@@ -3359,7 +3681,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: cost_direct_economy__tools_in_60k_120k_band
     display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
@@ -3396,7 +3718,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: cost_direct_economy__tools_in_120k_240k_band
     display_prompt: Use the lookup tool to verify the key facts in this long neutral record, then summarize the
@@ -3433,7 +3755,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
   - id: cost_direct_economy__economy_tools_supported
     query: Use the inventory function to look up the api-gateway service and return only its version field.
@@ -3452,7 +3774,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - tool_use
     notes: The request authorizes a tool operation; cost ranking operates inside the tool-capable candidate set.
   expected_algorithm: multi_factor
@@ -3461,6 +3783,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: cost_bounded_reasoning__reasoning_en
@@ -3472,7 +3795,7 @@ decisions:
     - positive
     - demo
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_zh
@@ -3483,7 +3806,7 @@ decisions:
     - positive
     - demo
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_es
@@ -3493,7 +3816,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_fr
@@ -3503,7 +3826,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_ja
@@ -3513,7 +3836,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_de
@@ -3523,7 +3846,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_pt
@@ -3533,7 +3856,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_ko
@@ -3543,7 +3866,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_ar
@@ -3553,7 +3876,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_hi
@@ -3563,7 +3886,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__reasoning_ru
@@ -3573,7 +3896,7 @@ decisions:
     - reasoning
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__ordered_reasoning
@@ -3583,7 +3906,7 @@ decisions:
     - structured-output
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   - id: cost_bounded_reasoning__hard_semantic_reasoning
@@ -3593,7 +3916,7 @@ decisions:
     - signal:complexity
     - positive
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Causal diagnosis or comparison under constraints justifies the reasoning quality floor.
   expected_algorithm: multi_factor
@@ -3602,6 +3925,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_text_tool_result_synthesis__ordinary_tool_result
@@ -3905,7 +4229,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
@@ -3918,7 +4242,7 @@ decisions:
     - positive
     - demo
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
@@ -3931,7 +4255,7 @@ decisions:
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
     expected_signals:
-      decision:
+      systemone:
       - depth
   - id: accuracy_multi_round_exploration__recursive_search_ar
     query: استكشف عدة مسارات للاستدلال وادمج الحل الأكثر صرامة قبل الإجابة.
@@ -3942,7 +4266,7 @@ decisions:
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
     expected_signals:
-      decision:
+      systemone:
       - depth
   - id: accuracy_direct__hard_without_multipath_intent
     query: Diagnose a complex distributed-system failure with incomplete evidence and provide one direct recommendation.
@@ -3955,7 +4279,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      decision:
+      systemone:
       - depth
   - id: accuracy_confidence_escalation__factual_escalation
     query: Fact-check the claim that the first Moon landing occurred in 1972, and escalate if uncertain before stating
@@ -3966,7 +4290,7 @@ decisions:
     - positive
     - demo
     expected_signals:
-      decision:
+      systemone:
       - correction
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
@@ -3979,7 +4303,7 @@ decisions:
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
     expected_signals:
-      decision:
+      systemone:
       - verification
   - id: accuracy_image_through_120k__image_followup_paraphrase
     messages:
@@ -4004,7 +4328,7 @@ decisions:
     notes: Use a single reasoning model for client tool continuation, factual scrutiny, or multiple reasoning paths
       without an independent multi-model execution request.
     expected_signals:
-      decision:
+      systemone:
       - depth
   - id: accuracy_direct__pending_tool_call_without_result
     messages:
@@ -4036,6 +4360,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_over_240k_text_guard__text_at_first_over_240k_band
@@ -4098,7 +4423,7 @@ decisions:
     - negative
     - negative:workflow
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4111,7 +4436,7 @@ decisions:
     - negative
     - negative:fusion
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4124,7 +4449,7 @@ decisions:
     - negative
     - negative:confidence
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4137,7 +4462,7 @@ decisions:
     - negative
     - negative:multi-round
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4149,7 +4474,7 @@ decisions:
     - collision
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4161,7 +4486,7 @@ decisions:
     - collision
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4173,7 +4498,7 @@ decisions:
     - collision
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4185,7 +4510,7 @@ decisions:
     - collision
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4197,7 +4522,7 @@ decisions:
     - collision
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4358,7 +4683,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Explanation or translation of routing vocabulary is a direct request, not authorization to execute the
       quoted workflow, review, or escalation.
@@ -4427,7 +4752,7 @@ decisions:
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
     expected_signals:
-      decision:
+      systemone:
       - quoted
   - id: accuracy_direct__exact_json_direct
     query: Return exactly one JSON object that must preserve identifier 9007199254740993 and include at least three
@@ -4448,7 +4773,7 @@ decisions:
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
     expected_signals:
-      decision:
+      systemone:
       - quoted
   - id: accuracy_direct__direct_fr
     query: 'Remplis le champ « définition » de ce formulaire en y copiant le texte fourni. Terme : mutex.
@@ -4467,7 +4792,7 @@ decisions:
     - direct
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
@@ -4478,7 +4803,7 @@ decisions:
     - direct
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
@@ -4491,7 +4816,7 @@ decisions:
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
     expected_signals:
-      decision:
+      systemone:
       - quoted
   - id: accuracy_direct__direct_ko
     query: 다음 정의에서 띄어쓰기 한 곳만 고치세요. "뮤텍스는 한번에 하나의 접근만 허용합니다." "한번에"를 "한 번에"로 바꾸고 다른 단어는 그대로 두세요.
@@ -4518,7 +4843,7 @@ decisions:
     - direct
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
@@ -4530,7 +4855,7 @@ decisions:
     - direct
     - negative
     expected_signals:
-      decision:
+      systemone:
       - quoted
     notes: Direct task semantics determine the policy; modality, context length, and tool availability constrain
       eligible models without creating another business decision.
@@ -4572,6 +4897,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_dynamic_workflow__tool_workstreams
@@ -4589,7 +4915,7 @@ decisions:
     - negative
     - negative:fanout
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Task decomposition does not request additional workers; tools, images, and context length
       only constrain eligible models.
@@ -4603,7 +4929,7 @@ decisions:
     - negative
     - negative:fanout
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Task decomposition does not request additional workers; tools, images, and context length
       only constrain eligible models.
@@ -4615,7 +4941,7 @@ decisions:
     - negative
     - negative:fanout
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Task decomposition does not request additional workers; tools, images, and context length
       only constrain eligible models.
@@ -4625,6 +4951,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_long_context_or_direct_reference__long_workflow_collision
@@ -4652,6 +4979,7 @@ decisions:
   expected_decision: agent
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_dynamic_workflow__flow_state_resume
@@ -4688,6 +5016,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_image_through_120k__image_understanding_contract
@@ -4716,6 +5045,7 @@ decisions:
   expected_decision: review
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_expert_fusion__competing_hypotheses
@@ -4726,11 +5056,11 @@ decisions:
     - negative
     - negative:fanout
     expected_signals:
-      decision:
+      systemone:
       - mode:experts
     notes: Comparing hypotheses or supplied opinions does not request new independent model responses.
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
   expected_algorithm: fusion
@@ -4739,6 +5069,7 @@ decisions:
   expected_decision: review
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_expert_fusion__semantic_panel
@@ -4749,12 +5080,12 @@ decisions:
     - semantic
     - paraphrase
     expected_signals:
-      decision:
+      systemone:
       - mode:experts
     notes: An operative request to obtain independent assessments from multiple experts authorizes bounded
       multi-model review.
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
   expected_algorithm: fusion
@@ -4763,6 +5094,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_expert_fusion__competing_hypotheses_zh
@@ -4773,7 +5105,7 @@ decisions:
     - negative
     - negative:fanout
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Comparing hypotheses or supplied opinions does not request new independent model responses.
   - id: accuracy_expert_fusion__fusion_over_confidence_collision
@@ -4785,7 +5117,7 @@ decisions:
     - negative
     - negative:fanout
     expected_signals:
-      decision:
+      systemone:
       - depth
     notes: Comparing hypotheses or supplied opinions does not request new independent model responses.
   expected_algorithm: multi_factor
@@ -4795,8 +5127,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_long_image__image_within_triage_budget
@@ -5224,8 +5557,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_image__image_description_zh
@@ -5243,7 +5577,7 @@ decisions:
     - image
     - paraphrase
     expected_signals:
-      decision:
+      systemone:
       - confidential
     notes: Declared private/confidential artifacts or personal identifiers require sensitive handling; tool stripping
       and retention denial apply across Vault.
@@ -5270,7 +5604,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      decision:
+      systemone:
       - confidential
     notes: Declared private/confidential artifacts or personal identifiers require sensitive handling; tool stripping
       and retention denial apply across Vault.
@@ -5284,7 +5618,7 @@ decisions:
     - positive
     - demo
     expected_signals:
-      decision:
+      systemone:
       - confidential
     notes: Declared private/confidential artifacts or personal identifiers require sensitive handling; tool stripping
       and retention denial apply across Vault.
@@ -5296,7 +5630,7 @@ decisions:
     - sensitive
     - paraphrase
     expected_signals:
-      decision:
+      systemone:
       - confidential
     notes: Declared private/confidential artifacts or personal identifiers require sensitive handling; tool stripping
       and retention denial apply across Vault.
@@ -5311,7 +5645,7 @@ decisions:
     - signal:kb
     - positive
     expected_signals:
-      decision:
+      systemone:
       - confidential
   - id: vault_sensitive__explicit_identifier
     query: My SSN is 123-45-6789.
@@ -5363,7 +5697,7 @@ decisions:
     - collision
     - priority
     expected_signals:
-      decision:
+      systemone:
       - confidential
     notes: Declared private/confidential artifacts or personal identifiers require sensitive handling; tool stripping
       and retention denial apply across Vault.
@@ -5403,7 +5737,7 @@ decisions:
     - collision
     - confidential:current-turn
     expected_signals:
-      decision:
+      systemone:
       - confidential
   - id: vault_sensitive__age_and_zip_with_name
     query: I am 34 years old and live in ZIP code 94110 with my partner Sam Rivera. Suggest a weekend plan for us.
@@ -5423,8 +5757,9 @@ decisions:
   expected_plugins:
   - fast_response
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_long_text__attack_context_priority_collision
@@ -5505,8 +5840,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_image__image_over_tools_collision
@@ -5581,6 +5917,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_stakes_health
@@ -5594,7 +5931,7 @@ decisions:
     notes: Actionable domain advice asserts the domain and consequential intent. A separate factual-query
       counterpart asserts FactCheck for the same domain.
     expected_signals:
-      decision:
+      systemone:
       - stakes
   expected_algorithm: multi_factor
 - id: accuracy_v2_definition_health
@@ -5602,6 +5939,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_definition_health
@@ -5614,7 +5952,7 @@ decisions:
       changes the effect of another medicine." Return only the supplied definition in one sentence.'
     notes: A short definition in the same domain is not personalized high-stakes advice.
     expected_signals:
-      decision:
+      systemone:
       - quoted
   expected_algorithm: multi_factor
 - id: accuracy_v2_stakes_law
@@ -5622,6 +5960,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_stakes_law
@@ -5635,7 +5974,7 @@ decisions:
     notes: Actionable domain advice asserts the domain and consequential intent. A separate factual-query
       counterpart asserts FactCheck for the same domain.
     expected_signals:
-      decision:
+      systemone:
       - stakes
   expected_algorithm: multi_factor
 - id: accuracy_v2_definition_law
@@ -5643,6 +5982,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_definition_law
@@ -5656,7 +5996,7 @@ decisions:
       stated in the entry and add no personal recommendation.'
     notes: A short definition in the same domain is not personalized high-stakes advice.
     expected_signals:
-      decision:
+      systemone:
       - quoted
   expected_algorithm: multi_factor
 - id: accuracy_v2_stakes_business
@@ -5664,6 +6004,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_stakes_business
@@ -5677,7 +6018,7 @@ decisions:
     notes: Actionable domain advice asserts the domain and consequential intent. A separate factual-query
       counterpart asserts FactCheck for the same domain.
     expected_signals:
-      decision:
+      systemone:
       - stakes
   expected_algorithm: multi_factor
 - id: accuracy_v2_definition_business
@@ -5685,6 +6026,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_definition_business
@@ -5696,7 +6038,7 @@ decisions:
     query: In one sentence, what is a company organizational chart?
     notes: A short definition in the same domain is not personalized high-stakes advice.
     expected_signals:
-      decision:
+      systemone:
       - quoted
   expected_algorithm: multi_factor
 - id: accuracy_v2_stakes_economics
@@ -5704,6 +6046,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_stakes_economics
@@ -5717,7 +6060,7 @@ decisions:
     notes: Actionable domain advice asserts the domain and consequential intent. A separate factual-query
       counterpart asserts FactCheck for the same domain.
     expected_signals:
-      decision:
+      systemone:
       - depth
   expected_algorithm: multi_factor
 - id: accuracy_v2_definition_economics
@@ -5725,6 +6068,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_definition_economics
@@ -5738,7 +6082,7 @@ decisions:
       the entry and add no personal recommendation.'
     notes: A short definition in the same domain is not personalized high-stakes advice.
     expected_signals:
-      decision:
+      systemone:
       - quoted
   expected_algorithm: multi_factor
 - id: accuracy_v2_implicit_correction
@@ -5746,6 +6090,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_implicit_correction
@@ -5764,7 +6109,7 @@ decisions:
         reverses those two rules, so it is not correct.
     notes: Correctness rejection is distinct from parallel expert authorization.
     expected_signals:
-      decision:
+      systemone:
       - correction
   expected_algorithm: multi_factor
 - id: accuracy_v2_satisfied_followup
@@ -5772,6 +6117,7 @@ decisions:
   expected_decision: simple
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_satisfied_followup
@@ -5795,6 +6141,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_single_model_hypotheses
@@ -5806,7 +6153,7 @@ decisions:
     query: Use one model to compare competing hypotheses for a database outage and justify the most likely cause.
     notes: An explicit single-model request prevents fusion even when hypotheses are compared.
     expected_signals:
-      decision:
+      systemone:
       - depth
   expected_algorithm: multi_factor
 - id: vault_v2_private_visibility_term
@@ -5815,8 +6162,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v2_private_visibility_term
@@ -5836,8 +6184,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v2_private_ip_term
@@ -5861,8 +6210,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v2_harmful_action
@@ -5875,7 +6225,7 @@ decisions:
     notes: Route harmful content to the responsible private model, which must refuse actionable facilitation. Guard
       separately contains prompt attacks.
     expected_signals:
-      decision:
+      systemone:
       - risk
   expected_algorithm: multi_factor
 - id: speed_v2_quoted_tool_instruction
@@ -5883,6 +6233,7 @@ decisions:
   expected_decision: fast
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: speed_v2_quoted_tool_instruction
@@ -5908,6 +6259,7 @@ decisions:
   expected_decision: economy
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: cost_v2_quoted_tool_instruction
@@ -5927,7 +6279,7 @@ decisions:
     expected_signals:
       conversation:
       - has_tools
-      decision:
+      systemone:
       - quoted
   expected_algorithm: multi_factor
 - id: accuracy_v2_independent_visual_review
@@ -5935,6 +6287,7 @@ decisions:
   expected_decision: review
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: accuracy_v2_independent_visual_review
@@ -5954,10 +6307,10 @@ decisions:
         fixture: mom_v1_architecture
     notes: Explicit independent visual review requires the real multi-model path with vision-capable stage candidates.
     expected_signals:
-      decision:
+      systemone:
       - mode:experts
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
   expected_algorithm: fusion
@@ -5966,6 +6319,7 @@ decisions:
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   plugin_match: exact
   variants:
   - id: cost_v2_repeated_correction
@@ -5989,7 +6343,7 @@ decisions:
     notes: The same explicit correction repeated after an answer activates Cost recovery; repetition alone remains
       insufficient.
     expected_signals:
-      decision:
+      systemone:
       - correction
   expected_algorithm: multi_factor
 - id: vault_v3_vh01
@@ -5998,8 +6352,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh01
@@ -6012,7 +6367,7 @@ decisions:
     - negative
     notes: Verify support through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6024,8 +6379,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh02
@@ -6037,7 +6393,7 @@ decisions:
     - positive
     notes: Verify refusal through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6049,8 +6405,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh03
@@ -6062,7 +6419,7 @@ decisions:
     - negative
     notes: Verify support through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6074,8 +6431,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh04
@@ -6087,7 +6445,7 @@ decisions:
     - positive
     notes: Verify refusal through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6099,8 +6457,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh05
@@ -6122,8 +6481,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh06
@@ -6135,7 +6495,7 @@ decisions:
     - positive
     notes: Verify refusal through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - risk
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6147,8 +6507,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh07
@@ -6170,8 +6531,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh08
@@ -6183,7 +6545,7 @@ decisions:
     - positive
     notes: Verify refusal through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - risk
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6195,8 +6557,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh09
@@ -6218,8 +6581,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh10
@@ -6232,7 +6596,7 @@ decisions:
     - negative
     notes: Verify responsible_guidance through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6244,8 +6608,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh11
@@ -6267,8 +6632,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh12
@@ -6280,7 +6646,7 @@ decisions:
     - positive
     notes: Verify refusal through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - risk
   expected_algorithm: multi_factor
   forbidden_signals:
@@ -6292,8 +6658,9 @@ decisions:
   expected_plugins:
   - fast_response
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh13
@@ -6305,7 +6672,7 @@ decisions:
     - positive
     notes: Verify immediate through a real routed request; Preview alone checks routing.
     expected_signals:
-      decision:
+      systemone:
       - attack
   expected_selection_status: not_required
 - id: vault_v3_vh14
@@ -6314,8 +6681,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh14
@@ -6339,8 +6707,9 @@ decisions:
   expected_plugins:
   - fast_response
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh15
@@ -6361,8 +6730,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   variants:
   - id: vault_v3_vh16
@@ -6391,10 +6761,10 @@ decisions:
     - contract
     - orchestration
     expected_signals:
-      decision:
+      systemone:
       - mode:workers
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
 - id: contract-workflow-delegation
@@ -6411,10 +6781,10 @@ decisions:
     - contract
     - orchestration
     expected_signals:
-      decision:
+      systemone:
       - mode:workers
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
 - id: contract-workflow-plan-only
@@ -6446,7 +6816,7 @@ decisions:
     - negative
     - orchestration
     expected_signals:
-      decision:
+      systemone:
       - quoted
 - id: contract-independent-review
   expected_recipe: accuracy
@@ -6462,10 +6832,10 @@ decisions:
     - contract
     - review
     expected_signals:
-      decision:
+      systemone:
       - mode:experts
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
 - id: contract-correctness-repair
@@ -6482,7 +6852,7 @@ decisions:
     - contract
     - correction
     expected_signals:
-      decision:
+      systemone:
       - correction
 - id: contract-correction-prohibited
   expected_recipe: cost
@@ -6540,7 +6910,7 @@ decisions:
     - contract
     - support
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
 - id: contract-direct-result-repair
   expected_recipe: cost
@@ -6557,7 +6927,7 @@ decisions:
     - contract
     - correction
     expected_signals:
-      decision:
+      systemone:
       - correction
 - id: contract-plural-workflow-start
   expected_recipe: accuracy
@@ -6574,10 +6944,10 @@ decisions:
     - contract
     - orchestration
     expected_signals:
-      decision:
+      systemone:
       - mode:workers
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
 - id: contract-single-worker-workflow
@@ -6611,7 +6981,7 @@ decisions:
     - negative
     - correction
     expected_signals:
-      decision:
+      systemone:
       - quoted
 - id: contract-fresh-independent-assessments
   expected_recipe: accuracy
@@ -6628,10 +6998,10 @@ decisions:
     - authorization
     - multi-assessment
     expected_signals:
-      decision:
+      systemone:
       - mode:experts
     expected_signal_values:
-      decision:mode:
+      systemone:mode:
         gte: 0.7
         lte: 1
 - id: contract-supplied-assessments
@@ -6652,7 +7022,7 @@ decisions:
     - authorization
     - supplied-assessments
     expected_signals:
-      decision:
+      systemone:
       - depth
 - id: contract-vault-action-guidance
   expected_recipe: vault
@@ -6661,8 +7031,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: Personal action guidance combines a relevant domain with an operative request; harmful intent
     is not required.
@@ -6677,7 +7048,7 @@ decisions:
     - contract
     - positive
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
   - id: zh
     query: 房东要求我明天前接受一条新的租约条款。请告诉我在作出承诺之前，从法律角度下一步该如何处理。
@@ -6686,7 +7057,7 @@ decisions:
     - contract
     - positive
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
 - id: contract-vault-action-discussion
   expected_recipe: vault
@@ -6695,8 +7066,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: An explanation or a quoted action request does not itself ask for personal action guidance.
   forbidden_signals:
@@ -6722,8 +7094,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: A genuine personal action request can coexist with quoted material; consequential intent
     must distinguish it from quotation alone.
@@ -6740,7 +7113,7 @@ decisions:
     - collision
     - quoted-context
     expected_signals:
-      decision:
+      systemone:
       - personal_advice
 - id: contract-vault-routine-action
   expected_recipe: vault
@@ -6749,8 +7122,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: Personal wording for ordinary technical or household work does not establish consequential support.
   forbidden_signals:
@@ -6776,8 +7150,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: Translating a personal action request does not ask for the quoted advice.
   forbidden_signals:
@@ -6794,8 +7169,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: A detected nationality, religious or political attribute requires an explicit personal or individual-record
     context.
@@ -6810,7 +7186,7 @@ decisions:
     - contract
     - positive
     expected_signals:
-      decision:
+      systemone:
       - personal_data
   - id: nationality_ja
     query: 申請者の国籍は日本人と記録されています。この項目を読みやすく整えてください。
@@ -6819,7 +7195,7 @@ decisions:
     - contract
     - positive
     expected_signals:
-      decision:
+      systemone:
       - personal_data
 - id: contract-vault-attribute-information
   expected_recipe: vault
@@ -6828,8 +7204,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: Language options and general group descriptions do not themselves associate an attribute with
     a person.
@@ -6870,8 +7247,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: An ordinary possessive or a definition of a profile is not an individual attribute declaration.
   forbidden_signals:
@@ -6899,8 +7277,9 @@ decisions:
   expected_plugins:
   - request_params
   - tools
-  - memory
+  - context
   - response_cache
+  - router_replay
   plugin_match: exact
   objective: Quotation preserves the sensitivity of supplied contact details and personal names.
   expected_signals:
@@ -6918,7 +7297,7 @@ decisions:
     - positive
     - quoted-context
     expected_signals:
-      decision:
+      systemone:
       - personal_data
   - id: name_zh
     query: 翻译这段联系人资料：“姓名：林晓雨”。保留姓名原样。
@@ -6928,13 +7307,14 @@ decisions:
     - positive
     - quoted-context
     expected_signals:
-      decision:
+      systemone:
       - personal_data
 - id: accuracy_v2_facts_health
   expected_algorithm: multi_factor
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   expected_recipe: accuracy
   plugin_match: exact
   signal_match: contains
@@ -6949,13 +7329,14 @@ decisions:
     - positive
     - stakes
     expected_signals:
-      decision:
+      systemone:
       - stakes
 - id: accuracy_v2_facts_law
   expected_algorithm: multi_factor
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   expected_recipe: accuracy
   plugin_match: exact
   signal_match: contains
@@ -6970,13 +7351,14 @@ decisions:
     - positive
     - stakes
     expected_signals:
-      decision:
+      systemone:
       - stakes
 - id: accuracy_v2_facts_business
   expected_algorithm: multi_factor
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   expected_recipe: accuracy
   plugin_match: exact
   signal_match: contains
@@ -6992,13 +7374,14 @@ decisions:
     - positive
     - stakes
     expected_signals:
-      decision:
+      systemone:
       - stakes
 - id: accuracy_v2_facts_economics
   expected_algorithm: multi_factor
   expected_decision: reasoning
   expected_plugins:
   - request_params
+  - router_replay
   expected_recipe: accuracy
   plugin_match: exact
   signal_match: contains
@@ -7013,5 +7396,5 @@ decisions:
     - positive
     - stakes
     expected_signals:
-      decision:
+      systemone:
       - verification

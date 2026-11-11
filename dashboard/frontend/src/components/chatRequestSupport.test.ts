@@ -14,53 +14,56 @@ function responseWithHeaders(headers: Record<string, string>): Response {
 }
 
 describe('collectResponseHeaders', () => {
-  it('collects actual automatic-output limits without inventing absent evidence', () => {
+  it('keeps the public set and expands the trace into its details', () => {
     expect(
       collectResponseHeaders(
         responseWithHeaders({
-          'x-vsr-effective-input-tokens': '512',
-          'x-vsr-effective-max-output-tokens': '261632',
+          'x-vsr-selected-recipe': 'default',
+          'x-vsr-trace':
+            'confidence=0.91, routing_latency_ms=61.0, effective_input_tokens=512, effective_max_output_tokens=261632, signals=("systemone:task:stem" "systemone:difficulty")',
         }),
       ),
     ).toEqual({
-      'x-vsr-effective-input-tokens': '512',
-      'x-vsr-effective-max-output-tokens': '261632',
+      'x-vsr-selected-recipe': 'default',
+      'trace:confidence': '0.91',
+      'trace:routing_latency_ms': '61.0',
+      'trace:effective_input_tokens': '512',
+      'trace:effective_max_output_tokens': '261632',
+      'signal:systemone': 'task:stem,difficulty',
     })
     expect(collectResponseHeaders(responseWithHeaders({}))).toEqual({})
   })
 
-  it('collects the looper latency and token usage headers (#2694)', () => {
-    const response = responseWithHeaders({
-      'x-vsr-looper-latency-ms': '74',
-      'x-vsr-looper-prompt-tokens': '16',
-      'x-vsr-looper-completion-tokens': '101',
-      'x-vsr-looper-total-tokens': '117',
-    })
-
-    const collected = collectResponseHeaders(response)
-
-    expect(collected['x-vsr-looper-latency-ms']).toBe('74')
-    expect(collected['x-vsr-looper-prompt-tokens']).toBe('16')
-    expect(collected['x-vsr-looper-completion-tokens']).toBe('101')
-    expect(collected['x-vsr-looper-total-tokens']).toBe('117')
-  })
-
-  it('collects the System One answers, recipe, confidence and routing latency', () => {
+  it('collects the looper latency and token usage (#2694)', () => {
     const collected = collectResponseHeaders(
       responseWithHeaders({
-        'x-vsr-matched-decision-model': 'task:stem,difficulty,needs:deliberation',
-        'x-vsr-selected-recipe': 'default',
-        'x-vsr-selected-confidence': '0.91',
-        'x-vsr-routing-latency-ms': '61',
+        'x-vsr-trace':
+          'looper=("a" "b");algorithm=escalate;model="b";iterations=2;latency_ms=74;prompt_tokens=16;completion_tokens=101;total_tokens=117',
       }),
     )
 
-    expect(collected).toEqual({
-      'x-vsr-matched-decision-model': 'task:stem,difficulty,needs:deliberation',
-      'x-vsr-selected-recipe': 'default',
-      'x-vsr-selected-confidence': '0.91',
-      'x-vsr-routing-latency-ms': '61',
-    })
+    expect(collected['trace:looper.models']).toBe('a,b')
+    expect(collected['trace:looper.latency_ms']).toBe('74')
+    expect(collected['trace:looper.prompt_tokens']).toBe('16')
+    expect(collected['trace:looper.completion_tokens']).toBe('101')
+    expect(collected['trace:looper.total_tokens']).toBe('117')
+  })
+
+  it('reads the warning codes and decodes the trace strings', () => {
+    const collected = collectResponseHeaders(
+      responseWithHeaders({
+        'x-vsr-warnings': 'hallucination, protocol;action=dropped;reason="a";field="b"',
+        'x-vsr-trace':
+          'category="computer science", learning=(protection;action=allow_switch;scope=conversation), ranking="b%2Ca";reason="higher priority"',
+      }),
+    )
+
+    expect(collected['x-vsr-warnings']).toBe('hallucination,protocol')
+    expect(collected['trace:category']).toBe('computer science')
+    expect(collected['trace:learning.methods']).toBe('protection')
+    expect(collected['trace:learning.actions']).toBe('protection=allow_switch')
+    expect(collected['trace:learning.scopes']).toBe('protection=conversation')
+    expect(collected['trace:ranking']).toBe('b,a: higher priority')
   })
 
   it('ignores headers outside the allowlist', () => {
@@ -329,7 +332,7 @@ describe('playground request stability', () => {
     for (const conversationId of ['conv-first', 'conv-second']) {
       const headers = buildPlaygroundRequestHeaders(conversationId)
       expect(headers).toMatchObject({
-        'x-session-id': conversationId,
+        'x-vsr-session-id': conversationId,
         'x-conversation-id': conversationId,
         'x-vsr-debug': 'true',
       })

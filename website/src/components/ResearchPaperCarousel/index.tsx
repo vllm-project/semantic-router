@@ -1,8 +1,9 @@
 import React from 'react'
 import Translate from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
-import IconExternalLink from '@theme/Icon/ExternalLink'
-import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
+import Link from '@docusaurus/Link'
+import { SectionLabel } from '@site/src/components/site/Chrome'
+import duo from '@site/src/components/duo/duo.module.css'
 import { localizeResearchEntries, researchPapers, sortResearchEntries } from '@site/src/data/researchContent'
 import styles from './index.module.css'
 
@@ -15,23 +16,23 @@ export default function ResearchPaperCarousel(): JSX.Element {
 
   return (
     <section className={styles.section}>
-      <div className="site-shell-container">
-        <div className={styles.header}>
+      <div className={styles.wrap}>
+        <header className="site-section-intro">
           <SectionLabel>
             <Translate id="homepage.researchCarousel.label">Research</Translate>
           </SectionLabel>
-          <h2 className={styles.title}>
+          <h2>
             <Translate id="homepage.researchCarousel.title">Papers behind the router</Translate>
           </h2>
-          <p className={styles.subtitle}>
+          <p>
             <Translate id="homepage.researchCarousel.subtitle">
               The ideas that move inference forward.
             </Translate>
           </p>
-        </div>
+        </header>
 
         <div className={styles.carouselShell}>
-          <div className={`${styles.carouselContainer} ${styles.carouselContainerStatic}`}>
+          <div className={styles.carouselContainer}>
             <div className={styles.carouselTrack}>
               {orderedPapers.map((paper, index) => {
                 const paperLink = paper.links.find(link => link.type === 'paper') ?? paper.links[0]
@@ -65,10 +66,9 @@ export default function ResearchPaperCarousel(): JSX.Element {
                         href={paperLink.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={styles.paperLink}
+                        className={duo.more}
                       >
                         <Translate id="homepage.researchCarousel.paperLink">Read paper</Translate>
-                        <IconExternalLink />
                       </a>
                     </div>
                   </article>
@@ -84,9 +84,10 @@ export default function ResearchPaperCarousel(): JSX.Element {
               Explore the research.
             </Translate>
           </p>
-          <PillLink to="/publications" muted>
+          <Link className={styles.all} to="/publications">
             <Translate id="homepage.researchCarousel.cta">All papers and talks</Translate>
-          </PillLink>
+            <span aria-hidden="true">→</span>
+          </Link>
         </div>
       </div>
     </section>

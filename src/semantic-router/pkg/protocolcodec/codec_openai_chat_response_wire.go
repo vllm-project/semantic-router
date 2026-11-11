@@ -40,11 +40,19 @@ type chatResponseWire struct {
 	XGroq json.RawMessage `json:"x_groq,omitempty"`
 	// Groq reports per-model usage for compound requests and null otherwise.
 	UsageBreakdown json.RawMessage `json:"usage_breakdown,omitempty"`
+	// Cerebras reports serving timing metadata on every response. It is
+	// provider timing metadata, not output content.
+	TimeInfo json.RawMessage `json:"time_info,omitempty"`
 	// Perplexity Sonar responses carry model source citations and search
 	// results at the top level. Neither has a neutral slot here, so both are
 	// dropped with a diagnostic instead of failing the strict decode.
 	Citations     json.RawMessage `json:"citations,omitempty"`
 	SearchResults json.RawMessage `json:"search_results,omitempty"`
+}
+
+// hasTimeInfo reports Cerebras's top-level serving timing metadata.
+func (wire chatResponseWire) hasTimeInfo() bool {
+	return len(wire.TimeInfo) > 0 && !bytes.Equal(bytes.TrimSpace(wire.TimeInfo), []byte("null"))
 }
 
 // hasUsageBreakdown reports Groq's per-model usage, which has no neutral slot.

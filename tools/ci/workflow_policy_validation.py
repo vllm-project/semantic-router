@@ -197,13 +197,13 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         errors.append("missing pull-request dispatcher")
         return
     gate = dispatcher.jobs.get("pr-gate", {})
-    if (
-        gate.get("name") != PR_EXECUTION_NAME
-        or gate.get("if") != "always()"
-        or needs(gate) != {"ci"}
-    ):
+    if gate.get("name") != PR_EXECUTION_NAME or needs(gate) != {"ci"}:
         errors.append(
             "pr.yml must retain strict execution and a legacy PR Gate until the base publisher exists"
+        )
+    if gate.get("if") != "${{ !cancelled() }}":
+        errors.append(
+            "pr.yml gate must reconcile failures without blocking workflow cancellation"
         )
     validate_status_publisher(workflows, errors)
     validate_publisher_bootstrap(workflows, errors)
@@ -234,9 +234,13 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         return
     expected = set(ALL_DISPATCH_JOBS)
     gate = shared.jobs.get("gate", {})
-    if needs(gate) != expected or gate.get("if") != "always()":
+    if needs(gate) != expected:
         errors.append(
             "ci.yml gate must aggregate every executor and build prerequisite"
+        )
+    if gate.get("if") != "${{ !cancelled() }}":
+        errors.append(
+            "ci.yml gate must reconcile failures without blocking workflow cancellation"
         )
     validate_gate_transport(gate, errors)
     text = shared.path.read_text()
@@ -285,6 +289,38 @@ def validate_main_publishers(
         )
 
 
+def validate_main_latest(workflows: dict[str, WorkflowLike], errors: list[str]) -> None:
+    """latest moves only forward, once its commit's complete image set exists."""
+    main = workflows.get("main.yml")
+    jobs = main.jobs if main else {}
+    if jobs.get("images", {}).get("with", {}).get("publish_latest"):
+        errors.append(
+            ".github/workflows/main.yml: 'images' publishes commit tags only; "
+            "'latest' moves latest"
+        )
+    latest = jobs.get("latest", {})
+    if (
+        "images" not in needs(latest)
+        or "needs.images.result == 'success'" not in latest.get("if", "")
+        or "tools/ci/latest_tags.py" not in json.dumps(latest.get("steps", []))
+        or latest.get("concurrency")
+        != {"group": "main-latest", "cancel-in-progress": False}
+    ):
+        errors.append(
+            ".github/workflows/main.yml: 'latest' must move latest one run at a "
+            "time, after its commit's complete image set is published"
+        )
+    qualification = jobs.get("ci", {}).get("concurrency", {}).get("group")
+    for job_id in ("images", "helm", "pypi"):
+        concurrency = jobs.get(job_id, {}).get("concurrency", {})
+        cancels = concurrency.get("cancel-in-progress") is not False
+        if cancels or concurrency.get("group") in {None, qualification}:
+            errors.append(
+                f".github/workflows/main.yml: '{job_id}' must queue in its own "
+                "group, so a newer push never cancels a publication that started"
+            )
+
+
 def validate_release_contract(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
@@ -296,6 +332,7 @@ def validate_release_contract(
     validate_release_images(release, errors)
     validate_stable_tag_owner(workflows, errors)
     validate_nightly_docker_owner(workflows, errors)
+    validate_nightly_qualification(workflows, errors)
     validate_fixture_tag_policy(workflows, errors)
 
 
@@ -466,6 +503,65 @@ def validate_nightly_docker_owner(
         errors.append("nightly images must consume the planner publication inventory")
 
 
+def validate_nightly_qualification(
+    workflows: dict[str, WorkflowLike], errors: list[str]
+) -> None:
+    """Every day publishes the newest qualified main commit, whatever came before."""
+    nightly = workflows.get("nightly-build.yml")
+    if nightly is None:
+        errors.append("missing nightly qualification")
+        return
+    schedules = nightly.events.get("schedule") or []
+    crons = [entry.get("cron", "") for entry in schedules if isinstance(entry, dict)]
+    if len(crons) != 1 or crons[0].split()[2:] != ["*", "*", "*"]:
+        errors.append("nightly-build.yml must qualify main once every day")
+    if "concurrency" in nightly.data:
+        errors.append(
+            "nightly-build.yml must not let a newer run cancel an older run's publication"
+        )
+    ci = nightly.jobs.get("ci", {})
+    if ci.get("concurrency") != {
+        "group": "nightly-qualification",
+        "cancel-in-progress": "${{ github.event_name == 'workflow_dispatch' }}",
+    } or "head" not in needs(ci):
+        errors.append(
+            "nightly-build.yml: a dispatch must cancel the qualification it supersedes, "
+            "and a scheduled run must wait for it"
+        )
+    reserve = json.dumps(nightly.jobs.get("reserve", {}))
+    for job_id in ("docker", "helm"):
+        job = nightly.jobs.get(job_id, {})
+        if "concurrency" in job:
+            errors.append(
+                f"nightly-build.yml: '{job_id}' publication must not be cancelled"
+            )
+        if (
+            "tools/ci/nightly_tags.py" not in reserve
+            or "reserve" not in needs(job)
+            or "needs.reserve.outputs.publish == 'true'" not in job.get("if", "")
+        ):
+            errors.append(
+                f"nightly-build.yml: '{job_id}' may publish only a date that is free "
+                "or the run's own"
+            )
+    for job_id in ("ci", "helm"):
+        if nightly.jobs.get(job_id, {}).get("with", {}).get("date") != (
+            "${{ needs.head.outputs.date }}"
+        ):
+            errors.append(
+                f"nightly-build.yml: '{job_id}' must use the run's one publication date"
+            )
+    retry = workflows.get("nightly-retry.yml")
+    trigger = retry.events.get("workflow_run", {}) if retry else {}
+    job = retry.jobs.get("retry", {}) if retry else {}
+    if trigger.get("workflows") != [nightly.data.get("name")] or trigger.get(
+        "types"
+    ) != ["completed"]:
+        errors.append("nightly-retry.yml must observe Nightly Qualification runs")
+    elif "github.event.workflow_run.run_attempt == 1" not in job.get("if", ""):
+        errors.append("nightly-retry.yml may re-run a qualification only once")
+
+
 def validate_fixture_tag_policy(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
@@ -572,6 +668,7 @@ def validate_workflow_policies(
 ) -> None:
     validate_pr_contract(workflows, errors)
     validate_main_publishers(workflows, errors)
+    validate_main_latest(workflows, errors)
     validate_release_contract(workflows, errors)
     validate_security_boundary(workflows, errors)
     validate_removed_workflows(errors)

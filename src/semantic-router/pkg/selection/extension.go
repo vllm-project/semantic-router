@@ -41,8 +41,6 @@ func (s *extensionSelector) Select(ctx context.Context, selCtx *SelectionContext
 
 func (s *extensionSelector) Method() SelectionMethod { return s.method }
 
-func (s *extensionSelector) UpdateFeedback(context.Context, *Feedback) error { return nil }
-
 func (s *extensionSelector) Tier() AlgorithmTier { return TierExperimental }
 
 func (s *extensionSelector) ExternalDependencies() []Dependency { return nil }

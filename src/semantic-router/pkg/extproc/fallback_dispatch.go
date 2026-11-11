@@ -24,6 +24,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
@@ -266,7 +267,7 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 		}
 	}
 
-	return nil
+	return r.encodeImmediateResponseForClient(r.delegatedCredentialRefusal(ctx), ctx)
 }
 
 // fallbackHaltStatus names why a chain stopped at a candidate that could not
@@ -277,6 +278,8 @@ func fallbackHaltStatus(err error) string {
 		return "total_deadline_exceeded"
 	case errors.Is(err, context.Canceled):
 		return "context_canceled"
+	case errors.Is(err, principal.ErrCredentialMissing):
+		return delegatedCredentialCode
 	default:
 		return "fallback_halted"
 	}
@@ -315,6 +318,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	origSemanticRequest := ctx.SemanticRequest
 	origRateLimitCtx := ctx.RateLimitCtx
 	origDiags := ctx.ProtocolDiagnostics
+	origTargetFormat := ctx.TargetFormat
 	var candidateSucceeded bool
 	defer func() {
 		ctx.TraceContext = origTraceContext
@@ -475,11 +479,12 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	ctx.VSRSelectedModel = candidateModel
 	ctx.ResponsePath = headers.ResponsePathFallback
 	ctx.UpstreamStatusCode = statusCode
+	ctx.TargetFormat = dispatch.targetFormat
 	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
 	ctx.SemanticResponse = &candidateResponse
 	ctx.SemanticRequest = reqCopy
 	ctx.ResponseEnvelope = translated.Envelope
-	ctx.ResponseVendorExtensions = protocolcodec.DiagnosticsDroppedVendorExtensions(translated.Diagnostics)
+	ctx.ResponseUnknownFields = protocolcodec.DiagnosticsDroppedUnknownFields(translated.Diagnostics)
 
 	if isStreaming {
 		ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, streamDiags...)
@@ -507,8 +512,12 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		r.settleFallbackCandidateUsage(ctx, attemptDuration)
 		policyPlan.commit()
 		metrics.RecordModelRouting(primaryModel, candidateModel)
-		r.updateRouterReplayStatus(ctx, blockedStatus, false)
 		candidateSucceeded = true
+		if isStreaming {
+			r.updateRouterReplayStatus(ctx, http.StatusOK, true)
+			return r.streamedFallbackRefusal(ctx, policyPlan.refusal), evalResult, nil
+		}
+		r.updateRouterReplayStatus(ctx, blockedStatus, false)
 		return policyPlan.blocked, evalResult, nil
 	}
 	finalBody := policyPlan.finalBody
@@ -549,7 +558,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 					} else {
 						attemptOutcome.Error = validateErr
 						attemptOutcome.Discarded = true
-						r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming)
+						r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming, origTargetFormat)
 						evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 						return nil, evalResult, fmt.Errorf("finalized fallback stream validation failed: %w", validateErr)
 					}
@@ -557,7 +566,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 			} else {
 				attemptOutcome.Error = streamErr
 				attemptOutcome.Discarded = true
-				r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming)
+				r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming, origTargetFormat)
 				evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 				return nil, evalResult, fmt.Errorf("finalized fallback stream encoding failed: %w", streamErr)
 			}
@@ -566,7 +575,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		if validateErr := engine.ValidateEncodedResponse(finalBody, false); validateErr != nil {
 			attemptOutcome.Error = validateErr
 			attemptOutcome.Discarded = true
-			r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming)
+			r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming, origTargetFormat)
 			evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 			return nil, evalResult, fmt.Errorf("finalized fallback body wire validation failed: %w", validateErr)
 		}
@@ -635,6 +644,13 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 	if err != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, err
 	}
+	if dispatch.profile.Delegated() {
+		// A candidate the request cannot pay for ends the chain before its
+		// call, and the request answers 401, as for the primary.
+		if _, err := principal.Delegated(ctx.TraceContext); err != nil {
+			return nil, fallback.EvaluationResult{CanFallback: false}, err
+		}
+	}
 
 	requestBase := ctx.FallbackRequest
 	requestAlreadyPrepared := requestBase != nil
@@ -700,7 +716,12 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		return nil, fallback.EvaluationResult{CanFallback: true}, engineErr
 	}
 
-	projected, projectionDiagnostics, projectionErr := r.projectAnthropicRequestForBackendWithDiagnostics(*reqCopy, dispatch.logicalModel, dispatch.targetFormat)
+	// As for the primary, prompt-cache markers go on the provider-bound copy only.
+	dispatchRequest := *reqCopy
+	if policyErr := r.applyPromptCachePolicy(&dispatchRequest, ctx, dispatch.targetFormat); policyErr != nil {
+		return nil, fallback.EvaluationResult{CanFallback: true}, policyErr
+	}
+	projected, projectionDiagnostics, projectionErr := r.projectRequestForBackendWithDiagnostics(dispatchRequest, dispatch.effectiveBackendModel(), dispatch.targetFormat)
 	if projectionErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
 	}
@@ -745,6 +766,9 @@ func (r *OpenAIRouter) settleFallbackCandidateUsage(ctx *RequestContext, attempt
 	if !ctx.StartTime.IsZero() {
 		completionLatency = time.Since(ctx.StartTime)
 	}
+	// The answer replaces the failed primary's response headers, so the
+	// candidate's own call time is its first response time.
+	recordNonStreamingFirstResponse(ctx, attemptDuration)
 	usage := r.takeNeutralResponseUsage(ctx)
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
@@ -770,6 +794,25 @@ func (r *OpenAIRouter) fallbackProviderAuthorizer(
 	provider, providerAuth, err := resolveProviderAuth(profile)
 	if err != nil {
 		return nil, err
+	}
+	if profile.Delegated() {
+		// The same contract as primary dispatch: only the request's delegated
+		// credential, and the attempt fails before the call without it.
+		credential, ok := requestDelegatedCredential(reqCtx)
+		if !ok {
+			return nil, principal.ErrCredentialMissing
+		}
+		if providerAuth.Strategy == "none" || providerAuth.Header == "" {
+			return nil, fmt.Errorf("delegated backend has no auth header to carry the credential")
+		}
+		return func(_ context.Context, request *http.Request) error {
+			value := credential
+			if providerAuth.Prefix != "" {
+				value = providerAuth.Prefix + " " + credential
+			}
+			request.Header.Set(providerAuth.Header, value)
+			return nil
+		}, nil
 	}
 	if providerAuth.Strategy == "none" {
 		return nil, nil
@@ -869,9 +912,9 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 }
 
 // buildFallbackImmediateResponse constructs the terminal HTTP 200 response. It
-// carries the final routing facts of any routed response, as the native
-// gateway's fallback answer does through the response phases, with the
-// number of attempts it took.
+// carries the public set of any routed response, as the native gateway's
+// fallback answer does through the response phases; the trace counts the
+// attempts it took.
 func (r *OpenAIRouter) buildFallbackImmediateResponse(
 	responseBody []byte,
 	contentType string,
@@ -884,15 +927,8 @@ func (r *OpenAIRouter) buildFallbackImmediateResponse(
 	builder := newResponseHeaderMutationBuilder()
 	builder.addString("content-type", contentType)
 	builder.addKeystone(ctx)
-	addFinalDecisionHeaders(builder, ctx)
-	if ctx != nil && !ctx.SkipProcessing && !ctx.LooperRequest && !ctx.VSRCacheHit && ctx.SemanticRequest != nil {
-		sampling := ctx.SemanticRequest.Sampling
-		if sampling.AutomaticOutput && sampling.AutomaticInputTokens != nil && sampling.MaxOutputTokens != nil &&
-			*sampling.AutomaticInputTokens > 0 && *sampling.MaxOutputTokens > 0 {
-			builder.addString(headers.VSREffectiveInputTokens, strconv.FormatInt(*sampling.AutomaticInputTokens, 10))
-			builder.addString(headers.VSREffectiveMaxOutputTokens, strconv.FormatInt(*sampling.MaxOutputTokens, 10))
-		}
-	}
+	builder.addPublicRoutingHeaders(ctx)
+	builder.addWarnings(ctx)
 	setHeaders := builder.setHeaders
 	if len(extraHeaders) > 0 {
 		setHeaders = append(setHeaders, extraHeaders...)
@@ -1041,6 +1077,7 @@ func (r *OpenAIRouter) rollbackFallbackContext(
 	origPath string,
 	origDiags []llmprotocol.Diagnostic,
 	wasStreaming bool,
+	origTargetFormat llmprotocol.WireFormat,
 ) {
 	if ctx == nil {
 		return
@@ -1049,34 +1086,17 @@ func (r *OpenAIRouter) rollbackFallbackContext(
 	ctx.VSRSelectedModel = primaryModel
 	ctx.ResponsePath = origPath
 	ctx.UpstreamStatusCode = primaryStatusCode
+	ctx.TargetFormat = origTargetFormat
 	ctx.ProtocolDiagnostics = origDiags
 	ctx.IsStreamingResponse = wasStreaming
 	ctx.ResponseVendor = ""
 	ctx.SemanticResponse = nil
 	ctx.ResponseEnvelope = llmprotocol.Envelope{}
-	ctx.ResponseVendorExtensions = false
+	ctx.ResponseUnknownFields = false
 	ctx.RequestCostPriced = false
 	ctx.RequestCost = 0
 	ctx.RequestCostCurrency = ""
-	ctx.HallucinationDetected = false
-	ctx.HallucinationConfidence = 0
-	ctx.HallucinationScoreAvailable = false
-	ctx.HallucinationScoreKind = ""
-	ctx.HallucinationSpans = nil
-	ctx.EnhancedHallucinationInfo = nil
-	ctx.UnverifiedFactualResponse = false
-	ctx.ResponseJailbreakDetected = false
-	ctx.ResponseJailbreakType = ""
-	ctx.ResponseJailbreakDecision = nil
-	ctx.ResponseJailbreakConfidence = 0
-	ctx.ResponseJailbreakScoreAvailable = false
-	ctx.VSRMatchedResponseJailbreak = nil
-	ctx.VSRResponseJailbreakType = ""
-	ctx.VSRResponseJailbreakRisk = 0
-	ctx.VSRResponseJailbreakScoreAvailable = false
-	ctx.VSRResponseJailbreakDecision = nil
-	ctx.VSRMatchedHallucination = nil
-	ctx.VSRHallucinationEvidence = nil
+	ctx.ResponseGuard = nil
 	ctx.PrimaryOutputDigest = ""
 	ctx.PrimaryOutputChars = 0
 	r.updateRouterReplayStatus(ctx, primaryStatusCode, wasStreaming)

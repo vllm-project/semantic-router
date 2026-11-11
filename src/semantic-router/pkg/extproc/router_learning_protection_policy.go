@@ -28,6 +28,7 @@ type routerLearningProtectionDiagnostics struct {
 	switchMargin    float64
 	stabilityWeight float64
 	rescue          bool
+	release         *protectionReleaseVerdict
 }
 
 type routerLearningIdentityDiagnostics struct {
@@ -61,14 +62,15 @@ func newProtectionPolicy(
 	policy.Action = action
 	policy.Reason = reason
 	policy.Scope = scope
+	sessionID, sessionHeader := protectionSessionID(ctx, cfg)
 	policy.Details.Protection = newRouterLearningProtectionDiagnostics(
 		nil,
 		newRouterLearningIdentityDiagnostics(routerLearningIdentity{
 			scope:              scope,
-			sessionHeader:      cfg.HeaderName("session"),
+			sessionHeader:      sessionHeader,
 			conversationHeader: cfg.HeaderName("conversation"),
 			agentHeader:        cfg.HeaderName("agent"),
-			sessionID:          strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("session"))),
+			sessionID:          sessionID,
 			conversationID:     strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("conversation"))),
 			agentID:            strings.TrimSpace(headerValueCI(ctx, cfg.HeaderName("agent"))),
 		}),
@@ -275,6 +277,9 @@ func (d *routerLearningProtectionDiagnostics) toPolicyMap() map[string]interface
 	}
 	if d.rescue {
 		setLearningPolicyValue(out, learningPolicyFieldRescue, map[string]interface{}{"active": true})
+	}
+	if d.release != nil {
+		setLearningPolicyValue(out, learningPolicyFieldRelease, d.release.toPolicyMap())
 	}
 	if len(out) == 0 {
 		return nil
