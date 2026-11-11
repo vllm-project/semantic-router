@@ -67,6 +67,7 @@ from .scheduler.batching import Batcher, SharedContext
 from .scheduler.scheduler import STOP_SECONDS, Forward, Scheduler, SchedulerLimits
 from .supervision.metrics import RuntimeMetrics
 from .supervision.readiness import STATES, Health, golden_check
+from .systemone import IMPLICIT_ROLES, REQUEST_ROLES, normalize_presets, read_roles
 from .timing import RunTiming, ServerTiming
 
 log = logging.getLogger("vllm_srun")
@@ -217,6 +218,7 @@ SURFACE_FIELDS = {
         "images",
         "videos",
         "assets",
+        "roles",
         "options",
     },
     "classify": {"model", "input", "head", "options"},
@@ -1191,13 +1193,34 @@ class Runtime:
                 f"model {served.label} does not serve /v1/{surface}",
             )
         deadline, return_meta, received = self._options(served, surface, body, received)
+        roles = IMPLICIT_ROLES
+        if surface == "decisions":
+            try:
+                roles = read_roles(body)
+            except ValueError as exc:
+                raise RuntimeServiceError("invalid_request", str(exc)) from exc
+            if isinstance(body.get("questions"), dict):
+                body = {
+                    **body,
+                    "questions": normalize_presets(
+                        body["questions"], served.model.info.presets
+                    ),
+                }
         request = SurfaceRequest(surface, body, deadline, return_meta, received, part)
+        token = REQUEST_ROLES.set(roles)
         try:
-            plan = served.model.plan_surface(surface, request)
+            if served.cache.entries > 0:
+                plan = served.model.plan_cached_surface(
+                    surface, request, served.cache.get
+                )
+            else:
+                plan = served.model.plan_surface(surface, request)
         except UnsupportedSurfaceError as exc:
             raise RuntimeServiceError("unsupported_surface", str(exc)) from exc
         except ValueError as exc:
             raise RuntimeServiceError.invalid(exc) from exc
+        finally:
+            REQUEST_ROLES.reset(token)
         return Prepared(served, request, plan)
 
     def finish(
@@ -1442,13 +1465,16 @@ class Runtime:
         for member, (_, prepared) in enumerate(members):
             items, member_slots = [], []
             for position, item in enumerate(prepared.plan.items):
+                observed = prepared.plan.cache_lookups.get(position)
                 key = (
                     getattr(item, "cache_key", None)
-                    if served.cache.entries > 0
+                    if served.cache.entries > 0 or observed is not None
                     else None
                 )
                 if key is not None:
-                    hit, value = served.cache.get(key)
+                    hit, value = (
+                        observed if observed is not None else served.cache.get(key)
+                    )
                     self.metrics.result_cache.labels(
                         model=served.label, outcome="hit" if hit else "miss"
                     ).inc()

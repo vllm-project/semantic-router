@@ -252,6 +252,14 @@ A work item (`WorkItem`) has `ids` (its token IDs) and may have `cost`, the
 tokens it costs a forward when it has no token IDs (images, audio), and
 `cache_key`, a content hash of everything its result depends on: the runtime
 then answers a repeated item from the model's result cache without a forward.
+A family with expensive materialization may implement `plan_cached_surface`;
+its default delegates to `plan_surface`. Omni audio uses this hook to read the
+same result cache before preparing features. Hits are retained by item position
+in `SurfacePlan.cache_lookups`, so eviction cannot send an unmaterialized hit
+to the scheduler. Miss items are fully prepared and use the ordinary later
+cache lookup, allowing results published during preparation to avoid a forward.
+Media format validation still runs before lookup. Reference/golden execution always
+uses `plan_surface` without the cache.
 `Results` are one value per item or `DEADLINE` (the `Expired` instance) for an
 expired item or plan. Results are shared with the cache, so `finish_surface`
 never mutates them. `mypy --strict` checks the plugin interfaces, the

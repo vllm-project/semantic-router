@@ -35,7 +35,7 @@ func (d *answererDecider) PrepareCard(_ context.Context, name string) (modelserv
 func TestMatchAnswererAsksEachDeploymentThroughItsProvider(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{
-		"remote": {Provider: config.SystemOneProvider},
+		"remote": {Provider: config.SystemOneProvider, Schema: "vllm-sr/4.0"},
 		"local":  {Provider: config.ModelRuntimeProvider},
 	}
 	remote := &answererDecider{cards: map[string]modelservice.ModelCard{"remote": {ID: "remote-card"}}}

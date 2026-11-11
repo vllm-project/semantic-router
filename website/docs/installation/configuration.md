@@ -57,9 +57,10 @@ decision, algorithm, plugin and global block.
 | --- | --- | --- |
 | `timeout` | The whole call, including its streamed response; it also bounds a stalled stream. `0s` lifts both limits. To lift only one model's call limit, set that model's `total_timeout: 0s`. | `300s` |
 | `api_keys` | Client API keys the listener requires. | none |
-| `models` | The chat models the listener accepts. | empty: all |
-| `systemone.models` | The native System One models the listener publishes, separate from `models`. Standalone mode serves them; `--gateway extproc` refuses the field. | none |
-| `systemone.max_deadline_ms` | The longest a System One request waits for a model. | 10 minutes |
+| `apis` | The APIs the listener serves, by API name: `chat_completions`, `responses`, `messages`, `images` and `systemone` (`openai` and `anthropic` are accepted as aliases of `chat_completions` and `messages`). Any other API path answers `404` with a `detail` naming the listener. Standalone mode serves `systemone`; `--gateway extproc` refuses a listener that serves it. | the four LLM APIs, no `systemone` |
+| `apis.<api>.models` | The only request models an API accepts. | every model of its kind |
+| `apis.systemone.schema` | The System One schema the listener speaks to its clients: `vllm-sr/5.0`, or `vllm-sr/4.0`, which also accepts every request form of the earlier contract. See [System One schemas](../system-one/use/schemas.md). | `vllm-sr/5.0` |
+| `apis.systemone.max_deadline_ms` | The longest a System One request waits for a model. | 10 minutes |
 | `tls.cert_file`, `tls.key_file` | One-way TLS. | off |
 | `identity.trust_headers`, `identity.trusted_peers` | The identity sources the listener trusts, in standalone mode. | none |
 

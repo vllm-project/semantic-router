@@ -45,7 +45,7 @@ System One is a separate typed API:
 - **Endpoints:** `POST /v1/systemone` (alias `/v1/decisions`) and
   `GET /v1/systemone/models`.
 - **Availability.** It's available in either startup mode when
-  `listeners[].systemone.models` publishes a concrete model. Router mode can
+  `listeners[].apis.systemone.models` publishes a concrete model. Router mode can
   also publish an explicit native recipe through an `api: systemone`
   entrypoint and a matching listener grant.
 - **Not translated.** These typed requests don't use the Chat

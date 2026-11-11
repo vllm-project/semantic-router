@@ -147,6 +147,17 @@ domains:
       - src/model-runtime/vllm_srun/families/decision1/questions.py
       - src/model-runtime/vllm_srun/families/decision2/family.py
       - src/model-runtime/vllm_srun/families/decision3/family.py
+      - config/schemas/systemone/**
+      - tools/codegen/systemone/**
+      - tools/make/model-runtime.mk
+      - src/model-runtime/vllm_srun/families/*/family.py
+      - src/model-runtime/vllm_srun/api/systemone_fields.py
+      - src/semantic-router/pkg/systemoneprotocol/zz_generated_fields.go
+      - src/semantic-router/pkg/systemoneprotocol/testdata/canonical_golden.json
+      - src/semantic-router/pkg/systemonecodec/zz_generated_specs.go
+      - src/semantic-router/pkg/systemonecodec/testdata/internal_corpus.json
+      - website/docs/system-one/reference/extension-reference.md
+      - website/docs/system-one/reference/compatibility-matrix.md
       - dashboard/frontend/scripts/generate-decision-runtime-catalog.py
       - dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json
       - dashboard/frontend/src/generated/routerConfigContract.ts
