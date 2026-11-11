@@ -94,7 +94,7 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 		userID:            userID,
 		userMessage:       currentUserMessage,
 		assistantResponse: currentAssistantResponse,
-		history:           history,
+		history:           historyBeforeCurrentTurn(history),
 	}.run)
 }
 

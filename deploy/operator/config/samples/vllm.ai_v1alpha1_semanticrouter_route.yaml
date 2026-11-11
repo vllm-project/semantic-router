@@ -47,7 +47,8 @@ spec:
   # ====================
   # Service Configuration
   # ====================
-  # Route points to Service API port (8080)
+  # The Route points to the Router's inference listener, Service port 8801
+  # (http-8801). Port 8080 serves the management API inside the Pod only.
   service:
     type: ClusterIP
     api:

@@ -46,7 +46,7 @@ from .base import (
 SURFACE = "decisions"
 SUM_TOLERANCE = 1e-6
 # The fields of a standard request's own: in a batch, every entry of ``states`` has them instead.
-STATE_FIELDS = frozenset({"state", "questions", "images", "videos"})
+STATE_FIELDS = frozenset({"state", "questions", "images", "videos", "roles"})
 # Fields a batch shares with every entry of its ``states``.
 SHARED_FIELDS = ("model", "options", "assets")
 # Whether the request being planned asked for long context (``options.long_context``): a family that caps
@@ -157,7 +157,7 @@ def split_states(body: Any) -> tuple[list[dict[str, Any]], list[str]] | None:
             or not {"state", "questions"} <= set(entry) <= STATE_FIELDS
         ):
             raise ValueError(
-                f"states[{name!r}] must hold state and questions, and may hold images and videos"
+                f"states[{name!r}] must hold state and questions, and may hold images, videos and roles"
             )
         bodies.append({**shared, **entry})
         names.append(name)

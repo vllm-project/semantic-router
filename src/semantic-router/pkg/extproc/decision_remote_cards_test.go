@@ -34,6 +34,7 @@ global:
     deployments:
       hosted-d3:
         provider: systemone
+        schema: vllm-sr/4.0
         endpoint: API/v1/systemone
         model: vllm-sr/d3-ultra
         auth: {api_key_env: REMOTE_DECISION_TEST_KEY}
@@ -168,6 +169,56 @@ func TestAGenerationFailsOnAQuestionItsRemoteListingDoesNotAnswer(t *testing.T) 
 				t.Fatalf("the generation prepared, want %q", tc.want)
 			}
 			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// A remote deployment reads the input modalities its API lists for the model,
+// with or without question types, else those it declares, else text, and
+// never audio: a rule reading a medium the deployment does not read fails the
+// generation as a declared mismatch fails the load, and one it reads prepares.
+func TestARemoteDeploymentReadsOnlyTheModalitiesItsCardLists(t *testing.T) {
+	image := `    signals: {systemone: [{name: chart, input: {image: true}, question: {type: noul, instructions: "Is the image a chart?"}}]}
+    decisions:
+      - {name: charts, priority: 200, rules: {operator: AND, conditions: [{type: systemone, name: chart}]}, modelRefs: [{model: deep}]}`
+	audio := `    signals: {systemone: [{name: voice, input: {audio: true}, question: {type: noul, instructions: "Is the speaker angry?"}}]}
+    decisions:
+      - {name: angry, priority: 200, rules: {operator: AND, conditions: [{type: systemone, name: voice}]}, modelRefs: [{model: deep}]}`
+	const refusedImage = `input_modality_unsupported: input.image resolves to deployment "hosted-d3", which does not read image input`
+	const refusedAudio = `input_modality_unsupported: input.audio resolves to deployment "hosted-d3", which does not read audio input`
+	for name, tc := range map[string]struct{ recipe, capabilities, listing, want string }{
+		"an image rule, listed text only": {
+			recipe: image, listing: `{"data":[{"id":"vllm-sr/d3-ultra","question_types":["noul"],"modalities":["text"]}]}`, want: refusedImage,
+		},
+		"an image rule, listed text only without question types over declared image": {
+			recipe: image, capabilities: "{modalities: [text, image]}", listing: `{"data":[{"id":"vllm-sr/d3-ultra","modalities":["text"]}]}`, want: refusedImage,
+		},
+		"an image rule, unlisted and declaring nothing":  {recipe: image, want: refusedImage},
+		"an image rule, unlisted and declaring no image": {recipe: image, capabilities: "{question_types: [noul]}", want: refusedImage},
+		"an audio rule, unlisted and declaring nothing":  {recipe: audio, want: refusedAudio},
+		"an audio rule, listed with audio": {
+			recipe: audio, listing: `{"data":[{"id":"vllm-sr/d3-ultra","question_types":["noul"],"modalities":["text","audio"]}]}`, want: refusedAudio,
+		},
+		"an image rule, listed with image": {
+			recipe: image, listing: `{"data":[{"id":"vllm-sr/d3-ultra","question_types":["noul"],"modalities":["text","image"]}]}`,
+		},
+		"an image rule, unlisted and declaring image": {recipe: image, capabilities: "{modalities: [text, image]}"},
+		"an image rule, listed without modalities over declared image": {
+			recipe: image, capabilities: "{modalities: [text, image]}", listing: `{"data":[{"id":"vllm-sr/d3-ultra","question_types":["noul"]}]}`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			api := &remoteCardAPI{listing: tc.listing}
+			router, err := buildOpenAIRouterFromConfig(moduleSystemOneRouterConfig(t, remoteCardYAML(tc.recipe, tc.capabilities), api))
+			if err == nil {
+				_ = router.Close()
+			}
+			switch {
+			case tc.want == "" && err != nil:
+				t.Fatalf("the generation failed with %v, want it prepared", err)
+			case tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)):
 				t.Fatalf("error %v, want %q", err, tc.want)
 			}
 		})

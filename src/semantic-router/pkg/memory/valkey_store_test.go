@@ -220,7 +220,7 @@ func TestValkeyParseScoreFromMap(t *testing.T) {
 		{
 			"valid COSINE distance",
 			map[string]interface{}{"vector_distance": "0.2"},
-			"vector_distance", "COSINE", 0.9, 0.01,
+			"vector_distance", "COSINE", 0.8, 0.001,
 		},
 		{
 			"missing key",
@@ -235,7 +235,7 @@ func TestValkeyParseScoreFromMap(t *testing.T) {
 		{
 			"float64 value",
 			map[string]interface{}{"vector_distance": float64(0.4)},
-			"vector_distance", "COSINE", 0.8, 0.01,
+			"vector_distance", "COSINE", 0.6, 0.001,
 		},
 	}
 
@@ -405,7 +405,7 @@ func TestValkeyStore_ParseSearchCandidates(t *testing.T) {
 		assert.Equal(t, "hello world", candidates[0].Memory.Content)
 		assert.Equal(t, "user1", candidates[0].Memory.UserID)
 		assert.Equal(t, "proj1", candidates[0].Memory.ProjectID)
-		assert.InDelta(t, 0.9, float64(candidates[0].Score), 0.01)
+		assert.InDelta(t, 0.8, float64(candidates[0].Score), 0.001)
 	})
 
 	t.Run("multiple results sorted by score descending", func(t *testing.T) {

@@ -228,6 +228,8 @@ recipes:
             use_reasoning: false
 ```
 
+该后端不使用密钥。无论是路由的请求还是 Router 自身发起的调用（例如影子请求），Router 都不会向 `ollama` 后端发送密钥，并会忽略其上设置的 `api_key` 或 `auth.api_key_env`。如果服务位于会校验密钥的代理之后，请使用 provider `openai-compatible`。
+
 校验并启动服务：
 
 ```bash

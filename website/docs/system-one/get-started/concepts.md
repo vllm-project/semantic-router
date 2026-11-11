@@ -175,7 +175,7 @@ or the configuration fails to load with `input_modality_unsupported`.
 | Levels of a `score` | 2 to 10 |
 | Questions in one call | No protocol limit |
 | Candidates of a choice judge (`tool_rank`) | At most 255, the option limit |
-| Candidates of a per-candidate judge (`relevance`, `same_request`) | `judge.max_candidates`, 64 by default |
+| Candidates of a per-candidate judge (`relevance`, `same_request`) | `judge.max_candidates`, 64 by default, at most 4096 |
 
 A judge over more candidates than its cap truncates; it never fails the
 request. Input length is a property of the model: vela3-fast reads 32,768

@@ -86,7 +86,7 @@ export async function classify<T>(
     }
     await update($, abandoned, ids => ids.filter(one => one !== id))
   }
-  const request = $.http.fetch(runtime.url, { method: 'POST', headers: headersOf(runtime), body: JSON.stringify({ state, questions }) })
+  const request = $.http.fetch(runtime.url, { method: 'POST', headers: headersOf(runtime), body: JSON.stringify({ ...(runtime.model === '' ? {} : { model: runtime.model }), state, questions }) })
   let response
   try {
     response = await Promise.race([request, $.clock.sleep(Math.max(0, deadline - (await $.clock.now()))).then(() => undefined)])
@@ -141,8 +141,20 @@ async function markReachable($: EngineInterface) {
   if (await read($, isOffline)) await update($, isOffline, () => false)
 }
 
-// The runtime's base URL (its `/v1/decisions` left off) and `/health` after it.
-export const healthUrlOf = (url: string) => `${url.replace(/\/v1\/decisions\/?$/, '').replace(/\/$/, '')}/health`
+// The runtime's base URL (its `/v1/decisions` left off), and `/health` or `/v1/models` after it.
+const baseOf = (url: string) => url.replace(/\/v1\/decisions\/?$/, '').replace(/\/$/, '')
+export const healthUrlOf = (url: string) => `${baseOf(url)}/health`
+export const modelsUrlOf = (url: string) => `${baseOf(url)}/v1/models`
+// A `/v1/models` answer that lists at least one model, as the setup script's health check requires.
+const listsModels = (response: { ok: boolean; text: string }) => {
+  if (!response.ok) return false
+  try {
+    const data = (JSON.parse(response.text) as { data?: unknown }).data
+    return Array.isArray(data) && data.length > 0
+  } catch {
+    return false
+  }
+}
 
 // Offline from now: requests are skipped for a minute at a time, and a toast says so once.
 async function markOffline($: EngineInterface, runtime: Runtime) {
@@ -153,10 +165,16 @@ async function markOffline($: EngineInterface, runtime: Runtime) {
   $.ui.toast(`vSR: the decision model is not answering at ${runtime.url} · vSR's checks step aside until it does (apps set to wait until done hold instead); guard's fixed rules still hold · /vsr:setup`)
 }
 
-// Asks the runtime's `/health` once; one that does not answer in time is offline. True when it answered.
+// Asks the runtime's `/health` once; one that does not answer in time is offline. A hosted System One API has no
+// `/health`, so a 404 there is answered by its `/v1/models` instead. True when it answered.
 export async function checkRuntime($: EngineInterface, runtime: Runtime): Promise<boolean> {
   const answered = await Promise.race([
-    $.http.fetch(healthUrlOf(runtime.url), { headers: headersOf(runtime) }).then(response => response.ok, () => false),
+    $.http.fetch(healthUrlOf(runtime.url), { headers: headersOf(runtime) }).then(
+      response =>
+        response.ok ||
+        (response.status === 404 && $.http.fetch(modelsUrlOf(runtime.url), { headers: headersOf(runtime) }).then(listsModels, () => false)),
+      () => false,
+    ),
     $.clock.sleep(HEALTH_TIMEOUT_MS).then(() => false),
   ])
   await (answered ? markReachable($) : markOffline($, runtime))

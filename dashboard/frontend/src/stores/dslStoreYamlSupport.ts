@@ -1,10 +1,14 @@
+import type { DSLState } from './dslStoreTypes'
+import { deployBaseYaml } from './dslStoreSupport'
+
 export async function renderCanonicalYaml(
   yaml: string,
   dsl: string,
-  baseYaml: string,
+  base: Pick<DSLState, 'baseConfigYaml' | 'baseConfigFromRouter'>,
   signal?: AbortSignal,
 ): Promise<string> {
-  if (!baseYaml.trim()) return yaml
+  if (!base.baseConfigYaml.trim()) return yaml
+  const baseYaml = deployBaseYaml(base)
 
   const response = await fetch('/api/router/config/deploy/preview', {
     method: 'POST',

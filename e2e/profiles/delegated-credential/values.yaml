@@ -109,6 +109,7 @@ config:
           provider: systemone
           endpoint: http://delegated-gateway.delegated-credential-system.svc.cluster.local:8000/v1/systemone
           model: e2e/fake-systemone
+          schema: vllm-sr/4.0
           timeout_ms: 5000
           auth:
             credential: delegated
