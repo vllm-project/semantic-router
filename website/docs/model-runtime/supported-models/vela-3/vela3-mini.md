@@ -37,7 +37,7 @@ Vela 3.0 on d3-mini: more accuracy than vela3-lite, with the built-in questions 
 | `set` | Yes, asked as one `noul` per label |
 | `span` | Yes, on the `router` span head |
 
-Rules that read the turn's images (`input.image`) or videos (`input.video`) can
+Rules that read the request's images (`input.image`) or videos (`input.video`) can
 resolve to it.
 
 ## Built-in questions

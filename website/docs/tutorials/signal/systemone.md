@@ -245,10 +245,16 @@ recipes:
   request. It needs `history` or `tool_results`, takes no `previous_turns`
   or media, and is not asked, so it does not match, while those hold no
   text.
-- `image` and `video`: the current turn's images and videos. The deployment
-  must read that input, or the configuration is refused with
-  `input_modality_unsupported`. No deployment reads audio yet, so
-  `input.audio` is always refused.
+- `image`: every image the request carries, the earlier turns', tool
+  results' and generated images' included, since the backend reads them all.
+  `video`: the current turn's videos. The deployment must read that input, or
+  the configuration is refused with `input_modality_unsupported`. No
+  deployment reads audio yet, so `input.audio` is always refused.
+  Images are read as inline PNG, JPEG or WebP data URLs. When the request
+  carries any other image, such as a remote URL or a GIF, an `image` rule is
+  unknown without a call, and the decision's failure policy decides (see
+  [When the model gives no answer](#when-the-model-gives-no-answer)). The
+  Router never fetches the image, and the backend gets the request as sent.
 - `answer` and `context`: the model's answer and its grounding context, for
   a `stage: response` rule only.
 
@@ -358,7 +364,9 @@ recipes:
 
 While the model is loading, overloaded or slower than `timeout_ms`, the rule
 is unknown. `rules.on_unknown` on the decision, or `on_error: match |
-no_match` on a condition, decides what an unknown answer means. Truncating to
+no_match` on a condition, decides what an unknown answer means. With neither
+set, an unknown condition is false, so a decision that guards against what a
+rule detects, such as an image check, should set `rules.on_unknown: match`. Truncating to
 the deployment's scan budget shortens only what the rule reads; it does not
 shorten the request sent to the selected backend.
 

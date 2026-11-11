@@ -42,9 +42,11 @@ type RequestFacts struct {
 	InputModality InputModalityFacts
 
 	// Turns are the user and assistant turns before the current user turn,
-	// and Images and Videos the inline (base64 data URL) media parts of the
-	// current user turn; systemone rules read them as their input asks.
-	// Remote media are never fetched.
+	// Images every image the request carries, earlier turns and tool results
+	// included, and Videos the current user turn's, all as inline (base64
+	// data URL) media; systemone rules read them as their input asks. Remote
+	// media are never fetched: an image that is not inline is an empty entry,
+	// which leaves a rule that reads images unknown.
 	Turns  []ConversationTurn
 	Images []string
 	Videos []string

@@ -180,6 +180,9 @@ global:
 
 Router Memory 计数器只使用有界标签。参见 [Router Memory Prometheus 标签发布说明](../../release-notes/router-memory-prometheus-labels)。
 
+请求指定了配置中不提供的模型时，`llm_request_errors_total` 以 `model="unknown"`、`reason="model_not_found"` 计数；
+`specified_model_not_found` 日志事件保留请求中发送的模型名。
+
 `llm_request_graph_node_duration_seconds` 为请求图的每个步骤计时，例如 Looper 模板的算法步骤和响应步骤；包含其他步骤的步骤也会计入它们的耗时。`template` 是图的名称（例如 `looper.fusion`），`node_type` 是步骤的注册类型。
 
 `llm_request_outcomes_total{traffic_kind="inference"}` 在每个公开推理请求到达终态时只计数一次：

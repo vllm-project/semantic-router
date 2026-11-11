@@ -6,6 +6,7 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -354,6 +355,7 @@ func (r *OpenAIRouter) unavailableModelResponse(
 		"code":       routingFailureModelNotFound.code,
 		"model":      model,
 	})
-	metrics.RecordRequestError(model, "model_not_found")
+	// The name is client text: a label per name would grow without bound.
+	metrics.RecordRequestError(consts.UnknownLabel, "model_not_found")
 	return r.routingFailureResponse(ctx, routingFailureModelNotFound)
 }

@@ -211,7 +211,8 @@ recipes:
 - `previous_turns`（0 到 32）：最近几个轮次（用户和助手），以对话记录形式给出。
 - `tool_results`：请求中的工具结果。
 - `request: false`：不读取当前用户轮次，请求阶段的规则只把它指定的之前用户轮次或工具结果作为请求读取。它需要 `history` 或 `tool_results`，不能带 `previous_turns` 或媒体输入；这些部分没有文本时，规则不会被询问，因此也不会匹配。
-- `image` 和 `video`：当前轮次的图片和视频。部署必须能读取该输入，否则配置以 `input_modality_unsupported` 被拒绝。目前还没有部署能读取音频，所以 `input.audio` 总会被拒绝。
+- `image`：请求携带的所有图片，包括之前轮次、工具结果和已生成的图片，因为后端会读取全部图片。`video`：当前轮次的视频。部署必须能读取该输入，否则配置以 `input_modality_unsupported` 被拒绝。目前还没有部署能读取音频，所以 `input.audio` 总会被拒绝。
+  图片以内联的 PNG、JPEG 或 WebP data URL 读取。请求带有其他图片（例如远程 URL 或 GIF）时，`image` 规则不发起调用，直接为未知，由决策的失败策略决定（见[模型没有给出答案时](#when-the-model-gives-no-answer)）。Router 不会获取该图片，后端收到的仍是客户端发送的请求。
 - `answer` 和 `context`：模型的答案及其依据上下文，仅用于 `stage: response` 规则。
 
 读取请求相同部分的规则共享一次调用；规则读取不同部分时，这次调用是批量请求，规则读取的每段文本各占一条。
@@ -291,6 +292,6 @@ recipes:
 
 ### 模型没有给出答案时 {#when-the-model-gives-no-answer}
 
-当模型正在加载、过载或慢于 `timeout_ms` 时，规则为未知。决策上的 `rules.on_unknown`，或条件上的 `on_error: match | no_match`，决定未知答案意味着什么。截断到部署的扫描预算只缩短规则读取的内容，不会缩短发给所选后端的请求。
+当模型正在加载、过载或慢于 `timeout_ms` 时，规则为未知。决策上的 `rules.on_unknown`，或条件上的 `on_error: match | no_match`，决定未知答案意味着什么。两者都未设置时，未知条件为 false，因此用于拦截规则所检测内容的决策（例如图片检查）应设置 `rules.on_unknown: match`。截断到部署的扫描预算只缩短规则读取的内容，不会缩短发给所选后端的请求。
 
 要查看哪些规则匹配了，使用路由预览（`POST /api/v1/routing/preview`）；对允许查看调试响应头的调用方，也可以查看 `x-vsr-trace` 响应头的 `signals` 成员。

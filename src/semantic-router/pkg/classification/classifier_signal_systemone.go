@@ -65,8 +65,8 @@ type ConversationTurn struct {
 }
 
 // systemOneReading is what a stage gives its rules to read: the current user
-// turn as it came, the conversation before it, the request's tool results and
-// the current turn's images and videos, and at the response stage the
+// turn as it came, the conversation before it, the request's tool results,
+// its images and the current turn's videos, and at the response stage the
 // model's answer and its grounding context.
 type systemOneReading struct {
 	request     string
@@ -320,10 +320,40 @@ func newResponseSignalResults() *SignalResults {
 }
 
 func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResults, mu *sync.Mutex, rules []askedRule, reading systemOneReading) {
+	if slices.ContainsFunc(reading.images, undecodedImage) {
+		rules = c.withoutImageRules(results, mu, rules)
+	}
 	calls := c.systemOneCalls(rules, reading)
 	modelservice.Fan(ctx, len(calls), func(i int) {
 		c.evaluateSystemOneDeployment(ctx, results, mu, calls[i])
 	})
+}
+
+// decodedImageTypes are the image data URLs the decision models decode.
+var decodedImageTypes = []string{"data:image/png;", "data:image/jpeg;", "data:image/jpg;", "data:image/webp;"}
+
+// undecodedImage reports an image no decision model decodes: one that was
+// not inline, an empty entry, or another format such as GIF.
+func undecodedImage(image string) bool {
+	return !slices.ContainsFunc(decodedImageTypes, func(prefix string) bool { return strings.HasPrefix(image, prefix) })
+}
+
+// withoutImageRules leaves out the rules that read the request's images when
+// one of them is undecoded. Asked without it, a rule would answer about the
+// rest alone, so it is unknown, and its decision's failure policy decides.
+func (c *Classifier) withoutImageRules(results *SignalResults, mu *sync.Mutex, rules []askedRule) []askedRule {
+	mu.Lock()
+	defer mu.Unlock()
+	var kept []askedRule
+	for _, asked := range rules {
+		if !asked.rule.Input.Image {
+			kept = append(kept, asked)
+			continue
+		}
+		results.SignalErrors[signalConfidenceKey(asked.signalType, asked.rule.Name)] = systemOneSignalErrorPrefix + "image_unreadable"
+		c.applyFailClosed(results, asked)
+	}
+	return kept
 }
 
 func (c *Classifier) evaluateSystemOneDeployment(
