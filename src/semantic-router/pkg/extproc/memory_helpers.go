@@ -53,6 +53,17 @@ func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, hi
 	return sessionID, userID, history, nil
 }
 
+// historyBeforeCurrentTurn is the conversation before its last user message,
+// the current turn, which the extractor adds to a session window itself.
+func historyBeforeCurrentTurn(history []llmprotocol.Message) []llmprotocol.Message {
+	for index := len(history) - 1; index >= 0; index-- {
+		if history[index].Role == llmprotocol.RoleUser {
+			return history[:index]
+		}
+	}
+	return history
+}
+
 // deriveSessionIDFromMessages creates a session ID from Chat Completions messages.
 // Uses a hash of the first few messages + userID to group related conversations.
 func deriveSessionIDFromSemanticMessages(messages []llmprotocol.Message, userID string) string {
