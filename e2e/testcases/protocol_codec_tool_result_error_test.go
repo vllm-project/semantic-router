@@ -6,7 +6,7 @@ import (
 )
 
 func TestToolResultErrorRejectionAssertion(t *testing.T) {
-	valid := `{"type":"error","error":{"type":"invalid_request_error","message":"translation would lose tool_result.is_error"}}`
+	valid := `{"type":"error","error":{"type":"invalid_request_error","message":"` + toolResultErrorRejection + `"}}`
 	for _, test := range []struct {
 		name       string
 		status     int
@@ -17,6 +17,7 @@ func TestToolResultErrorRejectionAssertion(t *testing.T) {
 		{"native Messages error", http.StatusBadRequest, valid, false, false},
 		{"dispatched despite error", http.StatusBadRequest, valid, true, true},
 		{"success status", http.StatusOK, valid, false, true},
+		{"refusal without the opt-in setting", http.StatusBadRequest, `{"type":"error","error":{"type":"invalid_request_error","message":"translation would lose tool_result.is_error"}}`, false, true},
 		{"unrelated rejection", http.StatusBadRequest, `{"type":"error","error":{"type":"invalid_request_error","message":"invalid model"}}`, false, true},
 		{"wrong protocol shape", http.StatusBadRequest, `{"error":{"code":"lossy_translation"}}`, false, true},
 		{"invalid JSON", http.StatusBadRequest, "not JSON", false, true},
