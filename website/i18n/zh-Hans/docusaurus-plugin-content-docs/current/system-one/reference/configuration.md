@@ -39,7 +39,7 @@ translation:
 | `predicate` | 答案必须满足的界限：`gt`、`gte`、`lt`、`lte` |
 | `deployment` | 回答问题的部署 |
 | `stage` | `request`（默认）或 `response` |
-| `input` | `history`、`previous_turns`（0 到 32）、`tool_results`、`answer`、`context`、`image`、`audio`、`video` |
+| `input` | `history`、`previous_turns`（0 到 32）、`tool_results`、`request`（`false` 时不读取当前用户轮次）、`answer`、`context`、`image`、`audio`、`video` |
 | `coverage` | `truncate`（默认）或 `full` |
 | `on_unscanned` | 使用 `coverage: full` 时：`match`、`no_match` 或 `unknown`（默认） |
 | `timeout_ms` | 最长 60,000 |
@@ -52,7 +52,7 @@ translation:
 | `fact_check`、`user_feedbacks` | `labels`、`predicate` |
 | `jailbreak` | `predicate`、`stage`、`input.history`、`on_unknown` |
 | `safety` | `labels`（危害类别）、`predicate`、`stage` |
-| `pii` | `predicate`、`ignore_labels`、`input.history`、`input.tool_results`、`on_unknown` |
+| `pii` | `predicate`、`ignore_labels`、`input.history`、`input.tool_results`、`input.request`、`on_unknown` |
 | `hallucination`、`refusal` | `predicate` |
 | `turn_relation` | `labels`、`input.previous_turns`（默认 4） |
 | `complexity` | `labels` |
