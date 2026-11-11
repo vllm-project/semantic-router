@@ -112,11 +112,11 @@ def _inactive_file_bytes(prefix: str, key: str) -> int:
     try:
         with open(prefix + "/memory.stat", encoding="utf-8") as stream:
             for line in stream:
-                parts = line.split()
-                if len(parts) != 2 or parts[0] != key:
+                name, _, value = line.partition(" ")
+                if name != key or not value.strip():
                     continue
                 try:
-                    return max(0, int(parts[1]))
+                    return max(0, int(value))
                 except ValueError:
                     return 0
     except OSError:
