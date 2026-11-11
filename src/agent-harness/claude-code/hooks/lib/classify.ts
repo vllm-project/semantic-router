@@ -19,8 +19,11 @@ const lastTry = atom({ plugin: 'vsr', key: 'offlineTry' } as const, 0)
 // it: a new question waits for those, within its own wait, rather than queue behind them and every one after. The
 // state names them; the requests themselves are kept here, and an id with none here (the module reloaded) is done.
 const abandoned = atom({ plugin: 'vsr', key: 'abandoned' } as const, [] as number[])
-const unanswered = new Map<number, Promise<unknown>>()
+const unanswered = new Map<number, { request: Promise<unknown>; since: number }>()
 let nextRequest = 0
+// A request given up on that has still not answered after the longest wait an app takes is stuck: it is forgotten,
+// so it no longer holds every later question back, and the runtime counts as offline until it answers again.
+const STUCK_MS = 60_000
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -79,9 +82,15 @@ export async function classify<T>(
   const deadline = started + timeoutMs
   for (const id of await read($, abandoned)) {
     const earlier = unanswered.get(id)
+    if (earlier !== undefined && started - earlier.since >= STUCK_MS) {
+      unanswered.delete(id)
+      await update($, abandoned, ids => ids.filter(one => one !== id))
+      await markOffline($, runtime)
+      return failed(`the decision model left a question unanswered for over ${STUCK_MS / 1000} s`, true)
+    }
     if (earlier !== undefined) {
       const left = Math.max(0, deadline - (await $.clock.now()))
-      const isAnswered = await Promise.race([earlier.then(() => true, () => true), $.clock.sleep(left).then(() => false)])
+      const isAnswered = await Promise.race([earlier.request.then(() => true, () => true), $.clock.sleep(left).then(() => false)])
       if (!isAnswered) return failed(`the decision model was still answering an earlier question after ${timeoutMs / 1000} s`)
     }
     await update($, abandoned, ids => ids.filter(one => one !== id))
@@ -101,7 +110,7 @@ export async function classify<T>(
     // Given up on, it still holds the runtime until it is answered.
     const id = nextRequest++
     const drop = () => unanswered.delete(id)
-    unanswered.set(id, request)
+    unanswered.set(id, { request, since: await $.clock.now() })
     void request.then(drop, drop)
     await update($, abandoned, ids => [...ids, id])
     // Slow or gone: /health tells, without holding this call up.

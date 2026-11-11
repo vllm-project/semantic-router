@@ -196,6 +196,9 @@ type Change = (all: LogLine[]) => LogLine[]
 // Changes wait here while a write runs; the next write takes them all, so a burst of decisions is one write.
 const pending: Change[] = []
 let writes: Promise<void> = Promise.resolve()
+// A write still running after this long is left behind, so one that never finishes cannot hold back every later
+// line; the next write rewrites the whole log from the store.
+const WRITE_MS = 10_000
 
 async function flush($: EngineInterface, log: Settings['log']) {
   if (pending.length === 0) return
@@ -210,7 +213,7 @@ async function flush($: EngineInterface, log: Settings['log']) {
 
 function changeLog($: EngineInterface, log: Settings['log'], change: Change) {
   pending.push(change)
-  writes = writes.then(() => flush($, log)).catch(() => undefined)
+  writes = writes.then(() => Promise.race([flush($, log), $.clock.sleep(WRITE_MS)])).catch(() => undefined)
 }
 
 // Writes a new decision's line, the hook that made it not waiting on the write. Never throws.

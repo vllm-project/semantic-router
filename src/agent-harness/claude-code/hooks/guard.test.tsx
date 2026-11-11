@@ -7,6 +7,7 @@ import {
   CHAIN,
   DELETE,
   engine,
+  engineFailingClock,
   FETCH,
   NO,
   paneLines,
@@ -538,3 +539,24 @@ test('a guard waiting until done holds a command whose answer was an error, and 
   expect(await paneText($, /waiting for you/)).toContain('1 of 1 step not checked · no step was scored')
 })
 
+
+test('a guard hook that fails still records the command, with why', async ($, on) => {
+  const { failNext } = engineFailingClock(on, { review: 0.2 })
+
+  failNext()
+  const verdict = await $.tool.check({ tool: 'Bash', input: { command: 'ls' } })
+
+  expect(verdict).toMatchObject({ decision: 'allow' })
+  expect(await paneText($, /ran unchecked/)).toMatch(/^command ran unchecked · the check failed \(.+\) · \/vsr:setup checks it$/)
+})
+
+test('a guard waiting until done holds the command when its hook fails', { options: { guardWait: 'done' } }, async ($, on) => {
+  const { failNext } = engineFailingClock(on, { review: 0.2 })
+
+  failNext()
+  const verdict = await $.tool.check({ tool: 'Bash', input: { command: 'ls' } })
+
+  expect(verdict).toMatchObject({ decision: 'ask' })
+  expect(String((verdict as { reason?: string }).reason)).toMatch(/^vSR guard: could not check this command: the check failed/)
+  expect(await paneText($, /HELD/)).toBe(' HELD  ls')
+})

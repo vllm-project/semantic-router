@@ -1,4 +1,4 @@
-import type { EngineInterface, Hook, ToolCallResult } from 'claude-code'
+import type { Caught, EngineInterface, Hook, ToolCallResult } from 'claude-code'
 
 import type { Decision, Outcome, Risk } from '../types'
 import { type Classified, classify, failureOf, isRecord, numberAt, type Reply } from './lib/classify'
@@ -6,7 +6,7 @@ import { budgetOf, type Settings } from './lib/settings'
 import { stamp } from './lib/env'
 import { alwaysHeld, firstOf, partsOf } from './lib/shell'
 import { record, updateDecision } from './lib/state'
-import { clip, fixed, oneLine, RISK_WORDS } from './lib/text'
+import { clip, fixed, hookFailureWhy, oneLine, RISK_WORDS } from './lib/text'
 
 // Measured on vela3-lite on CPU: the runtime answers one part at a time, about 0.23 s each, so 12 parts fit in
 // the default 3 s wait; a command of more is held rather than judged on its first parts alone.
@@ -60,6 +60,34 @@ const isHeldCall = (d: Decision, id: string) => d.kind === 'guard' && d.verdict 
 export async function settleHeld($: EngineInterface, id: string | undefined, outcome: Outcome, settings: Settings) {
   if (id === undefined) return
   await updateDecision($, settings.log, d => isHeldCall(d, id), d => ({ ...d, outcome }))
+}
+
+// The guard hook itself failed (it threw, or Claude Code stopped it at its budget), so Claude Code would run the
+// command unrecorded: a row says why, and a guard that waits until done holds the command instead.
+export async function guardFailed(
+  $: EngineInterface,
+  e: Parameters<Hook<'tool.check'>>[1],
+  next: Parameters<Hook<'tool.check'>>[2] & Caught,
+  settings: Settings,
+) {
+  const command = isRecord(e.input) && typeof e.input.command === 'string' ? e.input.command : undefined
+  // Past its `next`, the guard had already recorded its decision.
+  if (next.called || !settings.apps.guard || e.isReadOnly || command === undefined || command.trim() === '') return next(e)
+  const at = await stamp($)
+  const id = e.tool_use_id ?? at
+  const why = hookFailureWhy(next.error)
+  if (settings.waits.guard !== 'done') {
+    await record($, settings.log, { kind: 'unavailable', app: 'guard', id, toolUseId: e.tool_use_id, at, subject: command, why })
+    return next(e)
+  }
+  const parts = Math.max(1, partsOf(command).length)
+  const line = settings.thresholds.guard.review
+  await record($, settings.log, {
+    kind: 'guard', id, at, command, part: command, parts, verdict: 'ask', risk: 'safe', riskProbability: 0, review: 0, threshold: line, latencyMs: 0, unchecked: parts,
+  })
+  const decided = await next(e)
+  if (decided.decision === 'deny') return decided
+  return { decision: 'ask' as const, reason: `vSR guard: could not check this command: ${why}. Confirm before it runs.` }
 }
 
 export async function guardCheck(

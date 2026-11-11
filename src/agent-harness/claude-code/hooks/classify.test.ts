@@ -24,14 +24,14 @@ test('a 200 answer whose body is not JSON is a failed question, not an offline r
 })
 
 // A classifier whose answers wait until one of `asked` is called with a review score, in the order they were asked.
-function heldEngine(on: On) {
+function heldEngine(on: On, given: Parameters<typeof engine>[1] = {}) {
   const asked: ((review: number) => void)[] = []
   const reply = (review: number) =>
     answered(JSON.stringify({ answers: { kind: { type: 'choice', choice: 'safe', probabilities: { safe: 0.9, destructive: 0.04, exfiltration: 0.03, remote_code: 0.03 }, confidence: 0.9 }, review: { type: 'noul', noul: review } } }))
   const clock = engineWithout(
     on,
     (_, e) => (e.url.endsWith('/health') ? answered('{"status":"ok"}') : new Promise(resolve => asked.push(review => resolve(reply(review))))),
-    {},
+    given,
   )
   return { asked, clock }
 }
@@ -69,4 +69,31 @@ test('a question the runtime never gets to, behind one vSR gave up on, is skippe
   expect(await second).toMatchObject({ decision: 'allow' })
   expect(asked).toHaveLength(1)
   expect(await paneText($, /ran unchecked/)).toBe('command ran unchecked · the decision model was still answering an earlier question after 3 s · /vsr:setup checks it')
+})
+
+test('a request that never answers stops holding questions back after a minute: the model shows offline, then recovers', async ($, on) => {
+  const reply = { toasts: [] as string[] }
+  const { asked, clock } = heldEngine(on, reply)
+
+  const first = $.tool.check({ tool: 'Bash', input: { command: 'ls' } })
+  await clock.advance(3000)
+  await first
+  await clock.advance(60_000)
+  expect(await $.tool.check({ tool: 'Bash', input: { command: 'pwd' } })).toMatchObject({ decision: 'allow' })
+  expect(reply.toasts).toEqual([expect.stringContaining('the decision model is not answering')])
+
+  await clock.advance(60_000)
+  const third = $.tool.check({ tool: 'Bash', input: { command: 'pwd' } })
+  await clock.advance(0)
+  expect(asked).toHaveLength(2)
+  asked[1](0.1)
+  await clock.advance(0)
+  expect(await third).toMatchObject({ decision: 'allow' })
+
+  const fourth = $.tool.check({ tool: 'Bash', input: { command: 'whoami' } })
+  await clock.advance(0)
+  expect(asked).toHaveLength(3)
+  asked[2](0.1)
+  await clock.advance(0)
+  expect(await fourth).toMatchObject({ decision: 'allow' })
 })

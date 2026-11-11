@@ -89,9 +89,10 @@ session's model, at list price: for example `$0.15 for 1 subagent turn vs $6.00 
 It is an estimate. Haiku 5.5 is priced for prompts up to 100K tokens (longer ones cost five times as
 much, so their saving is overstated), and a model with no known price is left out.
 
-When the decision model cannot be reached, the tally says `model offline` and which checks stopped,
-a toast says so once, and vSR steps aside: Claude works as it would without vSR (guard's fixed rules
-still hold), and vSR tries the model again every minute. An app that waits `until done` does not
+When the decision model cannot be reached, or leaves a question unanswered for over a minute, the
+tally says `model offline` and which checks stopped, a toast says so once, and vSR steps aside:
+Claude works as it would without vSR (guard's fixed rules still hold), and vSR tries the model again
+every minute. An app that waits `until done` does not
 step aside: redact and shield withhold what they cannot check, and guard holds every command.
 
 ## How the router decides
@@ -208,6 +209,10 @@ and iTerm2 3.5 or later, and drawn in characters elsewhere (smooth wedge charact
 
 - **The tally says `model offline`.** The runtime is not answering at the URL `/vsr` shows. Run
   `/vsr:setup` to check and restart it; vSR picks it up within a minute of it answering again.
+- **A row says `the check failed` or `the check ran past Claude Code's 10 s limit for a hook`.** Claude
+  Code skipped that check of vSR's: the row records what went unchecked, and an app that waits
+  `until done` withholds or holds instead. Rows like this on every call, with the machine under heavy
+  load, mean vSR's checks cannot keep up; `/reload-plugins` restarts them.
 - **`/vsr` still shows old settings after setup.** Run `/reload-plugins`; if the `model` row or the
   controls at the top still differ, restart Claude Code.
 - **Reads feel slower.** On an x86 CPU, redact and shield add up to their waits to a long output (by

@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, ToolCallInput, ToolCallResult } from 'claude-code'
+import type { Caught, EngineInterface, Hook, ToolCallInput, ToolCallResult } from 'claude-code'
 
 import type { Tag } from '../types'
 import { type Classified, classify, isRecord, failureOf, probabilityOf, type Reply } from './lib/classify'
@@ -7,7 +7,7 @@ import { addCounts, type Found, hide, PII_QUESTIONS, parsePii, piiIn, secretsIn,
 import { budgetOf, remoteHostOf, type Settings } from './lib/settings'
 import { record } from './lib/state'
 import { stamp } from './lib/env'
-import { clip, fixed, oneLine } from './lib/text'
+import { clip, fixed, hookFailureWhy, oneLine } from './lib/text'
 
 // The runtime answers one request at a time, in time that grows with the text (measured on vela3-lite on CPU: about
 // 0.35 s per 1,000 characters per question), so the output is read in pieces, each sized by the pace so far, and
@@ -220,6 +220,29 @@ async function withhold($: EngineInterface, settings: Settings, call: Call, app:
   return {
     deny: `vSR ${app}: could not check ${call.source} for ${UNCHECKED_FOR[app]} (${why}), and ${app} waits until done, so this output is withheld. Check the decision model with /vsr:setup, or choose a shorter wait at the top of /vsr.`,
   }
+}
+
+// The output hook itself failed (it threw, or Claude Code stopped it at its budget), so the output would reach Claude
+// unchecked and unrecorded: a row says so, and an app that waits until done withholds the output instead.
+export async function outputFailed(
+  $: EngineInterface,
+  e: ToolCallInput,
+  next: Parameters<Hook<'tool.call'>>[2] & Caught,
+  settings: Settings,
+): Promise<ToolCallResult> {
+  const ran = await next(e)
+  const tool = String(e.tool)
+  const apps = (['redact', 'shield'] as const).filter(app => settings.apps[app] && (app === 'redact' ? REDACTED : SHIELDED).has(tool))
+  const output = outputOf(tool, ran)
+  if (apps.length === 0 || output === undefined || output.fields.every(field => field.trim() === '')) return ran
+  const at = await stamp($)
+  const call: Call = { toolUseId: e.tool_use_id ?? at, at, tool, source: await sourceOf($, e) }
+  const why = hookFailureWhy(next.error)
+  const strict = apps.find(app => settings.waits[app] === 'done')
+  if (strict !== undefined) return withhold($, settings, call, strict, why)
+  const [app, also] = apps
+  await record($, settings.log, { kind: 'unavailable', app, id: `${call.toolUseId}:${app}-failed`, ...call, subject: call.source, why, ...(also ? { also } : {}) })
+  return ran
 }
 
 // Hides personal data and secrets in a tool's output, and flags text in it that gives an agent instructions.

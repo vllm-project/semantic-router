@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { bandRow, callOf, engine, groupRow, paneLines, paneText, readCallOf, type Reply, rowTree, type Span, toolRow } from './kit'
+import { bandRow, callOf, engine, engineFailingClock, groupRow, paneLines, paneText, readCallOf, type Reply, rowTree, type Span, toolRow } from './kit'
 import { pieceSize } from './output'
 
 const TICKET_PATH = '/repo/support/ticket-1042.txt'
@@ -410,4 +410,25 @@ test('by default hidden data is one line, and the same kinds hidden from the sam
   expect(first.texts[1]).toBe(' vSR   REDACTED  4 items hidden: name, email, phone, card · support/ticket-1042.txt')
   expect(again.texts).toEqual(['the engine row'])
   expect(other.texts[1]).toBe(' vSR   REDACTED  4 items hidden: name, email, phone, card · support/ticket-1043.txt')
+})
+
+test('a redact hook that fails still records that the output went to Claude unchecked', async ($, on) => {
+  const { failNext } = engineFailingClock(on, { pii: TICKET_SPANS })
+  on('tool.call', () => readResult(TICKET))
+
+  failNext()
+  const ran = await $.tool.call({ tool: 'Read', file_path: TICKET_PATH, tool_use_id: 'r1' })
+
+  expect(contentOf(ran)).toBe(TICKET)
+  expect(await paneText($, /went to Claude unchecked/)).toMatch(/^support\/ticket-1042\.txt went to Claude unchecked for personal data or instructions · the check failed \(.+\)/)
+})
+
+test('redact waiting until done withholds the output when its hook fails', { options: { redactWait: 'done' } }, async ($, on) => {
+  const { failNext } = engineFailingClock(on, { pii: TICKET_SPANS })
+  on('tool.call', () => readResult(TICKET))
+
+  failNext()
+  const ran = await $.tool.call({ tool: 'Read', file_path: TICKET_PATH, tool_use_id: 'r1' })
+
+  expect(ran.deny).toMatch(/^vSR redact: could not check support\/ticket-1042\.txt for personal data \(the check failed/)
 })

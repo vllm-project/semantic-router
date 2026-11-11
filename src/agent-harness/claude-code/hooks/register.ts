@@ -3,12 +3,12 @@ import type { EngineInterface, Register, ToolCallInput, ToolCallResult } from 'c
 
 import { checkTurn, noteRead, startTurnReads } from './check'
 import { escalatePrompt, holdEscalation, releaseEscalation } from './escalate'
-import { guardCheck, isRefusal, settleHeld } from './guard'
+import { guardCheck, guardFailed, isRefusal, settleHeld } from './guard'
 import { checkRuntime } from './lib/classify'
 import { loadCalibration } from './lib/log'
 import { APP_NAMES } from './lib/apps'
 import { parseSettings, type Settings } from './lib/settings'
-import { inspectOutput, writeBackOf } from './output'
+import { inspectOutput, outputFailed, writeBackOf } from './output'
 import { countSpend, routeSpawn, routeStep } from './router'
 import { loadLook, registerCommand, registerView } from './view'
 
@@ -57,7 +57,8 @@ export const register: Register = (on, options) => {
     return yield* routeStep($, e, next, settings)
   })
 
-  on('tool.check', { tool: 'Bash' }, ($, e, next) => guardCheck($, e, next, settings)).catch(($, e, next) => next(e))
+  // A hook that throws or outruns its budget is skipped by Claude Code; each check's `.catch` records why instead.
+  on('tool.check', { tool: 'Bash' }, ($, e, next) => guardCheck($, e, next, settings)).catch(($, e, next) => guardFailed($, e, next, settings))
 
   on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
     let outcome: Outcome = 'declined'
@@ -68,9 +69,9 @@ export const register: Register = (on, options) => {
     } finally {
       await settleHeld($, e.tool_use_id, outcome, settings)
     }
-  })
-  on('tool.call', { tool: 'Read' }, async ($, e, next) => inspected($, e, await next(e), settings))
-  on('tool.call', { tool: 'WebFetch' }, async ($, e, next) => inspectOutput($, e, await next(e), settings))
+  }).catch(($, e, next) => outputFailed($, e, next, settings))
+  on('tool.call', { tool: 'Read' }, async ($, e, next) => inspected($, e, await next(e), settings)).catch(($, e, next) => outputFailed($, e, next, settings))
+  on('tool.call', { tool: 'WebFetch' }, async ($, e, next) => inspectOutput($, e, await next(e), settings)).catch(($, e, next) => outputFailed($, e, next, settings))
   on('tool.call', { tool: ['Write', 'Edit'] }, async ($, e, next) => {
     const refusal = await writeBackOf($, e, settings)
     return refusal === undefined ? next(e) : { deny: refusal }

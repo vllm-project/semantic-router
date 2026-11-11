@@ -7,6 +7,12 @@ export const capital = (word: string) => word.charAt(0).toUpperCase() + word.sli
 export const firstChars = (text: string, count: number) => Array.from(text).slice(0, count).join('')
 export const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`
 
+// Why Claude Code skipped one of vSR's hooks, as its row says it: the hook threw, or ran past the engine's budget.
+export const hookFailureWhy = (error: { kind: 'throw' | 'timeout'; message?: string }) =>
+  error.kind === 'timeout'
+    ? "the check ran past Claude Code's 10 s limit for a hook"
+    : `the check failed (${clip(oneLine(error.message ?? 'no reason given'), 80)})`
+
 export const RISK_WORDS: Record<Risk, string> = {
   safe: 'looks routine',
   destructive: 'looks destructive',
