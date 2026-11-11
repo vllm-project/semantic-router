@@ -66,7 +66,8 @@ TRACE_NOTES = (
     (
         ("confidence",),
         "`confidence` is absent when the decision rests on policy leaves, "
-        "aggregates several evidence leaves, or resolves through an error policy.",
+        "aggregates several evidence leaves, resolves through an error policy, "
+        "or is a catch-all.",
     ),
     (
         ("fallback_attempts",),

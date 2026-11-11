@@ -99,7 +99,7 @@ plugins:
 
 External API 的文档带有服务返回的分数（Pinecone `score`、Weaviate `1 - distance`、Elasticsearch `_score`、自定义 `score`）；没有分数的文档按相似度 1 计。
 
-`on_failure` 决定检索失败时怎么做：`skip`（缺省）不带文档继续，`warn` 另外记录一条警告，`block` 以 `503` 拒绝请求。检索没有结果不算失败。`cache_results` 按查询、源和 match 块把保留的文档缓存 `cache_ttl_seconds`（缺省 3600）秒；judge 失败时在 `on_error: skip` 下保留的未经评判的文档只用于当次请求，不缓存。
+`on_failure` 决定检索失败时怎么做：`skip`（缺省）不带文档继续，`warn` 另外记录一条警告，`block` 以 `503` 拒绝请求。检索没有结果不算失败。`cache_results` 按查询、源和 match 块把保留的文档缓存 `cache_ttl_seconds`（缺省 3600）秒；judge 失败时在 `on_error: skip` 下保留的未经评判的文档只用于当次请求，不缓存。缓存条目在过期前一直被使用，即使其文档已在后端更改，或其文件已从向量存储中分离；删除必须立即生效时，请不要开启 `cache_results`。
 
 :::caution
 检索到的文档会作为上下文发给模型提供商。请在 collection 级别做访问控制，不要把多个租户混在一个不受限的检索范围里。相似度阈值与 embedding 模型相关。
@@ -129,9 +129,9 @@ External API 的文档带有服务返回的分数（Pinecone `score`、Weaviate 
 - **先压缩的：**最不相关的片段和 judge 没有读到的片段，直到请求放进预算。
 - **只按词法。**`match: {recall: {method: bm25}}` 改为按词法排序，不调用模型。没有判断结果时，片段也按词法排序。
 
-- `mode: auto`（缺省）压缩超出预算的请求，或有片段超过其目标 `min_tokens` 的请求；`always` 压缩每个请求。
+- `mode: auto`（缺省）压缩超过其目标 `min_tokens` 的片段：`budget.max_tokens: auto` 时总是压缩，设为数值时只在请求超过该值时压缩。`always` 压缩每个请求。
 - `targets` 设置每类片段的模式（`preserve`、`extractive`、`truncate`、`recoverable`）及其 `min_tokens` 和 `target_tokens`。`target_tokens` 必须小于 `min_tokens`。历史、RAG、记忆和当前用户文本在其目标启用之前保持不变。
-- `budget.max_tokens` 是请求最多保留的输入 token 数：超过的请求被压缩到这个数。`auto`（缺省）是模型的上下文窗口减去 `budget.reserve_output_tokens`，后者缺省为请求的输出上限。预留可以加大，但不会小于请求的输出。
+- `budget.max_tokens` 是压缩的目标输入大小。`auto`（缺省）是模型的上下文窗口减去 `budget.reserve_output_tokens`，后者缺省为请求的输出上限。预留可以加大，但不会小于请求的输出。
 - `failure_mode: fail_open`（缺省）在改写失败时不压缩、照常发送请求；`fail_closed` 拒绝请求。两者都不绕过预算检查：受保护内容放不下的请求得到 `400` 和 `context_length_exceeded`。
 
 - **估算方式。**预算使用保守的 UTF-8 字节估算，不是精确的 tokenizer 计数。
@@ -168,7 +168,7 @@ global:
 
 ### 注入 {#injection}
 
-`injection.mode: tool_role`（缺省）在最后一条用户消息之后，为每个源添加一个工具调用及其结果：文档用 `vsr_rag_context`，记忆用 `vsr_memory_context`，按源的顺序排列。`system_prompt` 改为把它们加入系统提示词。压缩会把两者都识别为检索到的上下文。
+`injection.mode: tool_role`（缺省）在最后一条用户消息之后，为每个源添加一个工具调用及其结果：文档用 `vsr_rag_context`，记忆用 `vsr_memory_context`，按源的顺序排列。压缩把它们当作检索到的上下文，归入 `rag` 和 `memory` 目标；除非开启 `capture_tool_results`，捕获的 [router replay](./router-replay) 请求体会像其他工具结果一样省略它们。`system_prompt` 改为把它们加入系统提示词：它们成为系统消息的一部分，压缩从不缩短系统消息，捕获的请求体会保留它们。决策的 `tools` 策略为 `mode: none` 且 `strip_tool_history: true` 时，按 `system_prompt` 的方式注入，因为剥离会删除这些工具交换。
 
 ## 管理和预览 {#management-and-preview}
 

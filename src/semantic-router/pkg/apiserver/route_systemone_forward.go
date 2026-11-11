@@ -81,7 +81,8 @@ func retainedSystemOneInvoker(snapshot *configsnapshot.Snapshot, router systemon
 		}
 		return localSystemOneAnswer(models.SystemOne(ctx, deployment, body))
 	}
-	return systemone.ServingInvoker(snapshot.Config(), listener, router, local, remote)
+	cards, _ := snapshot.Part(configsnapshot.ComponentModelService).(systemone.Cards)
+	return systemone.ServingInvoker(snapshot.Config(), listener, router, local, remote, cards)
 }
 
 // Runtime-style answers for a refusal that happened before any worker answered.

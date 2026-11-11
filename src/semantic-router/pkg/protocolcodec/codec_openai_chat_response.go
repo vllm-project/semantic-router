@@ -339,11 +339,14 @@ func appendChatStopReasonDiagnostic(
 	policy llmprotocol.Policy,
 ) error {
 	switch stopReason {
-	case llmprotocol.StopPaused, llmprotocol.StopContextWindow, llmprotocol.StopCanceled, llmprotocol.StopUnknown:
+	case llmprotocol.StopPaused, llmprotocol.StopCanceled, llmprotocol.StopUnknown:
 		return appendLossy(
 			diagnostics, policy, source, llmprotocol.OpenAIChatV1,
 			"response.stop_reason", "Chat Completions cannot represent the source terminal reason",
 		)
+	case llmprotocol.StopContextWindow:
+		appendContextWindowProjection(diagnostics, policy, source, llmprotocol.OpenAIChatV1)
+		return nil
 	default:
 		return nil
 	}
@@ -429,9 +432,19 @@ func decodeChatStop(reason string) llmprotocol.StopReason {
 	}
 }
 
+// appendContextWindowProjection reports that a full context window reaches a
+// Chat or Responses client as its output-limit stop, the way vLLM reports
+// generation that reaches max_model_len. The reply is not refused.
+func appendContextWindowProjection(diagnostics *llmprotocol.Diagnostics, policy llmprotocol.Policy, source, target llmprotocol.WireFormat) {
+	*diagnostics = appendDiagnostics(*diagnostics, llmprotocol.Diagnostics{{
+		Source: source, Target: target, Field: "response.stop_reason", Action: llmprotocol.DiagnosticApproximated,
+		Reason: "a full context window is reported as the output token limit",
+	}}, policy.Limits.Diagnostics)
+}
+
 func encodeChatStop(reason llmprotocol.StopReason) string {
 	switch reason {
-	case llmprotocol.StopMaxTokens:
+	case llmprotocol.StopMaxTokens, llmprotocol.StopContextWindow:
 		return "length"
 	case llmprotocol.StopToolCall:
 		return "tool_calls"

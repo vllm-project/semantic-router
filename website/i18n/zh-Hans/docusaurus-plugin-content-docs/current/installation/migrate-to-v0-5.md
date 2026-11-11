@@ -48,7 +48,7 @@ VLLM_SR_GATEWAY=extproc vllm-sr config migrate --config config.yaml
 | `removed_section` | Router 不再读取的整个段落 |
 | `invalid_value` | 含义已经改变的值，例如 `version: v0.3` |
 
-有两种形式因为只是改名，仍能加载并给出警告：`signals.decision` 和 `type: decision` 条件按 `systemone` 加载（`renamed_signal_type`），`algorithm.type: decision` 按 `systemone` 选择器加载（`renamed_algorithm_type`）。migrate 会改写两者。
+有两种形式因为只是改名，仍能加载并给出警告：`signals.decision` 和 `type: decision` 条件按 `systemone` 加载（`renamed_signal_type`），`algorithm.type: decision` 按 `systemone` 选择器加载（`renamed_algorithm_type`）。migrate 会改写两者；Dashboard 也按同样方式读取两者，保存时写为 `systemone`。
 
 ## 3. 检查变化 {#3-review-what-changed}
 
@@ -157,7 +157,7 @@ recipes:
 | `on_error: block` 下的 `jailbreak` 和 `pii` 规则 | 规则上的 `on_unknown: match` |
 | `safety` 的 `threshold`、`labels`、`unsafe_labels`、`model` | `predicate`；`labels` 指定[危害类别](../system-one/reference/presets#harm-categories)；`deployment` |
 | `safety` 的 `hazard` | 它的 `categories` 对应的[危害类别](../system-one/reference/presets#harm-categories)写进规则的 `labels`，`hazard.threshold` 成为 `predicate`；不安全判定的 `threshold` 没有对应项，类别都对应不上的规则保留不安全判定（migrate 会说明这两点） |
-| `pii` 的 `threshold`、`pii_types_allowed`、`include_history`、`source: tool_result` | `predicate`、`ignore_labels`、`input.history`、`input.tool_results` |
+| `pii` 的 `threshold`、`pii_types_allowed`、`include_history`、`source: tool_result` | `predicate`、`ignore_labels`、`input.history`、`input.tool_results`；`source: tool_result` 只读取工具结果，因此变为 `input: {tool_results: true, request: false}` 并去掉 `include_history` |
 | 名为 `no_fact_check_needed` 且没有 labels 的 `fact_check` 规则 | `labels: [NO_FACT_CHECK_NEEDED]` 加一个 predicate |
 | 没有 `labels`、以名称决定选项的 `user_feedbacks` 和 `modality` 规则 | 把选项写进 `labels`；若有条件以 `label` 指定该规则的某个选项，或有分数输入写成 `<rule>:<label>`，该规则是按 v0.5 写的，保持原样 |
 | `reasks`、`topic_continuity` | 带 `labels` 的 `turn_relation`；`lookback_turns` 大于 1 的 reask 规则要求的连续重问没有对应项，`input.previous_turns` 最多为 32，migrate 会说明这两点 |

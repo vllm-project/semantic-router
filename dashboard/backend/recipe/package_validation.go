@@ -318,7 +318,7 @@ func walkEnvironmentBindingNodes(node *yaml.Node, pointer string, bindings map[s
 			}
 		}
 	case yaml.ScalarNode:
-		for _, name := range requiredEnvironmentReferences(node.Value) {
+		for _, name := range routerconfig.EnvironmentReferenceNames(node.Value) {
 			if err := addEnvironmentBinding(name, pointer, bindings); err != nil {
 				return err
 			}
@@ -336,58 +336,6 @@ func addEnvironmentBinding(name, pointer string, bindings map[string]environment
 	}
 	bindings[pointer+"\x00"+name] = environmentBinding{name: name, path: pointer}
 	return nil
-}
-
-func requiredEnvironmentReferences(value string) []string {
-	result := []string{}
-	for index := 0; index < len(value); {
-		if value[index] != '$' {
-			index++
-			continue
-		}
-		if index+1 < len(value) && value[index+1] == '$' {
-			index += 2
-			continue
-		}
-		if index+1 < len(value) && value[index+1] == '{' {
-			end := strings.IndexByte(value[index+2:], '}')
-			if end < 0 {
-				index++
-				continue
-			}
-			end += index + 2
-			inner := value[index+2 : end]
-			name := inner
-			if separator := strings.Index(inner, ":-"); separator > 0 {
-				name = inner[:separator]
-			} else if separator := strings.Index(inner, "-"); separator > 0 {
-				name = inner[:separator]
-			}
-			if name != "" {
-				result = append(result, name)
-			}
-			index = end + 1
-			continue
-		}
-		end := index + 1
-		for end < len(value) && isEnvironmentNameByte(value[end]) {
-			end++
-		}
-		if end > index+1 {
-			result = append(result, value[index+1:end])
-			index = end
-			continue
-		}
-		index++
-	}
-	return result
-}
-
-func isEnvironmentNameByte(value byte) bool {
-	return (value >= 'A' && value <= 'Z') ||
-		(value >= 'a' && value <= 'z') ||
-		(value >= '0' && value <= '9') ||
-		value == '_'
 }
 
 func walkCredentialNodes(node *yaml.Node, path, parentKey string, warnings *[]PackageWarning) {

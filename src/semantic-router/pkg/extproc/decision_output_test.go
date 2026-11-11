@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -60,6 +61,40 @@ func TestATextOnlyRequestEnteringAnImageDecisionGeneratesTheImage(t *testing.T) 
 	}
 	if !bytes.Contains(body, []byte(`"prompt":"draw a lighthouse at dusk"`)) {
 		t.Fatalf("images request = %s", body)
+	}
+}
+
+// A prompt written in several text parts reaches the images model whole, as
+// the text the request was routed on.
+func TestAPromptInSeveralTextPartsReachesTheImagesModelWhole(t *testing.T) {
+	router, decision, _ := outputContractTestRouter(t, config.OutputKindImage)
+	decoded, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequestForMutation(llmprotocol.OpenAIResponsesV1, []byte(
+		`{"model":"vllm-sr/auto","input":[{"role":"user","content":[{"type":"input_text","text":"Draw a lighthouse at dusk"},{"type":"input_text","text":"in watercolor"}]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := &decoded
+	ctx := routingTestContext(llmprotocol.OpenAIResponsesV1, request)
+	ctx.VSRSelectedDecision = decision
+	if err = router.applyDecisionOutput(ctx); err != nil {
+		t.Fatalf("applyDecisionOutput: %v", err)
+	}
+	if _, err = selectCapabilityTestDispatch(router, request, decision, ctx); err != nil {
+		t.Fatalf("selection: %v", err)
+	}
+	body, err := router.encodeDispatchRequest(ctx)
+	if err != nil {
+		t.Fatalf("encode the images request: %v", err)
+	}
+	var wire struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := json.Unmarshal(body, &wire); err != nil {
+		t.Fatal(err)
+	}
+	routed := extractSemanticRequestSignals(request).UserContent
+	if wire.Prompt != "Draw a lighthouse at dusk in watercolor" || wire.Prompt != routed {
+		t.Fatalf("images prompt %q, routed on %q; want both to be the whole prompt", wire.Prompt, routed)
 	}
 }
 

@@ -114,9 +114,6 @@ recipes:
           - model: local
             use_reasoning: false
 
-global:
-  router:
-
 entrypoints:
   - model_names: ["MoM"]
     recipe: default

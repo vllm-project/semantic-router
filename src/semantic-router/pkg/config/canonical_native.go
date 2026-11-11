@@ -142,8 +142,8 @@ func validateNativeStageBindings(cfg *RouterConfig, algorithm *AlgorithmConfig) 
 			if model.APIFormat != APIFormatSystemOne {
 				return fmt.Errorf("stage %q: native model %q requires api_format: systemone", stage.StageName(), stage.Model)
 			}
-		} else if model.APIFormat != APIFormatOpenAI {
-			return fmt.Errorf("stage %q: LLM model %q requires api_format: openai", stage.StageName(), stage.Model)
+		} else if CanonicalAPIFormat(model.APIFormat) != APIFormatChatCompletions {
+			return fmt.Errorf("stage %q: LLM model %q requires api_format: chat_completions", stage.StageName(), stage.Model)
 		}
 	}
 	return nil
