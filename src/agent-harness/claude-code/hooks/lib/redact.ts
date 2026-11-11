@@ -111,6 +111,16 @@ const IPV4 = new RegExp(`^${OCTET}(?:\\.${OCTET}){3}(?:/\\d{1,2})?(?::\\d{1,5})?
 const IPV6 = /^\[?[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?:%\w+)?\]?(?::\d{1,5})?$/
 export const looksLikeIp = (text: string) => IPV4.test(text) || (text.includes(':') && IPV6.test(text))
 
+// The dotted number around [from, to), without dots at its ends. The model cuts such numbers short (it tags the 2.32
+// of 2.32.3), so a span over part of an IPv4 address is checked, and hidden, as the whole address.
+function dottedAround(text: string, from: number, to: number): [number, number] {
+  while (from > 0 && /[0-9.]/.test(text[from - 1])) from--
+  while (to < text.length && /[0-9.]/.test(text[to])) to++
+  while (from < to && text[from] === '.') from++
+  while (to > from && text[to - 1] === '.') to--
+  return [from, to]
+}
+
 // The spans at or above `line`, of the labels that are personal data (a DOMAIN_NAME is not), in UTF-16 offsets of `text`; a span that stops inside a word runs to the word's end.
 export function piiIn(text: string, spans: readonly Span[], line: number): Found[] {
   const offsets: number[] = []
@@ -132,7 +142,12 @@ export function piiIn(text: string, spans: readonly Span[], line: number): Found
     if (from < 0 || span.text === '') return []
     while (from > 0 && WORD.test(text[from - 1]) && WORD.test(text[from])) from--
     while (to < text.length && WORD.test(text[to]) && WORD.test(text[to - 1])) to++
-    if (tag === 'ip' && !looksLikeIp(text.slice(from, to))) return []
+    if (tag === 'ip' && !looksLikeIp(text.slice(from, to))) {
+      const [start, end] = dottedAround(text, from, to)
+      if (!IPV4.test(text.slice(start, end))) return []
+      from = Math.min(from, start)
+      to = Math.max(to, end)
+    }
     return [{ from, to, tag, probability: span.probability }]
   })
 }

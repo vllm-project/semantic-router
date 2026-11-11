@@ -104,3 +104,13 @@ test('an IP span keeps its tag only when it is shaped like an address', () => {
   }
   expect(hide('requests==2.32.3', piiIn('requests==2.32.3', [ipSpan('requests==2.32.3', '2.32')], 0.5)).text).toBe('requests==2.32.3')
 })
+
+test('an IP span the model cut short hides the whole address', () => {
+  for (const [text, value, hidden] of [
+    ['connect to 192.168.1.20 now', '192.168.1', 'connect to [vsr:ip] now'],
+    ['the host is 10.0.0.12.', '10.0.0', 'the host is [vsr:ip].'],
+    ['listen on 192.168.1.20:8080', '168.1.20', 'listen on [vsr:ip]:8080'],
+  ] as const) {
+    expect(hide(text, piiIn(text, [ipSpan(text, value)], 0.5)).text).toBe(hidden)
+  }
+})
