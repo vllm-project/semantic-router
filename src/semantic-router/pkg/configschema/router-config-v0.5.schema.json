@@ -2367,6 +2367,11 @@
         "overlap": {
           "type": "integer",
           "minimum": 0
+        },
+        "max_parallel": {
+          "type": "integer",
+          "maximum": 64,
+          "minimum": 1
         }
       },
       "additionalProperties": false,
