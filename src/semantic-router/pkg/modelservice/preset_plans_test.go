@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
@@ -354,5 +355,32 @@ func TestMediaTravelWithTheirState(t *testing.T) {
 	image := Request{State: "describe", Images: []string{"data:image/png;base64,AAAA"}}
 	if stateText(text) == stateText(image) || decideKey(text) == decideKey(image) {
 		t.Fatal("the same text with an image is another state")
+	}
+}
+
+// A runtime reads an object state without roles by its keys' implicit roles,
+// and roles: null as no roles at all, so the Router's own requests and batch
+// entries leave the member out.
+func TestRouterRequestsKeepTheImplicitRoles(t *testing.T) {
+	body, err := encodeDecisionRequest(context.Background(), Request{
+		Parts:     map[string]string{"previous_turns": "user: What is the invoice total?", "request": "Check again."},
+		Questions: []Question{{ID: "unhappy", Type: "noul", Instructions: "Is the user unhappy with the previous answer?"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	single, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries := map[string]api.DecisionState{"parts": {State: body.State, Questions: body.Questions}}
+	batch, err := json.Marshal(api.DecisionRequest{States: &entries})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, encoded := range [][]byte{single, batch} {
+		if strings.Contains(string(encoded), `"roles"`) {
+			t.Fatalf("a request without roles carries the member: %s", encoded)
+		}
 	}
 }

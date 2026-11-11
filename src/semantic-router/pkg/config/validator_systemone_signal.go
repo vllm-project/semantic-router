@@ -5,6 +5,8 @@ import (
 	"math"
 	"slices"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 // validateSystemOneContracts checks systemone rules, the systemone selector
@@ -67,6 +69,13 @@ func validateDecisionSystemOneQuestions(cfg *RouterConfig, decision Decision) er
 		}
 		if err := validateDeclaredQuestionType(cfg, cfg.EscalateCheckDeployment(accept), questionType); err != nil {
 			return fmt.Errorf("decision '%s', %s: %w", decision.Name, path, err)
+		}
+		// An answer check reads the whole answer, which only a schema that
+		// reports input coverage can prove.
+		if name := cfg.EscalateCheckDeployment(accept); accept.SystemOne != nil && cfg.IsSystemOneDeployment(name) {
+			if capabilities, known := cfg.ModelDeployments[name].SchemaCapabilities(); known && !capabilities.Has(systemonecodec.CapabilityFullInput) {
+				return fmt.Errorf("decision '%s', %s: deployment %q speaks %s, which has no input_coverage to prove an answer check read the whole answer; bind the check to a deployment whose schema reports coverage (vllm-sr/5.0)", decision.Name, path, name, cfg.ModelDeployments[name].EffectiveSchema())
+			}
 		}
 	}
 	return nil
@@ -174,6 +183,9 @@ func validateSystemOneInput(rule SystemOneRule) error {
 	if rule.EffectiveStage() == SystemOneStageRequest && (input.Answer || input.Context) {
 		return fmt.Errorf("input.answer and input.context read the model's answer and its grounding context, which a request-stage rule does not have; set stage: response, or read the request's tool results with input.tool_results")
 	}
+	if err := validateTurnlessInput(rule); err != nil {
+		return err
+	}
 	switch rule.Coverage {
 	case "", SystemOneCoverageTruncate, SystemOneCoverageFull:
 	default:
@@ -187,6 +199,26 @@ func validateSystemOneInput(rule SystemOneRule) error {
 		}
 	default:
 		return fmt.Errorf("on_unscanned must be %s, %s or %s", SystemOneUnscannedMatch, SystemOneUnscannedNoMatch, SystemOneUnscannedUnknown)
+	}
+	return nil
+}
+
+// validateTurnlessInput checks a rule that leaves the current user turn out:
+// it reads the request's earlier user turns or tool results, and nothing that
+// belongs to the turn or to the answer.
+func validateTurnlessInput(rule SystemOneRule) error {
+	input := rule.Input
+	if input.ReadsRequest() {
+		return nil
+	}
+	if rule.EffectiveStage() != SystemOneStageRequest {
+		return fmt.Errorf("input.request: false applies to a request-stage rule")
+	}
+	if !input.History && !input.ToolResults {
+		return fmt.Errorf("input.request: false leaves the current user turn out, so the rule reads input.history or input.tool_results")
+	}
+	if input.PreviousTurns > 0 || input.Image || input.Audio || input.Video {
+		return fmt.Errorf("input.request: false reads only the earlier user turns and the tool results; drop input.previous_turns and the media inputs")
 	}
 	return nil
 }

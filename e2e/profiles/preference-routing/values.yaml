@@ -77,6 +77,7 @@ config:
           provider: systemone
           endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
           model: e2e/fake-systemone
+          schema: vllm-sr/4.0
           timeout_ms: 5000
           capabilities:
             question_types: [choice, noul, span]

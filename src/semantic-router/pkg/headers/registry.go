@@ -116,6 +116,19 @@ func KeptFromProviders() []string {
 	return names
 }
 
+// ProviderCredentials are the credential headers a provider request carries
+// only as the Router sets them from the upstream's auth. A client's copy of
+// each is removed before the Router dispatches to a provider it configures.
+func ProviderCredentials() []string {
+	var names []string
+	for _, header := range registry {
+		if header.Owner == "credentials" {
+			names = append(names, header.Name)
+		}
+	}
+	return names
+}
+
 // DroppedFromClients are the Router's own headers no client may supply:
 // every registered x-vsr- header that is not a control header, the route
 // key, the internal authentication and the KV hints among them. The Router
@@ -157,7 +170,7 @@ var registryByName = func() map[string]Header {
 var registry = []Header{
 	// The response contract.
 	{VSRSchemaVersion, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.4", "Response-header contract revision; currently `3`."},
-	{VSRResponsePath, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.4", "How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`."},
+	{VSRResponsePath, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.4", "How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`."},
 	{VSRConfigVersion, ToClient, SurfacePublic, SensitivityNone, "config", "v0.5", "Version of the configuration snapshot that served the request."},
 	{VSRConfigHash, ToClient, SurfacePublic, SensitivityNone, "config", "v0.4", "SHA-256 of the active runtime document, on routing previews and `GET /api/v1/config`."},
 	{VSRWarnings, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.5", "Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`."},

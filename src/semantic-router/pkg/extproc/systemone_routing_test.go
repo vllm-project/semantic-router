@@ -53,7 +53,7 @@ func TestSystemOneAutoUsesRecipeSignalsAndNativeBackends(t *testing.T) {
 listeners:
   - name: native
     port: 8801
-    systemone: {models: [vllm-sr/auto]}
+    apis: {chat_completions: {}, responses: {}, messages: {}, images: {}, systemone: {schema: vllm-sr/4.0, models: [vllm-sr/auto]}}
 providers:
   models:
     - name: fast
@@ -112,7 +112,7 @@ recipes:
 	}
 	defer remote.Close(context.Background())
 	listener := &cfg.Listeners[0]
-	handler := systemone.Handler(cfg, listener, systemone.ServingInvoker(cfg, listener.Name, router, nil, remote))
+	handler := systemone.Handler(cfg, listener, systemone.ServingInvoker(cfg, listener.Name, router, nil, remote, nil))
 	body := `{"model":"vllm-sr/auto","state":"hello","questions":{"task":{"type":"choice","instructions":"Type?","criteria":{"chat":"Chat","code":"Code"}}}}`
 	r := httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(body))
 	w := httptest.NewRecorder()
@@ -214,7 +214,7 @@ func TestSystemOneBudgetIncludesRemoteSignalAndTransportRetries(t *testing.T) {
 listeners:
   - name: native
     port: 8801
-    systemone: {models: [vllm-sr/auto]}
+    apis: {chat_completions: {}, responses: {}, messages: {}, images: {}, systemone: {schema: vllm-sr/4.0, models: [vllm-sr/auto]}}
 providers:
   models:
     - name: fast
@@ -234,7 +234,7 @@ entrypoints:
 global:
   model_catalog:
     deployments:
-      remote-kai: {provider: systemone, endpoint: %s/v1/systemone, model: vllm-sr/decision}
+      remote-kai: {provider: systemone, schema: vllm-sr/4.0, endpoint: %s/v1/systemone, model: vllm-sr/decision}
 recipes:
   - name: default
   - name: native
@@ -294,7 +294,7 @@ recipes:
 		t.Fatal(err)
 	}
 	defer remote.Close(context.Background())
-	handler := systemone.Handler(cfg, &cfg.Listeners[0], systemone.ServingInvoker(cfg, "native", router, nil, remote))
+	handler := systemone.Handler(cfg, &cfg.Listeners[0], systemone.ServingInvoker(cfg, "native", router, nil, remote, nil))
 	body := `{"model":"vllm-sr/auto","state":"hello","questions":{"task":{"type":"choice","instructions":"Type?","criteria":{"chat":"Chat","code":"Code"}}}}`
 	request := httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(body))
 	response := httptest.NewRecorder()
@@ -339,7 +339,7 @@ func TestSystemOneBudgetDeadlineIncludesRemoteSignal(t *testing.T) {
 listeners:
   - name: native
     port: 8801
-    systemone: {models: [vllm-sr/auto]}
+    apis: {chat_completions: {}, responses: {}, messages: {}, images: {}, systemone: {schema: vllm-sr/4.0, models: [vllm-sr/auto]}}
 providers:
   models:
     - name: fast
@@ -349,7 +349,7 @@ providers:
 global:
   model_catalog:
     deployments:
-      remote-kai: {provider: systemone, endpoint: %s/v1/systemone, model: vllm-sr/decision}
+      remote-kai: {provider: systemone, schema: vllm-sr/4.0, endpoint: %s/v1/systemone, model: vllm-sr/decision}
 entrypoints:
   - model_names: [vllm-sr/auto]
     recipe: default

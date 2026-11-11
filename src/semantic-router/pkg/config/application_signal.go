@@ -113,10 +113,12 @@ type PIIRule struct {
 }
 
 // PIIRuleInput adds the earlier user turns and the request's tool results to
-// the text a pii rule reads.
+// the text a pii rule reads; Request false leaves the current user turn out, as
+// SystemOneInput.Request does.
 type PIIRuleInput struct {
-	History     bool `yaml:"history,omitempty"`
-	ToolResults bool `yaml:"tool_results,omitempty"`
+	History     bool  `yaml:"history,omitempty"`
+	ToolResults bool  `yaml:"tool_results,omitempty"`
+	Request     *bool `yaml:"request,omitempty"`
 }
 
 // HallucinationRule matches claims in the model's answer that its grounding

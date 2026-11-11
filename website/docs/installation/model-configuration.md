@@ -198,7 +198,7 @@ providers:
 | `per_try_timeout` | none | Time for each attempt until its response starts. |
 | `first_byte_timeout` | none | Time for the first response byte, so a stream that stalls before it starts can still be retried. Standalone mode only. |
 | `retry_count` | `0` | Retries after the first attempt, up to 5. |
-| `retry_on` | `connect-failure,refused-stream` | When to retry, with Envoy's conditions: `5xx`, `gateway-error`, `reset`, `connect-failure`, `refused-stream`, `retriable-status-codes`, `retriable-4xx`, `reset-before-request`. |
+| `retry_on` | `connect-failure,refused-stream` | When to retry, with Envoy's condition names. Both gateways act on `5xx`, `gateway-error`, `reset`, `connect-failure`, `refused-stream`, `retriable-status-codes`, `retriable-4xx`, `reset-before-request`, and `envoy-ratelimited`. Envoy's other names (`retriable-headers`, `http3-post-connect-failure`, and the gRPC `cancelled`, `deadline-exceeded`, `internal`, `resource-exhausted`, `unavailable`) load, and the standalone gateway ignores them. A name Envoy does not know fails the configuration load. |
 | `retriable_status_codes` | none | Statuses retried under `retriable-status-codes`, such as `429`. |
 | `retry_back_off_base`, `retry_back_off_max` | `25ms`, ten times the base | Bounds of the randomized exponential wait between retries. |
 | `retry_after_max` | none | Wait the `Retry-After` seconds a response asks for, up to this bound. |
@@ -334,8 +334,8 @@ recipes:
 | --- | --- | --- |
 | `enabled` | `false` | Whether a failed attempt moves on to the next candidate. |
 | `max_attempts` | `3` | Attempts across candidates, the first one included. |
-| `total_timeout` | `30s` | Time for the whole chain. |
-| `per_attempt_timeout` | `10s` | Time for each candidate. It cannot exceed `total_timeout`. |
+| `total_timeout` | `30s` | Time from the start of the request in which another candidate is tried. A candidate gets at most what is left, and none starts after it runs out. |
+| `per_attempt_timeout` | `10s` | Time for each candidate after the first. It cannot exceed `total_timeout`. |
 | `retryable_status_codes` | `[502, 503, 504]` | Statuses that move on to the next candidate. |
 | `circuit_breaker` | 3 failures, `30s`, 1 probe | Skips a backend that keeps failing, for a cool-down. Global and recipe policies only. |
 
@@ -363,6 +363,17 @@ refused connection or a timeout, while behind Envoy the client receives
 Envoy's reply. Such a failure counts as a `503` or `504`, so keep those
 statuses in `retryable_status_codes` to fall back on it. Nothing falls back
 once any part of the response has reached the client.
+
+Neither fallback timeout shortens the first attempt, which keeps its provider
+model's and decision's `reliability` timeouts. To fall back from a model that
+never answers, give that provider model a `reliability.per_try_timeout` in
+standalone mode:
+
+- The timeout counts as a `504`, and the next candidate is tried.
+- The candidate gets at most `per_attempt_timeout` and what is left of
+  `total_timeout`, so make `total_timeout` longer than the `per_try_timeout`.
+- A decision's own `per_try_timeout` bounds every candidate it tries, so a
+  slower candidate fails the same way.
 
 On Kubernetes, a decision takes the same `reliability` and `fallback` blocks,
 with the same field names: in an `IntelligentRoute`'s `spec.decisions[]` and in
