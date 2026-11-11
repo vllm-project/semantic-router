@@ -112,7 +112,7 @@ type ToolTraceStep struct {
 	// APIType indicates the API variant this step was extracted from:
 	// "chat_completions" or "responses".
 	APIType string `json:"api_type,omitempty"`
-	// Truncated is true when Arguments or Output was cut to MaxToolTraceBytes.
+	// Truncated is true when Text, Arguments or Output was cut to MaxToolTraceBytes.
 	Truncated bool `json:"truncated,omitempty"`
 }
 

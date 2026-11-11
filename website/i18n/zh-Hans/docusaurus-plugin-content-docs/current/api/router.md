@@ -280,7 +280,9 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 
 Dashboard Insights 将这些路由与已记录的信号、投影、候选分数和会话切换原因一并展示。在 `observe` 模式下，候选及保持模型的解释表示保护策略本来会如何处理；所选模型和路由历史仍表示实际派发。保护策略的 `candidate_models` 独立于分数列出合格模型；未记录的分数显示为 `—`，已记录的零分仍显示为零。缺少身份或证据会明确显示。回放使用 `global.services.router_replay` 的采集默认值，并应用已选 decision 的 `router_replay` 插件覆盖；`enabled: false` 可关闭该 decision 的采集。尚未选中 decision 的被拒绝请求使用全局默认值。全局或插件设置 `capture_personal_data: false` 后，检测到 PII 或无法确认 PII 状态时会省略正文、提示词和工具内容，保留路由元数据。
 
-启用 bearer 认证时，回放调用者需要 `replay.read`。提示词、响应、工具及其他敏感细节保持脱敏，除非主体还拥有 `replay.detail`。即使 API 通常返回脱敏视图，也应将回放存储视为可能敏感。
+`capture_request_body: false` 会让整条记录都不含请求文本：请求体、`prompt`、`tool_definitions`，以及 `tool_trace` 中每个请求步骤的文本、参数和结果。`capture_response_body: false` 对响应体、响应步骤、`hallucination_spans`，以及回退结果 `execution_record` 中提供方返回的内容同样处理；每个失败的尝试只保留状态码和固定的原因。这些步骤保留类型、工具名、调用 ID 和状态。被省略的文本直接缺失，不标记为 `content_redacted`；该标记仍只表示对读者角色隐藏的内容，以及 `capture_tool_results` 未保留的工具结果。`max_tool_trace_bytes` 也会截断步骤文本，此时轨迹中的用户和助手消息带有 `content_truncated`。
+
+启用 bearer 认证时，回放调用者需要 `replay.read`。提示词、响应、工具及其他敏感细节保持脱敏，除非主体还拥有 `replay.detail`。所有回放读取路由使用同一套脱敏：没有 `replay.detail` 时，轨迹 `routes` 中的 `selection_reasoning` 和 `session_reason` 与记录的 `route_diagnostics` 一样返回为空。即使 API 通常返回脱敏视图，也应将回放存储视为可能敏感。
 
 回放生命周期值描述记录器观察到的状态：
 
