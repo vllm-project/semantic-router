@@ -179,7 +179,6 @@ func (m *MemoryStore) GetConversationChain(ctx context.Context, responseID strin
 	// Maximum chain length to prevent infinite loops, mirroring the Redis backend.
 	const maxChainLength = 1000
 
-	incomplete := false
 	for currentID != "" && len(chain) < maxChainLength {
 		// Prevent circular references from looping forever while holding the read lock.
 		if visited[currentID] {
@@ -193,14 +192,13 @@ func (m *MemoryStore) GetConversationChain(ctx context.Context, responseID strin
 			// A gap anywhere in the chain leaves the history incomplete. The
 			// caller answers previous_response_not_found instead of continuing
 			// with the remainder as if it were the whole conversation.
-			incomplete = true
-			break
+			return nil, ErrNotFound
 		}
 		result := *response
 		chain = append([]*responseapi.StoredResponse{&result}, chain...)
 		currentID = response.PreviousResponseID
 	}
-	if len(chain) == 0 || incomplete {
+	if len(chain) == 0 {
 		return nil, ErrNotFound
 	}
 	return chain, nil
