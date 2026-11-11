@@ -253,7 +253,12 @@ def _reply_of(harness: str, events: list[dict]) -> tuple[dict | None, str]:
             for event in events
             if event.get("type") == "content_block_start"
         ]
-        return {"content": blocks}, ""
+        text = "".join(
+            (event.get("delta") or {}).get("text") or ""
+            for event in events
+            if event.get("type") == "content_block_delta"
+        )
+        return {"content": blocks, "text": text}, ""
     done = next(
         (
             event["response"]
@@ -320,24 +325,31 @@ def _plain_request(harness: str, model: str) -> dict:
     return {"model": model, "max_output_tokens": 64, "input": question}
 
 
-def _with_result(harness: str, call: dict, first: dict) -> dict:
-    """The tool call's request again, carrying the call it answered with and its
-    result, as the harness sends it next."""
+def _text_of(harness: str, reply: dict) -> str:
+    """The text a finished reply gives, which the answer to a tool result needs."""
     if harness == "claude-code":
-        tool = next(b for b in first["content"] if b.get("type") == "tool_use")
+        return reply.get("text") or ""
+    return "".join(
+        part.get("text") or ""
+        for item in reply.get("output") or []
+        if item.get("type") == "message"
+        for part in item.get("content") or []
+    )
+
+
+def _with_result(harness: str, call: dict, first: dict) -> dict:
+    """The tool call's request again, carrying every call it answered with and a
+    result for each, as the harness sends them next."""
+    if harness == "claude-code":
+        tools = [b for b in first["content"] if b.get("type") == "tool_use"]
+        results = [
+            {"type": "tool_result", "tool_use_id": tool["id"], "content": "12:00"}
+            for tool in tools
+        ]
         messages = [
             *call["messages"],
-            {"role": "assistant", "content": [tool]},
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": tool["id"],
-                        "content": "12:00",
-                    }
-                ],
-            },
+            {"role": "assistant", "content": tools},
+            {"role": "user", "content": results},
         ]
         return {**call, "stream": True, "messages": messages}
     # the items go back as Codex sends them, without the status a reply gives them
@@ -345,16 +357,12 @@ def _with_result(harness: str, call: dict, first: dict) -> dict:
         {k: v for k, v in item.items() if k != "status"}
         for item in first.get("output") or []
     ]
-    function = next(i for i in output if i.get("type") == "function_call")
-    items = [
-        {"role": "user", "content": call["input"]},
-        *output,
-        {
-            "type": "function_call_output",
-            "call_id": function["call_id"],
-            "output": "12:00",
-        },
+    results = [
+        {"type": "function_call_output", "call_id": item["call_id"], "output": "12:00"}
+        for item in output
+        if item.get("type") == "function_call"
     ]
+    items = [{"role": "user", "content": call["input"]}, *output, *results]
     return {**call, "stream": True, "input": items}
 
 
@@ -424,11 +432,15 @@ def probe_gateway(
     first, problem = (None, problem) if problem else _reply_of(harness, events)
     detail = "called the tool and answered its result"
     if first is not None and not _called_tool(harness, first):
-        detail = "answered without calling the tool, so no result went back"
+        detail = (
+            "the model answered without calling the tool, so the loop was not tested"
+        )
     elif first is not None:
         response, events, problem = _post(
             url, headers, _with_result(harness, call, first), timeout
         )
         if not problem:
-            problem = _reply_of(harness, events)[1]
+            final, problem = _reply_of(harness, events)
+            if final is not None and not _text_of(harness, final):
+                problem = "the answer to the tool result has no text"
     return [plain, _result("Streamed tool loop", url, response, problem, detail)]

@@ -64,6 +64,11 @@ STAGES = {
                 "index": 0,
                 "content_block": {"type": "text"},
             },
+            {
+                "type": "content_block_delta",
+                "index": 0,
+                "delta": {"type": "text_delta", "text": "It is 12:00."},
+            },
             {"type": "message_stop"},
         ],
     },
@@ -73,7 +78,18 @@ STAGES = {
         "result": [
             {
                 "type": "response.completed",
-                "response": {"object": "response", "status": "completed", "output": []},
+                "response": {
+                    "object": "response",
+                    "status": "completed",
+                    "output": [
+                        {
+                            "type": "message",
+                            "content": [
+                                {"type": "output_text", "text": "It is 12:00."}
+                            ],
+                        }
+                    ],
+                },
             }
         ],
     },
@@ -390,6 +406,39 @@ def test_probe_refuses_a_200_that_is_not_a_reply(gateway):
     replies["/v1/messages"]["result"] = [{"type": "error", "error": {"type": "x"}}]
     loop = rc.probe_gateway(url, "claude-code", "m", "t")[1]
     assert not loop.ok and "ended in an error" in loop.detail
+    # or finish without the text the result was meant for
+    replies["/v1/messages"]["result"] = [MESSAGES_EVENTS[0], MESSAGES_EVENTS[-1]]
+    loop = rc.probe_gateway(url, "claude-code", "m", "t")[1]
+    assert not loop.ok and "has no text" in loop.detail
+
+
+def test_probe_answers_every_tool_call_and_says_when_none_came(gateway):
+    url, seen, replies = gateway
+    two = {**RESPONSES_EVENTS[0]["response"]}
+    two["output"] = [
+        *two["output"],
+        {
+            "type": "function_call",
+            "name": "get_time",
+            "call_id": "c2",
+            "arguments": "{}",
+        },
+    ]
+    replies["/v1/responses"]["tool"] = [{"type": "response.completed", "response": two}]
+    assert all(r.ok for r in rc.probe_gateway(url, "codex", "m", "t"))
+    outputs = [
+        i for i in seen[-1][1]["input"] if i.get("type") == "function_call_output"
+    ]
+    assert [o["call_id"] for o in outputs] == ["c1", "c2"]
+
+    replies["/v1/responses"]["tool"] = [
+        {
+            "type": "response.completed",
+            "response": {"object": "response", "status": "completed", "output": []},
+        }
+    ]
+    loop = rc.probe_gateway(url, "codex", "m", "t")[1]
+    assert loop.ok and "loop was not tested" in loop.detail
 
 
 def test_cli_dry_run_writes_nothing_and_hides_the_key(tmp_path, gateway, monkeypatch):
