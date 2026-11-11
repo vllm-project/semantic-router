@@ -446,6 +446,9 @@ def main() -> None:
     parser.add_argument("--generate", type=int, default=0)
     parser.add_argument("--long", action="store_true")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--ids", help="comma-separated request IDs to run (default: all)"
+    )
     parser.add_argument("--device", default="cpu")
     args = parser.parse_args()
 
@@ -463,6 +466,9 @@ def main() -> None:
         requests = near_window(model, args.seed, args.generate or 8)
     else:
         requests = generate(args.generate, args.seed)
+    if args.ids:
+        wanted = set(args.ids.split(","))
+        requests = [r for r in requests if r["id"] in wanted]
     reference = load_reference(args.package, args.device)
     accelerator = ACCELERATORS[args.device.split(":", maxsplit=1)[0]]()
     info = accelerator.devices()[
@@ -496,17 +502,25 @@ def main() -> None:
             continue
         timing["package"] += time.perf_counter() - started
         rows = compare(questions, ours, theirs)
-        for qid in apart(questions, ours, theirs):
+        redo = apart(questions, ours, theirs)
+        if redo:
             # The package runs every router question of the request in one
             # try, so one row that does not fit fails them all; the family
-            # fails that row alone. Compare the others asked apart.
-            alone = reference.system_one(
-                *package_request(state, {qid: questions[qid]}, schemas)
-            )
-            rows[qid] = {
-                **compare({qid: questions[qid]}, ours, alone)[qid],
-                "apart": True,
+            # fails that row alone. Ask the package again without the
+            # questions the family failed: the rows that fit are then the
+            # same rows, and their answers must be the family's.
+            kept = {
+                qid: q
+                for qid, q in questions.items()
+                if "error"
+                not in (ours["answers"].get(qid) or ours.get("sets", {}).get(qid) or {})
             }
+            again = reference.system_one(*package_request(state, kept, schemas))
+            for qid in redo:
+                rows[qid] = {
+                    **compare({qid: kept[qid]}, ours, again)[qid],
+                    "apart": True,
+                }
         tokens = ours["usage"]["input_tokens"] == theirs["usage"]["input_tokens"]
         errored = any("error" in theirs["answers"][q] for q in questions)
         passes = [one_pass, theirs.get("passes") == 1]
