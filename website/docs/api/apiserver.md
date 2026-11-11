@@ -463,6 +463,14 @@ audited invalidation.
 | `POST` | `/api/v1/storage/response-cache/invalidate` | Dry-run or invalidate a scoped partition |
 | `POST` | `/api/v1/storage/response-cache/flush` | Advance a scoped or global cache epoch |
 
+`invalidate` advances the epoch of the partition `selector.partition` names,
+so that partition's entries become misses, and refuses a selector without a
+partition with `400`. `flush` advances a partition's epoch or, without a
+partition, the global epoch, and needs `cache.manage` and
+`"confirm": "flush response cache"`. Neither call deletes or counts the
+entries it reaches, so both report `matched_estimate` and `deleted` as `0`
+with `count_unknown: true`.
+
 Prefer scoped invalidation and a dry run before a destructive cache mutation.
 Bearer roles distinguish read, invalidate, and broader cache-management
 permissions.
