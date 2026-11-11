@@ -20,7 +20,9 @@ class QualityWorkflowTests(unittest.TestCase):
     def test_quality_reuses_tool_caches_without_repeating_reference_generation(self):
         steps = workflow("pre-commit.yml")["jobs"]["quality"]["steps"]
         go = next(
-            step for step in steps if step.get("uses") == "./.github/actions/setup-go-ci"
+            step
+            for step in steps
+            if step.get("uses") == "./.github/actions/setup-go-ci"
         )
         self.assertIn("!inputs.docs_only", go["if"])
         self.assertNotIn("with", go)
