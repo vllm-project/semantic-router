@@ -68,16 +68,17 @@ type RemoteSystemOne struct {
 }
 
 type systemOneDeployment struct {
-	name     string
-	model    string
-	declared []string
-	presets  []string
-	client   *connector.Client
-	cache    *resultCache
-	started  atomic.Bool
-	prepared sync.Once
-	listed   atomic.Pointer[ModelCard]
-	failures sync.Map
+	name       string
+	model      string
+	declared   []string
+	presets    []string
+	modalities []string
+	client     *connector.Client
+	cache      *resultCache
+	started    atomic.Bool
+	prepared   sync.Once
+	listed     atomic.Pointer[ModelCard]
+	failures   sync.Map
 	// codec and deviations speak the deployment's schema; a schema without
 	// batches splits a stage's states into calls of their own, at most
 	// maxConcurrency in flight. lister reads the listing when it is not
@@ -120,9 +121,10 @@ func NewRemoteSystemOne(cfg *config.RouterConfig) (*RemoteSystemOne, error) {
 			return nil, fmt.Errorf("systemone deployment %q: %w", name, err)
 		}
 		// A delegated deployment answers each user with that user's
-		// credential, so no answer is kept for another request.
+		// credential, and one that forwards request headers may answer by
+		// them, so neither keeps an answer for another request.
 		var cache *resultCache
-		if !deployment.Auth.Delegated() {
+		if !deployment.Auth.Delegated() && len(deployment.ForwardRequestHeaders) == 0 {
 			cache = newExpiringResultCache(ResultCacheEntries(), remoteCacheTTL)
 		}
 		codec, deviations, err := systemonecodec.Builtin().Resolve(systemonecodec.SchemaID(deployment.Schema), deployment.Deviations)
@@ -133,8 +135,8 @@ func NewRemoteSystemOne(cfg *config.RouterConfig) (*RemoteSystemOne, error) {
 		entry := &systemOneDeployment{
 			name: name, model: deployment.Model,
 			declared: deployment.DeclaredQuestionTypes(), presets: deployment.DeclaredPresets(),
-			client: client, cache: cache, codec: codec, deviations: deviations,
-			maxConcurrency: deployment.EffectiveMaxConcurrency(),
+			modalities: deployment.DeclaredModalities(), client: client, cache: cache,
+			codec: codec, deviations: deviations, maxConcurrency: deployment.EffectiveMaxConcurrency(),
 		}
 		if path := codec.ListingPath(); !strings.HasPrefix(path, "/") {
 			sibling := transport
@@ -164,9 +166,10 @@ func siblingEndpoint(endpoint, segment string) string {
 
 // Card is the card name's questions compile against: the question types and
 // presets its API lists for the model in GET <endpoint>/models, else the
-// declared question_types and presets, else the System One types. The first
-// call reads the listing in the background unless a preparation has read it;
-// until it answers, the declared or System One types apply.
+// declared ones, else the System One types; and the modalities it lists, else
+// the declared ones, else text. The first call reads the listing in the
+// background unless a preparation has read it; until it answers, the declared
+// or System One types apply.
 func (r *RemoteSystemOne) Card(name string) (ModelCard, bool) {
 	d := r.deployment(name)
 	if d == nil {
@@ -316,7 +319,9 @@ func (r *RemoteSystemOne) deployment(name string) *systemOneDeployment {
 }
 
 func (d *systemOneDeployment) declaredCard() ModelCard {
-	return SchemaCard(d.model, d.schemaID(), d.declared, d.presets)
+	card := SchemaCard(d.model, d.schemaID(), d.declared, d.presets)
+	card.Modalities = slices.Clone(d.modalities)
+	return card
 }
 
 func (d *systemOneDeployment) schemaID() systemonecodec.SchemaID {
@@ -522,17 +527,40 @@ func (d *systemOneDeployment) listing(ctx context.Context) (ModelCard, error) {
 			ID            string   `json:"id"`
 			QuestionTypes []string `json:"question_types"`
 			Presets       []string `json:"presets"`
+			Modalities    []string `json:"modalities"`
 		} `json:"data"`
 	}
 	if json.Unmarshal(data, &models) != nil {
 		return ModelCard{}, errors.New("the models listing is not a model list")
 	}
 	for _, entry := range models.Data {
-		if entry.ID == d.model && len(entry.QuestionTypes) > 0 {
-			return RemoteCard(d.model, entry.QuestionTypes, entry.Presets), nil
+		if entry.ID != d.model {
+			continue
+		}
+		if card, ok := d.listedEntryCard(entry.QuestionTypes, entry.Presets, entry.Modalities); ok {
+			return card, nil
 		}
 	}
-	return ModelCard{}, fmt.Errorf("the models listing gives no question types for %q", d.model)
+	return ModelCard{}, fmt.Errorf("the models listing gives no question types or modalities for %q", d.model)
+}
+
+// listedEntryCard is the card a listing entry for the deployment's model
+// gives: the question types and presets it lists, else the declared ones, and
+// the modalities it lists, else the declared ones. An entry that lists
+// neither question types nor modalities gives none.
+func (d *systemOneDeployment) listedEntryCard(questionTypes, presets, modalities []string) (ModelCard, bool) {
+	if len(questionTypes) == 0 && modalities == nil {
+		return ModelCard{}, false
+	}
+	card := d.declaredCard()
+	if len(questionTypes) > 0 {
+		card.QuestionTypes, card.Presets = questionTypes, presets
+	}
+	if modalities != nil {
+		// A System One request carries no audio part.
+		card.Modalities = slices.DeleteFunc(modalities, func(modality string) bool { return modality == config.SystemOneModalityAudio })
+	}
+	return card, true
 }
 
 // listedCard reads the card of the deployment's model from a listing beside
@@ -562,14 +590,39 @@ func (d *systemOneDeployment) listedCard(ctx context.Context) (ModelCard, error)
 		var card struct {
 			QuestionTypes []string `json:"question_types"`
 			Presets       []string `json:"presets"`
+			Modalities    []string `json:"modalities"`
 		}
-		if json.Unmarshal(data, &card) == nil && len(card.QuestionTypes) > 0 {
-			listed := RemoteCard(d.model, card.QuestionTypes, card.Presets)
-			listed.Schema = string(d.schemaID())
-			return listed, nil
+		if json.Unmarshal(data, &card) == nil {
+			if listed, ok := d.listedEntryCard(card.QuestionTypes, card.Presets, card.Modalities); ok {
+				listed.MaxInputTokens, listed.ValidatedInputTokens = listedInputLimits(data)
+				return listed, nil
+			}
 		}
 	}
-	return ModelCard{}, fmt.Errorf("the models listing gives no question types for %q", d.model)
+	return ModelCard{}, fmt.Errorf("the models listing gives no question types or modalities for %q", d.model)
+}
+
+// listedInputLimits are the question token caps a listed card's limits give:
+// max_input_tokens and validated_input_tokens, zero when absent or not a
+// positive whole number.
+func listedInputLimits(data json.RawMessage) (maxInput, validated int) {
+	var card struct {
+		Limits struct {
+			MaxInputTokens       json.Number `json:"max_input_tokens"`
+			ValidatedInputTokens json.Number `json:"validated_input_tokens"`
+		} `json:"limits"`
+	}
+	if json.Unmarshal(data, &card) != nil {
+		return 0, 0
+	}
+	whole := func(number json.Number) int {
+		value, err := number.Int64()
+		if err != nil || value < 1 || value > math.MaxInt32 {
+			return 0
+		}
+		return int(value)
+	}
+	return whole(card.Limits.MaxInputTokens), whole(card.Limits.ValidatedInputTokens)
 }
 
 // checkListed reads the listing of a schema without model cards, whose
@@ -647,9 +700,12 @@ func SchemaCard(id string, schema systemonecodec.SchemaID, questionTypes, preset
 	return card
 }
 
-// DeploymentCard is the declared card of a systemone deployment.
+// DeploymentCard is the declared card of a systemone deployment, with the
+// input modalities it declares.
 func DeploymentCard(deployment config.ModelDeployment) ModelCard {
-	return SchemaCard(deployment.Model, systemonecodec.SchemaID(deployment.EffectiveSchema()), deployment.DeclaredQuestionTypes(), deployment.DeclaredPresets())
+	card := SchemaCard(deployment.Model, systemonecodec.SchemaID(deployment.EffectiveSchema()), deployment.DeclaredQuestionTypes(), deployment.DeclaredPresets())
+	card.Modalities = deployment.DeclaredModalities()
+	return card
 }
 
 // EncodeSystemOneRequest is request as a System One API reads it: each

@@ -302,3 +302,38 @@ func TestReplayCleanPromptDoesNotAuthorizeResponseToolsOrDifferentInput(t *testi
 		}
 	}
 }
+
+// A recipe that enables Replay in its own plugins records its requests that
+// are rejected before a decision, on the memory store as on a shared one.
+func TestReplayRecipeDefaultsCaptureBeforeDecisionOnMemoryStore(t *testing.T) {
+	cfg := &config.RouterConfig{
+		RouterReplay: config.RouterReplayConfig{StoreBackend: "memory"},
+		Recipes: []config.RoutingRecipe{
+			{Name: "plain", Profile: config.RoutingProfile{
+				Decisions: []config.Decision{{Name: "route", ModelRefs: []config.ModelRef{{Model: "m"}}}},
+			}},
+			{Name: "audited", Profile: config.RoutingProfile{
+				Plugins:   []config.DecisionPlugin{replayTestPlugin(map[string]interface{}{"enabled": true})},
+				Decisions: []config.Decision{{Name: "route", ModelRefs: []config.ModelRef{{Model: "m"}}}},
+			}},
+		},
+	}
+	withGlobalPlugins(t, cfg)
+	router := replayRuntimeRouter(t, cfg)
+	for i, recorded := range []bool{false, true} {
+		ctx := replayPolicyRequest(t)
+		ctx.Routing.SelectRecipe(&cfg.Recipes[i])
+		router.respondDecisionUnresolved(ctx, "public-entry", &decision.DecisionUnresolvedError{Decision: "unknown"})
+		if (ctx.RouterReplayID != "") != recorded {
+			t.Fatalf("recipe %s: replay id %q, want recorded=%t", cfg.Recipes[i].Name, ctx.RouterReplayID, recorded)
+		}
+	}
+	page, err := router.queryRouterReplayPage(routerReplayListQuery{limit: 10})
+	if err != nil || len(page.Data) != 1 {
+		t.Fatalf("rejected request not queryable: %+v err=%v", page, err)
+	}
+	record := page.Data[0]
+	if record.Recipe != "audited" || record.Decision != "" || record.ResponseStatus != 503 || record.LifecycleState != routerreplay.LifecycleFailed {
+		t.Fatalf("record = recipe %q decision %q status %d lifecycle %q", record.Recipe, record.Decision, record.ResponseStatus, record.LifecycleState)
+	}
+}

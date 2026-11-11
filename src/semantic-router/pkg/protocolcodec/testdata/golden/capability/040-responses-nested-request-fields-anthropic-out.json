@@ -153,6 +153,10 @@
         },
         "diagnostics": [
           {
+            "field": "content.file.filename",
+            "action": "dropped"
+          },
+          {
             "field": "max_tokens",
             "action": "generated"
           }
@@ -213,6 +217,10 @@
         },
         "diagnostics": [
           {
+            "field": "content.file.filename",
+            "action": "dropped"
+          },
+          {
             "field": "max_tokens",
             "action": "generated"
           }
@@ -242,6 +250,10 @@
           "model": "routed-model"
         },
         "diagnostics": [
+          {
+            "field": "content.image.detail",
+            "action": "dropped"
+          },
           {
             "field": "max_tokens",
             "action": "generated"

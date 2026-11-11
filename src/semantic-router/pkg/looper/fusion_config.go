@@ -92,7 +92,7 @@ func applyGroundingDefaults(cfg *fusionExecutionConfig) {
 		cfg.GroundingContradictionPenalty = 1.0
 	}
 	if strings.TrimSpace(cfg.GroundingOnError) == "" {
-		cfg.GroundingOnError = cfg.OnError
+		cfg.GroundingOnError = config.FusionOnErrorSkip
 	}
 }
 

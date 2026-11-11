@@ -50,6 +50,11 @@ providers:
   defaults:
     model: qwen3-8b
     reasoning_effort: medium
+    # The CA bundle of every https backend whose own tls names no ca_file. It
+    # replaces the system roots for those backends, in Envoy and in the
+    # Router's own calls, so it must hold every CA they chain to.
+    tls:
+      ca_file: /etc/vllm-sr/certs/example-corp-ca.pem
   models:
     - name: qwen3-8b
       reasoning:
@@ -150,6 +155,15 @@ providers:
           provider: openai-compatible
           auth:
             credential: delegated
+          # A backend behind a private CA: ca_file replaces the system roots
+          # for it, so it holds the issuing intermediate and the root;
+          # server_name is the name its certificate carries; cert_file and
+          # key_file present a client certificate. Absolute paths.
+          tls:
+            ca_file: /etc/vllm-sr/certs/example-corp-ca.pem
+            server_name: gateway.example.com
+            cert_file: /etc/vllm-sr/certs/router.crt
+            key_file: /etc/vllm-sr/certs/router.key
           weight: 100
     - name: qwen3-32b
       reasoning:
@@ -521,8 +535,13 @@ recipes:
             history: true
           deployment: primary
           timeout_ms: 300
-          # A request whose deployment gives no answer matches (fail closed);
-          # the default, no_match, passes it.
+          # A long input is read in windows. When the time runs out before
+          # every window is read, best_effort (the default) decides on the
+          # windows read; match matches the request (strict), and unknown
+          # leaves the rule to on_unknown.
+          on_unscanned: best_effort
+          # A request none of whose windows the deployment answers matches
+          # (fail closed, the default); no_match passes it.
           on_unknown: match
         # stage: response asks about the model's output instead of the prompt, so
         # this rule only exists once the model has answered; the selected
@@ -564,7 +583,19 @@ recipes:
             tool_results: true
           deployment: primary
           timeout_ms: 300
+          on_unscanned: match
           on_unknown: match
+        # An agent's user turn carries its harness's own instructions, such
+        # as a commit trailer with an email address, so this rule reads only
+        # what the agent's tools brought back, and is not asked before them.
+        - name: tool_output_pii
+          description: Personal data in the output of an agent's tools.
+          predicate:
+            gte: 0.8
+          input:
+            tool_results: true
+            request: false
+          deployment: primary
         # The masking plugin of static_business_route masks what this rule
         # detects in the request as it is sent.
         - name: business_contact_pii
@@ -725,6 +756,17 @@ recipes:
             tool_results: true
           coverage: full
           on_unscanned: unknown
+        # A question about what an agent's tools brought back leaves the user
+        # turn out, and is not asked before the first tool result.
+        - name: tool_output_failure
+          description: Whether the output of the agent's tools shows a failed command or a failing test.
+          deployment: decision-kai
+          question:
+            type: noul
+            instructions: Does this tool output show a failed command or a failing test?
+          input:
+            tool_results: true
+            request: false
         # Image and video parts of the current turn go to a deployment that
         # declares the input modality (input.audio is refused until one can).
         - name: chart_request
@@ -2067,6 +2109,8 @@ recipes:
         consecutive_failures: 3
         cooldown_period: 30s
         half_open_probes: 1
+      # Replaces global.router.fallback's list for this recipe.
+      forward_request_headers: [x-user-id]
 
   - name: native-handwritten
     description: Complete typed requests use explicit native stages and an algorithm execution budget.
@@ -2128,6 +2172,11 @@ global:
         consecutive_failures: 3
         cooldown_period: 30s
         half_open_probes: 1
+      # Client request headers a fallback attempt the Router sends itself
+      # copies, when the client sent them, over a backend's static header of
+      # the same name. Credential, framing and identity headers and the
+      # Router's own cannot be listed.
+      forward_request_headers: [x-user-id, x-request-id]
     streamed_body:
       enabled: true
       max_bytes: 1048576
@@ -2799,7 +2848,10 @@ global:
       # The same API behind a gateway with its own header and path prefix;
       # prefix "" sends the bare key. capabilities declares the question types,
       # presets and input modalities the model answers and reads, used only
-      # when GET <endpoint>/models lists none for it.
+      # when GET <endpoint>/models lists none for it. forward_request_headers
+      # copies the client's x-user-id, which the gateway attributes usage by,
+      # onto each call made for a request; calls the Router makes on its own
+      # behalf carry none, and no answer is kept for another request.
       decision-gateway:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
@@ -2809,6 +2861,7 @@ global:
           header: Ocp-Apim-Subscription-Key
           prefix: ""
           api_key_file: /run/secrets/systemone-gateway-key
+        forward_request_headers: [x-user-id]
         capabilities:
           question_types: [choice, noul, score]
           presets: [pii, halu]
@@ -2831,6 +2884,21 @@ global:
         auth:
           api_key_env: SYSTEMONE_STANDARD_KEY
         timeout_ms: 6000
+        # A routing question (a rule that does not read its whole input)
+        # reads at most max_tokens of a long input: its head (head_share of
+        # it) and its tail around a marker. A guard rule (jailbreak, safety,
+        # pii) reads all of it, in windows of scan_window.tokens that overlap
+        # by scan_window.overlap. Both are sized in bytes, four a token, so
+        # dense text such as JSON or base64 holds up to about three times as
+        # many tokens: size them so that a call on it fits timeout_ms. A
+        # systemone deployment defaults to 4096 for both and a model_runtime
+        # one to 8192; neither ever exceeds the model's validated length.
+        routing_view:
+          max_tokens: 4096
+          head_share: 0.25
+        scan_window:
+          tokens: 4096
+          overlap: 256
         capabilities:
           question_types: [choice, noul, score]
           modalities: [text, image]

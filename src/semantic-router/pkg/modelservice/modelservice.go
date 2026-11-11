@@ -74,6 +74,10 @@ type Choice struct {
 // part in windows (Vela 2.0), zero keeping the model's own: a part with more
 // tokens fails the questions that read it whole with scan_budget_exceeded. A
 // model without a scan budget ignores it and every question's Truncate.
+// Order places the state among the states a stage sends one deployment: a
+// lower order goes first in the batch or the calls that carry them, and
+// states of one order keep a fixed order of their own. It is not a wire
+// field, and leaves the answers as they are.
 type Request struct {
 	Model     string
 	State     string
@@ -82,6 +86,7 @@ type Request struct {
 	Videos    []string
 	Questions []Question
 	MaxTokens int
+	Order     int
 }
 
 // Answer is one runtime answer. Error is set instead of the values when the

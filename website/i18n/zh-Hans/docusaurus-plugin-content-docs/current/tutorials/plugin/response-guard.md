@@ -77,7 +77,7 @@ recipes:
 
 规则添加的警告码有 `hallucination`（回答无法检查时为 `unverified_factual`）、`response_jailbreak`，其他规则为 `response_guard`，每个已匹配条件中的响应阶段信号各一个；规则无法判定时，取其所有条件。被拦截的回答会替换为一条说明发现了什么的消息，而不会说明某项检查失败。
 
-依据上下文是 [context 插件](./context.md)检索到的文档，以及请求自身的工具结果。
+依据上下文是 [context 插件](./context.md)注入的文档和记忆（无论哪种注入模式），以及请求自身的工具结果。
 
 `POST /api/v1/plugins/response_guard/preview` 在给定的问题、上下文和回答上读取某个活动绑定的守卫；`mode: probe` 会调用已配置的模型，但不生成回答，也不持久化。
 

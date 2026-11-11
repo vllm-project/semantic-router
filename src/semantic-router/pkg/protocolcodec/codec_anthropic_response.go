@@ -246,7 +246,7 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 	if err != nil {
 		return nil, diagnostics, err
 	}
-	stop := encodeAnthropicStop(response.StopReason)
+	stop := encodeAnthropicStop(response.StopReason, responsesOutputHasToolCall(response.Output))
 	wire := anthropicResponseWire{ID: response.ID, Type: "message", Role: "assistant", Model: response.Model, Content: content, StopReason: &stop, Usage: encodeAnthropicUsage(response.Usage)}
 	if response.StopReason == llmprotocol.StopSequence {
 		wire.StopSequence = &response.MatchedStopSequence
@@ -344,7 +344,13 @@ func decodeAnthropicStop(reason string) llmprotocol.StopReason {
 	}
 }
 
-func encodeAnthropicStop(reason llmprotocol.StopReason) string {
+// A Messages turn that carries tool_use blocks stops with tool_use, which is
+// what Messages clients run calls on. A Chat backend ends a forced named tool
+// call with "stop", the end of the turn.
+func encodeAnthropicStop(reason llmprotocol.StopReason, toolUse bool) string {
+	if reason == llmprotocol.StopEndTurn && toolUse {
+		return "tool_use"
+	}
 	switch reason {
 	case llmprotocol.StopMaxTokens:
 		return "max_tokens"

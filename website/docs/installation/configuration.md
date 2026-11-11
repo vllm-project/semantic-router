@@ -57,7 +57,7 @@ decision, algorithm, plugin and global block.
 | --- | --- | --- |
 | `timeout` | The whole call, including its streamed response; it also bounds a stalled stream. `0s` lifts both limits. To lift only one model's call limit, set that model's `total_timeout: 0s`. | `300s` |
 | `api_keys` | Client API keys the listener requires. | none |
-| `apis` | The APIs the listener serves, by API name: `chat_completions`, `responses`, `messages`, `images` and `systemone` (`openai` and `anthropic` are accepted as aliases of `chat_completions` and `messages`). Any other API path answers `404` with a `detail` naming the listener. | the four LLM APIs, no `systemone` |
+| `apis` | The APIs the listener serves, by API name: `chat_completions`, `responses`, `messages`, `images` and `systemone` (`openai` and `anthropic` are accepted as aliases of `chat_completions` and `messages`). Any other API path answers `404` with a `detail` naming the listener. Standalone mode serves `systemone`; `--gateway extproc` refuses a listener that serves it. | the four LLM APIs, no `systemone` |
 | `apis.<api>.models` | The only request models an API accepts. | every model of its kind |
 | `apis.systemone.schema` | The System One schema the listener speaks to its clients: `vllm-sr/5.0`, or `vllm-sr/4.0`, which also accepts every request form of the earlier contract. See [System One schemas](../system-one/use/schemas.md). | `vllm-sr/5.0` |
 | `apis.systemone.max_deadline_ms` | The longest a System One request waits for a model. | 10 minutes |
@@ -296,6 +296,9 @@ api_key: ${MODEL_API_KEY}
 | `${VAR-default}` | `default` when `VAR` is unset |
 | `$$` | A literal `$` |
 
+- `VAR` is an uppercase name: `A`-`Z`, digits and `_`, not starting with a
+  digit. Any other `$` text stays as written, such as `$100`, a template's
+  `{{range $i := ...}}` or a `${user_content}` placeholder.
 - A custom recipe must authorize the host variables it needs with
   `--recipe-env NAME`.
 - On Kubernetes, put sensitive values in Secrets, not ConfigMaps or Helm

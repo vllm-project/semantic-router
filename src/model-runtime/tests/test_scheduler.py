@@ -1100,11 +1100,19 @@ def test_a_group_is_queued_at_once_and_answered_per_job():
         scheduler.stop()
 
 
-def test_a_group_beyond_the_queue_bound_is_refused_whole():
+def test_a_group_beyond_the_queue_bound_is_admitted_only_when_nothing_is_pending():
     scheduler = Scheduler(FakeModel(), batcher(), SchedulerLimits(max_queue=1))
+    first = scheduler.submit_group(
+        [[item("a", 4)], [item("b", 4)]], deadlines=[None, None]
+    )
     with pytest.raises(RuntimeServiceError) as error:
-        scheduler.submit_group([[item("a", 4)], [item("b", 4)]], deadlines=[None, None])
-    assert error.value.code == "overloaded"
+        scheduler.submit_group([[item("c", 4)], [item("d", 4)]], deadlines=[None, None])
+    assert error.value.code == "overloaded" and scheduler.depth() == 2
+    scheduler.start()
+    try:
+        assert [future.result(timeout=5) for future in first] == [[[0.0, 4.0]]] * 2
+    finally:
+        scheduler.stop()
 
 
 def test_a_group_timing_counts_a_forward_once_however_many_of_its_jobs_it_holds():

@@ -175,18 +175,22 @@ type IdentityConfig struct {
 	UserGroupsHeader string `yaml:"user_groups_header,omitempty"`
 }
 
+// GetUserIDHeader returns the configured user id header, lowercased as the
+// gateway hands request headers to the Router, or the default.
 func (ic IdentityConfig) GetUserIDHeader() string {
-	if ic.UserIDHeader == "" {
-		return headers.AuthzUserID
+	if header := strings.ToLower(strings.TrimSpace(ic.UserIDHeader)); header != "" {
+		return header
 	}
-	return ic.UserIDHeader
+	return headers.AuthzUserID
 }
 
+// GetUserGroupsHeader returns the configured user groups header, lowercased,
+// or the default.
 func (ic IdentityConfig) GetUserGroupsHeader() string {
-	if ic.UserGroupsHeader == "" {
-		return headers.AuthzUserGroups
+	if header := strings.ToLower(strings.TrimSpace(ic.UserGroupsHeader)); header != "" {
+		return header
 	}
-	return ic.UserGroupsHeader
+	return headers.AuthzUserGroups
 }
 
 type AuthzProviderConfig struct {
@@ -349,6 +353,9 @@ type BackendModels struct {
 	DefaultQualityIndex string                     `yaml:"-"`
 	VLLMEndpoints       []VLLMEndpoint             `yaml:"vllm_endpoints"`
 	ProviderProfiles    map[string]ProviderProfile `yaml:"provider_profiles,omitempty"`
+	// DefaultBackendTLS is providers.defaults.tls, already applied to each
+	// https backend's provider profile.
+	DefaultBackendTLS *ProviderDefaultsTLS `yaml:"-" json:"-"`
 	// ProviderModelOrder lists providers.models aliases in authored order.
 	// VLLMEndpoints are sorted by alias, but the data plane's default route
 	// serves the first authored model that has a backend.
