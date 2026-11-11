@@ -19,6 +19,9 @@ from .models_systemone import MAX_SYSTEMONE_PREVIOUS_TURNS, turnless_input_error
 Stage = Literal["request", "response"]
 # What a jailbreak or pii rule reads as when its deployment gives no answer.
 OnUnknown = Literal["match", "no_match"]
+# What a jailbreak or pii rule reads as when only some windows of a long input
+# were read.
+OnUnscanned = Literal["best_effort", "match", "no_match", "unknown"]
 
 
 class ApplicationRule(BaseModel):
@@ -86,6 +89,7 @@ class JailbreakRule(ApplicationRule):
     predicate: NumericPredicate | None = None
     stage: Stage | None = None
     input: JailbreakInput | None = None
+    on_unscanned: OnUnscanned | None = None
     on_unknown: OnUnknown | None = None
 
 
@@ -112,6 +116,7 @@ class PIIRule(ApplicationRule):
     predicate: NumericPredicate | None = None
     ignore_labels: list[str] = Field(default_factory=list)
     input: PIIInput | None = None
+    on_unscanned: OnUnscanned | None = None
     on_unknown: OnUnknown | None = None
 
     @model_validator(mode="after")
