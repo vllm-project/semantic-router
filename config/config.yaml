@@ -565,6 +565,17 @@ recipes:
           deployment: primary
           timeout_ms: 300
           on_unknown: match
+        # An agent's user turn carries its harness's own instructions, such
+        # as a commit trailer with an email address, so this rule reads only
+        # what the agent's tools brought back, and is not asked before them.
+        - name: tool_output_pii
+          description: Personal data in the output of an agent's tools.
+          predicate:
+            gte: 0.8
+          input:
+            tool_results: true
+            request: false
+          deployment: primary
         # The masking plugin of static_business_route masks what this rule
         # detects in the request as it is sent.
         - name: business_contact_pii
@@ -725,6 +736,17 @@ recipes:
             tool_results: true
           coverage: full
           on_unscanned: unknown
+        # A question about what an agent's tools brought back leaves the user
+        # turn out, and is not asked before the first tool result.
+        - name: tool_output_failure
+          description: Whether the output of the agent's tools shows a failed command or a failing test.
+          deployment: decision-kai
+          question:
+            type: noul
+            instructions: Does this tool output show a failed command or a failing test?
+          input:
+            tool_results: true
+            request: false
         # Image and video parts of the current turn go to a deployment that
         # declares the input modality (input.audio is refused until one can).
         - name: chart_request
