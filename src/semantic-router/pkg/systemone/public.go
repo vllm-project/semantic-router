@@ -246,7 +246,8 @@ func handle(config *routerconfig.RouterConfig, listener *routerconfig.Listener, 
 		}
 		systemOne := r.URL.Path == systemonecodec.PathSystemOne || r.URL.Path == systemonecodec.PathBatch
 		if code < 200 || code >= 300 {
-			if failure, failed := refusedQuestion(code, response, systemOne); failed {
+			failure, failed := refusedQuestion(code, response, systemOne)
+			if failed {
 				writeQuestionFailure(w, failure)
 				return
 			}
@@ -254,6 +255,10 @@ func handle(config *routerconfig.RouterConfig, listener *routerconfig.Listener, 
 			fields := map[string]any{"code": errorCode, "type": "systemone_error", "reason": reason, "message": message}
 			if limit != nil {
 				fields["limit"] = *limit
+			}
+			if failure.id != "" && errorCode == string(api.InvalidRequest) {
+				writeNoValidQuestion(w, failure, fields)
+				return
 			}
 			writeErrorBody(w, status, fields)
 			return

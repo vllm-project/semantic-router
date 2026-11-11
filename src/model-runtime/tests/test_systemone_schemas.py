@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 from vllm_srun.api import schemas
 from vllm_srun.families.vela2.request import read_state
@@ -9,6 +12,7 @@ from vllm_srun.families.vela3_d3 import spans
 from vllm_srun.systemone import (
     IMPLICIT_ROLES,
     REQUEST_ROLES,
+    implicit_roles,
     normalize_presets,
     read_roles,
 )
@@ -16,6 +20,21 @@ from vllm_srun.systemone import (
 FIVE, FOUR = schemas.SCHEMA_50, schemas.SCHEMA_40
 NOUL = {"q": {"type": "noul", "instructions": "Supported?"}}
 GROUNDED = {"context": "Refunds within 30 days.", "answer": "You have 90 days."}
+# The cases the Router's Go tests share (config/schemas/systemone/implicit-roles.json).
+IMPLICIT_CASES = json.loads(
+    (
+        Path(__file__).resolve().parents[3]
+        / "config/schemas/systemone/implicit-roles.json"
+    ).read_text(encoding="utf-8")
+)["cases"]
+# The requests without a valid question the Router's Go tests share
+# (config/schemas/systemone/no-valid-question.json).
+NO_VALID_QUESTION = json.loads(
+    (
+        Path(__file__).resolve().parents[3]
+        / "config/schemas/systemone/no-valid-question.json"
+    ).read_text(encoding="utf-8")
+)["cases"]
 
 
 def read(schema, path, body, headers=None):
@@ -247,6 +266,32 @@ def test_roles_that_name_what_the_keys_imply_read_the_state_as_before() -> None:
     assert (explicit.parts, explicit.fields) == (implicit.parts, implicit.fields)
 
 
+@pytest.mark.parametrize("case", IMPLICIT_CASES)
+def test_roles_a_router_writes_for_a_four_request_read_as_it_was_written(case) -> None:
+    """The Router gives a 4.0 request's keys the roles the runtime's implicit roles give them, whatever their case;
+    roles equal to them are the implicit roles, so every family (a vela3_d3 span's target too) reads the state as before.
+    """
+    state, roles = case["state"], case["roles"]
+    assert implicit_roles(state) == roles
+    read = read_roles({"state": state, "roles": roles})
+    assert read is IMPLICIT_ROLES
+    implicit, explicit = typed(state, IMPLICIT_ROLES), typed(state, read)
+    assert (explicit.parts, explicit.fields) == (implicit.parts, implicit.fields)
+    token = REQUEST_ROLES.set(read)
+    try:
+        target = spans.default_target(list(state))
+    finally:
+        REQUEST_ROLES.reset(token)
+    assert target == ("answer" if "answer" in state else list(state)[-1])
+
+
+def test_roles_other_than_the_implicit_ones_stay_explicit() -> None:
+    state = {"Prompt": "Is the sky green?", "Response": "Yes."}
+    roles = {"Prompt": "context", "Response": "answer"}
+    assert read_roles({"state": state, "roles": roles}) == roles
+    assert read_roles({"state": state, "roles": None}) is None
+
+
 def test_a_five_state_without_roles_is_the_users_content_as_documented() -> None:
     """The documented difference: {context, answer} is a context and an answer part under vllm-sr/4.0's implicit
     roles, and one user part holding both keys under vllm-sr/5.0 without roles."""
@@ -396,3 +441,23 @@ def test_a_runtime_answers_the_batch_endpoint_and_shapes_its_errors(
     assert (
         status == 400 and body["error"]["code"] == "invalid_request" and body["detail"]
     )
+
+
+@pytest.mark.parametrize("schema", [FIVE, FOUR])
+@pytest.mark.parametrize("case", NO_VALID_QUESTION, ids=lambda case: case["name"])
+def test_a_request_without_a_valid_question_answers_as_the_router_answers_it(
+    vela2_runtimes, schema, case
+) -> None:
+    status, body, _ = post(vela2_runtimes[schema], "/v1/decisions", case["request"])
+    assert status == case["status"], body
+    if "error" in case:
+        assert {key: body["error"].get(key) for key in case["error"]} == case[
+            "error"
+        ], body
+    for name, failed in case.get("failed", {}).items():
+        for question, reason in failed.items():
+            answer = body["states"][name]["answers"][question]
+            assert (answer["error"], answer.get("reason")) == (
+                "invalid_question",
+                reason,
+            ), body

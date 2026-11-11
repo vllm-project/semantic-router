@@ -48,7 +48,7 @@ listeners:
 
 Router 在 `vsr_systemone_listener_diagnostics_total{listener, schema, field, action}` 中统计每个 listener 的客户端发送了什么：
 
-- `action="legacy_form"`，按 `field`：请求使用的 4.0 形式（`states`、`images`、`videos`、`choices`、`levels`、`labels`、`preset_only`、`long_context`）以及 `implicit_roles`，即没有 `roles` 的对象 state，5.0 listener 会以不同方式读取它；
+- `action="legacy_form"`，按 `field`：请求使用的 4.0 形式（`states`、`images`、`videos`、`choices`、`levels`、`labels`、`preset_only`、`long_context`），以及 5.0 listener 会以不同方式读取的两种合法 5.0 请求：`implicit_roles`，即没有 `roles` 的对象 state；`placed_assets`，即由放在一个条目前面的 asset 占位符组成的 state；
 - `field="request"` 且 `action="passed_through"` 或 `"translated"`：每个请求如何继续转发。
 
 当没有客户端再使用旧形式时，先通知客户端，再把 listener 切换到 `vllm-sr/5.0`。listener 也可以一直保持 `vllm-sr/4.0`。

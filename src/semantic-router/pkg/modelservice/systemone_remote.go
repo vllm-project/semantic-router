@@ -227,7 +227,7 @@ func (r *RemoteSystemOne) Forward(ctx context.Context, name string, body json.Ra
 	if d == nil {
 		return SystemOneResult{}, ErrUnavailable
 	}
-	if !d.native() {
+	if !d.native() || (d.codec != nil && systemonecodec.HasRoles(body)) {
 		return d.forwardCodec(ctx, body)
 	}
 	var request map[string]json.RawMessage

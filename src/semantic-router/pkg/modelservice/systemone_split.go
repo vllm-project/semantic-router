@@ -21,7 +21,9 @@ import (
 // schema with batches gets the task's states in one call, one without them
 // each state in a call of its own, at most maxConcurrency in flight (a
 // sliding window: each answer starts the next), every call within the task's
-// deadline. A call that fails leaves only its own states' questions unknown.
+// deadline. Each state is answered as soon as its call is: a call that fails,
+// or that the deadline cuts short, leaves only its own states' questions
+// unknown.
 func (d *systemOneDeployment) sendCodec(ctx context.Context, task *bundleTask) {
 	states := task.decision.states
 	batch := systemoneprotocol.Batch{Model: d.model, Items: make([]systemoneprotocol.NamedRequest, len(states))}
@@ -31,23 +33,17 @@ func (d *systemOneDeployment) sendCodec(ctx context.Context, task *bundleTask) {
 		planErrs[index] = err
 		batch.Items[index] = systemoneprotocol.NamedRequest{Name: strconv.Itoa(index + 1), Request: request}
 	}
-	results := d.exchanger().Ask(ctx, batch, planErrs)
 	responses := make([]Response, len(states))
 	errs := make([]error, len(states))
+	exchange := d.exchanger()
+	exchange.Answered = func(index int, result systemonecodec.ItemResult) {
+		responses[index], errs[index] = d.decided(result, states[index].request.Questions)
+		task.deliverState(index, responses[index], errs[index])
+	}
+	exchange.Ask(ctx, batch, planErrs)
 	complete := true
-	for index, result := range results {
-		if result.Err != nil {
-			errs[index], complete = d.decideError(result.Err), false
-			continue
-		}
-		response, err := decideResponse(result.Response, states[index].request.Questions)
-		if err != nil {
-			errs[index], complete = err, false
-			d.reportFailure(http.StatusOK, ErrorReason(err), nil)
-			continue
-		}
-		responses[index] = response
-		complete = complete && completeAll([]Response{response})
+	for index := range states {
+		complete = complete && errs[index] == nil && completeAll([]Response{responses[index]})
 	}
 	if cache := task.decision.cache; cache != nil {
 		for _, call := range task.calls {
@@ -61,7 +57,20 @@ func (d *systemOneDeployment) sendCodec(ctx context.Context, task *bundleTask) {
 			}
 		}
 	}
-	task.deliverEach(responses, errs)
+}
+
+// decided is the response an item's result gives a state's questions, or the
+// error that leaves them unknown.
+func (d *systemOneDeployment) decided(result systemonecodec.ItemResult, questions []Question) (Response, error) {
+	if result.Err != nil {
+		return Response{}, d.decideError(result.Err)
+	}
+	response, err := decideResponse(result.Response, questions)
+	if err != nil {
+		d.reportFailure(http.StatusOK, ErrorReason(err), nil)
+		return Response{}, err
+	}
+	return response, nil
 }
 
 // forwardCodec sends a client's request, in the internal form, to a
@@ -311,16 +320,14 @@ func decideResponse(response systemoneprotocol.Response, questions []Question) (
 	return decodeResponse(decoded, questions), nil
 }
 
-// deliverEach hands every call of a decisions task its own state's answers,
-// or that state's error.
-func (t *bundleTask) deliverEach(responses []Response, errs []error) {
-	for index, state := range t.decision.states {
-		for _, call := range state.calls {
-			call.err = errs[index]
-			if errs[index] == nil {
-				call.decision.response = responses[index].part(call.decision.request.Questions)
-			}
-			close(call.done)
+// deliverState hands every call about one of a decisions task's states its
+// own answers, or the state's error.
+func (t *bundleTask) deliverState(index int, response Response, err error) {
+	for _, call := range t.decision.states[index].calls {
+		call.err = err
+		if err == nil {
+			call.decision.response = response.part(call.decision.request.Questions)
 		}
+		close(call.done)
 	}
 }

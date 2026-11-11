@@ -150,7 +150,7 @@ func sortedIDs(questions map[string]json.RawMessage) []string {
 }
 
 // fakeRemote serves api as the systemone deployment name.
-func fakeRemote(t *testing.T, name string, api *fakeSystemOneAPI, deployment config.ModelDeployment) *RemoteSystemOne {
+func fakeRemote(t *testing.T, name string, api http.Handler, deployment config.ModelDeployment) *RemoteSystemOne {
 	t.Helper()
 	server := httptest.NewServer(api)
 	t.Cleanup(server.Close)

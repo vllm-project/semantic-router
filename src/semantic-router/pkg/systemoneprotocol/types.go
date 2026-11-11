@@ -412,11 +412,12 @@ func (r Request) CanonicalState() string {
 	return Canonical(r.State)
 }
 
-// ImplicitRole is the role vllm-sr/4.0 gives a state key: request, user and
-// prompt hold the user's content, answer and response the answer, and every
-// other key context.
+// ImplicitRole is the role vllm-sr/4.0 gives a state key, whatever its case,
+// as the model runtime's STATE_KEY_ROLES reads it: request, user and prompt
+// hold the user's content, answer and response the answer, and every other
+// key context.
 func ImplicitRole(key string) Role {
-	switch key {
+	switch strings.ToLower(key) {
 	case "request", "user", "prompt":
 		return RoleUser
 	case "answer", "response":

@@ -156,6 +156,49 @@ func TestTheFiveCodecSendsStandardRequestsWithFlatExtensions(t *testing.T) {
 	}
 }
 
+// The roles the 5.0 codec writes for a 4.0 request are the ones the model
+// runtime's implicit roles give its keys, whatever their case: the cases
+// config/schemas/systemone/implicit-roles.json shares with the runtime's tests.
+func TestImplicitRolesMatchTheRuntimesForEveryCase(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "config", "schemas", "systemone", "implicit-roles.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Cases []struct {
+			State json.RawMessage `json:"state"`
+			Roles json.RawMessage `json:"roles"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(data, &fixture); err != nil || len(fixture.Cases) == 0 {
+		t.Fatalf("fixture: %v", err)
+	}
+	for _, tc := range fixture.Cases {
+		object := state(t, string(tc.State))
+		want := canonicalBytes(t, tc.Roles)
+		if got, _ := json.Marshal(systemoneprotocol.Object(systemoneprotocol.ImplicitRoles(object)...)); string(got) != string(want) {
+			t.Fatalf("implicit roles of %s: %s, want %s", tc.State, got, want)
+		}
+		roles, err := systemoneprotocol.Parse(tc.Roles)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !(systemoneprotocol.Roles{Mode: systemoneprotocol.RolesExplicit, Map: roles.Members()}).SameAsImplicit(object) {
+			t.Fatalf("roles %s are not the implicit ones of %s", tc.Roles, tc.State)
+		}
+		plan, _, err := VLLMSR50Codec{}.Plan(systemoneprotocol.Batch{Items: []systemoneprotocol.NamedRequest{{Request: systemoneprotocol.Request{
+			State: object, Questions: []systemoneprotocol.NamedQuestion{{Name: "q", Question: question50(t, `{"type": "noul", "instructions": "Ok?"}`)}},
+		}}}}, Target{}, Policy{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		sent, _ := plan.Calls[0].Body.Get("roles")
+		if got, _ := json.Marshal(sent); string(got) != string(want) {
+			t.Fatalf("the 5.0 codec sent roles %s for %s, want %s", got, tc.State, want)
+		}
+	}
+}
+
 // A question the server fails by name is asked again without it and answers
 // with its error and reason, as a runtime's /v1/decisions answers it.
 func TestAFailedQuestionAnswersWithItsReason(t *testing.T) {
@@ -188,6 +231,53 @@ func TestAFailedQuestionAnswersWithItsReason(t *testing.T) {
 	answers, _ = json.Marshal(systemoneprotocol.Object(results[0].Response.Answers...))
 	if want := `{"ok":{"type":"noul","noul":0.25},"p":{"type":null,"error":"invalid_question","reason":"preset_unknown"}}`; results[0].Err != nil || calls != 1 || string(answers) != want {
 		t.Fatalf("calls %d, %v, answers %s\nwant %s", calls, results[0].Err, answers, want)
+	}
+}
+
+// A request none of whose questions is valid is refused as the runtime
+// refuses it on /v1/decisions: 400 invalid_request naming its first question,
+// with every question's reason. A batch is refused so only when none of its
+// entries has one; otherwise each entry answers, its questions failed.
+func TestARequestWithNoValidQuestionIsRefusedAsTheRuntimeRefusesIt(t *testing.T) {
+	exchange := Exchange{Codec: VLLMSR50Codec{}, Send: func(_ context.Context, _ WireCall, body []byte) (WireReply, error) {
+		for _, bad := range []string{"bad1", "bad2"} {
+			if strings.Contains(string(body), `"`+bad+`"`) {
+				return WireReply{Status: http.StatusUnprocessableEntity, Body: []byte(`{"detail":[{"loc":["body","questions","` + bad + `"],"msg":"bad","type":"invalid_question"}],"code":"question_failed","question":"` + bad + `","reason":"question_malformed"}`)}, nil
+			}
+		}
+		return WireReply{Status: http.StatusOK, Body: []byte(`{"model":"d3","answers":{"ok":{"type":"noul","noul":0.25}},"usage":{"input_tokens":3,"output_tokens":0}}`)}, nil
+	}}
+	invalid := systemoneprotocol.Request{State: state(t, `"x"`), Questions: []systemoneprotocol.NamedQuestion{
+		{Name: "bad1", Question: question50(t, `{"type": "choice", "instructions": "Which?", "criteria": {"only": "one"}}`)},
+		{Name: "bad2", Question: question50(t, `{"type": "choice", "instructions": "Which?", "criteria": {"only": "one"}}`)},
+	}}
+	valid := systemoneprotocol.Request{State: state(t, `"y"`), Questions: []systemoneprotocol.NamedQuestion{
+		{Name: "ok", Question: question50(t, `{"type": "noul", "instructions": "Ok?"}`)},
+	}}
+	ask := func(form systemoneprotocol.BatchForm, items ...systemoneprotocol.NamedRequest) (int, string) {
+		t.Helper()
+		names := make([]string, len(items))
+		for index, item := range items {
+			names[index] = item.Name
+		}
+		results := exchange.Ask(context.Background(), systemoneprotocol.Batch{Form: form, Items: items}, nil)
+		status, body, err := InternalCodec{}.EncodeResults(results, names, form, "vllm-sr/test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return status, string(body)
+	}
+	status, body := ask(systemoneprotocol.FormAlone, systemoneprotocol.NamedRequest{Request: invalid})
+	if want := `{"error":{"code":"invalid_request","message":"no question is valid (bad1: question_malformed; bad2: question_malformed)","question":"bad1","reason":"question_malformed"}}`; status != 400 || body != want {
+		t.Fatalf("a request without a valid question => %d %s\nwant 400 %s", status, body, want)
+	}
+	status, body = ask(systemoneprotocol.FormStates, systemoneprotocol.NamedRequest{Name: "a", Request: invalid}, systemoneprotocol.NamedRequest{Name: "b", Request: valid})
+	if want := `"a":{"model":"vllm-sr/test","answers":{"bad1":{"type":"choice","error":"invalid_question","reason":"question_malformed"},"bad2":{"type":"choice","error":"invalid_question","reason":"question_malformed"}}`; status != 200 || !strings.Contains(body, want) || !strings.Contains(body, `"b":{"model":"d3","answers":{"ok"`) {
+		t.Fatalf("a batch with a valid entry => %d %s", status, body)
+	}
+	status, body = ask(systemoneprotocol.FormStates, systemoneprotocol.NamedRequest{Name: "a", Request: invalid}, systemoneprotocol.NamedRequest{Name: "b", Request: invalid})
+	if want := `{"error":{"code":"invalid_request","message":"no question is valid (states.a.questions.bad1: question_malformed; states.a.questions.bad2: question_malformed; states.b.questions.bad1: question_malformed; states.b.questions.bad2: question_malformed)","question":"bad1","reason":"question_malformed","state":"a"}}`; status != 400 || body != want {
+		t.Fatalf("a batch without a valid question => %d %s\nwant 400 %s", status, body, want)
 	}
 }
 
@@ -290,6 +380,25 @@ func TestImplicitRolesDifferBetweenTheListeners(t *testing.T) {
 		t.Fatalf("4.0 listener: %s %+v", four.Internal, four)
 	}
 	if !strings.HasSuffix(string(five.Internal), `"roles":null}`) {
+		t.Fatalf("5.0 listener: %s", five.Internal)
+	}
+}
+
+// Media placed in front of a state is the other valid 5.0 request a 4.0
+// listener reads otherwise: it keeps the array state and its assets, and
+// counts the form, where a 5.0 listener reads the item with the image in
+// front of it.
+func TestMediaPlacedInFrontDifferBetweenTheListeners(t *testing.T) {
+	body := `{"model":"vela","state":["logo","Where is the logo?"],"assets":{"logo":{"type":"image","format":"png","data_base64":"iVBORw0KGgo="}},"questions":{"q":{"type":"noul","instructions":"Is there a logo?"}}}`
+	four, err := Listener40{}.Read(PathSystemOne, []byte(body), http.Header{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(four.Internal), `"state":["logo","Where is the logo?"]`) || strings.Join(four.Legacy, ",") != "placed_assets" {
+		t.Fatalf("4.0 listener: %s %+v", four.Internal, four.Legacy)
+	}
+	five := readFive(t, PathSystemOne, body, http.Header{})
+	if !strings.Contains(string(five.Internal), `"state":"Where is the logo?"`) || !strings.Contains(string(five.Internal), `"images":["data:image/png;base64,iVBORw0KGgo="]`) {
 		t.Fatalf("5.0 listener: %s", five.Internal)
 	}
 }

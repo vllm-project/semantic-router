@@ -120,7 +120,7 @@ func BackendInvoker(cfg *config.RouterConfig, listener string, local Invoke, rem
 			// A vllm-sr/4.0 backend gets the internal request as it is,
 			// unless roles it cannot carry must come out first.
 			schema := systemonecodec.SchemaID(cfg.UpstreamSchema(alias))
-			if schema != systemonecodec.SchemaVLLMSR40 || hasRoles(body) {
+			if schema != systemonecodec.SchemaVLLMSR40 || systemonecodec.HasRoles(body) {
 				return forwardThrough(ctx, schema, external, alias, body, send)
 			}
 		}
@@ -179,19 +179,4 @@ func forwardThrough(ctx context.Context, schema systemonecodec.SchemaID, model, 
 		return 0, nil, results[0].Err
 	}
 	return internal.EncodeResults(results, names, form, model)
-}
-
-// hasRoles reports whether an internal request names its parts' roles, or
-// none.
-func hasRoles(body []byte) bool {
-	batch, err := systemonecodec.InternalCodec{}.DecodeRequest(body)
-	if err != nil {
-		return false
-	}
-	for _, item := range batch.Items {
-		if item.Request.Roles.Mode != systemoneprotocol.RolesImplicit {
-			return true
-		}
-	}
-	return false
 }

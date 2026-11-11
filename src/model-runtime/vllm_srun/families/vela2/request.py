@@ -27,6 +27,7 @@ from ...errors import INVALID_QUESTION, QuestionError, question_error
 from ...systemone import (
     IMPLICIT_ROLES,
     REQUEST_ROLES,
+    STATE_KEY_ROLES,
     canonical,
     content,
     json_payload,
@@ -39,18 +40,6 @@ from ...systemone import QUESTION_TYPES as SYSTEM_ONE_TYPES
 from .calibration import SPAN_HEADS, Calibration
 
 ROLES = ("user", "context", "answer")
-STATE_KEY_ROLES = {
-    "request": "user",
-    "user": "user",
-    "prompt": "user",
-    "source": "context",
-    "context": "context",
-    "document": "context",
-    "tools": "context",
-    "previous_answer": "context",
-    "answer": "answer",
-    "response": "answer",
-}
 LABELLED_TYPES = ("set", "span")
 QUESTION_TYPES = (*SYSTEM_ONE_TYPES, *LABELLED_TYPES)
 FAMILY_FIELDS = frozenset({"over", "preset", "overflow", "require_full_input"})

@@ -197,7 +197,7 @@ func TestPublicSystemOneAnswersAFailedQuestionAsTheWholeRequest(t *testing.T) {
 	if status, answer := send(handler, "/v1/systemone", body, nil); status != 422 || answer["reason"] != "box_unsupported" || answer["question"] != "box" {
 		t.Fatalf("a request without a valid question on /v1/systemone => %d %v", status, answer)
 	}
-	if status, answer := send(handler, "/v1/decisions", body, nil); status != 400 || answer["code"] != "invalid_request" || !strings.Contains(answer["message"], "box questions") {
+	if status, answer := send(handler, "/v1/decisions", body, nil); status != 400 || answer["code"] != "invalid_request" || answer["question"] != "box" || answer["reason"] != "box_unsupported" || !strings.Contains(answer["message"], "box questions") {
 		t.Fatalf("a request without a valid question on /v1/decisions => %d %v", status, answer)
 	}
 	sink.response = `{"error":{"code":"invalid_request","message":"no question is valid (states.s1.questions.q: ...)","reason":"box_unsupported","question":"q","state":"s1"}}`

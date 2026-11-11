@@ -40,6 +40,10 @@ type Exchange struct {
 	MaxConcurrency int
 	Send           Send
 	Observer       Observer
+	// Answered, when set, hears each item's result as soon as the item has
+	// it, before Ask returns, so an item answered early need not wait for a
+	// slower one. Items asked one per call are heard concurrently.
+	Answered func(index int, result ItemResult)
 }
 
 // Ask asks every item of a batch. A schema with batches gets the batch in
@@ -51,13 +55,19 @@ type Exchange struct {
 // when set, fail an item before it is sent.
 func (e Exchange) Ask(ctx context.Context, batch systemoneprotocol.Batch, planErrs []error) []ItemResult {
 	results := make([]ItemResult, len(batch.Items))
+	settle := func(index int, result ItemResult) {
+		results[index] = result
+		if e.Answered != nil {
+			e.Answered(index, result)
+		}
+	}
 	if planErrs == nil {
 		planErrs = make([]error, len(batch.Items))
 	}
 	pending := make([]int, 0, len(batch.Items))
 	for index := range batch.Items {
 		if planErrs[index] != nil {
-			results[index].Err = &systemoneprotocol.Problem{Status: http.StatusBadRequest, Kind: systemoneprotocol.ProblemRejected, Detail: planErrs[index].Error()}
+			settle(index, ItemResult{Err: &systemoneprotocol.Problem{Status: http.StatusBadRequest, Kind: systemoneprotocol.ProblemRejected, Detail: planErrs[index].Error()}})
 			continue
 		}
 		pending = append(pending, index)
@@ -71,7 +81,7 @@ func (e Exchange) Ask(ctx context.Context, batch systemoneprotocol.Batch, planEr
 		answered, retry := e.callBatch(ctx, whole)
 		if !retry {
 			for position, index := range pending {
-				results[index] = answered[position]
+				settle(index, answered[position])
 			}
 			return results
 		}
@@ -85,11 +95,12 @@ func (e Exchange) Ask(ctx context.Context, batch systemoneprotocol.Batch, planEr
 			select {
 			case window <- struct{}{}:
 			case <-ctx.Done():
-				results[index].Err = ctx.Err()
+				settle(index, ItemResult{Err: ctx.Err()})
 				return
 			}
-			defer func() { <-window }()
-			results[index] = e.askItem(ctx, batch, batch.Items[index])
+			result := e.askItem(ctx, batch, batch.Items[index])
+			<-window
+			settle(index, result)
 		}(index)
 	}
 	wg.Wait()
@@ -135,6 +146,18 @@ func (e Exchange) askItem(ctx context.Context, batch systemoneprotocol.Batch, it
 		case result.Err == nil:
 			result.Response.Answers = append(result.Response.Answers, failed...)
 			return result
+		case isProblem && NoValidQuestion(problem):
+			if refusal := noValidQuestion(problem, failed); refusal != nil {
+				return ItemResult{Err: refusal}
+			}
+			return result
+		case isProblem && problem.Question != "" && len(request.Questions) == 1 && invalidQuestions(problem, failed):
+			_, questionType, found := withoutQuestion(request, problem.Question)
+			if !found {
+				return result
+			}
+			failed = append(failed, failedAnswer(problem, questionType))
+			return ItemResult{Response: systemoneprotocol.Response{Answers: inQuestionOrder(item.Request, failed)}}
 		case isProblem && problem.Question != "" && len(failed) < 2 && len(request.Questions) > 1:
 			remaining, questionType, found := withoutQuestion(request, problem.Question)
 			if !found {
@@ -143,18 +166,7 @@ func (e Exchange) askItem(ctx context.Context, batch systemoneprotocol.Batch, it
 			if e.Observer.Retried != nil {
 				e.Observer.Retried(problem.Question, problem.QuestionError)
 			}
-			kind := systemoneprotocol.Null()
-			if questionType != "" {
-				kind = systemoneprotocol.String(questionType)
-			}
-			answer := systemoneprotocol.Object(
-				systemoneprotocol.Member{Key: "type", Value: kind},
-				systemoneprotocol.Member{Key: "error", Value: systemoneprotocol.String(firstNonEmpty(problem.QuestionError, "invalid_question"))},
-			)
-			if problem.Reason != "" {
-				answer = answer.With("reason", systemoneprotocol.String(problem.Reason))
-			}
-			failed = append(failed, systemoneprotocol.Member{Key: problem.Question, Value: answer})
+			failed = append(failed, failedAnswer(problem, questionType))
 			request = remaining
 		case isProblem && problem.Kind == systemoneprotocol.ProblemOverloaded && problem.RetryAfter > 0 && !waited && fitsDeadline(ctx, problem.RetryAfter):
 			waited = true
@@ -169,6 +181,69 @@ func (e Exchange) askItem(ctx context.Context, batch systemoneprotocol.Batch, it
 			return result
 		}
 	}
+}
+
+// failedAnswer is a question's answer when the server fails it: its type, or
+// null, and the question error.
+func failedAnswer(problem *systemoneprotocol.Problem, questionType string) systemoneprotocol.Member {
+	kind := systemoneprotocol.Null()
+	if questionType != "" {
+		kind = systemoneprotocol.String(questionType)
+	}
+	answer := systemoneprotocol.Object(
+		systemoneprotocol.Member{Key: "type", Value: kind},
+		systemoneprotocol.Member{Key: "error", Value: systemoneprotocol.String(firstNonEmpty(problem.QuestionError, "invalid_question"))},
+	)
+	if problem.Reason != "" {
+		answer = answer.With("reason", systemoneprotocol.String(problem.Reason))
+	}
+	return systemoneprotocol.Member{Key: problem.Question, Value: answer}
+}
+
+// invalidQuestions reports whether a failed question and every one failed
+// before it are invalid: the runtime answers such a request's questions each
+// with its error, and refuses it when nothing else in it is valid.
+func invalidQuestions(problem *systemoneprotocol.Problem, failed []systemoneprotocol.Member) bool {
+	if firstNonEmpty(problem.QuestionError, "invalid_question") != "invalid_question" {
+		return false
+	}
+	for _, earlier := range failed {
+		if textOf(mustGet(earlier.Value, "error")) != "invalid_question" {
+			return false
+		}
+	}
+	return true
+}
+
+// noValidQuestion is a server's refusal of the questions left in a request,
+// none of them valid, as the refusal of the whole request: 400
+// invalid_request naming its first question. It is nil when a question
+// failed otherwise.
+func noValidQuestion(problem *systemoneprotocol.Problem, failed []systemoneprotocol.Member) *systemoneprotocol.Problem {
+	if !invalidQuestions(problem, failed) {
+		return nil
+	}
+	refusal := *problem
+	if len(failed) > 0 {
+		refusal.Question, refusal.Reason, refusal.Limit = failed[0].Key, textOf(mustGet(failed[0].Value, "reason")), nil
+	}
+	return &refusal
+}
+
+// inQuestionOrder orders answers as the request asks its questions.
+func inQuestionOrder(request systemoneprotocol.Request, answers []systemoneprotocol.Member) []systemoneprotocol.Member {
+	ordered := make([]systemoneprotocol.Member, 0, len(answers))
+	for _, question := range request.Questions {
+		for _, answer := range answers {
+			if answer.Key == question.Name {
+				ordered = append(ordered, answer)
+			}
+		}
+	}
+	if len(ordered) != len(answers) {
+		return answers
+	}
+	return ordered
 }
 
 // call makes the one call a batch plans, its deviations applied, and reads

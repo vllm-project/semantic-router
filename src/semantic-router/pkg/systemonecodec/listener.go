@@ -27,10 +27,13 @@ const (
 	PlanTranslate PlanKind = "translate"
 )
 
-// LegacyForms are the vllm-sr/4.0 forms a listener counts, in order:
-// implicit_roles is an object state without roles, which 4.0 reads by its
-// keys and 5.0 as the user's content.
-var LegacyForms = []string{"states", "images", "videos", "choices", "levels", "labels", "preset_only", "long_context", "implicit_roles"}
+// LegacyForms are the vllm-sr/4.0 forms a listener counts, in order. Two are
+// valid 5.0 requests that 4.0 reads otherwise: implicit_roles is an object
+// state without roles, which 4.0 reads by its keys and 5.0 as the user's
+// content, and placed_assets a state of asset placeholders in front of one
+// item, which 4.0 reads as an array labelling its assets and 5.0 as the item
+// with the media in front of it.
+var LegacyForms = []string{"states", "images", "videos", "choices", "levels", "labels", "preset_only", "long_context", "implicit_roles", "placed_assets"}
 
 // ClientRequest is a client's request as a listener read and planned it.
 type ClientRequest struct {
@@ -107,6 +110,9 @@ func LegacyFormsOf(batch systemoneprotocol.Batch) []string {
 		}
 		if request.State.Kind() == systemoneprotocol.KindObject && request.Roles.Mode == systemoneprotocol.RolesImplicit {
 			used["implicit_roles"] = true
+		}
+		if _, _, _, _, placed, _ := UnplaceMedia(request.State, request.Assets); placed {
+			used["placed_assets"] = true
 		}
 	}
 	var forms []string

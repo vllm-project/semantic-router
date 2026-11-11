@@ -96,9 +96,12 @@ inline `images` and `states` batches. A 4.0 listener therefore accepts both
 forms on the same paths, with no header:
 
 - The 4.0-only forms are exactly the ones a 5.0 server refuses, so reading them
-  cannot change the meaning of a valid 5.0 request. The one overlap is implicit
-  roles: an object state without `roles` keeps 4.0's implicit roles on a 4.0
-  listener.
+  cannot change the meaning of a valid 5.0 request, with two overlaps, where a
+  valid 5.0 request keeps its 4.0 reading on a 4.0 listener: an object state
+  without `roles` keeps 4.0's implicit roles, and a state of asset
+  placeholders in front of one item stays an array that labels its assets,
+  where 5.0 reads the item with the media in front of it. The listener counts
+  both.
 - Answers keep the 4.0 shape; error bodies carry both `detail` (the standard)
   and `error` (4.0), so either kind of client can read them.
 - A per-listener counter of the 4.0-only forms clients use, by form, tells the

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemoneprotocol"
 )
@@ -478,6 +479,56 @@ func hasKey(order []string, key string) bool {
 	return false
 }
 
+// unanswerable is the runtime's refusal of a request none of whose questions
+// is valid, every answer of every item failed as invalid_question: 400
+// invalid_request naming the first question, and its entry in a batch. It is
+// nil when something in the request is answered or failed otherwise.
+func unanswerable(results []ItemResult, names []string) *systemoneprotocol.Problem {
+	var refusal *systemoneprotocol.Problem
+	var reasons []string
+	for index, result := range results {
+		for _, answer := range result.Response.Answers {
+			if textOf(mustGet(answer.Value, "error")) != "invalid_question" {
+				return nil
+			}
+			reason, location := textOf(mustGet(answer.Value, "reason")), answer.Key
+			if names != nil {
+				location = "states." + names[index] + ".questions." + answer.Key
+			}
+			reasons = append(reasons, location+": "+firstNonEmpty(reason, "invalid_question"))
+			if refusal == nil {
+				refusal = &systemoneprotocol.Problem{
+					Status: http.StatusBadRequest, Kind: systemoneprotocol.ProblemRejected, Code: "invalid_request",
+					Question: answer.Key, QuestionError: "invalid_question", Reason: reason,
+				}
+				if names != nil {
+					refusal.Item = names[index]
+				}
+			}
+		}
+	}
+	if refusal != nil {
+		refusal.Detail = "no question is valid (" + strings.Join(reasons, "; ") + ")"
+	}
+	return refusal
+}
+
+// HasRoles reports whether an internal request carries roles, null among
+// them: a vllm-sr/4.0 server reads none, so such a request goes to one
+// through its codec, which strips roles its keys imply and refuses others.
+func HasRoles(body []byte) bool {
+	batch, err := InternalCodec{}.DecodeRequest(body)
+	if err != nil {
+		return false
+	}
+	for _, item := range batch.Items {
+		if item.Request.Roles.Mode != systemoneprotocol.RolesImplicit {
+			return true
+		}
+	}
+	return false
+}
+
 // DecodeResponse reads an internal answer to a request of form: a response
 // alone, or a batch's entries under states, each under its name.
 func (InternalCodec) DecodeResponse(form systemoneprotocol.BatchForm, names []string, body []byte) ([]ItemResult, string, error) {
@@ -520,6 +571,10 @@ func (InternalCodec) EncodeResults(results []ItemResult, names []string, form sy
 			status, body := NativeErrorBody(results[0].Err, "")
 			return status, body, nil
 		}
+		if refusal := unanswerable(results, nil); refusal != nil {
+			status, body := NativeErrorBody(refusal, "")
+			return status, body, nil
+		}
 		body, err := json.Marshal(responseValue(results[0].Response, model))
 		return http.StatusOK, body, err
 	}
@@ -536,6 +591,10 @@ func (InternalCodec) EncodeResults(results []ItemResult, names []string, form sy
 		states = states.With(names[index], responseValue(result.Response, model))
 		usage.InputTokens += result.Response.Usage.InputTokens
 		usage.OutputTokens += result.Response.Usage.OutputTokens
+	}
+	if refusal := unanswerable(results, names); refusal != nil {
+		status, body := NativeErrorBody(refusal, "")
+		return status, body, nil
 	}
 	body, err := json.Marshal(systemoneprotocol.Object(
 		systemoneprotocol.Member{Key: "model", Value: systemoneprotocol.String(model)},

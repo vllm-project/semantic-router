@@ -61,10 +61,34 @@ class _Implicit:
 IMPLICIT_ROLES: Any = _Implicit()
 # The roles of the request being planned, which the role-aware families read.
 REQUEST_ROLES: ContextVar[Any] = ContextVar("request_roles", default=IMPLICIT_ROLES)
+# vllm-sr/4.0's implicit roles: the role each state key names, read in lower
+# case; any other key is context.
+STATE_KEY_ROLES = {
+    "request": "user",
+    "user": "user",
+    "prompt": "user",
+    "source": "context",
+    "context": "context",
+    "document": "context",
+    "tools": "context",
+    "previous_answer": "context",
+    "answer": "answer",
+    "response": "answer",
+}
+
+
+def implicit_roles(state: Mapping[Any, Any]) -> dict[str, str]:
+    """The role vllm-sr/4.0's implicit roles give each key of an object state."""
+    return {str(key): STATE_KEY_ROLES.get(str(key).lower(), "context") for key in state}
 
 
 def read_roles(body: Mapping[str, Any]) -> Any:
-    """A request's roles: IMPLICIT_ROLES without ``roles``, None for null, else ``{key: role}``; ValueError when malformed."""
+    """A request's roles: IMPLICIT_ROLES without ``roles``, None for null, else ``{key: role}``; ValueError when malformed.
+
+    Roles that give every key of an object state the role its implicit roles
+    give it are the implicit roles, so a 4.0 request a Router converted to
+    explicit roles is read exactly as it was written.
+    """
     if "roles" not in body:
         return IMPLICIT_ROLES
     roles = body["roles"]
@@ -75,6 +99,9 @@ def read_roles(body: Mapping[str, Any]) -> Any:
         for key, value in roles.items()
     ):
         raise ValueError("roles must map state keys to user, context or answer")
+    state = body.get("state")
+    if isinstance(state, dict) and state and roles == implicit_roles(state):
+        return IMPLICIT_ROLES
     return dict(roles)
 
 

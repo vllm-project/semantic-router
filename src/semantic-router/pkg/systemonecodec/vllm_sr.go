@@ -50,7 +50,11 @@ func (VLLMSR40Codec) Plan(batch systemoneprotocol.Batch, target Target, _ Policy
 		request := item.Request
 		if request.Roles.Mode != systemoneprotocol.RolesImplicit {
 			if !request.Roles.SameAsImplicit(request.State) {
-				return Plan{}, diagnostics, fmt.Errorf("request %q: vllm-sr/4.0 gives an object state's parts the roles their keys name, so it cannot carry these roles", item.Name)
+				return Plan{}, diagnostics, &systemoneprotocol.Problem{
+					Status: http.StatusBadRequest, Kind: systemoneprotocol.ProblemRejected, Code: "invalid_request",
+					Reason: "roles_unsupported", Item: item.Name,
+					Detail: fmt.Sprintf("request %q: vllm-sr/4.0 gives an object state's parts the roles their keys name, so it cannot carry these roles", item.Name),
+				}
 			}
 			request.Roles = systemoneprotocol.Roles{}
 			diagnostics = append(diagnostics, Diagnostic{Field: "roles", Action: DiagnosticStripped, Reason: "vllm-sr/4.0's implicit roles are the same"})
@@ -135,8 +139,12 @@ func NativeProblem(status int, body []byte) *systemoneprotocol.Problem {
 	}
 	fields := answer.Error
 	problem.Code, problem.Detail, problem.Reason, problem.Limit = fields.Code, fields.Message, fields.Reason, fields.Limit
-	if fields.Code == "question_failed" && fields.Question != "" {
+	switch {
+	case fields.Question == "":
+	case fields.Code == "question_failed":
 		problem.Question, problem.Item, problem.QuestionError = fields.Question, fields.State, fields.QuestionError
+	case fields.Code == "invalid_request":
+		problem.Question, problem.Item, problem.QuestionError = fields.Question, fields.State, "invalid_question"
 	}
 	return problem
 }
@@ -191,16 +199,29 @@ func nativeErrorFields(problem *systemoneprotocol.Problem, code, item string) ma
 	if problem.Limit != nil {
 		fields["limit"] = *problem.Limit
 	}
-	if state := firstNonEmpty(problem.Item, item); state != "" && code == "question_failed" {
+	if problem.Question == "" {
+		return fields
+	}
+	if state := firstNonEmpty(problem.Item, item); state != "" {
 		fields["state"] = state
 	}
+	fields["question"] = problem.Question
 	if code == "question_failed" {
-		fields["question"], fields["question_error"] = problem.Question, firstNonEmpty(problem.QuestionError, "invalid_question")
+		fields["question_error"] = firstNonEmpty(problem.QuestionError, "invalid_question")
 	}
 	return fields
 }
 
+// NoValidQuestion reports whether a problem is the refusal of a request none
+// of whose questions is valid: 400 invalid_request, naming the first of them.
+func NoValidQuestion(problem *systemoneprotocol.Problem) bool {
+	return problem.Question != "" && problem.Code == "invalid_request" && problem.Status == http.StatusBadRequest
+}
+
 func nativeStatus(problem *systemoneprotocol.Problem) (int, string) {
+	if NoValidQuestion(problem) {
+		return http.StatusBadRequest, "invalid_request"
+	}
 	if problem.Question != "" {
 		return questionStatus(problem), "question_failed"
 	}

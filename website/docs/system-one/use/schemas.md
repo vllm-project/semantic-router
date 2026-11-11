@@ -51,8 +51,9 @@ The Router counts what each listener's clients send in
 
 - `action="legacy_form"`, by `field`: the 4.0 forms a request used (`states`,
   `images`, `videos`, `choices`, `levels`, `labels`, `preset_only`,
-  `long_context`) and `implicit_roles`, an object state without `roles`, which
-  a 5.0 listener reads differently;
+  `long_context`), and two valid 5.0 requests a 5.0 listener reads
+  differently: `implicit_roles`, an object state without `roles`, and
+  `placed_assets`, a state of asset placeholders in front of one item;
 - `field="request"` with `action="passed_through"` or `"translated"`: how each
   request went on.
 
