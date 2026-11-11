@@ -239,6 +239,11 @@ recipes:
             use_reasoning: false
 ```
 
+The backend takes no key. The Router sends none to an `ollama` backend, on
+routed requests and on its own calls such as shadow requests, and ignores an
+`api_key` or `auth.api_key_env` set on one. Use provider `openai-compatible`
+for a server behind a proxy that checks a key.
+
 Validate and serve:
 
 ```bash

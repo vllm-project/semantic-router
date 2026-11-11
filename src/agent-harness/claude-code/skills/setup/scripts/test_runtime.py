@@ -5,6 +5,7 @@ import os
 import sys
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from typing import ClassVar
 from unittest import mock
@@ -143,8 +144,14 @@ class HealthDevice(unittest.TestCase):
         }
 
         def urlopen(request, timeout):
-            body = json.dumps(replies[request.full_url.split("8790", 1)[1]]).encode()
-            return contextlib.nullcontext(io.BytesIO(body))
+            path = request.full_url.split("8790", 1)[1]
+            if path not in replies:
+                raise urllib.error.HTTPError(
+                    request.full_url, 404, "Not Found", {}, None
+                )
+            return contextlib.nullcontext(
+                io.BytesIO(json.dumps(replies[path]).encode())
+            )
 
         with mock.patch.object(runtime.OPENER, "open", urlopen):
             return runtime.health("http://127.0.0.1:8790/v1/decisions")
@@ -160,6 +167,78 @@ class HealthDevice(unittest.TestCase):
 
     def test_an_older_runtime_has_no_device(self):
         self.assertIsNone(self.health_with({"data": [{"id": "m"}]})["device"])
+
+
+class HostedRuntimeTest(unittest.TestCase):
+    """A System One API: a model list, and questions that name a model."""
+
+    def test_a_404_health_with_listed_models_is_ready(self):
+        def urlopen(request, timeout):
+            if request.full_url.endswith("/health"):
+                raise urllib.error.HTTPError(
+                    request.full_url, 404, "Not Found", {}, None
+                )
+            body = json.dumps({"data": [{"id": "vllm-sr/vela3-flash"}]}).encode()
+            return contextlib.nullcontext(io.BytesIO(body))
+
+        with mock.patch.object(runtime.OPENER, "open", urlopen):
+            out = runtime.health("https://sr.example/v1/decisions")
+        self.assertTrue(out["ready"])
+        self.assertEqual(out["model"], "vllm-sr/vela3-flash")
+        self.assertEqual(out["modelIds"], ["vllm-sr/vela3-flash"])
+
+    def test_a_404_health_without_models_is_not_ready(self):
+        def urlopen(request, timeout):
+            raise urllib.error.HTTPError(request.full_url, 404, "Not Found", {}, None)
+
+        with mock.patch.object(runtime.OPENER, "open", urlopen):
+            self.assertFalse(runtime.health("https://sr.example/v1/decisions")["ready"])
+
+    def test_a_router_listener_lists_its_system_one_models(self):
+        replies = {
+            "/health": {"status": "ok"},
+            "/v1/systemone/models": {
+                "data": [
+                    {
+                        "id": "vela3-fast",
+                        "api": "systemone",
+                        "question_types": ["choice", "noul", "span"],
+                    }
+                ]
+            },
+            "/v1/models": {"data": [{"id": "vllm-sr/auto"}]},
+        }
+
+        def urlopen(request, timeout):
+            path = request.full_url.split("8899", 1)[1]
+            return contextlib.nullcontext(
+                io.BytesIO(json.dumps(replies[path]).encode())
+            )
+
+        with mock.patch.object(runtime.OPENER, "open", urlopen):
+            out = runtime.health("http://127.0.0.1:8899/v1/decisions")
+        self.assertTrue(out["ready"])
+        self.assertEqual(out["modelIds"], ["vela3-fast"])
+        # vela3-fast answers no score questions, which the router app asks
+        self.assertEqual(out["noScore"], ["vela3-fast"])
+
+    def test_a_question_names_the_model_only_when_one_is_set(self):
+        sent = []
+
+        def urlopen(request, timeout):
+            sent.append(json.loads(request.data))
+            raise urllib.error.HTTPError(request.full_url, 500, "x", {}, None)
+
+        with mock.patch.object(runtime.OPENER, "open", urlopen):
+            runtime.ask(
+                "https://sr.example/v1/decisions",
+                "guard",
+                "ls",
+                model="vllm-sr/vela3-flash",
+            )
+            runtime.ask("https://sr.example/v1/decisions", "guard", "ls")
+        self.assertEqual(sent[0]["model"], "vllm-sr/vela3-flash")
+        self.assertNotIn("model", sent[1])
 
 
 if __name__ == "__main__":

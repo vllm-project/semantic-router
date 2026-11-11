@@ -187,6 +187,8 @@ declare module 'claude-code' {
       isOffline: boolean
       // When a request last went to a runtime known to be offline.
       offlineTry: number
+      // The runtime's model when it answers no `score` question, so the router steps aside; empty otherwise.
+      noScoreModel: string
       // The ids of requests vSR gave up on (past their wait) that the runtime may still be answering.
       abandoned: number[]
       calibration: Calibration

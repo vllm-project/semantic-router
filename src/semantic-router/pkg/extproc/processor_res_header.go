@@ -29,7 +29,10 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		ctx.UpstreamStatusCode = outcome.statusCode
 	}
 	annotateUpstreamResponseSpan(ctx, outcome)
-	maybeRecordResponseHeaderTTFT(ctx)
+	if outcome.isSuccessful {
+		// A failed response is not the model's time to first token.
+		maybeRecordResponseHeaderTTFT(ctx)
+	}
 	r.updateRouterReplayStatus(ctx, outcome.statusCode, ctx != nil && ctx.IsStreamingResponse)
 	r.observeRouterLearningProviderStatus(ctx, outcome.statusCode)
 

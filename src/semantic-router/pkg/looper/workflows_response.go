@@ -163,7 +163,7 @@ func formatWorkflowStreamingResponse(
 		err  error
 	)
 	if finalResp.HasToolCalls {
-		body, err = buildWorkflowStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw, backendFinishReason(finalResp))
+		body, err = buildStreamingToolCallSSE(id, timestamp, finalResp)
 		if err != nil {
 			return nil, err
 		}
@@ -174,38 +174,6 @@ func formatWorkflowStreamingResponse(
 	resp.IntermediateResponses = trace
 	resp.Usage = usage
 	return withWorkflowExtension(resp, cfg, trace)
-}
-
-func buildWorkflowStreamingToolCallSSE(
-	id string,
-	created int64,
-	model string,
-	raw []byte,
-	finishReason string,
-) ([]byte, error) {
-	toolCalls, err := fusionToolCallDeltasFromRaw(raw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse workflow streaming tool-call response: %w", err)
-	}
-
-	var body []byte
-	roleChoice := map[string]interface{}{
-		"index":         0,
-		"delta":         map[string]interface{}{"role": "assistant"},
-		"finish_reason": nil,
-	}
-	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, nil))
-	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, map[string]interface{}{
-		"index":         0,
-		"delta":         map[string]interface{}{"tool_calls": toolCalls},
-		"finish_reason": nil,
-	}, nil))
-	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, map[string]interface{}{
-		"index":         0,
-		"delta":         map[string]interface{}{},
-		"finish_reason": toolCallFinishReason(finishReason),
-	}, nil))
-	return appendSSEDone(body), nil
 }
 
 func buildWorkflowStreamingSSE(

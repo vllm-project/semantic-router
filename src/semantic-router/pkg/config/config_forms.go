@@ -328,3 +328,11 @@ func encodeDocument(document *yaml.Node) ([]byte, error) {
 	}
 	return out.Bytes(), nil
 }
+
+// CanonicalConfigBytes returns a document as the Router reads it, for an
+// editor that decodes it into the canonical types: each renamed form in its
+// canonical form, and an error for a removed one.
+func CanonicalConfigBytes(data []byte) ([]byte, error) {
+	canonical, _, err := applyConfigForms(data, configForms)
+	return canonical, err
+}

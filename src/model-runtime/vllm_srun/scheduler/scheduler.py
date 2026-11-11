@@ -207,9 +207,11 @@ class Scheduler:
 
         ``deadlines`` holds each job's own deadline. Admission counts every
         job not yet answered, queued or planned, and refuses the whole group
-        or none of it. ``timing`` records the group's forwards. ``reference``
-        jobs (the golden check) run alone, in their released forwards.
-        ``alone`` jobs (``Job.alone``) are planned without the batching window.
+        or none of it; with nothing pending it admits a group beyond either
+        bound, which could never run otherwise. ``timing`` records the
+        group's forwards. ``reference`` jobs (the golden check) run alone, in
+        their released forwards. ``alone`` jobs (``Job.alone``) are planned
+        without the batching window.
         """
         futures, pending = self._jobs(item_lists, deadlines, timing, reference, alone)
         if not pending:
@@ -218,9 +220,9 @@ class Scheduler:
         with self._lock:
             if self._stopped:
                 raise RuntimeServiceError("not_ready", "the runtime is shutting down")
-            if self._pending_jobs + len(pending) > self.limits.max_queue or (
-                self._pending_jobs
-                and self._pending_tokens + tokens > self.limits.max_queued_tokens
+            if self._pending_jobs and (
+                self._pending_jobs + len(pending) > self.limits.max_queue
+                or self._pending_tokens + tokens > self.limits.max_queued_tokens
             ):
                 raise RuntimeServiceError(
                     "overloaded", "the request queue is full; retry later"

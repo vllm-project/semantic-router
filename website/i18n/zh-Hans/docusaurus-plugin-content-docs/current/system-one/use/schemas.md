@@ -17,7 +17,7 @@ schema ID 写明 System One API 遵循的是谁的规范、哪个版本。Router
 | Schema | 含义 |
 | --- | --- |
 | `systemone/0.2` | 已发布的 System One 标准 0.2 版。仓库在 `config/schemas/systemone` 中保存我们自己对该接口的描述，附带来源和核对时的 sha256。 |
-| `vllm-sr/5.0` | 标准加上 vllm-sr 扩展集 5.0：`roles`、`options`、`preset` 和 `over` 等问题提示、`set` 与 `span` 问题类型、视频资源、批量端点、平铺的错误字段和模型卡。见[扩展参考](../reference/extension-reference.md)。 |
+| `vllm-sr/5.0` | 标准加上 vllm-sr 扩展集 5.0：`roles`、`options`、`preset` 和 `over` 等问题提示、`set` 与 `span` 问题类型、视频资源、批量端点、平铺的错误字段和模型卡。见[扩展参考](/docs/system-one/reference/extension-reference)。 |
 | `vllm-sr/4.0` | 旧的运行时契约 4.0.0，保留下来让尚未升级的服务器和客户端继续工作。 |
 
 Router 的两侧各自写明 schema，互不影响：listener 可以对客户端保持 `vllm-sr/4.0`，而所有后端都使用 `vllm-sr/5.0`。

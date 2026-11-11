@@ -8,18 +8,16 @@ another copy of question, stage, budget and calibration field inventories.
 from functools import cache, partial
 from typing import Annotated, Any
 
+from jsonschema import Draft202012Validator
 from pydantic import AfterValidator
 
 from cli.config_schema import schema_document
-from cli.config_schema.validation import ConfigSchemaValidator
 
 
 @cache
-def _definition_validator(name: str) -> ConfigSchemaValidator:
+def _definition_validator(name: str) -> Draft202012Validator:
     document = schema_document()
-    return ConfigSchemaValidator(
-        {"$ref": f"#/$defs/{name}", "$defs": document["$defs"]}
-    )
+    return Draft202012Validator({"$ref": f"#/$defs/{name}", "$defs": document["$defs"]})
 
 
 def _validate_definition(name: str, value: dict[str, Any]) -> dict[str, Any]:

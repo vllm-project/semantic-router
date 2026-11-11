@@ -248,6 +248,44 @@ recipes:
         )
 
 
+def test_envoy_mode_refuses_a_listener_system_one_api(tmp_path, monkeypatch):
+    # ext_proc answers /v1/systemone with 404, so a published model would be
+    # unreachable behind the generated Envoy listener.
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "listener 'public': apis.systemone is served in standalone mode"
+        ),
+    ):
+        _render_envoy_config(
+            tmp_path,
+            monkeypatch,
+            """
+version: v0.5
+listeners:
+  - name: public
+    address: 0.0.0.0
+    port: 8899
+    apis:
+      openai: {}
+      systemone:
+        models: [vllm-sr/d3-ultra]
+providers:
+  defaults:
+    model: local-model
+  models:
+    - name: local-model
+      backend_refs:
+        - provider: vllm
+          endpoint: 127.0.0.1:8000
+recipes:
+  - name: default
+""",
+            extproc_host="localhost",
+            router_api_host="localhost",
+        )
+
+
 def test_envoy_routes_only_the_paths_of_the_apis_a_listener_serves(
     tmp_path, monkeypatch
 ):

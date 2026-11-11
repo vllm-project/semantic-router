@@ -16,7 +16,7 @@ var (
 	requestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "vsr_model_runtime_requests_total",
-			Help: "Calls to model runtime deployments by outcome (ok, timeout, unavailable, overloaded, rejected, failed).",
+			Help: "Calls to model runtime deployments by outcome (ok, timeout, cancelled, unknown_deployment, unavailable, overloaded, rejected, failed).",
 		},
 		[]string{"deployment", "outcome"},
 	)

@@ -135,6 +135,6 @@ recipes[default].signals.pii[personal_data]: span_required: resolves to deployme
 | `score` 的等级数 | 2 到 10 |
 | 一次调用中的问题数 | 协议无限制 |
 | choice 评审（`tool_rank`）的候选数 | 最多 255，即选项上限 |
-| 逐候选评审（`relevance`、`same_request`）的候选数 | `judge.max_candidates`，默认 64 |
+| 逐候选评审（`relevance`、`same_request`）的候选数 | `judge.max_candidates`，默认 64，最多 4096 |
 
 候选数超过上限的评审会截断，绝不会让请求失败。输入长度是模型的属性：vela3-fast 每次决策读取 32,768 个 token，路由和 span 问题使用 8,192 token 的窗口；较大的 Vela 3.0 规格每次决策最多读取 262,144 个 token，每个 span 目标 32,768 个。[性能与成本](../deploy/performance.md#long-inputs)介绍长输入。

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -71,11 +72,11 @@ type applicationRuleSpec struct {
 }
 
 // failsClosed reports whether the compiled rule matches when its deployment
-// gives no answer: a request-stage jailbreak or pii rule with on_unknown:
-// match.
+// gives no answer: a request-stage jailbreak or pii rule unless its
+// on_unknown is no_match.
 func (spec applicationRuleSpec) failsClosed() bool {
 	guard := spec.signalType == SignalTypeJailbreak || spec.signalType == SignalTypePII
-	return guard && spec.stage != SystemOneStageResponse && spec.onUnknown == string(RuleOnUnknownMatch)
+	return guard && spec.stage != SystemOneStageResponse && spec.onUnknown != string(RuleOnUnknownNoMatch)
 }
 
 // ApplicationRules compiles the scope's application signal rules, by type in
@@ -130,7 +131,7 @@ func (c *RouterConfig) applicationRuleSpecs() []applicationRuleSpec {
 		specs = append(specs, applicationRuleSpec{
 			signalType: SignalTypeJailbreak, preset: presets.Jailbreak, stage: r.EffectiveStage(), name: r.Name,
 			description: r.Description, deployment: r.Deployment, predicate: r.Predicate, input: SystemOneInput{History: r.Input.History},
-			onUnscanned: SystemOneUnscannedMatch, onUnknown: r.OnUnknown, timeoutMs: r.TimeoutMs,
+			onUnscanned: cmp.Or(r.OnUnscanned, SystemOneUnscannedBestEffort), onUnknown: r.OnUnknown, timeoutMs: r.TimeoutMs,
 		})
 	}
 	for _, r := range c.SafetyRules {
@@ -140,15 +141,16 @@ func (c *RouterConfig) applicationRuleSpecs() []applicationRuleSpec {
 		}
 		specs = append(specs, applicationRuleSpec{
 			signalType: SignalTypeSafety, preset: preset, stage: r.EffectiveStage(), name: r.Name,
-			description: r.Description, deployment: r.Deployment, labels: r.Labels, predicate: r.Predicate, timeoutMs: r.TimeoutMs,
+			description: r.Description, deployment: r.Deployment, labels: r.Labels, predicate: r.Predicate,
+			onUnscanned: SystemOneUnscannedBestEffort, timeoutMs: r.TimeoutMs,
 		})
 	}
 	for _, r := range c.PIIRules {
 		specs = append(specs, applicationRuleSpec{
 			signalType: SignalTypePII, preset: presets.PII, name: r.Name, description: r.Description,
 			deployment: r.Deployment, ignoreLabels: r.IgnoreLabels, predicate: r.Predicate,
-			input: SystemOneInput{History: r.Input.History, ToolResults: r.Input.ToolResults}, onUnscanned: SystemOneUnscannedMatch,
-			onUnknown: r.OnUnknown, timeoutMs: r.TimeoutMs,
+			input:       SystemOneInput{History: r.Input.History, ToolResults: r.Input.ToolResults, Request: r.Input.Request},
+			onUnscanned: cmp.Or(r.OnUnscanned, SystemOneUnscannedBestEffort), onUnknown: r.OnUnknown, timeoutMs: r.TimeoutMs,
 		})
 	}
 	for _, r := range c.HallucinationRules {

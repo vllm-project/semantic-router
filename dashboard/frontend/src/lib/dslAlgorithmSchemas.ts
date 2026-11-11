@@ -122,7 +122,7 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           type: 'select',
           options: ['', 'weighted', 'equal', 'round_robin', 'first_only'],
         },
-        { key: 'temperature', label: 'Temperature', type: 'number', placeholder: '1.0' },
+        { key: 'temperature', label: 'Temperature', type: 'number', placeholder: 'request value' },
         {
           key: 'include_reasoning',
           label: 'Include Reasoning',

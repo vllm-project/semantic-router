@@ -34,6 +34,7 @@ from .models_application import (
 )
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
@@ -47,7 +48,11 @@ from pydantic import (
 from .algorithms import AlgorithmConfig, ModelRef
 from .config_contract import UnknownPolicy
 from .config_schema import routing_surface_catalog, surface_types
-from .context_bands import normalize_token_count, validate_context_band
+from .context_bands import (
+    normalize_token_count,
+    references_environment,
+    validate_context_band,
+)
 from .durations import parse_duration
 
 RoutingStrategy = Literal["priority", "confidence"]
@@ -166,7 +171,8 @@ class Listener(BaseModel):
         "and anthropic are aliases of chat_completions and messages). Other "
         "API paths answer 404. Omitted, the listener serves chat_completions, "
         "responses, messages and images, and not systemone. A model "
-        "allow-list is enforced in standalone mode; --gateway extproc rejects it.",
+        "allow-list is enforced in standalone mode; --gateway extproc rejects it. "
+        "Standalone mode serves systemone; --gateway extproc rejects it.",
     )
     tls: Optional[ListenerTLS] = Field(
         default=None,
@@ -706,7 +712,16 @@ class ResponseCachePluginConfig(BaseModel):
     revision: Optional[ResponseCacheRevisionConfig] = None
 
 
-CompressionTokenLimit = Literal["auto"] | int
+def _environment_reference(value: str) -> str:
+    if not references_environment(value):
+        raise ValueError("must reference the environment")
+    return value
+
+
+# The Router expands a reference before it decodes a number-or-auto field, so a
+# reference can stand for "auto" or a count there.
+EnvironmentReference = Annotated[str, AfterValidator(_environment_reference)]
+CompressionTokenLimit = Literal["auto"] | int | EnvironmentReference
 
 
 class ContextBudgetConfig(BaseModel):
@@ -970,10 +985,23 @@ class RequestParamsPluginConfig(BaseModel):
 
     blocked_params: Optional[List[str]] = None
     default_max_tokens: Optional[
-        Annotated[int, Field(ge=1, strict=True)] | Literal["auto"]
+        Annotated[int, Field(ge=1, strict=True)]
+        | Literal["auto"]
+        | EnvironmentReference
     ] = None
     max_tokens_limit: Optional[int] = Field(default=None, ge=1)
     max_n: Optional[int] = Field(default=None, ge=1)
+
+    @field_validator("blocked_params")
+    @classmethod
+    def keep_stream(cls, names: Optional[List[str]]) -> Optional[List[str]]:
+        # Mirrors the Router's ValidateRequestParamsPluginConfig.
+        if any(name.strip() == "stream" for name in names or []):
+            raise ValueError(
+                "blocked_params cannot include stream: the Router streams "
+                "the answer when the client asks for a stream"
+            )
+        return names
 
 
 ResponseGuardAction = Literal["block", "annotate", "none"]
@@ -1584,6 +1612,42 @@ class DecisionAction(BaseModel):
         return self
 
 
+# The retry_on names Envoy documents, HTTP then gRPC, as the Router's
+# config.RetryOnConditions lists them. Envoy and the standalone gateway both
+# ignore a name they do not know, so a typo would turn its retries off.
+RETRY_ON_CONDITIONS = (
+    "5xx",
+    "gateway-error",
+    "reset",
+    "reset-before-request",
+    "connect-failure",
+    "envoy-ratelimited",
+    "retriable-4xx",
+    "refused-stream",
+    "retriable-status-codes",
+    "retriable-headers",
+    "http3-post-connect-failure",
+    "cancelled",
+    "deadline-exceeded",
+    "internal",
+    "resource-exhausted",
+    "unavailable",
+)
+
+
+def _known_retry_on(value: str) -> str:
+    for raw in value.split(","):
+        token = raw.strip()
+        if token and token not in RETRY_ON_CONDITIONS:
+            raise ValueError(
+                f"has unknown condition {token!r}; expected any of "
+                + ", ".join(RETRY_ON_CONDITIONS)
+            )
+    return value
+
+
+RetryOn = Annotated[str, AfterValidator(_known_retry_on)]
+
 # Decision reliability fields Envoy cannot apply to one request.
 DECISION_RELIABILITY_NATIVE_ONLY = (
     "idle_timeout",
@@ -1610,7 +1674,7 @@ class DecisionReliability(BaseModel):
     idle_timeout: Optional[str] = None
     first_byte_timeout: Optional[str] = None
     retry_count: Optional[int] = Field(default=None, ge=0, le=5)
-    retry_on: Optional[str] = None
+    retry_on: Optional[RetryOn] = None
     retriable_status_codes: Optional[List[Annotated[int, Field(ge=100, le=599)]]] = None
     retry_back_off_base: Optional[str] = None
     retry_back_off_max: Optional[str] = None
@@ -1834,7 +1898,7 @@ class ProviderReliability(BaseModel):
 
     lb_policy: Literal["round_robin", "least_request"] = "round_robin"
     retry_count: int = Field(default=0, ge=0, le=5)
-    retry_on: str = "connect-failure,refused-stream"
+    retry_on: RetryOn = "connect-failure,refused-stream"
     consecutive_5xx: int = Field(default=0, ge=0)
     base_ejection_time: str = "30s"
     max_ejection_percent: int = Field(default=50, ge=0, le=100)
@@ -2055,6 +2119,12 @@ class EvaluationRecord(BaseModel):
     source: Optional[str] = None
     measured_at: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("measured_at", mode="before")
+    @classmethod
+    def normalize_measured_at(cls, value: Any) -> Any:
+        # YAML reads an unquoted 2026-09-09 as a date; the Router keeps its text.
+        return value.isoformat() if isinstance(value, date) else value
 
     @model_validator(mode="after")
     def validate_measurement(self):
@@ -2542,6 +2612,19 @@ class UserConfig(BaseModel):
     entrypoints: List[Entrypoint] = Field(default_factory=list)
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
+
+    @field_validator("listeners")
+    @classmethod
+    def unique_listener_names(cls, listeners):
+        names = set()
+        for listener in listeners:
+            if listener.name in names:
+                raise ValueError(
+                    f"listener '{listener.name}' is defined twice; "
+                    "give each listener its own name"
+                )
+            names.add(listener.name)
+        return listeners
 
     @field_validator("global_")
     @classmethod

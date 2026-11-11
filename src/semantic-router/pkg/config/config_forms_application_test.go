@@ -87,6 +87,28 @@ func TestKBMigrationNotes(t *testing.T) {
 	}
 }
 
+// A v0.3 pii rule with source: tool_result read the request's tool results
+// and nothing else, include_history included. Migrated, it still leaves the
+// user turn and the earlier turns out, so the harness instructions in an
+// agent's turn never decide it.
+func TestAToolResultPIIRuleKeepsReadingOnlyTheToolResults(t *testing.T) {
+	migrated, _, err := MigrateConfig(readGolden(t, filepath.Join("testdata", "migrate", "removed-application-fields", "before.yaml")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ParseYAMLBytesWithoutEnvExpansion(migrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rule, ok := cfg.consumerScopes()[DefaultRecipeName].ApplicationRuleByName(SignalTypePII, "personal")
+	if !ok {
+		t.Fatal("the pii rule is gone")
+	}
+	if input := rule.Rule.Input; input.ReadsRequest() || input.History || !input.ToolResults {
+		t.Fatalf("the migrated rule reads %+v, want the tool results alone", input)
+	}
+}
+
 // migrateModels is the provider catalog of the migrate tests below: two
 // described models.
 const migrateModels = `version: v0.5

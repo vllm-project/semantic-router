@@ -242,4 +242,4 @@ spec:
         paths:
           - path: /
             pathType: Prefix
-            servicePort: 8080
+            servicePort: 8801  # the Router's inference listener (8080 is the management API)

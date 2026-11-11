@@ -62,7 +62,8 @@ plugins:
 
 - `passthrough` (the default) leaves the request's tools as they are.
 - `filtered` keeps the tools `allow_tools` names, when it names any, and
-  removes the tools `block_tools` names.
+  removes the tools `block_tools` names. A `tool_choice` that names a removed
+  tool is removed with it, and the model chooses among the tools left.
 - `none` removes every tool and the request's `tool_choice`. With
   `strip_tool_history: true` it also removes prior assistant tool calls and
   tool results from the provider-bound request. The policy runs after signal
