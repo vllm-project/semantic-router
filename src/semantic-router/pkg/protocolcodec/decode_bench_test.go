@@ -98,11 +98,11 @@ func BenchmarkDecodeAgentChatRequest(b *testing.B) {
 func BenchmarkDecodeChatStreamChunk(b *testing.B) {
 	policy := llmprotocol.DefaultPolicy()
 	chunk := []byte(`{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1760000000,"model":"agent-model","choices":[{"index":0,"delta":{"content":"The body is decoded in handler.go before validation."},"finish_reason":null}]}`)
-	b.Run("decodeProviderWireVendorAware", func(b *testing.B) {
+	b.Run("decodeProviderWireTolerant", func(b *testing.B) {
 		b.ReportAllocs()
 		for b.Loop() {
 			var wire chatChunkWire
-			if _, _, err := decodeProviderWireVendorAware(chunk, &wire, policy); err != nil {
+			if _, _, err := decodeProviderWireTolerant(chunk, &wire, policy); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -127,12 +127,10 @@ func agentChatResponse(paragraphs int) []byte {
 }
 
 func BenchmarkDecodeChatResponse(b *testing.B) {
-	azure := llmprotocol.DefaultPolicy()
-	azure.ResponseVendor = llmprotocol.ResponseVendorAzure
 	policies := []struct {
 		name   string
 		policy llmprotocol.Policy
-	}{{"default", llmprotocol.DefaultPolicy()}, {"azure", azure}}
+	}{{"default", llmprotocol.DefaultPolicy()}, {"conformance", conformancePolicy()}}
 	for _, paragraphs := range []int{1, 8} {
 		body := agentChatResponse(paragraphs)
 		for _, policy := range policies {
@@ -141,7 +139,7 @@ func BenchmarkDecodeChatResponse(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {
 					var wire chatResponseWire
-					if _, _, err := decodeProviderWireVendorAware(body, &wire, policy.policy); err != nil {
+					if _, _, err := decodeProviderWireTolerant(body, &wire, policy.policy); err != nil {
 						b.Fatal(err)
 					}
 				}

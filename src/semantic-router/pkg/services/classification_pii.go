@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/presets"
 )
 
 // PIIRequest represents a request for PII detection
@@ -67,7 +69,7 @@ func (s *ClassificationService) DetectPII(ctx context.Context, req PIIRequest) (
 	if scopeErr != nil {
 		return nil, scopeErr
 	}
-	if req.Recipe != "" && (classifier == nil || !classifier.IsPIIEnabled()) {
+	if req.Recipe != "" && classifier == nil {
 		return nil, ErrClassifierUnavailable
 	}
 	if classifier == nil {
@@ -81,24 +83,24 @@ func (s *ClassificationService) DetectPII(ctx context.Context, req PIIRequest) (
 		}, nil
 	}
 
-	var detections []classification.PIIDetection
-	var err error
-	if req.Options != nil && req.Options.ConfidenceThreshold > 0 {
-		detections, err = classifier.ClassifyPIIWithDetailsAndThreshold(ctx, req.Text, float32(req.Options.ConfidenceThreshold))
-	} else {
-		detections, err = classifier.ClassifyPIIWithDetails(ctx, req.Text)
+	answer, err := classifier.AskPreset(ctx, config.SignalTypePII, presets.PII, req.Text)
+	if errors.Is(err, modelservice.ErrUnavailable) {
+		return nil, fmt.Errorf("%w: PII detection failed: %w", ErrClassifierUnavailable, err)
 	}
-	// A declared truncation is not a failed call: the spans it returned are
-	// valid for the part the provider read. It is reported rather than
-	// swallowed, so a caller cannot read a partial scan as a clean one.
-	incomplete := errors.Is(err, classification.ErrTokenSpansTruncated)
-	if err != nil && !incomplete {
+	if err != nil {
 		return nil, fmt.Errorf("PII detection failed: %w", err)
+	}
+	threshold := classifier.Config.PresetThreshold(config.SignalTypePII, presets.PII)
+	if req.Options != nil && req.Options.ConfidenceThreshold > 0 {
+		threshold = req.Options.ConfidenceThreshold
 	}
 
 	processingTime := time.Since(start).Milliseconds()
-	response := s.buildPIIResponse(req.Text, detections, req.Options)
-	response.ScanIncomplete = incomplete
+	response := s.buildPIIResponse(req.Text, piiDetections(req.Text, answer.Spans, threshold), req.Options)
+	// The spans of an answer that read only part of the text are valid for
+	// that part. It is reported, so a caller cannot read a partial scan as a
+	// clean one.
+	response.ScanIncomplete = answer.InputCoverage != "complete"
 	response.ProcessingTimeMs = processingTime
 	response.Recipe = recipe
 	return response, nil

@@ -20,7 +20,7 @@ from cli.parser import parse_user_config  # noqa: E402
         (
             """
         - provider: vllm
-          base_url: http://query.example.test/v1?region=west
+          endpoint: http://query.example.test/v1?region=west
 """,
             "query parameters are not supported by Envoy routing",
         ),
@@ -42,14 +42,6 @@ from cli.parser import parse_user_config  # noqa: E402
 """,
             "name 'replica' is duplicated",
         ),
-        (
-            """
-        - provider: vllm
-          base_url: http://base.example/v1
-          endpoint: endpoint.example:8000/v1
-""",
-            "cannot set both base_url and endpoint",
-        ),
     ),
 )
 def test_envoy_generation_rejects_invalid_backend_group_at_shared_seam(
@@ -59,7 +51,7 @@ def test_envoy_generation_rejects_invalid_backend_group_at_shared_seam(
     output_path = tmp_path / "envoy.yaml"
     config_path.write_text(
         f"""
-version: v0.3
+version: v0.5
 providers:
   defaults:
     model: local-model
@@ -68,7 +60,8 @@ providers:
       api_format: openai
       backend_refs:
 {backend_refs}
-routing: {{}}
+recipes:
+  - name: default
 """
     )
 

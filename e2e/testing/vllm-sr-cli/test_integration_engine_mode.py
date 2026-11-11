@@ -37,7 +37,8 @@ from cli.runtime_stack import MAX_PORT_OFFSET
 from runtime_http import HTTP_OK, call, page_requests, write_fixture
 
 QUICKSTART = (
-    Path(__file__).resolve().parents[3] / "website/docs/model-runtime/quickstart.md"
+    Path(__file__).resolve().parents[3]
+    / "website/docs/model-runtime/get-started/quickstart.md"
 )
 API_KEY = "engine-e2e-key"
 MANAGEMENT_KEY = "engine-e2e-management-key"
@@ -129,7 +130,7 @@ def png_data_url(width, height, seed):
 
 def engine_config():
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [
             {
                 "name": "main",
@@ -154,16 +155,19 @@ def engine_config():
                 }
             ]
         },
-        "routing": {
-            "decisions": [
-                {
-                    "name": "saved",
-                    "priority": 1,
-                    "rules": {"operator": "AND", "conditions": []},
-                    "modelRefs": [{"model": "answer"}],
-                }
-            ]
-        },
+        "recipes": [
+            {
+                "name": "default",
+                "decisions": [
+                    {
+                        "name": "saved",
+                        "priority": 1,
+                        "rules": {"operator": "AND", "conditions": []},
+                        "modelRefs": [{"model": "answer"}],
+                    }
+                ],
+            }
+        ],
         "global": {
             "router": {"enabled": False},
             "model_catalog": {
@@ -1000,6 +1004,51 @@ class TestEngineModeD3Turbo(EngineStack):
             (over["error"]["code"], over["error"]["reason"], over["error"]["limit"]),
             ("invalid_request", "request_tokens", cap),
             over,
+        )
+
+
+class TestEngineModeD3Ultra(EngineStack):
+    """A package with d3-ultra's card through the public API: a text-only request lists its questions in front of its
+    state, so each question it adds also adds its line to that state; a request with images keeps d3-turbo's layout.
+    """
+
+    fixture = ("decision3", "ultra")
+
+    def answered(self, body):
+        status, response = self.public("/v1/systemone", {"model": PUBLIC_MODEL, **body})
+        self.assertEqual(status, 200, response)
+        return response
+
+    def test_a_text_request_lists_its_questions_before_the_state(self):
+        first = {"type": "noul", "instructions": "Is the request urgent?"}
+        second = {
+            "type": "choice",
+            "instructions": "Which team handles it?",
+            "criteria": {"billing": "Billing", "tech": "Technical support"},
+        }
+        added, answers = {}, {}
+        for kind, media in (
+            ("text", {}),
+            ("image", {"images": [png_data_url(64, 48, seed=11)]}),
+        ):
+            one = self.answered(
+                {"state": "A refund request.", "questions": {"first": first}, **media}
+            )
+            two = self.answered(
+                {
+                    "state": "A refund request.",
+                    "questions": {"first": first, "second": second},
+                    **media,
+                }
+            )
+            added[kind] = two["usage"]["input_tokens"] - one["usage"]["input_tokens"]
+            answers[kind] = (one["answers"]["first"], two["answers"]["first"])
+        # The second question's block costs the same either way; in a text request its line in the list counts too.
+        self.assertGreater(added["text"], added["image"], added)
+        self.assertGreater(added["image"], 0, added)
+        # The list is part of the text request's state, so the first question reads a different state.
+        self.assertNotEqual(
+            answers["text"][0]["noul"], answers["text"][1]["noul"], answers
         )
 
 

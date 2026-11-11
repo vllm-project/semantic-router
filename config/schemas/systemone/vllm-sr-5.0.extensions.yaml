@@ -1,0 +1,561 @@
+# vllm-sr/5.0: the System One standard (systemone/0.2) plus the vllm-sr
+# extension set 5.0.
+#
+# One entry per field vllm-sr adds to the standard. Every vllm-sr message stays
+# a complete standard message; an extension field is an additive hint in its
+# natural place, with no namespace object and no request header of its own.
+# A vllm-sr server answers an unknown field with 400 naming it.
+#
+# Schemas use the standard's dialect (JSON Schema 2020-12). A `$ref` names a
+# definition below (`#/definitions/Name`) or a part of the standard's
+# description, systemone-0.2.schema.yaml (`standard#/schemas/Name...`).
+#
+# After editing this file, run `make systemone-schemas-generate`.
+
+id: vllm-sr/5.0
+extends: systemone/0.2
+extension_version: "5.0"
+
+# The decision-model families of the model runtime; `all` in an entry means
+# every one of them.
+families: [decision1, decision2, decision3, vela2, vela3, vela3_d3]
+
+# Where a field sits, and the schemas of the standard's description it
+# extends there.
+levels:
+  request:
+    direction: request
+    extends: [SystemOneRequest]
+    title: Request
+  question:
+    direction: request
+    extends: [NoulQuestion, ChoiceQuestion, ScoreQuestion, BoxQuestion]
+    title: Question
+  question_type:
+    direction: request
+    extends: [Question]
+    title: Question type
+  asset_type:
+    direction: request
+    extends: [Asset]
+    title: Asset type
+  answer:
+    direction: response
+    extends: [NoulAnswer, ChoiceAnswer, ScoreAnswer, BoxAnswer]
+    title: Answer
+  response:
+    direction: response
+    extends: [SystemOneResponse]
+    title: Response
+  error:
+    direction: response
+    extends: [HTTPBadRequestError, HTTPValidationError]
+    title: Error
+  listing_entry:
+    direction: response
+    extends: [ModelMetadata]
+    title: Listing entry
+  endpoint:
+    direction: both
+    extends: []
+    title: Endpoint
+
+# What a systemone/0.2 target does with each field (`standard_target`):
+# - strip: the message goes without it; its standard part carries the meaning.
+# - refuse: a rule that needs it fails to load, naming the rule and the
+#   deployment.
+# - absent: a standard server never sends it, so no client may require it.
+standard_targets:
+  strip: The message goes without it; its standard part carries the meaning.
+  refuse: A rule that needs it fails to load, naming the rule and the deployment.
+  absent: A standard server never sends it, so no client may require it.
+
+definitions:
+  Content:
+    anyOf:
+      - {type: string}
+      - {type: object, additionalProperties: true}
+      - {type: array, items: {}}
+  NullableContent:
+    anyOf:
+      - {type: string}
+      - {type: object, additionalProperties: true}
+      - {type: array, items: {}}
+      - {type: "null"}
+  Labels:
+    type: object
+    minProperties: 1
+    maxProperties: 255
+    additionalProperties: {$ref: "#/definitions/NullableContent"}
+  Role:
+    type: string
+    enum: [user, context, answer]
+  Options:
+    type: object
+    additionalProperties: false
+    properties:
+      deadline_ms: {type: number, exclusiveMinimum: 0}
+      return_meta: {type: boolean}
+      max_tokens: {type: integer, minimum: 1}
+  Span:
+    type: object
+    required: [label, start, end, text, probability]
+    additionalProperties: false
+    properties:
+      label: {type: string}
+      start: {type: integer, minimum: 0}
+      end: {type: integer, minimum: 0}
+      text: {type: string}
+      probability: {type: number, minimum: 0, maximum: 1}
+  SetAnswer:
+    type: object
+    required: [selected, probabilities]
+    additionalProperties: false
+    properties:
+      selected: {type: array, items: {type: string}}
+      probabilities: {type: object, additionalProperties: {type: number}}
+      input_coverage: {type: string, enum: [complete]}
+  BatchItem:
+    type: object
+    required: [state, questions]
+    additionalProperties: false
+    properties:
+      model: {type: string}
+      state: {$ref: "standard#/schemas/SystemOneRequest/properties/state"}
+      questions: {$ref: "standard#/schemas/SystemOneRequest/properties/questions"}
+      assets: {$ref: "standard#/schemas/SystemOneRequest/properties/assets"}
+      roles: {type: object, additionalProperties: {$ref: "#/definitions/Role"}}
+
+fields:
+  # ---- request ----------------------------------------------------------
+  - name: roles
+    level: request
+    since: "5.0"
+    families: [vela2, vela3, vela3_d3]
+    standard_target: strip
+    schema:
+      type: object
+      additionalProperties: {$ref: "#/definitions/Role"}
+    summary: >-
+      Which state keys hold the user's content, context, or the answer under
+      check. Role-aware families read the state's parts by these roles; without
+      `roles`, the whole state is the user's content on every family.
+  - name: options
+    level: request
+    since: "5.0"
+    families: all
+    standard_target: strip
+    schema: {$ref: "#/definitions/Options"}
+    summary: >-
+      `deadline_ms` (work not started by then is not run, and its questions
+      answer `deadline_exceeded`), `return_meta` (the response adds `meta`)
+      and `max_tokens` (the scan budget of a model that reads a long part in
+      windows). A standard target is bounded by the client's own timeout
+      instead.
+
+  # ---- question ---------------------------------------------------------
+  - name: preset
+    level: question
+    since: "5.0"
+    families: [decision1, vela2, vela3, vela3_d3]
+    applies_to: all
+    standard_target: strip
+    schema: {type: string, minLength: 1}
+    summary: >-
+      A question the model was trained on, such as `pii`, answered by its
+      trained head. The question still carries its own `instructions` and
+      `criteria`, which any other server answers.
+  - name: head
+    level: question
+    since: "5.0"
+    families: [vela2, vela3, vela3_d3]
+    applies_to: [span]
+    standard_target: refuse
+    schema: {type: string, enum: [router, broad]}
+    summary: >-
+      The span head that answers: `router`, or `broad` on models that have a
+      broad span head.
+  - name: decision_adapter
+    level: question
+    since: "5.0"
+    families: [vela3_d3]
+    applies_to: [choice, noul, score]
+    standard_target: refuse
+    schema: {type: boolean}
+    summary: >-
+      Answers with the package's opt-in decision adapter, on Vela 3.0 d3 sizes
+      that declare one.
+  - name: over
+    level: question
+    since: "5.0"
+    families: [vela2, vela3, vela3_d3]
+    applies_to: all
+    standard_target: refuse
+    schema:
+      anyOf:
+        - {type: string, minLength: 1}
+        - {type: array, minItems: 1, items: {type: string, minLength: 1}}
+    summary: >-
+      The state keys the question reads, in state order; by default the whole
+      state (a span: its answer part if present, else its user part).
+  - name: overflow
+    level: question
+    since: "5.0"
+    families: [vela2, vela3, vela3_d3]
+    applies_to: all
+    standard_target: strip
+    schema: {type: string, enum: [window, truncate]}
+    summary: >-
+      How a model with a scan budget reads a part longer than one input:
+      `window` (whole, in windows) or `truncate` (its first tokens).
+  - name: require_full_input
+    level: question
+    since: "5.0"
+    families: all
+    applies_to: all
+    standard_target: refuse
+    schema: {type: boolean}
+    summary: >-
+      Fails the question unless every state part is read completely; its
+      answer then carries `input_coverage: complete`, which the standard has
+      no field for.
+  - name: threshold
+    level: question
+    since: "5.0"
+    families: [vela2, vela3, vela3_d3]
+    applies_to: [set, span]
+    standard_target: refuse
+    schema: {type: number, minimum: 0, maximum: 1}
+    summary: >-
+      Replaces the model's decision threshold for a set or span question; the
+      applied value comes back in `thresholds`.
+  - name: at
+    level: question
+    since: "5.0"
+    families: [decision3, vela3_d3]
+    applies_to: [box]
+    standard_target: refuse
+    schema: {type: number, minimum: 0}
+    summary: >-
+      A box question on a video: the second to read, from the start of the
+      state's only video.
+  - name: rate
+    level: question
+    since: "5.0"
+    families: [decision3, vela3_d3]
+    applies_to: [track]
+    standard_target: refuse
+    schema: {type: integer, enum: [1, 2]}
+    summary: >-
+      A track question's updates per second over the whole video, 1 (the
+      default) or 2.
+
+  # ---- question types ---------------------------------------------------
+  - name: span
+    level: question_type
+    since: "5.0"
+    families: [vela2, vela3, vela3_d3]
+    standard_target: refuse
+    schema:
+      type: object
+      required: [type, criteria]
+      properties:
+        type: {const: span}
+        instructions: {$ref: "standard#/schemas/ChoiceQuestion/properties/instructions"}
+        criteria: {$ref: "#/definitions/Labels"}
+    summary: >-
+      Where each label of `criteria` occurs in the text it reads. The answer
+      is a noul (the highest probability any word reached) and its spans
+      under `spans`.
+  - name: set
+    level: question_type
+    since: "5.0"
+    families: [vela2, vela3]
+    standard_target: refuse
+    schema:
+      type: object
+      required: [type, criteria]
+      properties:
+        type: {const: set}
+        instructions: {$ref: "standard#/schemas/ChoiceQuestion/properties/instructions"}
+        criteria: {$ref: "#/definitions/Labels"}
+    summary: >-
+      Which labels of `criteria` apply, each with its own probability, under
+      `sets`; each label also answers as a noul under `<question>.<label>`.
+  - name: track
+    level: question_type
+    since: "5.0"
+    families: [decision3, vela3_d3]
+    standard_target: refuse
+    schema:
+      type: object
+      required: [type, instructions]
+      properties:
+        type: {const: track}
+        instructions: {$ref: "#/definitions/Content"}
+    summary: >-
+      A box for each sampled moment of the state's only video, on models whose
+      card declares track questions.
+
+  # ---- asset types ------------------------------------------------------
+  - name: video
+    level: asset_type
+    since: "5.0"
+    families: [decision3, vela3_d3]
+    standard_target: refuse
+    schema:
+      type: object
+      required: [type]
+      properties:
+        type: {const: video}
+        format: {type: string, enum: [mp4, webm, mov, mkv]}
+        data_base64: {type: string}
+        part: {type: string}
+    summary: >-
+      A video, placed where its placeholder is, on models whose card lists the
+      video modality.
+
+  # ---- answer -----------------------------------------------------------
+  - name: abstain_probability
+    level: answer
+    since: "5.0"
+    families: [vela2, vela3]
+    applies_to: [choice, noul]
+    standard_target: absent
+    schema: {type: number, minimum: 0, maximum: 1}
+    summary: >-
+      The probability of the model's abstain option, where it has one (not
+      calibrated).
+  - name: input_coverage
+    level: answer
+    since: "5.0"
+    families: all
+    applies_to: all
+    standard_target: absent
+    schema: {type: string, enum: [complete]}
+    summary: >-
+      Proof that a `require_full_input` question read every state part
+      completely.
+  - name: error
+    level: answer
+    since: "5.0"
+    families: all
+    applies_to: all
+    endpoints: ["POST /v1/decisions"]
+    standard_target: absent
+    schema:
+      type: string
+      enum: [invalid_question, invalid_input, max_length_exceeded, scan_budget_exceeded, invalid_model_output, deadline_exceeded, unavailable]
+    summary: >-
+      Why this question has no answer, on `POST /v1/decisions`, which answers
+      the other questions in the same 200.
+  - name: reason
+    level: answer
+    since: "5.0"
+    families: all
+    applies_to: all
+    endpoints: ["POST /v1/decisions"]
+    standard_target: absent
+    schema: {type: string}
+    summary: A fixed word for why the question failed; it never carries request data.
+  - name: message
+    level: answer
+    since: "5.0"
+    families: all
+    applies_to: all
+    endpoints: ["POST /v1/decisions"]
+    standard_target: absent
+    schema: {type: string}
+    summary: Why the question failed, for a person to read.
+
+  # ---- response ---------------------------------------------------------
+  - name: spans
+    level: response
+    since: "5.0"
+    families: [vela2, vela3, vela3_d3]
+    standard_target: absent
+    schema:
+      type: object
+      additionalProperties: {type: array, items: {$ref: "#/definitions/Span"}}
+    summary: >-
+      Each span question's spans: label, `start` and `end` (Unicode code
+      points into the text it read, end exclusive), text and probability.
+  - name: sets
+    level: response
+    since: "5.0"
+    families: [vela2, vela3]
+    standard_target: absent
+    schema:
+      type: object
+      additionalProperties: {$ref: "#/definitions/SetAnswer"}
+    summary: Each set question's selected labels and the probability of every label.
+  - name: thresholds
+    level: response
+    since: "5.0"
+    families: [vela2, vela3, vela3_d3]
+    standard_target: absent
+    schema:
+      type: object
+      additionalProperties: {type: number}
+    summary: The threshold applied to each set or span question.
+  - name: span_heads
+    level: response
+    since: "5.0"
+    families: [vela2]
+    standard_target: absent
+    schema:
+      type: object
+      additionalProperties: {type: string, enum: [router, broad]}
+    summary: The span head that answered each span question, on models with a broad span head.
+  - name: meta
+    level: response
+    since: "5.0"
+    families: all
+    standard_target: absent
+    schema: {type: object, additionalProperties: true}
+    summary: >-
+      With `options.return_meta`, the model's verified identity, revision,
+      precision, numerics, engine, device and timings.
+  - name: routing
+    level: response
+    since: "5.0"
+    families: []
+    standard_target: absent
+    schema: {type: object, additionalProperties: true}
+    summary: >-
+      Added by the Router's `vllm-sr/auto` routing: the recipe, decision,
+      algorithm, stage and model that answered, and the model calls made.
+
+  # ---- error ------------------------------------------------------------
+  - name: code
+    level: error
+    since: "5.0"
+    families: all
+    standard_target: absent
+    schema: {type: string}
+    summary: >-
+      A stable error code beside the standard `detail`, such as
+      `invalid_request`, `model_not_found`, `overloaded` or `question_failed`.
+  - name: question
+    level: error
+    since: "5.0"
+    families: all
+    standard_target: absent
+    schema: {type: string}
+    summary: The question whose failure answers the request (`question_failed`).
+  - name: state
+    level: error
+    since: "5.0"
+    families: all
+    standard_target: absent
+    schema: {type: string}
+    summary: In a batch, the name of the request the failed question belongs to.
+  - name: reason
+    level: error
+    since: "5.0"
+    families: all
+    standard_target: absent
+    schema: {type: string}
+    summary: A fixed word for why the request or its question failed; it never carries request data.
+  - name: limit
+    level: error
+    since: "5.0"
+    families: all
+    standard_target: absent
+    schema: {type: integer}
+    summary: The limit `reason` names, when one was broken (bytes, pixels, seconds or tokens).
+
+  # ---- listing entry ----------------------------------------------------
+  - name: version
+    level: listing_entry
+    since: "5.0"
+    families: all
+    standard_target: absent
+    schema: {type: string}
+    summary: The extension set version the server answers with, such as `5.0`.
+  - name: features
+    level: listing_entry
+    since: "5.0"
+    families: all
+    standard_target: absent
+    schema: {type: array, items: {type: string}}
+    summary: >-
+      The question types and extension features the model answers, which
+      `vllm-sr/auto` routes by.
+  - name: card
+    level: listing_entry
+    since: "5.0"
+    families: all
+    standard_target: absent
+    schema: {type: object, additionalProperties: true}
+    summary: The model card, with its limits and placement.
+
+  # ---- endpoints --------------------------------------------------------
+  - name: POST /v1/systemone/batch
+    level: endpoint
+    since: "5.0"
+    families: all
+    standard_target: absent
+    request:
+      type: object
+      required: [model, requests]
+      additionalProperties: false
+      properties:
+        model: {type: string}
+        requests:
+          type: object
+          minProperties: 1
+          additionalProperties: {$ref: "#/definitions/BatchItem"}
+        options: {$ref: "#/definitions/Options"}
+    response:
+      type: object
+      required: [model, responses, usage]
+      properties:
+        model: {type: string}
+        responses:
+          type: object
+          additionalProperties: {$ref: "standard#/schemas/SystemOneResponse"}
+        usage: {$ref: "standard#/schemas/Usage"}
+    summary: >-
+      Named standard requests answered in one call, each as it would be alone.
+      An item takes the batch's `model` and may repeat it. A systemone/0.2
+      target has no batch endpoint, so a batch is split into single requests.
+  - name: POST /v1/decisions
+    level: endpoint
+    since: "5.0"
+    families: all
+    standard_target: absent
+    request: {$ref: "standard#/schemas/SystemOneRequest"}
+    response: {$ref: "standard#/schemas/SystemOneResponse"}
+    summary: >-
+      The body of `POST /v1/systemone`, answered with a failed question's
+      `error`, `reason` and `message` in its own answer of a 200, instead of
+      failing the request.
+  - name: GET /health
+    level: endpoint
+    since: "5.0"
+    families: all
+    standard_target: absent
+    response:
+      type: object
+      required: [api_version, status]
+      properties:
+        api_version: {type: string}
+        status: {type: string}
+        reason: {type: [string, "null"]}
+        model: {type: [string, "null"]}
+        models: {type: object, additionalProperties: true}
+    summary: Readiness, with the extension set version the server answers with.
+
+# Forms that 4.0.0 accepted and 5.0 does not: the standard expresses them.
+removed:
+  - {name: choices, level: question, replaced_by: criteria, note: "An object of option keys to descriptions, for choice and noul."}
+  - {name: levels, level: question, replaced_by: criteria, note: "An ordered array of level descriptions, for score."}
+  - {name: labels, level: question, replaced_by: criteria, note: "An object of labels to descriptions, for set and span."}
+  - {name: images, level: request, replaced_by: assets, note: "Assets of type image, placed by their placeholders."}
+  - {name: videos, level: request, replaced_by: assets, note: "Assets of type video."}
+  - {name: states, level: request, replaced_by: "POST /v1/systemone/batch", note: "`/v1/systemone` takes exactly one request."}
+  - {name: long_context, level: options, replaced_by: "TypeSafe-Danger-Zone-Long-Context: true", note: "The standard's request header."}
+  - {name: error, level: error, replaced_by: detail, note: "The standard `detail`, with flat `code`, `question`, `state`, `reason` and `limit`."}
+  - {name: data, level: listing, replaced_by: "models[].card", note: "Router mode keeps the OpenAI `data` list for Chat clients."}
+  - {name: implicit roles, level: state, replaced_by: roles, note: "State keys carry no meaning; `roles` names the parts."}

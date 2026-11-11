@@ -89,12 +89,12 @@ func TestGenerateConfigYAMLIncludesBackendTargetAndLoRACatalog(t *testing.T) {
 		t.Fatalf("failed to parse generated YAML: %v", err)
 	}
 
-	if len(parsed.Routing.ModelCards) != 1 {
-		t.Fatalf("expected one generated modelCard, got %#v", parsed.Routing.ModelCards)
+	if len(parsed.Providers.Models) != 1 {
+		t.Fatalf("expected one generated provider model, got %#v", parsed.Providers.Models)
 	}
 	assertGeneratedBackendTarget(t, parsed)
 
-	modelCard := parsed.Routing.ModelCards[0]
+	modelCard := parsed.Providers.Models[0]
 	if len(modelCard.LoRAs) != 1 {
 		t.Fatalf("expected one generated LoRA adapter, got %#v", modelCard.LoRAs)
 	}
@@ -681,7 +681,7 @@ func TestGenerateIngress(t *testing.T) {
 		},
 	}
 
-	ing := r.generateIngress(sr)
+	ing := r.generateIngress(sr, GatewayModeStandalone)
 
 	if ing == nil {
 		t.Fatal("generateIngress() returned nil")
@@ -699,15 +699,15 @@ func TestGenerateIngress(t *testing.T) {
 		t.Errorf("expected host 'example.com', got '%s'", ing.Spec.Rules[0].Host)
 	}
 
-	// servicePort is optional: an omitted port must target the api Service
-	// port instead of serialising an empty backend port the API server
-	// rejects (#4414).
-	if got := ing.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Port.Number; got != DefaultAPIPort {
-		t.Errorf("omitted servicePort: backend port = %d, want %d", got, DefaultAPIPort)
+	// servicePort is optional: an omitted port must target the Router's
+	// inference listener instead of serialising an empty backend port the API
+	// server rejects (#4414).
+	if got := ing.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Port.Number; got != DefaultListenerPort {
+		t.Errorf("omitted servicePort: backend port = %d, want %d", got, DefaultListenerPort)
 	}
 }
 
-func TestGenerateIngressServicePortFollowsAPIService(t *testing.T) {
+func TestGenerateIngressOmittedServicePortFollowsGatewayMode(t *testing.T) {
 	s := runtime.NewScheme()
 	_ = vllmv1alpha1.AddToScheme(s)
 
@@ -717,14 +717,17 @@ func TestGenerateIngressServicePortFollowsAPIService(t *testing.T) {
 
 	tests := []struct {
 		name        string
+		mode        string
 		apiPort     int32
 		servicePort int32
 		setPort     bool
 		wantPort    int32
 	}{
-		{name: "omitted port follows custom api port", apiPort: 9000, wantPort: 9000},
-		{name: "omitted port defaults to DefaultAPIPort", wantPort: DefaultAPIPort},
-		{name: "explicit port wins over api port", apiPort: 9000, servicePort: 9090, setPort: true, wantPort: 9090},
+		{name: "standalone omitted port targets the listener", mode: GatewayModeStandalone, apiPort: 9000, wantPort: DefaultListenerPort},
+		{name: "standalone explicit port wins", mode: GatewayModeStandalone, servicePort: 9090, setPort: true, wantPort: 9090},
+		{name: "gateway omitted port follows custom api port", mode: GatewayModeIntegration, apiPort: 9000, wantPort: 9000},
+		{name: "gateway omitted port defaults to DefaultAPIPort", mode: GatewayModeIntegration, wantPort: DefaultAPIPort},
+		{name: "gateway explicit port wins over api port", mode: GatewayModeIntegration, apiPort: 9000, servicePort: 9090, setPort: true, wantPort: 9090},
 	}
 
 	for _, tt := range tests {
@@ -747,7 +750,7 @@ func TestGenerateIngressServicePortFollowsAPIService(t *testing.T) {
 				},
 			}
 
-			ing := r.generateIngress(sr)
+			ing := r.generateIngress(sr, tt.mode)
 			if ing == nil {
 				t.Fatal("generateIngress() returned nil")
 			}
@@ -994,7 +997,7 @@ func TestReconcileIngress(t *testing.T) {
 	}
 
 	// Test ingress creation
-	err := r.reconcileIngress(context.Background(), sr)
+	err := r.reconcileIngress(context.Background(), sr, GatewayModeStandalone)
 	if err != nil {
 		t.Fatalf("reconcileIngress() failed: %v", err)
 	}

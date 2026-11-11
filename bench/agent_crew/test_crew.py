@@ -98,7 +98,7 @@ class FakeRouter(BaseHTTPRequestHandler):
         headers = {
             "content-type": "application/json",
             "x-vsr-selected-model": selected,
-            "x-vsr-routing-latency-ms": "0.250",
+            "x-vsr-trace": "routing_latency_ms=0.25",
             "x-vsr-cost": str(COST[selected]),
             "x-vsr-cost-currency": "USD",
         }

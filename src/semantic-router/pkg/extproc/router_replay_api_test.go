@@ -239,28 +239,26 @@ func TestHandleRouterReplayAPIListRejectsInvalidShowDetails(t *testing.T) {
 	}
 }
 
-func TestHandleRouterReplayAPIListReturnsPayloadTooLargeWhenShowDetailsTrue(t *testing.T) {
+func TestHandleRouterReplayAPIListReturnsOversizedPageWhenShowDetailsTrue(t *testing.T) {
 	oversizedBody := strings.Repeat("x", 5*1024*1024)
 	router := newReplayAPITestRouterWithRecords(t, 1, oversizedBody)
 
+	// The replay API is served only through the HTTP management API (the
+	// public listener rejects the path), so a page larger than the historical
+	// ext-proc message budget must still be returned in full.
 	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays?limit=1&showDetails=true")
 	if response == nil || response.GetImmediateResponse() == nil {
-		t.Fatal("expected immediate error response")
+		t.Fatal("expected immediate response")
 	}
-	if got := response.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_PayloadTooLarge {
-		t.Fatalf("expected payload too large status, got %v", got)
+	immediate := response.GetImmediateResponse()
+	if got := immediate.GetStatus().GetCode(); got != typev3.StatusCode_OK {
+		t.Fatalf("expected OK status for a large details page, got %v", got)
 	}
 
-	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
-	errorBody, ok := body["error"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected error payload, got %#v", body)
-	}
-	if got := int(errorBody["code"].(float64)); got != 413 {
-		t.Fatalf("expected error code 413, got %d", got)
-	}
-	if got := errorBody["message"]; got == nil || !strings.Contains(got.(string), "ext-proc message size limit") {
-		t.Fatalf("expected oversized response guidance, got %#v", got)
+	body := decodeJSONBody(t, immediate.Body)
+	record := mustSingleReplayRecord(t, body)
+	if got := record["request_body"]; got != oversizedBody {
+		t.Fatalf("expected the full request body to survive serialization")
 	}
 }
 

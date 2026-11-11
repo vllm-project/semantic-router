@@ -1,0 +1,58 @@
+---
+# SemanticRouter example with a response cache that embeds with Vela
+# Embedding (vela-embedding, the default embeddings deployment) at a
+# 256-dimension view: a narrower view makes similarity search faster.
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata:
+  name: semantic-router-embedding
+  namespace: default
+spec:
+  # Basic deployment settings
+  replicas: 1
+
+  # Configure vLLM backend endpoints
+  vllmEndpoints:
+    - name: my-llama-model
+      model: llama3-8b
+      reasoning:
+        family: qwen3
+      backend:
+        type: kserve
+        inferenceServiceName: llama-3-8b
+
+  # Persistence for model cache
+  persistence:
+    enabled: true
+    size: 10Gi
+
+  # Basic resource limits
+  resources:
+    requests:
+      cpu: 2000m
+      memory: 4Gi
+    limits:
+      cpu: 4000m
+      memory: 12Gi
+
+  # Semantic router configuration
+  config:
+    response_cache:
+      enabled: true
+      backend_type: "memory"
+
+      # Vela Embedding serves 768, 512, 256, 128 and 64 dimensions; without a
+      # dimension the in-memory cache reads its 256-dimension view of layer 6.
+      embedding:
+        dimension: 256
+      similarity_threshold: "0.85"
+      max_entries: 5000
+      ttl_seconds: 7200
+      eviction_policy: "lru"
+
+      # HNSW indexing for fast similarity search
+      hnsw:
+        use_hnsw: true
+        hnsw_m: 16
+        hnsw_ef_construction: 200
+        max_memory_entries: 5000

@@ -137,7 +137,6 @@ VELA_RELEASE_REVISIONS = {
     "vllm-sr/Vela-1.0-Encoder-307M-PII": "6d3300c4bd7975f30a664503f6c725cf1fbbad48",
     "vllm-sr/Vela-1.0-Encoder-307M-Modality": "5384b8997e3cbb79ca3a670e869577f4e4f4997e",
     "vllm-sr/Vela-1.0-Encoder-307M-Feedback": "47434a7fd7c245c0c7c17564a000b3c56ccfec41",
-    "vllm-sr/Vela-1.0-Encoder-307M-Reranker": "a388e41cbbd5dc5f16b6389fa76d0b8b8a38a8bf",
     "vllm-sr/Vela-1.0-Encoder-307M-Hazard": "5dd25f2cc3c98f338e6a79b667662d60f936a28d",
     "vllm-sr/Vela-1.0-Encoder-307M-Safety": "6e70e725a5f4d86da10f5be5e4dfd1da0358bb85",
     "vllm-sr/Vela-1.0-Encoder-307M-Shield": "a981a99eeb05a2859b88b5cee9af4352897ec4ec",

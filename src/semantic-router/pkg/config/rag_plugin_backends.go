@@ -28,6 +28,8 @@ type MilvusRAGConfig struct {
 	ReuseCacheConnection bool   `json:"reuse_cache_connection,omitempty" yaml:"reuse_cache_connection,omitempty"`
 	ContentField         string `json:"content_field,omitempty" yaml:"content_field,omitempty"`
 	FilterExpression     string `json:"filter_expression,omitempty" yaml:"filter_expression,omitempty"`
+	// Embedding names the deployment the collection was indexed with.
+	Embedding *EmbeddingBinding `json:"embedding,omitempty" yaml:"embedding,omitempty"`
 }
 
 // ExternalAPIRAGConfig represents configuration for external API-based RAG retrieval.
@@ -40,10 +42,19 @@ type ExternalAPIRAGConfig struct {
 	TimeoutSeconds   *int              `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
 	MaxResponseBytes int64             `json:"max_response_bytes,omitempty" yaml:"max_response_bytes,omitempty"`
 	Headers          map[string]string `json:"headers,omitempty" yaml:"headers,omitempty"`
+	// Embedding names the deployment the index was built with, for the
+	// request formats that search by a query vector.
+	Embedding *EmbeddingBinding `json:"embedding,omitempty" yaml:"embedding,omitempty"`
 }
 
 func (c *ExternalAPIRAGConfig) GetTimeout() time.Duration {
 	return ragTimeout(c.TimeoutSeconds, DefaultExternalRAGTimeoutSeconds)
+}
+
+// EmbedsQuery reports whether the request format searches by a query vector
+// the router computes.
+func (c *ExternalAPIRAGConfig) EmbedsQuery() bool {
+	return c.RequestFormat == "pinecone" || c.RequestFormat == "weaviate"
 }
 
 // MCPRAGConfig represents configuration for MCP-based RAG retrieval.
@@ -91,33 +102,35 @@ type QdrantRAGConfig struct {
 	Collection           string `json:"collection" yaml:"collection"`
 	ReuseCacheConnection bool   `json:"reuse_cache_connection,omitempty" yaml:"reuse_cache_connection,omitempty"`
 	ContentField         string `json:"content_field,omitempty" yaml:"content_field,omitempty"`
+	// Embedding names the deployment the collection was indexed with.
+	Embedding *EmbeddingBinding `json:"embedding,omitempty" yaml:"embedding,omitempty"`
 }
 
-func (c *RAGPluginConfig) MilvusBackendConfig() (*MilvusRAGConfig, error) {
+func (c *ContextSource) MilvusBackendConfig() (*MilvusRAGConfig, error) {
 	return decodeRAGBackendConfig[MilvusRAGConfig](c, "milvus")
 }
 
-func (c *RAGPluginConfig) QdrantBackendConfig() (*QdrantRAGConfig, error) {
+func (c *ContextSource) QdrantBackendConfig() (*QdrantRAGConfig, error) {
 	return decodeRAGBackendConfig[QdrantRAGConfig](c, "qdrant")
 }
 
-func (c *RAGPluginConfig) ExternalAPIBackendConfig() (*ExternalAPIRAGConfig, error) {
+func (c *ContextSource) ExternalAPIBackendConfig() (*ExternalAPIRAGConfig, error) {
 	return decodeRAGBackendConfig[ExternalAPIRAGConfig](c, "external_api")
 }
 
-func (c *RAGPluginConfig) MCPBackendConfig() (*MCPRAGConfig, error) {
+func (c *ContextSource) MCPBackendConfig() (*MCPRAGConfig, error) {
 	return decodeRAGBackendConfig[MCPRAGConfig](c, "mcp")
 }
 
-func (c *RAGPluginConfig) OpenAIBackendConfig() (*OpenAIRAGConfig, error) {
+func (c *ContextSource) OpenAIBackendConfig() (*OpenAIRAGConfig, error) {
 	return decodeRAGBackendConfig[OpenAIRAGConfig](c, "openai")
 }
 
-func (c *RAGPluginConfig) VectorStoreBackendConfig() (*VectorStoreRAGConfig, error) {
+func (c *ContextSource) VectorStoreBackendConfig() (*VectorStoreRAGConfig, error) {
 	return decodeRAGBackendConfig[VectorStoreRAGConfig](c, "vectorstore")
 }
 
-func (c *RAGPluginConfig) HybridBackendConfig() (*HybridRAGConfig, error) {
+func (c *ContextSource) HybridBackendConfig() (*HybridRAGConfig, error) {
 	return decodeRAGBackendConfig[HybridRAGConfig](c, "hybrid")
 }
 
@@ -135,9 +148,9 @@ func (c *OpenAIRAGConfig) FilterMap() (map[string]interface{}, error) {
 	return c.Filter.AsStringMap()
 }
 
-func decodeRAGBackendConfig[T any](cfg *RAGPluginConfig, expectedBackend string) (*T, error) {
+func decodeRAGBackendConfig[T any](cfg *ContextSource, expectedBackend string) (*T, error) {
 	if cfg == nil {
-		return nil, fmt.Errorf("RAG config is nil")
+		return nil, fmt.Errorf("rag source is nil")
 	}
 	if cfg.Backend != expectedBackend {
 		return nil, fmt.Errorf("expected RAG backend %q, got %q", expectedBackend, cfg.Backend)

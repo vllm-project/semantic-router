@@ -18,11 +18,15 @@ package vectorstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
 )
+
+// ErrStoreNotFound reports a vector store ID the manager does not hold.
+var ErrStoreNotFound = errors.New("vector store not found")
 
 // Manager orchestrates vector store CRUD operations, coordinates between
 // the metadata registry and the vector backend, and keeps an in-memory
@@ -139,7 +143,7 @@ func (m *Manager) GetStore(id string) (*VectorStore, error) {
 
 	vs, ok := m.stores[id]
 	if !ok {
-		return nil, fmt.Errorf("vector store not found: %s", id)
+		return nil, fmt.Errorf("%w: %s", ErrStoreNotFound, id)
 	}
 	return cloneVectorStore(vs), nil
 }
@@ -232,7 +236,7 @@ func (m *Manager) UpdateStore(ctx context.Context, id string, req UpdateStoreReq
 	vs, ok := m.stores[id]
 	if !ok {
 		m.mu.Unlock()
-		return nil, fmt.Errorf("vector store not found: %s", id)
+		return nil, fmt.Errorf("%w: %s", ErrStoreNotFound, id)
 	}
 
 	if req.Name != nil {
@@ -263,7 +267,7 @@ func (m *Manager) DeleteStore(ctx context.Context, id string) error {
 	_, ok := m.stores[id]
 	if !ok {
 		m.mu.Unlock()
-		return fmt.Errorf("vector store not found: %s", id)
+		return fmt.Errorf("%w: %s", ErrStoreNotFound, id)
 	}
 	delete(m.stores, id)
 	m.mu.Unlock()
@@ -288,7 +292,7 @@ func (m *Manager) UpdateFileCounts(ctx context.Context, id string, fn func(*File
 	vs, ok := m.stores[id]
 	if !ok {
 		m.mu.Unlock()
-		return fmt.Errorf("vector store not found: %s", id)
+		return fmt.Errorf("%w: %s", ErrStoreNotFound, id)
 	}
 	fn(&vs.FileCounts)
 	snapshot := cloneVectorStore(vs)
@@ -320,7 +324,7 @@ func (m *Manager) failQueuedFileCounts(ctx context.Context, failedByStore map[st
 		vs, ok := m.stores[id]
 		if !ok {
 			m.mu.Unlock()
-			return fmt.Errorf("vector store not found: %s", id)
+			return fmt.Errorf("%w: %s", ErrStoreNotFound, id)
 		}
 		vs.FileCounts.InProgress -= failed
 		vs.FileCounts.Failed += failed

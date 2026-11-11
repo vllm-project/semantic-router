@@ -111,11 +111,11 @@
     "description": "The label used to tell the user that he's browsing an unreleased doc version"
   },
   "theme.docs.versions.unmaintainedVersionLabel": {
-    "message": "此为 {siteTitle} {versionLabel} 版的文档，现已不再积极维护。",
+    "message": "此为 {siteTitle} 已发布版本 {versionLabel} 的文档。",
     "description": "The label used to tell the user that he's browsing an unmaintained doc version"
   },
   "theme.docs.versions.latestVersionSuggestionLabel": {
-    "message": "最新的文档请参阅 {latestVersionLink} ({versionLabel})。",
+    "message": "基于 main 构建的最新文档请参阅{latestVersionLink}。",
     "description": "The label used to tell the user to check the latest version"
   },
   "theme.docs.versions.latestVersionLinkLabel": {
@@ -395,7 +395,7 @@
     "message": "面向模型与算力的开放、可编程{decisionLayer}。"
   },
   "homepage.hero.primaryCta": {
-    "message": "体验 Playground"
+    "message": "体验 System Duo"
   },
   "homepage.hero.manifesto": {
     "message": "先把请求看明白，再把系统做大；以信号驱动，以不确定性为标尺，让决策足够清晰。"
@@ -403,53 +403,17 @@
   "homepage.hero.secondaryCta": {
     "message": "开始使用"
   },
-  "homepage.hero.modelBand.aria": {
-    "message": "用于可编程推理的模型"
-  },
   "homepage.hero.film.title": {
     "message": "重新认识 vLLM Semantic Router"
   },
   "homepage.hero.film.play": {
     "message": "观看影片"
   },
-  "homepage.stats.signals.label": {
-    "message": "信号"
-  },
-  "homepage.stats.signals.description": {
-    "message": "上下文、意图、安全、偏好与系统状态。"
-  },
-  "homepage.stats.algorithms.label": {
-    "message": "算法"
-  },
-  "homepage.stats.algorithms.description": {
-    "message": "11 种选择算法，5 种协作循环。"
-  },
-  "homepage.stats.papers.label": {
-    "message": "论文"
-  },
-  "homepage.stats.papers.description": {
-    "message": "{count} 篇关于路由、安全与推理的论文。"
-  },
   "homepage.capabilities.label": {
     "message": "架构"
   },
   "homepage.capabilities.heading": {
     "message": "你的模型，你的规则。"
-  },
-  "homepage.capabilities.description": {
-    "message": "为每次请求选择模型与算力。"
-  },
-  "homepage.capabilities.axis.models": {
-    "message": "模型"
-  },
-  "homepage.capabilities.axis.compute": {
-    "message": "算力"
-  },
-  "homepage.capabilities.axis.location": {
-    "message": "位置"
-  },
-  "homepage.capabilities.axis.preference": {
-    "message": "偏好"
   },
   "homepage.capabilities.signal.title": {
     "message": "信号提取"
@@ -1024,18 +988,6 @@
   "homepage.videos.selected": {
     "message": "已选视频"
   },
-  "homepage.videos.previous.aria": {
-    "message": "显示上一个视频"
-  },
-  "homepage.videos.previous": {
-    "message": "上一个"
-  },
-  "homepage.videos.next.aria": {
-    "message": "显示下一个视频"
-  },
-  "homepage.videos.next": {
-    "message": "下一个"
-  },
   "homepage.videos.rail.aria": {
     "message": "视频播放列表"
   },
@@ -1047,21 +999,6 @@
   },
   "homepage.videos.playFeatured": {
     "message": "播放视频"
-  },
-  "homepage.videos.pagination.aria": {
-    "message": "视频播放列表分页"
-  },
-  "homepage.videos.previousPage.aria": {
-    "message": "显示上一页视频"
-  },
-  "homepage.videos.previousPage": {
-    "message": "上一页"
-  },
-  "homepage.videos.nextPage.aria": {
-    "message": "显示下一页视频"
-  },
-  "homepage.videos.nextPage": {
-    "message": "下一页"
   },
   "features.sectionTitle": {
     "message": "我们的目标"
@@ -2178,18 +2115,6 @@
   "visionPaper.heroDescription": {
     "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构，以 vLLM Semantic Router 愿景论文的完整 PDF 阅读器形式呈现。"
   },
-  "decisionPaper.title": {
-    "message": "Decision 论文"
-  },
-  "decisionPaper.socialTitle": {
-    "message": "Decision 1.0：迈向开放的决策基础模型 — vLLM Semantic Router"
-  },
-  "decisionPaper.metaDescription": {
-    "message": "Decision 1.0：迈向开放的决策基础模型"
-  },
-  "decisionPaper.heroDescription": {
-    "message": "Decision 1.0：迈向开放的决策基础模型。这份技术报告介绍 Decision 系列的模型、数据与训练方法。"
-  },
   "homepage.meta.description": {
     "message": "面向模型与算力的开放、可编程决策层。"
   },
@@ -2244,9 +2169,6 @@
   "teamCarousel.label": {
     "message": "社区"
   },
-  "teamCarousel.footer": {
-    "message": "一起塑造下一步。"
-  },
   "teamCarousel.viewAll": {
     "message": "认识团队"
   },
@@ -2259,12 +2181,6 @@
   "acknowledgements.subtitle": {
     "message": "支撑 vLLM Semantic Router 的开源库与平台。"
   },
-  "acknowledgements.projectMeta": {
-    "message": "基础依赖"
-  },
-  "acknowledgements.projectLink": {
-    "message": "查看项目"
-  },
   "homepage.testimonials.label": {
     "message": "行业声音"
   },
@@ -2272,15 +2188,6 @@
     "message": "这场转变已经开始"
   },
   "homepage.testimonials.source": {
-    "message": "来源"
-  },
-  "homepage.trending.label": {
-    "message": "趋势亮点"
-  },
-  "homepage.trending.title": {
-    "message": "这股势头已经可见"
-  },
-  "homepage.trending.source": {
     "message": "来源"
   },
   "homepage.trending.source.collection": {
@@ -2374,13 +2281,13 @@
     "message": "由你掌控"
   },
   "homepage.finalCta.title": {
-    "message": "让每次请求，都发挥价值。"
+    "message": "让每次请求，都{count}。"
   },
   "homepage.finalCta.description": {
-    "message": "在 Playground 中体验智能路由，再把它接入你自己的技术栈。"
+    "message": "在 System Duo 中体验智能路由，再把它接入你自己的技术栈。"
   },
   "homepage.finalCta.playground": {
-    "message": "体验 Playground"
+    "message": "体验 System Duo"
   },
   "homepage.finalCta.docs": {
     "message": "自行部署"
@@ -2540,6 +2447,68 @@
   },
   "community.contributors.range.all.caption": {
     "message": "仓库全量历史"
+  },
+  "theme.SearchBar.section.docs": {
+    "message": "文档"
+  },
+  "theme.SearchBar.section.blog": {
+    "message": "博客"
+  },
+  "theme.SearchBar.section.pages": {
+    "message": "页面"
+  },
+  "theme.SearchBar.placeholder": {
+    "message": "搜索文档和博客…",
+    "description": "Placeholder in the command palette search field"
+  },
+  "theme.SearchBar.resultsLabel": {
+    "message": "搜索结果",
+    "description": "Accessible name of the command palette result list"
+  },
+  "theme.SearchBar.idleTitle": {
+    "message": "搜索文档和博客",
+    "description": "Headline of the command palette before anything is typed"
+  },
+  "theme.SearchBar.idleHint": {
+    "message": "结果按栏目分组。按 ↵ 打开高亮项。",
+    "description": "Sub-line of the command palette before anything is typed"
+  },
+  "theme.SearchBar.loading": {
+    "message": "正在加载搜索索引…",
+    "description": "Shown while the search index is being fetched"
+  },
+  "theme.SearchBar.unavailableTitle": {
+    "message": "搜索暂不可用",
+    "description": "Headline shown when the search index could not be fetched"
+  },
+  "theme.SearchBar.unavailableHint": {
+    "message": "无法加载索引。请检查网络连接后刷新页面。",
+    "description": "Sub-line shown when the search index could not be fetched"
+  },
+  "theme.SearchBar.emptyHint": {
+    "message": "试试更短或更宽泛的关键词。",
+    "description": "Advice shown when a query matches nothing"
+  },
+  "theme.SearchBar.seeAllShort": {
+    "message": "查看全部结果",
+    "description": "Row that leaves the palette for the standalone /search page"
+  },
+  "theme.SearchBar.hintNavigate": {
+    "message": "导航"
+  },
+  "theme.SearchBar.hintOpen": {
+    "message": "打开"
+  },
+  "theme.SearchBar.hintClose": {
+    "message": "关闭"
+  },
+  "theme.SearchBar.triggerLabel": {
+    "message": "搜索",
+    "description": "Visible label of the navbar search trigger"
+  },
+  "theme.SearchBar.noResults": {
+    "message": "未找到“{term}”的相关结果",
+    "description": "Headline shown when a query matches nothing; {term} is the query"
   },
   "theme.SearchBar.noResultsText": {
     "message": "没有找到任何文档"
@@ -3002,20 +2971,17 @@
   "homepage.hero.decisionLayer": {
     "message": "决策层"
   },
+  "homepage.ecosystem.label": {
+    "message": "产业与学术"
+  },
   "homepage.ecosystem.title": {
     "message": "生态与合作"
-  },
-  "homepage.ecosystem.description": {
-    "message": "面向模型与算力的开放、可编程{decisionLayer}。"
   },
   "homepage.ecosystem.growing": {
     "message": "开放的社区，持续成长。"
   },
   "homepage.ecosystem.cta": {
     "message": "与我们一起构建"
-  },
-  "homepage.ecosystem.decisionLayer": {
-    "message": "决策层"
   },
   "homepage.hero.beyond": {
     "message": "超越单一模型。"
@@ -3024,16 +2990,16 @@
     "message": "应用场景"
   },
   "homepage.runtimeModes.title": {
-    "message": "统一前端，按需组合。"
+    "message": "放在模型之前，或伴在应用一旁。"
   },
   "homepage.runtimeModes.description": {
-    "message": "通过决策引擎路由聊天请求，或直接调用模型智能。两条路径共享前端和可扩展的服务引擎。"
+    "message": "一次安装，两处接入，就在你已有的技术栈上。"
   },
   "homepage.runtimeModes.router.label": {
     "message": "Router 模式"
   },
   "homepage.runtimeModes.router.description": {
-    "message": "将 Chat、Messages 和 Responses 请求路由到模型后端，同时保留原生决策能力。"
+    "message": "把 Chat、Messages 和 Responses 路由到你的后端，原生决策同时可用。"
   },
   "homepage.runtimeModes.router.endpoint": {
     "message": "调用 {chatEndpoint} 或 {messagesEndpoint}。"
@@ -3048,7 +3014,7 @@
     "message": "Engine 模式"
   },
   "homepage.runtimeModes.engine.description": {
-    "message": "启动相同的前端和模型工作进程，并关闭路由。后续逻辑由你的应用掌控。"
+    "message": "相同的前端和工作进程，关闭路由。后续逻辑由你的应用掌控。"
   },
   "homepage.runtimeModes.engine.cta": {
     "message": "运行 Engine"
@@ -3075,16 +3041,10 @@
     "message": "你的知识，你的掌控。"
   },
   "homepage.sovereigntyAI.description": {
-    "message": "让私有领域知识留在本地，用你的 GPU 运行开放模型。对路由策略允许的请求，使用外部前沿模型。"
-  },
-  "homepage.sovereigntyAI.privacy": {
-    "message": "隐私感知路由"
+    "message": "私有知识留在你的 GPU 上。前沿模型，仅在策略允许时使用。"
   },
   "homepage.sovereigntyAI.localCompute": {
     "message": "本地 GPU，开放模型。"
-  },
-  "homepage.sovereigntyAI.frontier": {
-    "message": "在你的策略下使用前沿模型。"
   },
   "homepage.sovereigntyAI.cta": {
     "message": "探索路由策略"
@@ -3122,12 +3082,6 @@
   "homepage.sovereigntyAI.knowledgeOnPrem": {
     "message": "领域知识留在本地"
   },
-  "homepage.sovereigntyAI.localAvailable": {
-    "message": "本地模型可用"
-  },
-  "homepage.sovereigntyAI.localSelected": {
-    "message": "私有知识由本地模型处理"
-  },
   "homepage.sovereigntyAI.externalProvider": {
     "message": "外部提供商"
   },
@@ -3136,12 +3090,6 @@
   },
   "homepage.sovereigntyAI.externalCondition": {
     "message": "仅接收策略允许的请求"
-  },
-  "homepage.sovereigntyAI.frontierSelected": {
-    "message": "通过策略检查，选择此路径"
-  },
-  "homepage.sovereigntyAI.privateExcluded": {
-    "message": "私有上下文禁止此路径"
   },
   "homepage.sovereigntyAI.eligibilityFirst": {
     "message": "先检查路由约束"
@@ -3153,79 +3101,10 @@
     "message": "质量 · 延迟 · 成本"
   },
   "homepage.sovereigntyAI.diagramDescription": {
-    "message": "动画展示一种配置好的隐私策略：内部领域知识路由到本地 GPU 上的开放模型；公开请求符合策略时，可以使用外部前沿闭源模型。隐私、处理位置和访问约束先于模型选择。"
-  },
-  "homepage.architecture.models.closed": {
-    "message": "闭源模型"
-  },
-  "homepage.architecture.models.open": {
-    "message": "开源模型"
-  },
-  "homepage.architecture.models.copy": {
-    "message": "各有所长，组成统一模型池。"
-  },
-  "homepage.architecture.compute.gpu": {
-    "message": "GPU 节点"
-  },
-  "homepage.architecture.compute.runtime": {
-    "message": "本地运行时"
-  },
-  "homepage.architecture.compute.api": {
-    "message": "模型 API"
-  },
-  "homepage.architecture.compute.copy": {
-    "message": "路由到你配置的后端。"
-  },
-  "homepage.architecture.location.cloud": {
-    "message": "云端"
-  },
-  "homepage.architecture.location.private": {
-    "message": "私有环境"
-  },
-  "homepage.architecture.location.edge": {
-    "message": "边缘"
-  },
-  "homepage.architecture.location.copy": {
-    "message": "由你配置推理运行的位置。"
-  },
-  "homepage.architecture.preference.quality": {
-    "message": "质量"
-  },
-  "homepage.architecture.preference.latency": {
-    "message": "延迟"
-  },
-  "homepage.architecture.preference.cost": {
-    "message": "成本"
-  },
-  "homepage.architecture.preference.copy": {
-    "message": "为每项任务设置优先级。"
-  },
-  "homepage.architecture.center.label": {
-    "message": "可编程决策层"
-  },
-  "homepage.architecture.center.context": {
-    "message": "上下文"
-  },
-  "homepage.architecture.center.policy": {
-    "message": "策略"
-  },
-  "homepage.architecture.center.selection": {
-    "message": "按请求选择"
-  },
-  "homepage.architecture.center.model": {
-    "message": "模型"
-  },
-  "homepage.architecture.center.backend": {
-    "message": "后端"
+    "message": "此图展示一种配置好的隐私策略：内部领域知识路由到本地 GPU 上的开放模型；公开请求符合策略时，可以使用外部前沿闭源模型。隐私、处理位置和访问约束先于模型选择。"
   },
   "homepage.runtimeModes.devChannel": {
     "message": "开发通道"
-  },
-  "homepage.architecture.center.promise": {
-    "message": "为每个请求带来合适的智能。"
-  },
-  "homepage.sovereigntyAI.externalApproved": {
-    "message": "允许外部处理"
   },
   "homepage.sovereigntyAI.gate.privacy": {
     "message": "隐私"
@@ -3241,111 +3120,6 @@
   },
   "homepage.runtimeModes.startupNote": {
     "message": "在 CLI 启动时选择组件组合。"
-  },
-  "homepage.runtimeModes.diagram.explore": {
-    "message": "探索请求路径"
-  },
-  "homepage.runtimeModes.diagram.chat": {
-    "message": "聊天路由"
-  },
-  "homepage.runtimeModes.diagram.native": {
-    "message": "原生决策"
-  },
-  "homepage.runtimeModes.diagram.direct": {
-    "message": "原生直达路径 · 绕过路由"
-  },
-  "homepage.runtimeModes.diagram.shared": {
-    "message": "共享入口"
-  },
-  "homepage.runtimeModes.diagram.frontend": {
-    "message": "前端"
-  },
-  "homepage.runtimeModes.diagram.frontendDescription": {
-    "message": "监听器、身份验证与 API 契约。"
-  },
-  "homepage.runtimeModes.diagram.chatApi": {
-    "message": "Chat 与 Responses"
-  },
-  "homepage.runtimeModes.diagram.nativeApi": {
-    "message": "System One · 原生决策"
-  },
-  "homepage.runtimeModes.diagram.alias": {
-    "message": "别名：/v1/decisions"
-  },
-  "homepage.runtimeModes.diagram.optional": {
-    "message": "可选的路由层"
-  },
-  "homepage.runtimeModes.diagram.decision": {
-    "message": "决策引擎"
-  },
-  "homepage.runtimeModes.diagram.recipe": {
-    "message": "每个入口解析到独立的配方。"
-  },
-  "homepage.runtimeModes.diagram.signals": {
-    "message": "信号"
-  },
-  "homepage.runtimeModes.diagram.projections": {
-    "message": "投影"
-  },
-  "homepage.runtimeModes.diagram.decisions": {
-    "message": "决策"
-  },
-  "homepage.runtimeModes.diagram.algorithms": {
-    "message": "算法"
-  },
-  "homepage.runtimeModes.diagram.plugins": {
-    "message": "配方插件 · 请求与响应钩子"
-  },
-  "homepage.runtimeModes.diagram.taskLink": {
-    "message": "模型任务"
-  },
-  "homepage.runtimeModes.diagram.execution": {
-    "message": "模型执行"
-  },
-  "homepage.runtimeModes.diagram.serving": {
-    "message": "服务引擎"
-  },
-  "homepage.runtimeModes.diagram.servingDescription": {
-    "message": "先选择模型部署，再分配就绪副本。"
-  },
-  "homepage.runtimeModes.diagram.deployment": {
-    "message": "模型部署"
-  },
-  "homepage.runtimeModes.diagram.replicaOne": {
-    "message": "副本 1"
-  },
-  "homepage.runtimeModes.diagram.replicaTwo": {
-    "message": "副本 2"
-  },
-  "homepage.runtimeModes.diagram.more": {
-    "message": "+ 更多副本"
-  },
-  "homepage.runtimeModes.diagram.scale": {
-    "message": "每个模型独立扩展"
-  },
-  "homepage.runtimeModes.diagram.specialists": {
-    "message": "专用工作进程：分类 · 嵌入 · 重排"
-  },
-  "homepage.runtimeModes.diagram.logical": {
-    "message": "按能力组合，不代表固定的进程边界。"
-  },
-  "homepage.runtimeModes.diagram.backends": {
-    "message": "聊天模型后端"
-  },
-  "homepage.runtimeModes.diagram.generation": {
-    "message": "本地、私有或云端生成"
-  },
-  "homepage.runtimeModes.diagram.ownership": {
-    "message": "托管或外部接入的工作进程"
-  },
-  "homepage.runtimeModes.diagram.workerApis": {
-    "message": "工作进程 API 与公共前端 API 相互独立。"
-  },
-  "homepage.runtimeModes.diagram.chatCaption": {
-    "message": "聊天请求按照配方策略抵达生成后端。信号或插件需要模型能力时，决策引擎会调用模型工作进程。"
-  },
-  "homepage.runtimeModes.diagram.nativeCaption": {
-    "message": "原生决策从前端直达指定模型及就绪副本，绕过路由流水线。Router 和 Engine 模式均可使用。"
   },
   "homepage.install.channel": {
     "message": "开发通道"
@@ -3723,7 +3497,7 @@
     "message": "信息物理系统"
   },
   "team.members.WUKUNTAI-0211.role": {
-    "message": "软件工程师"
+    "message": "副研究科学家"
   },
   "team.members.WUKUNTAI-0211.bio": {
     "message": "软件工程师，给大规模 LLM 服务和智能体搭 AI 基础设施，计算机视觉出身。"
@@ -3840,7 +3614,7 @@
     "message": "vLLM Semantic Router 开源贡献者。"
   },
   "team.members.theohsiung.role": {
-    "message": "初级软件工程师（研究科学家）"
+    "message": "副研究科学家"
   },
   "team.members.theohsiung.bio": {
     "message": "AI 研究者兼软件工程师，AI for Science、LLM 系统、智能体基础设施、计算机视觉都做。"
@@ -3868,5 +3642,278 @@
   },
   "team.members.Zi-Yi-Ming.bio": {
     "message": "vLLM Semantic Router 开源贡献者。"
+  },
+  "homepage.arch.lede": {
+    "message": "同一个前端，两种模式：Router 路由对话，Engine 直接回答问题。"
+  },
+  "homepage.arch.routerRow": {
+    "message": "Router 模式 · 每一个对话请求"
+  },
+  "homepage.arch.engineRow": {
+    "message": "Engine 模式 · 一个直接的问题"
+  },
+  "homepage.arch.request.label": {
+    "message": "你的应用或智能体"
+  },
+  "homepage.arch.request.title": {
+    "message": "一个请求"
+  },
+  "homepage.arch.request.body": {
+    "message": "任意 OpenAI 或 Anthropic SDK：{chat}、{messages}"
+  },
+  "homepage.arch.signals.label": {
+    "message": "信号"
+  },
+  "homepage.arch.signals.title": {
+    "message": "读懂请求"
+  },
+  "homepage.arch.signals.aria": {
+    "message": "部分信号"
+  },
+  "homepage.arch.decision.label": {
+    "message": "决策"
+  },
+  "homepage.arch.decision.title": {
+    "message": "选定路由"
+  },
+  "homepage.arch.decision.body": {
+    "message": "投影与决策执行你的策略，再由算法选出模型。"
+  },
+  "homepage.arch.plugins.label": {
+    "message": "插件"
+  },
+  "homepage.arch.plugins.title": {
+    "message": "转发出去"
+  },
+  "homepage.arch.plugins.body": {
+    "message": "提示词、记忆、缓存与安全检查；流式输出与路由响应头。"
+  },
+  "homepage.arch.models.label": {
+    "message": "你的模型"
+  },
+  "homepage.arch.models.title": {
+    "message": "随处运行"
+  },
+  "homepage.arch.models.body": {
+    "message": "vLLM、SGLang 或任意 OpenAI 兼容 API：云端、私有环境或边缘。"
+  },
+  "homepage.arch.models.aria": {
+    "message": "可路由到的模型"
+  },
+  "homepage.arch.agent.label": {
+    "message": "你的智能体"
+  },
+  "homepage.arch.agent.title": {
+    "message": "一个小问题"
+  },
+  "homepage.arch.agent.body": {
+    "message": "{endpoint}：有风险吗？该交给哪个团队？完成了吗？"
+  },
+  "homepage.arch.systemOne.label": {
+    "message": "System One"
+  },
+  "homepage.arch.systemOne.title": {
+    "message": "决策模型"
+  },
+  "homepage.arch.systemOne.body": {
+    "message": "Vela 3.0 与 Decision 3.0，运行于 CPU 或 GPU：文本、图像与视频。"
+  },
+  "homepage.arch.pass.label": {
+    "message": "一次前向计算"
+  },
+  "homepage.arch.pass.title": {
+    "message": "所有答案"
+  },
+  "homepage.arch.pass.body": {
+    "message": "每个选项给出一个概率，不生成文本。"
+  },
+  "homepage.arch.calibrated.label": {
+    "message": "已校准"
+  },
+  "homepage.arch.calibrated.title": {
+    "message": "据此行动"
+  },
+  "homepage.arch.calibrated.body": {
+    "message": "按你的阈值放行、询问、路由或拦截。"
+  },
+  "homepage.arch.back.label": {
+    "message": "回到你这里"
+  },
+  "homepage.arch.back.title": {
+    "message": "你的下一步"
+  },
+  "homepage.arch.back.body": {
+    "message": "你的应用依据答案行动，它的 LLM 把 token 留给真正的工作。"
+  },
+  "homepage.arch.caption": {
+    "message": "在 Router 模式下，对话请求先被读取信号，再匹配到一个决策，由其算法选出模型，经过插件后发往你的模型。在 Engine 模式下，发往 /v1/systemone 的直接问题由决策模型一次前向计算作答，并为每个选项给出校准后的概率。"
+  },
+  "homepage.hero.filmLink": {
+    "message": "观看影片"
+  },
+  "homepage.install.caption.human": {
+    "message": "终端"
+  },
+  "homepage.install.caption.agent": {
+    "message": "给智能体的提示词"
+  },
+  "homepage.install.copy.label": {
+    "message": "复制"
+  },
+  "homepage.sovereigntyAI.hardware": {
+    "message": "硬件"
+  },
+  "homepage.sovereigntyAI.models": {
+    "message": "模型"
+  },
+  "homepage.finalCta.count": {
+    "message": "发挥价值"
+  },
+  "homepage.trending.news": {
+    "message": "最新动态"
+  },
+  "homepage.trending.more": {
+    "message": "更多"
+  },
+  "teamCarousel.tag.maintainer": {
+    "message": "维护者"
+  },
+  "teamCarousel.tag.committer": {
+    "message": "提交者"
+  },
+  "teamCarousel.tag.emeritus": {
+    "message": "荣誉提交者"
+  },
+  "teamCarousel.play": {
+    "message": "播放人物墙"
+  },
+  "teamCarousel.pause": {
+    "message": "暂停人物墙"
+  },
+  "teamCarousel.playShort": {
+    "message": "播放"
+  },
+  "teamCarousel.pauseShort": {
+    "message": "暂停"
+  },
+  "teamCarousel.count.maintainers": {
+    "message": "{count} 位维护者"
+  },
+  "teamCarousel.count.committers": {
+    "message": "{count} 位提交者"
+  },
+  "teamCarousel.count.emeritus": {
+    "message": "{count} 位荣誉提交者"
+  },
+  "homepage.runtimeModes.map.router.caption": {
+    "message": "在你的客户端与模型池之间"
+  },
+  "homepage.runtimeModes.map.router.description": {
+    "message": "应用、智能体和 IDE 调用 Router，Router 把每个请求发往模型池中的一个模型。"
+  },
+  "homepage.runtimeModes.map.apps": {
+    "message": "应用"
+  },
+  "homepage.runtimeModes.map.agents": {
+    "message": "智能体"
+  },
+  "homepage.runtimeModes.map.ides": {
+    "message": "IDE"
+  },
+  "homepage.runtimeModes.map.router": {
+    "message": "Router"
+  },
+  "homepage.runtimeModes.map.pool": {
+    "message": "你的模型池"
+  },
+  "homepage.runtimeModes.map.engine.caption": {
+    "message": "伴在应用一旁，跑在你自己的硬件上"
+  },
+  "homepage.runtimeModes.map.engine.description": {
+    "message": "你的应用向 Engine 提问，并拿回每个选项的概率。"
+  },
+  "homepage.runtimeModes.map.app": {
+    "message": "你的应用"
+  },
+  "homepage.runtimeModes.map.engine": {
+    "message": "Engine"
+  },
+  "homepage.runtimeModes.map.hardware": {
+    "message": "GPU 或 CPU"
+  },
+  "homepage.runtimeModes.map.answer.engineering": {
+    "message": "工程"
+  },
+  "homepage.runtimeModes.map.answer.billing": {
+    "message": "账单"
+  },
+  "homepage.runtimeModes.map.answer.sales": {
+    "message": "销售"
+  },
+  "homepage.runtimeModes.plug.openai": {
+    "message": "OpenAI 兼容 API"
+  },
+  "homepage.runtimeModes.plug.harness": {
+    "message": "智能体框架"
+  },
+  "homepage.runtimeModes.plug.gateways": {
+    "message": "Envoy 网关"
+  },
+  "homepage.runtimeModes.plug.k8s": {
+    "message": "Kubernetes"
+  },
+  "homepage.runtimeModes.plug.systemone": {
+    "message": "System One API"
+  },
+  "homepage.runtimeModes.plug.gpus": {
+    "message": "本地 GPU"
+  },
+  "homepage.runtimeModes.plug.docker": {
+    "message": "Docker"
+  },
+  "homepage.runtimeModes.plug.router.aria": {
+    "message": "Router 模式的集成方式"
+  },
+  "homepage.runtimeModes.plug.engine.aria": {
+    "message": "Engine 模式的集成方式"
+  },
+  "homepage.interlude.dawn": {
+    "message": "读懂信号，选对模型。"
+  },
+  "homepage.interlude.night.open": {
+    "message": "开源"
+  },
+  "homepage.interlude.night.hardware": {
+    "message": "你的硬件"
+  },
+  "homepage.interlude.night.policy": {
+    "message": "你的策略"
+  },
+  "homepage.testimonials.play": {
+    "message": "播放观点轮播"
+  },
+  "homepage.testimonials.pause": {
+    "message": "暂停观点轮播"
+  },
+  "homepage.testimonials.roleCarousel": {
+    "message": "轮播"
+  },
+  "homepage.testimonials.roleSlide": {
+    "message": "幻灯片"
+  },
+  "homepage.testimonials.slideLabel": {
+    "message": "第 {n} 张，共 {count} 张：{name}"
+  },
+  "homepage.testimonials.prev": {
+    "message": "上一条观点"
+  },
+  "homepage.testimonials.next": {
+    "message": "下一条观点"
+  },
+  "homepage.testimonials.dot": {
+    "message": "显示第 {n} 条观点：{name}"
+  },
+  "homepage.testimonials.status": {
+    "message": "第 {n} 张，共 {count} 张"
   }
 }

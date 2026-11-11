@@ -90,12 +90,9 @@ def _is_plain_typed_scalar(node: yaml.Node, loader: yaml.SafeLoader) -> bool:
 def _context_rule_nodes(
     root: yaml.Node, loader: yaml.SafeLoader
 ) -> Iterator[yaml.Node]:
-    """Yield the context rule nodes of the default profile and every recipe."""
-    yield from _sequence_items(_child(root, loader, "routing", "signals", "context"))
+    """Yield the context rule nodes of every recipe."""
     for recipe in _sequence_items(_child(root, loader, "recipes")):
-        yield from _sequence_items(
-            _child(recipe, loader, "routing", "signals", "context")
-        )
+        yield from _sequence_items(_child(recipe, loader, "signals", "context"))
 
 
 def _child(

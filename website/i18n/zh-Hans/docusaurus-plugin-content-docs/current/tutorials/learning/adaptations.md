@@ -73,12 +73,10 @@ global:
 
 ## 诊断
 
-响应头保持紧凑：
+`x-vsr-trace` 的 `learning` 成员保持紧凑：
 
 ```http
-x-vsr-learning-methods: adaptation,protection
-x-vsr-learning-actions: adaptation=keep_base,protection=hold_current
-x-vsr-learning-reasons: adaptation=base_best,protection=cache_cost_high
+x-vsr-trace: learning=(adaptation;action=keep_base;reason=base_best protection;action=hold_current;reason=cache_cost_high)
 ```
 
 路由回放会存储候选模型评分、后验均值、采样值、基础模型、提案模型、最终模型、候选集、策略和原因。

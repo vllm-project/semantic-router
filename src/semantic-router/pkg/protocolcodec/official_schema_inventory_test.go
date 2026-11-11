@@ -10,7 +10,7 @@ import (
 // OpenAI OpenAPI contract at 690521b1753dce0c6d6b275f583d22537679cff9 and the
 // generated Anthropic Messages API types at
 // d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa, plus the later published
-// context-editing, thinking-token-count, and iteration-usage fields.
+// context-editing, thinking-token-count, iteration-usage, and speed-mode fields.
 // Every field is either represented semantically or decoded into an explicit
 // unsupported_feature error; adding a silent JSON sink is not allowed.
 func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
@@ -149,9 +149,10 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 				"choices", "created", "id", "metadata", "model", "moderation", "object", "service_tier", "system_fingerprint", "usage",
 			),
 			extensions: fields(
-				"do_remote_decode", "do_remote_prefill", "ec_transfer_params", "error", "kv_transfer_params", "metrics",
+				"citations", "do_remote_decode", "do_remote_prefill", "ec_transfer_params", "error", "kv_transfer_params", "metrics",
 				"prompt_logprobs", "prompt_routed_experts", "prompt_text", "prompt_token_ids", "remote_block_ids", "remote_engine_id",
-				"provider", "remote_host", "remote_port", "usage_breakdown", "x_groq",
+
+				"provider", "remote_host", "remote_port", "search_results", "time_info", "usage_breakdown", "x_groq",
 			),
 		},
 		{
@@ -165,7 +166,7 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 				"safety_identifier", "service_tier", "status", "temperature", "text", "tool_choice",
 				"tools", "top_logprobs", "top_p", "truncation", "usage", "user",
 			),
-			extensions: fields("billing", "conversation_id", "frequency_penalty", "presence_penalty", "store", "tool_usage"),
+			extensions: fields("billing", "conversation_id", "ec_transfer_params", "frequency_penalty", "input_messages", "kv_transfer_params", "output_messages", "presence_penalty", "store", "tool_usage"),
 		},
 		{
 			name: "Anthropic Messages",
@@ -223,6 +224,7 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 			official: fields(
 				"cache_creation", "cache_creation_input_tokens", "cache_read_input_tokens", "inference_geo",
 				"input_tokens", "iterations", "output_tokens", "output_tokens_details", "server_tool_use", "service_tier",
+				"speed",
 			),
 		},
 	}
