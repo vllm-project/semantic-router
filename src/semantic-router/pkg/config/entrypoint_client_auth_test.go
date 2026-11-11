@@ -42,6 +42,32 @@ func TestEntrypointClientAuthIsNotAvailableYet(t *testing.T) {
 	}
 }
 
+func TestRoutingFragmentRejectsUnavailableClientAuth(t *testing.T) {
+	const fragment = `recipes:
+  - name: default
+entrypoints:
+  - model_names: [company/fast]
+    recipe: default
+    client_auth: `
+	for _, tc := range []struct {
+		name string
+		auth string
+		want string
+	}{
+		{"policy", "{type: bearer_api_key, api_key_envs: [FAST_KEY]}", "entrypoint client authentication is not available yet"},
+		{"null", "null", "entrypoint client authentication is not available yet"},
+		{"empty", "", "entrypoint client authentication is not available yet"},
+		{"env reference", `{type: bearer_api_key, api_key_envs: ["${FAST_KEY}"]}`, "must not contain $ references"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ParseRoutingYAMLBytes([]byte(fragment + tc.auth + "\n"))
+			if err == nil || !strings.Contains(err.Error(), "entrypoints[0].client_auth") || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("ParseRoutingYAMLBytes() = %v, want client_auth rejected with %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestEntrypointClientAuthNeverExpandsAKeyIntoAnError(t *testing.T) {
 	t.Setenv("FAST_KEY", "expanded-secret")
 	for _, auth := range []string{

@@ -22,6 +22,11 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
 	}
 
+	// A fragment's entrypoints face the same raw-field checks as a whole
+	// config's, such as the rejection of client_auth by its presence.
+	if err := validateAndNormalizeRawConfig(raw); err != nil {
+		return nil, err
+	}
 	// Fragments share the canonical routing vocabulary while omitting only
 	// infrastructure cross-reference validation.
 	if err := validateKnownFields(raw, reflect.TypeOf(CanonicalConfig{})); err != nil {
