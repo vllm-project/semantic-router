@@ -38,6 +38,17 @@ var (
 		[]string{"signal_type", "signal_name"},
 	)
 
+	// SignalScanCoverageTotal counts the guard rules (jailbreak, safety, pii)
+	// by how much of their input they read: full, partial (some windows) or
+	// none.
+	SignalScanCoverageTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "vsr_signal_scan_coverage_total",
+			Help: "Guard signal rules by how much of their input the model read: full, partial or none",
+		},
+		[]string{"signal", "result"},
+	)
+
 	// DecisionEvaluationTotal tracks the total number of decision evaluations
 	DecisionEvaluationTotal = promauto.NewCounter(
 		prometheus.CounterOpts{
@@ -143,6 +154,15 @@ func RecordSignalMatch(signalType, signalName string) {
 		signalName = consts.UnknownLabel
 	}
 	SignalMatchTotal.WithLabelValues(signalType, signalName).Inc()
+}
+
+// RecordSignalScanCoverage records how much of its input a guard rule,
+// "type:name", read.
+func RecordSignalScanCoverage(signal, result string) {
+	if signal == "" {
+		signal = consts.UnknownLabel
+	}
+	SignalScanCoverageTotal.WithLabelValues(signal, result).Inc()
 }
 
 // RecordDecisionEvaluation records a decision evaluation event

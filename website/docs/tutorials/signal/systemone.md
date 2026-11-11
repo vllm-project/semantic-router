@@ -115,7 +115,7 @@ rewrites them to `systemone`.
 | `stage` | `request` (default) or `response`. |
 | `input` | What the rule reads besides the current user turn; see [Read more than the current turn](#read-more-than-the-current-turn). |
 | `coverage` | `truncate` (default) reads what fits the model's input; `full` reads all of it. |
-| `on_unscanned` | `coverage: full` only: what an answer that could not read the whole input means: `match`, `no_match` or `unknown` (default). |
+| `on_unscanned` | `coverage: full` only: what an answer that could not read the whole input means: `match`, `no_match` or `unknown` (default); `best_effort` reads as `unknown` here, since a `systemone` rule reads its input in one call. |
 | `timeout_ms` | The answer's deadline, up to 60000 ms; else the deployment's, else 1000 ms. |
 
 ### What a rule matches
@@ -240,6 +240,11 @@ recipes:
 - `previous_turns` (0 to 32): the last turns of the conversation, user and
   assistant, as a transcript.
 - `tool_results`: the request's tool results.
+- `request: false`: leave the current user turn out, so a request-stage rule
+  reads only the earlier user turns or the tool results it names, as its
+  request. It needs `history` or `tool_results`, takes no `previous_turns`
+  or media, and is not asked, so it does not match, while those hold no
+  text.
 - `image` and `video`: the current turn's images and videos. The deployment
   must read that input, or the configuration is refused with
   `input_modality_unsupported`. No deployment reads audio yet, so

@@ -547,7 +547,8 @@ lists eligible models independently of their scores; an unrecorded score appears
 as `—`, while a recorded zero remains zero. Missing identity or evidence
 is displayed explicitly. Replay capture uses `global.services.router_replay`
 defaults and the selected decision's `router_replay` plugin overrides. Rejected
-requests without a selected decision use the global defaults.
+requests without a selected decision use the global defaults layered with their
+recipe's own plugins.
 `capture_personal_data: false` retains routing evidence but suppresses content
 when personal data is detected or PII evidence is unavailable.
 

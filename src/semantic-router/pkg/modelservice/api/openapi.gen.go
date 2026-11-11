@@ -1516,10 +1516,10 @@ type Usage struct {
 
 // WindowOptions defines model for WindowOptions.
 type WindowOptions struct {
-	// Overlap Content tokens shared by neighbouring windows.
+	// Overlap Content tokens shared by neighbouring windows. An overlap that is not smaller than the content width (tokens minus special tokens) fails the request.
 	Overlap *int `json:"overlap,omitempty"`
 
-	// Tokens Window size including special tokens.
+	// Tokens Window size including special tokens. A size that leaves no room for content after the head's special tokens fails the request.
 	Tokens int `json:"tokens"`
 }
 

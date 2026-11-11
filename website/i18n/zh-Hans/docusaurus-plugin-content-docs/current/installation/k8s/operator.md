@@ -251,6 +251,8 @@ spec:
 
 省略主机名可让 OpenShift 分配一个，或提供由你的 DNS 和证书配置覆盖的主机名。
 
+在独立模式下，Route 将客户端发送到 Router 的推理监听器，即 Service 端口 8801（`http-8801`），未设置 `servicePort` 的 `spec.ingress` 路径也是如此。使用 `spec.gateway.existingRef` 时，Router 不提供 HTTP 推理端口，请通过该 Gateway 访问。
+
 ## 密钥
 
 将提供商、仓库和模型下载凭证放在 Kubernetes Secrets 中。从 `spec.env` 引用它们，不要在自定义资源中放入字面值：

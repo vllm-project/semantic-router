@@ -69,6 +69,13 @@ func (l *Ledger) TightenLimit(limit int) bool {
 	}
 }
 
+// Unmetered returns ctx without its call ledger, for an exchange its caller's
+// contract keeps out of the call budget. The deadline and every other value
+// stay. The untyped nil reads as no ledger.
+func Unmetered(ctx context.Context) context.Context {
+	return context.WithValue(ctx, contextKey{}, nil)
+}
+
 // Current returns the request ledger carried by ctx, when one is installed.
 func Current(ctx context.Context) (*Ledger, bool) {
 	ledger, ok := ctx.Value(contextKey{}).(*Ledger)

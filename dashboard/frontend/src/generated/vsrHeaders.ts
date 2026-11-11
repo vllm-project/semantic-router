@@ -196,7 +196,7 @@ export const X_VSR_PROTECTION_RELEASE = 'x-vsr-protection-release'
 /** Router Replay record id, when the record was persisted. Surface: public. */
 export const X_VSR_REPLAY_ID = 'x-vsr-replay-id'
 
-/** How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`. Surface: public. */
+/** How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`. Surface: public. */
 export const X_VSR_RESPONSE_PATH = 'x-vsr-response-path'
 
 /** Route key: the model whose route the gateway sends the provider request on; the Router drops a client's value and sets its own. Surface: internal. */
@@ -273,6 +273,9 @@ export const TRACE_EFFECTIVE_MAX_OUTPUT_TOKENS = 'effective_max_output_tokens'
 /** Matched signal rules as `type:name`, and `type:rule:option` for a choice rule without labels; projections are `projection:name`. */
 export const TRACE_SIGNALS = 'signals'
 
+/** Guard rules that read their input in windows, as `type:name` with `coverage` (`full`, `partial` or `none`) and, for `partial`, the `read` and `windows` counts. */
+export const TRACE_SCAN_COVERAGE = 'scan_coverage'
+
 /** Token count the `context` signal measured. */
 export const TRACE_CONTEXT_TOKENS = 'context_tokens'
 
@@ -333,6 +336,7 @@ export const TRACE_MEMBERS = [
   TRACE_EFFECTIVE_INPUT_TOKENS,
   TRACE_EFFECTIVE_MAX_OUTPUT_TOKENS,
   TRACE_SIGNALS,
+  TRACE_SCAN_COVERAGE,
   TRACE_CONTEXT_TOKENS,
   TRACE_CATEGORY,
   TRACE_REASONING,

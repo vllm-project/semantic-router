@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -43,7 +42,7 @@ func startNativeGateway(ctx context.Context, server *extproc.Server, writer star
 	engineOpts.ExecutesFallback = true
 	listeners, err := listenNative(cfg, bindAddress, gateway.Options{
 		Serving:   nativeServing{pin: server.Pin, engine: engineOpts},
-		Ready:     ready.Load,
+		Ready:     func() bool { return ready.Load() && server.ServingActive() },
 		AccessLog: logAccess,
 	})
 	if err != nil {
@@ -376,60 +375,20 @@ func buildUpstream(mode config.GatewayMode, cfg *config.RouterConfig, previous *
 
 // validateNativeListeners refuses a reload that changes what the native
 // gateway bound at startup: the set of listeners, or a listener's address,
-// port, timeout (also its connections' idle timeout) or TLS certificate.
+// port, timeout (also its connections' idle timeout) or TLS file paths.
 func validateNativeListeners(candidate, active *configsnapshot.Snapshot) error {
 	if active == nil {
 		return nil
 	}
-	bound := make(map[string]config.Listener, len(active.Config().Listeners))
-	for _, listener := range active.Config().Listeners {
-		bound[listener.Name] = listener
-	}
 	var reasons []configsnapshot.Reason
-	restart := func(path, message string) {
+	for _, restart := range config.ListenerRestarts(active.Config().Listeners, candidate.Config().Listeners) {
 		reasons = append(reasons, configsnapshot.Reason{
-			Stage: configsnapshot.StageValidate, Code: configsnapshot.CodeRestartRequired, Path: path,
-			Message: message + "; standalone mode binds listeners at startup, so restart the Router to apply it",
+			Stage: configsnapshot.StageValidate, Code: configsnapshot.CodeRestartRequired, Path: restart.Path,
+			Message: restart.Message + "; standalone mode binds listeners at startup, so restart the Router to apply it",
 		})
-	}
-	for _, next := range candidate.Config().Listeners {
-		path := "listeners[" + next.Name + "]"
-		previous, ok := bound[next.Name]
-		delete(bound, next.Name)
-		switch {
-		case !ok:
-			restart(path, "the listener is new")
-		case next.Address != previous.Address:
-			restart(path+".address", fmt.Sprintf("the address changes from %q to %q", previous.Address, next.Address))
-		case next.Port != previous.Port:
-			restart(path+".port", fmt.Sprintf("the port changes from %d to %d", previous.Port, next.Port))
-		case next.Timeout != previous.Timeout:
-			restart(path+".timeout", fmt.Sprintf("the timeout changes from %q to %q", previous.Timeout, next.Timeout))
-		case !sameListenerTLS(next.TLS, previous.TLS):
-			restart(path+".tls", "the TLS certificate changes")
-		}
-	}
-	for _, removed := range sortedListenerNames(bound) {
-		restart("listeners["+removed+"]", "the listener is removed")
 	}
 	if len(reasons) == 0 {
 		return nil
 	}
 	return configsnapshot.RejectReasons(configsnapshot.StageValidate, reasons)
-}
-
-func sameListenerTLS(a, b *config.ListenerTLS) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
-}
-
-func sortedListenerNames(listeners map[string]config.Listener) []string {
-	names := make([]string, 0, len(listeners))
-	for name := range listeners {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
 }

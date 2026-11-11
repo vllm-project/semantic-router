@@ -63,7 +63,7 @@ plugins:
 ### 策略
 
 - `passthrough`（默认）保持请求的工具不变。
-- `filtered` 在 `allow_tools` 列出工具时只保留这些工具，并移除 `block_tools` 列出的工具。
+- `filtered` 在 `allow_tools` 列出工具时只保留这些工具，并移除 `block_tools` 列出的工具。指名被移除工具的 `tool_choice` 也随之移除，由模型在剩下的工具中选择。
 - `none` 移除所有工具以及请求的 `tool_choice`。设置 `strip_tool_history: true` 时，还会从发往
   提供方的请求中移除先前的助手工具调用和工具结果。策略在信号与决策评估之后执行，因此不会改变匹配的路由。
 - `trusted_facts` 根据运维策略、网关证明和新鲜的运行时可用性（当决策的选择从目录添加工具时，

@@ -33,7 +33,7 @@ export function matchField(recallMethods: string[], judgePreset: string): FieldS
             label: 'Max Candidates',
             type: 'number',
             placeholder: '64',
-            description: 'The most candidates the judge reads; more are truncated, never refused',
+            description: 'The most candidates the judge reads, at most 4096; more are truncated, never refused',
           },
         ],
       },

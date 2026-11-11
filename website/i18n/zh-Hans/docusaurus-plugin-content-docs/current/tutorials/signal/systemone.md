@@ -99,7 +99,7 @@ global:
 | `stage` | `request`（默认）或 `response`。 |
 | `input` | 规则在当前用户轮次之外读取的内容；见[读取当前轮次之外的内容](#read-more-than-the-current-turn)。 |
 | `coverage` | `truncate`（默认）读取能放进模型输入的部分；`full` 读取全部。 |
-| `on_unscanned` | 仅 `coverage: full`：无法读完整个输入的答案意味着什么：`match`、`no_match` 或 `unknown`（默认）。 |
+| `on_unscanned` | 仅 `coverage: full`：无法读完整个输入的答案意味着什么：`match`、`no_match` 或 `unknown`（默认）；`best_effort` 在这里等同于 `unknown`，因为 `systemone` 规则一次调用读取其输入。 |
 | `timeout_ms` | 答案的截止时间，最长 60000 毫秒；否则使用部署的值，再否则为 1000 毫秒。 |
 
 ### 规则匹配什么 {#what-a-rule-matches}
@@ -210,6 +210,7 @@ recipes:
 - `history`：之前的用户轮次。
 - `previous_turns`（0 到 32）：最近几个轮次（用户和助手），以对话记录形式给出。
 - `tool_results`：请求中的工具结果。
+- `request: false`：不读取当前用户轮次，请求阶段的规则只把它指定的之前用户轮次或工具结果作为请求读取。它需要 `history` 或 `tool_results`，不能带 `previous_turns` 或媒体输入；这些部分没有文本时，规则不会被询问，因此也不会匹配。
 - `image` 和 `video`：当前轮次的图片和视频。部署必须能读取该输入，否则配置以 `input_modality_unsupported` 被拒绝。目前还没有部署能读取音频，所以 `input.audio` 总会被拒绝。
 - `answer` 和 `context`：模型的答案及其依据上下文，仅用于 `stage: response` 规则。
 
