@@ -119,7 +119,7 @@ state. [Supported models](../supported-models/overview.md) lists every model.
   `~/.local/state/vllm-sr/engine/<model>`.
 - The initial Engine configuration publishes the selected model on the default
   listener. An existing config keeps its explicit
-  `listeners[].systemone.models` allowlist and API keys; restarting in another
+  `listeners[].apis.systemone.models` allowlist and API keys; restarting in another
   mode or selecting a model never broadens it.
 - Every start without `--engine` uses Router mode; MODEL alone does not select
   Engine mode. Bare `vllm-sr serve` preserves the configured default judgment
@@ -189,8 +189,10 @@ listeners:
   - name: http
     address: 0.0.0.0
     port: 8899
-    systemone:
-      models: [vllm-sr/vela3-fast]
+    apis:
+      chat_completions: {}
+      systemone:
+        models: [vllm-sr/vela3-fast]
 providers:
   defaults:
     model: answer-model

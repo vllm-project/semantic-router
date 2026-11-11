@@ -356,6 +356,7 @@ func (l *FusionLooper) runFusionFinal(
 		return nil, fmt.Errorf("fusion final synthesis failed for judge model %q: %w", cfg.Model, err)
 	}
 	applyJSONActionOutputContract(req.OutputContractSpec, resp, panelResponses)
+	applyReferenceSelectionOutputContract(req.OutputContractSpec, resp, panelResponses)
 	applyFinalOutputContract(req.OutputContractSpec, resp)
 	return resp, nil
 }
@@ -624,7 +625,7 @@ func (l *FusionLooper) formatFusionStreamingResponse(
 		err  error
 	)
 	if finalResp.HasToolCalls {
-		body, err = buildFusionStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw, backendFinishReason(finalResp))
+		body, err = buildStreamingToolCallSSE(id, timestamp, finalResp)
 		if err != nil {
 			return nil, err
 		}

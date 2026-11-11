@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -251,6 +252,64 @@ func TestLooperStreamReportsTheRunUsage(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// An escalate candidate that streams forwards the backend's stream, whose
+// chunks name the model as the backend reports it, as an OpenAI snapshot does.
+// The run's usage chunk must name the same model, or the client codec rejects
+// the stream as one that changed model.
+func TestLooperStreamKeepsTheBackendReportedModel(t *testing.T) {
+	const reported = "panel-a-2026-01-01"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		if strings.Contains(string(raw), "A useful answer") {
+			writeFusionReplayCompletion(w, reported, []map[string]interface{}{{"index": 0, "message": map[string]interface{}{"role": "assistant", "content": `{"confidence":0.95,"reason":"grounded"}`}, "finish_reason": "stop"}}, map[string]int64{"prompt_tokens": 4, "completion_tokens": 3, "total_tokens": 7})
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		for _, chunk := range []string{
+			`{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"` + reported + `","choices":[{"index":0,"delta":{"role":"assistant","content":"A useful answer"},"finish_reason":null}]}`,
+			`{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"` + reported + `","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
+			`{"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"` + reported + `","choices":[],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}`,
+		} {
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", chunk)
+		}
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+	gte := 0.5
+	decision := &config.Decision{Name: "ingress-escalate", ModelRefs: []config.ModelRef{{Model: "panel-a"}}, Algorithm: &config.AlgorithmConfig{
+		Type: config.DecisionAlgorithmEscalate, Escalate: &config.EscalateAlgorithmConfig{
+			Accept: &config.EscalateAccept{Confidence: &config.EscalateConfidence{Method: config.ConfidenceMethodSelfVerify, GTE: &gte}},
+		},
+	}}
+	for _, client := range []struct {
+		format       llmprotocol.WireFormat
+		includeUsage bool
+	}{{llmprotocol.AnthropicMessagesV1, false}, {llmprotocol.OpenAIChatV1, true}, {llmprotocol.OpenAIChatV1, false}} {
+		t.Run(fmt.Sprintf("%s/include_usage_%t", client.format, client.includeUsage), func(t *testing.T) {
+			router, ctx, _ := quorumFallbackRouter(server.URL)
+			ctx.SourceFormat = client.format
+			ctx.TraceContext = context.Background()
+			var raw map[string]interface{}
+			require.NoError(t, json.Unmarshal(looperIngressBody(t, client.format, true), &raw))
+			if client.includeUsage {
+				raw["stream_options"] = map[string]bool{"include_usage": true}
+			}
+			body, err := json.Marshal(raw)
+			require.NoError(t, err)
+			request, rejected := router.prepareProtocolRequest(body, ctx)
+			require.Nil(t, rejected)
+			_, err = router.extractRequestSignalSnapshot(ctx)
+			require.NoError(t, err)
+			response, err := router.handleLooperExecution(context.Background(), request, decision, ctx)
+			require.NoError(t, err)
+			immediate := response.GetImmediateResponse()
+			require.EqualValues(t, 200, immediate.GetStatus().GetCode(), string(immediate.GetBody()))
+			require.Contains(t, string(immediate.GetBody()), "A useful answer")
+		})
 	}
 }
 

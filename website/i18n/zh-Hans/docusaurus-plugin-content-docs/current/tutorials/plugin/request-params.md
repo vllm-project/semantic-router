@@ -51,5 +51,9 @@ PLUGIN request_params {
 }
 ```
 
+`max_tokens_limit` 限制的是全部输出，思考也算在内。当它把 `max_tokens` 降到 Anthropic `thinking.budget_tokens` 或更低时，预算会降到比上限少一个 token。Anthropic 要求预算至少为 1024，因此上限为 1024 或更低的 Anthropic 路由仍会拒绝思考预算。
+
+`blocked_params` 不能包含 `stream`。客户端请求流式时，路由器才以流式返回答案，因此列出它的配置会在加载时失败。
+
 该插件强制一组有界的 OpenAI Chat Completions 字段。它不是通用 JSON schema 防火墙，也不授权调用方。路由器已经会拒绝客户端线路格式未声明的请求字段，因此该插件没有 `strip_unknown`：仍设置它的配置会在加载时以一行提示失败，`vllm-sr config migrate` 会删除它。完整示例见：
 [`config/fragments/plugin/request-params/budget-tier.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/request-params/budget-tier.yaml)。

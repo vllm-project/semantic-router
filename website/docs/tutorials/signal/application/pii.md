@@ -48,6 +48,7 @@ recipes:
         - name: tool_result_pii
           input:
             tool_results: true
+            request: false
     decisions:
       - name: keep-private
         priority: 200
@@ -67,6 +68,7 @@ recipes:
 | `ignore_labels` | Labels the rule never counts |
 | `input.history` | Also read the earlier user turns |
 | `input.tool_results` | Also read the request's tool results |
+| `input.request` | `false` leaves the current user turn out, so the rule reads only the earlier user turns or tool results it names |
 | `on_unknown` | What the rule reports when its model gives no answer: `no_match` (the default) or `match` |
 | `deployment`, `timeout_ms` | The deployment that answers, and the answer's deadline |
 
@@ -82,6 +84,14 @@ The question reads the current user turn, the earlier user turns with
 tool calls and non-text content are not read. It also reads what
 `global.router.routing_input` removes from the routing text, so personal data
 cannot hide in a fake memory block.
+
+A coding agent's user turn carries its harness's own instructions: Claude Code
+2.1.317, for example, puts a commit trailer with an email address into a
+reminder in the first user message. A rule meant for what the agent's tools
+bring back sets `input.request: false` with `input.tool_results: true`, as
+`tool_result_pii` above does, so it reads the tool results alone, and leaves
+out the current turn with what `routing_input` removed from it. Such a rule is
+not asked, and does not match, before the request has a tool result.
 
 It reads its whole input, in windows when the input is longer than one
 forward. Text the model did not read (over its input or scan budget, or
@@ -137,6 +147,7 @@ global:
         provider: systemone
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: SYSTEMONE_API_KEY}
     system:
       decision_model: {deployment: d3-remote}

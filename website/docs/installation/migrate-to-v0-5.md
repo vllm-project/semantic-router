@@ -72,7 +72,8 @@ becomes:
 Two forms still load, with a warning, because they are renames:
 `signals.decision` and `type: decision` conditions load as `systemone`
 (`renamed_signal_type`), and `algorithm.type: decision` loads as the
-`systemone` selector (`renamed_algorithm_type`). Migrate rewrites both.
+`systemone` selector (`renamed_algorithm_type`). Migrate rewrites both, and
+the Dashboard reads both the same way and saves them as `systemone`.
 
 ## 3. Review what changed
 
@@ -185,7 +186,7 @@ recipes:
 | `jailbreak` and `pii` rules under `on_error: block` | `on_unknown: match` on the rules |
 | `safety` `threshold`, `labels`, `unsafe_labels`, `model` | `predicate`; `labels` name [harm categories](../system-one/reference/presets#harm-categories); `deployment` |
 | `safety` `hazard` | The [harm categories](../system-one/reference/presets#harm-categories) its `categories` name, in the rule's `labels`, with `hazard.threshold` as the `predicate`; the unsafe `threshold` has no counterpart, and a rule whose categories name none keeps the unsafe verdict (migrate notes both) |
-| `pii` `threshold`, `pii_types_allowed`, `include_history`, `source: tool_result` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results` |
+| `pii` `threshold`, `pii_types_allowed`, `include_history`, `source: tool_result` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results`; `source: tool_result` read the tool results alone, so it becomes `input: {tool_results: true, request: false}` and drops `include_history` |
 | `fact_check` rule named `no_fact_check_needed` without labels | `labels: [NO_FACT_CHECK_NEEDED]` with a predicate |
 | `user_feedbacks` and `modality` rules without `labels` whose name chose the option | The option in `labels`, unless a condition names one of the rule's options as its `label`, or a score input as `<rule>:<label>`: that rule is written for v0.5 and stays as it is |
 | `reasks`, `topic_continuity` | `turn_relation` with `labels`; a reask rule's streak over a `lookback_turns` above 1 has no counterpart, `input.previous_turns` stops at 32, and migrate notes both |

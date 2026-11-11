@@ -64,6 +64,7 @@ global:
         provider: systemone              # or openai_chat, openai_embeddings
         endpoint: https://api.example.com/v1/systemone  # full URL; unix:///abs.sock for an attached runtime
         model: vllm-sr/d3-ultra          # the remote model; an attached runtime's served model
+        schema: vllm-sr/5.0
         auth: {header: Authorization, prefix: Bearer, api_key_env: EXAMPLE_KEY}  # or api_key_file: /abs/path
         headers: {X-Org: acme}           # non-secret headers only
         timeout_ms: 1500                 # per attempt
@@ -203,6 +204,7 @@ global:
         provider: systemone
         endpoint: https://judge.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: JUDGE_KEY}
         timeout_ms: 5000
 recipes:
@@ -229,6 +231,7 @@ global:
         provider: systemone
         endpoint: https://gateway.example.com/Unified/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth:
           header: Ocp-Apim-Subscription-Key
           prefix: ""                     # no Bearer prefix
@@ -281,6 +284,7 @@ global:
         provider: systemone
         endpoint: https://app.vllm-sr.ai/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth: {api_key_env: VSR_APP_KEY}
 ```
 

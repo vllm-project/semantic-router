@@ -14,7 +14,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .models_predicates import NumericPredicate
-from .models_systemone import MAX_SYSTEMONE_PREVIOUS_TURNS
+from .models_systemone import MAX_SYSTEMONE_PREVIOUS_TURNS, turnless_input_error
 
 Stage = Literal["request", "response"]
 # What a jailbreak or pii rule reads as when its deployment gives no answer.
@@ -102,6 +102,8 @@ class PIIInput(BaseModel):
 
     history: bool = False
     tool_results: bool = False
+    # False leaves the current user turn out, as a systemone rule's input does.
+    request: bool | None = None
 
 
 class PIIRule(ApplicationRule):
@@ -111,6 +113,12 @@ class PIIRule(ApplicationRule):
     ignore_labels: list[str] = Field(default_factory=list)
     input: PIIInput | None = None
     on_unknown: OnUnknown | None = None
+
+    @model_validator(mode="after")
+    def validate_input(self):
+        if self.input and (error := turnless_input_error(self.input, None)):
+            raise ValueError(error)
+        return self
 
 
 class HallucinationRule(ApplicationRule):

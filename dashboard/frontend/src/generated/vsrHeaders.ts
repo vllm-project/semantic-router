@@ -196,7 +196,7 @@ export const X_VSR_PROTECTION_RELEASE = 'x-vsr-protection-release'
 /** Router Replay record id, when the record was persisted. Surface: public. */
 export const X_VSR_REPLAY_ID = 'x-vsr-replay-id'
 
-/** How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`. Surface: public. */
+/** How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`. Surface: public. */
 export const X_VSR_RESPONSE_PATH = 'x-vsr-response-path'
 
 /** Route key: the model whose route the gateway sends the provider request on; the Router drops a client's value and sets its own. Surface: internal. */
