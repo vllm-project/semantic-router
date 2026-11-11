@@ -210,6 +210,13 @@ class Vela3D3Family(ModelFamily):
             spec,
             name=package.model_name,
             backbone=replace(spec.backbone, gated=gated),
+            # The package is validated as its own model (its own registry pin,
+            # tests and surfaces), so it consents to the accelerator's measured
+            # approximate kernels for itself: the fla-npu chunk on the SoCs its
+            # records cover (npu-fla-chunk-ascend950dt.md,
+            # npu-fla-chunk-ascend910b1.md), behind the FLA_NPU_APPROXIMATE
+            # opt-in. The decision3 base's own dtype is unchanged.
+            dtype=replace(spec.dtype, approximate_kernels=True),
         )
 
     def load(

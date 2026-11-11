@@ -4,8 +4,10 @@ Approximate slot: the Ascend C chunk rounds 1-2 bf16 ulp away from the
 reference per call -- both implementations sit at max 1 ulp from the FP64
 reference, so this is two equally-correct rounding paths, not a wrong kernel.
 Measured on Ascend 950DT
-(``docs/records/npu-fla-chunk-ascend950dt.md``): the 60-answer label-diff
-flips 4 of 60 requests (row agreement 93.3%), every flip on a borderline leaf
+(``docs/records/npu-fla-chunk-ascend950dt.md``) and Ascend 910B1
+(``docs/records/npu-fla-chunk-ascend910b1.md``, the fla-npu a2 wheel): the
+60-answer label-diff flips 4 of 60 requests on the 950DT (row agreement
+93.3%), every flip on a borderline leaf
 (two-option probability gap <= 0.02), the two flip directions opposite; the
 divergence does not compound across the 24 GDN layers (measured growth 0.96x)
 and does not grow with sequence length. The slot registers approximate, and
@@ -36,8 +38,10 @@ import torch
 from .kernels import chunk_gated_delta_rule_ref
 
 # SoCs the slot was measured on: registered (approximate) only there -- the
-# rocm.py precedent of exact/approximate only where measured.
-MEASURED = frozenset({"Ascend950DT"})
+# rocm.py precedent of exact/approximate only where measured. 950DT:
+# docs/records/npu-fla-chunk-ascend950dt.md; 910B1 (the fla-npu a2 wheel):
+# docs/records/npu-fla-chunk-ascend910b1.md.
+MEASURED = frozenset({"Ascend950DT", "Ascend910B1"})
 
 # The default-off gate: approximate kernels change answers (the record's
 # 93.3% row agreement), so the slot registers only on an explicit opt-in --
