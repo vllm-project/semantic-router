@@ -1,6 +1,8 @@
 import type { ViewField } from '../components/ViewPanel'
 import type { InsightsRecord } from './insightsPageTypes'
 import { projectionMetric } from './insightsRoutingMetrics'
+import InsightsSystemOneAnswers from './InsightsSystemOneAnswers'
+import { systemOneAnswers } from './insightsSystemOneAnswers'
 import styles from './InsightsRoutingEvidence.module.css'
 
 export function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] {
@@ -16,6 +18,8 @@ export function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] 
     ]),
   ].sort()
   if (!outputs.length && !scores.length && !signals.length) return []
+  // with System One's answers drawn above, the raw values fold away
+  const answered = systemOneAnswers(record.signal_values).length > 0
   return [
     {
       label: 'Recorded routing values',
@@ -52,6 +56,7 @@ export function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] 
               </dl>
             </section>
           ) : null}
+          <InsightsSystemOneAnswers record={record} />
           {signals.length > 0 ? (
             <section className={styles.metadataGroup} aria-label="Signal evidence">
               <h3>
@@ -60,40 +65,43 @@ export function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] 
               <p className={styles.muted}>
                 Values and confidence are distinct measurements; a missing confidence is not zero.
               </p>
-              <div className={styles.tableScroll}>
-                <table aria-label="Recorded signal values and confidence">
-                  <thead>
-                    <tr>
-                      <th>Signal</th>
-                      <th>Value</th>
-                      <th>Confidence</th>
-                      {record.signal_error_matches &&
-                      Object.keys(record.signal_error_matches).length ? (
-                        <th>Error match</th>
-                      ) : null}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {signals.map((name) => (
-                      <tr key={name}>
-                        <th scope="row">{name}</th>
-                        <td>{projectionMetric(record.signal_values?.[name])}</td>
-                        <td>{projectionMetric(record.signal_confidences?.[name])}</td>
+              <details className={styles.allValues} open={!answered}>
+                <summary>All recorded values</summary>
+                <div className={styles.tableScroll}>
+                  <table aria-label="Recorded signal values and confidence">
+                    <thead>
+                      <tr>
+                        <th>Signal</th>
+                        <th>Value</th>
+                        <th>Confidence</th>
                         {record.signal_error_matches &&
                         Object.keys(record.signal_error_matches).length ? (
-                          <td>
-                            {record.signal_error_matches[name] === undefined
-                              ? 'Not recorded'
-                              : record.signal_error_matches[name]
-                                ? 'Yes'
-                                : 'No'}
-                          </td>
+                          <th>Error match</th>
                         ) : null}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {signals.map((name) => (
+                        <tr key={name}>
+                          <th scope="row">{name}</th>
+                          <td>{projectionMetric(record.signal_values?.[name])}</td>
+                          <td>{projectionMetric(record.signal_confidences?.[name])}</td>
+                          {record.signal_error_matches &&
+                          Object.keys(record.signal_error_matches).length ? (
+                            <td>
+                              {record.signal_error_matches[name] === undefined
+                                ? 'Not recorded'
+                                : record.signal_error_matches[name]
+                                  ? 'Yes'
+                                  : 'No'}
+                            </td>
+                          ) : null}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
             </section>
           ) : null}
         </div>

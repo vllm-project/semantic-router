@@ -348,3 +348,71 @@
     grid-column: 1 / -1;
   }
 }
+
+/* System One answers: one quiet row per question, a thin bar with the answer lit. */
+.answers {
+  display: grid;
+  gap: 0.55rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.answer {
+  display: grid;
+  grid-template-columns: minmax(7rem, 11rem) minmax(6rem, 1fr) minmax(5.5rem, auto);
+  grid-template-areas: 'question bar value';
+  align-items: center;
+  column-gap: 0.85rem;
+  min-width: 0;
+}
+.answerQuestion {
+  grid-area: question;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.answerBar {
+  grid-area: bar;
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.answerBar > span {
+  min-width: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  transition: background 0.2s ease;
+}
+.answerBar > .answerTop {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.85));
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.18);
+}
+.answer:hover .answerBar > span:not(.answerTop) {
+  background: rgba(255, 255, 255, 0.2);
+}
+.answerValue {
+  grid-area: value;
+  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.answerValue strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+.allValues > summary {
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+}
+.allValues[open] > summary {
+  margin-bottom: 0.5rem;
+}

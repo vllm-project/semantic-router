@@ -1,6 +1,8 @@
 import { Fragment } from 'react'
 import { Link } from 'react-router-dom'
 
+import { formatSeconds } from '../utils/dateTime'
+import InsightsDecisionBadge from './InsightsDecisionBadge'
 import { buildConversationLabels } from './insightsConversationIdentity'
 import { getInsightsRecordPath } from './insightsPageSupport'
 import type { InsightsTrajectory } from './insightsPageTypes'
@@ -88,7 +90,13 @@ export default function InsightsSessionRoutes({
                   <td title={route.agent ? 'Agent identity hash' : undefined}>
                     {route.agent || 'main'}
                   </td>
-                  <td>{route.decision || 'Unresolved'}</td>
+                  <td>
+                    {route.decision ? (
+                      <InsightsDecisionBadge decision={route.decision} label={route.decision} />
+                    ) : (
+                      'Unresolved'
+                    )}
+                  </td>
                   <td>
                     {route.previous_model ? `${route.previous_model} → ` : ''}
                     {route.selected_model || 'No backend selected'}
@@ -107,7 +115,7 @@ export default function InsightsSessionRoutes({
                   <td>
                     {route.lifecycle_state === 'in_progress'
                       ? 'In progress'
-                      : `${route.duration_ms} ms`}
+                      : formatSeconds(route.duration_ms)}
                   </td>
                 </tr>
               </Fragment>

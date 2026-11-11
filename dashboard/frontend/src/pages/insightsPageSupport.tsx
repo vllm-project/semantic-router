@@ -3,7 +3,7 @@ import CollapsibleSection from '../components/CollapsibleSection'
 import { formatRoutingMetadataValue } from '../components/routingMetadataDisplay'
 import type { ViewField, ViewSection } from '../components/ViewPanel'
 import { X_VSR_SELECTED_DECISION } from '../generated/vsrHeaders'
-import { formatDateTime } from '../utils/dateTime'
+import { formatDateTime, formatSeconds } from '../utils/dateTime'
 import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
 import { Link } from 'react-router-dom'
 
@@ -12,6 +12,7 @@ import type {
   InsightsCurrencyCostSummary,
   InsightsRecord,
 } from './insightsPageTypes'
+import InsightsDecisionBadge from './InsightsDecisionBadge'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
 import { buildRoutingMetadataFields } from './insightsRoutingMetadata'
 import { buildRoutingExplanationSections } from './insightsPageRouting'
@@ -203,11 +204,15 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
       header: 'Decision',
       width: '180px',
       sortable: true,
-      render: (row) => (
-        <span className={styles.decision}>
-          {row.decision ? formatInsightsDecisionName(row.decision) : '-'}
-        </span>
-      ),
+      render: (row) =>
+        row.decision ? (
+          <InsightsDecisionBadge
+            decision={row.decision}
+            label={formatInsightsDecisionName(row.decision)}
+          />
+        ) : (
+          <span className={styles.decision}>-</span>
+        ),
     },
     {
       key: 'signals',
@@ -340,7 +345,7 @@ export function buildInsightsRecordSections(
       { label: 'Ended at', value: record.ended_at ? formatDateTime(record.ended_at) : '-' },
       {
         label: 'Duration',
-        value: typeof record.duration_ms === 'number' ? `${record.duration_ms} ms` : '-',
+        value: typeof record.duration_ms === 'number' ? formatSeconds(record.duration_ms) : '-',
       },
       { label: 'Terminal reason', value: record.terminal_reason || '-' },
     ],
