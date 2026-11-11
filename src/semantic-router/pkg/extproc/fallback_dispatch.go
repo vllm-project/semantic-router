@@ -336,6 +336,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	// The response-phase fallback answers with a buffered immediate response.
 	candidate, prepared, err := r.prepareFallbackCandidate(callCtx, candidateRef, ctx, true)
 	if err != nil {
+		logSkippedFallbackCandidate(ctx, candidateRef, prepared, err)
 		return nil, prepared, err
 	}
 	candidateModel, dispatch, reqCopy, requestBody := candidate.model, candidate.dispatch, candidate.request, candidate.body
@@ -611,6 +612,19 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	r.persistImmediateResponseObject(immediateResp, ctx)
 	candidateSucceeded = true
 	return immediateResp, evalResult, nil
+}
+
+// logSkippedFallbackCandidate says why a candidate was dropped before its
+// call. The chain's record lists such a candidate as visited, with no attempt.
+func logSkippedFallbackCandidate(
+	ctx *RequestContext, candidateRef *config.ModelRef, prepared fallback.EvaluationResult, err error,
+) {
+	logging.ComponentWarnEvent("extproc", "fallback_candidate_skipped", map[string]interface{}{
+		"request_id":      ctx.RequestID,
+		"candidate_model": candidateModelIdentity(*candidateRef),
+		"error":           err.Error(),
+		"can_fallback":    prepared.CanFallback,
+	})
 }
 
 // fallbackCandidate is a fallback candidate's request, prepared the way the
