@@ -515,6 +515,10 @@ func TestUpdateStatusClearsStaleProgressingOnZeroReady(t *testing.T) {
 	if progressing.Message != "1/3 replicas ready" {
 		t.Fatalf("1/3 seed: Progressing message=%q, want %q", progressing.Message, "1/3 replicas ready")
 	}
+	available := meta.FindStatusCondition(partial.Status.Conditions, typeAvailableSemanticRouter)
+	if available == nil || available.Status != metav1.ConditionFalse || available.Reason != "ReplicasNotReady" || available.Message != "1/3 replicas ready" {
+		t.Fatalf("1/3 seed: Available should be False/ReplicasNotReady, got %+v", available)
+	}
 
 	t.Run("partial_to_zero_clears_stale_progressing", func(t *testing.T) {
 		patchDeploymentReady(t, 0)
@@ -583,6 +587,46 @@ func TestUpdateStatusClearsStaleProgressingOnZeroReady(t *testing.T) {
 		}
 		if progressing.Message != "1/3 replicas ready" {
 			t.Errorf("Progressing message=%q, want %q", progressing.Message, "1/3 replicas ready")
+		}
+		available := meta.FindStatusCondition(got.Status.Conditions, typeAvailableSemanticRouter)
+		if available == nil || available.Status != metav1.ConditionFalse || available.Reason != "ReplicasNotReady" || available.Message != "1/3 replicas ready" {
+			t.Errorf("Available condition: %+v", available)
+		}
+		if available != nil && available.Message == "No replicas are ready" {
+			t.Errorf("stale zero-ready Available message survived: %+v", available)
+		}
+	})
+
+	t.Run("all_ready_to_partial_clears_stale_available", func(t *testing.T) {
+		patchDeploymentReady(t, 3)
+		seed := runUpdateStatus(t)
+		available := meta.FindStatusCondition(seed.Status.Conditions, typeAvailableSemanticRouter)
+		if available == nil || available.Status != metav1.ConditionTrue || available.Message != "All replicas are ready" {
+			t.Fatalf("3/3 seed: Available condition: %+v", available)
+		}
+		if meta.FindStatusCondition(seed.Status.Conditions, typeProgressingSemanticRouter) != nil {
+			t.Fatalf("3/3 seed: Progressing should be absent, got %v", conditionMessages(seed.Status.Conditions))
+		}
+
+		patchDeploymentReady(t, 1)
+		got := runUpdateStatus(t)
+
+		if got.Status.ReadyReplicas != 1 {
+			t.Errorf("ReadyReplicas=%d, want 1", got.Status.ReadyReplicas)
+		}
+		if got.Status.Phase != "Progressing" {
+			t.Errorf("Phase=%q, want Progressing", got.Status.Phase)
+		}
+		progressing := meta.FindStatusCondition(got.Status.Conditions, typeProgressingSemanticRouter)
+		if progressing == nil || progressing.Status != metav1.ConditionTrue || progressing.Message != "1/3 replicas ready" {
+			t.Errorf("Progressing condition: %+v", progressing)
+		}
+		available = meta.FindStatusCondition(got.Status.Conditions, typeAvailableSemanticRouter)
+		if available == nil || available.Status != metav1.ConditionFalse || available.Reason != "ReplicasNotReady" || available.Message != "1/3 replicas ready" {
+			t.Errorf("Available condition: %+v", available)
+		}
+		if available != nil && (available.Status == metav1.ConditionTrue || available.Message == "All replicas are ready") {
+			t.Errorf("stale all-ready Available survived: %+v", available)
 		}
 	})
 }
