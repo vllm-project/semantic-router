@@ -79,10 +79,11 @@ def base_of(url: str) -> str:
 
 
 def health(url: str, token: str | None = None, timeout: float = 3.0) -> dict:
-    """GET /health and /v1/models; never raises."""
+    """GET /health and the model list; never raises."""
     base = base_of(url)
     out: dict = {"url": url}
-    for name, path in (("health", "/health"), ("models", "/v1/models")):
+
+    def get(name: str, path: str) -> None:
         started = time.perf_counter()
         try:
             request = urllib.request.Request(base + path, headers=_headers(token))
@@ -93,10 +94,22 @@ def health(url: str, token: str | None = None, timeout: float = 3.0) -> dict:
         except (OSError, ValueError) as error:
             out[name] = {"error": str(getattr(error, "reason", error))}
         out[f"{name}Ms"] = round((time.perf_counter() - started) * 1000)
+
+    get("health", "/health")
+    # A System One API, a Router listener's or a hosted one, lists its models at
+    # /v1/systemone/models; vllm-srun lists its one model at /v1/models.
+    get("models", "/v1/systemone/models")
+    if not (isinstance(out["models"], dict) and out["models"].get("data")):
+        get("models", "/v1/models")
     status = out["health"].get("status") if isinstance(out["health"], dict) else None
-    out["ready"] = status == "ready"
     models = out["models"].get("data") if isinstance(out["models"], dict) else None
+    # A Router listener's /health says only that it serves, and a hosted System One
+    # API has none; the models they list show they are up.
+    out["ready"] = status == "ready" or (
+        (status == "ok" or out["health"] == {"error": "HTTP 404"}) and bool(models)
+    )
     out["model"] = models[0].get("id") if models else out["health"].get("model")
+    out["modelIds"] = [m.get("id") for m in models or [] if isinstance(m, dict)]
     # vllm-srun names the device the model runs on in /v1/models; older builds leave it out.
     out["device"] = (
         (models[0].get("device") or models[0].get("accelerator")) if models else None
@@ -111,10 +124,13 @@ def ask(
     token: str | None = None,
     timeout: float = 30.0,
     thresholds: dict | None = None,
+    model: str | None = None,
 ) -> dict:
     """One decision call for one app's input: its score (and extras) and the latency."""
     state, questions = framed(app, given)
-    body = json.dumps({"state": state, "questions": questions}).encode()
+    body = json.dumps(
+        {**({"model": model} if model else {}), "state": state, "questions": questions}
+    ).encode()
     started = time.perf_counter()
     try:
         request = urllib.request.Request(url, body, _headers(token))
@@ -145,9 +161,14 @@ def slow_note(median: int | None) -> str | None:
     )
 
 
-def time_question(url: str, token: str | None = None, tries: int = 3) -> int | None:
+def time_question(
+    url: str, token: str | None = None, tries: int = 3, model: str | None = None
+) -> int | None:
     """The median time of a short guard question, asked `tries` times; None when it fails."""
-    asked = [ask(url, "guard", "git status", token, timeout=10) for _ in range(tries)]
+    asked = [
+        ask(url, "guard", "git status", token, timeout=10, model=model)
+        for _ in range(tries)
+    ]
     return median_ms(asked)
 
 
@@ -202,7 +223,14 @@ def run_probes(
             continue
         if smoke and not case.get("smoke"):
             continue
-        got = ask(url, case["app"], case["input"], token, thresholds=defaults)
+        got = ask(
+            url,
+            case["app"],
+            case["input"],
+            token,
+            thresholds=defaults,
+            model=thresholds.get("runtimeModel") or None,
+        )
         expected = case.get("measured")
         drift = (
             None
@@ -291,6 +319,10 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "--token-file", help="a file holding the Bearer token (else $SR_RUNTIME_TOKEN)"
     )
+    parser.add_argument(
+        "--model",
+        help="the model to ask, for a runtime that serves several (default: runtimeModel)",
+    )
     parser.add_argument("--apps", help="comma-separated apps to probe (default: all)")
     parser.add_argument("--smoke", action="store_true", help="one probe per app")
     parser.add_argument(
@@ -307,6 +339,8 @@ def main(argv: list[str]) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 2
     url = args.url or options["runtimeUrl"]
+    if args.model:
+        options = {**options, "runtimeModel": args.model}
     if cleartext_remote(url):
         print(
             f"warning: {url} is plain http to another machine, so requests{' and the token' if token else ''} "
@@ -318,7 +352,13 @@ def main(argv: list[str]) -> int:
         print(
             json.dumps(out, indent=2)
             if args.json
-            else f"{'ready' if out['ready'] else 'NOT ready'} · {url} · model {out['model']} · health {out['healthMs']} ms"
+            else f"{'ready' if out['ready'] else 'NOT ready'} · {url} · "
+            + (
+                f"models {', '.join(out['modelIds'])} (name one with --model)"
+                if len(out.get("modelIds", [])) > 1
+                else f"model {out['model']}"
+            )
+            + f" · health {out['healthMs']} ms"
             + ("" if out["ready"] else f" · {out['health']}")
         )
         return 0 if out["ready"] else 1
