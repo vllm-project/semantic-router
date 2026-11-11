@@ -42,7 +42,7 @@ The answer to `urgent` is P(yes), for example `{"type": "noul", "noul": 0.88}`.
 | `POST /v1/systemone` | Answers one request. A question that cannot be answered fails the request as a whole |
 | `POST /v1/systemone/batch` | Answers named requests in one call, each as it would be answered alone |
 | `POST /v1/decisions` | The native form of the same call, which the Router uses: the internal request form, and a failed question carries its own error in a 200 |
-| `GET /v1/models` | Lists the models a server answers with, each with its `version`, `features` and `card` |
+| `GET /v1/models` | Lists the models a server answers with, each with its `version`, `features` and `card`; a Router or Engine frontend also lists its System One models at `GET /v1/systemone/models`, with the `question_types` and `modalities` of each built-in decision model it serves |
 
 A runtime reports its contract as `api_version` in `GET /health` (`5.0.0`).
 

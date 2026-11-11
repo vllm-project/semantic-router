@@ -38,7 +38,7 @@ curl -s localhost:8100/v1/systemone -H 'content-type: application/json' -d '{
 | `POST /v1/systemone` | 回答一个请求。某个问题无法回答时，整个请求失败 |
 | `POST /v1/systemone/batch` | 一次调用回答多个具名请求，每个请求的回答与单独发送时相同 |
 | `POST /v1/decisions` | 同一调用的原生形式，供 Router 使用：内部请求形式，失败的问题在 200 中带自己的错误 |
-| `GET /v1/models` | 列出服务器回答用的模型，每个带 `version`、`features` 和 `card` |
+| `GET /v1/models` | 列出服务器回答用的模型，每个带 `version`、`features` 和 `card`；Router 或 Engine 前端还在 `GET /v1/systemone/models` 列出其 System One 模型，并给出其所服务的每个内置决策模型的 `question_types` 和 `modalities` |
 
 运行时在 `GET /health` 中以 `api_version` 报告其契约（`5.0.0`）。
 
