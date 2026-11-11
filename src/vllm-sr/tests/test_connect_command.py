@@ -19,6 +19,8 @@ hc = importlib.import_module("cli.harness_connect")
 rc = importlib.import_module("cli.harness_router_check")
 chat_client = importlib.import_module("cli.chat_client")
 
+# What the stub gateway answers at each stage: a plain reply, the streamed tool
+# call, and the streamed answer once the tool result goes back.
 MESSAGES_EVENTS = [
     {"type": "message_start", "message": {"type": "message", "content": []}},
     {
@@ -39,17 +41,60 @@ RESPONSES_EVENTS = [
         "response": {
             "object": "response",
             "status": "completed",
-            "output": [{"type": "function_call", "name": "get_time"}],
+            "output": [
+                {
+                    "type": "function_call",
+                    "name": "get_time",
+                    "call_id": "c1",
+                    "arguments": "{}",
+                    "status": "completed",
+                }
+            ],
         },
     }
 ]
+STAGES = {
+    "/v1/messages": {
+        "plain": {"type": "message", "content": [{"type": "text", "text": "ok"}]},
+        "tool": MESSAGES_EVENTS,
+        "result": [
+            {"type": "message_start", "message": {"type": "message", "content": []}},
+            {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {"type": "text"},
+            },
+            {"type": "message_stop"},
+        ],
+    },
+    "/v1/responses": {
+        "plain": {"object": "response", "status": "completed", "output": []},
+        "tool": RESPONSES_EVENTS,
+        "result": [
+            {
+                "type": "response.completed",
+                "response": {"object": "response", "status": "completed", "output": []},
+            }
+        ],
+    },
+}
+
+
+def _stage(body: dict) -> str:
+    if not body.get("stream"):
+        return "plain"
+    sent = json.dumps(body.get("messages") or body.get("input"))
+    return (
+        "result" if "tool_result" in sent or "function_call_output" in sent else "tool"
+    )
 
 
 @pytest.fixture
 def gateway():
-    """A stub gateway that records each request and streams like the Router."""
+    """A stub gateway that records each request and answers like the Router: JSON
+    for a plain request, events for a streamed one."""
     seen = []
-    replies = {"/v1/messages": MESSAGES_EVENTS, "/v1/responses": RESPONSES_EVENTS}
+    replies = {path: dict(stages) for path, stages in STAGES.items()}
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -58,12 +103,17 @@ def gateway():
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers["content-length"])))
             seen.append((self.path, body, self.headers.get("authorization")))
-            events = replies.get(self.path)
-            self.send_response(200 if events is not None else 404)
-            self.send_header("content-type", "text/event-stream")
+            stage = _stage(body)
+            reply = replies.get(self.path, {}).get(stage)
+            self.send_response(200 if reply is not None else 404)
+            kind = "application/json" if stage == "plain" else "text/event-stream"
+            self.send_header("content-type", kind)
             self.send_header("x-vsr-selected-model", "agent-model")
             self.end_headers()
-            for event in events or [{"type": "error"}]:
+            if stage == "plain":
+                self.wfile.write(json.dumps(reply or {"error": "not_found"}).encode())
+                return
+            for event in reply or [{"type": "error"}]:
                 self.wfile.write(f"data: {json.dumps(event)}\n\n".encode())
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -283,34 +333,63 @@ def test_router_check_for_codex():
     assert rc.check_router_config(complete, "codex") == []
 
 
-def test_probe_sends_one_tool_call_in_each_protocol(gateway):
+def test_probe_checks_a_plain_reply_then_a_streamed_tool_loop(gateway):
     url, seen, _ = gateway
-    result = rc.probe_gateway(url, "claude-code", "vllm-sr/auto", "tok")
-    assert result.ok and result.model == "agent-model"
-    assert result.detail == "called the tool"
-    path, body, auth = seen[-1]
-    assert path == "/v1/messages" and body["tools"][0]["input_schema"]
-    assert body["stream"] is True
-    assert auth == "Bearer tok"
-    assert rc.probe_gateway(url, "codex", "vllm-sr/auto", "tok").ok
-    path, body, _ = seen[-1]
-    assert path == "/v1/responses" and body["tools"][0]["type"] == "function"
-    assert not rc.probe_gateway(url + "/nope", "codex", "m", "t").ok
+    plain, loop = rc.probe_gateway(url, "claude-code", "vllm-sr/auto", "tok")
+    assert (plain.name, plain.ok, plain.model) == ("Basic reply", True, "agent-model")
+    assert (loop.name, loop.ok) == ("Streamed tool loop", True)
+    assert loop.detail == "called the tool and answered its result"
+    (_, first, auth), (_, call, _), (path, answer, _) = seen
+    assert "stream" not in first and "tools" not in first
+    assert call["stream"] is True and call["tools"][0]["input_schema"]
+    assert path == "/v1/messages" and auth == "Bearer tok"
+    assert answer["messages"][-1]["content"][0] == {
+        "type": "tool_result",
+        "tool_use_id": "t",
+        "content": "12:00",
+    }
+
+    seen.clear()
+    assert all(r.ok for r in rc.probe_gateway(url, "codex", "vllm-sr/auto", "tok"))
+    path, answer, _ = seen[-1]
+    assert path == "/v1/responses" and seen[1][1]["tools"][0]["type"] == "function"
+    # the call goes back as Codex sends it, then its result
+    assert answer["input"][1] == {
+        "type": "function_call",
+        "name": "get_time",
+        "call_id": "c1",
+        "arguments": "{}",
+    }
+    assert answer["input"][2]["type"] == "function_call_output"
+    failed = rc.probe_gateway(url + "/nope", "codex", "m", "t")
+    assert [r.ok for r in failed] == [False]
 
 
 def test_probe_refuses_a_200_that_is_not_a_reply(gateway):
     url, _, replies = gateway
-    replies["/v1/messages"] = MESSAGES_EVENTS[:1]  # never finished
-    replies["/v1/responses"] = [{"type": "response.failed", "response": {}}]
-    assert not rc.probe_gateway(url, "claude-code", "m", "t").ok
-    assert not rc.probe_gateway(url, "codex", "m", "t").ok
+    replies["/v1/messages"]["plain"] = {}
+    (plain,) = rc.probe_gateway(url, "claude-code", "m", "t")
+    assert not plain.ok and plain.name == "Basic reply"
+
+    replies["/v1/messages"]["plain"] = STAGES["/v1/messages"]["plain"]
+    replies["/v1/messages"]["tool"] = MESSAGES_EVENTS[:1]  # never finished
+    replies["/v1/responses"]["tool"] = [{"type": "response.failed", "response": {}}]
+    assert not rc.probe_gateway(url, "claude-code", "m", "t")[1].ok
+    assert not rc.probe_gateway(url, "codex", "m", "t")[1].ok
+
     # a stream that fails where a block closes still began with a 200
-    replies["/v1/messages"] = [
+    replies["/v1/messages"]["tool"] = [
         *MESSAGES_EVENTS[:2],
         {"type": "error", "error": {"type": "lossy_translation"}},
     ]
-    result = rc.probe_gateway(url, "claude-code", "m", "t")
-    assert not result.ok and "lossy_translation" in result.detail
+    loop = rc.probe_gateway(url, "claude-code", "m", "t")[1]
+    assert not loop.ok and "lossy_translation" in loop.detail
+
+    # and the answer to the tool result can fail on its own
+    replies["/v1/messages"]["tool"] = MESSAGES_EVENTS
+    replies["/v1/messages"]["result"] = [{"type": "error", "error": {"type": "x"}}]
+    loop = rc.probe_gateway(url, "claude-code", "m", "t")[1]
+    assert not loop.ok and "ended in an error" in loop.detail
 
 
 def test_cli_dry_run_writes_nothing_and_hides_the_key(tmp_path, gateway, monkeypatch):
@@ -335,7 +414,8 @@ def test_cli_writes_probes_and_undoes(tmp_path, gateway, monkeypatch):
     monkeypatch.delenv("VLLM_SR_API_KEY", raising=False)
     result = CliRunner().invoke(main, ["connect", "codex", "--base-url", url, "--yes"])
     assert result.exit_code == 0, result.output
-    assert "System Two: ok" in result.output
+    assert "Basic reply: ok" in result.output
+    assert "Streamed tool loop: ok" in result.output
     assert seen[-1][0] == "/v1/responses"
     # Codex refuses to start while a provider's env_key names an unset variable,
     # so a listener without keys gets a profile without one
@@ -361,7 +441,7 @@ def test_cli_fails_when_the_gateway_refuses(tmp_path, gateway, monkeypatch):
         main, ["connect", "codex", "--base-url", url + "/nope", "--yes"]
     )
     assert result.exit_code != 0
-    assert "System Two: failed" in result.output
+    assert "Basic reply: failed" in result.output
 
 
 def test_cli_project_scope_keeps_the_key_out_of_git(tmp_path, gateway, monkeypatch):

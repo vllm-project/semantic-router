@@ -126,14 +126,21 @@ The command shows the changes and asks before writing them:
   provider, selects it and turns off hosted web search, which the Router does
   not serve. `~/.codex/config.toml` is not touched.
 
-It then checks the Router configuration given with `--config` and prints the
-settings below that are missing, without changing it, and sends one streamed
-tool call in the harness's protocol, as the harness does: `System Two: ok` names
-the model that answered and whether it called the tool, and a stream that ends
-in an error fails the check. With the vSR plugin installed it warns while the
-plugin's router app is on, and when the listener also serves System One it
-prints the setting that points vSR at it. `--dry-run` prints the plan and writes
-nothing.
+It then reports three checks, each on its own line:
+
+- `Router configuration`: what the configuration given with `--config` lacks
+  for this harness, from the settings below, without changing it.
+- `Basic reply`: a plain request in the harness's protocol gets an answer, and
+  the line names the model that gave it.
+- `Streamed tool loop`: a streamed tool call, then the answer once its result
+  goes back, as the harness sends them. A stream that ends in an error fails
+  it, and the check runs only after the basic reply passed.
+
+On a failure the written changes stay, so fix the gateway and run the command
+again, or take them back with `--undo`. With the vSR plugin installed it warns
+while the plugin's router app is on, and when the listener also serves System
+One it prints the setting that points vSR at it. `--dry-run` prints the plan
+and writes nothing.
 
 `--status-line` also sets Claude Code's status line to show which models
 answered this session, the last first, such as `vllm-sr ⇢ qwen36 (4) ·

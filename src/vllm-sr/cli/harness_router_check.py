@@ -44,6 +44,7 @@ class RouterFinding:
 @dataclass
 class ProbeResult:
     ok: bool
+    name: str = ""
     model: str = ""
     detail: str = ""
     warnings: list[str] = field(default_factory=list)
@@ -269,6 +270,7 @@ def _reply_of(harness: str, events: list[dict]) -> tuple[dict | None, str]:
 
 def _events(response: requests.Response) -> list[dict]:
     """The JSON data of each server-sent event in the body."""
+    response.encoding = "utf-8"  # what server-sent events always are
     events = []
     for line in response.iter_lines(decode_unicode=True):
         if line and line.startswith("data:") and line[5:].strip() != "[DONE]":
@@ -289,50 +291,144 @@ def _called_tool(harness: str, answer: dict) -> bool:
     )
 
 
+def _plain_problem(harness: str, answer: Any) -> str:
+    """Why a 200 answer is not a finished reply in the harness's protocol, or ""."""
+    if not isinstance(answer, dict):
+        return "the answer is not a JSON object"
+    if harness == "claude-code":
+        if answer.get("type") != "message" or not isinstance(
+            answer.get("content"), list
+        ):
+            return "the answer is not a Messages reply"
+        return ""
+    if answer.get("object") != "response" or answer.get("status") not in (
+        "completed",
+        "incomplete",
+    ):
+        return f"the answer is not a finished Responses reply (status {answer.get('status')!r})"
+    return ""
+
+
+def _plain_request(harness: str, model: str) -> dict:
+    question = "Reply with the word ok."
+    if harness == "claude-code":
+        return {
+            "model": model,
+            "max_tokens": 64,
+            "messages": [{"role": "user", "content": question}],
+        }
+    return {"model": model, "max_output_tokens": 64, "input": question}
+
+
+def _with_result(harness: str, call: dict, first: dict) -> dict:
+    """The tool call's request again, carrying the call it answered with and its
+    result, as the harness sends it next."""
+    if harness == "claude-code":
+        tool = next(b for b in first["content"] if b.get("type") == "tool_use")
+        messages = [
+            *call["messages"],
+            {"role": "assistant", "content": [tool]},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool["id"],
+                        "content": "12:00",
+                    }
+                ],
+            },
+        ]
+        return {**call, "stream": True, "messages": messages}
+    # the items go back as Codex sends them, without the status a reply gives them
+    output = [
+        {k: v for k, v in item.items() if k != "status"}
+        for item in first.get("output") or []
+    ]
+    function = next(i for i in output if i.get("type") == "function_call")
+    items = [
+        {"role": "user", "content": call["input"]},
+        *output,
+        {
+            "type": "function_call_output",
+            "call_id": function["call_id"],
+            "output": "12:00",
+        },
+    ]
+    return {**call, "stream": True, "input": items}
+
+
+def _post(url: str, headers: dict, body: dict, timeout: float):
+    """The response and its reply: a stream's events when the body streams, else
+    the JSON body; or None and why it failed."""
+    try:
+        with requests.post(
+            url, json=body, headers=headers, timeout=timeout, stream=True
+        ) as response:
+            if response.status_code != requests.codes.ok:
+                return (
+                    response,
+                    None,
+                    f"HTTP {response.status_code} {response.text[:300]}",
+                )
+            if body.get("stream"):
+                return response, _events(response), ""
+            try:
+                return response, response.json(), ""
+            except ValueError:
+                return response, None, "the answer is not JSON"
+    except requests.RequestException as exc:
+        return None, None, str(exc)
+
+
+def _result(name: str, url: str, response, problem: str, detail: str) -> ProbeResult:
+    headers = response.headers if response is not None else {}
+    return ProbeResult(
+        not problem,
+        name=name,
+        model=headers.get("x-vsr-selected-model", ""),
+        detail=f"{url}: {problem}" if problem else detail,
+        warnings=[
+            w.strip() for w in headers.get("x-vsr-warnings", "").split(",") if w.strip()
+        ],
+    )
+
+
 def probe_gateway(
     gateway: str, harness: str, model: str, token: str, timeout: float = 120
-) -> ProbeResult:
-    """One streamed tool-call request in the harness's own protocol, since both
-    harnesses stream and some failures show only where a stream ends."""
-    path, extra, body = _probe_request(harness, model)
+) -> list[ProbeResult]:
+    """Two checks in the harness's own protocol, each run only after the one before
+    passed: a plain reply, then a streamed tool loop, a tool call and the answer to
+    its result, since both harnesses stream and some failures show only where a
+    stream ends or once a tool result goes back."""
+    path, extra, call = _probe_request(harness, model)
     url = gateway.rstrip("/") + path
     headers = {
         "content-type": "application/json",
         "authorization": f"Bearer {token}",
         **extra,
     }
-    try:
-        with requests.post(
-            url,
-            json={**body, "stream": True},
-            headers=headers,
-            timeout=timeout,
-            stream=True,
-        ) as response:
-            if response.status_code != requests.codes.ok:
-                return ProbeResult(
-                    False,
-                    detail=f"{url}: HTTP {response.status_code} {response.text[:300]}",
-                )
-            events = _events(response)
-    except requests.RequestException as exc:
-        return ProbeResult(False, detail=f"{url}: {exc}")
-    answer, problem = _reply_of(harness, events)
-    if answer is None:
-        return ProbeResult(False, detail=f"{url}: {problem}")
-    warnings = [
-        w.strip()
-        for w in response.headers.get("x-vsr-warnings", "").split(",")
-        if w.strip()
-    ]
-    called = (
-        "called the tool"
-        if _called_tool(harness, answer)
-        else "answered without calling the tool"
+    response, answer, problem = _post(
+        url, headers, _plain_request(harness, model), timeout
     )
-    return ProbeResult(
-        True,
-        model=response.headers.get("x-vsr-selected-model", ""),
-        detail=called,
-        warnings=warnings,
+    plain = _result(
+        "Basic reply",
+        url,
+        response,
+        problem or _plain_problem(harness, answer),
+        "answered",
     )
+    if not plain.ok:
+        return [plain]
+    response, events, problem = _post(url, headers, {**call, "stream": True}, timeout)
+    first, problem = (None, problem) if problem else _reply_of(harness, events)
+    detail = "called the tool and answered its result"
+    if first is not None and not _called_tool(harness, first):
+        detail = "answered without calling the tool, so no result went back"
+    elif first is not None:
+        response, events, problem = _post(
+            url, headers, _with_result(harness, call, first), timeout
+        )
+        if not problem:
+            problem = _reply_of(harness, events)[1]
+    return [plain, _result("Streamed tool loop", url, response, problem, detail)]

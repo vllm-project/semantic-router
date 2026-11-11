@@ -275,17 +275,19 @@ def _json_of(argv: list[str], env: dict[str, str]):
 
 
 def _probe(gateway: str, harness: str, model: str, token: str) -> None:
-    result = rc.probe_gateway(gateway, harness, model, token)
-    if not result.ok:
-        raise click.ClickException(
-            f"System Two: failed. {result.detail}\n"
-            "The changes above stay written; take them back with --undo."
+    """A basic reply, then a streamed tool loop, each on its own line."""
+    for result in rc.probe_gateway(gateway, harness, model, token):
+        if not result.ok:
+            raise click.ClickException(
+                f"{result.name}: failed. {result.detail}\n"
+                "The changes above stay written: fix the gateway and run this command"
+                " again, or take them back with --undo."
+            )
+        success(
+            f"{result.name}: ok (model {result.model or 'not reported'}; {result.detail})"
         )
-    success(
-        f"System Two: ok (selected model {result.model or 'not reported'}; {result.detail})"
-    )
-    for item in result.warnings:
-        echo(f"  x-vsr-warnings: {item}")
+        for item in result.warnings:
+            echo(f"  x-vsr-warnings: {item}")
 
 
 def _undo(manifest_dir: Path) -> None:
