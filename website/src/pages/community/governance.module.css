@@ -243,8 +243,8 @@
   gap: 2rem;
   padding: 1.3rem;
   border: 1px solid var(--site-border-strong);
-  background: #111;
-  color: #fff;
+  background: var(--night);
+  color: var(--on-ink);
 }
 
 .emeritusLead > div {
@@ -254,7 +254,7 @@
 }
 
 .emeritusLead span {
-  color: #61b9f3;
+  color: var(--ember-hi);
 }
 
 .emeritusLead strong {
@@ -264,7 +264,7 @@
 
 .emeritusLead p {
   margin: 0;
-  color: #d4d4d8;
+  color: var(--on-ink-2);
   font-size: 0.86rem;
   line-height: 1.65;
 }

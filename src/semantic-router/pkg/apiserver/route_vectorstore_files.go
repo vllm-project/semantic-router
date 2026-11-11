@@ -47,6 +47,14 @@ func (s *ClassificationAPIServer) handleAttachFile(w http.ResponseWriter, r *htt
 			s.writeErrorResponse(w, http.StatusConflict, "EMBEDDING_REINDEX_REQUIRED", err.Error())
 			return
 		}
+		// The store is looked up after the failure, so a store deleted while
+		// the file was being attached also answers 404.
+		if manager := s.currentVectorStoreManager(); manager != nil {
+			if _, getErr := manager.GetStore(id); getErr != nil {
+				s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND", "vector store not found")
+				return
+			}
+		}
 		s.writeErrorResponse(w, http.StatusBadRequest, "ATTACH_ERROR", "failed to attach file")
 		return
 	}

@@ -35,14 +35,11 @@ metadata:
   namespace: default
 spec:
   signals:
-    embeddings:
+    keywords:
       - name: "sensitive_data"
-        threshold: 0.80
-        candidates:
-          - "I need to share my personal information"
-          - "Here is my credit card number"
-          - "My social security number is"
-        aggregationMethod: "max"
+        operator: "OR"
+        keywords: ["I need to share my personal information", "Here is my credit card number", "My social security number is"]
+        caseSensitive: false
 
   decisions:
     - name: "pii_protected"
@@ -51,7 +48,7 @@ spec:
       signals:
         operator: "AND"
         conditions:
-          - type: "embedding"
+          - type: "keyword"
             name: "sensitive_data"
       modelRefs:
         - model: "deepseek-r1"

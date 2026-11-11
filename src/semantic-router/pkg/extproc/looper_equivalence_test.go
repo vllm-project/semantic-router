@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"bytes"
+	"cmp"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -48,7 +49,7 @@ const (
 )
 
 const looperEquivalenceConfig = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http-8899
     address: 0.0.0.0
@@ -75,18 +76,14 @@ providers:
       provider_model_id: judge
       api_format: openai
       backend_refs: [{name: fake-judge, endpoint: BACKEND, protocol: http, provider: vllm}]
-routing:
-  modelCards:
-    - name: model-a
-    - name: model-b
-    - name: model-c
-    - name: judge
-  decisions:
-    - name: looper_route
-      priority: 10
-      rules:
-        operator: AND
-        conditions: []
+recipes:
+  - name: default
+    decisions:
+      - name: looper_route
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
 DECISION
 global:
   integrations:
@@ -97,12 +94,13 @@ global:
 // looperFixture is one algorithm's deterministic scenario.
 type looperFixture struct {
 	name string
-	// decision is the rest of routing.decisions[0]: its modelRefs and
+	// decision is the rest of recipes[default].decisions[0]: its modelRefs and
 	// algorithm, indented for the config above.
 	decision string
 	request  string
-	// failing names models whose backend answers 503.
-	failing []string
+	// failing names models whose backend answers failStatus, or 503.
+	failing    []string
+	failStatus int
 	// slow delays every successful answer, so a failure always arrives first
 	// where the algorithm stops once it has enough answers.
 	slow time.Duration
@@ -116,7 +114,8 @@ var looperFixtures = []looperFixture{
       modelRefs: [{model: model-a, use_reasoning: true}, {model: model-b}, {model: model-c}]
       algorithm:
         type: ratings
-        ratings: {max_concurrent: 2, on_error: skip}
+        on_error: skip
+        ratings: {max_concurrent: 2}
       plugins:
         - type: system_prompt
           configuration: {enabled: true, mode: insert, system_prompt: Answer in one sentence.}
@@ -127,15 +126,15 @@ var looperFixtures = []looperFixture{
       modelRefs: [{model: model-a}, {model: model-b}, {model: model-c}]
       algorithm:
         type: ratings
-        ratings: {max_concurrent: 3, on_error: skip}`},
-	{name: "confidence", request: looperClientRequest, decision: `
+        on_error: skip
+        ratings: {max_concurrent: 3}`},
+	{name: "escalate", request: looperClientRequest, decision: `
       modelRefs: [{model: model-a}, {model: model-b}]
       algorithm:
-        type: confidence
-        confidence:
-          confidence_method: avg_logprob
-          threshold: 0.6
-          escalation_order: small_to_large`},
+        type: escalate
+        escalate:
+          order: size
+          accept: {confidence: {method: avg_logprob, gte: 0.6}}`},
 	{name: "remom", request: looperClientRequest, decision: `
       modelRefs: [{model: model-a}, {model: model-b}]
       algorithm:
@@ -150,30 +149,25 @@ var looperFixtures = []looperFixture{
       modelRefs: [{model: model-a}, {model: model-b}]
       algorithm:
         type: fusion
+        on_error: skip
         fusion:
           model: judge
           analysis_models: [model-a, model-b, model-c]
           analysis_mode: one_call
           max_concurrent: 3
-          min_successful_responses: 3
-          on_error: skip`},
+          min_successful_responses: 3`},
 	{name: "fusion-separate-quorum", request: looperClientRequest, failing: []string{"model-c"}, slow: 50 * time.Millisecond, decision: `
       modelRefs: [{model: model-a}, {model: model-b}]
       algorithm:
         type: fusion
+        on_error: skip
         fusion:
           model: judge
           analysis_models: [model-a, model-b, model-c]
           analysis_mode: separate
           max_concurrent: 3
           min_successful_responses: 2
-          include_analysis: true
-          on_error: skip`},
-	{name: "prompt-selection", request: looperClientRequest, decision: `
-      modelRefs: [{model: model-a}, {model: model-b}]
-      algorithm:
-        type: prompt
-        prompt: {model: judge, instructions: Choose model-b for geography.}`},
+          include_analysis: true`},
 	{name: "workflows-static", request: looperClientRequest, decision: `
       modelRefs: [{model: model-a}, {model: model-b}, {model: judge}]
       algorithm:
@@ -217,12 +211,13 @@ type looperReply struct {
 // request, and records each request. Like a provider that honors
 // Accept-Encoding, it gzips a buffered reply to a request that accepts gzip.
 type looperBackend struct {
-	failing []string
-	slow    time.Duration
-	mu      sync.Mutex
-	calls   []looperCall
-	running int
-	peak    int
+	failing    []string
+	failStatus int
+	slow       time.Duration
+	mu         sync.Mutex
+	calls      []looperCall
+	running    int
+	peak       int
 }
 
 func (b *looperBackend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +236,7 @@ func (b *looperBackend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	call := looperCall{
-		Route: r.Header.Get("X-Selected-Model"), Model: req.Model, Body: canonicalJSON(raw),
+		Route: r.Header.Get("X-Vsr-Route-Model"), Model: req.Model, Body: canonicalJSON(raw),
 		askedGzip: acceptsGzip(strings.Join(r.Header.Values("Accept-Encoding"), ", ")),
 	}
 	for name, values := range r.Header {
@@ -267,7 +262,7 @@ func (b *looperBackend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// The headers and body http.Error writes.
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.Header().Set("X-Content-Type-Options", "nosniff")
-			writeScriptedBody(w, http.StatusServiceUnavailable,
+			writeScriptedBody(w, cmp.Or(b.failStatus, http.StatusServiceUnavailable),
 				[]byte(`{"error":{"message":"overloaded","type":"server_error"}}`+"\n"), call.askedGzip)
 			return
 		}
@@ -380,12 +375,12 @@ type looperHarness struct {
 
 func newLooperHarness(t *testing.T, fixture looperFixture) *looperHarness {
 	t.Helper()
-	backend := &looperBackend{failing: fixture.failing, slow: fixture.slow}
+	backend := &looperBackend{failing: fixture.failing, failStatus: fixture.failStatus, slow: fixture.slow}
 	backendServer := httptest.NewServer(backend)
 	t.Cleanup(backendServer.Close)
 	configYAML := strings.NewReplacer(
 		"BACKEND", strings.TrimPrefix(backendServer.URL, "http://"),
-		"DECISION", strings.TrimPrefix(fixture.decision, "\n"),
+		"DECISION", "  "+strings.ReplaceAll(strings.TrimSuffix(strings.TrimPrefix(fixture.decision, "\n"), "\n"), "\n", "\n  ")+"\n",
 	).Replace(looperEquivalenceConfig)
 	cfg, err := config.ParseYAMLBytes([]byte(configYAML))
 	if err != nil {

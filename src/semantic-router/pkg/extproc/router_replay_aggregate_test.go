@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
@@ -143,6 +145,55 @@ func TestRouterReplayAggregateExcludesNonCompletedCostAndReportsLifecycle(t *tes
 	}
 }
 
+func TestHandleRouterReplayAggregateAPIGroupsCurrenciesWithoutConversion(t *testing.T) {
+	router := newReplayAggregateTestRouter(t)
+	recorder := router.ReplayRecorders["decision-a"]
+	_, err := recorder.AddRecord(routerreplay.RoutingRecord{
+		ID: "eur-record", Timestamp: time.Unix(3, 0).UTC(), LifecycleState: routerreplay.LifecycleCompleted,
+		ActualCost: replayFloat64Ptr(0.004), BaselineCost: replayFloat64Ptr(0.009), CostSavings: replayFloat64Ptr(0.005),
+		Currency: replayStringPtr("EUR"), BaselineModel: replayStringPtr("eur-base"), TotalTokens: replayIntPtr(150),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate")
+	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+	summary := body["summary"].(map[string]interface{})
+	if summary["currency"] != nil || summary["total_saved"].(float64) != 0 || int(summary["cost_record_count"].(float64)) != 2 || int(summary["excluded_record_count"].(float64)) != 1 {
+		t.Fatalf("unexpected mixed-currency summary: %#v", summary)
+	}
+	groups := summary["by_currency"].([]interface{})
+	if len(groups) != 2 {
+		t.Fatalf("expected two retained currency groups, got %#v", groups)
+	}
+	eur := groups[0].(map[string]interface{})
+	usd := groups[1].(map[string]interface{})
+	if eur["currency"] != "EUR" || eur["actual_spend"].(float64) != 0.004 || eur["total_saved"].(float64) != 0.005 || usd["currency"] != "USD" || usd["actual_spend"].(float64) != 0.002 || usd["total_saved"].(float64) != 0.003 {
+		t.Fatalf("currency amounts lost or converted: %#v", groups)
+	}
+}
+
+func TestRouterReplayAggregateExcludesIncompleteCostEstimates(t *testing.T) {
+	complete := routerreplay.RoutingRecord{
+		LifecycleState: routerreplay.LifecycleCompleted, ActualCost: replayFloat64Ptr(0), BaselineCost: replayFloat64Ptr(0), CostSavings: replayFloat64Ptr(0),
+		Currency: replayStringPtr("USD"), BaselineModel: replayStringPtr("free"), TotalTokens: replayIntPtr(100),
+	}
+	records := []routerreplay.RoutingRecord{complete}
+	missingUsage := complete
+	missingUsage.TotalTokens = nil
+	missingCurrency := complete
+	missingCurrency.Currency = nil
+	missingPricing := complete
+	missingPricing.ActualCost = nil
+	missingBaseline := complete
+	missingBaseline.BaselineModel = nil
+	records = append(records, missingUsage, missingCurrency, missingPricing, missingBaseline)
+	got := buildRouterReplayAggregateCostSummary(records)
+	if got.CostRecordCount != 1 || got.ExcludedRecordCount != 4 || got.Currency != "USD" || len(got.ByCurrency) != 1 {
+		t.Fatalf("incomplete estimates counted or explicit free pricing lost: %#v", got)
+	}
+}
+
 func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 	t.Helper()
 
@@ -195,8 +246,8 @@ func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 			PromptTokens:     &promptB,
 			CompletionTokens: &completionB,
 			Signals: store.Signal{
-				Domain:     []string{"business"},
-				Preference: []string{"latency"},
+				Domain:       []string{"business"},
+				TurnRelation: []string{"asked_again"},
 			},
 		},
 	}
@@ -214,51 +265,32 @@ func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 	}
 }
 
-func TestHandleRouterReplayAggregateAPIGroupsCurrenciesWithoutConversion(t *testing.T) {
-	router := newReplayAggregateTestRouter(t)
-	recorder := router.ReplayRecorders["decision-a"]
-	_, err := recorder.AddRecord(routerreplay.RoutingRecord{
-		ID: "eur-record", Timestamp: time.Unix(3, 0).UTC(), LifecycleState: routerreplay.LifecycleCompleted,
-		ActualCost: replayFloat64Ptr(0.004), BaselineCost: replayFloat64Ptr(0.009), CostSavings: replayFloat64Ptr(0.005),
-		Currency: replayStringPtr("EUR"), BaselineModel: replayStringPtr("eur-base"), TotalTokens: replayIntPtr(150),
-	})
-	if err != nil {
+func TestRouterReplayAggregateCountsEverySignalFamily(t *testing.T) {
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	if _, err := recorder.AddRecord(routerreplay.RoutingRecord{ID: "every-family", Decision: "guarded", Signals: routerreplay.Signal{
+		Keyword: []string{"a"}, Domain: []string{"a"}, FactCheck: []string{"a"}, UserFeedback: []string{"a"},
+		TurnRelation: []string{"a"}, Language: []string{"a"}, Context: []string{"a"}, Complexity: []string{"a"},
+		Modality: []string{"a"}, Authz: []string{"a"}, Jailbreak: []string{"a"}, Safety: []string{"a"},
+		PII: []string{"a"}, Conversation: []string{"a"}, Metadata: []string{"a"}, InputModality: []string{"a"},
+		Decision: []string{"a", "b"},
+	}}); err != nil {
 		t.Fatal(err)
 	}
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate")
-	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
-	summary := body["summary"].(map[string]interface{})
-	if summary["currency"] != nil || summary["total_saved"].(float64) != 0 || int(summary["cost_record_count"].(float64)) != 2 || int(summary["excluded_record_count"].(float64)) != 1 {
-		t.Fatalf("unexpected mixed-currency summary: %#v", summary)
+	router := &OpenAIRouter{ReplayRecorder: recorder}
+	payload := routerreplay.AggregateResponse{}
+	if err := json.Unmarshal(router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate").GetImmediateResponse().GetBody(), &payload); err != nil {
+		t.Fatal(err)
 	}
-	groups := summary["by_currency"].([]interface{})
-	if len(groups) != 2 {
-		t.Fatalf("expected two retained currency groups, got %#v", groups)
+	got := map[string]int{}
+	for _, value := range payload.SignalDistribution {
+		got[value.Name] = value.Value
 	}
-	eur := groups[0].(map[string]interface{})
-	usd := groups[1].(map[string]interface{})
-	if eur["currency"] != "EUR" || eur["actual_spend"].(float64) != 0.004 || eur["total_saved"].(float64) != 0.005 || usd["currency"] != "USD" || usd["actual_spend"].(float64) != 0.002 || usd["total_saved"].(float64) != 0.003 {
-		t.Fatalf("currency amounts lost or converted: %#v", groups)
+	want := map[string]int{
+		"keyword": 1, "domain": 1, "fact_check": 1, "user_feedback": 1, "turn_relation": 1, "language": 1,
+		"context": 1, "complexity": 1, "modality": 1, "authz": 1, "jailbreak": 1, "safety": 1, "pii": 1,
+		"conversation": 1, "metadata": 1, "input_modality": 1, "decision": 2,
 	}
-}
-
-func TestRouterReplayAggregateExcludesIncompleteCostEstimates(t *testing.T) {
-	complete := routerreplay.RoutingRecord{
-		LifecycleState: routerreplay.LifecycleCompleted, ActualCost: replayFloat64Ptr(0), BaselineCost: replayFloat64Ptr(0), CostSavings: replayFloat64Ptr(0),
-		Currency: replayStringPtr("USD"), BaselineModel: replayStringPtr("free"), TotalTokens: replayIntPtr(100),
-	}
-	records := []routerreplay.RoutingRecord{complete}
-	missingUsage := complete
-	missingUsage.TotalTokens = nil
-	missingCurrency := complete
-	missingCurrency.Currency = nil
-	missingPricing := complete
-	missingPricing.ActualCost = nil
-	missingBaseline := complete
-	missingBaseline.BaselineModel = nil
-	records = append(records, missingUsage, missingCurrency, missingPricing, missingBaseline)
-	got := buildRouterReplayAggregateCostSummary(records)
-	if got.CostRecordCount != 1 || got.ExcludedRecordCount != 4 || got.Currency != "USD" || len(got.ByCurrency) != 1 {
-		t.Fatalf("incomplete estimates counted or explicit free pricing lost: %#v", got)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("signal_distribution = %v, want %v", got, want)
 	}
 }

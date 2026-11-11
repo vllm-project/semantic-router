@@ -47,8 +47,8 @@ func (s *serviceTestStore) StoreExact(_ context.Context, write CacheWrite) error
 func (s *serviceTestStore) LookupSemantic(
 	_ context.Context,
 	_ SemanticLookup,
-) (CacheResult, error) {
-	return CacheResult{HitKind: HitKindMiss}, nil
+) (SemanticRecall, error) {
+	return SemanticRecall{}, nil
 }
 
 func (s *serviceTestStore) StoreSemantic(_ context.Context, _ CacheWrite) error {

@@ -37,8 +37,7 @@ def _split_runtime_topology(monkeypatch):
 def _minimal_stack_config(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.3\nlisteners:\n  - name: http-8899\n"
-        "    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.5\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
     return config_path
 

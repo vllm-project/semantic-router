@@ -370,12 +370,6 @@ func (r *OpenAIRouter) encodeClientResponseWithReplay(
 }
 
 func requestWirePath(format llmprotocol.WireFormat) string {
-	// The Images wire predates the protocol catalog and is not registered
-	// there; keep its canonical path stable instead of falling back to the
-	// chat-completions default.
-	if format == llmprotocol.OpenAIImagesV1 {
-		return "/v1/images/generations"
-	}
 	registry, err := modelcatalog.BuiltIn()
 	if err != nil {
 		return "/v1/chat/completions"
@@ -393,6 +387,8 @@ func requestWireProtocol(format llmprotocol.WireFormat) string {
 		return "openai/responses@1"
 	case llmprotocol.AnthropicMessagesV1:
 		return "anthropic/messages@1"
+	case llmprotocol.OpenAIImagesV1:
+		return "openai/images@1"
 	default:
 		return "openai/chat-completions@1"
 	}

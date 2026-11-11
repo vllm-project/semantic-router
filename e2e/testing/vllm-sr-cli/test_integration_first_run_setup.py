@@ -72,18 +72,22 @@ class TestFirstRunSetup(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
                     }
                 ],
             },
-            "routing": {
-                "modelCards": [{"name": "test-model"}],
-                "decisions": [
-                    {
-                        "name": "default-route",
-                        "description": "Default route",
-                        "priority": 100,
-                        "rules": {"operator": "AND", "conditions": []},
-                        "modelRefs": [{"model": "test-model", "use_reasoning": False}],
-                    }
-                ],
-            },
+            "recipes": [
+                {
+                    "name": "default",
+                    "decisions": [
+                        {
+                            "name": "default-route",
+                            "description": "Default route",
+                            "priority": 100,
+                            "rules": {"operator": "AND", "conditions": []},
+                            "modelRefs": [
+                                {"model": "test-model", "use_reasoning": False}
+                            ],
+                        }
+                    ],
+                }
+            ],
         }
 
     def test_setup_activation_starts_the_router_from_the_cli(self):
@@ -135,7 +139,9 @@ class TestFirstRunSetup(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
                 self.assertTrue(router["healthy"], router)
 
                 edited = self._activation_config(mock_container)
-                edited["routing"]["decisions"][0]["description"] = "Edited after setup"
+                edited["recipes"][0]["decisions"][0][
+                    "description"
+                ] = "Edited after setup"
                 saved = self._dashboard("/api/router/config/update", edited, token)
                 self.assertEqual(saved, {"status": "success"})
                 headers = self._send_mock_chat_completion(mock_container)

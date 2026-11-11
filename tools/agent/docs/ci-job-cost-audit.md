@@ -32,7 +32,10 @@ The exact inputs below are:
 - Full CPU: the versioned full inventory with no additional affected profiles.
 - Old scheduled run: no comparison base, so the old CLI passes every tracked
   path to `make_plan`. The new CLI supplies no changed paths in this situation.
-- Explicit Main publication: no comparison base, `publish: true`.
+- Main publication dispatch: no comparison base, `publish: true` with full
+  qualification.
+- Main push: the push's changed paths, `publish: true` without full
+  qualification.
 
 These are representative inputs, not universal counts for every core or CLI
 change. `/ci run full` also retains profiles selected by the real diff; a PR
@@ -50,9 +53,9 @@ that qualified fixture exists.
 | Same core PR, approved affected run | 5 | 5 / 5 | 10 | 9 | Two images remain; two compatible E2E profiles use one worker. |
 | Versioned full CPU PR, approved | 38 | 31 / 31 | 64 | 40 | Keep maintained product boundaries; retire four gateway qualifications, use one Operator deployment, and select five authoring contracts only when affected or requested. |
 | No-base daily Nightly versus weekly qualification | 64 | 31 / 31 | 100 | 49 | Qualification is 92 versus 41; eight success-only image/Helm publication jobs are included in each total. |
-| Main push, core input | 5 | 3 / 3 | 14 | 5 | Before: four image producers and three image publishers. After: automatic source/component evidence only. |
-| Main push, CLI input | 5 | 4 / 4 | 17 | 6 | Before: five image producers, four image publishers, one CLI publisher and live Local Stack qualification. These eleven jobs move out of routine pushes. |
-| Explicit Main publication | Not available | 31 / 31 | Not available | 50 | Full qualification, six image publishers, two Helm jobs, one development CLI publisher. |
+| Main push, core input | 5 | 4 / 4 | 14 | 20 | Before: four image producers and three image publishers. After: automatic source/component evidence, `cli-package`, six multi-arch image producers, six image publishers, the `latest` move and one CLI publisher. #5223's checks-only push took 5 jobs. |
+| Main push, CLI input | 5 | 4 / 4 | 17 | 20 | Before: five image producers, four image publishers, one CLI publisher and live Local Stack qualification. After: the same complete publication as a core push; live Local Stack qualification stays with the reviewed PR and Nightly Qualification. #5223's checks-only push took 6 jobs. |
+| Main publication dispatch | Not available | 31 / 31 | Not available | 51 | Full qualification, six image publishers, the `latest` move, two Helm jobs, one development CLI publisher. |
 
 Approval reruns the original PR workflow. The automatic six-job core attempt
 and the approved nine-job attempt can both consume resources: **6 + 9 is 15
@@ -212,8 +215,7 @@ its optional manual profile and does not affect this fixed baseline.
 | Model-heavy singleton | `vela-omni` |
 | Dashboard lane | `dashboard` |
 | Provider fixture batch 1 | `envoy-ai-gateway`, `local-classifier-backend`, `routing-errors` |
-| Provider fixture batch 2 | `standalone`, `streaming`, `vela-halu` |
-| Provider fixture batch 3 | `vela-shield` |
+| Provider fixture batch 2 | `standalone`, `streaming` |
 | Router-only batch | `multimodal-routing`, `remote-embedding` |
 
 Each job has at most three profiles and at most 270 minutes of declared profile
@@ -228,6 +230,13 @@ The platform batch contains `platform.image-calibration-cpu` and
 `platform.models-cpu`: two 120-minute contract budgets, one 240-minute batch.
 It shares model files/runtime installation, but preserves separate evidence
 and process deadlines. This can take longer to finish than two concurrent jobs.
+
+Later, `local-classifier-backend`, `multimodal-routing` and `vela-omni` left the
+inventory with the classifier, embedding and image-routing paths they qualified,
+and `platform.image-calibration-cpu` left with them: the platform batch now
+holds `platform.models-cpu` alone. `vela-halu` and `vela-shield` left the
+provider fixture batches too: the Vela 1.0 Halu and Shield encoders answer no
+System One question, so no application rule can bind them.
 
 ### Recipe mapping
 
@@ -394,10 +403,25 @@ qualifying launches one short job instead of the full qualification. A dispatch
 cancels the qualification it supersedes, a scheduled run waits for a running
 one, and a failed first attempt re-runs only its failed jobs, once.
 
-Routine Main source/component qualification remains. Expensive qualification
-and publication move to an explicit decision; they are not free when that
-decision is exercised. A manually published commit needs the complete image
-set so its development CLI's commit-addressed defaults remain usable.
+Routine Main source/component qualification remains, and a push that isn't
+superseded publishes its commit's complete image set, so its development
+CLI's commit-addressed defaults remain usable. Expensive qualification stays
+an explicit decision (a publication dispatch) and the daily Nightly
+Qualification.
+
+A push publication costs about 240 runner-minutes, measured from the image
+work of the 5 Nov publication dispatch (run 42040614554): image builds 181
+(ROCm alone 84), image publication 53, the CLI package 3 and the chart 1. A
+push run holds at most six image builds at once, then the ROCm build alone for
+about an hour. A newer push cancels an older push's run while it is queued or
+qualifying, about 90 minutes from the merge, and the newest run checks the
+cancelled commits' changes. Replaying the 194 pushes of 27 Oct to 10 Nov (12.6
+a day) with that window, 60 publish and 134 are cancelled after spending part
+of their builds: about 27,600 runner-minutes instead of 46,900 if every merge
+published, 41% less. On the busiest day, 31 merges publish 7 times for about
+3,100 runner-minutes instead of 7,500 (59% less). One full qualification costs
+about 430. Hosted runners are free for this public repository; the bound is
+the organization's concurrent-job limit.
 
 Batching exchanges less repeated preparation for less parallelism and coarser
 reruns. If one profile fails, rerunning its Actions job reruns its successful
@@ -430,8 +454,9 @@ as the path list. For the new scheduled scenario, pass an empty list, matching
 the CLI's no-base behavior. For approved PRs pass
 `require_approval=True` and an authorization object with `authorized: true`
 and `scopes: [affected]`; use `full: true` for the full PR. Old `make_plan` has
-no approval or publication parameters. For explicit Main publication use
-`profile="main", publish=True` with no paths. Use a full source SHA in all
+no approval or publication parameters. For a Main publication dispatch use
+`profile="main", full=True, publish=True` with no paths; for a push, pass its
+changed paths with `publish=True`. Use a full source SHA in all
 plans. These are planner simulations, not authorization files for live CI.
 
 For each plan, sum:
@@ -449,9 +474,9 @@ For each plan, sum:
    `source_matrix_payload(inventories, None, root)`; after uses three shards
    per source. Obtain inventories with `discover_source_inventories` and
    `cpu_inventory(discover_inventory(root))`.
-7. For Main/scheduled successful paths: one job per `publish_images` entry,
-   two Helm jobs if requested, and one prebuilt development CLI publisher if
-   requested. Reusable caller nodes add zero.
+7. For Main/scheduled successful paths: one job per `publish_images` entry
+   (plus Main's `latest` move), two Helm jobs if requested, and one prebuilt
+   development CLI publisher if requested. Reusable caller nodes add zero.
 
 The matrices above document every member needed to cross-check that sum.
 Historical runner-minutes are `sum(seconds) / 60` from executed job records;

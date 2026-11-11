@@ -153,8 +153,8 @@ func testStreamingCacheRoundtrip(ctx context.Context, client *kubernetes.Clients
 	resp1.Body.Close()
 
 	if opts.Verbose {
-		fmt.Printf("[Streaming] Original request: status=%d, cache-hit=%s\n",
-			resp1.StatusCode, resp1.Header.Get("x-vsr-cache-hit"))
+		fmt.Printf("[Streaming] Original request: status=%d, response-path=%s\n",
+			resp1.StatusCode, resp1.Header.Get(responsePathHeader))
 	}
 
 	// Retry the similar question with backoff — cache writes are async and
@@ -180,13 +180,13 @@ func testStreamingCacheRoundtrip(ctx context.Context, client *kubernetes.Clients
 		resp2.Body.Close()
 
 		resp2Status = resp2.StatusCode
-		cacheHit = resp2.Header.Get("x-vsr-cache-hit")
+		cacheHit = resp2.Header.Get(responsePathHeader)
 		if opts.Verbose {
-			fmt.Printf("[Streaming] Similar request: status=%d, cache-hit=%s, decision=%s\n",
+			fmt.Printf("[Streaming] Similar request: status=%d, response-path=%s, decision=%s\n",
 				resp2.StatusCode, cacheHit, resp2.Header.Get("x-vsr-selected-decision"))
 		}
 
-		if cacheHit == "true" {
+		if cacheHit == "cache" {
 			break
 		}
 	}
@@ -195,14 +195,14 @@ func testStreamingCacheRoundtrip(ctx context.Context, client *kubernetes.Clients
 		opts.SetDetails(map[string]interface{}{
 			"original_status": resp1.StatusCode,
 			"similar_status":  resp2Status,
-			"cache_hit":       cacheHit,
+			"response_path":   cacheHit,
 			"original_len":    len(body1),
 			"similar_len":     len(body2),
 		})
 	}
 
-	if cacheHit != "true" {
-		return fmt.Errorf("expected cache hit for similar question, got cache-hit=%q", cacheHit)
+	if cacheHit != "cache" {
+		return fmt.Errorf("expected cache hit for similar question, got response-path=%q", cacheHit)
 	}
 
 	return nil
@@ -365,7 +365,7 @@ func testStreamingSSECache(ctx context.Context, client *kubernetes.Clientset, op
 		if readErr != nil {
 			return fmt.Errorf("read cached SSE replay: %w", readErr)
 		}
-		if stream.Header.Get("x-vsr-cache-hit") != "true" && attempt < 4 {
+		if stream.Header.Get(responsePathHeader) != "cache" && attempt < 4 {
 			continue
 		}
 		if err := validateStreamingCacheReplay(stream.Header, streamBody, wantText); err != nil {
@@ -405,8 +405,8 @@ func primeStreamingResponseCache(ctx context.Context, question, model, localPort
 }
 
 func validateStreamingCacheReplay(headers http.Header, body []byte, wantText string) error {
-	if headers.Get("x-vsr-cache-hit") != "true" {
-		return fmt.Errorf("expected cached SSE replay, got cache-hit=%q", headers.Get("x-vsr-cache-hit"))
+	if headers.Get(responsePathHeader) != "cache" {
+		return fmt.Errorf("expected cached SSE replay, got response-path=%q", headers.Get(responsePathHeader))
 	}
 	return validateStreamingCacheStream(headers, body, wantText)
 }

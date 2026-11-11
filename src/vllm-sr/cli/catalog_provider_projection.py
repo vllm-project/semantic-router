@@ -8,10 +8,11 @@ from functools import lru_cache
 from typing import Any
 from urllib.parse import urlsplit
 
+from cli.api_registry import ALIASES
 from cli.envoy_backend_pool import project_envoy_backend_group
 from cli.model_catalog import DEFAULT_CHANNEL, _load_catalog_document
 from cli.model_catalog_types import ModelCatalogError
-from cli.models import BackendRef, Model, UserConfig
+from cli.models import BackendAuth, BackendRef, Model, UserConfig
 from cli.validation_error import ValidationError
 
 
@@ -26,9 +27,10 @@ class _CatalogProviderIndex:
 
 
 _API_FORMAT_TO_PROTOCOL = {
-    "openai": "openai/chat-completions@1",
+    "chat_completions": "openai/chat-completions@1",
     "responses": "openai/responses@1",
-    "anthropic": "anthropic/messages@1",
+    "messages": "anthropic/messages@1",
+    "images": "openai/images@1",
     "systemone": "vllm-sr/systemone@1",
 }
 _PROTOCOL_TO_API_FORMAT = {
@@ -202,6 +204,7 @@ def _validate_physical_backend_requirement(
         or model.deployment
         or card.get("kind") == "virtual"
         or allow_backendless_physical
+        or model.states_only_facts()
     ):
         return
     raise CatalogProviderProjectionError(
@@ -439,44 +442,38 @@ def _apply_provider_defaults(
 ) -> None:
     provider_id = _required_string(provider, "id", f"{path}.provider")
     backend.protocol = (backend.protocol or "http").strip().lower() or "http"
-    base_url = (backend.base_url or "").strip()
-    endpoint = (backend.endpoint or "").strip()
-    if base_url and endpoint:
-        raise CatalogProviderProjectionError(
-            f"{path} cannot set both base_url and endpoint"
-        )
-    backend.base_url = base_url or None
-    backend.endpoint = endpoint or None
-    if not backend.endpoint and not backend.base_url:
+    backend.endpoint = (backend.endpoint or "").strip() or None
+    if not backend.endpoint:
         default_base_url = str(provider.get("default_base_url") or "").strip()
         if not default_base_url:
             raise CatalogProviderProjectionError(
-                f"{path} requires endpoint or base_url because provider "
+                f"{path} requires endpoint because provider "
                 f"{provider_id!r} has no default"
             )
-        backend.base_url = default_base_url
+        backend.endpoint = default_base_url
 
     _validate_backend_url(backend, path)
 
     default_headers = _string_mapping(provider.get("default_headers"), path)
-    extra_headers = {**default_headers, **(backend.extra_headers or {})}
-    backend.extra_headers = extra_headers or None
+    headers = {**default_headers, **(backend.headers or {})}
+    backend.headers = headers or None
 
     auth = provider.get("auth") or {}
     if not isinstance(auth, dict):
         raise CatalogProviderProjectionError(
             f"{path}.provider catalog auth must be an object"
         )
-    if not backend.auth_header:
-        backend.auth_header = str(auth.get("header") or "").strip() or None
-    if backend.auth_prefix is None:
-        backend.auth_prefix = str(auth.get("prefix") or "").strip()
+    if backend.auth is None:
+        backend.auth = BackendAuth()
+    if not backend.auth.header:
+        backend.auth.header = str(auth.get("header") or "").strip() or None
+    if backend.auth.prefix is None:
+        backend.auth.prefix = str(auth.get("prefix") or "").strip()
 
 
 def _validate_backend_url(backend: BackendRef, path: str) -> None:
-    field_name = "base_url" if backend.base_url else "endpoint"
-    raw_url = backend.base_url or backend.endpoint or ""
-    if field_name == "endpoint" and "://" not in raw_url:
+    raw_url = backend.endpoint or ""
+    if "://" not in raw_url:
         raw_url = f"{(backend.protocol or 'http').lower()}://{raw_url}"
     candidate = _ENDPOINT_TEMPLATE_TOKEN.sub(
         "catalog-placeholder.invalid",
@@ -487,33 +484,34 @@ def _validate_backend_url(backend: BackendRef, path: str) -> None:
         hostname = parsed.hostname
     except ValueError as parse_error:
         raise CatalogProviderProjectionError(
-            f"{path}.{field_name} must be an absolute http(s) URL"
+            f"{path}.endpoint must be an absolute http(s) URL"
         ) from parse_error
     if not parsed.scheme or not hostname:
         raise CatalogProviderProjectionError(
-            f"{path}.{field_name} must be an absolute http(s) URL"
+            f"{path}.endpoint must be an absolute http(s) URL"
         )
     if parsed.scheme not in {"http", "https"}:
         raise CatalogProviderProjectionError(
-            f"{path}.{field_name} scheme {parsed.scheme!r} is unsupported"
+            f"{path}.endpoint scheme {parsed.scheme!r} is unsupported"
         )
     if parsed.username is not None or parsed.password is not None or parsed.fragment:
         raise CatalogProviderProjectionError(
-            f"{path}.{field_name} userinfo and fragments are not allowed"
+            f"{path}.endpoint userinfo and fragments are not allowed"
         )
     if parsed.query:
         raise CatalogProviderProjectionError(
-            f"{path}.{field_name} query parameters are not supported by Envoy "
+            f"{path}.endpoint query parameters are not supported by Envoy "
             "routing; use api_version for provider API-version queries"
         )
 
 
 def _protocol_for_api_format(api_format: str, path: str) -> str:
-    protocol = _API_FORMAT_TO_PROTOCOL.get(api_format)
+    protocol = _API_FORMAT_TO_PROTOCOL.get(ALIASES.get(api_format, api_format))
     if protocol is None:
         raise CatalogProviderProjectionError(
-            f"{path}.api_format {api_format!r} is unsupported; use openai, "
-            "responses, anthropic, or systemone"
+            f"{path}.api_format {api_format!r} is unsupported; use chat_completions, "
+            "responses, messages, images or systemone (openai and anthropic are "
+            "aliases of chat_completions and messages)"
         )
     return protocol
 

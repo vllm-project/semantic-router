@@ -6,15 +6,16 @@ import (
 	"strings"
 )
 
-func validateInputModalityContracts(cfg *RouterConfig) error {
+func validateInputModalityContracts(cfg *RouterConfig) (err error) {
+	defer func() { err = cfg.inRecipe(err) }()
 	seen := make(map[string]struct{}, len(cfg.InputModalityRules))
 	for i, rule := range cfg.InputModalityRules {
 		if err := ValidateInputModalityRuleContract(rule); err != nil {
-			return fmt.Errorf("routing.signals.input_modality[%d]: %w", i, err)
+			return fmt.Errorf("signals.input_modality[%d]: %w", i, err)
 		}
 		normalizedName := strings.ToLower(rule.Name)
 		if _, exists := seen[normalizedName]; exists {
-			return fmt.Errorf("routing.signals.input_modality[%d]: duplicate name %q", i, rule.Name)
+			return fmt.Errorf("signals.input_modality[%d]: duplicate name %q", i, rule.Name)
 		}
 		seen[normalizedName] = struct{}{}
 	}

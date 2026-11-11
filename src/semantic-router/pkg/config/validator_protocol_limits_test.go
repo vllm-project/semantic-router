@@ -9,7 +9,7 @@ import (
 
 func protocolLimitsConfig(limits string) []byte {
 	return []byte(`
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -22,17 +22,16 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: cheap
-  decisions:
-    - name: route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap
+recipes:
+  - name: default
+    decisions:
+      - name: route
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: cheap
 global:
   router:
     allow_lossy_translation: [tool_result.is_error]

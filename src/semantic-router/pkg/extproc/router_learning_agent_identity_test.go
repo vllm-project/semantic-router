@@ -45,7 +45,7 @@ func TestProtectionAgentIdentityHoldsEachAgentOnItsOwnModel(t *testing.T) {
 					SelectedModel: proposal, Score: 1, Confidence: 1, Method: selection.MethodStatic,
 					AllScores: map[string]float64{proposal: 1},
 				}})
-				selCtx := router.buildSelectionContext(both, "choice", "", nil, "", nil, ctx)
+				selCtx := router.buildSelectionContext(both, "choice", "", "", nil, ctx)
 				selected, _, err := router.selectModelFromCandidates(selCtx, nil, ctx)
 				if err != nil || selected == nil {
 					t.Fatalf("selection failed for agent=%q: selected=%+v err=%v", agent, selected, err)

@@ -208,7 +208,7 @@ const decisionModelCatalog = {
 async function mockRouterInventoryShell(
   page: Page,
   status: unknown = statusPayload,
-  config: unknown = { signals: {}, decisions: [], providers: { models: [] }, plugins: {} },
+  config: unknown = { version: 'v0.5', providers: { models: [] }, recipes: [{ name: 'default' }] },
 ) {
   await mockAuthenticatedAppShell(page, {
     settings: {
@@ -245,21 +245,20 @@ test.describe('Router model inventory surfaces', () => {
       { name: 'correction', question: { type: 'noul' } },
     ]
     const config = {
+      version: 'v0.5',
       global: { model_catalog: decisionModelCatalog },
       providers: { models: [] },
       entrypoints: [{ recipe: 'balanced', model_names: ['vllm-sr/balanced'] }],
       recipes: [
         {
           name: 'balanced',
-          routing: {
-            signals: {
-              decision: questions,
-              pii: [{ name: 'personal_data' }],
-              jailbreak: [{ name: 'prompt_attack' }],
-              safety: [{ name: 'unsafe_request' }],
-            },
-            projections: { scores: [{ name: 'effort_score' }], mappings: [{ name: 'effort' }] },
+          signals: {
+            systemone: questions,
+            pii: [{ name: 'personal_data' }],
+            jailbreak: [{ name: 'prompt_attack' }],
+            safety: [{ name: 'unsafe_request' }],
           },
+          projections: { scores: [{ name: 'effort_score' }], mappings: [{ name: 'effort' }] },
         },
       ],
     }
