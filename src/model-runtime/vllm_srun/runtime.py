@@ -501,25 +501,33 @@ class ServedModel:
         )
         try:
             self._start(process, execute)
+
+            with self.runtime._lifecycle_lock:
+                if self.runtime._stopping.is_set():
+                    raise _RuntimeStopping(
+                        "runtime shutdown began during model initialization"
+                    )
+
+                metrics = self.runtime.metrics
+                metrics.model_info.labels(
+                    model=self.label,
+                    revision=model.info.revision or "local",
+                    family=family.name,
+                    engine=self.engine,
+                    accelerator=placement.accelerator.name,
+                    device=placement.device.label,
+                    dtype=self.precision,
+                    numerics=self.numerics,
+                ).set(1)
+                metrics.model_memory.labels(model=self.label).set(
+                    model.engine_model.memory_bytes()
+                )
+                self.health.set("ready", self.unpinned)
+
         except BaseException:
             self.stop()
             self.scheduler = self.model = None
             raise
-        metrics = self.runtime.metrics
-        metrics.model_info.labels(
-            model=self.label,
-            revision=model.info.revision or "local",
-            family=family.name,
-            engine=self.engine,
-            accelerator=placement.accelerator.name,
-            device=placement.device.label,
-            dtype=self.precision,
-            numerics=self.numerics,
-        ).set(1)
-        metrics.model_memory.labels(model=self.label).set(
-            model.engine_model.memory_bytes()
-        )
-        self.health.set("ready", self.unpinned)
         log.info(
             "serving %s on %s (max_num_seqs %d, max_num_batched_tokens %d from %s, "
             "batch_window_ms %g, dtype %s, shared context %s, %s numerics)",
@@ -556,7 +564,7 @@ class ServedModel:
             and not model.engine_model.approximate_kernels
             else "approximate"
         )
-        self.scheduler = Scheduler(
+        scheduler = Scheduler(
             model,
             batcher,
             SchedulerLimits(
@@ -573,7 +581,12 @@ class ServedModel:
             device_fault=placement.accelerator.device_fault,
             planning=self.runtime.planning_before,
         )
-        self.scheduler.start()
+
+        with self.runtime._lifecycle_lock:
+            if self.runtime._stopping.is_set():
+                raise _RuntimeStopping("runtime shutdown began during model loading")
+            self.scheduler = scheduler
+            self.scheduler.start()
         self.health.set("warming", "running the golden check")
         assert self.family is not None and self.package is not None
         self.health.golden = golden_check(
@@ -945,6 +958,10 @@ class ProcessHealth:
         }
 
 
+class _RuntimeStopping(Exception):
+    """Loading was cancelled because runtime shutdown began."""
+
+
 class Runtime:
     def __init__(self, config: ServeConfig, metrics: RuntimeMetrics | None = None):
         self.config = config
@@ -960,6 +977,7 @@ class Runtime:
             raise ValueError("served model names must be unique")
         self.health = ProcessHealth(self)
         self._thread: threading.Thread | None = None
+        self._lifecycle_lock = threading.Lock()
         self._stopping = threading.Event()
 
     # -- lifecycle -----------------------------------------------------------
@@ -995,9 +1013,26 @@ class Runtime:
 
         What still runs then, one entry per model; those models stay open.
         """
-        self._stopping.set()
+        with self._lifecycle_lock:
+            self._stopping.set()
+
+        thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join()
+
         # Every worker stops taking work before any is waited for, so a hung
         # forward leaves the other models the whole timeout.
+        for served in self.served:
+            if served.scheduler is not None:
+                served.scheduler.stop(0)
+        deadline = time.monotonic() + timeout
+        abandoned = []
+        for served in self.served:
+            running = served.stop(max(0.0, deadline - time.monotonic()))
+            if running is not None:
+                abandoned.append(running)
+        media.stop()
+        return abandoned
         for served in self.served:
             if served.scheduler is not None:
                 served.scheduler.stop(0)
@@ -1059,6 +1094,8 @@ class Runtime:
                     return
                 try:
                     served.load()
+                except _RuntimeStopping:
+                    return
                 except (PackageError, UnsupportedDeviceError, VerificationError) as exc:
                     log.error("loading %s failed: %s", served.label, exc)
                     served.health.set("failed", f"{type(exc).__name__}: {exc}")
@@ -1087,7 +1124,10 @@ class Runtime:
             pending = retry
 
     def _ready_gauge(self) -> None:
-        self.metrics.ready.set(1 if self.health.ready else 0)
+        with self._lifecycle_lock:
+            if self._stopping.is_set():
+                return
+            self.metrics.ready.set(1 if self.health.ready else 0)
 
     # -- routing -------------------------------------------------------------
 
