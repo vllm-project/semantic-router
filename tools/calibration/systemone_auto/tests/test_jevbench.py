@@ -75,7 +75,7 @@ def arguments(tmp_path, **updates):
     parser = argparse.ArgumentParser()
     live.add_parser(parser.add_subparsers(dest="command", required=True))
     config = tmp_path / "config.yaml"
-    config.write_text("version: v0.3\n")
+    config.write_text("version: v0.5\n")
     args = parser.parse_args(
         [
             "jevbench",
@@ -121,8 +121,8 @@ def response(payload, *, no_coverage=False):
         "meta": {
             "revision": REVISIONS[model],
             "model_sha256": ("a" if model == "kai" else "b") * 64,
-            "profile": "exact",
-            "numerics": "exact",
+            "dtype": "bfloat16",
+            "numerics": "approximate",
             "engine": "native",
             "accelerator": "cpu",
             "device": "private-device",
@@ -404,7 +404,7 @@ def test_response_projection_excludes_private_diagnostics(suite):
         "meta": {
             "revision": "private.invalid",
             "model_sha256": "private.invalid",
-            "profile": "private.invalid",
+            "dtype": "private.invalid",
             "accelerator": ["private.invalid"],
             "device": "private-device",
         },

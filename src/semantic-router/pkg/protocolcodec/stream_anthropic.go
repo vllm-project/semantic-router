@@ -51,13 +51,18 @@ type anthropicEventWire struct {
 }
 
 type anthropicMessageDeltaUsageWire struct {
-	CacheCreationInputTokens int64                           `json:"cache_creation_input_tokens"`
-	CacheReadInputTokens     int64                           `json:"cache_read_input_tokens"`
-	InputTokens              int64                           `json:"input_tokens"`
-	OutputTokens             int64                           `json:"output_tokens"`
-	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
-	ServerToolUse            anthropicServerToolUsageWire    `json:"server_tool_use"`
-	Iterations               []json.RawMessage               `json:"iterations,omitempty"`
+	// Anthropic's MessageDeltaUsage marks each input counter independently
+	// optional. A field the delta omits carries no evidence, so the nil
+	// pointer keeps the running value during the merge instead of settling
+	// a fabricated zero.
+	CacheCreationInputTokens *int64                           `json:"cache_creation_input_tokens,omitempty"`
+	CacheReadInputTokens     *int64                           `json:"cache_read_input_tokens,omitempty"`
+	InputTokens              *int64                           `json:"input_tokens,omitempty"`
+	OutputTokens             int64                            `json:"output_tokens"`
+	CacheCreation            *anthropicCacheCreationUsageWire `json:"cache_creation,omitempty"`
+	OutputTokensDetails      anthropicOutputUsageDetailsWire  `json:"output_tokens_details"`
+	ServerToolUse            anthropicServerToolUsageWire     `json:"server_tool_use"`
+	Iterations               []json.RawMessage                `json:"iterations,omitempty"`
 }
 
 type anthropicDeltaWire struct {
@@ -117,6 +122,10 @@ func (decoder *anthropicStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Ev
 		return nil, nil, err
 	}
 	if decoder.terminal {
+		// vLLM 0.11 through 0.18 end their Messages stream with an OpenAI [DONE] line.
+		if bytes.Equal(bytes.TrimSpace(parsed.Data), []byte("[DONE]")) {
+			return nil, nil, nil
+		}
 		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Anthropic stream emitted data after message_stop")
 	}
 	eventType, err := decodeProviderEventType(parsed.Data, parsed.Event, decoder.policy)
@@ -135,9 +144,12 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicWireFrame(
 	frame []byte,
 ) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	var wire anthropicEventWire
-	if err := decodeProviderWire(data, &wire, decoder.policy); err != nil {
+	_, unknownFields, err := decodeProviderWireTolerant(data, &wire, decoder.policy)
+	if err != nil {
 		return nil, nil, err
 	}
+	var unknownFieldDiagnostics llmprotocol.Diagnostics
+	decoder.appendStreamUnknownFields(&unknownFieldDiagnostics, llmprotocol.AnthropicMessagesV1, unknownFields)
 	if wire.Type == "" {
 		wire.Type = eventType
 	}
@@ -153,6 +165,7 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicWireFrame(
 		}
 	}
 	events, diagnostics, err := decoder.decodeEvent(wire, frame)
+	diagnostics = appendDiagnostics(unknownFieldDiagnostics, diagnostics, decoder.policy.Limits.Diagnostics)
 	if err != nil {
 		return events, diagnostics, err
 	}
@@ -178,7 +191,10 @@ func (decoder *anthropicStreamDecoder) decodeEvent(
 ) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	switch wire.Type {
 	case "message_start":
-		events, diagnostics, err := decoder.emitAnthropicEvent(decodeAnthropicMessageStart(wire))
+		var startDiagnostics llmprotocol.Diagnostics
+		event := decoder.decodeAnthropicMessageStart(wire, &startDiagnostics)
+		events, diagnostics, err := decoder.emitAnthropicEvent(event)
+		diagnostics = appendDiagnostics(startDiagnostics, diagnostics, decoder.policy.Limits.Diagnostics)
 		if wire.Message != nil && len(wire.Message.Diagnostics) > 0 && !bytes.Equal(bytes.TrimSpace(wire.Message.Diagnostics), []byte("null")) {
 			appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
 				"stream.message.diagnostics", "prompt-cache miss diagnostics have no neutral representation")
@@ -186,6 +202,14 @@ func (decoder *anthropicStreamDecoder) decodeEvent(
 		if wire.Message != nil && wire.Message.Usage != nil && len(wire.Message.Usage.Iterations) > 0 {
 			appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1,
 				"stream.message.usage.iterations", "per-iteration usage has no neutral accounting bucket")
+		}
+		if wire.Message != nil && wire.Message.Usage != nil {
+			usage := wire.Message.Usage
+			appendProviderFieldOmissions(&diagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1, map[string]bool{
+				"stream.message.usage.inference_geo": usage.InferenceGeo != "",
+				"stream.message.usage.service_tier":  usage.ServiceTier != "",
+				"stream.message.usage.speed":         usage.Speed != "",
+			}, anthropicUsageMetadataReason)
 		}
 		return events, diagnostics, err
 	case "content_block_start":
@@ -227,14 +251,14 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicMessageStop() ([]llmprotoc
 	})
 }
 
-func decodeAnthropicMessageStart(wire anthropicEventWire) llmprotocol.Event {
+func (decoder *anthropicStreamDecoder) decodeAnthropicMessageStart(wire anthropicEventWire, diagnostics *llmprotocol.Diagnostics) llmprotocol.Event {
 	event := llmprotocol.Event{Type: llmprotocol.EventResponseStarted}
 	if wire.Message == nil {
 		return event
 	}
 	event.ResponseID, event.Model = wire.Message.ID, wire.Message.Model
 	if wire.Message.Usage != nil {
-		usage := decodeAnthropicStreamUsage(*wire.Message.Usage, true)
+		usage := decodeAnthropicMessageStartUsage(*wire.Message.Usage, decoder.policy, diagnostics)
 		event.Usage = &usage
 	}
 	return event
@@ -387,44 +411,87 @@ func decodeAnthropicContentDelta(wire anthropicEventWire) (llmprotocol.Event, er
 	return event, nil
 }
 
-func decodeAnthropicStreamUsage(wire anthropicUsageWire, initial bool) llmprotocol.Usage {
-	usage := llmprotocol.Usage{State: llmprotocol.UsageAvailable}
-	if initial || wire.InputTokens > 0 || wire.CacheReadInputTokens > 0 || wire.CacheCreationInputTokens > 0 {
-		usage.InputUncached = authoritative(wire.InputTokens)
-		usage.InputCacheRead = authoritative(wire.CacheReadInputTokens)
-		usage.InputCacheWrite = authoritative(wire.CacheCreationInputTokens)
-		usage.InputTotal = authoritative(wire.InputTokens + wire.CacheReadInputTokens + wire.CacheCreationInputTokens)
+func decodeAnthropicMessageStartUsage(wire anthropicUsageWire, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) llmprotocol.Usage {
+	cacheWrite := wire.CacheCreationInputTokens
+	cacheWrite5m, cacheWrite1h, derivedAggregate := decodeAnthropicCacheCreationTiers(
+		wire.CacheCreation, cacheWrite, policy, diagnostics,
+	)
+	if derivedAggregate != nil {
+		cacheWrite = *derivedAggregate
 	}
-	if wire.OutputTokens > 0 || !initial {
-		reasoning := wire.OutputTokensDetails.ThinkingTokens
-		other := wire.OutputTokens - reasoning
-		if other < 0 {
-			other = 0
-		}
-		usage.OutputReasoning = authoritative(reasoning)
-		usage.OutputOther = authoritative(other)
+	usage := llmprotocol.Usage{
+		State:             llmprotocol.UsageAvailable,
+		InputUncached:     authoritative(wire.InputTokens),
+		InputCacheRead:    authoritative(wire.CacheReadInputTokens),
+		InputCacheWrite:   authoritative(cacheWrite),
+		InputCacheWrite5m: cacheWrite5m,
+		InputCacheWrite1h: cacheWrite1h,
+		InputTotal:        authoritative(wire.InputTokens + wire.CacheReadInputTokens + cacheWrite),
+	}
+	// message_start's output count is provisional. A reasoning/other split
+	// taken from it can shrink once message_delta reports the thinking count,
+	// so only the total is settled here.
+	if wire.OutputTokens > 0 {
 		usage.OutputTotal = authoritative(wire.OutputTokens)
 	}
 	return usage
 }
 
 func decodeAnthropicMessageDeltaUsage(wire anthropicMessageDeltaUsageWire) llmprotocol.Usage {
-	return decodeAnthropicStreamUsage(anthropicUsageWire{
-		InputTokens: wire.InputTokens, OutputTokens: wire.OutputTokens,
-		CacheCreationInputTokens: wire.CacheCreationInputTokens,
-		CacheReadInputTokens:     wire.CacheReadInputTokens,
-		OutputTokensDetails:      wire.OutputTokensDetails,
-		ServerToolUse:            wire.ServerToolUse,
-	}, false)
+	// Presence-aware partial update: only the input buckets the delta
+	// explicitly reports settle evidence of their own. A delta that reports
+	// every bucket also settles the input total; otherwise the total is left
+	// for the merge to refresh from the combined buckets.
+	usage := llmprotocol.Usage{State: llmprotocol.UsageAvailable}
+	cacheWrite := wire.CacheCreationInputTokens
+	if wire.CacheCreation != nil {
+		aggregate := int64(0)
+		if cacheWrite != nil {
+			aggregate = *cacheWrite
+		}
+		cacheWrite5m, cacheWrite1h, derivedAggregate := decodeAnthropicCacheCreationTiers(
+			wire.CacheCreation, aggregate, llmprotocol.Policy{}, nil,
+		)
+		usage.InputCacheWrite5m, usage.InputCacheWrite1h = cacheWrite5m, cacheWrite1h
+		if derivedAggregate != nil {
+			cacheWrite = derivedAggregate
+		}
+	}
+	if wire.InputTokens != nil {
+		usage.InputUncached = authoritative(*wire.InputTokens)
+	}
+	if wire.CacheReadInputTokens != nil {
+		usage.InputCacheRead = authoritative(*wire.CacheReadInputTokens)
+	}
+	if cacheWrite != nil {
+		usage.InputCacheWrite = authoritative(*cacheWrite)
+	}
+	if wire.InputTokens != nil && wire.CacheReadInputTokens != nil && cacheWrite != nil {
+		usage.InputTotal = authoritative(*wire.InputTokens + *wire.CacheReadInputTokens + *cacheWrite)
+	}
+	reasoning := wire.OutputTokensDetails.ThinkingTokens
+	other := wire.OutputTokens - reasoning
+	if other < 0 {
+		other = 0
+	}
+	usage.OutputReasoning = authoritative(reasoning)
+	usage.OutputOther = authoritative(other)
+	usage.OutputTotal = authoritative(wire.OutputTokens)
+	return usage
 }
 
 func encodeAnthropicMessageDeltaUsage(usage llmprotocol.Usage) *anthropicMessageDeltaUsageWire {
 	full := encodeAnthropicUsage(usage)
+	var creation *anthropicCacheCreationUsageWire
+	if usage.InputCacheWrite5m.Value != nil || usage.InputCacheWrite1h.Value != nil {
+		creation = full.CacheCreation
+	}
 	return &anthropicMessageDeltaUsageWire{
-		CacheCreationInputTokens: full.CacheCreationInputTokens,
-		CacheReadInputTokens:     full.CacheReadInputTokens,
-		InputTokens:              full.InputTokens,
+		CacheCreationInputTokens: &full.CacheCreationInputTokens,
+		CacheReadInputTokens:     &full.CacheReadInputTokens,
+		InputTokens:              &full.InputTokens,
 		OutputTokens:             full.OutputTokens,
+		CacheCreation:            creation,
 		OutputTokensDetails:      full.OutputTokensDetails,
 		ServerToolUse:            full.ServerToolUse,
 	}
@@ -441,6 +508,9 @@ func (decoder *anthropicStreamDecoder) Finalize(reason error) ([]llmprotocol.Eve
 }
 
 func (encoder *anthropicStreamEncoder) Push(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	if err := rejectReasoningContinuity(llmprotocol.AnthropicMessagesV1, llmprotocol.RequiredEventCapabilities(event)); err != nil {
+		return nil, nil, err
+	}
 	if encoder.terminal {
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorConflict, "stream_terminal", "stream is already terminal", nil)
 	}
@@ -743,7 +813,11 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicCompletion(
 	if event.Usage == nil {
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "usage_event_invalid", "terminal usage is invalid", nil)
 	}
-	stop := encodeAnthropicStop(event.StopReason)
+	toolUse := false
+	for _, kind := range encoder.blocks {
+		toolUse = toolUse || kind == llmprotocol.ContentToolCall
+	}
+	stop := encodeAnthropicStop(event.StopReason, toolUse)
 	deltaWire := &anthropicDeltaWire{Type: "message_delta", StopReason: &stop}
 	if event.StopReason == llmprotocol.StopSequence {
 		deltaWire.StopSequence = &event.MatchedStopSequence

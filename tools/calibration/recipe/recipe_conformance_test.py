@@ -18,6 +18,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 recipe_conformance = importlib.import_module("recipe_conformance")
 recipe_coverage = importlib.import_module("recipe_conformance_coverage")
+recipe_sources = importlib.import_module("recipe_conformance_sources")
 recipe_metadata_schema = importlib.import_module("recipe_metadata_schema")
 FULL_COVERAGE_PERCENT = 100.0
 
@@ -44,9 +45,16 @@ class RecipeConformanceTest(unittest.TestCase):
         self.assertEqual(
             set(mom.decisions),
             {
-                "balance:simple",
-                "balance:medium",
-                "balance:reasoning",
+                "balance:long_context",
+                "balance:vision",
+                "balance:recovery",
+                "balance:agentic",
+                "balance:facts",
+                "balance:frontier",
+                "balance:code",
+                "balance:hard",
+                "balance:standard",
+                "balance:fast",
                 "speed:fast",
                 "speed:tools",
                 "speed:reasoning",
@@ -62,13 +70,15 @@ class RecipeConformanceTest(unittest.TestCase):
                 "vault:private",
             },
         )
-        self.assertEqual(len(mom.decisions), 16)
-        self.assertEqual(mom.variants, 315)
+        self.assertEqual(len(mom.decisions), 23)
+        self.assertEqual(mom.variants, 366)
+        self.assertNotIn("classifier", mom.coverage["signals"]["by_family"])
+        self.assertEqual(len(mom.probe_shard_sizes), 16)
+        self.assertEqual(sum(mom.probe_shard_sizes), mom.variants)
         self.assertEqual(
-            mom.coverage["signals"]["by_family"]["classifier"]["asserted"],
-            ["classifier:content-risk"],
+            set(mom.algorithms),
+            {"static", "systemone", "multi_factor", "fusion", "workflows"},
         )
-        self.assertEqual(set(mom.algorithms), {"multi_factor", "fusion", "workflows"})
         self.assertTrue(mom.coverage["passed"])
 
     def test_default_discovery_skips_the_nested_built_in_catalog(self) -> None:
@@ -319,7 +329,7 @@ class RecipeConformanceTest(unittest.TestCase):
         )
         by_name = {recipe.name: recipe for recipe in inventory}
         self.assertEqual(by_name["vela-amd"].required_devices, ("rocm:0",))
-        self.assertEqual(by_name["decision-balance"].required_devices, ("rocm",))
+        hardware = {recipe.name for recipe in inventory if recipe.required_devices}
         with tempfile.TemporaryDirectory() as directory:
             args = recipe_conformance.build_parser().parse_args(
                 ["--output-dir", directory, "plan", "--shards", "3"]
@@ -333,13 +343,17 @@ class RecipeConformanceTest(unittest.TestCase):
                 for shard in matrix["include"]
                 for name in shard["recipes"].split(",")
             }
-            self.assertEqual(planned, set(by_name) - {"decision-balance", "vela-amd"})
+            self.assertEqual(planned, set(by_name) - hardware)
             receipt = json.loads((Path(directory) / "cpu-eligibility.json").read_text())
             self.assertEqual(
                 receipt["excluded"],
                 [
-                    {"recipe": "decision-balance", "required_devices": ["rocm"]},
-                    {"recipe": "vela-amd", "required_devices": ["rocm:0"]},
+                    {
+                        "recipe": recipe.name,
+                        "required_devices": list(recipe.required_devices),
+                    }
+                    for recipe in inventory
+                    if recipe.required_devices
                 ],
             )
 
@@ -479,7 +493,7 @@ class RecipeConformanceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             recipe = Path(tempdir) / "incomplete"
             recipe.mkdir()
-            (recipe / "config.yaml").write_text("version: v0.3\n", encoding="utf-8")
+            (recipe / "config.yaml").write_text("version: v0.5\n", encoding="utf-8")
 
             with self.assertRaisesRegex(ValueError, "five-file contract"):
                 recipe_conformance.validate_recipe_directory(recipe)
@@ -555,7 +569,7 @@ class RecipeConformanceTest(unittest.TestCase):
     def test_portable_recipe_defaults_do_not_create_runtime_entrypoints(self) -> None:
         config = {
             "global": {"router": {"learning": {"enabled": True}}},
-            "recipes": [{"name": "balanced", "routing": {}}],
+            "recipes": [{"name": "balanced"}],
         }
         probes = [
             recipe_conformance.Probe(
@@ -573,25 +587,74 @@ class RecipeConformanceTest(unittest.TestCase):
         )
         self.assertIsNone(probes[0].model)
 
+    def test_bundle_default_entrypoint_creates_no_runtime_entrypoints(self) -> None:
+        config = {
+            "recipes": [{"name": "balanced"}, {"name": "fast"}],
+            "entrypoints": [
+                {
+                    "model_names": ["vllm-sr/balanced"],
+                    "recipe": "balanced",
+                    "default": True,
+                }
+            ],
+        }
+
+        self.assertTrue(recipe_conformance.is_portable_bundle(config))
+        self.assertEqual(recipe_conformance.config_auto_entrypoints(config), ())
+        self.assertEqual(recipe_conformance.config_entrypoints(config), {})
+        self.assertFalse(
+            recipe_conformance.is_portable_bundle(
+                {**config, "providers": {"models": [{"name": "backend"}]}}
+            )
+        )
+
+    def test_probe_plugins_include_the_global_and_recipe_plugins(self) -> None:
+        config = {
+            "providers": {"models": [{"name": "backend"}]},
+            "global": {"plugins": [{"type": "router_replay"}]},
+            "recipes": [
+                {
+                    "name": "default",
+                    "plugins": [{"type": "header_mutation"}],
+                    "decisions": [
+                        {
+                            "name": "route",
+                            "modelRefs": [{"model": "backend"}],
+                            "plugins": [{"type": "request_params"}],
+                        }
+                    ],
+                }
+            ],
+        }
+        probe = recipe_conformance.Probe(
+            decision_id="route",
+            variant_id="plain",
+            probe_id="route:plain",
+            expected_decision="route",
+            model="vllm-sr/auto",
+            expected_plugins=("request_params", "header_mutation", "router_replay"),
+        )
+        manifest = {"acceptance": {}}
+
+        recipe_conformance.validate_probe_references(
+            Path("probes.yaml"), config, manifest, [probe]
+        )
+        with self.assertRaisesRegex(ValueError, r"expects missing plugins \['tools'\]"):
+            recipe_conformance.validate_probe_references(
+                Path("probes.yaml"),
+                config,
+                manifest,
+                [recipe_conformance.replace(probe, expected_plugins=("tools",))],
+            )
+
     def test_composed_recipe_keeps_runtime_entrypoint_coverage(self) -> None:
         bundle = {
             "global": {"router": {"learning": {"enabled": True}}},
-            "recipes": [{"name": "balanced", "routing": {}}],
+            "recipes": [{"name": "balanced"}],
         }
-        for field, value in (
-            ("providers", {"models": [{"name": "backend"}]}),
-            ("routing", {"decisions": [{"name": "fallback"}]}),
-            ("entrypoints", [{"recipe": "balanced", "model_names": ["route"]}]),
-        ):
-            with self.subTest(field=field):
-                config = {**bundle, field: value}
-                entrypoints = recipe_conformance.config_entrypoints(config)
-                self.assertEqual(
-                    {name: entrypoints[name] for name in ("vllm-sr/auto",)},
-                    dict.fromkeys(("vllm-sr/auto",), "default"),
-                )
-                if field == "entrypoints":
-                    self.assertEqual(entrypoints["route"], "balanced")
+        config = {**bundle, "providers": {"models": [{"name": "backend"}]}}
+        entrypoints = recipe_conformance.config_entrypoints(config)
+        self.assertEqual(entrypoints["vllm-sr/auto"], "default")
 
     def test_consolidated_report_marks_missing_recipes(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -626,6 +689,128 @@ class RecipeConformanceTest(unittest.TestCase):
             self.assertEqual(report["summary"]["passed_recipes"], 1)
             self.assertEqual(report["summary"]["missing_recipes"], 1)
             self.assertFalse(report["summary"]["passed"])
+
+    def test_probe_shards_spread_long_reads_and_keep_manifest_order(self) -> None:
+        costs = [("a", 1), ("b", 17), ("c", 1), ("d", 17), ("e", 1), ("f", 1)]
+
+        shards = recipe_sources.partition_probes(costs, 2)
+
+        flat = [probe for shard in shards for probe in shard]
+        self.assertEqual(sorted(flat), ["a", "b", "c", "d", "e", "f"])
+        self.assertEqual([("b" in shard) + ("d" in shard) for shard in shards], [1, 1])
+        order = [probe_id for probe_id, _cost in costs]
+        for shard in shards:
+            self.assertEqual(shard, sorted(shard, key=order.index))
+        self.assertEqual(recipe_sources.probe_cost(10_000_000), 17)
+
+    def test_probe_shard_settings_are_validated(self) -> None:
+        self.assertEqual(recipe_sources.probe_shard_count({}), 1)
+        self.assertEqual(
+            recipe_sources.probe_shard_count({"evaluation": {"shards": 4}}), 4
+        )
+        for value in (0, 17, True, "4"):
+            with self.subTest(value=value), self.assertRaises((TypeError, ValueError)):
+                recipe_sources.probe_shard_count({"evaluation": {"shards": value}})
+        self.assertEqual(recipe_sources.parse_probe_shard("2/3"), (2, 3))
+        for value in ("3/3", "2", "-1/3", "a/b"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                recipe_sources.parse_probe_shard(value)
+
+    def test_probe_shard_reports_merge_only_when_every_shard_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            root = Path(tempdir)
+            manifest = root / "probes.yaml"
+            manifest.write_text(
+                yaml.safe_dump(
+                    {
+                        "schema_version": "v1",
+                        "name": "bundle",
+                        "routing_assets": {"yaml": "config.yaml", "dsl": "recipe.dsl"},
+                        "evaluation": {"concurrency": 1, "shards": 2},
+                        "coverage": {
+                            "min_signal_assertion_percent": 0,
+                            "min_projection_assertion_percent": 0,
+                            "min_algorithm_assertion_percent": 0,
+                            "min_plugin_assertion_percent": 0,
+                            "required_request_shapes": [],
+                            "min_tag_counts": {},
+                            "min_tag_pass_rate": {"tools": 100.0},
+                        },
+                        "decisions": [
+                            {
+                                "id": "fast",
+                                "expected_decision": "fast",
+                                "variants": [
+                                    {"id": name, "query": name, "tags": ["tools"]}
+                                    for name in ("one", "two", "three")
+                                ],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def shard_report(index: int, ids: list[str]) -> None:
+                results = [
+                    {
+                        "id": f"fast:{probe_id}",
+                        "variant_id": probe_id,
+                        "decision_id": "fast",
+                        "expected_decision": "fast",
+                        "actual_decision": "fast",
+                        "model": "vllm-sr/bundle",
+                        "matched": True,
+                        "deployment_matched": True,
+                        "policy_matched": True,
+                        "tags": ["tools"],
+                        "latency_ms": 10.0,
+                    }
+                    for probe_id in ids
+                ]
+                path = root / "report" / "bundle" / "shards" / str(index)
+                path.mkdir(parents=True)
+                (path / "eval-report.json").write_text(
+                    json.dumps(
+                        {
+                            "inventory": {
+                                "name": "bundle",
+                                "probes": str(manifest),
+                                "probe_shard_sizes": [2, 1],
+                            },
+                            "evaluation": {
+                                "router_url": "http://127.0.0.1:8080",
+                                "evaluation_scope": "deployment",
+                                "performance": {"wall_time_seconds": 1.5},
+                                "execution": {
+                                    "expected_entrypoints": ["vllm-sr/bundle"]
+                                },
+                                "results": results,
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+
+            shard_report(1, ["two"])
+            self.assertEqual(recipe_conformance.merge_probe_shards(root / "report"), [])
+            self.assertFalse((root / "report/bundle/eval-report.json").exists())
+
+            shard_report(0, ["three", "one"])
+            self.assertEqual(
+                recipe_conformance.merge_probe_shards(root / "report"), ["bundle"]
+            )
+            merged = json.loads(
+                (root / "report/bundle/eval-report.json").read_text(encoding="utf-8")
+            )["evaluation"]
+            self.assertEqual(
+                [result["id"] for result in merged["results"]],
+                ["fast:one", "fast:two", "fast:three"],
+            )
+            self.assertEqual((merged["total"], merged["probe_shards"]), (3, 2))
+            self.assertTrue(merged["execution"]["complete"])
+            self.assertTrue(merged["passed"])
+            self.assertEqual(merged["performance"]["wall_time_seconds"], 3.0)
 
 
 if __name__ == "__main__":

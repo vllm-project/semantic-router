@@ -1,0 +1,25 @@
+[project]
+name = "kv-mapper"
+version = "0.0.0"
+description = "Environment for the KV mapper under src/training/kv_mapper"
+requires-python = ">=3.10"
+dependencies = [
+    # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
+    "numpy>=1.26.0,<3",
+    "safetensors>=0.4.0,<1",
+]
+
+[dependency-groups]
+# Only the model scripts (collect_run, distill, distill_run, hooks, model_eval_run) need these.
+models = [
+    # from_pretrained(low_cpu_mem_usage=True) needs accelerate on transformers 4.x.
+    "accelerate>=0.28.0,<2",
+    "datasets>=2.18.0,<6",
+    "huggingface_hub>=0.20.0,<3",
+    "torch>=2.2,<3",
+    # Qwen3 (imported by distill.py and model_eval_run.py) first shipped in 4.51.
+    "transformers>=4.51.0,<6",
+]
+
+[tool.uv]
+package = false

@@ -11,7 +11,7 @@ RUNTIME_FIELDS = (
     "revision",
     "model_sha256",
     "engine",
-    "profile",
+    "dtype",
     "numerics",
     "accelerator",
 )

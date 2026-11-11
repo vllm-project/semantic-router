@@ -106,9 +106,9 @@ tag; `--image-pull-policy never` prevents pulling missing images.
 For the AMD local image:
 
 ```bash
-make vllm-sr-dev VLLM_SR_PLATFORM=amd
+make vllm-sr-dev VLLM_SR_PLATFORM=rocm
 VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:latest \
-  vllm-sr serve --image-pull-policy never --platform amd
+  vllm-sr serve --image-pull-policy never --platform rocm
 ```
 
 If you customize `DOCKER_TAG`, `DOCKER_REGISTRY`, or the Make image variables,
@@ -187,6 +187,9 @@ of truth for schemas, test selection, or public documentation.
 
 ## Submit a pull request
 
+Contributors without repository write access may have at most six open pull
+requests at a time, including drafts.
+
 1. Link the change to an accepted issue with exactly one `wg/*` owner.
 2. Create a focused branch and make one coherent change.
 3. Update tests, examples, and public docs for behavior the user can observe.
@@ -205,9 +208,44 @@ Keep commits reviewable and avoid unrelated cleanup. A PR should explain why
 the change is needed, which modules it affects, and how its user-visible
 behavior was verified.
 
+### Understand CI authorization
+
+Affected source and component checks start automatically. Expensive image,
+model, service, and deployment checks need a committer's authorization. When
+only that authorization is missing, **PR Gate** stays pending with
+**Waiting for committer approval**. A single bot comment on the PR lists the
+remaining checks and the command to authorize them; it is updated as the PR
+changes. Waiting does not occupy a runner. Actual test or evidence failures
+remain failures, and the Gate succeeds only when all required evidence passes.
+
+Contributors without repository write permission do not need to authorize CI
+and cannot do so. A committer with current `write`, `maintain`, or `admin`
+permission can post a new, unedited comment:
+
+```text
+/ci run
+```
+
+This authorizes the affected work and reruns the original PR workflow.
+`/ci run full` requests the complete CPU inventory. Narrower scopes are
+documented in the [testing strategy](tools/agent/docs/testing-strategy.md#product-layers-and-execution-policy).
+Valid scopes accumulate for the same revision; partial authorization does not
+waive the remaining checks. A new head revision requires fresh
+authorization.
+
+The command handler reacts with 👀 when it receives a request and 🚀 after it
+successfully triggers the PR workflow. The rocket means CI was started, not that
+tests passed; **PR Gate** reports the final result. Rejected requests receive 😕
+and a short bot reply explaining the reason and next step, including when the
+requester lacks permission. Feedback appears when the command handler starts.
+
+Branches based on main before the status publisher was introduced retain the
+strict legacy PR Gate during bootstrap. Update the branch after the publisher
+lands on main to use the pending state and bot guidance.
+
 Mergify places a pull request in the merge queue only after at least two
 reviewers with `write`, `maintain`, or `admin` repository permission approve
-it and all required checks pass.
+it, all required checks pass, and all review conversations are resolved.
 
 ### Troubleshoot the merge queue
 
@@ -215,9 +253,25 @@ Check the **Mergify Merge Queue** check or Mergify's **Merge Queue Status**
 comment on the PR. The **Reason** and **Hint** explain whether the PR is
 waiting or was dequeued because its branch could not be updated.
 
+If the PR is approved and PR Gate is green but no **Merge Queue Status**
+comment appears, open Mergify's **Summary** check and inspect the unmet
+conditions under **queue approved pull requests**. The Summary check can
+succeed while that rule's conditions remain unmet. Items marked
+**🛡 GitHub branch protection** are inherited from branch protection.
+[.mergify.yml](.mergify.yml) defines the repository's queue rules, while the
+Summary check shows the effective conditions, including inherited requirements.
+
 - **Waiting in the queue:** the queue processes PRs serially, so a long wait
-  can be normal. See [.mergify.yml](.mergify.yml) for the current settings.
+  can be normal. Mergify checks each PR on a draft pull request that merges it
+  onto current `main`, and that run needs no new `/ci run`.
   Avoid pushing while queued: a push restarts PR Gate, which the queue requires.
+- **Unresolved review conversation:** every review thread must be resolved,
+  including threads marked **Outdated** after a push or branch update. Use
+  the **Conversations** menu on **Files changed** to find them. The PR author
+  can resolve a thread once it is addressed, including on a fork PR; reviewers
+  should resolve their own addressed threads when approving. See
+  [GitHub's conversation-resolution guidance][review-conversations].
+  `@mergifyio queue` does not bypass this requirement.
 - **Workflow permission refusal:** until
   [#3902](https://github.com/vllm-project/semantic-router/issues/3902) is resolved,
   Mergify cannot update a branch when the update includes workflow changes
@@ -241,13 +295,15 @@ to update your fork's `main` before retrying the push. GitHub permits workflow
 files without that scope when the same paths and contents already exist on
 another branch in the fork. See [GitHub's scope documentation][oauth-scopes].
 
-Once PR Gate passes on the new head and the required approvals still hold,
-the rule requeues the PR automatically. The `@mergifyio queue` command and
+Once PR Gate passes on the new head, the required approvals still hold, and
+all review conversations are resolved, the rule requeues the PR automatically.
+The `@mergifyio queue` command and
 **Requeue** checkbox require write permission by default; contributors do not
 need them for this recovery.
 
 [fork-permissions]: https://docs.github.com/en/pull-requests/how-tos/work-with-forks/allowing-changes-to-a-pull-request-branch-created-from-a-fork
 [oauth-scopes]: https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps
+[review-conversations]: https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/commenting-on-a-pull-request#resolving-conversations
 
 ## Repository map
 

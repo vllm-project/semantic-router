@@ -59,7 +59,8 @@ func acquireRuntimeConfigStoreLock(storeDir string) (*runtimeConfigStoreLock, bo
 	// `vllm-sr serve` opens the lock as a member of the store's group; the
 	// process umask narrows a lock this process creates.
 	if int(stat.Uid) == os.Getuid() && stat.Mode&0o060 != 0o060 {
-		if err := unix.Fchmod(lockFD, stat.Mode&0o777|0o060); err != nil {
+		//nolint:unconvert // Stat_t.Mode is uint16 on darwin; the cast keeps Fchmod portable.
+		if err := unix.Fchmod(lockFD, uint32(stat.Mode)&0o777|0o060); err != nil {
 			cleanup()
 			return nil, false, err
 		}

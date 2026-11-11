@@ -107,33 +107,61 @@ func (v *ValkeyStore) recordRetrievalBatch(ids []string) {
 	}
 }
 
+// valkeyAtomicRecordRetrievalScript conditionally increments access_count and updates
+// updated_at only if the memory hash key already exists. If the memory was deleted
+// (e.g. via Forget) before or during background access tracking, the script returns
+// "missing" without recreating the key or leaving partial/orphan records.
+const valkeyAtomicRecordRetrievalScript = `
+if redis.call("EXISTS", KEYS[1]) == 0 then
+	return "missing"
+end
+
+redis.call("HINCRBY", KEYS[1], "access_count", 1)
+redis.call("HSET", KEYS[1], "updated_at", ARGV[1])
+return "updated"
+`
+
+func valkeyBuildAtomicRecordRetrievalCommand(key string, nowUnix string) []string {
+	return []string{"EVAL", valkeyAtomicRecordRetrievalScript, "1", key, nowUnix}
+}
+
+func valkeyAtomicRecordRetrievalResult(result any, memoryID string) error {
+	var response string
+	switch value := result.(type) {
+	case string:
+		response = value
+	case []byte:
+		response = string(value)
+	default:
+		return fmt.Errorf("unexpected atomic Valkey record retrieval response type %T for memory id=%s", result, memoryID)
+	}
+
+	switch response {
+	case "updated", "missing":
+		return nil
+	default:
+		return fmt.Errorf("unexpected atomic Valkey record retrieval response %q for memory id=%s", response, memoryID)
+	}
+}
+
 // recordRetrieval updates LastAccessed and AccessCount for a single memory (reinforcement: S += 1, t = 0).
 //
 // The authoritative access_count and updated_at live as top-level HASH fields and are updated
-// atomically via HINCRBY / HSET. Do not rewrite duplicated values inside the metadata JSON blob
-// here: a separate read-modify-write of metadata can race with concurrent retrievals and move
-// access_count / last_accessed backwards. Callers should use the top-level HASH fields as the
-// source of truth for these mutable values.
+// atomically via an EVAL script only if the hash key exists. If the memory was deleted (e.g. via Forget)
+// before or during background access tracking, the script safely returns "missing" to avoid resurrecting
+// deleted memories as orphan records with partial fields.
 func (v *ValkeyStore) recordRetrieval(ctx context.Context, id string) error {
 	key := v.hashKey(id)
 	now := time.Now()
 	nowUnix := strconv.FormatInt(now.UnixMilli(), 10)
 
-	// Increment access_count atomically.
-	_, err := v.client.CustomCommand(ctx, []string{"HINCRBY", key, "access_count", "1"})
+	command := valkeyBuildAtomicRecordRetrievalCommand(key, nowUnix)
+	result, err := v.client.CustomCommand(ctx, command)
 	if err != nil {
-		return fmt.Errorf("HINCRBY access_count failed: %w", err)
+		return fmt.Errorf("atomic access tracking failed for memory id=%s: %w", id, err)
 	}
 
-	// Update timestamps.
-	_, err = v.client.HSet(ctx, key, map[string]string{
-		"updated_at": nowUnix,
-	})
-	if err != nil {
-		return fmt.Errorf("HSET timestamps failed: %w", err)
-	}
-
-	return nil
+	return valkeyAtomicRecordRetrievalResult(result, id)
 }
 
 // ---------------------------------------------------------------------------

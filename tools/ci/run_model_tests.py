@@ -6,9 +6,9 @@ Every listed Vela 1.0 test serves its package through a managed model runtime
 this runner provisions the runtime's pinned packages as plain directories and
 points those variables at them. The Vela 2.0 tests ask a runtime that serves
 one pinned size on CPU: the runner downloads each size's pinned files into the
-runtime cache, serves it offline from there at the profile the Router's
-implicit CPU deployment runs it with, and names the endpoint for the size's
-tests. Every listed test must pass: a skip, a failure or a missing test fails
+runtime cache, serves it offline from there with the runtime's default engine
+arguments, as the Router's implicit CPU deployment runs it, and names the
+endpoint for the size's tests. Every listed test must pass: a skip, a failure or a missing test fails
 the contract.
 """
 
@@ -33,62 +33,38 @@ ROOT = Path(__file__).resolve().parents[2]
 ROUTER = ROOT / "src/semantic-router"
 # Environment variable -> the runtime's built-in package it names.
 PACKAGES = {
-    "VLLM_SR_DOMAIN_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
-    "VLLM_SR_PII_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-PII",
-    "VLLM_SR_JAILBREAK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
-    "VLLM_SR_FACTCHECK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
-    "VLLM_SR_FEEDBACK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
     "VLLM_SR_MMBERT_TEST_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
 }
-# Router consumers read their label mappings from the package directory; the
-# runtime's pinned file list leaves them out.
+# Files the runtime's pinned file list leaves out of a package directory.
 ROUTER_FILES = ["*_mapping.json"]
-CLASSIFIER_TESTS = (
-    "TestJailbreakDistributionRealModel",
-    "TestJailbreakRiskRealModelContract",
-    "TestClassifyPIIWithDetails_RealModelFindsPIIPastTheWindow",
-    "TestFeedbackPredictionAndAbstentionRealModel",
-    "TestFeedbackForcedAbstentionPreservesPredictionRealModel",
-    "TestFactCheckPolicyRealModel",
-    "TestFactCheckEmptyInputRealModel",
-    "TestLocalClassifierMaintainedCPU",
-    "TestUnifiedClassifierPublishedModels",
-)
 CACHE_TESTS = ("TestNegationFalseHitRegressionInMemory",)
 # The pinned Omni Nano snapshot (VELA_OMNI_ARTIFACT) serves these.
 OMNI_TESTS = {
-    "classification": (
-        "TestEmbeddingClassifier_IntegrationImageQueryEndToEnd",
-        "TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath",
-    ),
     "cache": ("TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity",),
 }
 # Log -> the Vela 2.0 size a runtime of its own serves for the tests that log
-# there: its repository, the profile the Router's implicit CPU deployment runs
-# it with (config.ImplicitModelRuntimeDeployment), the variable that names the
-# endpoint and the tests.
+# there: its repository, the variable that names the endpoint and the tests.
+# Each size runs with the runtime's default engine arguments, as the Router's
+# implicit CPU deployment does (config.ImplicitModelRuntimeDeployment).
 VELA2_SUITES = {
     "vela2-0.3b.jsonl": (
         "vllm-sr/Vela-2.0-0.3B",
-        "max_speed",
         "VLLM_SRUN_VELA2_ENDPOINT",
         ("TestVela2PublishedAnswers03BRealModel", "TestVela2RouterMatchesSystemOne"),
     ),
     "vela2-0.8b.jsonl": (
         "vllm-sr/Vela-2.0-0.8B",
-        "exact",
         "VLLM_SRUN_VELA2_08B_ENDPOINT",
         ("TestVela2PublishedAnswers08BRealModel",),
     ),
 }
 SELECTIONS = (
-    ("./pkg/classification", CLASSIFIER_TESTS, "classification.jsonl"),
     ("./pkg/cache", CACHE_TESTS, "cache.jsonl"),
     *(
         ("./pkg/" + package, names, "omni-" + package + ".jsonl")
         for package, names in OMNI_TESTS.items()
     ),
-    *(("./pkg/classification", suite[3], log) for log, suite in VELA2_SUITES.items()),
+    *(("./pkg/classification", suite[2], log) for log, suite in VELA2_SUITES.items()),
 )
 # A cold CPU load reads the weights and runs the golden check; the 0.8B takes
 # about half a minute on four cores.
@@ -143,14 +119,13 @@ def provision_vela2(cache: Path) -> dict[str, dict]:
     )
 
     models = {}
-    for log, (repo, profile, env, _) in VELA2_SUITES.items():
+    for log, (repo, env, _) in VELA2_SUITES.items():
         started = time.monotonic()
         ref = resolve(repo, cache_dir=cache)
         models[log] = {
             "env": env,
             "repo_id": repo,
             "revision": ref.revision,
-            "profile": profile,
             "bytes": sum(
                 path.stat().st_size for path in ref.root.rglob("*") if path.is_file()
             ),
@@ -198,8 +173,6 @@ def serve_vela2(model: dict, cache: Path, log: Path) -> Iterator[str]:
         model["revision"],
         "--device",
         "cpu",
-        "--profile",
-        model["profile"],
         "--cache-dir",
         str(cache),
         "--offline",
@@ -221,7 +194,7 @@ def serve_vela2(model: dict, cache: Path, log: Path) -> Iterator[str]:
             model["ready_seconds"] = round(time.monotonic() - started, 1)
             print(
                 f"{model['repo_id']}@{model['revision'][:12]} ready on CPU "
-                f"({model['profile']}) after {model['ready_seconds']} s",
+                f"after {model['ready_seconds']} s",
                 flush=True,
             )
             yield endpoint
@@ -331,7 +304,7 @@ def record_vela2(models_dir: Path, output: Path) -> int:
     suites = [
         run_vela2_suite(
             "./pkg/classification",
-            VELA2_SUITES[log][3][:1],
+            VELA2_SUITES[log][2][:1],
             env,
             output / log,
             model,

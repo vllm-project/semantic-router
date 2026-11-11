@@ -1,4 +1,4 @@
-version: v0.3
+version: v0.5
 listeners: []
 providers:
   defaults:
@@ -13,88 +13,86 @@ providers:
           provider: vllm
           endpoint: 172.28.0.20:8002
           weight: 1
-routing:
-  signals:
-    domains:
-      - name: business
-        model_scores:
-          - model: qwen3
-            score: 0.7
-            use_reasoning: false
-      - name: law
-        model_scores:
-          - model: qwen3
-            score: 0.4
-            use_reasoning: false
-      - name: psychology
-        model_scores:
-          - model: qwen3
-            score: 0.6
-            use_reasoning: false
-      - name: biology
-        model_scores:
-          - model: qwen3
-            score: 0.9
-            use_reasoning: false
-      - name: chemistry
-        model_scores:
-          - model: qwen3
-            score: 0.6
-            use_reasoning: true
-      - name: history
-        model_scores:
-          - model: qwen3
-            score: 0.7
-            use_reasoning: false
-      - name: other
-        model_scores:
-          - model: qwen3
-            score: 0.7
-            use_reasoning: false
-      - name: health
-        model_scores:
-          - model: qwen3
-            score: 0.5
-            use_reasoning: false
-      - name: economics
-        model_scores:
-          - model: qwen3
-            score: 1.0
-            use_reasoning: false
-      - name: math
-        model_scores:
-          - model: qwen3
-            score: 1.0
-            use_reasoning: true
-      - name: physics
-        model_scores:
-          - model: qwen3
-            score: 0.7
-            use_reasoning: true
-      - name: computer science
-        model_scores:
-          - model: qwen3
-            score: 0.6
-            use_reasoning: false
-      - name: philosophy
-        model_scores:
-          - model: qwen3
-            score: 0.5
-            use_reasoning: false
-      - name: engineering
-        model_scores:
-          - model: qwen3
-            score: 0.7
-            use_reasoning: false
-  modelCards:
-    - name: qwen3
+recipes:
+  - name: default
+    signals:
+      domains:
+        - name: business
+          model_scores:
+            - model: qwen3
+              score: 0.7
+              use_reasoning: false
+        - name: law
+          model_scores:
+            - model: qwen3
+              score: 0.4
+              use_reasoning: false
+        - name: psychology
+          model_scores:
+            - model: qwen3
+              score: 0.6
+              use_reasoning: false
+        - name: biology
+          model_scores:
+            - model: qwen3
+              score: 0.9
+              use_reasoning: false
+        - name: chemistry
+          model_scores:
+            - model: qwen3
+              score: 0.6
+              use_reasoning: true
+        - name: history
+          model_scores:
+            - model: qwen3
+              score: 0.7
+              use_reasoning: false
+        - name: other
+          model_scores:
+            - model: qwen3
+              score: 0.7
+              use_reasoning: false
+        - name: health
+          model_scores:
+            - model: qwen3
+              score: 0.5
+              use_reasoning: false
+        - name: economics
+          model_scores:
+            - model: qwen3
+              score: 1.0
+              use_reasoning: false
+        - name: math
+          model_scores:
+            - model: qwen3
+              score: 1.0
+              use_reasoning: true
+        - name: physics
+          model_scores:
+            - model: qwen3
+              score: 0.7
+              use_reasoning: true
+        - name: computer science
+          model_scores:
+            - model: qwen3
+              score: 0.6
+              use_reasoning: false
+        - name: philosophy
+          model_scores:
+            - model: qwen3
+              score: 0.5
+              use_reasoning: false
+        - name: engineering
+          model_scores:
+            - model: qwen3
+              score: 0.7
+              use_reasoning: false
 global:
   router: {}
   services:
     api:
       batch_classification:
         max_batch_size: 100
-        max_concurrency: 8
         metrics:
           enabled: true
           detailed_goroutine_tracking: true
@@ -147,21 +145,17 @@ global:
           max_models: 50
   stores:
     response_cache:
-      enabled: true
       backend_type: memory
-      similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo
-      embedding_model: mmbert
-    memory:
-      embedding_model: mmbert
-    vector_store:
-      embedding_model: mmbert
-  integrations:
-    tools:
-      enabled: true
-      top_k: 3
-      similarity_threshold: 0.2
-      tools_db_path: config/tools_db.json
-      fallback_to_empty: true
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
+        semantic:
+          match:
+            recall:
+              top_k: 1
+              min_similarity: 0.8

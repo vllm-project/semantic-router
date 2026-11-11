@@ -7,8 +7,11 @@ export interface SystemOneDeployment {
   question_types: string[]
   surfaces: string[]
   unavailable_reason?: string
+  artifact?: string
   repo?: string
   family?: string
+  /** Presets a remote systemone deployment declares, such as pii or halu. */
+  presets?: string[]
   max_input_tokens?: number
   max_scan_tokens?: number
 }

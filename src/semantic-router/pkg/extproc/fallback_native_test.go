@@ -6,11 +6,14 @@ import (
 	"testing"
 	"time"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
@@ -91,6 +94,30 @@ func TestNativeFallbackSwitchesToTheCandidateOnItsSuccess(t *testing.T) {
 	require.Len(t, ctx.FallbackRecord.Attempts, 2)
 }
 
+// The candidate's success belongs to the candidate's backend. The primary
+// failed and was never seen to succeed, so its breaker stays open and the next
+// request's chain skips it, as behind Envoy.
+func TestNativeFallbackSuccessLeavesThePrimaryBreakerOpen(t *testing.T) {
+	policy := fallback.DefaultEnabledPolicy()
+	policy.CircuitBreaker.ConsecutiveFailures = 1
+	session := nativeFallbackSession(t, policy, "model-primary", "model-fallback-1")
+	ctx := session.ctx
+	_, err := session.router.prepareProviderDispatch(ctx.SemanticRequest, "model-primary", "", false, ctx)
+	require.NoError(t, err)
+	breaker := session.router.FallbackOrchestrator.CircuitBreaker()
+
+	step, err := session.Fallback().Next(context.Background(), failedWith(http.StatusServiceUnavailable, "unavailable"))
+	require.NoError(t, err)
+	require.NotNil(t, step.Call)
+	require.Equal(t, fallback.StateOpen, breaker.GetState("backend-primary"))
+
+	_, err = session.ResponseHeaders(routing.Header{{Name: ":status", Value: "200"}, {Name: "content-type", Value: "application/json"}}, false)
+	require.NoError(t, err)
+	require.Equal(t, "model-fallback-1", ctx.VSRSelectedModel)
+	require.Equal(t, fallback.StateOpen, breaker.GetState("backend-primary"), "the candidate's success closed the failed primary's breaker")
+	require.Equal(t, fallback.StateClosed, breaker.GetState("backend-fallback-1"))
+}
+
 func TestNativeFallbackEndsWithThePrimaryContext(t *testing.T) {
 	session := nativeFallbackSession(t, fallback.DefaultEnabledPolicy(), "model-primary", "model-fallback-1")
 	ctx := session.ctx
@@ -115,6 +142,44 @@ func TestNativeFallbackEndsWithThePrimaryContext(t *testing.T) {
 
 	session.fallback.succeeded(http.StatusOK)
 	require.Equal(t, "model-primary", ctx.VSRSelectedModel, "no candidate is in flight once the chain ended")
+}
+
+// pkg/upstream hands the fallback a failed reply's bytes as the provider sent
+// them. A gzip reply is recorded decoded, as the response-phase fallback
+// records it, even when the excerpt was cut short; one that does not decode is
+// recorded without a body, as the response phase continues an undecodable
+// error reply with none.
+func TestNativeFallbackRecordsAGzipFailureDecoded(t *testing.T) {
+	gzipFailure := func(status int, body []byte) routing.Outcome {
+		outcome := failedWith(status, "")
+		outcome.Header = routing.Header{{Name: "content-encoding", Value: "gzip"}}
+		outcome.Body = body
+		return outcome
+	}
+	whole := gzipBytes(t, []byte("unavailable"))
+	for _, tc := range []struct {
+		name, want string
+		body       []byte
+	}{
+		{name: "whole", body: whole, want: "upstream returned status 503: unavailable"},
+		{name: "cut_short", body: whole[:len(whole)-8], want: "upstream returned status 503: unavailable"},
+		{name: "undecodable", body: []byte("not gzip"), want: "upstream returned status 503"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			session := nativeFallbackSession(t, fallback.DefaultEnabledPolicy(), "model-primary", "model-fallback-1")
+			chain := session.Fallback()
+			step, err := chain.Next(context.Background(), gzipFailure(http.StatusServiceUnavailable, tc.body))
+			require.NoError(t, err)
+			require.NotNil(t, step.Call)
+			_, err = chain.Next(context.Background(), gzipFailure(http.StatusBadGateway, gzipBytes(t, []byte("bad gateway"))))
+			require.NoError(t, err)
+
+			attempts := session.ctx.FallbackRecord.Attempts
+			require.Len(t, attempts, 2)
+			require.Equal(t, tc.want, attempts[0].ErrorMessage)
+			require.Equal(t, "bad gateway", attempts[1].ErrorMessage)
+		})
+	}
 }
 
 func TestNativeFallbackBoundsACandidateLikeTheResponsePhase(t *testing.T) {
@@ -197,4 +262,46 @@ func TestNativeFallbackStopsWhereThePolicyStops(t *testing.T) {
 		_, err := chain.Next(context.Background(), failedWith(http.StatusServiceUnavailable, "unavailable"))
 		require.ErrorIs(t, err, errSessionEnded)
 	})
+}
+
+// A candidate whose backend takes the delegated credential the request does
+// not carry ends the chain before its call, in both gateways: the client is
+// answered 401, as the primary's own dispatch would be, and the candidates
+// after it are not tried.
+func TestNativeFallbackRefusesADelegatedCandidateLikeTheResponsePhase(t *testing.T) {
+	eligible := []string{"model-primary", "model-fallback-1", "model-fallback-2"}
+	delegatedFallback := func(router *OpenAIRouter, ctx *RequestContext) {
+		router.Config.ProviderProfiles["prof-delegated"] = config.ProviderProfile{
+			Type: "openai", BaseURL: "http://127.0.0.1:8002", AuthCredential: config.CredentialDelegated,
+		}
+		router.Config.VLLMEndpoints[1].ProviderProfileName = "prof-delegated"
+		ctx.TraceContext = principal.ForRequest(context.Background(), "")
+	}
+
+	session := nativeFallbackSession(t, fallback.DefaultEnabledPolicy(), eligible...)
+	delegatedFallback(session.router, session.ctx)
+	step, err := session.Fallback().Next(context.Background(), failedWith(http.StatusServiceUnavailable, "unavailable"))
+	require.NoError(t, err)
+	require.Nil(t, step.Call, "the native chain went on past the delegated candidate")
+	require.NotNil(t, step.Immediate)
+
+	router, _ := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+	ctx := testFallbackRequestContext("model-primary", eligible)
+	delegatedFallback(router, ctx)
+	ctx.Headers = map[string]string{}
+	response, err := router.handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{ResponseHeaders: &ext_proc.HttpHeaders{
+		Headers: &core.HeaderMap{Headers: []*core.HeaderValue{{Key: ":status", Value: "503"}}},
+	}}, ctx)
+	require.NoError(t, err)
+	envoy := response.GetImmediateResponse()
+	require.NotNil(t, envoy, "the response-phase fallback did not answer the client")
+
+	require.Equal(t, http.StatusUnauthorized, step.Immediate.Status)
+	require.EqualValues(t, http.StatusUnauthorized, envoy.GetStatus().GetCode())
+	require.Contains(t, string(envoy.GetBody()), delegatedCredentialCode)
+	require.Equal(t, string(envoy.GetBody()), string(step.Immediate.Body))
+	for _, record := range []*fallback.ExecutionRecord{session.ctx.FallbackRecord, ctx.FallbackRecord} {
+		require.Len(t, record.Attempts, 1, "only the primary was called")
+		require.Equal(t, delegatedCredentialCode, record.FinalStatus)
+	}
 }

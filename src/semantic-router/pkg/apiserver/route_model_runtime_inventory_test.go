@@ -31,8 +31,8 @@ func TestModelRuntimeInventoryListsPublishedDeploymentsWithoutCredentials(t *tes
 		"guard": {Provider: config.ModelRuntimeProvider, Endpoint: endpoint},
 	}
 	for _, name := range []string{"guard", "kai"} {
-		cfg.DecisionRules = append(cfg.DecisionRules, config.DecisionSignalRule{
-			Name: "hard_" + name, Deployment: name, Question: config.DecisionQuestion{Type: "noul", Instructions: "Hard?"},
+		cfg.SystemOneRules = append(cfg.SystemOneRules, config.SystemOneRule{
+			Name: "hard_" + name, Deployment: name, Question: config.SystemOneQuestion{Type: "noul", Instructions: "Hard?"},
 		})
 	}
 	manager := modelservice.NewManager()
@@ -71,7 +71,7 @@ func TestModelRuntimeInventoryListsPublishedDeploymentsWithoutCredentials(t *tes
 		t.Fatalf("guard = %+v", guard)
 	}
 	wantHeads := []modelRuntimeHead{{Name: "default", Kind: "sequence", Labels: []string{"benign", "jailbreak"}}}
-	if guard.Family != "task_heads" || !reflect.DeepEqual(guard.Surfaces, []string{"classify"}) || !reflect.DeepEqual(guard.Heads, wantHeads) || guard.Device != "cpu" || guard.Profile != "exact" {
+	if guard.Family != "task_heads" || !reflect.DeepEqual(guard.Surfaces, []string{"classify"}) || !reflect.DeepEqual(guard.Heads, wantHeads) || guard.Device != "cpu" || guard.EngineArgs == nil || guard.EngineArgs.Dtype != "auto" || guard.Numerics != "exact" {
 		t.Fatalf("guard card = %+v", guard)
 	}
 	if kai.Family != "decision2" || !reflect.DeepEqual(kai.Surfaces, []string{"decisions"}) || len(kai.Heads) != 0 {

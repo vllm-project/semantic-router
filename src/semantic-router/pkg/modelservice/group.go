@@ -49,6 +49,11 @@ type group struct {
 	failedLoads int
 	restarts    int
 	everReady   bool
+	// processGeneration identifies the current managed-process epoch. A
+	// refresh binds its probe to the generation it started in; processExited
+	// advances the generation so a late probe result cannot publish state
+	// observed from the exited process.
+	processGeneration atomic.Uint64
 }
 
 // servedModel is one model of a process and the deployments that call it.
@@ -160,6 +165,7 @@ func (g *group) everyReady() bool {
 }
 
 func (g *group) refresh(ctx context.Context) {
+	generation := g.processGeneration.Load()
 	probe, cancel := context.WithTimeout(ctx, healthTimeout)
 	defer cancel()
 	health, err := g.client.health(probe)
@@ -177,6 +183,12 @@ func (g *group) refresh(ctx context.Context) {
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if generation != g.processGeneration.Load() {
+		// The process exited while this probe was in flight. Its health and
+		// discovery results belong to the previous process, so discard them
+		// and let a later probe describe the restarted process.
+		return
+	}
 	changed := false
 	for _, served := range g.models {
 		state, reason := "unreachable", ""
@@ -276,6 +288,7 @@ func (g *group) needsCards(health processHealth) bool {
 func (g *group) processExited(err error, ran time.Duration) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	g.processGeneration.Add(1)
 	g.restarts++
 	for _, served := range g.models {
 		served.ready.Store(false)

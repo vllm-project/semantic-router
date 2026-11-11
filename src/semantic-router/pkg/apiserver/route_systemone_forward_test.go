@@ -24,6 +24,7 @@ type forwardTestModels struct {
 	held   *atomic.Int32
 	calls  atomic.Int32
 	during func()
+	refuse error // a replica-pool refusal: no worker answered
 	t      *testing.T
 }
 
@@ -43,6 +44,9 @@ func (m *forwardTestModels) SystemOne(_ context.Context, deployment string, body
 	if !strings.Contains(string(body), `"questions":{"z":{"type":"noul"},"a":{"type":"choice"}}`) {
 		m.t.Fatalf("native question order or types changed: %s", body)
 	}
+	if m.refuse != nil {
+		return modelservice.SystemOneResult{}, m.refuse
+	}
 	return modelservice.SystemOneResult{Status: 200, Body: json.RawMessage(`{"model":"internal","answers":{}}`)}, nil
 }
 
@@ -59,8 +63,8 @@ func TestSystemOneForwardUsesActiveListenerAndRetainsGeneration(t *testing.T) {
 			makeSnapshot := func(key string, grants []string) *configsnapshot.Snapshot {
 				cfg := &config.RouterConfig{RouterOptions: config.RouterOptions{RouterEnabled: &routing}}
 				cfg.Listeners = []config.Listener{
-					{Name: "public", APIKeys: []string{key}, SystemOne: &config.ListenerSystemOne{Models: grants}},
-					{Name: "private", APIKeys: []string{"private-key"}, SystemOne: &config.ListenerSystemOne{Models: []string{"judge-next"}}},
+					{Name: "public", APIKeys: []string{key}, APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: grants}}},
+					{Name: "private", APIKeys: []string{"private-key"}, APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"judge-next"}}}},
 				}
 				cfg.ModelDeployments = map[string]config.ModelDeployment{
 					"primary": {Provider: config.ModelRuntimeProvider, Artifact: "example/judge", PublicName: "judge"},
@@ -152,6 +156,23 @@ func TestSystemOneForwardUsesActiveListenerAndRetainsGeneration(t *testing.T) {
 			if response := invoke("pending-key", "judge-next", "public", false); response.Code != 200 {
 				t.Fatalf("activated grant unavailable: %d %s", response.Code, response.Body.String())
 			}
+			for _, refusal := range []struct {
+				err    error
+				status int
+				code   string
+				retry  string
+			}{
+				{modelservice.ErrOverloaded, http.StatusTooManyRequests, `"code":"overloaded"`, "1"},
+				{modelservice.ErrUnavailable, http.StatusServiceUnavailable, `"code":"not_ready"`, "5"},
+			} {
+				models.refuse = refusal.err
+				response := invoke("pending-key", "judge-next", "public", false)
+				if response.Code != refusal.status || !strings.Contains(response.Body.String(), refusal.code) ||
+					response.Header().Get("Retry-After") != refusal.retry {
+					t.Fatalf("pool refusal %v: %d %s Retry-After %q", refusal.err, response.Code, response.Body.String(), response.Header().Get("Retry-After"))
+				}
+			}
+			models.refuse = nil
 		})
 	}
 }

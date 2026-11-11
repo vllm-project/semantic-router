@@ -128,23 +128,24 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-Route policy lives in `routing.decisions[]`. For example, this decision
+Route policy lives in `recipes[].decisions[]`. For example, this decision
 fragment defines a final static fallback; merge it into a complete config that
-declares `local-model` under `providers.models` and `routing.modelCards`:
+declares `local-model` under `providers.models` and `providers.models`:
 
 ```yaml
-routing:
-  decisions:
-    - name: local-fallback
-      description: Handle requests that did not match an earlier decision.
-      priority: 0
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: local-model
-      algorithm:
-        type: static
+recipes:
+  - name: default
+    decisions:
+      - name: local-fallback
+        description: Handle requests that did not match an earlier decision.
+        priority: 0
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local-model
+        algorithm:
+          type: static
 ```
 
 `vllm-sr init` was removed in v0.3. For older files, use the explicit
@@ -170,10 +171,11 @@ vllm-sr serve --config recipe.yaml --recipe-env PROVIDER_API_KEY
 
 ## Connect Models and build Mixture-of-Models
 
-Run `vllm-sr serve`, then use Dashboard to connect provider Models, choose a
-built-in or custom Recipe, and assign Models to its decisions. Dashboard keeps
-provider connection details separate from reusable routing policy and exposes
-the published names through `/v1/models`.
+Run `vllm-sr serve`, connect provider Models in Dashboard, then open **Build →
+Mixture-of-Models** and create a model from a built-in or configured Recipe by
+assigning Models to its decisions. Dashboard keeps provider connection details
+separate from reusable routing policy and exposes the published names through
+`/v1/models`.
 
 For source-controlled deployments, validate and serve one complete user-owned
 configuration:
@@ -257,8 +259,9 @@ are rejected.
 the selected Kubernetes context. Choose `cpu`, `rocm` or `cuda` explicitly to
 select that backend. Kubernetes requires its device plugin and schedules GPU
 resources from canonical placement ordinals; physical `--device-ids` belongs
-to the Docker target. Deployment `--profile` and model `--runtime-profile`
-control different settings.
+to the Docker target. The Kubernetes target's `--profile` (`dev` or `prod`)
+selects Helm values; engine flags such as `--max-num-seqs` and `--dtype` set
+the model runtime's engine arguments.
 
 See [Kubernetes installation](https://vllm-sr.ai/docs/installation/k8s/) for
 gateway, profile, and production guidance.

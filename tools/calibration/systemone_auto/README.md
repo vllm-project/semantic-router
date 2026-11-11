@@ -7,7 +7,7 @@ answers the original System One request; Vega 27B answers the same request only
 when Kai does not pass the configured early-exit gate.** It does not call Kai
 again to classify the task, and it does not call an LLM.
 
-Use the [cascade guide](../../../website/docs/tutorials/algorithm/native/cascade.md)
+Use the [escalate guide](../../../website/docs/tutorials/algorithm/looper/escalate.md#on-system-one)
 for the native provider bindings, explicit entrypoint, and two-call algorithm
 budget. Its first example uses a frozen pilot operating point, not a universal
 default. For your own workload, choose gates using independent calibration
@@ -150,10 +150,10 @@ The output directory must be empty; interrupted runs remain marked incomplete.
 Use `--key-env SYSTEMONE_API_KEY` for a protected listener; credentials and
 endpoints are not written to artifacts. `--kai-model`, `--vega-model` and
 `--auto-model` customize the published aliases. The two checkpoint revisions
-above and native `exact` profile/numerics are pinned. Every response must retain
-the requested public model alias, while its native revision identifies Kai or
-Vega independently. Metadata records and checks the numerical profile and model
-artifact hash throughout the run.
+above are pinned. Every response must retain the requested public model alias,
+while its native revision identifies Kai or Vega independently. Metadata
+records the native `dtype` and `numerics` and the model artifact hash, and
+checks that they stay the same throughout the run.
 `--config` records the local YAML hash without copying its contents. It does
 not replace checking the configuration actually deployed on the target.
 
@@ -290,7 +290,7 @@ end-to-end latency and provisioned-resource cost.
 
 Both methods share a two-call maximum and the same calibration cost budgets.
 The default cost metric is native `meta.compute_ms`, validated against the
-pinned model revision and a consistent runtime profile. This is reported
+pinned model revision and a consistent runtime `dtype` and `numerics`. This is reported
 compute elapsed time, not GPU-active time or billable GPU usage. Missing timing
 does not become zero: compute-based replay refuses that matrix. You can run
 `--cost-metric client_elapsed_ms` as a separate comparison that retains failures

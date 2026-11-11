@@ -133,15 +133,6 @@ function validateRouteInput(
 
     // Number range checks
     const fields = algorithm.fields
-    if (algorithm.algoType === 'confidence') {
-      const t = fields['threshold']
-      if (t !== undefined && t !== '' && typeof t === 'number' && (t < -100 || t > 0)) {
-        issues.push({
-          level: 'warning',
-          message: `Threshold ${t} — typically negative log-prob (e.g. -1.0)`,
-        })
-      }
-    }
     if (algorithm.algoType === 'remom' || algorithm.algoType === 'fusion') {
       const mc = fields['max_concurrent']
       if (mc !== undefined && mc !== '' && typeof mc === 'number' && mc < 0) {
@@ -212,17 +203,6 @@ function validateRouteInput(
         })
       }
     }
-    if (algorithm.algoType === 'latency_aware') {
-      for (const key of ['tpot_percentile', 'ttft_percentile']) {
-        const v = fields[key]
-        if (v !== undefined && v !== '' && typeof v === 'number' && (v < 1 || v > 100)) {
-          issues.push({
-            level: 'error',
-            message: `${key} must be 1-100 (got ${v})`,
-          })
-        }
-      }
-    }
     if (algorithm.algoType === 'ratings') {
       const mc = fields['max_concurrent']
       if (mc !== undefined && mc !== '' && typeof mc === 'number' && mc < 0) {
@@ -240,7 +220,7 @@ function validateRouteInput(
     if (
       validModels.length < 2 &&
       (algorithm.algoType !== 'fusion' || fusionPanelModels < 2) &&
-      ['confidence', 'ratings', 'fusion', 'workflows', 'hybrid', 'automix'].includes(algorithm.algoType)
+      ['escalate', 'ratings', 'fusion', 'workflows'].includes(algorithm.algoType)
     ) {
       issues.push({
         level: 'constraint',

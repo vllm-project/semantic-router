@@ -1,8 +1,6 @@
 import React from 'react'
 import Link from '@docusaurus/Link'
 import Translate from '@docusaurus/Translate'
-import useBaseUrl from '@docusaurus/useBaseUrl'
-import { SectionLabel } from '@site/src/components/site/Chrome'
 import styles from './index.module.css'
 
 interface HighlightMetric {
@@ -28,6 +26,23 @@ interface Highlight {
 }
 
 const highlights: Highlight[] = [
+  {
+    id: 'decision-30-localllama-hot',
+    dateIso: '2026-10-12',
+    dateLabel: 'October 12, 2026',
+    label: '#1 hot on r/LocalLLaMA',
+    title: 'Decision 3.0 tops r/LocalLLaMA',
+    statement:
+      'The Decision 3.0 launch post reached #1 on the r/LocalLLaMA hot feed, with 224 upvotes and 272 shares in its first five hours.',
+    image: '/img/trending/decision-30-localllama-hot.jpg',
+    imageWidth: 1150,
+    imageHeight: 647,
+    imageAlt:
+      'The Decision 3.0 launch post at the top of the r/LocalLLaMA hot feed.',
+    sourceLabel: 'Reddit · r/LocalLLaMA',
+    sourceUrl:
+      'https://www.reddit.com/r/LocalLLaMA/comments/1x3th4p/decision_30_open_multimodal_decision_models_from/',
+  },
   {
     id: 'hf-model-downloads',
     dateIso: '2026-10-10',
@@ -141,132 +156,44 @@ const highlights: Highlight[] = [
   },
 ]
 
-function revealFocusedCard(event: React.FocusEvent<HTMLAnchorElement>): void {
-  const card = event.currentTarget.closest('article')
-  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-  card?.scrollIntoView({
-    behavior: prefersReducedMotion ? 'auto' : 'smooth',
-    block: 'nearest',
-    inline: 'center',
-  })
-}
-
-interface HighlightSequenceProps {
-  duplicate?: boolean
-}
-
-function HighlightCard({
-  highlight,
-  duplicate = false,
-}: {
-  highlight: Highlight
-  duplicate?: boolean
-}): JSX.Element {
-  const imageUrl = useBaseUrl(highlight.image ?? '/img/hf-trending.svg')
-  const sourceProps = {
-    className: styles.sourceLink,
-    tabIndex: duplicate ? -1 : undefined,
-    onFocus: revealFocusedCard,
-  }
-
+function HighlightRow({ highlight }: { highlight: Highlight }): JSX.Element {
+  const content = (
+    <>
+      <time className={styles.date} dateTime={highlight.dateIso}>{highlight.dateLabel}</time>
+      <span className={styles.source}>{highlight.sourceLabel}</span>
+      <span className={styles.rowTitle}>{highlight.title}</span>
+      <span className={styles.arrow} aria-hidden="true">↗</span>
+    </>
+  )
   return (
-    <article
-      className={styles.card}
-      aria-label={duplicate ? undefined : `${highlight.title}, ${highlight.dateLabel}`}
-    >
-      <div className={styles.cardHeader}>
-        <span className={styles.cardLabel}>{highlight.label}</span>
-        <span className={styles.name}>{highlight.title}</span>
-        <time className={styles.date} dateTime={highlight.dateIso}>
-          {highlight.dateLabel}
-        </time>
-      </div>
-
-      {highlight.metrics
-        ? (
-            <div
-              className={styles.metrics}
-              aria-label="Hugging Face model metrics: downloads, models, collections, and likes"
-            >
-              {highlight.metrics.map(metric => (
-                <div key={metric.label} className={styles.metric}>
-                  <strong className={styles.metricValue}>{metric.value}</strong>
-                  <span className={styles.metricLabel}>{metric.label}</span>
-                </div>
-              ))}
-            </div>
-          )
-        : (
-            <div className={styles.media}>
-              <img
-                src={imageUrl}
-                alt=""
-                width={highlight.imageWidth}
-                height={highlight.imageHeight}
-                loading="lazy"
-              />
-            </div>
-          )}
-
-      <p className={styles.statement}>{highlight.statement}</p>
-
+    <li>
       {highlight.internal
-        ? (
-            <Link {...sourceProps} to={highlight.sourceUrl}>
-              <span>
-                <Translate id="homepage.trending.source">Source</Translate>
-              </span>
-              <span className={styles.sourceName}>{highlight.sourceLabel}</span>
-              <span className={styles.sourceArrow} aria-hidden="true">↗</span>
-            </Link>
-          )
-        : (
-            <a
-              {...sourceProps}
-              href={highlight.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <span>
-                <Translate id="homepage.trending.source">Source</Translate>
-              </span>
-              <span className={styles.sourceName}>{highlight.sourceLabel}</span>
-              <span className={styles.sourceArrow} aria-hidden="true">↗</span>
-            </a>
-          )}
-    </article>
+        ? <Link className={styles.row} to={highlight.sourceUrl}>{content}</Link>
+        : <a className={styles.row} href={highlight.sourceUrl} target="_blank" rel="noopener noreferrer">{content}</a>}
+    </li>
   )
 }
 
-function HighlightSequence({ duplicate = false }: HighlightSequenceProps): JSX.Element {
-  return (
-    <div className={styles.sequence} aria-hidden={duplicate || undefined}>
-      {highlights.map(highlight => (
-        <HighlightCard key={highlight.id} highlight={highlight} duplicate={duplicate} />
-      ))}
-    </div>
-  )
-}
-
+/* A quiet strip near the end of the page: the newest four as text rows, the rest behind "More". */
 export default function TrendingHighlights(): JSX.Element {
   return (
-    <section className={styles.section} aria-labelledby="trending-highlights-heading">
-      <div className="site-shell-container">
-        <header className={styles.header}>
-          <SectionLabel>
-            <Translate id="homepage.trending.label">Trending highlights</Translate>
-          </SectionLabel>
-          <h2 className={styles.title} id="trending-highlights-heading">
-            <Translate id="homepage.trending.title">The momentum is already visible</Translate>
-          </h2>
-        </header>
-      </div>
-
-      <div className={styles.viewport}>
-        <div className={styles.track}>
-          <HighlightSequence />
-          <HighlightSequence duplicate />
+    <section className={styles.strip} aria-labelledby="trending-highlights-heading">
+      <div className={styles.stripWrap}>
+        <h2 className={styles.stripLabel} id="trending-highlights-heading">
+          <Translate id="homepage.trending.news">In the news</Translate>
+        </h2>
+        <div>
+          <ul className={styles.rows}>
+            {highlights.slice(0, 4).map(highlight => <HighlightRow key={highlight.id} highlight={highlight} />)}
+          </ul>
+          <details className={styles.more}>
+            <summary>
+              <Translate id="homepage.trending.more">More</Translate>
+            </summary>
+            <ul className={styles.rows}>
+              {highlights.slice(4).map(highlight => <HighlightRow key={highlight.id} highlight={highlight} />)}
+            </ul>
+          </details>
         </div>
       </div>
     </section>

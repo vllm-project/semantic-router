@@ -78,6 +78,20 @@ class CacheFixture:
 
 
 class CacheIdentityTests(CacheFixture, unittest.TestCase):
+    def test_tokenizer_file_receipt_without_hashlib_file_digest(self):
+        base = self.root / "tokenizer_fallback"
+        base.mkdir()
+        for name in ("tokenizer.json", "tokenizer_config.json"):
+            (base / name).write_text("{}")
+        expected = tokenizer_file_receipt(base)
+
+        original = getattr(hashlib, "file_digest", None)
+        if original is not None:
+            self.addCleanup(setattr, hashlib, "file_digest", original)
+            del hashlib.file_digest
+
+        self.assertEqual(tokenizer_file_receipt(base), expected)
+
     def test_exact_cache_covers_only_explicit_replay_and_derives_compatibility(self):
         cache = self.load()
         self.assertEqual(cache.receipt["replay_rows"], len(self.rows) - 1)

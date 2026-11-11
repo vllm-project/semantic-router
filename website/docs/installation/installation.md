@@ -19,25 +19,29 @@ import {
 # Quickstart
 
 Install vLLM Semantic Router, connect one model, and send your first routed
-request. To serve typed decision questions without a Chat backend, follow the
-[System One quickstart](../model-runtime/quickstart.md) instead. Both paths use
-the same [frontend and model runtime](../overview/component-architecture).
+request. `vllm-sr serve` runs the whole local stack in Docker:
 
-`vllm-sr serve` runs a local stack in Docker: the Router, which serves an
-OpenAI-compatible API on port 8899 itself (standalone mode, the default), the
-Dashboard on port 8700, and the
-[model runtime](../model-runtime/overview.md) that runs the Router's own
-classifiers and embedding models. The models that answer your users run
-elsewhere, such as Ollama, a vLLM server or a hosted API, and you connect them
-in the Dashboard.
+| Component | Port | Role |
+| --- | --- | --- |
+| **Router** | 8899 | Serves the OpenAI-compatible API itself (standalone mode, the default). |
+| **Dashboard** | 8700 | Setup, models, routing and insights. |
+| **[Model runtime](../model-runtime/get-started/overview.md)** | internal | Runs the Router's own decision model, and the embedding model when a recall feature needs it. |
+
+The models that answer your users run elsewhere, such as Ollama, a vLLM
+server or a hosted API. You connect them in the Dashboard.
+
+:::tip Only need typed decisions?
+To serve decision questions without a chat backend, follow the
+[System One quickstart](../model-runtime/get-started/quickstart.md) instead. Both paths
+use the same [frontend and model runtime](../overview/component-architecture).
+:::
 
 :::note Release channel
 These pages follow `main`. Standalone mode and the built-in model runtime came
-after `vllm-sr` 0.4.0, the current stable release, which puts Envoy in front
-of the Router and has no `--gateway` option. To follow these pages today,
-use the development channel. The installation tabs below select it: the curl
-installer uses `--channel dev`, and pip/uv allow prereleases. Stable-release
-upgrade instructions are separate from this `main` quickstart.
+after the stable `vllm-sr` 0.4.0, so the tabs below select the development
+channel: the curl installer uses `--channel dev`, and pip and uv allow
+prereleases. For stable-release upgrades, see
+[Upgrade and Rollback](upgrade-rollback).
 :::
 
 ## Requirements
@@ -45,22 +49,24 @@ upgrade instructions are separate from this `main` quickstart.
 | Host | You need |
 | --- | --- |
 | Every host | Linux, macOS or WSL2; Docker (Linux can use Podman instead); Python 3.10 or newer; about 5 GB of free disk for the images, plus 1–1.5 GB for each built-in model your routes use |
-| CPU | Nothing else. The `vllm-sr` image runs every built-in model on the CPU; plan about 1.3 GB of memory for each 307M task model your routes use |
+| CPU | Nothing else. The `vllm-sr` image runs the built-in models on the CPU. The default decision model, vela3-fast, holds about 7 GB of memory once loaded, so give the Router about 12 GiB; the 307M embedding model adds about 1.3 GB when a recall feature uses it |
 | AMD Instinct MI300X or MI325X | The ROCm driver on the host, Docker access to `/dev/kfd` and `/dev/dri`, and `--platform rocm`. Its `vllm-sr-rocm` image is a 6.5 GB download and takes about 20 GB of disk |
-| NVIDIA | The NVIDIA Container Toolkit and `--platform cuda` (works, not yet validated) |
+| NVIDIA | The NVIDIA Container Toolkit and `--platform cuda`. CUDA is validated (H200, A100, Tesla T4 records). Fused kernels without bit-exact evidence stay off the exact profile |
 
 On macOS the Docker target runs on the CPU only; see
 [Gateway Modes](gateway-modes#macos).
 
-For the curl installer, pass `--runtime podman` to force Podman or
-`--runtime skip` to skip container-runtime preparation. For example:
+:::tip Installer options
+Pass `--runtime podman` to the curl installer to force Podman, or
+`--runtime skip` to skip container-runtime preparation:
 
 ```bash
 curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel dev --runtime skip
 ```
 
-These are installer options. `vllm-sr serve --container-runtime` selects a
-container runtime (`docker` or `podman`); `skip` is not a `serve` runtime.
+These are installer options. To choose a runtime when serving, use
+`vllm-sr serve --container-runtime docker` or `podman`.
+:::
 
 ## Install
 
@@ -120,11 +126,13 @@ Open [http://localhost:8700](http://localhost:8700). The Dashboard listens on
 3. **Choose routing:** **From scratch** makes one default route to that model.
 4. **Review and Activate.**
 
-`vllm-sr serve` keeps waiting during setup. After you activate, it starts the
-Router from that configuration, prints the endpoints and exits. If you stopped
-it first, run `vllm-sr serve` again; until then `vllm-sr status` says that
-setup is complete. Agents can do the same work through the CLI and the Router
-management API without using the Dashboard.
+`vllm-sr serve` waits during setup. After you activate, it starts the Router
+from that configuration, prints the endpoints and exits. If you stopped it
+first, run `vllm-sr serve` again; until you do, `vllm-sr status` reports that
+setup is complete.
+
+Agents can do the same work through the CLI and the Router management API,
+without the Dashboard.
 
 ## Send a request
 
@@ -138,10 +146,20 @@ curl -s -D - http://localhost:8899/v1/chat/completions \
   }'
 ```
 
-`vllm-sr/auto` lets the Router choose. The response headers say what it chose:
-`x-vsr-selected-decision` names the route and `x-vsr-selected-model` the
-model; with `x-vsr-debug: true`, the `x-vsr-matched-*` headers list the
-signals that matched. See [Router headers](../troubleshooting/vsr-headers).
+`vllm-sr/auto` lets the Router choose. The response headers say what it
+chose:
+
+- `x-vsr-selected-decision` names the route;
+- `x-vsr-selected-model` names the model;
+- `x-vsr-trace` lists the matched signals in its `signals` member, for a
+  caller that sends `x-vsr-debug: true` and that `global.router.headers.debug`
+  allows.
+
+:::note
+No caller receives `x-vsr-trace` by default. On a local stack, set
+`global.router.headers.debug: any` to see it. See
+[Router headers](../api/headers).
+:::
 
 ## Operate the stack
 
@@ -151,10 +169,10 @@ vllm-sr logs router -f    # Router logs
 vllm-sr stop
 ```
 
-Later changes the Router hot-reloads apply at once. A change the running
-containers can't take, such as a listener's new port, is saved and the
-Dashboard answers "Restart required: run `vllm-sr serve` to apply."; the next
-`vllm-sr serve` applies it, and `vllm-sr status` reports it until then. See
+Changes the Router can hot-reload apply at once. A change the running
+containers can't take, such as a listener's new port, is saved, and the
+Dashboard says "Restart required: run `vllm-sr serve` to apply.". Run
+`vllm-sr serve` to apply it; until then `vllm-sr status` reports it. See
 [Configuration Management](configuration-management).
 
 `vllm-sr serve --gateway extproc` puts an Envoy container in front of the
@@ -163,40 +181,32 @@ Router, as releases before standalone mode did.
 
 ## What the installer leaves behind
 
-`install.sh` writes these paths (defaults - `--install-root` and `--bin-dir`
-move them):
+`install.sh` writes these paths; `--install-root` and `--bin-dir` move them:
 
-- `~/.local/share/vllm-sr/venv/`: the CLI's virtual environment.
-- `~/.local/share/vllm-sr/runtime.env`: the container runtime chosen at
-  install time. `vllm-sr` reads it when it selects the runtime;
-  `CONTAINER_RUNTIME` overrides it for one run, and a runtime missing from
-  `PATH` falls back to auto-detection with a warning. Delete the file to
-  return to auto-detection.
-- `~/.local/share/vllm-sr/first-run.log`: kept only when the first
-  `vllm-sr serve` waits for setup or fails.
-- `~/.local/bin/vllm-sr`: the launcher, which pins `VLLM_SR_INSTALL_ROOT`.
-- A completion line in your shell rc file: `vllm-sr completion install`
-  appends an eval line to `~/.bashrc` or `~/.zshrc`, or writes
-  `~/.config/fish/completions/vllm-sr.fish` on fish. Once the launcher is
-  gone, every new bash or zsh shell reports the missing command, so
-  remove the line - or the fish completions file - too.
-  [Shell Completion](shell-completion) has the details.
+| Path | What it is |
+| --- | --- |
+| `~/.local/share/vllm-sr/venv/` | The CLI's virtual environment. |
+| `~/.local/share/vllm-sr/runtime.env` | The container runtime chosen at install time. `CONTAINER_RUNTIME` overrides it for one run, and a runtime missing from `PATH` falls back to auto-detection with a warning. Delete the file to return to auto-detection. |
+| `~/.local/share/vllm-sr/first-run.log` | Kept only when the first `vllm-sr serve` waits for setup or fails. |
+| `~/.local/bin/vllm-sr` | The launcher, which pins `VLLM_SR_INSTALL_ROOT`. |
+| A line in `~/.bashrc` or `~/.zshrc`, or `~/.config/fish/completions/vllm-sr.fish` | Shell completion from `vllm-sr completion install`; see [Shell Completion](shell-completion). |
 
-Run `vllm-sr stop` while the CLI is still installed: it removes the stack's
-containers and networks. Then delete the paths above.
+To uninstall, run `vllm-sr stop` while the CLI is still installed, which
+removes the stack's containers and networks. Then delete the paths above,
+including the completion line, or every new shell reports the missing command.
 
-Deleting those paths removes the install, but leaves in place:
+:::note What uninstalling keeps
 
-- system packages the installer added when missing: Python and its venv
-  support; in serve mode, Homebrew `docker` and `colima` on macOS, or the
-  Docker package, its enabled service and your `docker` group membership on
-  Linux;
-- the images `vllm-sr serve` pulled, and the Redis and Postgres data volumes
-  the stack wrote;
-- the state the first `vllm-sr serve` wrote in the directory it ran from:
-  `config.yaml`, `.vllm-sr/` (Dashboard data, recipe store, logs) and
-  `models/`. The installer starts that first serve from the directory the
-  installer ran in, falling back to `$HOME` when it is not writable.
+- System packages the installer added when missing: Python and its venv
+  support and, in serve mode, Homebrew `docker` and `colima` on macOS, or the
+  Docker package, its service and your `docker` group membership on Linux.
+- The images `vllm-sr serve` pulled, and the stack's Redis and Postgres data
+  volumes.
+- The state the first `vllm-sr serve` wrote where it ran: `config.yaml`,
+  `.vllm-sr/` (Dashboard data, recipe store, logs) and `models/`. That is the
+  directory the installer ran in, or `$HOME` when it was not writable.
+
+:::
 
 ## Next
 
@@ -204,6 +214,6 @@ Deleting those paths removes the install, but leaves in place:
 - [Choose a deployment](deployment-options)
 - [Configure models](model-configuration)
 - [Configure routing](configuration)
-- [Use the built-in model runtime](../model-runtime/overview.md)
+- [Use the built-in model runtime](../model-runtime/get-started/overview.md)
 - [Use the Router API](../api/router)
 - [Troubleshoot installation](../troubleshooting/common-errors)

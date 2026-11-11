@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 999
 title: 常见问题
 description: 了解 vLLM Semantic Router 的定位、它与 llm-d 和 AI 网关的区别，以及如何衡量路由价值和排查错误路由。
@@ -12,12 +13,13 @@ translation:
 
 ## 它是 AI 网关，还是其他系统？ {#is-it-an-ai-gateway-or-something-else}
 
-它由 Frontend、可选的 Decision Engine 和模型运行时组成。Frontend 接收请求，
-Decision Engine 根据信号与策略选择模型或有界多模型工作流。默认的 standalone
-网关自行转发请求；使用 `--gateway extproc` 可接入 Envoy。
+它由三部分组成：
 
-模型运行时执行 Router 的判断、embedding 等模型任务，Chat 后端独立运行。
-TLS 终止与集群级 Pod 调度仍由部署环境负责。
+- **Frontend** 接收请求。默认的 standalone 网关自行转发请求；使用 `--gateway extproc` 可接入 Envoy。
+- **可选的 Decision Engine** 根据信号与策略选择模型或有界多模型工作流。
+- **模型运行时**执行 Router 的判断、embedding 等模型任务。
+
+Chat 后端独立运行。TLS 终止与集群级 Pod 调度仍由部署环境负责。
 
 架构见[组件架构](overview/component-architecture)，多模型执行见
 [Mixture of Models](overview/mom-model-family)。
@@ -29,10 +31,10 @@ TLS 终止与集群级 Pod 调度仍由部署环境负责。
 
 ```bash
 # Router：位置参数指定提供路由判断的模型
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --config config.yaml
+vllm-sr serve vllm-sr/vela3-fast --config config.yaml
 
 # Engine：共享 Frontend 和运行时，不启用 Chat 路由
-vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
+vllm-sr serve vllm-sr/d3-edge -e
 ```
 
 `serve` 默认启动 Router；只传模型不会改变模式。`--engine` 可缩写为 `-e`。
@@ -40,15 +42,15 @@ vllm-sr serve vllm-sr/Vela-2.0-0.3B --engine
 
 ## Router 能否同时提供 System One？ {#can-router-also-expose-system-one}
 
-可以。通过 listener 的 `systemone.models` 授权发布原生模型，再调用
+可以。通过 listener 的 `apis.systemone.models` 授权发布原生模型，再调用
 `/v1/systemone`；`/v1/decisions` 是别名。原生模型发现使用
 `/v1/systemone/models`，Chat 模型发现使用 `/v1/models`。
 
 两种模式都可以用具体模型 ID 直接推理。Router 模式还可以显式声明
-`api: systemone` 入口，并在 listener 中授权其 `vllm-sr/auto` 名称，运行原生级联。
+`api: systemone` 入口，并在 listener 中授权其 `vllm-sr/auto` 名称，运行原生 escalate。
 默认 Chat 入口不会隐式开启原生路由。配置和请求示例见
-[System One 级联指南（英文）](https://vllm-sr.ai/docs/tutorials/algorithm/native/cascade)和
-[快速开始](model-runtime/quickstart)。
+[System One escalate 指南](tutorials/algorithm/looper/escalate#on-system-one)和
+[快速开始](./model-runtime/get-started/quickstart)。
 
 ## 如何与 Agent Harness 配合？ {#how-does-it-work-with-an-agent-harness}
 
@@ -59,7 +61,7 @@ Harness 管理 Agent 循环、工具和任务状态。它调用稳定模型入�
 
 ## 如何衡量路由准确性和业务价值？ {#how-do-we-measure-routing-accuracy-and-business-value}
 
-分类器准确率不足以回答这个问题。需要验证路由配方能否相对于强单模型基线，**保持回答质量，同时降低成本和延迟**。这需要配对证据，不能仅靠变更前后的个别观察。
+信号准确率不足以回答这个问题。需要验证路由配方能否相对于强单模型基线，**保持回答质量，同时降低成本和延迟**。这需要配对证据，不能仅靠变更前后的个别观察。
 
 仓库使用 **sr-bench**：固定用例、评分器版本、请求参数和价格；在同一批用例上运行最强单模型和当前混合模型；将质量与 `100 × (1 − candidate cost / baseline cost)` 一起阅读。解释结果时遵循两个原则：
 
@@ -82,7 +84,7 @@ llm-d 不应决定业务策略，Semantic Router 也不负责选择 Pod。项目
 
 [llm-d 集成指南](installation/k8s/llm-d)在部署上下文中解释了这个边界。
 
-Router 自身的 Serving Engine 也会在任务模型的副本间分发请求。这些运行时副本池
+Router 自身的 Serving Engine 也会在它所调用模型（决策模型和嵌入模型）的副本间分发请求。这些运行时副本池
 与外部 Chat 后端的 llm-d 调度相互独立。
 
 ## 如何避免与 llm-d 的决策冲突？ {#how-do-we-avoid-conflicts-with-llm-d}
@@ -92,7 +94,7 @@ Router 自身的 Serving Engine 也会在任务模型的副本间分发请求。
 运维时遵循两条规则：
 
 - **先独立部署和验证 llm-d，再加入 Semantic Router**；使用一个受支持的 llm-d 版本，不混用不同版本的清单。
-- **让最终决策可见。** Router 将 `x-vsr-selected-model` 作为回执，将 `x-selected-model` 作为网关匹配值；`vllm-sr route probe --expect-selected-model` 用于断言回执。应读取这些值，而不是事后推测决策。
+- **让最终决策可见。** Router 将 `x-vsr-selected-model` 作为回执，将 `x-vsr-route-model` 作为网关匹配值；`vllm-sr route probe --expect-selected-model` 用于断言回执。应读取这些值，而不是事后推测决策。
 
 部署与决策规则见[集成 llm-d](installation/k8s/llm-d)。
 
@@ -121,4 +123,4 @@ signal → policy / decision → algorithm / model → plugin → endpoint sched
 
 交付、路由正确性和回答质量是三个独立结果。明确说明未测量的部分，不要据此推断成功。
 
-[CLI 参考](api/cli)说明这里使用的全部参数，[VSR 标头](troubleshooting/vsr-headers)列出回执头，[API 与可观测性](tutorials/global/api-and-observability)介绍遥测方式。
+[CLI 参考](api/cli)说明这里使用的全部参数，[VSR 标头](api/headers)列出回执头，[API 与可观测性](tutorials/global/api-and-observability)介绍遥测方式。

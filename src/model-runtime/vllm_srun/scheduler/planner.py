@@ -1,4 +1,4 @@
-"""Token-budget micro-batching shared by the profiles."""
+"""Token-budget micro-batching: the released split of one request and the token costs the batcher counts."""
 
 from __future__ import annotations
 

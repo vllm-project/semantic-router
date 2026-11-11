@@ -131,3 +131,67 @@ func TestChatUsageStreamFilterRejectsDataAndTrailingFragmentsAfterTerminal(t *te
 		t.Fatalf("malformed trailing frame did not suppress success: output=%q err=%v", output, err)
 	}
 }
+
+// A provider error event ends the public stream. The filter drops the event
+// and every later frame, reports UpstreamFailed and does not fail, so the
+// caller can send the Router's error frame in its place.
+func TestChatPublicStreamFilterDropsProviderErrorEvent(t *testing.T) {
+	content := []byte("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"partial\"}}]}\n\n")
+	event := []byte("data: {\"error\":{\"message\":\"failed\",\"type\":\"server_error\",\"code\":500}}\n\n")
+	done := []byte("data: [DONE]\n\n")
+	later := []byte("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"late\"}}]}\n\n")
+	for name, reads := range map[string][][]byte{
+		"one read":               {bytes.Join([][]byte{content, event, done}, nil)},
+		"[DONE] in a later read": {bytes.Join([][]byte{content, event}, nil), done},
+		"data after the error":   {content, event, later, done},
+	} {
+		t.Run(name, func(t *testing.T) {
+			filter := NewChatPublicStreamFilter(1<<20, true)
+			var output []byte
+			for _, read := range reads {
+				out, err := filter.Push(read)
+				if err != nil {
+					t.Fatalf("push failed: %v", err)
+				}
+				output = append(output, out...)
+			}
+			out, err := filter.Finalize()
+			if err != nil {
+				t.Fatalf("finalize failed: %v", err)
+			}
+			output = append(output, out...)
+			if !bytes.Equal(output, content) {
+				t.Fatalf("want only the content frame, got %q", output)
+			}
+			if !filter.UpstreamFailed() {
+				t.Fatal("provider error event was not reported")
+			}
+		})
+	}
+}
+
+// After [DONE], an error event is data after the terminal and fails the
+// stream, as any other data there does.
+func TestChatPublicStreamFilterRejectsAnErrorEventAfterTerminal(t *testing.T) {
+	filter := NewChatPublicStreamFilter(1<<20, true)
+	if output, err := filter.Push([]byte("data: [DONE]\n\n")); err != nil || len(output) != 0 {
+		t.Fatalf("terminal was not held: output=%q err=%v", output, err)
+	}
+	_, err := filter.Push([]byte("data: {\"error\":{\"message\":\"failed\",\"type\":\"server_error\",\"code\":500}}\n\n"))
+	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "stream_event_after_terminal")
+	if filter.UpstreamFailed() {
+		t.Fatal("an error event after the terminal was reported as the provider's failure")
+	}
+}
+
+func TestChatPublicStreamFilterTreatsNullErrorAsData(t *testing.T) {
+	frame := []byte("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"}}],\"error\":null}\n\n")
+	filter := NewChatPublicStreamFilter(1<<20, true)
+	if output, err := filter.Push(frame); err != nil || !bytes.Equal(output, frame) || filter.UpstreamFailed() {
+		t.Fatalf("null error changed the stream: output=%q err=%v failed=%v", output, err, filter.UpstreamFailed())
+	}
+	var missing *ChatUsageStreamFilter
+	if missing.UpstreamFailed() {
+		t.Fatal("a nil filter reported a provider error")
+	}
+}

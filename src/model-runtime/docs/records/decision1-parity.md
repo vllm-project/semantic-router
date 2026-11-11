@@ -1,6 +1,7 @@
 # Decision 1.0 parity
 
-On the exact profile, the `decision1` family answers byte-identically to each
+With each request alone (the golden check's reference path), the `decision1`
+family answers byte-identically to each
 Decision 1.0 package's bundled runtime, for all seven packages. On ROCm this
 holds on all four scored panels, on CPU on subsets of them. That is design
 §17's bar for Decision 1.0: bit-identical on the same device class.
@@ -26,7 +27,8 @@ encoders, with no decision changed, and almost none on the decoders, where
 - **Native side:** `tools/decision1_parity.py native`. It loads the package by
   repo id through `Decision1Family` (pinned revision, file digests), the native
   engine and the device's accelerator, with no package code. Requests go
-  through `Runtime.call`, the API's request path, on the `exact` profile.
+  through `Runtime.call`, the API's request path, each request alone (the
+  default of the time).
 - **Comparison** (`tools/decision1_parity.py compare`): a request matches when
   its answers' canonical JSON is byte-identical. Otherwise it counts decision
   changes (a different choice or class), error mismatches and the largest
@@ -35,7 +37,8 @@ encoders, with no decision changed, and almost none on the decoders, where
   returns every legend description as a string (the object's canonical JSON).
   The reference's legend is compared in the contract's form.
 - **Raw results:** `decision1-parity.json`, one entry per model, device,
-  profile and commit, with every panel's counts. From `c22bb15cd` an entry
+  configuration and commit (its `profile` field names the configuration as
+  the runtime did then: `exact` for alone), with every panel's counts. From `c22bb15cd` an entry
   also carries what the engine ran: graph statistics per layer stack and the
   reduced copy. A P1-4 entry names the models served before it in the same
   process (`served_before`), and `concurrent` when they were asked at once.
@@ -43,7 +46,7 @@ encoders, with no decision changed, and almost none on the decoders, where
   with (`released`, or the `stack`'s own one-model answers), and a
   `cross_process` entry holds the three cold processes.
 
-## Exact profile, ROCm, four scored panels
+## Each request alone, ROCm, four scored panels
 
 Panels: typed-final (1,600 requests), css15 (6,547), public231 (231) and
 mlx-diag (2,275), 10,653 in all. "Identical" means 0 decision changes, 0 error
@@ -133,11 +136,11 @@ models' batches and graph captures meet:
   thread-local mode, so a device query from another thread (placement's, for a
   model loading next to served ones) can't invalidate a capture either.
 - **Three encoders in one process** (`f25dae5dd`, Kai with Lex and Route, 8
-  prompts at a time to all three): on `exact`, where encoders run eagerly,
-  Kai's 10,653 answers stay identical. On `batching`, every model replays its
+  prompts at a time to all three): alone, where encoders run eagerly,
+  Kai's 10,653 answers stay identical. Batched, every model replays its
   own per-stack graphs (Kai's trunk: 10 captures, 341 replays, none failed),
-  and Kai has 0 decision changes against its reference (max |Δp| 1.2e-5, the
-  profile's approximation; 640 requests byte-identical, fewer than one at a
+  and Kai has 0 decision changes against its reference (max |Δp| 1.2e-5,
+  batching's approximation; 640 requests byte-identical, fewer than one at a
   time because concurrent requests coalesce). On both, no request failed and
   all three stayed ready.
 
@@ -234,7 +237,7 @@ sides in the image plus Transformers 5.17 (231 / 231 requests, 1,386
 questions each). On CPU, Kai is 30 / 30 and Eos 10 / 10 (3 threads on both
 sides).
 
-## Exact profile, CPU
+## Each request alone, CPU
 
 The first requests of each panel; public231 in full.
 
@@ -298,17 +301,18 @@ answers:
 - **ROCm:** 0 of 640 rows equal, max |Δp| 0.08;
 - **CPU (MKL):** 244 of 320 rows equal, max |Δp| 1.4e-3.
 
-So the exact profile keeps the released shapes: full mixed batches, every
+So each request alone keeps the released shapes: full mixed batches, every
 present type's stack over all of their rows. Running each type's stack over its
-own rows only, packed without padding, is the `batching` profile's job (next
+own rows only, packed without padding, is what batched forwards do (next
 section).
 
-## Approximate profiles
+## Batching, reduced copies and shared context
 
-These profiles are opt-in. They change the shapes, so they are compared within
-a tolerance rather than bit for bit.
+These were opt-in when measured; batching and the CPU copy are the defaults
+now, and shared context is `enable_shared_context`. They change the shapes,
+so they are compared within a tolerance rather than bit for bit.
 
-- **`batching`, encoders, ROCm, four panels:** each type's stack runs over
+- **Batched, encoders, ROCm, four panels:** each type's stack runs over
   its own rows, packed without padding (`run_approximate`). From `c22bb15cd`
   every stack also replays its own bucket graphs; before, only the Noul stack
   did.
@@ -327,7 +331,7 @@ a tolerance rather than bit for bit.
   differed were typed-final's two-question requests. A bucket graph pads its
   rows and masks the padding, which moves the last bits of single-question
   Choice and Score requests too; no decision changes.
-- **`max_speed`, encoders, CPU, `c22bb15cd`:** `batching` on the
+- **Batched on the reduced copy, encoders, CPU, `c22bb15cd`:** batched on the
   `float32-packed` copy of all three stacks (1.32 GB of pre-packed linears),
   on the CPU subsets above, against the bundled runtime.
 
@@ -340,13 +344,13 @@ a tolerance rather than bit for bit.
   The same counts at `d3d1d7e68`, where on CPUs the type heads read coalesced
   rows by length group and coalesced batches stay within 1,024 padded tokens.
   On GPUs `d3d1d7e68` runs approximate batches as `c22bb15cd` does; at
-  `8d45cd2f2`, which also grouped there, `batching` on the four panels matched
+  `8d45cd2f2`, which also grouped there, batched on the four panels matched
   the `c22bb15cd` row.
 
-- **`shared_context`, decoders, ROCm, `d5b985e43`:** the public many-question
+- **Shared context, decoders, ROCm, `d5b985e43`:** the public many-question
   request (`tools/many_questions.py`) at 64 and 128 questions, 5 requests each
   (960 questions). The bundled runtime has no shared mode, so it answers every
-  question from the full prompt. On the same requests, the exact profile is
+  question from the full prompt. On the same requests, each request alone is
   byte-identical for all four models.
 
   | Model | Max \|Δp\| | Decision changes (64 / 128 questions) |
@@ -378,7 +382,7 @@ python3 tools/decision1_parity.py reference --package PACKAGE_DIR --repo vllm-sr
   --device cuda:0|cpu [--threads 16] --panel typed-final:PROMPTS.jsonl:1600 --panel css15:PROMPTS.jsonl:6547 \
   --panel public231:PROMPTS.jsonl:231 --panel mlx-diag:PROMPTS.jsonl:2275 --answers reference.jsonl
 python3 tools/decision1_parity.py native --model vllm-sr/Decision-1.0-Kai-0.6B --cache-dir HF_CACHE \
-  --device rocm:0|cpu [--threads 16] [--profile batching] --panel ... --answers native.jsonl
+  --device rocm:0|cpu [--threads 16] [--merged] --panel ... --answers native.jsonl
 python3 tools/decision1_parity.py compare reference.jsonl native.jsonl --output compare.json
 # P1-4: Sol served after Eos in one process, against Sol's reference (add --concurrent 8 to ask both at once)
 python3 tools/decision1_parity.py native --model vllm-sr/Decision-1.0-Sol-2B --also vllm-sr/Decision-1.0-Eos-0.8B \

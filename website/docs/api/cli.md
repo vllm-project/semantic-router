@@ -62,7 +62,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config envoy`](#vllm-sr-config-envoy) | Print the generated Envoy configuration. |
 | [`vllm-sr config get`](#vllm-sr-config-get) | Read the active canonical configuration from a Router. |
 | [`vllm-sr config init`](#vllm-sr-config-init) | Create a minimal canonical configuration template. |
-| [`vllm-sr config migrate`](#vllm-sr-config-migrate) | Migrate a legacy or mixed config file to canonical v0.3 YAML. |
+| [`vllm-sr config migrate`](#vllm-sr-config-migrate) | Migrate a config file to canonical v0.5 YAML. |
 | [`vllm-sr config plan`](#vllm-sr-config-plan) | Validate and plan an exact remote mutation without changing the Router. |
 | [`vllm-sr config propose`](#vllm-sr-config-propose) | Print a reviewable config proposal. This command does not apply it. |
 | [`vllm-sr config rollback`](#vllm-sr-config-rollback) | Compare-and-swap the active configuration to a recorded version. |
@@ -805,12 +805,20 @@ Create a minimal canonical configuration template.
 Usage: vllm-sr config migrate [OPTIONS]
 ```
 
-Migrate a legacy or mixed config file to canonical v0.3 YAML.
+Migrate a config file to canonical v0.5 YAML.
+
+The Router rewrites the file: a local Router binary
+($VLLM_SR_ROUTER_BINARY) or, present here and never pulled, the Router
+image `vllm-sr serve` runs by default ($VLLM_SR_ROUTER_IMAGE,
+$VLLM_SR_IMAGE or this CLI's own); a running stack's Router is not asked.
+The output is written only when the CLI's structural checks and the
+Router's own validation accept it, in the gateway mode --gateway names.
 
 | Parameter | Description |
 | --- | --- |
 | `--config TEXT` | Path to source config file (default: config.yaml) Default: config.yaml. |
 | `--output TEXT` | Path for migrated canonical config (default: &lt;config&gt;.migrated.yaml) |
+| `--gateway CHOICE` | The gateway mode the configuration is served in (default: $VLLM_SR_GATEWAY or standalone). Choices: standalone, extproc. |
 | `--force` | Overwrite the output file if it already exists. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
@@ -848,7 +856,7 @@ vllm-sr config propose --config config.yaml \
 
 | Parameter | Description |
 | --- | --- |
-| `--config TEXT` | Path to a canonical v0.3 config file. The file is not modified.  [required] |
+| `--config TEXT` | Path to a canonical v0.5 config file. The file is not modified.  [required] |
 | `--intent TEXT` | Maintained proposal intent id, for example selection.latency-aware.  [required] |
 | `--decision TEXT` | Name of an existing routing decision. Used by decision intents. |
 | `--recipe TEXT` | Name of an existing recipe. Used by recipe intents. |
@@ -914,26 +922,32 @@ Usage: vllm-sr config validate [OPTIONS]
 
 Validate configuration file.
 
-The CLI's own checks run first. The Router's validation then decides, as
-it does when `vllm-sr serve` or `vllm-sr config apply` loads the file: the
-Router in its local image (never pulled), or the running Router --endpoint
-names.
+The Router's own validation decides, as it does when `vllm-sr serve` or
+`vllm-sr config apply` loads the file: a local Router binary
+(--router-binary or $VLLM_SR_ROUTER_BINARY), a Router image present here
+and never pulled (--image, else the one `vllm-sr serve` runs by default:
+$VLLM_SR_ROUTER_IMAGE, $VLLM_SR_IMAGE or this CLI's own), or the running
+Router --endpoint names. A running stack's Router is asked only when named.
+The CLI checks the file's structure and the rules it owns as well. With
+--offline, or when no Router can run, only the CLI's structural checks run.
 
 Examples:
 
 ```bash
 vllm-sr config validate
 vllm-sr config validate --config my-config.yaml
+vllm-sr config validate --router-binary bin/router
 vllm-sr config validate --endpoint http://localhost:8080
 ```
 
 | Parameter | Description |
 | --- | --- |
 | `--config TEXT` | Path to config file (default: config.yaml) Default: config.yaml. |
-| `--endpoint TEXT` | Validate with this running Router instead of the local Router image. |
-| `--image TEXT` | Router image whose own validation to run (default: the stack's, if present). |
-| `--gateway CHOICE` | The gateway mode the configuration is served in (default: standalone). Choices: standalone, extproc. |
-| `--offline` | Run only the CLI's own checks, without the Router's validation. Default: false. |
+| `--endpoint TEXT` | Validate with this running Router instead of a local Router. |
+| `--router-binary PATH` | Local Router executable whose own validation to run, preferred over the image (default: $VLLM_SR_ROUTER_BINARY). |
+| `--image TEXT` | Router image whose own validation to run (default: the one `vllm-sr serve` runs without --image, if present). |
+| `--gateway CHOICE` | The gateway mode the configuration is served in (default: $VLLM_SR_GATEWAY or standalone). Choices: standalone, extproc. |
+| `--offline` | Run only the CLI's structural checks, without the Router's validation. Default: false. |
 | `--timeout FLOAT` | [default: 15] |
 | `--token-env TEXT` | [default: VSR_MGMT_TOKEN] |
 | `--help` | Show this message and exit. Default: false. |
@@ -1369,7 +1383,7 @@ Probe a real route and assert complete assistant delivery for expected 2xx.
 | `--max-completion-tokens INTEGER RANGE` | Completion token budget, including reasoning; omitted uses the backend default.  [x&gt;=1] |
 | `--timeout FLOAT` | [default: 120.0] |
 | `--target TEXT` | Deployment target used for URL resolution. |
-| `--debug / --no-debug` | [default: debug] |
+| `--debug / --no-debug` | Ask for x-vsr-trace. The Router sends it only when global.router.headers.debug allows this caller.  [default: debug] |
 | `--expect-status INTEGER` | [default: OK] |
 | `--expect-recipe TEXT` | — |
 | `--expect-decision TEXT` | — |
@@ -1422,22 +1436,17 @@ kubernetes - Kubernetes deployment via Helm (k8s is the old name, for this
              release only)
 ```
 
-MODEL SELECTION ALGORITHMS:
+ALGORITHM OVERRIDES (--algorithm):
 
 ```text
 static     - Use first configured model (default, no learning)
-router_dc  - Query-model matching via embedding similarity
-automix    - Cost-quality optimization using POMDP
-hybrid     - Combine multiple methods with configurable weights
-workflows  - Router Flow static/dynamic micro-agent orchestration
-latency_aware - TPOT/TTFT percentile-aware selection
-knn        - KNN selector using shared ML model-selection settings
-kmeans     - KMeans selector using shared ML model-selection settings
-svm        - SVM selector using shared ML model-selection settings
-mlp        - MLP selector using shared ML model-selection settings
-multi_factor - Quality, latency, cost, and load scoring
 random     - Uniform pick among eligible candidates (no configuration)
+multi_factor - Quality, latency, cost, and load scoring
+workflows  - Router Flow static/dynamic micro-agent orchestration
 ```
+
+The systemone selector and the escalate, fusion, remom and ratings
+executors need authored settings; configure them in config.yaml.
 
 Cross-request learning lives under global.router.learning.adaptation and
 global.router.learning.protection instead of --algorithm.
@@ -1456,7 +1465,7 @@ vllm-sr serve --config my-models.yaml --replace-active-config
 # Deploy a user-owned config to Kubernetes
 vllm-sr serve --target kubernetes --config my-models.yaml --namespace my-ns
 # Runtime policy and image overrides
-vllm-sr serve --algorithm latency_aware
+vllm-sr serve --algorithm multi_factor
 vllm-sr serve --image-pull-policy always
 vllm-sr serve --readonly
 vllm-sr serve --minimal
@@ -1487,8 +1496,10 @@ prints a short summary (--verbose prints every detail). Saved routing
 configuration is retained.
 
 MODEL overrides the configured default judgment deployment's artifact.
-Omitting MODEL preserves that deployment (a new configuration uses Vela 2.0
-0.3B). Only explicit model/placement options override saved settings.
+Omitting MODEL preserves that deployment (a new configuration uses Vela 3.0
+vela3-fast). Only explicit model, placement and engine options override saved
+settings: --max-num-seqs, --max-num-batched-tokens, --batch-window-ms, --dtype
+and --enable-shared-context set the deployment's engine arguments.
 Backend LLMs, named deployments, listeners and API grants belong in --config.
 
 | Parameter | Description |
@@ -1502,6 +1513,7 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `--envoy-image TEXT` | Docker image for the Envoy container (docker target with --gateway extproc; defaults to --image or VLLM_SR_IMAGE) |
 | `--dashboard-image TEXT` | Docker image for the dashboard container (Docker target only; defaults to --image or VLLM_SR_IMAGE) |
 | `--image-pull-policy CHOICE` | Image pull policy: always, ifnotpresent, never (default: always) Choices: always, ifnotpresent, never. Default: always. |
+| `--restart-policy CHOICE` | Restart policy of the containers this start creates: no (default), on-failure, unless-stopped, always. unless-stopped and always restart a crashed container and bring the stack back after a host reboot; vllm-sr stop still stops it. Choices: no, on-failure, unless-stopped, always. |
 | `--startup-timeout SECONDS` | Local Docker startup readiness budget in seconds, including model loading and compilation (default: 1800).  [x&gt;=1] |
 | `--readonly` | Run dashboard in read-only mode (disable config editing, allow playground only) Default: false. |
 | `--minimal / --no-minimal` | Start without the Dashboard, sr-bench and the observability stack (Jaeger, Prometheus, Grafana). The default in engine mode; --no-minimal starts them all. |
@@ -1510,7 +1522,7 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `-v, --verbose` | Show every startup detail; engine mode otherwise prints a short summary. Default: false. |
 | `--log-level CHOICE` | Log level of the Router, or of the runtime in engine mode (debug, info, warn, error, dpanic, panic, fatal) Choices: debug, info, warn, warning, error, dpanic, panic, fatal. |
 | `--platform CHOICE` | Execution backend: auto (default) discovers the deployment target; cpu, cuda or rocm select it explicitly. Choices: auto, cpu, cuda, rocm. |
-| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, router_dc, automix, hybrid, workflows, latency_aware, knn, kmeans, svm, mlp, multi_factor, random. |
+| `--algorithm CHOICE` | Request-time base algorithm override for payload-safe algorithms: static, random, multi_factor, workflows. Algorithms that require an authored payload remain available in config.yaml. Cross-request learning uses global.router.learning.adaptation/protection. Choices: static, random, multi_factor, workflows. |
 | `--target TEXT` | Deployment target: docker, kubernetes (default: docker) |
 | `--gateway CHOICE` | Where client traffic enters: standalone (default; the Router serves the OpenAI-compatible API on the config's listeners, with no Envoy) or extproc (an Envoy-based gateway in front of the Router: the Envoy container on the docker target, your gateway on kubernetes). Choices: standalone, extproc. |
 | `--namespace TEXT` | Kubernetes namespace (kubernetes target only) |
@@ -1522,7 +1534,11 @@ Backend LLMs, named deployments, listeners and API grants belong in --config.
 | `--revision TEXT` | Optional model branch, tag or commit; resolved once to an immutable startup revision. |
 | `-dp, --data-parallel-size INTEGER RANGE` | Number of model replicas. Preserve configured placement; new GPU deployments use distinct available GPUs.  [1&lt;=x&lt;=64] |
 | `--device-ids IDS` | Docker host GPU indices, e.g. 0 or 0,1. One index shares a GPU across replicas; otherwise use one per replica. Existing visibility masks are respected, not changed. |
-| `--runtime-profile PROFILE` | Model runtime numerics profile (default exact; vllm-srun plugins lists the installed ones). |
+| `--max-num-seqs INTEGER RANGE` | Most rows one model forward holds, across requests: one per question of a decision request, one per input or window otherwise; 1 runs every row alone. Unset, the runtime picks it by the device (256 on GPUs with 160 GB or more, fewer on smaller ones, 8192 on the CPU).  [x&gt;=1] |
+| `--max-num-batched-tokens INTEGER RANGE` | Tokens one model forward may hold: the sum of its rows for models that pack merged rows, else its rows times its longest row. Unset, the runtime picks it by the device and a short startup calibration (at most 32768 on GPUs with 160 GB or more, 65536 on the CPU).  [x&gt;=8] |
+| `--batch-window-ms FLOAT RANGE` | How long the model runtime waits after the first request to collect more (runtime default 2.0).  [0&lt;=x&lt;=1000] |
+| `--dtype CHOICE` | Precision the model computes in; auto (the runtime default) is the one it was published in. Choices: auto, float32, bfloat16, float16. |
+| `--enable-shared-context / --no-enable-shared-context` | Compute the shared state of a multi-question decision request once (runtime default: on where the model family's records show no accuracy loss, Decision 2.0). |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr status` {#vllm-sr-status}

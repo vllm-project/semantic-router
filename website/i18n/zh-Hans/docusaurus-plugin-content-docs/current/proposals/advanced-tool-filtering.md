@@ -1,15 +1,16 @@
 ---
+is_mtpe: false
 title: 用于工具选择的高级工具过滤
 description: 定义可选重排序器，结合嵌入、词汇、标签、名称和类别信号，实现可解释的工具选择。
 created: 2026-01-14
-status: Implemented
+status: Superseded
 translation:
   source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/proposals/advanced-tool-filtering.md"
   outdated: false
 ---
 
-> **状态：** 已实现 · **创建日期：** 2026-01-14
+> **状态：** 已被[工具插件](../tutorials/plugin/tools)的 `select` 块取代，由决策模型选择工具 · **创建日期：** 2026-01-14
 
 ## 问题 {#problem}
 
@@ -69,6 +70,5 @@ flowchart LR
 
 ## 参考资料 {#references}
 
-- [工具选择插件指南](../tutorials/plugin/tool-selection)
-- [维护中的 add 模式片段](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/tool-selection/add-from-database.yaml)
+- [工具插件指南](../tutorials/plugin/tools)
 - [相关议题 #1002](https://github.com/vllm-project/semantic-router/issues/1002)

@@ -4,8 +4,9 @@
         --output OUT.json [--answers OUT.jsonl] [--concurrency 16] [--warmup 512] [--rows-bucket 2]
         [--length-bucket 64] [--graphable-only] [--device rocm:0] [--base-path DIR]
 
-MODE is ``exact`` (one request per forward, the reference answers), ``batching`` (the profile as it is)
-or ``buckets``: the batching profile's batches, each padded up to a bucketed shape before its forward,
+MODE is ``alone`` (each request alone in its released forwards, the reference answers), ``merged`` (the
+default engine arguments' merged batches as they are) or ``buckets``: those merged batches, each padded up
+to a bucketed shape before its forward,
 rows to the next power of --rows-bucket with copies of the batch's last row and the padded length to a
 multiple of --length-bucket with padding columns (with --graphable-only, only when the bucketed shape
 stays within the graph-size cap). Padding rows and columns never change which rows are
@@ -31,9 +32,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from gpu_parity import load
+from vllm_srun.config import EngineArgs
 from vllm_srun.plugins.base import ForwardBatch, ForwardOutput
-from vllm_srun.profiles.batching import BatchingProfile
-from vllm_srun.profiles.exact import ExactProfile
+from vllm_srun.scheduler.batching import Batcher
 from vllm_srun.scheduler.scheduler import Scheduler, SchedulerLimits
 
 
@@ -95,9 +96,7 @@ def main() -> int:
     )
     parser.add_argument("--package", required=True)
     parser.add_argument("--prompts", action="append", required=True)
-    parser.add_argument(
-        "--mode", choices=("exact", "batching", "buckets"), required=True
-    )
+    parser.add_argument("--mode", choices=("alone", "merged", "buckets"), required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--answers", type=Path)
     parser.add_argument("--concurrency", type=int, default=16)
@@ -125,11 +124,11 @@ def main() -> int:
         install_buckets(
             model, args.rows_bucket, args.length_bucket, args.graphable_only, tally
         )
-    profile = ExactProfile() if args.mode == "exact" else BatchingProfile()
+    batcher = Batcher(EngineArgs())
+    batcher.bind(model)
+    alone = args.mode == "alone"
     scheduler = Scheduler(
-        model,
-        {profile.name: profile},
-        SchedulerLimits(max_queue=4096, batch_window_ms=2.0),
+        model, batcher, SchedulerLimits(max_queue=4096, batch_window_ms=2.0)
     )
     scheduler.start()
     plans = [model.plan(prompt["state"], prompt["questions"]) for prompt in prompts]
@@ -141,7 +140,7 @@ def main() -> int:
             wave = indices[start : start + args.concurrency]
             tick = time.perf_counter()
             futures = [
-                scheduler.submit(plans[i].items, deadline=None, profile=profile.name)
+                scheduler.submit(plans[i].items, deadline=None, reference=alone)
                 for i in wave
             ]
             for i, future in zip(wave, futures, strict=True):
@@ -191,7 +190,7 @@ def main() -> int:
         "requests": len(timed),
         "seconds": seconds,
         "requests_per_s": len(timed) / seconds,
-        "wave_ms_mean": statistics.mean(latencies),
+        "wave_ms_mean": statistics.mean(latencies) if latencies else None,
         "graphs": {
             key: after[key] - before.get(key, 0)
             for key in ("captures", "replays", "eager", "full")

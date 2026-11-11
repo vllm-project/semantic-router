@@ -29,7 +29,7 @@ CPU = DeviceInfo(accelerator="cpu", index=None, name="cpu")
 
 
 def request(surface, body):
-    return SurfaceRequest(surface, body, None, "exact", True, time.monotonic())
+    return SurfaceRequest(surface, body, None, True, time.monotonic())
 
 
 def config_of(root):

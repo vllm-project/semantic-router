@@ -15,6 +15,9 @@
 
 set -e  # Exit on error
 
+AREA="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$AREA"
+
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
@@ -81,12 +84,12 @@ mkdir -p "$OUTPUT_BASE_DIR"
 mkdir -p "$LOG_DIR"
 
 # Check if training script exists
-if [ ! -f "$TRAINING_SCRIPT" ]; then
-    echo "❌ ERROR: Training script not found: $TRAINING_SCRIPT"
-    echo "   Make sure you're running this from: src/training/training_lora/mmlu_pro_solver_lora/"
+if [ ! -f "$AREA/$TRAINING_SCRIPT" ]; then
+    echo "❌ ERROR: Training script not found: $AREA/$TRAINING_SCRIPT"
+    echo "   Expected under: src/training/model_experiment/mmlu_pro_solver_lora/"
     exit 1
 fi
-echo "Training script found: $TRAINING_SCRIPT"
+echo "Training script found: $AREA/$TRAINING_SCRIPT"
 echo ""
 
 # Check GPU availability
@@ -153,7 +156,7 @@ train_specialist() {
     echo ""
 
     # Run training
-    if CUDA_VISIBLE_DEVICES=$GPU_ID python "$TRAINING_SCRIPT" \
+    if CUDA_VISIBLE_DEVICES=$GPU_ID uv run --project "$AREA" python "$AREA/$TRAINING_SCRIPT" \
         --mode train \
         --model-type "$MODEL_TYPE" \
         --epochs "$MODEL_EPOCHS" \
@@ -392,12 +395,12 @@ echo "2. Check model performance:"
 echo "   cat $OUTPUT_BASE_DIR/*/training_comparison.json"
 echo ""
 echo "3. Test individual models:"
-echo "   python ft_qwen3_mmlu_solver_lora_no_leakage.py \\"
+echo "   uv run --project $AREA python $AREA/ft_qwen3_mmlu_solver_lora_no_leakage.py \\"
 echo "       --mode test \\"
 echo "       --model-path $OUTPUT_BASE_DIR/math-reasoner_r32_e5_s1000"
 echo ""
 echo "4. Deploy with router system (after all models trained):"
-echo "   python mmlu_solver_router.py \\"
+echo "   uv run --project $AREA python mmlu_solver_router.py \\"
 echo "       --classifier-path path/to/classifier \\"
 echo "       --solver-base-path $OUTPUT_BASE_DIR/"
 echo ""

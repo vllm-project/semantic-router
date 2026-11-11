@@ -30,7 +30,8 @@ for direct requests. Engine mode adds Router time for large request bodies
   text and images and the v3.1.0 runtime files for videos. On CPU the
   package's runtime is called in the same process.
 - **Runtime side:** on the MI325X, `vllm-srun serve` with the built-in model
-  name, the exact profile and the default fast path (fused decoder layers,
+  name, each request alone (the golden check's reference path) and the
+  default fast path (fused decoder layers,
   `fp64_naive` depthwise convolution); on CPU, the same runtime in process.
 - **Kernel choices:** both sides run the model's pinned FLA kernel choices,
   each from its own empty Triton cache: the runtime from

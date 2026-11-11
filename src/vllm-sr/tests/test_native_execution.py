@@ -17,12 +17,13 @@ from pydantic import ValidationError
 def native_document():
     return yaml.safe_load(
         """
-version: v0.3
+version: v0.5
 listeners:
   - name: native
     port: 8801
-    systemone:
-      models: [vllm-sr/auto, kai, strong]
+    apis:
+      systemone:
+        models: [vllm-sr/auto, kai, strong]
 providers:
   models:
     - {name: kai, api_format: systemone, deployment: local-kai}
@@ -31,8 +32,8 @@ providers:
       provider_model_id: vllm-sr/Decision-2.0-Nox-4B
       backend_refs:
         - provider: systemone-compatible
-          base_url: http://localhost:8900/v1
-          api_key_env: NATIVE_TEST_TOKEN
+          endpoint: http://localhost:8900/v1
+          auth: {api_key_env: NATIVE_TEST_TOKEN}
 global:
   model_catalog:
     deployments:
@@ -41,25 +42,29 @@ global:
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
         device: cpu
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - {api: systemone, model_names: [vllm-sr/auto], recipe: native}
 recipes:
+  - name: default
   - name: native
-    routing:
-      decisions:
-        - name: classify
-          rules: {}
-          modelRefs: [{model: kai}, {model: strong}]
-          algorithm:
-            type: cascade
-            budget: {deadline: 3s, max_calls: 3}
+    decisions:
+      - name: classify
+        rules: {}
+        modelRefs: [{model: kai}, {model: strong}]
+        algorithm:
+          type: escalate
+          budget: {deadline: 3s, max_calls: 3}
+          escalate:
             quality:
               type: uncalibrated
-              acceptance:
-                rules:
-                  - {question_type: choice, field: top_probability, predicate: {gte: 0.9}}
+              accept:
+                native:
+                  - {question_type: choice, field: top_probability, gte: 0.9}
             stages:
-              - {name: fast, kind: native, model: kai}
-              - {name: strong, kind: native, model: strong}
+              - {name: fast, model: kai}
+              - {name: strong, model: strong}
 """
     )
 
@@ -72,7 +77,7 @@ def test_native_round_trip_and_listener_scope(native_document, tmp_path):
     assert validate_user_config(config, log_summary=False) == []
     dumped = config.model_dump(by_alias=True, exclude_none=True, exclude_unset=True)
     assert dumped == native_document
-    assert config.recipes[0].routing.decisions[0].algorithm.on_error is None
+    assert config.recipes[1].decisions[0].algorithm.on_error is None
     entries = effective_entrypoints(config)
     assert [(entry.api or "chat", entry.model_names) for entry in entries] == [
         ("chat", ["vllm-sr/auto"]),
@@ -82,8 +87,8 @@ def test_native_round_trip_and_listener_scope(native_document, tmp_path):
 
 def test_native_cascade_and_calibration_survive_projection(native_document):
     document = deepcopy(native_document)
-    algorithm = document["recipes"][0]["routing"]["decisions"][0]["algorithm"]
-    algorithm["quality"] = {
+    algorithm = document["recipes"][1]["decisions"][0]["algorithm"]
+    algorithm["escalate"]["quality"] = {
         "type": "calibrated",
         "calibration": "suite",
         "loss": "bundle_error",
@@ -104,24 +109,19 @@ def test_native_cascade_and_calibration_survive_projection(native_document):
 
 @pytest.mark.parametrize("field, value", [("models", ["kai"]), ("unknown_field", True)])
 def test_native_stage_uses_generated_closed_contract(native_document, field, value):
-    stage = native_document["recipes"][0]["routing"]["decisions"][0]["algorithm"][
-        "stages"
-    ][0]
+    algorithm = native_document["recipes"][1]["decisions"][0]["algorithm"]
+    stage = algorithm["escalate"]["stages"][0]
     stage[field] = value
     with pytest.raises(ValidationError, match="Additional properties"):
         UserConfig.model_validate(native_document)
 
 
-@pytest.mark.parametrize(
-    "mutation", ["wrong_deployment", "wrong_stage", "chat_default"]
-)
+@pytest.mark.parametrize("mutation", ["wrong_stage", "chat_default"])
 def test_native_invalid_resource_references_are_rejected(native_document, mutation):
-    if mutation == "wrong_deployment":
-        native_document["providers"]["models"][0]["deployment"] = "missing"
-    elif mutation == "wrong_stage":
-        native_document["recipes"][0]["routing"]["decisions"][0]["algorithm"]["stages"][
-            1
-        ]["model"] = "missing"
+    if mutation == "wrong_stage":
+        native_document["recipes"][1]["decisions"][0]["algorithm"]["escalate"][
+            "stages"
+        ][1]["model"] = "missing"
     elif mutation == "chat_default":
         native_document["providers"]["defaults"] = {"model": "kai"}
     config = UserConfig.model_validate(native_document)
@@ -141,7 +141,7 @@ def test_native_invalid_resource_references_are_rejected(native_document, mutati
     ],
 )
 def test_removed_policy_and_misplaced_budget_are_rejected(native_document, mutation):
-    routing = native_document["recipes"][0]["routing"]
+    routing = native_document["recipes"][1]
     algorithm = routing["decisions"][0]["algorithm"]
     if mutation == "policy_type":
         algorithm["type"] = "policy"
@@ -152,7 +152,7 @@ def test_removed_policy_and_misplaced_budget_are_rejected(native_document, mutat
     elif mutation == "recipe_budget":
         routing["budget"] = algorithm.pop("budget")
     elif mutation == "default_budget":
-        native_document["routing"] = {"budget": {"deadline": "3s", "max_calls": 2}}
+        native_document["recipes"][0]["budget"] = {"deadline": "3s", "max_calls": 2}
     elif mutation == "minimum_candidates":
         algorithm["minimum_candidates"] = 2
     else:
@@ -164,28 +164,28 @@ def test_removed_policy_and_misplaced_budget_are_rejected(native_document, mutat
 
 
 def test_multiple_decisions_keep_independent_algorithm_limits(native_document):
-    decisions = native_document["recipes"][0]["routing"]["decisions"]
+    decisions = native_document["recipes"][1]["decisions"]
     other = deepcopy(decisions[0])
     other["name"] = "alternate"
     other["algorithm"]["budget"] = {"deadline": "9s", "max_calls": 1}
     decisions.append(other)
     config = UserConfig.model_validate(native_document)
     assert validate_native_execution(config) == []
-    actual = config.recipes[0].routing.decisions
+    actual = config.recipes[1].decisions
     assert actual[0].algorithm.budget == {"deadline": "3s", "max_calls": 3}
     assert actual[1].algorithm.budget == {"deadline": "9s", "max_calls": 1}
 
 
-@pytest.mark.parametrize("signal", ["authz", "metadata", "conversation", "reask", "kb"])
+@pytest.mark.parametrize("signal", ["authz", "metadata", "conversation", "reask"])
 def test_native_rejects_unavailable_request_context(native_document, signal):
-    decision = native_document["recipes"][0]["routing"]["decisions"][0]
+    decision = native_document["recipes"][1]["decisions"][0]
     decision["rules"] = {"type": signal, "name": "private"}
     errors = validate_native_execution(UserConfig.model_validate(native_document))
     assert any("native request context" in str(error) for error in errors)
 
 
 def test_native_rejects_unavailable_projection_input(native_document):
-    native_document["recipes"][0]["routing"]["projections"] = {
+    native_document["recipes"][1]["projections"] = {
         "scores": [
             {
                 "name": "derived",
@@ -212,7 +212,7 @@ def test_native_rejects_unavailable_projection_input(native_document):
     ],
 )
 def test_native_rejects_ignored_chat_controls(native_document, control):
-    routing = native_document["recipes"][0]["routing"]
+    routing = native_document["recipes"][1]
     decision = routing["decisions"][0]
     if control == "fallback":
         routing["fallback"] = {"enabled": True}
@@ -231,22 +231,21 @@ def test_native_rejects_ignored_chat_controls(native_document, control):
     assert validate_native_execution(UserConfig.model_validate(native_document))
 
 
-@pytest.mark.parametrize("field", ["candidateIterations", "emits"])
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("candidateIterations", [{"variable": "model"}]), ("retention", {"drop": True})],
+)
 def test_native_rejects_chat_directives_before_pydantic_drops_them(
-    native_document, field
+    native_document, field, value
 ):
-    native_document["recipes"][0]["routing"]["decisions"][0][field] = [
-        {"kind": "retention"}
-    ]
+    native_document["recipes"][1]["decisions"][0][field] = value
     with pytest.raises(ValidationError, match="unsupported for native execution"):
         UserConfig.model_validate(native_document)
 
 
-@pytest.mark.parametrize(
-    "variant", ["contrastive", "examples", "external", "http", "mcp", "explicit"]
-)
-def test_native_signal_backend_lifecycle(native_document, variant):
-    profile = native_document["recipes"][0]["routing"]
+@pytest.mark.parametrize("backend", ["examples", "local-kai", "remote"])
+def test_native_signal_backend_lifecycle(native_document, backend):
+    profile = native_document["recipes"][1]
     profile["signals"] = {
         "preferences": [
             {"name": "brief", "description": "Brief"},
@@ -257,30 +256,32 @@ def test_native_signal_backend_lifecycle(native_document, variant):
         "operator": "AND",
         "conditions": [{"type": "preference", "name": "brief"}],
     }
-    catalog = native_document["global"]["model_catalog"]
-    if variant in {"contrastive", "explicit"}:
-        catalog["modules"] = {"classifier": {"preference": {"use_contrastive": True}}}
-    elif variant == "examples":
+    if backend == "examples":
         profile["signals"]["preferences"][0]["examples"] = ["be brief"]
-    elif variant == "external":
-        catalog["external"] = [{"model_role": "preference"}]
-    elif variant == "mcp":
-        catalog["modules"] = {"classifier": {"mcp": {"enabled": True}}}
-        profile["decisions"][0]["rules"]["conditions"][0]["type"] = "domain"
-    if variant in {"http", "explicit"}:
-        profile["model_bindings"] = {
-            "preference": {
-                "deployment": "local-kai" if variant == "explicit" else "remote",
-                "contract": "decision.v1",
-                "adapter": "decision",
-            }
-        }
+    else:
+        profile["model_bindings"] = {"preference": backend}
     errors = validate_native_execution(UserConfig.model_validate(native_document))
-    assert bool(errors) == (variant != "explicit")
+    # The Router judges the preference backend.
+    assert not errors
 
 
 def test_native_stage_cannot_shadow_abstention(native_document):
-    native_document["recipes"][0]["routing"]["decisions"][0]["algorithm"]["stages"][0][
+    native_document["recipes"][1]["decisions"][0]["algorithm"]["escalate"]["stages"][0][
         "name"
     ] = "abstain"
     assert validate_native_execution(UserConfig.model_validate(native_document))
+
+
+@pytest.mark.parametrize("publish", [False, True])
+def test_native_cascade_accepts_a_scan_budget_on_a_local_alias(
+    native_document, publish
+):
+    models = ["vllm-sr/auto", "strong"]
+    if publish:
+        models.append("kai")
+    native_document["listeners"][0]["apis"]["systemone"]["models"] = models
+    native_document["global"]["model_catalog"]["deployments"]["local-kai"]["input"] = {
+        "max_tokens": 32768,
+        "overflow": "window",
+    }
+    assert validate_native_execution(UserConfig.model_validate(native_document)) == []

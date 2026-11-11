@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -91,10 +92,10 @@ func (m *MilvusStore) Forget(ctx context.Context, id string) error {
 
 	logging.Debugf("MilvusStore.Forget: deleting memory id=%s", id)
 
-	// Build delete expression
-	// NOTE: IDs are system-generated UUIDs, so injection risk is minimal.
-	// For production with user-controlled IDs, consider escaping quotes or using parameterized queries.
-	deleteExpr := fmt.Sprintf("id == \"%s\"", id)
+	// Build delete expression — memory IDs go through the shared escaping
+	// helper milvusEqString so values containing '"' or '\\' cannot break out
+	// of the quoted literal (defence in depth alongside the HTTP API reject).
+	deleteExpr := milvusEqString("id", id)
 
 	err := m.retryWithBackoff(ctx, func() error {
 		return m.client.Delete(
@@ -215,10 +216,17 @@ func (m *MilvusStore) forgetByScopeWithQuery(ctx context.Context, scope MemorySc
 	// Delete each matching memory
 	// NOTE: Deletes one-by-one for simplicity. For production at scale,
 	// consider batch deletion using "id in [...]" expression for efficiency.
+	var deleteErrors []error
+
 	for _, memID := range idsToDelete {
 		if err := m.Forget(ctx, memID); err != nil {
 			logging.Warnf("MilvusStore.ForgetByScope: failed to delete memory id=%s: %v", memID, err)
+			deleteErrors = append(deleteErrors, fmt.Errorf("delete memory %s: %w", memID, err))
 		}
+	}
+
+	if err := errors.Join(deleteErrors...); err != nil {
+		return fmt.Errorf("failed to delete memories by scope: %w", err)
 	}
 
 	logging.Debugf("MilvusStore.ForgetByScope: deleted %d memories", len(idsToDelete))

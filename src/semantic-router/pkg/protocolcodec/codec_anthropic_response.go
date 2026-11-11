@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -24,21 +25,22 @@ type anthropicResponseWire struct {
 }
 
 type anthropicUsageWire struct {
-	InputTokens              int64                           `json:"input_tokens"`
-	OutputTokens             int64                           `json:"output_tokens"`
-	CacheCreationInputTokens int64                           `json:"cache_creation_input_tokens"`
-	CacheReadInputTokens     int64                           `json:"cache_read_input_tokens"`
-	CacheCreation            anthropicCacheCreationUsageWire `json:"cache_creation"`
-	InferenceGeo             string                          `json:"inference_geo"`
-	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
-	ServerToolUse            anthropicServerToolUsageWire    `json:"server_tool_use"`
-	ServiceTier              string                          `json:"service_tier"`
-	Iterations               []json.RawMessage               `json:"iterations,omitempty"`
+	InputTokens              int64                            `json:"input_tokens"`
+	OutputTokens             int64                            `json:"output_tokens"`
+	CacheCreationInputTokens int64                            `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int64                            `json:"cache_read_input_tokens"`
+	CacheCreation            *anthropicCacheCreationUsageWire `json:"cache_creation"`
+	InferenceGeo             string                           `json:"inference_geo"`
+	OutputTokensDetails      anthropicOutputUsageDetailsWire  `json:"output_tokens_details"`
+	ServerToolUse            anthropicServerToolUsageWire     `json:"server_tool_use"`
+	ServiceTier              string                           `json:"service_tier"`
+	Speed                    string                           `json:"speed,omitempty"`
+	Iterations               []json.RawMessage                `json:"iterations,omitempty"`
 }
 
 type anthropicCacheCreationUsageWire struct {
-	Ephemeral1hInputTokens int64 `json:"ephemeral_1h_input_tokens"`
-	Ephemeral5mInputTokens int64 `json:"ephemeral_5m_input_tokens"`
+	Ephemeral1hInputTokens *int64 `json:"ephemeral_1h_input_tokens,omitempty"`
+	Ephemeral5mInputTokens *int64 `json:"ephemeral_5m_input_tokens,omitempty"`
 }
 
 type anthropicOutputUsageDetailsWire struct {
@@ -63,16 +65,21 @@ type anthropicTransportErrorWire struct {
 
 func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire anthropicResponseWire
-	if err := decodeProviderWire(body, &wire, policy); err != nil {
+	_, unknownFields, err := decodeProviderWireTolerant(body, &wire, policy)
+	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := validateAnthropicResponseResource(wire); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	diagnostics, err := anthropicStopSequenceDiagnostics(body, "", policy)
+	unknownFields = append(unknownFields, anthropicContentUnknownFields(wire.Content, policy)...)
+	var diagnostics llmprotocol.Diagnostics
+	appendUnknownFieldDiagnostics(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, unknownFields)
+	stopSequenceDiagnostics, err := anthropicStopSequenceDiagnostics(body, "", policy)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
+	diagnostics = appendDiagnostics(diagnostics, stopSequenceDiagnostics, policy.Limits.Diagnostics)
 	diagnostics = appendDiagnostics(diagnostics, anthropicResponseMetadataDiagnostics(wire, policy), policy.Limits.Diagnostics)
 	response, err := decodeAnthropicResponseResource(wire, policy)
 	if err != nil {
@@ -80,6 +87,25 @@ func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Pol
 	}
 	appendAnthropicResponseUsage(&response, wire.Usage, policy, &diagnostics)
 	return response, responseEnvelope(llmprotocol.AnthropicMessagesV1, body, response.Generation, response.SourceStopReason, policy), diagnostics, nil
+}
+
+// anthropicContentUnknownFields reports the members of reply content blocks
+// that their wire contract does not declare. The blocks are raw values decoded
+// one by one, so the resource-level strip cannot see inside them.
+func anthropicContentUnknownFields(raw json.RawMessage, policy llmprotocol.Policy) []string {
+	if !dropUnknownUpstreamFields(policy) || !jsonFieldPresent(raw) {
+		return nil
+	}
+	var blocks []json.RawMessage
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return nil
+	}
+	dropped := make(map[string]struct{})
+	for _, block := range blocks {
+		_, fields := stripUnknownUpstreamFields(block, reflect.TypeOf(anthropicContentWire{}))
+		addUnknownFieldPaths(dropped, "content[]", fields)
+	}
+	return sortedUnknownFieldPaths(dropped)
 }
 
 func anthropicResponseMetadataDiagnostics(wire anthropicResponseWire, policy llmprotocol.Policy) llmprotocol.Diagnostics {
@@ -131,20 +157,26 @@ func appendAnthropicResponseUsage(
 	if usage == nil {
 		return
 	}
-	response.Usage = decodeAnthropicUsage(*usage)
+	response.Usage = decodeAnthropicUsage(*usage, policy, diagnostics)
 	appendProviderFieldOmissions(diagnostics, policy, llmprotocol.AnthropicMessagesV1, map[string]bool{
-		"usage.cache_creation": usage.CacheCreation.Ephemeral1hInputTokens != 0 ||
-			usage.CacheCreation.Ephemeral5mInputTokens != 0,
 		"usage.inference_geo": usage.InferenceGeo != "",
 		"usage.server_tool_use": usage.ServerToolUse.WebFetchRequests != 0 ||
 			usage.ServerToolUse.WebSearchRequests != 0,
 		"usage.service_tier": usage.ServiceTier != "",
+		"usage.speed":        usage.Speed != "",
 		"usage.iterations":   len(usage.Iterations) > 0,
-	}, "provider usage metadata has no neutral accounting bucket")
+	}, anthropicUsageMetadataReason)
 }
 
-func decodeAnthropicUsage(wire anthropicUsageWire) llmprotocol.Usage {
-	inputTotal := wire.InputTokens + wire.CacheReadInputTokens + wire.CacheCreationInputTokens
+const anthropicUsageMetadataReason = "provider usage metadata has no neutral accounting bucket"
+
+func decodeAnthropicUsage(wire anthropicUsageWire, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) llmprotocol.Usage {
+	cacheWrite := wire.CacheCreationInputTokens
+	cacheWrite5m, cacheWrite1h, derivedAggregate := decodeAnthropicCacheCreationTiers(wire.CacheCreation, cacheWrite, policy, diagnostics)
+	if derivedAggregate != nil {
+		cacheWrite = *derivedAggregate
+	}
+	inputTotal := wire.InputTokens + wire.CacheReadInputTokens + cacheWrite
 	reasoning := int64(0)
 	reasoning = wire.OutputTokensDetails.ThinkingTokens
 	other := wire.OutputTokens - reasoning
@@ -152,14 +184,24 @@ func decodeAnthropicUsage(wire anthropicUsageWire) llmprotocol.Usage {
 		other = 0
 	}
 	return llmprotocol.Usage{
-		State:         llmprotocol.UsageAvailable,
-		InputUncached: authoritative(wire.InputTokens), InputCacheRead: authoritative(wire.CacheReadInputTokens), InputCacheWrite: authoritative(wire.CacheCreationInputTokens),
-		OutputReasoning: authoritative(reasoning), OutputOther: authoritative(other),
-		InputTotal: authoritative(inputTotal), OutputTotal: authoritative(wire.OutputTokens), Total: llmprotocol.TokenCount{Value: llmprotocol.Int64(inputTotal + wire.OutputTokens), Provenance: llmprotocol.UsageDerived},
+		State:             llmprotocol.UsageAvailable,
+		InputUncached:     authoritative(wire.InputTokens),
+		InputCacheRead:    authoritative(wire.CacheReadInputTokens),
+		InputCacheWrite:   authoritative(cacheWrite),
+		InputCacheWrite5m: cacheWrite5m,
+		InputCacheWrite1h: cacheWrite1h,
+		OutputReasoning:   authoritative(reasoning),
+		OutputOther:       authoritative(other),
+		InputTotal:        authoritative(inputTotal),
+		OutputTotal:       authoritative(wire.OutputTokens),
+		Total:             llmprotocol.TokenCount{Value: llmprotocol.Int64(inputTotal + wire.OutputTokens), Provenance: llmprotocol.UsageDerived},
 	}
 }
 
 func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
+	if err := rejectReasoningContinuity(llmprotocol.AnthropicMessagesV1, llmprotocol.RequiredResponseCapabilities(response)); err != nil {
+		return nil, nil, err
+	}
 	if response.Error != nil {
 		var diagnostics llmprotocol.Diagnostics
 		if response.Usage.State == llmprotocol.UsageAvailable {
@@ -185,6 +227,7 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 	}
 	appendAnthropicPartialCacheOmission(&diagnostics, policy, envelope.Format, response.Usage)
 	appendAnthropicPartialOutputOmission(&diagnostics, policy, envelope.Format, response.Usage)
+	appendAnthropicTierSplitOmission(&diagnostics, policy, envelope.Format, response.Usage)
 	if len(response.Alternatives) > 0 {
 		if err := appendLossy(&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1, "response.alternatives", "Messages has one output sequence"); err != nil {
 			return nil, diagnostics, err
@@ -203,7 +246,7 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 	if err != nil {
 		return nil, diagnostics, err
 	}
-	stop := encodeAnthropicStop(response.StopReason)
+	stop := encodeAnthropicStop(response.StopReason, responsesOutputHasToolCall(response.Output))
 	wire := anthropicResponseWire{ID: response.ID, Type: "message", Role: "assistant", Model: response.Model, Content: content, StopReason: &stop, Usage: encodeAnthropicUsage(response.Usage)}
 	if response.StopReason == llmprotocol.StopSequence {
 		wire.StopSequence = &response.MatchedStopSequence
@@ -225,20 +268,51 @@ func encodeAnthropicUsage(usage llmprotocol.Usage) *anthropicUsageWire {
 		inputTokens = max(0, tokenValue(usage.InputTotal)-tokenValue(usage.InputCacheRead)-tokenValue(usage.InputCacheWrite))
 	}
 	cacheWrite := tokenValue(usage.InputCacheWrite)
+	var creation anthropicCacheCreationUsageWire
+	has5m := usage.InputCacheWrite5m.Value != nil
+	has1h := usage.InputCacheWrite1h.Value != nil
+	if has5m || has1h {
+		if has5m {
+			v5m := *usage.InputCacheWrite5m.Value
+			creation.Ephemeral5mInputTokens = &v5m
+		}
+		if has1h {
+			v1h := *usage.InputCacheWrite1h.Value
+			creation.Ephemeral1hInputTokens = &v1h
+		}
+	} else if cacheWrite > 0 {
+		ephemeral5m := cacheWrite
+		ephemeral1h := int64(0)
+		creation.Ephemeral5mInputTokens = &ephemeral5m
+		creation.Ephemeral1hInputTokens = &ephemeral1h
+	} else {
+		ephemeral5m := int64(0)
+		ephemeral1h := int64(0)
+		creation.Ephemeral5mInputTokens = &ephemeral5m
+		creation.Ephemeral1hInputTokens = &ephemeral1h
+	}
 	*wire = anthropicUsageWire{
-		InputTokens: inputTokens, OutputTokens: tokenValue(usage.OutputTotal),
-		CacheCreationInputTokens: cacheWrite, CacheReadInputTokens: tokenValue(usage.InputCacheRead),
-		CacheCreation:       anthropicCacheCreationUsageWire{Ephemeral5mInputTokens: cacheWrite},
-		InferenceGeo:        "global",
-		OutputTokensDetails: anthropicOutputUsageDetailsWire{ThinkingTokens: tokenValue(usage.OutputReasoning)},
-		ServerToolUse:       anthropicServerToolUsageWire{},
-		ServiceTier:         "standard",
+		InputTokens:              inputTokens,
+		OutputTokens:             tokenValue(usage.OutputTotal),
+		CacheCreationInputTokens: cacheWrite,
+		CacheReadInputTokens:     tokenValue(usage.InputCacheRead),
+		CacheCreation:            &creation,
+		InferenceGeo:             "global",
+		OutputTokensDetails:      anthropicOutputUsageDetailsWire{ThinkingTokens: tokenValue(usage.OutputReasoning)},
+		ServerToolUse:            anthropicServerToolUsageWire{},
+		ServiceTier:              "standard",
 	}
 	return wire
 }
 
 func newAnthropicUsageWire() *anthropicUsageWire {
+	ephemeral1h := int64(0)
+	ephemeral5m := int64(0)
 	return &anthropicUsageWire{
+		CacheCreation: &anthropicCacheCreationUsageWire{
+			Ephemeral1hInputTokens: &ephemeral1h,
+			Ephemeral5mInputTokens: &ephemeral5m,
+		},
 		InferenceGeo: "global",
 		ServiceTier:  "standard",
 	}
@@ -270,7 +344,13 @@ func decodeAnthropicStop(reason string) llmprotocol.StopReason {
 	}
 }
 
-func encodeAnthropicStop(reason llmprotocol.StopReason) string {
+// A Messages turn that carries tool_use blocks stops with tool_use, which is
+// what Messages clients run calls on. A Chat backend ends a forced named tool
+// call with "stop", the end of the turn.
+func encodeAnthropicStop(reason llmprotocol.StopReason, toolUse bool) string {
+	if reason == llmprotocol.StopEndTurn && toolUse {
+		return "tool_use"
+	}
 	switch reason {
 	case llmprotocol.StopMaxTokens:
 		return "max_tokens"
@@ -305,9 +385,12 @@ func (AnthropicMessagesCodec) DecodeTransportError(
 		return decodeSnowflakeTransportError(body, policy, llmprotocol.AnthropicMessagesV1)
 	}
 	var wire anthropicTransportErrorWire
-	if err := decodeProviderWire(body, &wire, policy); err != nil {
+	_, unknownFields, err := decodeProviderWireTolerant(body, &wire, policy)
+	if err != nil {
 		return llmprotocol.TransportError{}, nil, err
 	}
+	var diagnostics llmprotocol.Diagnostics
+	appendUnknownFieldDiagnostics(&diagnostics, policy, llmprotocol.AnthropicMessagesV1, unknownFields)
 	if wire.Type != "error" {
 		return llmprotocol.TransportError{}, nil, invalidProviderResponse(
 			"invalid_upstream_error_envelope",
@@ -331,7 +414,7 @@ func (AnthropicMessagesCodec) DecodeTransportError(
 			Code:     wire.Error.Type, Message: wire.Error.Message,
 		},
 		ProviderRequestID: wire.RequestID,
-	}, nil, nil
+	}, diagnostics, nil
 }
 
 func (AnthropicMessagesCodec) EncodeTransportError(transportError llmprotocol.TransportError) []byte {

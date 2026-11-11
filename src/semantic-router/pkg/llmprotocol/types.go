@@ -11,6 +11,13 @@ import (
 // WireFormat is a stable wire contract identifier, not a provider product.
 type WireFormat string
 
+// Values of Request.Truncation. Only TruncationAuto needs the target to keep
+// conversation state; TruncationDisabled is the default and drops nothing.
+const (
+	TruncationDisabled = "disabled"
+	TruncationAuto     = "auto"
+)
+
 const (
 	OpenAIChatV1        WireFormat = "openai.chat.v1"
 	OpenAIResponsesV1   WireFormat = "openai.responses.v1"
@@ -81,6 +88,9 @@ type Content struct {
 	GeneratedImage *GeneratedImage
 	Signature      string
 	Reasoning      ReasoningScope
+	// ReasoningDetail is a typed continuity block, distinct from display text.
+	// Its identity and opaque payload must survive routing and tool turns.
+	ReasoningDetail *ReasoningDetail
 }
 
 // CacheDirective marks a request block or tool definition as an explicit
@@ -107,11 +117,18 @@ type Message struct {
 	Role            Role
 	Content         []Content
 	ReasoningEffort string // Anthropic per-message output_config.effort.
+	Name            string // Chat Completions participant name; formats without one drop it.
+	// WithToolResults marks user content the client sent in the same message
+	// as tool results, which decoding splits into a message of its own: text
+	// next to an Anthropic tool_result block. It continues the tool loop
+	// rather than starting a user turn. It is not a wire field.
+	WithToolResults bool `json:",omitempty"`
 }
 
 type InstructionBlock struct {
 	Role    Role
 	Content []Content
+	Name    string // Chat Completions participant name; formats without one drop it.
 }
 
 type ToolCall struct {
@@ -325,15 +342,17 @@ type TokenCount struct {
 }
 
 type Usage struct {
-	State           UsageState
-	InputUncached   TokenCount
-	InputCacheRead  TokenCount
-	InputCacheWrite TokenCount
-	OutputReasoning TokenCount
-	OutputOther     TokenCount
-	InputTotal      TokenCount
-	OutputTotal     TokenCount
-	Total           TokenCount
+	State             UsageState
+	InputUncached     TokenCount
+	InputCacheRead    TokenCount
+	InputCacheWrite   TokenCount
+	InputCacheWrite5m TokenCount
+	InputCacheWrite1h TokenCount
+	OutputReasoning   TokenCount
+	OutputOther       TokenCount
+	InputTotal        TokenCount
+	OutputTotal       TokenCount
+	Total             TokenCount
 }
 
 type UsageState string

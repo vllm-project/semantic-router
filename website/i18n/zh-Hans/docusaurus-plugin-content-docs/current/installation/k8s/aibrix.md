@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 与 AIBrix 集成
 description: 将 Semantic Router 的模型池选择与 AIBrix 的模型部署和副本路由结合。
 translation:

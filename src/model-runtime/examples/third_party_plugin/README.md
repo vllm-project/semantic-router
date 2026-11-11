@@ -1,19 +1,21 @@
 # Example out-of-tree plugin
 
 A complete, minimal plugin for the vllm-sr model runtime, kept small enough to
-read in one sitting. It adds four plugins through Python entry points, the
-same way the built-in families, engines, accelerators and profiles register:
+read in one sitting. It adds three plugins through Python entry points, the
+same way the built-in families, engines and accelerators register:
 
 | Entry point | Name | What it does |
 | --- | --- | --- |
 | `vllm_srun.families` | `example_keywords` | Reads a keyword package, renders text into keyword IDs, and reads label distributions, embeddings and relevance scores out of the engine's hidden states |
 | `vllm_srun.engines` | `example_counts` | Turns keyword IDs into one-hot label vectors on the CPU |
 | `vllm_srun.accelerators` | `example_host` | Offers the host CPU as its own device (`--device example_host`); `--device auto` never picks it |
-| `vllm_srun.profiles` | `example_one_by_one` | Runs every job alone, in arrival order (`--profile example_one_by_one`) |
 
 The family never runs the backbone and the engine never reads the package:
 that split is what lets a third-party family reuse a built-in engine, or a
-third-party engine serve a built-in family.
+third-party engine serve a built-in family. Batching is the runtime's: it
+batches the example's requests as it batches every model's, as the engine
+arguments (`--max-num-seqs`, `--max-num-batched-tokens`, `--batch-window-ms`)
+say.
 
 ## Try it
 
@@ -32,12 +34,13 @@ curl -s localhost:8100/v1/classify -H 'content-type: application/json' \
 curl -s localhost:8100/v1/models | jq '.data[0].plugins[] | select(.name | startswith("example"))'
 ```
 
-`/v1/models` lists the four plugins with their capability descriptors. To run
-the same model on the example accelerator and profile:
+`/v1/models` lists the three plugins with their capability descriptors. To run
+the same model on the example accelerator, every input in a forward of its
+own:
 
 ```bash
 vllm-srun serve /tmp/keywords --engine example_counts --device example_host \
-  --profile example_one_by_one --port 8100
+  --max-num-seqs 1 --port 8100
 ```
 
 ## Write your own
@@ -52,15 +55,17 @@ vllm-srun serve /tmp/keywords --engine example_counts --device example_host \
 2. Reuse a built-in engine through `ModelSpec`, or subclass `Engine` and
    `EngineModel` (`supports`, `load`, `forward` or `encode`); set
    `auto_priority` if `--engine auto` may try it before the others, and build
-   `descriptor()` on `super().descriptor()`, which lists it.
+   `descriptor()` on `super().descriptor()`, which lists it. An engine runs
+   `--dtype auto` only unless it lists more values in `dtypes`.
 3. For new hardware, subclass `Accelerator` (`available`, `devices`,
    `torch_device`, `kernels`); set `auto_priority` if `--device auto` may pick
-   it. For a new batching policy, subclass `Profile` (`plan`, and `bind` for
-   what it reads from the model).
+   it.
 4. Register each under its entry-point group in your `pyproject.toml`.
 5. Set `cache_key` on work items whose result depends only on their content,
    so repeated inputs are answered from the result cache, and set
-   `fuse_bundled_jobs` when one forward may serve several bundled requests.
+   `batch_invariant` on the loaded model once a test shows that every row
+   answers the same alone or in any batch: queued requests then merge without
+   waiting for the batching window.
 
 The runtime never imports code shipped inside a model package; plugins are
 installed code. The runtime's tests build this example's wheel, install it

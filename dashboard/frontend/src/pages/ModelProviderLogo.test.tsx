@@ -10,7 +10,7 @@ const provider = (patch: Partial<ModelProviderPreset>): ModelProviderPreset => (
   description: 'Example provider contract',
   category: 'Model APIs',
   baseUrl: '',
-  apiFormat: 'openai',
+  apiFormat: 'chat_completions',
   authStrategy: 'bearer',
   icon: '',
   monogram: 'EX',

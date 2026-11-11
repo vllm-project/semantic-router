@@ -77,8 +77,6 @@ func TestGeneratedCRDsCarryComplexityValidationRules(t *testing.T) {
 		// and ordered, so a reversed pair is refused at admission
 		"double(self.easy_below) < double(self.hard_above)",
 		"double(self.hard_below) < double(self.easy_above)",
-		// complexity reads two response shapes, so it must name one
-		"!has(self.backend) || has(self.backend.contract)",
 	}
 
 	for _, relative := range generatedCRDCopies {
@@ -93,32 +91,6 @@ func TestGeneratedCRDsCarryComplexityValidationRules(t *testing.T) {
 			if !strings.Contains(flattened, strings.Join(strings.Fields(expression), " ")) {
 				t.Errorf("%s is missing the CEL rule %q; run 'make manifests' and 'make bundle'",
 					generatedCRDName(relative), expression)
-			}
-		}
-	}
-}
-
-// The PII module's remote backend and failure policy must be in both generated
-// CRD copies, otherwise a Kubernetes user cannot select the token_spans.v1
-// backend or its on_error policy at all (review on #3498).
-func TestGeneratedCRDsCarryPIIBackendAndOnError(t *testing.T) {
-	for _, relative := range generatedCRDCopies {
-		data, err := os.ReadFile(relative)
-		if err != nil {
-			t.Fatalf("read %s: %v", relative, err)
-		}
-		flattened := strings.Join(strings.Fields(string(data)), " ")
-		for _, want := range []string{
-			"- token_spans.v1",
-			"OnError selects what a PII backend failure",
-			"Backend names a remote token classifier speaking token_spans.v1",
-			"external_models:",
-			"llm_model_name:",
-			"ExternalModels declares the remote models that classifier backends",
-		} {
-			if !strings.Contains(flattened, want) {
-				t.Errorf("%s is missing %q; run 'make manifests' and refresh bundle/manifests",
-					generatedCRDName(relative), want)
 			}
 		}
 	}

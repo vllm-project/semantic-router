@@ -2,7 +2,6 @@ package apicontract
 
 import (
 	"encoding/json"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -23,35 +22,6 @@ type sampleBody struct {
 	Labels   map[string]int  `json:"labels"`
 	Ignored  string          `json:"-"`
 	internal string          //nolint:unused // exercises the unexported-field skip
-}
-
-func TestSchemaForFollowsJSONTags(t *testing.T) {
-	schema := SchemaFor[sampleBody]()
-	if schema.Type != "object" {
-		t.Fatalf("type = %q, want object", schema.Type)
-	}
-	for _, name := range []string{"shared", "name", "note", "count", "tags", "raw", "labels"} {
-		if _, ok := schema.Properties[name]; !ok {
-			t.Errorf("missing property %q", name)
-		}
-	}
-	for _, name := range []string{"Ignored", "-", "internal"} {
-		if _, ok := schema.Properties[name]; ok {
-			t.Errorf("unexpected property %q", name)
-		}
-	}
-	if want := []string{"shared", "name", "count", "tags", "labels"}; !slices.Equal(schema.Required, want) {
-		t.Errorf("required = %v, want %v", schema.Required, want)
-	}
-	if !schema.Properties["count"].Nullable || schema.Properties["count"].Type != "integer" {
-		t.Errorf("count = %+v, want nullable integer", schema.Properties["count"])
-	}
-	if raw := schema.Properties["raw"]; raw.Type != "" {
-		t.Errorf("raw = %+v, want an unconstrained schema", raw)
-	}
-	if items := schema.Properties["tags"].Items; items == nil || items.Type != "string" {
-		t.Errorf("tags items = %+v, want string", items)
-	}
 }
 
 func TestBuildRendersPolicyAndSchemaStatus(t *testing.T) {
@@ -233,6 +203,8 @@ func TestOperationIDsAndTags(t *testing.T) {
 		{"GET", "/openapi.json", "getOpenapiJson", "openapi"},
 		{"DELETE", "/api/mcp/servers/{id}", "deleteApiMcpServersId", "mcp"},
 		{"POST", "/api/sr-bench/v1/runs/{id}/recover-plan", "postApiSrBenchV1RunsIdRecoverPlan", "sr-bench"},
+		{"GET", "/api/v1/capabilities", "getApiV1Capabilities", "capabilities"},
+		{"GET", "/api/v1", "getApiV1", "v1"},
 		{"GET", "/", "get", "root"},
 	} {
 		if id := defaultOperationID(test.method, test.path); id != test.id {
@@ -241,31 +213,5 @@ func TestOperationIDsAndTags(t *testing.T) {
 		if tag := tagFor(test.path); tag != test.tag {
 			t.Errorf("tagFor(%s) = %q, want %q", test.path, tag, test.tag)
 		}
-	}
-}
-
-func TestSchemaAccepts(t *testing.T) {
-	open := Schema{Required: []string{"error", "message"}, Properties: map[string]Schema{
-		"error": {Type: "string"}, "message": {Type: "string"},
-	}}
-	closed := open
-	closed.AdditionalProperties = false
-
-	for _, test := range []struct {
-		name   string
-		schema Schema
-		keys   []string
-		want   bool
-	}{
-		{"open schema ignores extra keys", open, []string{"error", "message", "stage"}, true},
-		{"missing a required key", open, []string{"error"}, false},
-		{"closed schema rejects an extra key", closed, []string{"error", "message", "stage"}, false},
-		{"closed schema accepts its exact keys", closed, []string{"error", "message"}, true},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			if got := test.schema.Accepts(test.keys); got != test.want {
-				t.Errorf("Accepts(%v) = %v, want %v", test.keys, got, test.want)
-			}
-		})
 	}
 }

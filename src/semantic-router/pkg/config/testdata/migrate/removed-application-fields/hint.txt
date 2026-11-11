@@ -1,0 +1,1 @@
+recipes[default].signals.domains[sciences].mmlu_categories: removed_field: a domain rule's mmlu_categories are its labels; run `vllm-sr config migrate` (labels)

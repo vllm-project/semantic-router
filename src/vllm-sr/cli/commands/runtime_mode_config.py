@@ -7,9 +7,16 @@ from copy import deepcopy
 import click
 
 from cli.bootstrap import build_bootstrap_config
-from cli.decision_model import configured_decision_model, decision_model_deployment
-from cli.model_revision import resolve_model_revision
-from cli.validator_decision_model import MODEL_RUNTIME_PROFILE, public_model_name
+from cli.decision_model import (
+    configured_decision_model,
+    decision_model_deployment,
+    remote_decision_model,
+)
+from cli.model_revision import builtin_releases, resolve_model_revision
+from cli.utils import get_logger
+from cli.validator_decision_model import engine_args_error, public_model_name
+
+log = get_logger(__name__)
 
 MODE_HELP = """
 \b
@@ -30,24 +37,56 @@ prints a short summary (--verbose prints every detail). Saved routing
 configuration is retained.
 
 MODEL overrides the configured default judgment deployment's artifact.
-Omitting MODEL preserves that deployment (a new configuration uses Vela 2.0
-0.3B). Only explicit model/placement options override saved settings.
+Omitting MODEL preserves that deployment (a new configuration uses Vela 3.0
+vela3-fast). Only explicit model, placement and engine options override saved
+settings: --max-num-seqs, --max-num-batched-tokens, --batch-window-ms, --dtype
+and --enable-shared-context set the deployment's engine arguments.
 Backend LLMs, named deployments, listeners and API grants belong in --config.
 """
 
 
+# The deployment's engine arguments that serve flags set.
+ENGINE_ARGUMENTS = (
+    "max_num_seqs",
+    "max_num_batched_tokens",
+    "batch_window_ms",
+    "dtype",
+    "enable_shared_context",
+)
+
+
+def removed_runtime_profile(ctx, param, value):
+    """Refuse the removed --runtime-profile and name the engine options that replace it."""
+    if value is not None:
+        raise click.UsageError(
+            "--runtime-profile was removed; batching is on by default; set "
+            "--max-num-seqs, --max-num-batched-tokens, --batch-window-ms, "
+            "--enable-shared-context or --dtype instead",
+            ctx=ctx,
+        )
+    return value
+
+
 def validate_model_options(
-    *, model, revision, runtime_profile, data_parallel_size=None, device_ids=None
+    *,
+    model,
+    revision,
+    data_parallel_size=None,
+    device_ids=None,
+    engine_args=None,
 ):
     """Keep unspecified values absent so they cannot reset saved resources."""
     if model is not None and (not model or model.strip() != model):
         raise click.UsageError("MODEL must be a non-empty, trimmed artifact")
     if revision is not None and (not revision or revision.strip() != revision):
         raise click.UsageError("--revision must be a non-empty branch, tag or commit")
-    if runtime_profile is not None and not MODEL_RUNTIME_PROFILE.fullmatch(
-        runtime_profile
-    ):
-        raise click.UsageError("--runtime-profile must be a valid profile name")
+    engine_args = {
+        name: value for name, value in (engine_args or {}).items() if value is not None
+    }
+    message = engine_args_error(engine_args)
+    if message:
+        flag, _, rest = message.partition(" ")
+        raise click.UsageError(f"--{flag.replace('_', '-')} {rest}")
     ids = None
     if device_ids is not None:
         parts = device_ids.split(",")
@@ -63,11 +102,36 @@ def validate_model_options(
     values = {
         "artifact": model,
         "revision": revision,
-        "profile": runtime_profile,
         "data_parallel_size": data_parallel_size,
         "device_ids": ids,
+        **engine_args,
     }
     return {key: value for key, value in values.items() if value is not None} or None
+
+
+def _warn_off_release(artifact, revision):
+    """Name this CLI's release pin when a saved revision keeps a model off it.
+
+    A saved revision outlives upgrades by design, including one an older CLI
+    resolved from the Hub before it pinned the model.
+    """
+    pin = next(
+        (
+            pin
+            for name, pin in builtin_releases().items()
+            if name.lower() == artifact.lower()
+        ),
+        None,
+    )
+    if pin and revision != pin:
+        log.warning(
+            "%s is served at revision %s, saved in this configuration; this vllm-sr "
+            "pins %s. Serve with --revision %s to switch.",
+            artifact,
+            revision[:12],
+            pin[:12],
+            pin[:12],
+        )
 
 
 def _placements(resource, options, platform, available_devices, authored):
@@ -130,10 +194,18 @@ def apply_instance_options(
         global_config = document.setdefault("global", {})
         global_config.setdefault("router", {})["enabled"] = not engine
     key = configured_decision_model(document)
+    remote = remote_decision_model(document) is not None
+    if remote and model_options:
+        raise ValueError(
+            "serve model overrides apply to a local decision model; "
+            f"{key!r} is a systemone deployment, configured in --config"
+        )
     catalog = global_config.get("model_catalog") or {}
     deployments = catalog.get("deployments") or {}
     authored = key in deployments
-    if model_options or (not authored and platform in {"cuda", "rocm"}):
+    if not remote and (
+        model_options or (not authored and platform in {"cuda", "rocm"})
+    ):
         catalog = document.setdefault("global", {}).setdefault("model_catalog", {})
         deployments = catalog.setdefault("deployments", {})
         defaults = decision_model_deployment(document)
@@ -144,7 +216,6 @@ def apply_instance_options(
                 "provider": "model_runtime",
                 "artifact": defaults["artifact"],
                 "device": "auto",
-                "profile": "exact",
             }
         )
         options = model_options or {}
@@ -157,7 +228,7 @@ def apply_instance_options(
         artifact = options.get("artifact")
         if artifact is not None and artifact != resource.get("artifact"):
             resource.pop("revision", None)
-        for name in ("artifact", "revision", "profile"):
+        for name in ("artifact", "revision", *ENGINE_ARGUMENTS):
             if name in options:
                 resource[name] = options[name]
         if "data_parallel_size" in options or "device_ids" in options:
@@ -171,7 +242,6 @@ def apply_instance_options(
             for name in ("device", "endpoint", "served_name"):
                 resource.pop(name, None)
         resource.setdefault("provider", "model_runtime")
-        resource.setdefault("profile", "exact")
         revision = resolve_model_revision(
             resource["artifact"], resource.get("revision")
         )
@@ -179,6 +249,8 @@ def apply_instance_options(
             resource.pop("revision", None)
         else:
             resource["revision"] = revision
+            if "revision" not in options:
+                _warn_off_release(resource["artifact"], revision)
         deployments[key] = resource
         catalog.setdefault("system", {})["decision_model"] = {"deployment": key}
     if setup and engine:
@@ -193,6 +265,6 @@ def apply_instance_options(
                 raise ValueError(
                     "A local MODEL needs an explicit public_name in --config"
                 )
-            bootstrap_listeners[0]["systemone"] = {"models": [name]}
+            bootstrap_listeners[0]["apis"] = {"systemone": {"models": [name]}}
             document["listeners"] = bootstrap_listeners
     return document != before

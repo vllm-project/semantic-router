@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: vLLM Production Stack 的语义智能层
 description: 提出语义请求路由与 vLLM Production Stack 之间的集成。
 created: 2025-10-13

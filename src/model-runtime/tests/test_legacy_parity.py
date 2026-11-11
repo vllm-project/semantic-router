@@ -274,3 +274,11 @@ def test_inputs_both_sides_reject_are_counted_not_compared(lp):
     report = lp.compare_job(spec, legacy, runtime, lp.ROCM_THRESHOLDS)
     assert (report["compared"], report["both_rejected"]) == (1, 1)
     assert report["passed"]
+
+
+def test_corpus_refuses_to_substitute_edge_prompts_when_e2e_pool_is_empty(
+    lp, monkeypatch
+):
+    monkeypatch.setattr(lp, "prompts", lambda: [])
+    with pytest.raises(SystemExit, match="acceptance corpus is empty"):
+        lp.corpus(0)

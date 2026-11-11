@@ -260,6 +260,7 @@ def test_an_invalid_question_says_why() -> None:
     assert plan.errors["unknown"] == {
         "type": "set",
         "error": "invalid_question",
+        "reason": "question_malformed",
         "message": "set questions do not take ['colour']",
     }
     assert plan.errors["few"]["message"] == "criteria must name 2 to 255 options"

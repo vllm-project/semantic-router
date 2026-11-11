@@ -37,7 +37,14 @@ func TestDecideRejectsAnswersThatDoNotFitTheirQuestion(t *testing.T) {
 			map[string]interface{}{"type": "noul", "noul": 0.9},
 			false,
 		},
-		"noul above one": {Question{Type: "noul"}, map[string]interface{}{"type": "noul", "noul": 1.7}, false},
+		"noul above one":                 {Question{Type: "noul"}, map[string]interface{}{"type": "noul", "noul": 1.7}, false},
+		"preset negative confidence":     {Question{Preset: "pii"}, map[string]interface{}{"type": "choice", "choice": "person", "confidence": -42, "probabilities": map[string]float64{"person": 1}}, false},
+		"non-preset negative confidence": {Question{Type: "choice", Choices: []Choice{{Key: "person"}}}, map[string]interface{}{"type": "choice", "choice": "person", "confidence": -42, "probabilities": map[string]float64{"person": 1}}, false},
+		"preset confidence above one":    {Question{Preset: "pii"}, map[string]interface{}{"type": "choice", "choice": "person", "confidence": 7.5}, false},
+		"preset negative probability":    {Question{Preset: "pii"}, map[string]interface{}{"type": "choice", "choice": "person", "probabilities": map[string]float64{"person": -0.1}}, false},
+		"preset probability above one":   {Question{Preset: "pii"}, map[string]interface{}{"type": "choice", "choice": "person", "probabilities": map[string]float64{"person": 1.1}}, false},
+		"preset zero confidence":         {Question{Preset: "pii"}, map[string]interface{}{"type": "choice", "choice": "person", "confidence": 0, "probabilities": map[string]float64{"person": 0}}, true},
+		"preset unit confidence":         {Question{Preset: "pii"}, map[string]interface{}{"type": "choice", "choice": "person", "confidence": 1, "probabilities": map[string]float64{"person": 1}}, true},
 		"score past its levels": {
 			Question{Type: "score", Levels: levels},
 			map[string]interface{}{"type": "score", "score": 2.5, "probabilities": map[string]float64{"0": 0.1, "1": 0.3, "2": 0.6}},
@@ -133,6 +140,9 @@ func TestDecideRejectsAnswersThatDoNotFitTheirQuestion(t *testing.T) {
 		}
 		if got.Error != want {
 			t.Errorf("%s: error = %q, want %q (answer %+v)", id, got.Error, want, got)
+		}
+		if want == "invalid_model_output" && (got.Confidence != 0 || got.Choice != "" || len(got.Probabilities) != 0) {
+			t.Errorf("%s: invalid answer retained routing evidence: %+v", id, got)
 		}
 	}
 }

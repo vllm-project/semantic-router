@@ -178,7 +178,7 @@ class Decision2Family(ModelFamily):
             name=package.model_name,
             backbone=backbone,
             # cuda-fused-approximate.md: no decision changed with CUDA's
-            # approximate fused kernels.
+            # approximate fused kernels, so they run by default there.
             dtype=DtypePolicy(approximate_kernels=True),
             max_input_tokens=package.max_input_tokens,
             requires=backbone.requires,
@@ -250,6 +250,10 @@ def _model_type(config: dict[str, Any], declared: str) -> str:
 
 
 class Decision2Model(DecisionModel[RenderedItem, list[float] | None]):
+    # docs/records/rocm-mi325x-batching.md: shared-context trees answer as the
+    # released share_context switch, with no accuracy loss on any panel.
+    shared_context_default = True
+
     def __init__(
         self,
         info: ModelInfo,

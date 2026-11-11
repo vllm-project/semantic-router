@@ -12,14 +12,14 @@ describe('decision plugin configuration editor', () => {
         value: [
           {
             type: 'response_cache',
-            configuration: { enabled: true, similarity_threshold: 0.91 },
+            configuration: { enabled: true, ttl_seconds: 900 },
           },
         ],
         onChange: vi.fn(),
       }),
     )
 
-    expect(markup).toContain('Similarity Threshold')
+    expect(markup).toContain('Min Similarity')
     expect(markup).toContain('Enabled')
     expect(markup).not.toContain('Configuration JSON')
     expect(markup).not.toContain('<textarea')

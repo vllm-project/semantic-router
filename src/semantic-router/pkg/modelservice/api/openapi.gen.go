@@ -14,11 +14,24 @@ import (
 	"strings"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for AnswerInputCoverage.
 const (
 	AnswerInputCoverageComplete AnswerInputCoverage = "complete"
+)
+
+// Defines values for AssetFormat.
+const (
+	Jpeg AssetFormat = "jpeg"
+	Jpg  AssetFormat = "jpg"
+	Png  AssetFormat = "png"
+)
+
+// Defines values for AssetType.
+const (
+	Image AssetType = "image"
 )
 
 // Defines values for ClassifyOptionsOverflow.
@@ -60,33 +73,70 @@ const (
 	Query    EmbeddingsRequestInputType = "query"
 )
 
+// Defines values for EngineArgsDtype.
+const (
+	Auto     EngineArgsDtype = "auto"
+	Bfloat16 EngineArgsDtype = "bfloat16"
+	Float16  EngineArgsDtype = "float16"
+	Float32  EngineArgsDtype = "float32"
+)
+
 // Defines values for ErrorBodyCode.
 const (
-	InternalError      ErrorBodyCode = "internal_error"
-	InvalidRequest     ErrorBodyCode = "invalid_request"
-	ModelNotFound      ErrorBodyCode = "model_not_found"
-	NotReady           ErrorBodyCode = "not_ready"
-	Overloaded         ErrorBodyCode = "overloaded"
-	RequestTooLarge    ErrorBodyCode = "request_too_large"
-	UnsupportedSurface ErrorBodyCode = "unsupported_surface"
+	InternalError        ErrorBodyCode = "internal_error"
+	InvalidRequest       ErrorBodyCode = "invalid_request"
+	ModelNotFound        ErrorBodyCode = "model_not_found"
+	NotReady             ErrorBodyCode = "not_ready"
+	Overloaded           ErrorBodyCode = "overloaded"
+	QuestionFailed       ErrorBodyCode = "question_failed"
+	RequestTooLarge      ErrorBodyCode = "request_too_large"
+	UnsupportedMediaType ErrorBodyCode = "unsupported_media_type"
+	UnsupportedSurface   ErrorBodyCode = "unsupported_surface"
 )
 
 // Defines values for ErrorBodyReason.
 const (
-	ImageAspectRatio ErrorBodyReason = "image_aspect_ratio"
-	ImageFormat      ErrorBodyReason = "image_format"
-	ImageMalformed   ErrorBodyReason = "image_malformed"
-	ImagePixels      ErrorBodyReason = "image_pixels"
-	ImageTooLarge    ErrorBodyReason = "image_too_large"
-	ImageUnsupported ErrorBodyReason = "image_unsupported"
-	VideoAspectRatio ErrorBodyReason = "video_aspect_ratio"
-	VideoFormat      ErrorBodyReason = "video_format"
-	VideoMalformed   ErrorBodyReason = "video_malformed"
-	VideoPixels      ErrorBodyReason = "video_pixels"
-	VideoTokens      ErrorBodyReason = "video_tokens"
-	VideoTooLarge    ErrorBodyReason = "video_too_large"
-	VideoTooLong     ErrorBodyReason = "video_too_long"
-	VideoUnsupported ErrorBodyReason = "video_unsupported"
+	AssetMalformed            ErrorBodyReason = "asset_malformed"
+	AssetReference            ErrorBodyReason = "asset_reference"
+	AssetUnreferenced         ErrorBodyReason = "asset_unreferenced"
+	AssetUses                 ErrorBodyReason = "asset_uses"
+	AtOutOfRange              ErrorBodyReason = "at_out_of_range"
+	BoxNeedsImage             ErrorBodyReason = "box_needs_image"
+	BoxTargetAmbiguous        ErrorBodyReason = "box_target_ambiguous"
+	BoxUnsupported            ErrorBodyReason = "box_unsupported"
+	BoxVideoTooLong           ErrorBodyReason = "box_video_too_long"
+	Deadline                  ErrorBodyReason = "deadline"
+	EncodingMalformed         ErrorBodyReason = "encoding_malformed"
+	EncodingUnsupported       ErrorBodyReason = "encoding_unsupported"
+	ImageAspectRatio          ErrorBodyReason = "image_aspect_ratio"
+	ImageFormat               ErrorBodyReason = "image_format"
+	ImageMalformed            ErrorBodyReason = "image_malformed"
+	ImagePixels               ErrorBodyReason = "image_pixels"
+	ImageTooLarge             ErrorBodyReason = "image_too_large"
+	ImageUnsupported          ErrorBodyReason = "image_unsupported"
+	InputMalformed            ErrorBodyReason = "input_malformed"
+	ModelOutput               ErrorBodyReason = "model_output"
+	ModelUnavailable          ErrorBodyReason = "model_unavailable"
+	MultipartMalformed        ErrorBodyReason = "multipart_malformed"
+	PresetUnknown             ErrorBodyReason = "preset_unknown"
+	QuestionImagesUnsupported ErrorBodyReason = "question_images_unsupported"
+	QuestionMalformed         ErrorBodyReason = "question_malformed"
+	QuestionTokens            ErrorBodyReason = "question_tokens"
+	RequestTokens             ErrorBodyReason = "request_tokens"
+	RequireFullInput          ErrorBodyReason = "require_full_input"
+	ScanBudget                ErrorBodyReason = "scan_budget"
+	TrackUnsupported          ErrorBodyReason = "track_unsupported"
+	TypeUnsupported           ErrorBodyReason = "type_unsupported"
+	VideoAspectRatio          ErrorBodyReason = "video_aspect_ratio"
+	VideoFormat               ErrorBodyReason = "video_format"
+	VideoMalformed            ErrorBodyReason = "video_malformed"
+	VideoNeeded               ErrorBodyReason = "video_needed"
+	VideoPixels               ErrorBodyReason = "video_pixels"
+	VideoTargetAmbiguous      ErrorBodyReason = "video_target_ambiguous"
+	VideoTokens               ErrorBodyReason = "video_tokens"
+	VideoTooLarge             ErrorBodyReason = "video_too_large"
+	VideoTooLong              ErrorBodyReason = "video_too_long"
+	VideoUnsupported          ErrorBodyReason = "video_unsupported"
 )
 
 // Defines values for GoldenStatusStatus.
@@ -140,7 +190,21 @@ const (
 
 // Defines values for LivenessStatus.
 const (
-	Alive LivenessStatus = "alive"
+	Alive   LivenessStatus = "alive"
+	Stalled LivenessStatus = "stalled"
+)
+
+// Defines values for ModelCardImagePlacements.
+const (
+	Criteria     ModelCardImagePlacements = "criteria"
+	Instructions ModelCardImagePlacements = "instructions"
+	State        ModelCardImagePlacements = "state"
+)
+
+// Defines values for ModelCardNumerics.
+const (
+	ModelCardNumericsApproximate ModelCardNumerics = "approximate"
+	ModelCardNumericsExact       ModelCardNumerics = "exact"
 )
 
 // Defines values for ModelCardStatus.
@@ -153,6 +217,11 @@ const (
 	ModelCardStatusWarming  ModelCardStatus = "warming"
 )
 
+// Defines values for ModelCardUsage.
+const (
+	StateOnce ModelCardUsage = "state_once"
+)
+
 // Defines values for ModelHealthStatus.
 const (
 	ModelHealthStatusDegraded ModelHealthStatus = "degraded"
@@ -161,12 +230,6 @@ const (
 	ModelHealthStatusReady    ModelHealthStatus = "ready"
 	ModelHealthStatusStarting ModelHealthStatus = "starting"
 	ModelHealthStatusWarming  ModelHealthStatus = "warming"
-)
-
-// Defines values for ProfileInfoNumerics.
-const (
-	Approximate ProfileInfoNumerics = "approximate"
-	Exact       ProfileInfoNumerics = "exact"
 )
 
 // Defines values for QuestionHead.
@@ -181,10 +244,22 @@ const (
 	QuestionOverflowWindow   QuestionOverflow = "window"
 )
 
+// Defines values for QuestionRate.
+const (
+	N1 QuestionRate = 1
+	N2 QuestionRate = 2
+)
+
 // Defines values for RerankOptionsOverflow.
 const (
 	Reject   RerankOptionsOverflow = "reject"
 	Truncate RerankOptionsOverflow = "truncate"
+)
+
+// Defines values for ResponseMetaNumerics.
+const (
+	ResponseMetaNumericsApproximate ResponseMetaNumerics = "approximate"
+	ResponseMetaNumericsExact       ResponseMetaNumerics = "exact"
 )
 
 // Defines values for SetAnswerInputCoverage.
@@ -193,13 +268,21 @@ const (
 )
 
 // Answer One answer. Choice: choice, probabilities, confidence. Noul: noul (P(true)). Score: score (the expected
-// level), probabilities, confidence, legend. A failed question has only type, error and, when the runtime
-// knows why, message.
+// level), probabilities, confidence, legend. Box: box, confidence (null when the model gives none) and,
+// on a video, time. Track: track. Choice and Score confidence are System One's published statistics:
+// Choice `(p_max - 1/n) / (1 - 1/n)`; Score `max(0, 1 - sum_i p_i |i - m| / MAD_unif)`, m the most likely
+// level and `MAD_unif = sum_i |i - (n - 1)/2| / n`. A failed question has only type, error, reason and,
+// when the runtime knows why, message.
 type Answer struct {
 	// AbstainProbability Probability of the model's abstain option, where it has one (not calibrated).
 	AbstainProbability *float64 `json:"abstain_probability,omitempty"`
-	Choice             *string  `json:"choice,omitempty"`
-	Confidence         *float64 `json:"confidence,omitempty"`
+
+	// Box A box as fractions of its image's height (top, bottom) and width (left, right) from the top-left
+	// corner, as the image was sent: 0 <= top < bottom <= 1, 0 <= left < right <= 1. A box is always given;
+	// pair it with a Noul when the target may be absent.
+	Box        *Box     `json:"box,omitempty"`
+	Choice     *string  `json:"choice,omitempty"`
+	Confidence *float64 `json:"confidence,omitempty"`
 
 	// Error Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
 	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
@@ -215,12 +298,47 @@ type Answer struct {
 	Message       *string             `json:"message,omitempty"`
 	Noul          *float64            `json:"noul,omitempty"`
 	Probabilities *map[string]float64 `json:"probabilities,omitempty"`
-	Score         *float64            `json:"score,omitempty"`
-	Type          *string             `json:"type"`
+
+	// Reason A fixed word for why a question failed; it never carries request data. invalid_question:
+	// `question_malformed`, `type_unsupported`, `box_unsupported`, `track_unsupported`,
+	// `question_images_unsupported`, `box_needs_image`, `box_target_ambiguous`, `video_needed`,
+	// `video_target_ambiguous`, `box_video_too_long`, `at_out_of_range`, `preset_unknown`; max_length_exceeded:
+	// `question_tokens`
+	// (over `limits.validated_input_tokens`, or `limits.max_input_tokens` with long context),
+	// `require_full_input`; scan_budget_exceeded: `scan_budget`; invalid_input: `input_malformed`;
+	// invalid_model_output: `model_output`; deadline_exceeded: `deadline`; unavailable: `model_unavailable`.
+	Reason *QuestionReason `json:"reason,omitempty"`
+	Score  *float64        `json:"score,omitempty"`
+
+	// Time Box on a video; the second of the sampled moment the box was read at.
+	Time *float64 `json:"time,omitempty"`
+
+	// Track Track; one entry per sampled moment of the video, in time order.
+	Track *[]TrackPoint `json:"track,omitempty"`
+	Type  *string       `json:"type"`
 }
 
 // AnswerInputCoverage Explicit proof that a require_full_input question read every supplied state part completely; omitted for permissive questions and errors.
 type AnswerInputCoverage string
+
+// Asset defines model for Asset.
+type Asset struct {
+	// DataBase64 The image file, base64; at most `limits.image_max_bytes` decoded.
+	DataBase64 *string `json:"data_base64,omitempty"`
+
+	// Format Optional; the format is read from the bytes (PNG, JPEG or WebP; animated images are refused).
+	Format *AssetFormat `json:"format,omitempty"`
+
+	// Part In a multipart request, the part holding the image file (data_base64 is then ignored).
+	Part *string    `json:"part,omitempty"`
+	Type *AssetType `json:"type,omitempty"`
+}
+
+// AssetFormat Optional; the format is read from the bytes (PNG, JPEG or WebP; animated images are refused).
+type AssetFormat string
+
+// AssetType defines model for Asset.Type.
+type AssetType string
 
 // AudioPart defines model for AudioPart.
 type AudioPart struct {
@@ -232,6 +350,16 @@ type AudioPart struct {
 
 // Base64Vector defines model for Base64Vector.
 type Base64Vector = []byte
+
+// Box A box as fractions of its image's height (top, bottom) and width (left, right) from the top-left
+// corner, as the image was sent: 0 <= top < bottom <= 1, 0 <= left < right <= 1. A box is always given;
+// pair it with a Noul when the target may be absent.
+type Box struct {
+	Bottom float64 `json:"bottom"`
+	Left   float64 `json:"left"`
+	Right  float64 `json:"right"`
+	Top    float64 `json:"top"`
+}
 
 // BundleRequest defines model for BundleRequest.
 type BundleRequest struct {
@@ -249,7 +377,11 @@ type BundleResponse struct {
 
 // BundleResult A task's result; on status 200 its surface field holds the response, otherwise error is set.
 type BundleResult struct {
-	Classify   *ClassifyResponse   `json:"classify,omitempty"`
+	Classify *ClassifyResponse `json:"classify,omitempty"`
+
+	// Decisions The answers to a standard request (`answers`, and `spans`, `sets`, `thresholds` and `span_heads` for the
+	// questions that have them) or to a batch (`states`: each entry's answers under its name). A batch's
+	// `usage` counts every entry, and its `meta` (with `return_meta`) is the one every entry carries.
 	Decisions  *DecisionResponse   `json:"decisions,omitempty"`
 	Embeddings *EmbeddingsResponse `json:"embeddings,omitempty"`
 	Error      *ErrorBody          `json:"error,omitempty"`
@@ -260,7 +392,14 @@ type BundleResult struct {
 
 // BundleTask One task; exactly one surface field is set, holding that surface's request body.
 type BundleTask struct {
-	Classify   *ClassifyRequest   `json:"classify,omitempty"`
+	Classify *ClassifyRequest `json:"classify,omitempty"`
+
+	// Decisions A standard request or a batch; the two forms are mutually exclusive. A standard request is one context
+	// and its questions: `state` and `questions` (both required), and the `images` and `videos` every
+	// question sees. A batch is `states` alone: named standard requests, each answered under its name. A
+	// batch has no top-level `state`, `questions`, `images` or `videos`; a body with `states` and any of them
+	// is answered 400 invalid_request. `model`, `options` and `assets` belong to the request, and in a batch
+	// to every entry.
 	Decisions  *DecisionRequest   `json:"decisions,omitempty"`
 	Embeddings *EmbeddingsRequest `json:"embeddings,omitempty"`
 	Id         string             `json:"id"`
@@ -301,9 +440,6 @@ type ClassifyOptions struct {
 
 	// Overflow What happens to an input longer than max_tokens (default the head's declared policy, usually reject). Nothing is cut silently.
 	Overflow *ClassifyOptionsOverflow `json:"overflow,omitempty"`
-
-	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile *ProfileName `json:"profile,omitempty"`
 
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
@@ -397,6 +533,20 @@ type ContentPartType string
 // ContentPartList defines model for ContentPartList.
 type ContentPartList = []ContentPart
 
+// DecisionAssets Images by reference (System One `assets`), for models whose card lists the `image` modality. Each
+// reference is 1 to 1,024 bytes and not blank, all of them together at most 65,536 bytes, and every one
+// must be used (reason `asset_unreferenced`). A reference is replaced wherever it occurs in a string of
+// the state, of a question's `instructions` or of its options (criteria values, `choices` and `labels`
+// descriptions, `levels`), in a standard request or in every entry of a batch: a string equal to a reference is
+// that image, a longer one is split at each occurrence (left to right, the longest reference first at
+// one position), and object keys are never replaced. Each occurrence is one use, read where it sits and
+// counted again, toward the token limits and `usage.input_tokens`; the bytes of all uses together are at
+// most `limits.max_request_bytes` of the process (reason `asset_uses`). An image in the state is part of
+// the state. An image in a question's instructions or options belongs to that question only, on models
+// whose `image_placements` list `instructions` or `criteria`; another model answers that question with
+// invalid_question, reason `question_images_unsupported`. One rejected image fails the request.
+type DecisionAssets map[string]Asset
+
 // DecisionImages Images every question of the state sees, for models whose card lists the `image` modality: base64 PNG,
 // JPEG or WebP data URLs (`data:image/png;base64,...`), each at most `limits.image_max_bytes` bytes and
 // `limits.image_source_max_pixels` pixels. The model reads each at up to `limits.image_max_pixels`
@@ -404,8 +554,43 @@ type ContentPartList = []ContentPart
 // invalid_request, as it does a malformed image.
 type DecisionImages = []string
 
-// DecisionRequest defines model for DecisionRequest.
+// DecisionMultipart A request as multipart/form-data, as the System One SDKs send one with images: the first part is named
+// `request` (application/json) and holds the request; every other part holds one image's bytes (named
+// uniquely, typed image/png, image/jpeg, image/jpg, application/octet-stream or not at all) and is
+// claimed by exactly one asset's `part`. Anything else is 400 invalid_request (reason
+// `multipart_malformed`).
+type DecisionMultipart struct {
+	// Request A standard request or a batch; the two forms are mutually exclusive. A standard request is one context
+	// and its questions: `state` and `questions` (both required), and the `images` and `videos` every
+	// question sees. A batch is `states` alone: named standard requests, each answered under its name. A
+	// batch has no top-level `state`, `questions`, `images` or `videos`; a body with `states` and any of them
+	// is answered 400 invalid_request. `model`, `options` and `assets` belong to the request, and in a batch
+	// to every entry.
+	Request              DecisionRequest               `json:"request"`
+	AdditionalProperties map[string]openapi_types.File `json:"-"`
+}
+
+// DecisionRequest A standard request or a batch; the two forms are mutually exclusive. A standard request is one context
+// and its questions: `state` and `questions` (both required), and the `images` and `videos` every
+// question sees. A batch is `states` alone: named standard requests, each answered under its name. A
+// batch has no top-level `state`, `questions`, `images` or `videos`; a body with `states` and any of them
+// is answered 400 invalid_request. `model`, `options` and `assets` belong to the request, and in a batch
+// to every entry.
 type DecisionRequest struct {
+	// Assets Images by reference (System One `assets`), for models whose card lists the `image` modality. Each
+	// reference is 1 to 1,024 bytes and not blank, all of them together at most 65,536 bytes, and every one
+	// must be used (reason `asset_unreferenced`). A reference is replaced wherever it occurs in a string of
+	// the state, of a question's `instructions` or of its options (criteria values, `choices` and `labels`
+	// descriptions, `levels`), in a standard request or in every entry of a batch: a string equal to a reference is
+	// that image, a longer one is split at each occurrence (left to right, the longest reference first at
+	// one position), and object keys are never replaced. Each occurrence is one use, read where it sits and
+	// counted again, toward the token limits and `usage.input_tokens`; the bytes of all uses together are at
+	// most `limits.max_request_bytes` of the process (reason `asset_uses`). An image in the state is part of
+	// the state. An image in a question's instructions or options belongs to that question only, on models
+	// whose `image_placements` list `instructions` or `criteria`; another model answers that question with
+	// invalid_question, reason `question_images_unsupported`. One rejected image fails the request.
+	Assets *DecisionAssets `json:"assets,omitempty"`
+
 	// Images Images every question of the state sees, for models whose card lists the `image` modality: base64 PNG,
 	// JPEG or WebP data URLs (`data:image/png;base64,...`), each at most `limits.image_max_bytes` bytes and
 	// `limits.image_source_max_pixels` pixels. The model reads each at up to `limits.image_max_pixels`
@@ -417,17 +602,25 @@ type DecisionRequest struct {
 	Model   *string         `json:"model,omitempty"`
 	Options *RequestOptions `json:"options,omitempty"`
 
-	// Questions Named questions; answers keep this order.
-	Questions map[string]Question `json:"questions"`
+	// Questions A standard request's named questions; answers keep this order.
+	Questions map[string]Question `json:"questions,omitempty"`
 
-	// State The context the questions are about; text, an object or an array of JSON values. Models with typed
-	// parts read an object's `request` / `user` / `prompt` as the user part, `answer` / `response` as the
-	// answer part and every other field as context.
-	State interface{} `json:"state"`
+	// Roles What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3): the `user`'s
+	// content, `context`, or the `answer` under check; a key without one is context. Omitted, the keys name
+	// their parts as `state` says (vllm-sr/4.0's implicit roles). Null gives no part a role: the whole state is
+	// the user's content, as a vllm-sr/5.0 request without roles has it. Other families read the state as they
+	// render it, whatever the roles.
+	Roles *DecisionRoles `json:"roles,omitempty"`
 
-	// States Further states, each with its own questions, answered in the same call: a client asks every question it
-	// has for one model in one request. Each entry is read exactly as a request with its state, its questions
-	// and this request's model and options would be, and its answers come back under the same name in the
+	// State A standard request's context, which its questions are about; text, an object or an array of JSON
+	// values. Models with typed parts read an object's `request` / `user` / `prompt` as the user part,
+	// `answer` / `response` as the answer part and every other field as context.
+	State interface{} `json:"state,omitempty"`
+
+	// States A batch: named standard requests answered in one call, so a client asks every question it has for one
+	// model at once. Questions about one context go in one entry, and each other context in an entry of its
+	// own. Each entry is read exactly as a standard request with its state, questions, images and videos and
+	// the batch's model, options and assets would be, and its answers come back under the same name in the
 	// response's `states`. Question IDs are unique within an entry.
 	States *map[string]DecisionState `json:"states,omitempty"`
 
@@ -442,10 +635,13 @@ type DecisionRequest struct {
 	Videos *DecisionVideos `json:"videos,omitempty"`
 }
 
-// DecisionResponse defines model for DecisionResponse.
+// DecisionResponse The answers to a standard request (`answers`, and `spans`, `sets`, `thresholds` and `span_heads` for the
+// questions that have them) or to a batch (`states`: each entry's answers under its name). A batch's
+// `usage` counts every entry, and its `meta` (with `return_meta`) is the one every entry carries.
 type DecisionResponse struct {
-	// Answers One answer per question; a Set question adds a Noul answer per label under `<id>.<label>`.
-	Answers map[string]Answer `json:"answers"`
+	// Answers A standard request's answers, one per question; a Set question adds a Noul answer per label under
+	// `<id>.<label>`.
+	Answers map[string]Answer `json:"answers,omitempty"`
 	Meta    *ResponseMeta     `json:"meta,omitempty"`
 	Model   string            `json:"model"`
 
@@ -458,8 +654,7 @@ type DecisionResponse struct {
 	// Spans Span answers by question ID.
 	Spans *map[string][]Span `json:"spans,omitempty"`
 
-	// States The answers about each entry of the request's `states`, as that entry's own request would get them. The
-	// response's own fields answer the request's `state`, and its `usage` counts that state alone.
+	// States A batch's answers by entry name, each as that entry's own standard request would get them.
 	States *map[string]DecisionStateResponse `json:"states,omitempty"`
 
 	// Thresholds The threshold applied to each Set or Span question.
@@ -467,7 +662,14 @@ type DecisionResponse struct {
 	Usage      Usage               `json:"usage"`
 }
 
-// DecisionState defines model for DecisionState.
+// DecisionRoles What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3): the `user`'s
+// content, `context`, or the `answer` under check; a key without one is context. Omitted, the keys name
+// their parts as `state` says (vllm-sr/4.0's implicit roles). Null gives no part a role: the whole state is
+// the user's content, as a vllm-sr/5.0 request without roles has it. Other families read the state as they
+// render it, whatever the roles.
+type DecisionRoles map[string]string
+
+// DecisionState One entry of a batch, a standard request without the batch's shared fields.
 type DecisionState struct {
 	// Images Images every question of the state sees, for models whose card lists the `image` modality: base64 PNG,
 	// JPEG or WebP data URLs (`data:image/png;base64,...`), each at most `limits.image_max_bytes` bytes and
@@ -479,7 +681,14 @@ type DecisionState struct {
 	// Questions Named questions about this state; answers keep this order.
 	Questions map[string]Question `json:"questions"`
 
-	// State The context this entry's questions are about, as a request's `state`.
+	// Roles What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3): the `user`'s
+	// content, `context`, or the `answer` under check; a key without one is context. Omitted, the keys name
+	// their parts as `state` says (vllm-sr/4.0's implicit roles). Null gives no part a role: the whole state is
+	// the user's content, as a vllm-sr/5.0 request without roles has it. Other families read the state as they
+	// render it, whatever the roles.
+	Roles *DecisionRoles `json:"roles,omitempty"`
+
+	// State The context this entry's questions are about, as a standard request's `state`.
 	State interface{} `json:"state"`
 
 	// Videos Videos every question of the state sees, after its images, for models whose card lists the `video`
@@ -493,7 +702,7 @@ type DecisionState struct {
 	Videos *DecisionVideos `json:"videos,omitempty"`
 }
 
-// DecisionStateResponse The answers about one entry of a request's `states`, with the fields of a response of its own.
+// DecisionStateResponse The answers to one entry of a batch, with the fields of a standard request's response.
 type DecisionStateResponse struct {
 	// Answers One answer per question; a Set question adds a Noul answer per label under `<id>.<label>`.
 	Answers map[string]Answer `json:"answers"`
@@ -569,9 +778,6 @@ type EmbeddingsOptions struct {
 	MaxTokens  *int                       `json:"max_tokens,omitempty"`
 	Overflow   *EmbeddingsOptionsOverflow `json:"overflow,omitempty"`
 
-	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile *ProfileName `json:"profile,omitempty"`
-
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
 }
@@ -619,8 +825,40 @@ type EmbeddingsUsage struct {
 	TotalTokens  int `json:"total_tokens"`
 }
 
+// EngineArgs How the model batches requests and the precision it computes in (`vllm-srun serve` engine arguments).
+type EngineArgs struct {
+	// BatchWindowMs How long the scheduler waits after the first request to collect more (when `max_num_seqs` is above 1).
+	BatchWindowMs float64 `json:"batch_window_ms"`
+
+	// Dtype The configured precision; auto is the precision the model was published in.
+	Dtype EngineArgsDtype `json:"dtype"`
+
+	// EnableSharedContext Whether a multi-question decision request computes its shared state once.
+	EnableSharedContext bool `json:"enable_shared_context"`
+
+	// MaxModelLen The most input tokens one question of a Decision model may have, as configured; null keeps the
+	// package's limit. The limit the model applies is the card's `limits.max_input_tokens`.
+	MaxModelLen *int `json:"max_model_len"`
+
+	// MaxNumBatchedTokens The most tokens one merged forward holds: the sum of its rows, each rounded up to 8, for a model
+	// that packs merged rows, else its rows times its longest row. A value the engine arguments leave unset
+	// is the one the runtime chose for the device (its memory class, adjusted by the startup calibration).
+	MaxNumBatchedTokens int `json:"max_num_batched_tokens"`
+
+	// MaxNumSeqs The most rows one forward holds, across requests: one per question of a decision request, one per
+	// input or window otherwise; 1 runs every row alone. A value the engine arguments leave unset is the
+	// one the runtime chose for the device (its memory class; the CPU's default never binds at its token
+	// budget, since a row costs at least 8 padded tokens).
+	MaxNumSeqs int `json:"max_num_seqs"`
+}
+
+// EngineArgsDtype The configured precision; auto is the precision the model was published in.
+type EngineArgsDtype string
+
 // ErrorBody defines model for ErrorBody.
 type ErrorBody struct {
+	// Code The request's error. `question_failed` (POST /v1/systemone): the request is answered as a whole for
+	// its failed question `question`, whose code is `question_error`; its status follows that code.
 	Code ErrorBodyCode `json:"code"`
 
 	// Limit The limit `reason` names when one was broken: bytes for `*_too_large`, pixels for `*_pixels`, seconds
@@ -629,16 +867,32 @@ type ErrorBody struct {
 	Limit   *int   `json:"limit,omitempty"`
 	Message string `json:"message"`
 
-	// Reason Why an image or video was rejected (`invalid_request` only). These fixed words never carry request
-	// data, so a gateway may show them where it must not show `message`.
+	// Question The question whose failure answers the request: on POST /v1/systemone, and on a request none of whose
+	// questions is valid.
+	Question *string `json:"question,omitempty"`
+
+	// QuestionError Why one item or question has no result. `max_length_exceeded`: the input has more tokens than the model or the
+	// request's budget takes. `scan_budget_exceeded`: the input is one the model reads in windows (classify
+	// `overflow: window`, a Vela 2.0 state part) and has more tokens than its scan budget, so none of it was
+	// scanned.
+	QuestionError *ItemError `json:"question_error,omitempty"`
+
+	// Reason Why an image, video, asset or body was rejected, or the failed question's reason (QuestionReason).
+	// These fixed words never carry request data, so a gateway may show them where it must not show
+	// `message`.
 	Reason *ErrorBodyReason `json:"reason,omitempty"`
+
+	// State In a batch, the name of the entry `question` belongs to.
+	State *string `json:"state,omitempty"`
 }
 
-// ErrorBodyCode defines model for ErrorBody.Code.
+// ErrorBodyCode The request's error. `question_failed` (POST /v1/systemone): the request is answered as a whole for
+// its failed question `question`, whose code is `question_error`; its status follows that code.
 type ErrorBodyCode string
 
-// ErrorBodyReason Why an image or video was rejected (`invalid_request` only). These fixed words never carry request
-// data, so a gateway may show them where it must not show `message`.
+// ErrorBodyReason Why an image, video, asset or body was rejected, or the failed question's reason (QuestionReason).
+// These fixed words never carry request data, so a gateway may show them where it must not show
+// `message`.
 type ErrorBodyReason string
 
 // ErrorResponse defines model for ErrorResponse.
@@ -651,8 +905,10 @@ type FloatVector = []float32
 
 // GoldenStatus defines model for GoldenStatus.
 type GoldenStatus struct {
-	Checked   *int               `json:"checked,omitempty"`
-	Matched   *int               `json:"matched,omitempty"`
+	Checked *int `json:"checked,omitempty"`
+	Matched *int `json:"matched,omitempty"`
+
+	// Reference Recorded golden reference key. A hardware-qualified key is preferred when present; otherwise the device-class reference is used.
 	Reference *string            `json:"reference"`
 	Status    GoldenStatusStatus `json:"status"`
 }
@@ -750,8 +1006,11 @@ type ItemError string
 // Liveness Liveness of the process (`GET /health/live`), whatever its models' readiness.
 type Liveness struct {
 	// ApiVersion The version of this contract the runtime serves (`info.version`); a client refuses another major version.
-	ApiVersion string         `json:"api_version"`
-	Status     LivenessStatus `json:"status"`
+	ApiVersion string `json:"api_version"`
+
+	// Reason Why the process is stalled, per model; absent while alive.
+	Reason *string        `json:"reason"`
+	Status LivenessStatus `json:"status"`
 }
 
 // LivenessStatus defines model for Liveness.Status.
@@ -765,40 +1024,67 @@ type ModelCard struct {
 	Dtype                *string        `json:"dtype,omitempty"`
 	Embedding            *EmbeddingCard `json:"embedding,omitempty"`
 	Engine               *string        `json:"engine,omitempty"`
-	Family               string         `json:"family"`
-	Golden               *GoldenStatus  `json:"golden,omitempty"`
-	Heads                *[]HeadCard    `json:"heads,omitempty"`
-	Id                   string         `json:"id"`
-	Licence              *string        `json:"licence"`
-	Limits               *ModelLimits   `json:"limits,omitempty"`
-	ManifestSha256       *string        `json:"manifest_sha256,omitempty"`
 
-	// Modalities Decision models only; the inputs a decisions request may carry (`text`, `image` for `images`, `video` for `videos`).
-	Modalities  *[]string     `json:"modalities,omitempty"`
-	ModelSha256 *string       `json:"model_sha256,omitempty"`
-	Object      string        `json:"object"`
-	OwnedBy     *string       `json:"owned_by,omitempty"`
-	Parameters  *int          `json:"parameters,omitempty"`
-	Plugins     *[]PluginInfo `json:"plugins,omitempty"`
+	// EngineArgs How the model batches requests and the precision it computes in (`vllm-srun serve` engine arguments).
+	EngineArgs *EngineArgs   `json:"engine_args,omitempty"`
+	Family     string        `json:"family"`
+	Golden     *GoldenStatus `json:"golden,omitempty"`
+	Heads      *[]HeadCard   `json:"heads,omitempty"`
+	Id         string        `json:"id"`
+
+	// ImagePlacements Decision models with the `image` modality; where they read a request's images: `state` (in front of
+	// the state text: `images`, and the uses of `assets` in the state), and `instructions` and `criteria`
+	// (inside one question) where the model reads a question's own images.
+	ImagePlacements *[]ModelCardImagePlacements `json:"image_placements,omitempty"`
+	Licence         *string                     `json:"licence"`
+	Limits          *ModelLimits                `json:"limits,omitempty"`
+	ManifestSha256  *string                     `json:"manifest_sha256,omitempty"`
+
+	// Modalities Decision models only; the inputs a decisions request may carry (`text`, `image` for `images` and `assets`, `video` for `videos`).
+	Modalities  *[]string `json:"modalities,omitempty"`
+	ModelSha256 *string   `json:"model_sha256,omitempty"`
+
+	// Numerics exact when the model's answers never depend on batching: its rows answer the same alone or in
+	// any batch, at `dtype` auto, without shared context and on kernels that are bit-exact against
+	// their references. approximate when the rows a forward holds, shared-context trees, another dtype
+	// or approximate kernels can move answers by rounding.
+	Numerics   *ModelCardNumerics `json:"numerics,omitempty"`
+	Object     string             `json:"object"`
+	OwnedBy    *string            `json:"owned_by,omitempty"`
+	Parameters *int               `json:"parameters,omitempty"`
+	Plugins    *[]PluginInfo      `json:"plugins,omitempty"`
 
 	// Presets Questions the model defines (Question.preset).
-	Presets       *[]string      `json:"presets,omitempty"`
-	Profile       *string        `json:"profile,omitempty"`
-	Profiles      *[]ProfileInfo `json:"profiles,omitempty"`
-	QuestionTypes *[]string      `json:"question_types,omitempty"`
-	Ready         bool           `json:"ready"`
-	Reason        *string        `json:"reason"`
-	Repo          *string        `json:"repo"`
-	Rerank        *RerankCard    `json:"rerank,omitempty"`
-	Revision      *string        `json:"revision"`
+	Presets       *[]string   `json:"presets,omitempty"`
+	QuestionTypes *[]string   `json:"question_types,omitempty"`
+	Ready         bool        `json:"ready"`
+	Reason        *string     `json:"reason"`
+	Repo          *string     `json:"repo"`
+	Rerank        *RerankCard `json:"rerank,omitempty"`
+	Revision      *string     `json:"revision"`
 
 	// Status This model's state.
 	Status   *ModelCardStatus `json:"status,omitempty"`
 	Surfaces []string         `json:"surfaces"`
+
+	// Usage How usage.input_tokens counts a request; `state_once` when the state counts once and every question its own tokens; absent when each question counts its own copy of the state.
+	Usage *ModelCardUsage `json:"usage,omitempty"`
 }
+
+// ModelCardImagePlacements defines model for ModelCard.ImagePlacements.
+type ModelCardImagePlacements string
+
+// ModelCardNumerics exact when the model's answers never depend on batching: its rows answer the same alone or in
+// any batch, at `dtype` auto, without shared context and on kernels that are bit-exact against
+// their references. approximate when the rows a forward holds, shared-context trees, another dtype
+// or approximate kernels can move answers by rounding.
+type ModelCardNumerics string
 
 // ModelCardStatus This model's state.
 type ModelCardStatus string
+
+// ModelCardUsage How usage.input_tokens counts a request; `state_once` when the state counts once and every question its own tokens; absent when each question counts its own copy of the state.
+type ModelCardUsage string
 
 // ModelHealth defines model for ModelHealth.
 type ModelHealth struct {
@@ -811,7 +1097,10 @@ type ModelHealthStatus string
 
 // ModelLimits defines model for ModelLimits.
 type ModelLimits struct {
-	// ImageMaxBytes Models that read images; the most bytes one supplied image may have.
+	// BoxVideoMaxSeconds Models that answer track questions; the longest clip a box question with `at` or a track question reads, in seconds (a longer clip gets `box_video_too_long`); every other video question keeps `video_max_seconds`.
+	BoxVideoMaxSeconds *int `json:"box_video_max_seconds,omitempty"`
+
+	// ImageMaxBytes Models that read images; the most bytes one supplied image may have (16 MiB for Decision 3.0).
 	ImageMaxBytes *int `json:"image_max_bytes,omitempty"`
 
 	// ImageMaxPixels Models that read images; the most pixels the model reads of one image (larger images are resized).
@@ -819,12 +1108,17 @@ type ModelLimits struct {
 
 	// ImageSourceMaxPixels Models that read images; the most pixels one supplied image may have.
 	ImageSourceMaxPixels *int `json:"image_source_max_pixels,omitempty"`
-	MaxInputTokens       *int `json:"max_input_tokens,omitempty"`
+
+	// MaxInputTokens The most tokens of one question (the state and that question), with long context where the model has `validated_input_tokens`.
+	MaxInputTokens *int `json:"max_input_tokens,omitempty"`
 
 	// MaxInputs Most inputs or documents one classify, embeddings or rerank request may carry.
 	MaxInputs  *int `json:"max_inputs,omitempty"`
 	MaxLevels  *int `json:"max_levels,omitempty"`
 	MaxOptions *int `json:"max_options,omitempty"`
+
+	// MaxRequestTokens State-once models; the most tokens of one request, its state once and every question's own.
+	MaxRequestTokens *int `json:"max_request_tokens,omitempty"`
 
 	// MaxScanTokens Decision models that read a long state part in windows (Vela 2.0): the most tokens of one part a question
 	// reads whole, by default four inputs on a CPU and 32 on a GPU. A longer part fails its questions with
@@ -834,8 +1128,13 @@ type ModelLimits struct {
 	MinOptions    *int `json:"min_options,omitempty"`
 
 	// TruncateTokens The same models: the most tokens of a part a question with `overflow: truncate` reads, one input on a
-	// CPU (one forward) and the scan budget on a GPU.
+	// CPU (one forward) and the scan budget on a GPU. A Vela 3.0 evidence span question reads its route's
+	// 32,768-token window instead.
 	TruncateTokens *int `json:"truncate_tokens,omitempty"`
+
+	// ValidatedInputTokens The length the model was validated at: each question's cap unless the request asks for long context
+	// (`options.long_context`); absent when `max_input_tokens` is the only cap.
+	ValidatedInputTokens *int `json:"validated_input_tokens,omitempty"`
 
 	// VideoFps Models that read videos; the frames per second the model samples.
 	VideoFps *float32 `json:"video_fps,omitempty"`
@@ -868,14 +1167,17 @@ type ModelList struct {
 	// Limits What one request to this process may hold; a larger one is answered 413 request_too_large as a whole, so a
 	// client splits its work to fit.
 	Limits ProcessLimits `json:"limits"`
-	Object string        `json:"object"`
+
+	// Models The decision models in System One's model-list shape, which the System One SDKs read.
+	Models []SystemOneModel `json:"models"`
+	Object string           `json:"object"`
 }
 
 // PluginInfo defines model for PluginInfo.
 type PluginInfo struct {
-	// Capabilities The plugin's capability descriptor: a family's surfaces and package formats, an engine's architectures
-	// and outputs, an accelerator's validation status, a profile's numerics. Engines and accelerators also list
-	// `auto_priority`, where `auto` tries them (lowest first; null: only when named).
+	// Capabilities The plugin's capability descriptor: a family's surfaces and package formats, an engine's architectures,
+	// outputs and the `--dtype` values it runs (`dtypes`), an accelerator's validation status. Engines and
+	// accelerators also list `auto_priority`, where `auto` tries them (lowest first; null: only when named).
 	Capabilities *map[string]interface{} `json:"capabilities,omitempty"`
 	Distribution *string                 `json:"distribution"`
 	Group        string                  `json:"group"`
@@ -893,26 +1195,23 @@ type ProcessLimits struct {
 	MaxRequestBytes int `json:"max_request_bytes"`
 }
 
-// ProfileInfo defines model for ProfileInfo.
-type ProfileInfo struct {
-	Description *string             `json:"description,omitempty"`
-	Name        string              `json:"name"`
-	Numerics    ProfileInfoNumerics `json:"numerics"`
-}
-
-// ProfileInfoNumerics defines model for ProfileInfo.Numerics.
-type ProfileInfoNumerics string
-
-// ProfileName exact, or a profile the server enabled for this model (its card's `profiles`).
-type ProfileName = string
-
-// Question One question. `instructions` is required unless `preset` names a question the model defines (see
-// `presets` in /v1/models). Every family validates System One fields the same way: a question takes only
-// its type's fields (`choices` for Choice and Noul, `levels` for Score, `labels` for Set and Span, `over`,
-// `head` and `threshold` where the model reads them), and any other field is answered with
-// invalid_question. `choices`, `levels` and `labels` are the Router config's ordered forms of `criteria`;
-// a question takes one or the other.
+// Question One question. Choice and Score may omit `instructions` (the model then chooses the best matching
+// option); a Noul may when its criteria describe an outcome; Box and track need them; a `preset` names a
+// question the model defines (see `presets` in /v1/models). Every family validates System One fields the
+// same way: a question takes only its type's fields (`choices` for Choice and Noul, `levels` for Score,
+// `labels` for Set and Span, `at` for Box, `rate` for track, `over`, `head` and `threshold` where the
+// model reads them), and any other field is answered with invalid_question. `choices`, `levels` and
+// `labels` are the Router config's ordered forms of `criteria`; a question takes one or the other. A Box
+// question locates what its instructions describe in its target image: the image its instructions
+// reference when there is one, else the state's only image (reasons `box_needs_image`,
+// `box_target_ambiguous`); with `at`, at that moment of the state's only video; a track question locates
+// it at every sampled moment of that video, `rate` times per second (reasons `video_needed`,
+// `video_target_ambiguous`, `box_video_too_long` for a clip longer than `limits.box_video_max_seconds`,
+// `at_out_of_range`).
 type Question struct {
+	// At Box questions on a video; seconds from its start (the sampled moment nearest to it is read).
+	At *float64 `json:"at,omitempty"`
+
 	// Choices Ordered Choice or Noul options, an alternative to a criteria object.
 	Choices *[]ChoiceOption `json:"choices,omitempty"`
 
@@ -921,6 +1220,14 @@ type Question struct {
 	// model's default). Score: an ordered list of 2..10 level descriptions. Set and Span: an object of
 	// 1..255 labels to descriptions. Descriptions are non-blank text, an object or an array.
 	Criteria *interface{} `json:"criteria,omitempty"`
+
+	// DecisionAdapter Vela 3.0 d3 sizes (family `vela3_d3`) whose package declares `decision_opt_in`: true answers a
+	// Choice, Noul or Score question with the opt-in decision adapter (`decision_optin`, else the router
+	// adapter), as the package's runtime does. A router question keeps the router adapter; one the package
+	// routes to a task adapter takes the opt-in adapter instead. Only true turns it on; any other value, a
+	// package without opt-in, and a request with images, videos, assets or Box / track questions (which
+	// runs every adapter off) answer it as false. Other models answer the field with invalid_question.
+	DecisionAdapter *bool `json:"decision_adapter,omitempty"`
 
 	// Head Span questions on models with a broad span head: the head that answers (default: the model's routing,
 	// reported per question in `span_heads`). Models without one answer `broad` with invalid_question.
@@ -942,12 +1249,17 @@ type Question struct {
 
 	// Overflow Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
 	// than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
-	// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
-	// both kinds share their model inputs unless one has to be read in windows.
+	// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only (a Vela 3.0
+	// evidence span question: its route's 32,768-token window). Questions of both kinds share their model inputs
+	// unless one has to be read in windows.
 	Overflow *QuestionOverflow `json:"overflow,omitempty"`
 
 	// Preset A question the model defines; the model fills in its type, instructions and criteria.
 	Preset *string `json:"preset,omitempty"`
+
+	// Rate Track questions: updates per second over the whole video, 1 (16-second windows at 2 frames per
+	// second) or 2 (8-second windows at 4); any other value is answered with invalid_question.
+	Rate *QuestionRate `json:"rate,omitempty"`
 
 	// RequireFullInput Require every supplied state part to be read completely, including context outside `over`.
 	// Clipping fails this question with max_length_exceeded unless complete window coverage is
@@ -959,8 +1271,9 @@ type Question struct {
 	// Threshold Set or Span decision threshold; the applied threshold is reported in `thresholds`.
 	Threshold *float64 `json:"threshold,omitempty"`
 
-	// Type choice, noul or score; set and span where the model declares them (`question_types` in /v1/models).
-	// Unknown or undeclared types are answered with invalid_question.
+	// Type choice, noul or score; box, track, set and span where the model declares them (`question_types` in
+	// /v1/models). Unknown types are answered with invalid_question (reason `type_unsupported`); an
+	// undeclared box or track with reason `box_unsupported` or `track_unsupported`.
 	Type *string `json:"type,omitempty"`
 }
 
@@ -970,9 +1283,24 @@ type QuestionHead string
 
 // QuestionOverflow Models with a scan budget (their card's `limits.max_scan_tokens`): how the question reads a field longer
 // than one input. `window` (default): whole, in windows up to the request's `max_tokens`, failing with
-// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only. Questions of
-// both kinds share their model inputs unless one has to be read in windows.
+// `scan_budget_exceeded` past it. `truncate`: its first `limits.truncate_tokens` tokens only (a Vela 3.0
+// evidence span question: its route's 32,768-token window). Questions of both kinds share their model inputs
+// unless one has to be read in windows.
 type QuestionOverflow string
+
+// QuestionRate Track questions: updates per second over the whole video, 1 (16-second windows at 2 frames per
+// second) or 2 (8-second windows at 4); any other value is answered with invalid_question.
+type QuestionRate int
+
+// QuestionReason A fixed word for why a question failed; it never carries request data. invalid_question:
+// `question_malformed`, `type_unsupported`, `box_unsupported`, `track_unsupported`,
+// `question_images_unsupported`, `box_needs_image`, `box_target_ambiguous`, `video_needed`,
+// `video_target_ambiguous`, `box_video_too_long`, `at_out_of_range`, `preset_unknown`; max_length_exceeded:
+// `question_tokens`
+// (over `limits.validated_input_tokens`, or `limits.max_input_tokens` with long context),
+// `require_full_input`; scan_budget_exceeded: `scan_budget`; invalid_input: `input_malformed`;
+// invalid_model_output: `model_output`; deadline_exceeded: `deadline`; unavailable: `model_unavailable`.
+type QuestionReason = string
 
 // Representation The identity of an embedding space; vectors with different representations never mix.
 type Representation struct {
@@ -988,14 +1316,16 @@ type RequestOptions struct {
 	// DeadlineMs Work not started by the deadline is not run; its items return deadline_exceeded.
 	DeadlineMs *float64 `json:"deadline_ms,omitempty"`
 
+	// LongContext Long context (default false): each question may have up to the model's `limits.max_input_tokens`
+	// instead of its `limits.validated_input_tokens`, and a state-once model's request up to
+	// `limits.max_request_tokens`. Slower and less accurate than the validated length.
+	LongContext *bool `json:"long_context,omitempty"`
+
 	// MaxTokens Scan budget: the most tokens of one state part a question reads whole (default its card's
 	// `limits.max_scan_tokens`; a part that fits one model input is always read). A longer part fails the
 	// questions that read it whole with `scan_budget_exceeded`. Only a model whose card has `max_scan_tokens`
 	// takes it.
 	MaxTokens *int `json:"max_tokens,omitempty"`
-
-	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile *ProfileName `json:"profile,omitempty"`
 
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
@@ -1020,9 +1350,6 @@ type RerankOptions struct {
 
 	// Overflow What happens to a query-document pair longer than max_tokens (default reject).
 	Overflow *RerankOptionsOverflow `json:"overflow,omitempty"`
-
-	// Profile exact, or a profile the server enabled for this model (its card's `profiles`).
-	Profile *ProfileName `json:"profile,omitempty"`
 
 	// ReturnMeta Include meta in the response (default false).
 	ReturnMeta *bool `json:"return_meta,omitempty"`
@@ -1082,17 +1409,21 @@ type ResponseMeta struct {
 	Accelerator *string  `json:"accelerator,omitempty"`
 	ComputeMs   *float64 `json:"compute_ms,omitempty"`
 	Device      *string  `json:"device,omitempty"`
-	Engine      *string  `json:"engine,omitempty"`
+
+	// Dtype The precision the backbone computed in (float32, bfloat16 or float16).
+	Dtype  *string `json:"dtype,omitempty"`
+	Engine *string `json:"engine,omitempty"`
 
 	// Head The head that produced a classify result.
 	Head *string `json:"head,omitempty"`
 
 	// ModelId The verified loaded model identity, preserved when a serving frontend replaces the public model selector with an alias.
-	ModelId     *string  `json:"model_id,omitempty"`
-	ModelSha256 *string  `json:"model_sha256,omitempty"`
-	Numerics    *string  `json:"numerics,omitempty"`
-	Profile     *string  `json:"profile,omitempty"`
-	QueueMs     *float64 `json:"queue_ms,omitempty"`
+	ModelId     *string `json:"model_id,omitempty"`
+	ModelSha256 *string `json:"model_sha256,omitempty"`
+
+	// Numerics exact when the model's answers never depend on batching; see ModelCard.numerics.
+	Numerics *ResponseMetaNumerics `json:"numerics,omitempty"`
+	QueueMs  *float64              `json:"queue_ms,omitempty"`
 
 	// Representation The identity of an embedding space; vectors with different representations never mix.
 	Representation *Representation `json:"representation,omitempty"`
@@ -1100,6 +1431,9 @@ type ResponseMeta struct {
 	// Revision The 40-hex Hub revision; null for a local package directory.
 	Revision *string `json:"revision"`
 }
+
+// ResponseMetaNumerics exact when the model's answers never depend on batching; see ModelCard.numerics.
+type ResponseMetaNumerics string
 
 // SetAnswer defines model for SetAnswer.
 type SetAnswer struct {
@@ -1121,6 +1455,34 @@ type Span struct {
 	Text        string  `json:"text"`
 }
 
+// SystemOneBatchRequest defines model for SystemOneBatchRequest.
+type SystemOneBatchRequest struct {
+	Model   string          `json:"model"`
+	Options *RequestOptions `json:"options,omitempty"`
+
+	// Requests Named vllm-sr/5.0 requests without options; each may repeat the batch's model.
+	Requests map[string]map[string]interface{} `json:"requests"`
+}
+
+// SystemOneBatchResponse defines model for SystemOneBatchResponse.
+type SystemOneBatchResponse struct {
+	Meta      *ResponseMeta               `json:"meta,omitempty"`
+	Model     string                      `json:"model"`
+	Responses map[string]DecisionResponse `json:"responses"`
+	Usage     Usage                       `json:"usage"`
+}
+
+// SystemOneModel defines model for SystemOneModel.
+type SystemOneModel struct {
+	Description string `json:"description"`
+
+	// Name The model ID a request names.
+	Name string `json:"name"`
+
+	// ReleaseDate YYYY-MM-DD, or empty when the package does not say.
+	ReleaseDate string `json:"release_date"`
+}
+
 // TextList defines model for TextList.
 type TextList = []string
 
@@ -1131,6 +1493,21 @@ type TokenProbabilities struct {
 	Start         int       `json:"start"`
 }
 
+// TrackPoint defines model for TrackPoint.
+type TrackPoint struct {
+	// Box A box as fractions of its image's height (top, bottom) and width (left, right) from the top-left
+	// corner, as the image was sent: 0 <= top < bottom <= 1, 0 <= left < right <= 1. A box is always given;
+	// pair it with a Noul when the target may be absent.
+	Box        Box      `json:"box"`
+	Confidence *float64 `json:"confidence"`
+
+	// Time Seconds from the start of the video.
+	Time float64 `json:"time"`
+
+	// Visible The probability that the target is visible at this moment.
+	Visible float64 `json:"visible"`
+}
+
 // Usage defines model for Usage.
 type Usage struct {
 	InputTokens  int `json:"input_tokens"`
@@ -1139,10 +1516,10 @@ type Usage struct {
 
 // WindowOptions defines model for WindowOptions.
 type WindowOptions struct {
-	// Overlap Content tokens shared by neighbouring windows.
+	// Overlap Content tokens shared by neighbouring windows. An overlap that is not smaller than the content width (tokens minus special tokens) fails the request.
 	Overlap *int `json:"overlap,omitempty"`
 
-	// Tokens Window size including special tokens.
+	// Tokens Window size including special tokens. A size that leaves no room for content after the head's special tokens fails the request.
 	Tokens int `json:"tokens"`
 }
 
@@ -1158,6 +1535,9 @@ type CreateClassificationJSONRequestBody = ClassifyRequest
 // CreateDecisionsJSONRequestBody defines body for CreateDecisions for application/json ContentType.
 type CreateDecisionsJSONRequestBody = DecisionRequest
 
+// CreateDecisionsMultipartRequestBody defines body for CreateDecisions for multipart/form-data ContentType.
+type CreateDecisionsMultipartRequestBody = DecisionMultipart
+
 // CreateEmbeddingsJSONRequestBody defines body for CreateEmbeddings for application/json ContentType.
 type CreateEmbeddingsJSONRequestBody = EmbeddingsRequest
 
@@ -1166,6 +1546,78 @@ type CreateRerankJSONRequestBody = RerankRequest
 
 // CreateSystemOneJSONRequestBody defines body for CreateSystemOne for application/json ContentType.
 type CreateSystemOneJSONRequestBody = DecisionRequest
+
+// CreateSystemOneMultipartRequestBody defines body for CreateSystemOne for multipart/form-data ContentType.
+type CreateSystemOneMultipartRequestBody = DecisionMultipart
+
+// CreateSystemOneBatchJSONRequestBody defines body for CreateSystemOneBatch for application/json ContentType.
+type CreateSystemOneBatchJSONRequestBody = SystemOneBatchRequest
+
+// Getter for additional properties for DecisionMultipart. Returns the specified
+// element and whether it was found
+func (a DecisionMultipart) Get(fieldName string) (value openapi_types.File, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for DecisionMultipart
+func (a *DecisionMultipart) Set(fieldName string, value openapi_types.File) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]openapi_types.File)
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for DecisionMultipart to handle AdditionalProperties
+func (a *DecisionMultipart) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["request"]; found {
+		err = json.Unmarshal(raw, &a.Request)
+		if err != nil {
+			return fmt.Errorf("error reading 'request': %w", err)
+		}
+		delete(object, "request")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]openapi_types.File)
+		for fieldName, fieldBuf := range object {
+			var fieldVal openapi_types.File
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for DecisionMultipart to handle AdditionalProperties
+func (a DecisionMultipart) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	object["request"], err = json.Marshal(a.Request)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'request': %w", err)
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
 
 // AsInputText returns the union data inside the ClassifyInput as a InputText
 func (t ClassifyInput) AsInputText() (InputText, error) {
@@ -1519,6 +1971,11 @@ type ClientInterface interface {
 	CreateSystemOneWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	CreateSystemOne(ctx context.Context, body CreateSystemOneJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateSystemOneBatchWithBody request with any body
+	CreateSystemOneBatchWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateSystemOneBatch(ctx context.Context, body CreateSystemOneBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1703,6 +2160,30 @@ func (c *Client) CreateSystemOneWithBody(ctx context.Context, contentType string
 
 func (c *Client) CreateSystemOne(ctx context.Context, body CreateSystemOneJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateSystemOneRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSystemOneBatchWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSystemOneBatchRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSystemOneBatch(ctx context.Context, body CreateSystemOneBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSystemOneBatchRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2061,6 +2542,46 @@ func NewCreateSystemOneRequestWithBody(server string, contentType string, body i
 	return req, nil
 }
 
+// NewCreateSystemOneBatchRequest calls the generic CreateSystemOneBatch builder with application/json body
+func NewCreateSystemOneBatchRequest(server string, body CreateSystemOneBatchJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateSystemOneBatchRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateSystemOneBatchRequestWithBody generates requests for CreateSystemOneBatch with any type of body
+func NewCreateSystemOneBatchRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/systemone/batch")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -2145,6 +2666,11 @@ type ClientWithResponsesInterface interface {
 	CreateSystemOneWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSystemOneResponse, error)
 
 	CreateSystemOneWithResponse(ctx context.Context, body CreateSystemOneJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSystemOneResponse, error)
+
+	// CreateSystemOneBatchWithBodyWithResponse request with any body
+	CreateSystemOneBatchWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSystemOneBatchResponse, error)
+
+	CreateSystemOneBatchWithResponse(ctx context.Context, body CreateSystemOneBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSystemOneBatchResponse, error)
 }
 
 type GetHealthResponse struct {
@@ -2174,6 +2700,7 @@ type GetLivenessResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *Liveness
+	JSON503      *Liveness
 }
 
 // Status returns HTTPResponse.Status
@@ -2274,6 +2801,7 @@ type CreateDecisionsResponse struct {
 	JSON400      *Error
 	JSON404      *Error
 	JSON413      *Error
+	JSON415      *Error
 	JSON422      *Error
 	JSON429      *Error
 	JSON500      *Error
@@ -2383,10 +2911,12 @@ type CreateSystemOneResponse struct {
 	JSON400      *Error
 	JSON404      *Error
 	JSON413      *Error
+	JSON415      *Error
 	JSON422      *Error
 	JSON429      *Error
 	JSON500      *Error
 	JSON503      *Error
+	JSON504      *Error
 }
 
 // Status returns HTTPResponse.Status
@@ -2399,6 +2929,35 @@ func (r CreateSystemOneResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r CreateSystemOneResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateSystemOneBatchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SystemOneBatchResponse
+	JSON400      *Error
+	JSON404      *Error
+	JSON413      *Error
+	JSON422      *Error
+	JSON500      *Error
+	JSON503      *Error
+	JSON504      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateSystemOneBatchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateSystemOneBatchResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -2543,6 +3102,23 @@ func (c *ClientWithResponses) CreateSystemOneWithResponse(ctx context.Context, b
 	return ParseCreateSystemOneResponse(rsp)
 }
 
+// CreateSystemOneBatchWithBodyWithResponse request with arbitrary body returning *CreateSystemOneBatchResponse
+func (c *ClientWithResponses) CreateSystemOneBatchWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSystemOneBatchResponse, error) {
+	rsp, err := c.CreateSystemOneBatchWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSystemOneBatchResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateSystemOneBatchWithResponse(ctx context.Context, body CreateSystemOneBatchJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSystemOneBatchResponse, error) {
+	rsp, err := c.CreateSystemOneBatch(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSystemOneBatchResponse(rsp)
+}
+
 // ParseGetHealthResponse parses an HTTP response from a GetHealthWithResponse call
 func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -2596,6 +3172,13 @@ func ParseGetLivenessResponse(rsp *http.Response) (*GetLivenessResponse, error) 
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Liveness
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -2781,6 +3364,13 @@ func ParseCreateDecisionsResponse(rsp *http.Response) (*CreateDecisionsResponse,
 			return nil, err
 		}
 		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest Error
@@ -3033,6 +3623,13 @@ func ParseCreateSystemOneResponse(rsp *http.Response) (*CreateSystemOneResponse,
 		}
 		response.JSON413 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 415:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON415 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -3060,6 +3657,88 @@ func ParseCreateSystemOneResponse(rsp *http.Response) (*CreateSystemOneResponse,
 			return nil, err
 		}
 		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateSystemOneBatchResponse parses an HTTP response from a CreateSystemOneBatchWithResponse call
+func ParseCreateSystemOneBatchResponse(rsp *http.Response) (*CreateSystemOneBatchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateSystemOneBatchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SystemOneBatchResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 504:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON504 = &dest
 
 	}
 

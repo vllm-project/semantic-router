@@ -2,7 +2,6 @@ package serving
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -15,18 +14,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
-// embedServices serves embedding and rerank cards. A vector is [len(input),
-// dimension, layer, 1, 1, ...] truncated to the requested dimension; a rerank
-// logit is the document's length.
+// embedServices serves embedding cards. A vector is [len(input), dimension,
+// layer, 1, 1, ...] truncated to the requested dimension.
 type embedServices struct {
 	mu       sync.Mutex
 	cards    map[string]modelservice.ModelCard
 	embeds   []modelservice.EmbedRequest
-	reranks  []modelservice.RerankRequest
 	fail     string
 	inFlight int
 	peak     int
@@ -44,10 +40,6 @@ func (f *embedServices) Card(_ context.Context, deployment string) (modelservice
 func (f *embedServices) CurrentCard(deployment string) (modelservice.ModelCard, bool) {
 	card, ok := f.cards[deployment]
 	return card, ok
-}
-
-func (f *embedServices) Classify(context.Context, string, modelservice.ClassifyRequest) (modelservice.ClassifyResponse, error) {
-	return modelservice.ClassifyResponse{}, errors.New("not used")
 }
 
 func (f *embedServices) Embed(_ context.Context, deployment string, request modelservice.EmbedRequest) (modelservice.EmbedResponse, error) {
@@ -78,23 +70,11 @@ func (f *embedServices) Embed(_ context.Context, deployment string, request mode
 		for j := range vector {
 			vector[j] = 1
 		}
-		vector[0] = float32(len(input.Text + input.ImageURL + input.AudioWAV))
+		vector[0] = float32(len(input.Text))
 		vector[1] = float32(dimension)
 		vector[2] = float32(request.Layer)
 		response.Embeddings[i] = vector
 		response.Inputs[i] = &modelservice.InputUsage{Tokens: 4, ProcessedTokens: 4, Truncated: len(strings.Fields(input.Text)) > 8}
-	}
-	return response, nil
-}
-
-func (f *embedServices) Rerank(_ context.Context, _ string, request modelservice.RerankRequest) (modelservice.RerankResponse, error) {
-	f.mu.Lock()
-	f.reranks = append(f.reranks, request)
-	f.mu.Unlock()
-	response := modelservice.RerankResponse{Results: make([]modelservice.RerankResult, len(request.Documents))}
-	for i, document := range request.Documents {
-		tokens := len(strings.Fields(request.Query + " " + document))
-		response.Results[i] = modelservice.RerankResult{Index: i, Logit: float64(len(document)), Input: &modelservice.InputUsage{Tokens: tokens, ProcessedTokens: tokens}}
 	}
 	return response, nil
 }
@@ -108,16 +88,16 @@ func (f *embedServices) embedCalls() []modelservice.EmbedRequest {
 func embeddingCard(id string, modalities ...string) modelservice.ModelCard {
 	return modelservice.ModelCard{
 		ID: id, Repo: "vllm-sr/" + id, ModelSHA256: strings.Repeat("ab", 32), Revision: strings.Repeat("1", 40),
-		Surfaces: []string{"embeddings"}, MaxInputTokens: 512, MaxInputs: 3, Device: "cpu", Dtype: "float32", Profile: "exact", Engine: "native",
+		Surfaces: []string{"embeddings"}, MaxInputTokens: 512, MaxInputs: 3, Device: "cpu", Dtype: "float32", Engine: "native",
 		Embedding: &modelservice.EmbeddingCard{Dimensions: []int{8, 4}, Layers: []int{6, 22}, Modalities: modalities, Normalized: true, Pooling: "mean"},
 	}
 }
 
 func embeddingSpec(deployment string) config.ResolvedModelBinding {
 	return config.ResolvedModelBinding{
-		Recipe: config.DefaultRecipeName, Name: "embedding",
-		Binding:    config.ModelBinding{Deployment: deployment, Contract: embeddingContract},
-		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime:8100", Device: "cpu", Profile: "exact", Input: config.ModelInputBudget{Overflow: "truncate"}},
+		Recipe: config.DefaultRecipeName, Name: "embedding", Contract: embeddingContract,
+		Binding:    config.ModelBinding{Deployment: deployment},
+		Deployment: config.ModelDeployment{Provider: config.ModelRuntimeProvider, Endpoint: "http://runtime:8100", Device: "cpu", Input: config.ModelInputBudget{Overflow: "truncate"}},
 	}
 }
 
@@ -276,41 +256,20 @@ func TestEmbeddingMapsItemErrors(t *testing.T) {
 	}
 }
 
-func TestEmbeddingMediaInputs(t *testing.T) {
+// A multimodal model's card lists its modalities, which the binding reports;
+// recall embeds its text.
+func TestEmbeddingReportsTheModalitiesOfItsCard(t *testing.T) {
 	services := &embedServices{cards: map[string]modelservice.ModelCard{"omni": embeddingCard("omni", "text", "image", "audio")}}
 	provider, err := New(services, nil).Embedding(context.Background(), embeddingSpec("omni"), 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer provider.Close()
-	if info := provider.EmbeddingInfo(); info.Audio == nil || len(info.Modalities) != 3 {
+	if info := provider.EmbeddingInfo(); len(info.Modalities) != 3 {
 		t.Fatalf("info %+v", info)
 	}
-	png := []byte("\x89PNG\r\n\x1a\nrest")
-	if _, err = provider.EmbedImage(context.Background(), png, 4); err != nil {
+	if _, err = provider.Embed(context.Background(), "the passport page"); err != nil {
 		t.Fatal(err)
-	}
-	pcm := []float32{0.5, -0.25, 0.125, 1}
-	if _, err = provider.EmbedAudio(context.Background(), embedding.AudioRequest{PCM: pcm, SampleRate: 16000, Channels: 2}); err != nil {
-		t.Fatal(err)
-	}
-	calls := services.embedCalls()
-	image, audio := calls[len(calls)-2].Inputs[0], calls[len(calls)-1].Inputs[0]
-	if !strings.HasPrefix(image.ImageURL, "data:image/png;base64,") || image.Text != "" {
-		t.Fatalf("image input %+v", image)
-	}
-	wav, err := base64.StdEncoding.DecodeString(audio.AudioWAV)
-	if err != nil {
-		t.Fatal(err)
-	}
-	decoded, err := embedding.DecodeAudio(base64.StdEncoding.EncodeToString(wav))
-	if err != nil || decoded.SampleRate != 16000 || decoded.Channels != 2 || len(decoded.PCM) != 4 {
-		t.Fatalf("audio round trip: %+v, %v", decoded, err)
-	}
-	for i := range pcm {
-		if decoded.PCM[i] != pcm[i] {
-			t.Fatalf("sample %d = %v, want %v", i, decoded.PCM[i], pcm[i])
-		}
 	}
 }
 
@@ -357,56 +316,6 @@ func TestDiagnoseEmbedding(t *testing.T) {
 	result, err := runtime.DiagnoseEmbedding(context.Background(), string(config.DefaultRecipeName), "embedding", "diagnose me")
 	if err != nil || len(result.Result.Embedding) != 4 || result.Binding.Identity.Deployment != "emb-diag" {
 		t.Fatalf("diagnostic %+v, %v", result, err)
-	}
-}
-
-func rerankSpec(deployment, overflow string, selection *config.PairScorerSelection) config.ResolvedModelBinding {
-	spec := embeddingSpec(deployment)
-	spec.Name = config.RAGRerankerConsumer
-	spec.Binding.Contract = config.RelevanceScoresContract
-	spec.Binding.PairScorer = selection
-	spec.Deployment.Input.Overflow = overflow
-	return spec
-}
-
-func TestRelevanceScoresPairsPerQueryAtTheSelectedExit(t *testing.T) {
-	card := modelservice.ModelCard{
-		ID: "reranker", ModelSHA256: strings.Repeat("ef", 32), Surfaces: []string{"rerank"}, MaxInputTokens: 512, Device: "cpu", Dtype: "float32",
-		Rerank: &modelservice.RerankCard{Default: modelservice.RerankExit{Layer: 22, Dimension: 768}, Exits: []modelservice.RerankExit{{Layer: 6, Dimension: 256}}},
-	}
-	services := &embedServices{cards: map[string]modelservice.ModelCard{"reranker": card}}
-	runtime := New(services, nil)
-	if _, err := runtime.Relevance(context.Background(), rerankSpec("reranker", "truncate", nil)); err == nil {
-		t.Fatal("a truncating reranker must be rejected")
-	}
-	if _, err := runtime.Relevance(context.Background(), rerankSpec("reranker", "reject", &config.PairScorerSelection{Layer: 6, Dimension: 768})); err == nil {
-		t.Fatal("an undeclared exit must be rejected")
-	}
-	scorer, err := runtime.Relevance(context.Background(), rerankSpec("reranker", "reject", &config.PairScorerSelection{Layer: 6}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer scorer.Close()
-	if scorer.Selection() != (config.PairScorerSelection{Layer: 6, Dimension: 256}) || scorer.CacheIdentity() == "" {
-		t.Fatalf("selection %+v identity %q", scorer.Selection(), scorer.CacheIdentity())
-	}
-	pairs := []tasks.QueryDocument{{Query: "q1", Document: "aa"}, {Query: "q1", Document: "bbbb"}, {Query: "q2", Document: "c"}}
-	scores, err := scorer.ScorePairs(context.Background(), string(config.DefaultRecipeName), pairs)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if scores.Scores[0] != 2 || scores.Scores[1] != 4 || scores.Scores[2] != 1 || scores.Inputs[2].OriginalTokens != 2 {
-		t.Fatalf("scores %+v", scores)
-	}
-	services.mu.Lock()
-	reranks := services.reranks[1:]
-	services.mu.Unlock()
-	if len(reranks) != 2 || len(reranks[0].Documents) != 2 || reranks[0].Layer != 6 || reranks[0].Dimensions != 256 || reranks[0].Overflow != "reject" {
-		t.Fatalf("rerank calls %+v", reranks)
-	}
-	diagnostic, err := runtime.DiagnoseRerank(context.Background(), string(config.DefaultRecipeName), config.RAGRerankerConsumer, pairs[:1])
-	if err != nil || len(diagnostic.Result.Scores) != 1 {
-		t.Fatalf("diagnostic %+v, %v", diagnostic, err)
 	}
 }
 

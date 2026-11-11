@@ -35,10 +35,15 @@ func ReadyTimeout() time.Duration {
 // only (one forward on a CPU) instead of whole.
 // RequireFullInput rejects a judgment unless the runtime proves every supplied
 // input part was read completely; it is independent of scan-budget support.
+// DecisionAdapter asks a vela3_d3 package with an opt-in decision adapter to
+// answer with it; only that family takes the field.
 type Question struct {
-	// TaskID and Stage describe the internal consumer; they are not wire fields.
+	// TaskID and Stage describe the internal consumer, and Reads the
+	// options its askers read (nil: every option), which a family's trained
+	// form must cover to answer it; they are not wire fields.
 	TaskID           string
 	Stage            string
+	Reads            []string
 	ID               string
 	Type             string
 	Instructions     string
@@ -50,6 +55,7 @@ type Question struct {
 	Preset           string
 	Truncate         bool
 	RequireFullInput bool
+	DecisionAdapter  bool
 }
 
 // Choice is one Choice option, a Noul description or a Set / Span label.
@@ -62,16 +68,25 @@ type Choice struct {
 // the served model on the runtime (empty while it serves one model). State
 // is the text the questions are about; Parts, when set, replace it with
 // named parts (request, context, answer) for models that read typed parts.
+// Images and Videos are base64 data URLs every question of the state sees,
+// for a model whose card lists the image or video modality.
 // MaxTokens, when positive, is the scan budget of a model that reads a long
 // part in windows (Vela 2.0), zero keeping the model's own: a part with more
 // tokens fails the questions that read it whole with scan_budget_exceeded. A
 // model without a scan budget ignores it and every question's Truncate.
+// Order places the state among the states a stage sends one deployment: a
+// lower order goes first in the batch or the calls that carry them, and
+// states of one order keep a fixed order of their own. It is not a wire
+// field, and leaves the answers as they are.
 type Request struct {
 	Model     string
 	State     string
 	Parts     map[string]string
+	Images    []string
+	Videos    []string
 	Questions []Question
 	MaxTokens int
+	Order     int
 }
 
 // Answer is one runtime answer. Error is set instead of the values when the

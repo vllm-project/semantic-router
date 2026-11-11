@@ -19,14 +19,15 @@ import (
 // `global:` key.
 func GlobalConfigYAMLHandler(configPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
 		globalYAML, err := readEffectiveGlobalYAML(configPath)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to read global config: %v", err), http.StatusInternalServerError)
+			log.Printf("Failed to read global config: %v", err)
+			http.Error(w, "Failed to read global config", http.StatusInternalServerError)
 			return
 		}
 
@@ -71,11 +72,12 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 
 		existingData, err := readPersistedDashboardConfig(configPath)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
+			log.Printf("Failed to read config: %v", err)
+			http.Error(w, "Failed to read config", http.StatusInternalServerError)
 			return
 		}
 
-		updatedYAML, err := replaceGlobalOverrideYAML(existingData, rawBody)
+		updatedYAML, warnings, err := replaceGlobalOverrideYAML(existingData, rawBody)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Global config validation failed: %v", err), http.StatusBadRequest)
 			return
@@ -101,17 +103,15 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 			return
 		}
 		if configActivationDeferred() {
-			writeDeferredConfigResponse(w)
+			writeDeferredConfigResponse(w, warnings)
 			return
 		}
 		if restartMessage != "" {
-			writeRestartRequiredResponse(w, "", restartMessage)
+			writeRestartRequiredResponse(w, "", restartMessage, warnings)
 			return
 		}
 
-		if err := writeYAMLTaggedJSON(w, map[string]string{"status": "success"}); err != nil {
-			log.Printf("Error encoding response: %v", err)
-		}
+		writeConfigSavedResponse(w, warnings)
 	}
 }
 
@@ -132,26 +132,43 @@ func readEffectiveGlobalYAML(configPath string) ([]byte, error) {
 		global = &defaults
 	}
 
-	globalYAML, err := yaml.Marshal(global)
+	var effective yaml.Node
+	if err = effective.Encode(global); err != nil {
+		return nil, fmt.Errorf("marshal effective global config: %w", err)
+	}
+	// The typed global omits an explicit false or empty value, which a save of
+	// this view would turn back into its default: show what config.yaml writes.
+	written, err := decodeConfigDocument[canonicalConfigTransport](data)
+	if err != nil {
+		return nil, err
+	}
+	if written.globalOverrideRaw != nil {
+		if err = mergeMappingNodes(&effective, written.globalOverrideRaw); err != nil {
+			return nil, err
+		}
+	}
+	globalYAML, err := yaml.Marshal(&effective)
 	if err != nil {
 		return nil, fmt.Errorf("marshal effective global config: %w", err)
 	}
 	return globalYAML, nil
 }
 
-func replaceGlobalOverrideYAML(existingData, rawGlobalYAML []byte) ([]byte, error) {
+// replaceGlobalOverrideYAML returns the config with its global block
+// replaced, once the Router's validator accepts it, and the Router's warnings.
+func replaceGlobalOverrideYAML(existingData, rawGlobalYAML []byte) ([]byte, []routerconfig.ConfigWarning, error) {
 	existingDoc, err := parseYAMLDocument(existingData)
 	if err != nil {
-		return nil, fmt.Errorf("parse config.yaml: %w", err)
+		return nil, nil, fmt.Errorf("parse config.yaml: %w", err)
 	}
 	root, err := documentMappingNode(existingDoc)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	globalOverride, hasOverride, err := parseRawGlobalOverrideNode(rawGlobalYAML)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if hasOverride {
@@ -162,14 +179,15 @@ func replaceGlobalOverrideYAML(existingData, rawGlobalYAML []byte) ([]byte, erro
 
 	updatedYAML, err := marshalYAMLDocument(existingDoc)
 	if err != nil {
-		return nil, fmt.Errorf("marshal updated config: %w", err)
+		return nil, nil, fmt.Errorf("marshal updated config: %w", err)
 	}
 
-	if _, err := routerconfig.ParseYAMLBytes(updatedYAML); err != nil {
-		return nil, err
+	parsed, err := routerconfig.ParseYAMLBytes(updatedYAML)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	return updatedYAML, nil
+	return updatedYAML, savedConfigWarnings(parsed), nil
 }
 
 func parseRawGlobalOverrideNode(raw []byte) (*yaml.Node, bool, error) {
@@ -221,9 +239,44 @@ func mergeGlobalOverridePatchYAML(existingData, rawPatch []byte) ([]byte, error)
 	if existingGlobal.Kind != yaml.MappingNode {
 		return nil, fmt.Errorf("config.yaml global block must be a YAML mapping")
 	}
-	if err := mergeMappingNodes(existingGlobal, patchRoot); err != nil {
+	if err := mergeMappingPatch(existingGlobal, patchRoot); err != nil {
 		return nil, err
 	}
 
 	return marshalYAMLDocument(existingDoc)
+}
+
+// mergeMappingPatch applies src to dst as a JSON merge patch (RFC 7396): a
+// null value removes its key, a mapping merges into the mapping at its key,
+// and any other value replaces it. Removing keys from a mapping that does not
+// exist writes nothing.
+func mergeMappingPatch(dst, src *yaml.Node) error {
+	if dst.Kind != yaml.MappingNode || src.Kind != yaml.MappingNode {
+		return fmt.Errorf("merge requires YAML mapping nodes")
+	}
+	for i := 0; i+1 < len(src.Content); i += 2 {
+		key, value := src.Content[i].Value, src.Content[i+1]
+		switch {
+		case value.Kind == yaml.ScalarNode && value.ShortTag() == "!!null":
+			deleteMappingValueNode(dst, key)
+		case value.Kind == yaml.MappingNode:
+			target := mappingValueNode(dst, key)
+			if target != nil && target.Kind == yaml.MappingNode {
+				if err := mergeMappingPatch(target, value); err != nil {
+					return err
+				}
+				continue
+			}
+			created := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+			if err := mergeMappingPatch(created, value); err != nil {
+				return err
+			}
+			if target != nil || len(created.Content) > 0 || len(value.Content) == 0 {
+				setMappingValueNode(dst, key, created)
+			}
+		default:
+			setMappingValueNode(dst, key, value)
+		}
+	}
+	return nil
 }

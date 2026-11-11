@@ -64,7 +64,7 @@ from ...plugins.base import (
 from ...registry import builtin
 from ...registry.artifacts import named_files, safetensors_elements
 from ...registry.resolve import fetch
-from ...text.windows import Envelope, InputTooLongError
+from ...text.windows import Envelope, InputTooLongError, window_width
 from . import package as pkg
 
 OVERFLOW = ("reject", "truncate", "window")
@@ -140,7 +140,8 @@ def batch_invariant(model: TaskHeadsModel, vocab: int) -> bool:
 
     Kernels are invariant by construction only on some PyTorch builds (a
     narrow classifier through oneDNN 3.11 is not at small batch sizes), so
-    the loaded model is probed on its own host before ``exact`` may batch.
+    the loaded model is probed on its own host before its requests merge
+    without changing an answer.
     """
     generator = torch.Generator().manual_seed(0)
     items = [
@@ -181,8 +182,6 @@ class TaskHeadsModel(LoadedModel[Item, Any]):
     embeddings or rerank surface over them; ``normalize_exits`` is the
     package's representation contract for intermediate exits.
     """
-
-    fuse_bundled_jobs = True
 
     def __init__(
         self,
@@ -273,6 +272,8 @@ class TaskHeadsModel(LoadedModel[Item, Any]):
                 raise ValueError("window tokens exceed max_tokens")
             if overlap < 0:
                 raise ValueError("window overlap must not be negative")
+            if isinstance(head, SequenceHead | TokenHead):
+                window_width(head.envelope, size, overlap)
         entries: list[tuple[int, Any]] = []
         items: list[Item] = []
         input_tokens = 0
@@ -299,7 +300,7 @@ class TaskHeadsModel(LoadedModel[Item, Any]):
         return 0
 
     def run_approximate(self, items: list[Item]) -> list[Any]:
-        """``run`` on the engine's reduced copy of the backbone, where it loaded one (``max_speed``)."""
+        """``run`` on the engine's reduced copy of the backbone, where it loaded one (``DtypePolicy.reduced_cpu``)."""
         return self.run(items, reduced=True)
 
     def run(self, items: list[Item], reduced: bool = False) -> list[Any]:

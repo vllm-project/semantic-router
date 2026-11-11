@@ -3,13 +3,15 @@
     python3 tools/gpu_bench.py --package DIR --prompts PROMPTS.jsonl --output OUT.json [--count 400]
         [--device rocm:0] [--base-path DIR] [--concurrency 1,4,16,64] [--throughput-count 512]
 
-latency     the first --count prompts as single requests on the exact profile, --warmup-passes untimed passes
-            (graphs are captured on a shape's second use) then one timed pass: p50 / p95 / mean, requests/s
-many        the public many-question request (``many_questions.py``) at 16, 64 and 128 questions as one request
-            on the exact and the shared_context profiles: p50 / p95 of --runs requests
-throughput  the first --throughput-count prompts in waves of C concurrent requests through the scheduler, for
-            the exact and the batching profiles, two untimed passes then a timed one: requests/s, the mean wave
-            latency and the timed pass's graph captures / replays / eager forwards per C
+latency     the first --count prompts as single requests, each alone in its released forwards, --warmup-passes
+            untimed passes (graphs are captured on a shape's second use) then one timed pass: p50 / p95 / mean,
+            requests/s
+many        the public many-question request (``many_questions.py``) at 16, 64 and 128 questions as one request,
+            alone in its released forwards and as one shared-context tree: p50 / p95 of --runs requests
+throughput  the first --throughput-count prompts in waves of C concurrent requests through the scheduler, each
+            request alone in its released forwards and with the default engine arguments (rows of concurrent
+            requests merged), two untimed passes then a timed one: requests/s, the mean wave latency and the
+            timed pass's graph captures / replays / eager forwards per C
 Every request is timed with the device synchronized around it.
 """
 
@@ -28,9 +30,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import many_questions
 from gpu_parity import load, system_one
-from vllm_srun.profiles.batching import BatchingProfile
-from vllm_srun.profiles.exact import ExactProfile
-from vllm_srun.profiles.shared_context import SharedContextProfile
+from vllm_srun.config import EngineArgs
+from vllm_srun.scheduler.batching import Batcher, SharedContext
 from vllm_srun.scheduler.scheduler import Scheduler, SchedulerLimits
 
 
@@ -69,7 +70,6 @@ def main() -> int:
     import torch
 
     model = load(args)
-    exact = ExactProfile()
     prompts = [json.loads(line) for line in open(args.prompts, encoding="utf-8")]
     result: dict = {
         "schema": "model-runtime-gpu-bench/1",
@@ -81,17 +81,17 @@ def main() -> int:
         },
     }
 
-    def timed(state, questions, profile=exact):
+    def timed(state, questions, sharing=None):
         torch.cuda.synchronize()
         started = time.perf_counter()
-        response = system_one(model, profile, state, questions)
+        response = system_one(model, sharing, state, questions)
         torch.cuda.synchronize()
         return 1000 * (time.perf_counter() - started), response
 
     single = prompts[: args.count]
     for _ in range(args.warmup_passes):
         for prompt in single:
-            system_one(model, exact, prompt["state"], prompt["questions"])
+            system_one(model, None, prompt["state"], prompt["questions"])
     milliseconds = [timed(p["state"], p["questions"])[0] for p in single]
     result["latency"] = {
         "requests": len(single),
@@ -101,8 +101,8 @@ def main() -> int:
     print(json.dumps({"latency": result["latency"]}), flush=True)
 
     request = many_questions.request(128)
-    shared = SharedContextProfile()
-    if shared.available(model):
+    shared: SharedContext | None = SharedContext()
+    if shared.unavailable(model):
         shared = None
     else:
         shared.bind(model)
@@ -110,26 +110,26 @@ def main() -> int:
     for n in (16, 64, 128):
         questions = dict(list(request["questions"].items())[:n])
         entry = {}
-        for name, profile in (("exact", exact), ("shared_context", shared)):
-            if profile is None:
+        for name, sharing in (("alone", None), ("shared", shared)):
+            if name == "shared" and sharing is None:
                 continue
             for _ in range(5):
-                system_one(model, profile, request["state"], questions)
+                system_one(model, sharing, request["state"], questions)
             milliseconds = [
-                timed(request["state"], questions, profile)[0] for _ in range(args.runs)
+                timed(request["state"], questions, sharing)[0] for _ in range(args.runs)
             ]
             entry[name] = {
                 "ms": summary(milliseconds),
                 "shared_prefix": (
-                    profile.share(
+                    sharing.share(
                         model.plan(request["state"], questions).items,
                         model.forward_token_budget(),
                     )
-                    if name == "shared_context"
+                    if sharing is not None
                     else 0
                 ),
             }
-        result["many"][str(n)] = {"ms": entry["exact"]["ms"], **entry}
+        result["many"][str(n)] = {"ms": entry["alone"]["ms"], **entry}
         print(
             json.dumps(
                 {"many": n, **{k: round(v["ms"]["p50"], 2) for k, v in entry.items()}}
@@ -140,9 +140,11 @@ def main() -> int:
     load_prompts = prompts[: args.throughput_count]
     plans = [model.plan(p["state"], p["questions"]) for p in load_prompts]
     result["throughput"] = {}
-    for name, profile in (("exact", exact), ("batching", BatchingProfile())):
+    for name in ("alone", "merged"):
+        batcher = Batcher(EngineArgs())
+        batcher.bind(model)
         scheduler = Scheduler(
-            model, {name: profile}, SchedulerLimits(max_queue=4096, batch_window_ms=2.0)
+            model, batcher, SchedulerLimits(max_queue=4096, batch_window_ms=2.0)
         )
         scheduler.start()
         per = {}
@@ -157,7 +159,9 @@ def main() -> int:
                     wave = plans[s : s + concurrency]
                     t = time.perf_counter()
                     futures = [
-                        scheduler.submit(p.items, deadline=None, profile=name)
+                        scheduler.submit(
+                            p.items, deadline=None, reference=name == "alone"
+                        )
                         for p in wave
                     ]
                     for future in futures:

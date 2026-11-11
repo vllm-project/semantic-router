@@ -1,9 +1,9 @@
 ---
 slug: decision-3-0-on-apple-silicon
 title: "Decision 3.0 on Apple Silicon: Text, Image and Video Decisions on a Mac"
-description: "d3-lite, d3-nano and d3-mini converted to Core ML: triage 1,000 pull requests at 0.12 s each, drive a real website and watch live video, all on one Mac."
+description: "d3-lite, d3-nano and d3-mini converted to Core ML: triage 1,000 pull requests at 0.12 s each, drive a real website, watch live video and play Super Mario Bros., all on one Mac."
 authors: [Alex-Wengg]
-tags: [decision, core-ml, apple-silicon, multimodal, demos, semantic-router]
+tags: [decision, core-ml, apple-silicon, multimodal, demos, games, semantic-router]
 image: /img/blog/decision-3-0-coreml/pr-triage-poster.jpg
 ---
 
@@ -20,7 +20,7 @@ import { ArticleVideo } from '@site/src/components/ArticleMedia';
 
 **Decision 3.0 runs on a Mac.**
 
-[Decision 3.0](https://huggingface.co/collections/vllm-sr/decision-30) brought text, image and video decisions to one open model family. We converted the three smaller sizes (**d3-lite 0.8B, d3-nano 2B and d3-mini 4B**) to Core ML and built demos for text, screenshots and live video.
+[Decision 3.0](https://huggingface.co/collections/vllm-sr/decision-30) brought text, image and video decisions to one open model family. We converted the three smaller sizes (**d3-lite 0.8B, d3-nano 2B and d3-mini 4B**) to Core ML and built demos for text, screenshots and live video. Later we added d3-flash 9B, which plays Super Mario Bros. and taught d3-lite to do the same.
 
 A decision made on the Mac has no per-call cost and no network round trip, and the pull request, web page or video never leaves the machine. That fits alongside vLLM-SR: routine decisions can be answered on the device, and the ones that need a bigger model can go to the router.
 
@@ -63,7 +63,7 @@ All numbers are from one MacBook Pro (M5 Pro, 24 GB), running on the GPU. d3-nan
 
 ## Demos
 
-d3-lite handles the demo where speed matters; d3-mini handles screenshots and video.
+d3-lite handles the demo where speed matters; d3-mini handles screenshots and video; d3-flash and a distilled d3-lite play Mario.
 
 **Triage pull requests (d3-lite, [on X](https://x.com/Alex_tra_memory/status/2109343807854493724)).** The video at the top. For each of 1,000 sample pull requests, d3-lite reads the title, the start of the description and the changed files, then answers two questions: which of the seven [vLLM-SR workgroups](/blog/join-vllm-sr-workgroups) owns it, and what kind of change it is. Each PR takes **0.12 s, so 8.3 PRs and 16.5 decisions per second**. On real vLLM-SR pull requests, d3-mini matched the maintainers' workgroup label on **134 of 168** and the change-type tag on **153 of 182**.
 
@@ -88,6 +88,21 @@ d3-lite handles the demo where speed matters; d3-mini handles screenshots and vi
 </ArticleVideo>
 
 **Watch live video (d3-mini).** As the clip plays, d3-mini looks at the last 4 seconds (8 frames at its native 2 fps) and answers whether the cars are moving and whether someone is cycling. Each look takes **1.1 s on Core ML, against 2.4 s for PyTorch on the same Mac**, and answers stay about 2 seconds behind the live video.
+
+<ArticleVideo
+  src="/videos/decision-3-0-coreml/d3-mario.mp4"
+  poster="/img/blog/decision-3-0-coreml/mario-poster.jpg"
+  title="A distilled d3-lite plays Super Mario Bros. 1-1 on Core ML"
+  landscape
+>
+  Every move, d3-lite answers three yes/no questions about close-ups just ahead of Mario. Right: its answers and time per decision. Bottom: GPU load and the decision log.
+</ArticleVideo>
+
+**Play Super Mario Bros.: a proof of concept.** d3 is a general decision model, not a game agent, and nothing here was particularly built for Mario. We gave it the setup JEV-9B used to clear World 1-1. While Mario is on the ground, the game pauses and d3 answers three plain yes/no questions about close-ups just ahead of him: is there an enemy, a pipe or step, a gap? Mario jumps if any answer is yes, and runs otherwise. The harness reads Mario's position from the emulator's memory and plays fixed button moves.
+
+**d3-flash 9B clears 1-1 out of the box, on Core ML, in 56 decisions at 1.25 s per decision.** It gets no game-specific prompt, examples or training: just the same Choice / Noul interface it uses for routing and policy questions.
+
+Distillation brings this down to d3-lite. As a proof of concept, a LoRA trained only on d3-flash's answers to the same three questions (states from 28 of the 32 levels, 4 held out) **clears 1-1 on Core ML in 65 decisions at 0.31 s per decision**, 4× faster than its teacher. The recipe doesn't depend on which d3 is the teacher, so the same approach could distil the 27B model. Distillation can also go beyond the teacher: when the labels are corrected by searching the emulator for moves that survive, a student clears levels that neither d3-flash nor d3 27B finishes on its own.
 
 ## Try it
 

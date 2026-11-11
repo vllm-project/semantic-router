@@ -31,7 +31,7 @@ func TestStoreImportsListsAndIdempotentlyInstallsExactFiveZIP(t *testing.T) {
 	}))
 	defer server.Close()
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	store := NewStore(StoreOptions{Root: filepath.Join(t.TempDir(), "store"), ConfigPath: configPath, HTTPClient: server.Client()})
@@ -55,7 +55,7 @@ func TestStoreImportsListsAndIdempotentlyInstallsExactFiveZIP(t *testing.T) {
 		t.Fatalf("List() = %#v, %v", list, err)
 	}
 	var record packageRecord
-	if err := readStrictJSONFile(recordRefPath(store.root, packageRecord{ID: "accuracy", Version: "0.1.0"}), 1<<20, &record); err != nil {
+	if err := readStrictJSONFile(recordRefPath(store.root, packageRecord{ID: "accuracy", Version: "0.2.0"}), 1<<20, &record); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(record.SourceURL, "signature") || strings.Contains(record.SourceURL, "hidden") {
@@ -232,7 +232,7 @@ func TestStoreImportVerifiesArchiveDigestAndDownloadLimit(t *testing.T) {
 	}))
 	defer server.Close()
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	store := NewStore(StoreOptions{Root: filepath.Join(t.TempDir(), "store"), ConfigPath: configPath, HTTPClient: server.Client()})
@@ -269,7 +269,7 @@ func TestStoreImportRollsSameIDVersionAndPreservesActiveOldDigest(t *testing.T) 
 	}))
 	defer server.Close()
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	store := NewStore(StoreOptions{Root: filepath.Join(t.TempDir(), "store"), ConfigPath: configPath, HTTPClient: server.Client()})
@@ -281,7 +281,7 @@ func TestStoreImportRollsSameIDVersionAndPreservesActiveOldDigest(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	previous := []byte("version: v0.3\n")
+	previous := []byte("version: v0.5\n")
 	transaction, err := store.BeginActivation(firstSummary.RecipeDigest, previous)
 	if err != nil {
 		t.Fatal(err)
@@ -349,7 +349,7 @@ extra_headers:
 			t.Fatalf("warning = %#v", warning)
 		}
 	}
-	if err := validateRuntimeConfig([]byte("version: v0.3\nsetup:\n  mode: true\n")); err == nil {
+	if err := validateRuntimeConfig([]byte("version: v0.5\nsetup:\n  mode: true\n")); err == nil {
 		t.Fatal("setup.mode=true config accepted")
 	}
 }
@@ -382,26 +382,17 @@ func TestPackageValidationRejectsLiteralCredentialBeforeInstall(t *testing.T) {
 }
 
 func TestEnvironmentReferenceScannerMatchesRouterExpansionForms(t *testing.T) {
+	// The Router reads only uppercase names; other $ text is not a binding.
 	config := []byte(`
 plain: $PLAIN_NAME
 braced: ${BRACED_NAME}
 empty_default: ${EMPTY_DEFAULT:-fallback}
 unset_default: ${UNSET_DEFAULT-fallback}
-lowercase: ${host_secret}
-invalid_default_name: ${:-fallback}
 escaped: $$NOT_A_REFERENCE
+template: "{{range $i, $resp := .ReferenceResponses}}{{$resp.Content}}{{end}}"
+not_names: $100 ${host_secret} ${:-fallback} ${user_content}
 `)
-	_, err := extractEnvironmentBindings(config)
-	if err == nil {
-		t.Fatal("lowercase environment reference was accepted")
-	}
-	if (!strings.Contains(err.Error(), "/lowercase") && !strings.Contains(err.Error(), "/invalid_default_name")) || strings.Contains(err.Error(), "host-secret-value") {
-		t.Fatalf("unsafe binding error = %v", err)
-	}
-
-	valid := bytes.Replace(config, []byte("${host_secret}"), []byte("${HOST_SECRET}"), 1)
-	valid = bytes.Replace(valid, []byte("${:-fallback}"), []byte("${VALID_DEFAULT:-fallback}"), 1)
-	bindings, err := extractEnvironmentBindings(valid)
+	bindings, err := extractEnvironmentBindings(config)
 	if err != nil {
 		t.Fatalf("extractEnvironmentBindings() = %v", err)
 	}
@@ -409,75 +400,35 @@ escaped: $$NOT_A_REFERENCE
 	for _, binding := range bindings {
 		names = append(names, binding.name)
 	}
-	for _, expected := range []string{"PLAIN_NAME", "BRACED_NAME", "EMPTY_DEFAULT", "UNSET_DEFAULT", "HOST_SECRET", "VALID_DEFAULT"} {
-		if !slices.Contains(names, expected) {
-			t.Fatalf("bindings = %#v, missing %s", bindings, expected)
-		}
-	}
-	if slices.Contains(names, "NOT_A_REFERENCE") {
-		t.Fatalf("escaped dollar became binding: %#v", bindings)
-	}
-}
-
-func TestPackageRuntimeValidationRejectsUnsafeKnowledgeBasePaths(t *testing.T) {
-	tests := []struct {
-		path string
-		ok   bool
-	}{
-		{path: "knowledge_bases/privacy/", ok: true},
-		{path: "knowledge_bases/team/privacy/", ok: true},
-		{path: "../dashboard-data"},
-		{path: "knowledge_bases/../.vllm-sr"},
-		{path: "knowledge_bases//privacy"},
-		{path: "knowledge_bases\\privacy"},
-		{path: "/app/.vllm-sr"},
-	}
-	for _, test := range tests {
-		t.Run(strings.ReplaceAll(test.path, "/", "_"), func(t *testing.T) {
-			config := []byte(fmt.Sprintf(`
-version: v0.3
-global:
-  model_catalog:
-    kbs:
-      - name: privacy_kb
-        source:
-          path: %q
-        threshold: 0.5
-`, test.path))
-			err := validateRuntimeConfig(config)
-			if test.ok && err != nil {
-				t.Fatalf("validateRuntimeConfig() = %v", err)
-			}
-			if !test.ok && err == nil {
-				t.Fatal("unsafe knowledge-base path was accepted")
-			}
-		})
+	slices.Sort(names)
+	if want := []string{"BRACED_NAME", "EMPTY_DEFAULT", "PLAIN_NAME", "UNSET_DEFAULT"}; !slices.Equal(names, want) {
+		t.Fatalf("binding names = %v, want %v", names, want)
 	}
 }
 
 func TestPackageRuntimeValidationRejectsYAMLIndirection(t *testing.T) {
 	for name, config := range map[string]string{
-		"alias": `version: v0.3
+		"alias": `version: v0.5
 literal: &private_value ${HOST_SECRET}
 headers:
   Authorization: *private_value
 `,
-		"merge": `version: v0.3
+		"merge": `version: v0.5
 defaults: &private_headers
   Authorization: ${HOST_SECRET}
 headers:
-  <<: *private_headers
+  !!merge <<: *private_headers
 `,
-		"binary value": `version: v0.3
+		"binary value": `version: v0.5
 provider:
   base_url: !!binary aHR0cHM6Ly91c2VyOnNlbnNpdGl2ZUBleGFtcGxlLmNvbS92MQ==
 `,
-		"binary key": `version: v0.3
+		"binary key": `version: v0.5
 request:
   headers:
     !!binary QXV0aG9yaXphdGlvbg==: Bearer sensitive
 `,
-		"explicit string": `version: v0.3
+		"explicit string": `version: v0.5
 value: !!str sensitive
 `,
 	} {
@@ -571,49 +522,12 @@ func TestCredentialDetectorRejectsEmbeddedURLCredentialsWithoutExposingThem(t *t
 	}
 }
 
-func TestPackageRuntimeValidationRejectsLocalProcessMCP(t *testing.T) {
-	base := `
-version: v0.3
-global:
-  model_catalog:
-    modules:
-      classifier:
-        mcp:
-          enabled: true
-%s
-          tool_name: classify
-`
-	tests := []struct {
-		name  string
-		body  string
-		valid bool
-	}{
-		{name: "explicit stdio", body: "          transport_type: stdio\n          command: canary-do-not-run\n          args: [--canary]\n"},
-		{name: "implicit stdio command", body: "          command: canary-do-not-run\n"},
-		{name: "stdio env", body: "          transport_type: stdio\n          command: canary-do-not-run\n          env: {INHERITED: value}\n"},
-		{name: "http", body: "          transport_type: http\n          url: https://example.com/mcp\n", valid: true},
-		{name: "streamable http", body: "          transport_type: streamable-http\n          url: https://example.com/mcp\n", valid: true},
-		{name: "implicit http", body: "          url: https://example.com/mcp\n", valid: true},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			err := validateRuntimeConfig([]byte(fmt.Sprintf(base, test.body)))
-			if test.valid && err != nil {
-				t.Fatalf("HTTP MCP rejected: %v", err)
-			}
-			if !test.valid && (err == nil || strings.Contains(err.Error(), "canary-do-not-run")) {
-				t.Fatalf("local MCP validation error = %v", err)
-			}
-		})
-	}
-}
-
 func TestRecipeEnvironmentBindingsRequireExplicitAvailableAllowlist(t *testing.T) {
 	config := []byte(`
 providers:
   models:
     - backend_refs:
-        - api_key_env: OPENROUTER_API_KEY
+        - auth: {api_key_env: OPENROUTER_API_KEY}
           endpoint: ${MODEL_ENDPOINT}
           fallback: ${OPTIONAL_ENDPOINT:-https://example.com}
           escaped: $$NOT_A_BINDING
@@ -674,7 +588,7 @@ func TestActivationTargetRequiresExplicitEnvironmentWarningAcknowledgement(t *te
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(archive) }))
 	defer server.Close()
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	store := NewStore(StoreOptions{Root: filepath.Join(t.TempDir(), "store"), ConfigPath: configPath, HTTPClient: server.Client()})
@@ -706,7 +620,7 @@ func TestActivationTargetRejectsSymlinkedImmutableObjectDirectory(t *testing.T) 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(archive) }))
 	defer server.Close()
 	configPath := filepath.Join(t.TempDir(), "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte("version: v0.3\n"), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte("version: v0.5\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	store := NewStore(StoreOptions{Root: filepath.Join(t.TempDir(), "store"), ConfigPath: configPath, HTTPClient: server.Client()})

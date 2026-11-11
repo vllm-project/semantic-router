@@ -1,8 +1,9 @@
 ---
+is_mtpe: false
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/tutorials/algorithm/looper/fusion.md"
-  outdated: false
+  outdated: true
 ---
 
 # 融合
@@ -85,40 +86,46 @@ flowchart TD
 决策级 Fusion：
 
 ```yaml
-routing:
-  decisions:
-    - name: deliberation
-      description: Compare candidate answers and synthesize one response.
-      priority: 100
-      output_contract: Preserve any explicit output format exactly.
-      modelRefs:
-        - model: qwen3-32b
-        - model: deepseek-worker
-      algorithm:
-        type: fusion
-        fusion:
-          model: qwen3-32b
-          analysis_models:
-            - qwen3-32b
-            - deepseek-worker
-          analysis_mode: separate
-          analysis_overrides:
-            - model: qwen3-32b
-              temperature: 0.15
-              max_completion_tokens: 512
-            - model: deepseek-worker
-              temperature: 0.2
-              max_completion_tokens: 384
+recipes:
+  - name: default
+    decisions:
+      - name: deliberation
+        description: Compare candidate answers and synthesize one response.
+        priority: 100
+        output_contract: Preserve any explicit output format exactly.
+        modelRefs:
+          - model: qwen3-32b
+          - model: deepseek-worker
+        algorithm:
+          type: fusion
+          fusion:
+            model: qwen3-32b
+            analysis_models:
+              - qwen3-32b
+              - deepseek-worker
+            analysis_mode: separate
+            analysis_overrides:
+              - model: qwen3-32b
+                temperature: 0.15
+                max_completion_tokens: 512
+              - model: deepseek-worker
+                temperature: 0.2
+                max_completion_tokens: 384
 ```
 
-`output_contract` 是决策范围的提示词文本。把它用于应同时作用于 Fusion、Flow 和 ReMoM 的基准或应用格式要求，而不是把任务特定提示词硬编码进算法。
-使用 `output_contract_spec` 做类型化的路由器可执行归一化和后处理，例如 choice 提取、终端动作 JSON 归一化或引用解引用。提取默认精确匹配 `content`；仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
+| 字段 | 用途 |
+| --- | --- |
+| `output_contract` | 决策范围的提示词文本：应同时作用于 Fusion、Flow 和 ReMoM 的基准或应用格式要求，而不是硬编码进算法的任务特定提示词。 |
+| `output_contract_spec` | 由 Router 执行的类型化归一化和后处理，例如 choice 提取、终端动作 JSON 归一化或引用解引用（返回评审模型按编号选中的面板回答的内容；该回答只有推理内容时保留评审模型的回答）。只有 Fusion、ReMoM 和 Flow 决策接受它。 |
+
+提取默认精确匹配 `content`。仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
 
 最小算法配置：
 
 ```yaml
 algorithm:
   type: fusion
+  on_error: skip
   fusion:
     model: qwen3-32b
     analysis_models:
@@ -139,7 +146,6 @@ algorithm:
     temperature: 0.2
     include_analysis: true
     include_intermediate_responses: true
-    on_error: skip
     judge_prompt_version: fusion-v1
 ```
 
@@ -159,21 +165,24 @@ entrypoints:
 
 ```yaml
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/fusion, openrouter/fusion]
     recipe: fusion
 recipes:
+  - name: default
   - name: fusion
-    routing:
-      decisions:
-        - name: panel
-          priority: 1
-          rules: {operator: AND, conditions: []}
-          modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
-          algorithm:
-            type: fusion
-            fusion:
-              model: qwen3-32b
-              analysis_models: [qwen3-8b, qwen3-32b]
+    decisions:
+      - name: panel
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
+        algorithm:
+          type: fusion
+          fusion:
+            model: qwen3-32b
+            analysis_models: [qwen3-8b, qwen3-32b]
 ```
 
 公开入口名不能与后端模型冲突。Signals、裁判、面板、并发、预算、模板及错误策略
@@ -196,7 +205,7 @@ recipes:
 | `temperature` | float | 请求默认值 | 配方拥有的、应用到 Fusion 子请求的温度 |
 | `include_analysis` | bool | `true` | 配方拥有的、对可用结构化裁判分析的可见性；这不控制执行 |
 | `include_intermediate_responses` | bool | `true` | 配方拥有的、对原始面板响应的可见性 |
-| `on_error` | string | `skip` | 配方拥有的处理：在强制法定人数的同时 `skip` 单个失败或不可用的面板响应，或在第一个此类响应上 `fail` |
+| `algorithm.on_error` | string | `skip` | 与 `type` 并列，而不在此块中。配方拥有的处理：在强制法定人数的同时 `skip` 单个失败或不可用的面板响应，或在第一个此类响应上 `fail` |
 | `analysis_template` | string | 内置 | 配方拥有的单独分析提示，含 `{{original}}` 和 `{{responses}}`；在 `separate` 之外会被拒绝 |
 | `synthesis_template` | string | 内置 | 配方拥有的各模式终端提示，含 `{{original}}`、`{{responses}}` 和 `{{analysis}}`；在 `separate` 之外分析为空 |
 | `judge_prompt_version` | string | `fusion-v1` | 配方拥有的版本标记，会写入 Fusion 响应追踪 |
@@ -214,16 +223,23 @@ recipes:
 
 内置提示词和阶段边界是刻意区分的：
 
-- `separate` 要求紧凑的结构化 JSON，且不使用工具。分析传输失败会被记录，最终合成仍从面板继续。当启用 `include_analysis` 时，解析失败可以作为原始 `parse_failed` 追踪证据出现。最终合成仍是终端的，并可以使用请求工具。
-- `one_call` 不产生结构化分析产物。它的单个终端提示要求裁判比较面板、解决矛盾，并在一次调用中合成客户端答案。失败是终端的。
-- `none` 不产生结构化分析产物。它的单个终端提示要求裁判直接从面板合成，不要求单独或合并的分析。失败是终端的。
+| 模式 | 分析 | 终端步骤 | 失败时 |
+| --- | --- | --- | --- |
+| `separate` | 紧凑的结构化 JSON，不使用工具 | 最终合成，可以使用请求工具 | 分析传输失败会被记录，合成仍从面板继续；启用 `include_analysis` 时，解析失败可以作为 `parse_failed` 追踪证据出现。 |
+| `one_call` | 无 | 一个提示要求裁判比较面板、解决矛盾并合成回答 | 终止 |
+| `none` | 无 | 一个提示要求裁判直接从面板合成 | 终止 |
 
 对每种模式，`synthesis_template` 都会替换完整的内置终端提示。在 `one_call` 和 `none` 中，`{{analysis}}` 渲染为空字符串。配置校验会拒绝这些模式下的非空 `analysis_template`，而不是静默忽略。
 
 Fusion 用量会聚合完整面板成本和每次成功的裁判响应。上报的迭代次数是配置的面板尝试次数，加上 `separate` 的两次裁判调用，或加上 `one_call` 和 `none` 的一次裁判调用。
 
-有效的 `analysis_mode` 记录在 Fusion 内部追踪中，由 `looper.Response.IntermediateResponses` 携带。仅有模式值并不会在公开响应中增加顶层 `fusion` 成员。公开追踪信封保持现有谓词：仅当启用了分析或中间响应、某个面板模型失败，或存在依据证据时才发出。公开模式追踪传输仍推迟到
-[issue #3378](https://github.com/vllm-project/semantic-router/issues/3378)。
+有效的 `analysis_mode` 记录在 Fusion 内部追踪中，由 `looper.Response.IntermediateResponses` 携带。仅有模式值不会在公开响应中增加顶层 `fusion` 成员，它只在以下情况出现：
+
+- 启用了分析或中间响应；
+- 某个面板模型失败；或
+- 存在依据证据。
+
+公开的模式追踪传输在 [issue #3378](https://github.com/vllm-project/semantic-router/issues/3378) 中跟踪。
 
 ## 依据感知合成
 
@@ -244,9 +260,11 @@ Fusion 用量会聚合完整面板成本和每次成功的裁判响应。上报�
 可用响应法定人数在依据处理之前，对原始面板检查。
 如果 `filter` 策略随后移除了响应，Fusion 不会对缩减后的裁判输入再做第二次法定人数检查。
 
-> 依据衡量的是忠实度/一致性，不是真值。在没有权威来源时，它可以下调支持最少的响应权重，但不能证明正确性。**硬丢弃**相互一致性最低的响应（`filter` 策略）在有争议的事实问题上会明显*损害*效果 — 三个模型可能一起自信地出错，而单独异议者是对的 — 因此默认是 `weight`。该默认背后的评测见 `bench/grounded_fusion/FINDINGS.md`。
+:::warning 依据衡量的是一致性，不是真值
+在没有权威来源时，它可以下调支持最少的响应的权重，但不能证明正确性。硬丢弃一致性最低的响应（`filter` 策略）在有争议的事实问题上会明显损害效果：三个模型可能一起自信地出错，而唯一的异议者是对的。因此默认是 `weight`；评测见 `bench/grounded_fusion/FINDINGS.md`。
+:::
 
-需要在 `global` 幻觉缓解下配置幻觉检测器（以及 `panel`/跨模型路径所需的 NLI 模型）。如果后端不可用，`on_error: skip` 会回退到普通 Fusion。
+依据评分询问决策模型的[幻觉](../../signal/application/hallucination)问题，需要支持 span 的部署。如果它不可用，`on_error: skip` 会回退到普通 Fusion。
 
 ```yaml
 algorithm:

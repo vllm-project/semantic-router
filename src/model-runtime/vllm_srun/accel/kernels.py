@@ -4,16 +4,21 @@ Every kernel slot has a reference implementation that reproduces the
 Transformers code the released packages were scored with. An accelerator may
 register a faster implementation for a slot; it declares whether it is
 bit-exact against the reference on that device. A kernel that is not
-bit-exact is used only when the active profile allows approximate numerics.
+bit-exact is used only for a model whose family consents to it
+(``DtypePolicy.approximate_kernels``) at its published precision.
 A variant is an alternative a model's released runtime ran for a slot (for
 example a different convolution); it runs only for models that name it
 (``ModelSpec.kernel_variants``) and is that model's reference.
+A slot that only forwards merging requests run (``varlen_attention``: packed
+rows, which no released runtime ran) takes its preferred kernel, exact or
+not (``KernelSet.preferred``), since those forwards approximate anyway.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -30,7 +35,7 @@ class Kernel:
 
 @dataclass
 class KernelSet:
-    """The kernels one device uses; ``select`` honours the profile's exactness and the model's variants."""
+    """The kernels one device uses; ``select`` honours ``allow_approximate`` and the model's variants."""
 
     device: str
     available: dict[str, list[Kernel]] = field(default_factory=dict)
@@ -56,6 +61,23 @@ class KernelSet:
 
     def __call__(self, name: str) -> Callable:
         return self.select(name).fn
+
+    def preferred(self, name: str) -> Callable:
+        """The last registered kernel of a slot, exact or not: for slots only approximate forwards run."""
+        return self._preferred(name).fn
+
+    def preferred_source(self, name: str) -> str | None:
+        """Where ``preferred`` comes from, or None when the slot has no kernel."""
+        try:
+            return self._preferred(name).source
+        except KeyError:
+            return None
+
+    def _preferred(self, name: str) -> Kernel:
+        candidates = self.available.get(name, [])
+        if not candidates:
+            raise KeyError(f"no kernel registered for {name!r} on {self.device}")
+        return candidates[0]
 
     def has(self, name: str) -> bool:
         try:
@@ -101,6 +123,42 @@ def causal_conv1d_ref(
     if activation is not None:
         out = _activation(activation)(out)
     return out.to(hidden_states.dtype)
+
+
+def gdn_prep_ref(
+    mixed_qkv: torch.Tensor,
+    b: torch.Tensor,
+    a: torch.Tensor,
+    conv_weight: torch.Tensor,
+    a_log: torch.Tensor,
+    dt_bias: torch.Tensor,
+    k_heads: int,
+    head_dim: int,
+    conv_fn=None,
+    conv_bias: torch.Tensor | None = None,
+    activation: str | None = "silu",
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Released GatedDeltaNet prep: conv + SiLU, split q/k/v, sigmoid beta, softplus gate.
+
+    Layout matches ``triton_gfx942.gdn_prep`` (q/k at ``k_heads``, before GQA repeat).
+    ``mixed_qkv`` is ``[B, T, C]``, ``conv_weight`` is ``[C, KW]``. ``conv_fn`` is the
+    ``causal_conv1d`` slot (``[B, C, T]``); the torch reference runs when it is omitted.
+    """
+    conv = conv_fn or causal_conv1d_ref
+    channels_time = mixed_qkv.transpose(1, 2).contiguous()
+    mixed = conv(
+        channels_time, conv_weight, bias=conv_bias, activation=activation
+    ).transpose(1, 2)
+    batch, length, channels = mixed.shape
+    key_dim = k_heads * head_dim
+    value_dim = channels - 2 * key_dim
+    query, key, value = torch.split(mixed, [key_dim, key_dim, value_dim], dim=-1)
+    query = query.reshape(batch, length, k_heads, head_dim)
+    key = key.reshape(batch, length, k_heads, head_dim)
+    value = value.reshape(batch, length, value_dim // head_dim, head_dim)
+    beta = b.sigmoid()
+    gate = -a_log.float().exp() * F.softplus(a.float() + dt_bias)
+    return query, key, value, gate, beta
 
 
 def chunk_gated_delta_rule_ref(
@@ -185,6 +243,87 @@ def chunk_gated_delta_rule_ref(
         initial_dtype, memory_format=torch.contiguous_format
     )
     return core_attn_out, last_recurrent_state
+
+
+def attn_prep_ref(
+    q_proj_out: torch.Tensor,
+    k_proj_out: torch.Tensor,
+    q_norm_w1: torch.Tensor,
+    k_norm_w1: torch.Tensor,
+    cos: torch.Tensor,
+    sin: torch.Tensor,
+    heads: int,
+    kv_heads: int,
+    head_dim: int,
+    eps: float,
+    *,
+    gated: bool = True,
+    zero_centred: bool = True,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Eager ``attn_prep``: per-head RMSNorm then rotary, matching the native decoder.
+
+    Qwen3.5 (``gated`` and ``zero_centred``): ``q_proj_out`` is ``[B, T, H * 2D]``
+    (query then unused gate), norms multiply by the already-offset ``*_w1`` and
+    round to the input dtype before partial RoPE. Qwen3 (neither): norms round
+    ``x * rstd`` to the input dtype, multiply by ``w`` in FP32, and apply full
+    RoPE. Layout out is ``[B, H, T, D]`` / ``[B, Hkv, T, D]``.
+    """
+    batch, length = q_proj_out.shape[:2]
+    q_width = 2 * head_dim if gated else head_dim
+    query = q_proj_out.view(batch, length, heads, q_width)[..., :head_dim]
+    key = k_proj_out.view(batch, length, kv_heads, head_dim)
+
+    def rms(x: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
+        scaled = x.float() * torch.rsqrt(x.float().pow(2).mean(-1, keepdim=True) + eps)
+        if zero_centred:
+            return (scaled * weight.float()).to(x.dtype)
+        return scaled.to(x.dtype).float() * weight.float()
+
+    query = rms(query, q_norm_w1).transpose(1, 2)
+    key = rms(key, k_norm_w1).transpose(1, 2)
+    rotary_dim = cos.shape[-1]
+    cos_h = cos.unsqueeze(1)
+    sin_h = sin.unsqueeze(1)
+
+    def rotate_half(x: torch.Tensor) -> torch.Tensor:
+        half = x.shape[-1] // 2
+        return torch.cat((-x[..., half:], x[..., :half]), dim=-1)
+
+    def embed(x: torch.Tensor) -> torch.Tensor:
+        rot, passthrough = x[..., :rotary_dim], x[..., rotary_dim:]
+        spun = (rot * cos_h) + (rotate_half(rot) * sin_h)
+        out = torch.cat([spun, passthrough], dim=-1) if passthrough.numel() else spun
+        return out.to(q_proj_out.dtype)
+
+    return embed(query), embed(key)
+
+
+def varlen_attention_ref(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    packed: Any,
+    *,
+    scale: float,
+    groups: int,
+) -> torch.Tensor:
+    """Non-causal attention of each packed row over itself: ``[T, H, D]`` inputs (keys with ``H / groups`` heads), ``[T, H, D]`` out.
+
+    ``packed`` holds the rows' ``lengths`` (``models.packed.Packed``); each row
+    runs SDPA alone, as an unpadded batch of one would.
+    """
+    outputs = []
+    for row in zip(
+        *(torch.split(t, packed.lengths, dim=0) for t in (query, key, value)),
+        strict=True,
+    ):
+        q, k, v = (x.transpose(0, 1)[None] for x in row)
+        if groups > 1:
+            k = k.repeat_interleave(groups, dim=1)
+            v = v.repeat_interleave(groups, dim=1)
+        out = F.scaled_dot_product_attention(q, k, v, scale=scale)
+        outputs.append(out[0].transpose(0, 1))
+    return torch.cat(outputs)
 
 
 def rotary_half_ref(
@@ -365,6 +504,7 @@ def reference_kernels(device: str) -> KernelSet:
         ("linear", linear_ref),
         ("rotary_half", rotary_half_ref),
         ("sdpa", sdpa_ref),
+        ("varlen_attention", varlen_attention_ref),
     ):
         kernels.register(Kernel(name=name, fn=fn, source="torch-reference", exact=True))
     kernels.register(

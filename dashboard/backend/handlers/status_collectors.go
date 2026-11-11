@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"os"
 	"strings"
 
@@ -48,21 +49,21 @@ func servedByCLI() bool {
 	return strings.TrimSpace(os.Getenv("VLLM_SR_RUNTIME_CONFIG_PATH")) != ""
 }
 
-func collectInContainerStatus(runtimePath string, stack StackState, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
-	return collectManagedStackStatus(runtimePath, stack, routerAPIURL, envoyURL, credentialProvider...)
+func collectInContainerStatus(ctx context.Context, runtimePath string, stack StackState, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
+	return collectManagedStackStatus(ctx, runtimePath, stack, routerAPIURL, envoyURL, credentialProvider...)
 }
 
-func collectHostStatus(runtimePath, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
-	if status, ok := collectDirectStatus(runtimePath, routerAPIURL, envoyURL, credentialProvider...); ok {
+func collectHostStatus(ctx context.Context, runtimePath, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
+	if status, ok := collectDirectStatus(ctx, runtimePath, routerAPIURL, envoyURL, credentialProvider...); ok {
 		return status
 	}
-	return collectDashboardOnlyHostStatus(routerAPIURL, envoyURL)
+	return collectDashboardOnlyHostStatus(ctx, routerAPIURL, envoyURL)
 }
 
 // collectManagedStackStatus reports the stack `vllm-sr serve` runs, from its
 // Dashboard container. A service that answers its HTTP probe runs; the state
 // of one that does not comes from the stack's files.
-func collectManagedStackStatus(runtimePath string, stack StackState, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
+func collectManagedStackStatus(ctx context.Context, runtimePath string, stack StackState, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
 	routerAPIURL = strings.TrimRight(routerAPIURL, "/")
 	status := baseSystemStatus()
 	status.DeploymentType = "docker"
@@ -70,18 +71,19 @@ func collectManagedStackStatus(runtimePath string, stack StackState, routerAPIUR
 	status.Endpoints = []string{"http://localhost:8899"}
 
 	stopped := stack.stoppedService()
-	probe := probeServingHealth(routerAPIURL, credentialProvider...)
+	probe := probeServingHealth(ctx, routerAPIURL, credentialProvider...)
 	status.ServingMode = probe.mode
 	if probe.mode == servingModeEngine {
 		return collectModelEngineStatus(routerAPIURL, "docker", "container", probe)
 	}
 	router := resolveManagedRouterStatus(probe, stopped)
-	envoy := resolveManagedEnvoyStatus(envoyURL, stopped)
+	envoy := resolveManagedEnvoyStatus(ctx, envoyURL, stopped)
 
-	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, router.Healthy, credentialProvider...)
-	routerReady := resolveRouterReadiness(routerAPIURL, router.Healthy, status.RouterRuntime, credentialProvider...)
+	status.RouterRuntime = resolveRouterRuntimeStatus(ctx, runtimePath, routerAPIURL, router.Healthy, credentialProvider...)
+	routerReady := resolveRouterReadiness(ctx, routerAPIURL, router.Healthy, status.RouterRuntime, credentialProvider...)
+	status.routerReady = routerReady
 	router.Message = applyRuntimeMessage(router.Message, status.RouterRuntime)
-	status.Models = fetchModelsWhenReady(routerAPIURL, routerReady, credentialProvider...)
+	status.Models = fetchModelsWhenReady(ctx, routerAPIURL, routerReady, credentialProvider...)
 	status.Services = append(status.Services,
 		buildServiceStatus("Routing access", boolToStatus(routerReady && envoy.Healthy), routerReady && envoy.Healthy, routingAccessMessage(routerReady, envoy.Healthy), "gateway"),
 		router,
@@ -99,13 +101,13 @@ func collectManagedStackStatus(runtimePath string, stack StackState, routerAPIUR
 	return status
 }
 
-func collectDirectStatus(runtimePath, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) (SystemStatus, bool) {
+func collectDirectStatus(ctx context.Context, runtimePath, routerAPIURL, envoyURL string, credentialProvider ...routerauth.CredentialProvider) (SystemStatus, bool) {
 	routerAPIURL = strings.TrimRight(routerAPIURL, "/")
 	if routerAPIURL == "" {
 		return SystemStatus{}, false
 	}
 
-	probe := probeServingHealth(routerAPIURL, credentialProvider...)
+	probe := probeServingHealth(ctx, routerAPIURL, credentialProvider...)
 	if probe.mode == servingModeEngine {
 		return collectModelEngineStatus(routerAPIURL, "local (direct)", "process", probe), true
 	}
@@ -119,13 +121,14 @@ func collectDirectStatus(runtimePath, routerAPIURL, envoyURL string, credentialP
 	status.ServingMode = probe.mode
 	status.Overall = "healthy"
 	status.Endpoints = []string{routerAPIURL}
-	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy, credentialProvider...)
-	routerReady := resolveRouterReadiness(routerAPIURL, routerHealthy, status.RouterRuntime, credentialProvider...)
+	status.RouterRuntime = resolveRouterRuntimeStatus(ctx, runtimePath, routerAPIURL, routerHealthy, credentialProvider...)
+	routerReady := resolveRouterReadiness(ctx, routerAPIURL, routerHealthy, status.RouterRuntime, credentialProvider...)
+	status.routerReady = routerReady
 	routerMsg = applyRuntimeMessage(routerMsg, status.RouterRuntime)
-	status.Models = fetchModelsWhenReady(routerAPIURL, routerReady, credentialProvider...)
+	status.Models = fetchModelsWhenReady(ctx, routerAPIURL, routerReady, credentialProvider...)
 	status.Services = append(status.Services, buildServiceStatus("Router", "running", true, routerMsg, "process"))
 
-	envoyHealthy := appendDirectEnvoyStatus(&status, envoyURL)
+	envoyHealthy := appendDirectEnvoyStatus(ctx, &status, envoyURL)
 	status.Services = append([]ServiceStatus{buildServiceStatus("Routing access", boolToStatus(routerReady && envoyHealthy), routerReady && envoyHealthy, routingAccessMessage(routerReady, envoyHealthy), "gateway")}, status.Services...)
 	status.Services = append(status.Services, buildServiceStatus("Dashboard", "running", true, "Running", "process"))
 	setDegradedWhenUnhealthy(&status, routerReady, envoyHealthy)
@@ -133,7 +136,7 @@ func collectDirectStatus(runtimePath, routerAPIURL, envoyURL string, credentialP
 	return status, true
 }
 
-func collectDashboardOnlyHostStatus(routerAPIURL, envoyURL string) SystemStatus {
+func collectDashboardOnlyHostStatus(ctx context.Context, routerAPIURL, envoyURL string) SystemStatus {
 	status := baseSystemStatus()
 	routerMsg := "Router API URL is not configured"
 	if routerAPIURL != "" {
@@ -145,7 +148,7 @@ func collectDashboardOnlyHostStatus(routerAPIURL, envoyURL string) SystemStatus 
 		buildServiceStatus("Routing access", "unavailable", false, "Router or gateway is unavailable", "gateway"),
 		buildServiceStatus("Router", "not running", false, routerMsg, "process"),
 	)
-	appendDirectEnvoyStatus(&status, envoyURL)
+	appendDirectEnvoyStatus(ctx, &status, envoyURL)
 	status.Services = append(status.Services,
 		buildServiceStatus("Dashboard", "running", true, "Running", "process"),
 	)
@@ -160,12 +163,12 @@ func routingAccessMessage(routerHealthy, envoyHealthy bool) string {
 	return "Router or gateway is unavailable"
 }
 
-func appendDirectEnvoyStatus(status *SystemStatus, envoyURL string) bool {
+func appendDirectEnvoyStatus(ctx context.Context, status *SystemStatus, envoyURL string) bool {
 	readyURL := "http://localhost:8801/ready"
 	if envoyURL != "" {
 		readyURL = strings.TrimRight(envoyURL, "/") + "/v1/models"
 	}
-	envoyRunning, envoyHealthy, envoyMsg := checkEnvoyHealth(readyURL)
+	envoyRunning, envoyHealthy, envoyMsg := checkEnvoyHealth(ctx, readyURL)
 	if !envoyRunning {
 		return false
 	}
@@ -203,7 +206,7 @@ func resolveManagedRouterStatus(probe servingHealthProbe, stopped stoppedService
 	return buildServiceStatus("Router", stopped.status, false, stopped.message, "container")
 }
 
-func resolveManagedEnvoyStatus(envoyURL string, stopped stoppedService) ServiceStatus {
+func resolveManagedEnvoyStatus(ctx context.Context, envoyURL string, stopped stoppedService) ServiceStatus {
 	readyURLs := []string{}
 	if envoyURL != "" {
 		readyURLs = append(readyURLs, strings.TrimRight(envoyURL, "/")+"/v1/models")
@@ -212,7 +215,7 @@ func resolveManagedEnvoyStatus(envoyURL string, stopped stoppedService) ServiceS
 		readyURLs = append(readyURLs, readyURL)
 	}
 	for _, readyURL := range readyURLs {
-		if running, healthy, msg := checkEnvoyHealth(readyURL); running {
+		if running, healthy, msg := checkEnvoyHealth(ctx, readyURL); running {
 			return buildServiceStatus("Envoy", boolToStatus(healthy), healthy, msg, "container")
 		}
 	}
@@ -227,20 +230,20 @@ func applyRuntimeMessage(message string, runtime *RouterRuntimeStatus) string {
 }
 
 // Keep process liveness separate from whether the Router can serve requests.
-func resolveRouterReadiness(routerAPIURL string, routerHealthy bool, runtime *RouterRuntimeStatus, credentialProvider ...routerauth.CredentialProvider) bool {
+func resolveRouterReadiness(ctx context.Context, routerAPIURL string, routerHealthy bool, runtime *RouterRuntimeStatus, credentialProvider ...routerauth.CredentialProvider) bool {
 	if !routerHealthy {
 		return false
 	}
 	if runtime != nil {
 		return runtime.Ready
 	}
-	return checkRouterManagementHealth(routerAPIURL+"/ready", credentialProvider...)
+	return checkRouterManagementHealth(ctx, routerAPIURL+"/ready", credentialProvider...)
 }
 
-func fetchModelsWhenReady(routerAPIURL string, routerReady bool, credentialProvider ...routerauth.CredentialProvider) *RouterModelsInfo {
+func fetchModelsWhenReady(ctx context.Context, routerAPIURL string, routerReady bool, credentialProvider ...routerauth.CredentialProvider) *RouterModelsInfo {
 	if !routerReady {
 		return nil
 	}
 
-	return fetchRouterModelsInfo(routerAPIURL, credentialProvider...)
+	return fetchRouterModelsInfo(ctx, routerAPIURL, credentialProvider...)
 }

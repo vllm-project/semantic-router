@@ -1,0 +1,50 @@
+name: Retry Nightly Qualification
+
+# A failed first attempt gets its failed jobs re-run once, within minutes of
+# failing. A manual re-run makes this one stand down, and no run is retried
+# twice, so wait for this retry rather than re-running a failure by hand.
+
+on:
+  workflow_run:
+    workflows: [Nightly Qualification]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  retry:
+    name: Re-run Failed Jobs Once
+    if: >-
+      github.repository == 'vllm-project/semantic-router'
+      && github.event.workflow_run.conclusion == 'failure'
+      && github.event.workflow_run.run_attempt == 1
+      && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Re-run the failed jobs while the run is main's newest qualification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          attempt="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq .run_attempt)"
+          if [[ "$attempt" != 1 ]]; then
+            echo "::notice::Run $RUN_ID was already re-run (attempt $attempt); it is not retried again."
+            exit 0
+          fi
+          main="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          if [[ "$main" != "$RUN_SHA" ]]; then
+            echo "::notice::main moved to $main; the next run qualifies that commit instead."
+            exit 0
+          fi
+          active="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow nightly-build.yml --json status --jq '[.[] | select(.status != "completed")] | length')"
+          if [[ "$active" != 0 ]]; then
+            echo "::notice::Another Nightly Qualification run is active and qualifies main instead."
+            exit 0
+          fi
+          gh run rerun "$RUN_ID" --failed --repo "$GITHUB_REPOSITORY"
