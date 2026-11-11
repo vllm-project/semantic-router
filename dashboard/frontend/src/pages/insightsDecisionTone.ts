@@ -1,14 +1,15 @@
 // The kind of decision a name reads as, which sets the badge's color and icon.
 export type Tone = 'guard' | 'privacy' | 'deep' | 'fast' | 'route'
 
-const TONES: [RegExp, Tone][] = [
-  [/shield|guard|jailbreak|injection|block|refus|harm/, 'guard'],
-  [/pii|mask|privacy|redact|secret|private/, 'privacy'],
-  [/slow|hard|deep|reason|escalat|complex/, 'deep'],
-  [/fast|quick|easy|light|simple|cheap/, 'fast'],
+// Whole words of the name only, so unblock_x is not a guard and the first kind found wins.
+const TONES: [Tone, string[]][] = [
+  ['guard', ['shield', 'guard', 'jailbreak', 'injection', 'block', 'harm', 'safety']],
+  ['privacy', ['pii', 'mask', 'privacy', 'redact', 'secret', 'private']],
+  ['deep', ['slow', 'hard', 'deep', 'reason', 'reasoning', 'escalate', 'complex']],
+  ['fast', ['fast', 'quick', 'easy', 'light', 'simple', 'cheap']],
 ]
 
 export function decisionTone(decision: string): Tone {
-  const name = decision.toLowerCase()
-  return TONES.find(([pattern]) => pattern.test(name))?.[1] ?? 'route'
+  const words = new Set(decision.toLowerCase().split(/[^a-z0-9]+/))
+  return TONES.find(([, names]) => names.some((name) => words.has(name)))?.[0] ?? 'route'
 }

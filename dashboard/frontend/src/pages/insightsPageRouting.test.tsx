@@ -229,7 +229,7 @@ describe('recorded routing explanation', () => {
         <InsightsSessionRoutes trajectory={trajectory} />
       </MemoryRouter>,
     )
-    expect(html).toContain('Kept the model · by session protection')
+    expect(html).toContain('Kept the model · protected')
     expect(html).toContain('Kept this session&#x27;s model')
     expect(html).toContain('Kept this agent&#x27;s model')
     expect(html).toContain('Switched model')

@@ -7,7 +7,8 @@ export function formatDateTime(value?: string | null, fallback = '-'): string {
 }
 
 // A recorded duration in seconds to the millisecond, such as 1.489s.
-export const formatSeconds = (ms: number): string => `${(ms / 1_000).toFixed(3)}s`
+export const formatSeconds = (ms: number): string =>
+  Number.isFinite(ms) && ms >= 0 ? `${(ms / 1_000).toFixed(3)}s` : 'Not recorded'
 
 export function formatDurationBetween(start?: string | null, end?: string | null): string {
   if (!start) return '-'

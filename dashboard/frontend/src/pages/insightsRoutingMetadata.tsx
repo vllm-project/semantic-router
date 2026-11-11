@@ -1,6 +1,7 @@
 import type { ViewField } from '../components/ViewPanel'
 import type { InsightsRecord } from './insightsPageTypes'
 import { projectionMetric } from './insightsRoutingMetrics'
+import InsightsSignalTable from './InsightsSignalTable'
 import InsightsSystemOneAnswers from './InsightsSystemOneAnswers'
 import { systemOneAnswers } from './insightsSystemOneAnswers'
 import styles from './InsightsRoutingEvidence.module.css'
@@ -18,8 +19,11 @@ export function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] 
     ]),
   ].sort()
   if (!outputs.length && !scores.length && !signals.length) return []
-  // with System One's answers drawn above, the raw values fold away
-  const answered = systemOneAnswers(record.signal_values).length > 0
+  // with System One's answers drawn above, only their raw values fold away
+  const answered = systemOneAnswers(record.signal_values, record.signal_confidences).length > 0
+  const isAnswerValue = (name: string) => answered && name.startsWith('systemone:')
+  const shown = signals.filter((name) => !isAnswerValue(name))
+  const folded = signals.filter(isAnswerValue)
   return [
     {
       label: 'Recorded routing values',
@@ -65,43 +69,13 @@ export function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] 
               <p className={styles.muted}>
                 Values and confidence are distinct measurements; a missing confidence is not zero.
               </p>
-              <details className={styles.allValues} open={!answered}>
-                <summary>All recorded values</summary>
-                <div className={styles.tableScroll}>
-                  <table aria-label="Recorded signal values and confidence">
-                    <thead>
-                      <tr>
-                        <th>Signal</th>
-                        <th>Value</th>
-                        <th>Confidence</th>
-                        {record.signal_error_matches &&
-                        Object.keys(record.signal_error_matches).length ? (
-                          <th>Error match</th>
-                        ) : null}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {signals.map((name) => (
-                        <tr key={name}>
-                          <th scope="row">{name}</th>
-                          <td>{projectionMetric(record.signal_values?.[name])}</td>
-                          <td>{projectionMetric(record.signal_confidences?.[name])}</td>
-                          {record.signal_error_matches &&
-                          Object.keys(record.signal_error_matches).length ? (
-                            <td>
-                              {record.signal_error_matches[name] === undefined
-                                ? 'Not recorded'
-                                : record.signal_error_matches[name]
-                                  ? 'Yes'
-                                  : 'No'}
-                            </td>
-                          ) : null}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </details>
+              {shown.length > 0 ? <InsightsSignalTable record={record} names={shown} /> : null}
+              {folded.length > 0 ? (
+                <details className={styles.allValues}>
+                  <summary>Raw System One values ({folded.length})</summary>
+                  <InsightsSignalTable record={record} names={folded} />
+                </details>
+              ) : null}
             </section>
           ) : null}
         </div>

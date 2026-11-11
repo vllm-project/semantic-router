@@ -1308,17 +1308,15 @@
   color: var(--color-text-secondary);
 }
 
-/* A decision as a tinted pill: a soft gradient, a thin border and a glow in its tone's color. */
+/* A decision as a tinted pill: a soft tint and a thin border in its kind's color. */
 .decisionBadge {
   --badge: #a1a1aa;
   --badge-text: #e4e4e7;
-  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.22rem 0.7rem 0.22rem 0.55rem;
+  padding: 0.2rem 0.65rem 0.2rem 0.5rem;
   border-radius: 999px;
-  overflow: hidden;
   font-weight: 600;
   font-size: 0.82rem;
   line-height: 1.3;
@@ -1326,16 +1324,11 @@
   color: var(--badge-text);
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--badge) 24%, transparent),
-    color-mix(in srgb, var(--badge) 6%, transparent)
+    color-mix(in srgb, var(--badge) 18%, transparent),
+    color-mix(in srgb, var(--badge) 5%, transparent)
   );
-  border: 1px solid color-mix(in srgb, var(--badge) 42%, transparent);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 0 16px -6px color-mix(in srgb, var(--badge) 70%, transparent);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease;
+  border: 1px solid color-mix(in srgb, var(--badge) 34%, transparent);
+  box-shadow: 0 0 12px -6px color-mix(in srgb, var(--badge) 60%, transparent);
 }
 
 .decisionBadge svg {
@@ -1347,64 +1340,33 @@
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--badge) 80%, transparent));
 }
 
-/* One sweep of light when the badge appears. */
-.decisionBadge::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    105deg,
-    transparent 35%,
-    rgba(255, 255, 255, 0.18) 50%,
-    transparent 65%
-  );
-  transform: translateX(-120%);
-  animation: decisionBadgeShine 1.1s ease-out 0.15s 1 both;
-  pointer-events: none;
-}
-
-.decisionBadge:hover {
-  transform: translateY(-1px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 0 22px -4px color-mix(in srgb, var(--badge) 85%, transparent);
+/* In a table where every row has one: the icon and a tinted name, nothing around them. */
+.decisionBadge[data-quiet] {
+  padding: 0;
+  font-weight: 500;
+  background: none;
+  border: none;
+  box-shadow: none;
 }
 
 .decisionBadge[data-tone='guard'] {
-  --badge: #f43f5e;
-  --badge-text: #fecdd3;
+  --badge: #e8798f;
+  --badge-text: #f5c7d0;
 }
 
 .decisionBadge[data-tone='privacy'] {
-  --badge: #f59e0b;
-  --badge-text: #fde68a;
+  --badge: #e0a84f;
+  --badge-text: #f3dcb0;
 }
 
 .decisionBadge[data-tone='deep'] {
-  --badge: #a78bfa;
-  --badge-text: #ddd6fe;
+  --badge: #a395e8;
+  --badge-text: #d9d3f7;
 }
 
 .decisionBadge[data-tone='fast'] {
-  --badge: #2dd4bf;
-  --badge-text: #99f6e4;
-}
-
-@keyframes decisionBadgeShine {
-  to {
-    transform: translateX(120%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .decisionBadge::after {
-    animation: none;
-  }
-
-  .decisionBadge {
-    transition: none;
-  }
+  --badge: #5cc8b8;
+  --badge-text: #bfeae3;
 }

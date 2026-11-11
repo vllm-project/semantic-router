@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { formatSeconds } from '../utils/dateTime'
 import InsightsDecisionBadge from './InsightsDecisionBadge'
 import { buildConversationLabels } from './insightsConversationIdentity'
-import { getInsightsRecordPath } from './insightsPageSupport'
+import { formatInsightsDecisionName, getInsightsRecordPath } from './insightsPageSupport'
 import type { InsightsTrajectory } from './insightsPageTypes'
 import type { InsightsTrajectoryRoute } from './insightsPageRoutingTypes'
 import styles from './InsightsPage.module.css'
@@ -92,20 +92,26 @@ export default function InsightsSessionRoutes({
                   </td>
                   <td>
                     {route.decision ? (
-                      <InsightsDecisionBadge decision={route.decision} label={route.decision} />
+                      <InsightsDecisionBadge
+                        decision={route.decision}
+                        label={formatInsightsDecisionName(route.decision)}
+                        quiet
+                      />
                     ) : (
                       'Unresolved'
                     )}
                   </td>
                   <td>
-                    {route.previous_model ? `${route.previous_model} → ` : ''}
+                    {route.previous_model && route.previous_model !== route.selected_model
+                      ? `${route.previous_model} → `
+                      : ''}
                     {route.selected_model || 'No backend selected'}
                   </td>
                   <td title={route.session_action || undefined}>
                     {ACTION_TEXT[route.session_action || ''] ||
                       route.session_action ||
                       'Not recorded'}
-                    {route.session_policy_applied ? ' · by session protection' : ''}
+                    {route.session_policy_applied ? ' · protected' : ''}
                   </td>
                   <td title={route.session_reason || undefined}>{reasonText(route)}</td>
                   <td>

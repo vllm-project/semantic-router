@@ -9,17 +9,25 @@ const ICONS: Record<Tone, string> = {
   route: 'M5 6h8a4 4 0 0 1 0 8H9a4 4 0 0 0 0 8h10M17 3l3 3-3 3',
 }
 
-// A decision as a tinted pill with an icon; `label` is the name to show.
+// A decision as a tinted pill with an icon; `label` is the name to show. `quiet` keeps
+// the icon and a tinted name only, for a table where every row has one.
 export default function InsightsDecisionBadge({
   decision,
   label,
+  quiet = false,
 }: {
   decision: string
   label: string
+  quiet?: boolean
 }) {
   const tone = decisionTone(decision)
   return (
-    <span className={styles.decisionBadge} data-tone={tone} title={decision}>
+    <span
+      className={styles.decisionBadge}
+      data-tone={tone}
+      data-quiet={quiet || undefined}
+      title={decision}
+    >
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d={ICONS[tone]} />
       </svg>

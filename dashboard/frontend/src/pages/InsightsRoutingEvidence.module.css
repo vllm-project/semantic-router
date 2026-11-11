@@ -353,6 +353,7 @@
 .answers {
   display: grid;
   gap: 0.55rem;
+  max-width: 44rem;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -384,17 +385,11 @@
   background: rgba(255, 255, 255, 0.04);
 }
 .answerBar > span {
-  min-width: 2px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
-  transition: background 0.2s ease;
 }
 .answerBar > .answerTop {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.85));
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.18);
-}
-.answer:hover .answerBar > span:not(.answerTop) {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.7);
 }
 .answerValue {
   grid-area: value;
@@ -407,6 +402,15 @@
 .answerValue strong {
   color: var(--color-text);
   font-weight: 600;
+}
+@media (max-width: 640px) {
+  .answer {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'question value'
+      'bar bar';
+    row-gap: 0.3rem;
+  }
 }
 .allValues > summary {
   cursor: pointer;
