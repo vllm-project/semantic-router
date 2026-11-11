@@ -49,7 +49,7 @@ func NewProfile() *Profile {
 func (p *Profile) Name() string { return "masking" }
 
 func (p *Profile) Description() string {
-	return "Tests the masking decision plugin across Chat, Responses and Anthropic, and its fail-closed behavior when the PII deployment errors"
+	return "Tests the masking decision plugin across Chat, Responses and Anthropic, over coding-agent tool loops, and its fail-closed behavior when the PII deployment errors, plus session protection for agent sessions and subagents"
 }
 
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
@@ -64,7 +64,9 @@ func (p *Profile) GetTestCases() []string {
 	return []string{
 		"masking-cross-protocol",
 		"masking-keeps-echoed-placeholder",
-		"masking-classifier-unavailable-fails-closed",
+		"masking-agent-tool-loop",
+		"masking-scan-error-fails-closed",
+		"agent-session-holds-model",
 	}
 }
 

@@ -123,6 +123,7 @@ until the selected cases are known to be isolated.
 - **external-gateway-responses**: ExtProc-only Responses create, get, and conversation chaining with external gateway-owned dispatch.
 - **dashboard**: dashboard API, validation, and routing-authoring contracts.
 - **routing-strategies**: keyword, entropy, and fallback routing.
+- **masking**: the masking plugin on Chat, Responses and Anthropic, including a coding-agent tool loop whose tool results and tool call arguments reach the backend masked, scan errors that refuse the request without dispatching it, and session protection that holds a session's model, scopes subagents to their own key and releases after the idle timeout.
 - **dynamic-config**: CRD-driven routing and embedding signals.
 - **remote-embedding**: OpenAI-compatible remote embedding providers.
 - **looper**: deterministic Looper algorithm contracts.
