@@ -40,15 +40,11 @@ spec:
         operator: "OR"
         keywords: ["tutorial", "guide", "how-to", "learn"]
         caseSensitive: false
-
-    embeddings:
       - name: "learning_intent"
-        threshold: 0.72
-        candidates:
-          - "I want to learn about this topic"
-          - "Can you teach me how to do this?"
-          - "I'm trying to understand this concept"
-        aggregationMethod: "max"
+        operator: "OR"
+        keywords: ["I want to learn about this topic", "Can you teach me how to do this?", "I'm trying to understand this concept"]
+        caseSensitive: false
+
 
     domains:
       - name: "computer science"
@@ -67,7 +63,7 @@ spec:
         conditions:
           - type: "keyword"
             name: "tutorial"
-          - type: "embedding"
+          - type: "keyword"
             name: "learning_intent"
           - type: "domain"
             name: "computer science"
@@ -84,7 +80,7 @@ spec:
         conditions:
           - type: "keyword"
             name: "tutorial"
-          - type: "embedding"
+          - type: "keyword"
             name: "learning_intent"
           - type: "domain"
             name: "math"
@@ -101,7 +97,7 @@ spec:
         conditions:
           - type: "keyword"
             name: "tutorial"
-          - type: "embedding"
+          - type: "keyword"
             name: "learning_intent"
       modelRefs:
         - model: "qwen-2.5-32b"

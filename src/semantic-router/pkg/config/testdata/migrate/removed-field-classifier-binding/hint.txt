@@ -1,0 +1,1 @@
+recipes[default].model_bindings.pii: removed_field: binding pii asks a classifier head (token_spans.v1), which no signal asks; run `vllm-sr config migrate` (drop it; the decision model answers the signal)

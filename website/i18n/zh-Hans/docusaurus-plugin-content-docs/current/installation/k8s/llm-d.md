@@ -21,7 +21,7 @@ translation:
 client
   -> inference gateway
   -> Semantic Router ExtProc
-  -> HTTPRoute selected by x-selected-model
+  -> HTTPRoute selected by x-vsr-route-model
   -> InferencePool
   -> llm-d endpoint picker
   -> model replica
@@ -44,7 +44,7 @@ client
 | 名称 | 所有者 | 要求 |
 | --- | --- | --- |
 | 提供商模型 | Semantic Router | `providers.models[].name` 是配方所选的逻辑池名称。 |
-| 请求头 | Semantic Router | Router 将所选提供商模型写入 `x-selected-model`。 |
+| 请求头 | Semantic Router | Router 将所选提供商模型写入 `x-vsr-route-model`。 |
 | 路由匹配 | Gateway API | 一条 `HTTPRoute` 精确匹配该头值。 |
 | 后端引用 | Gateway API / llm-d | 路由指向预期的 `InferencePool`。 |
 | 已服务模型 | 模型服务器 | 池中的副本接受网关转发的模型标识。 |
@@ -64,7 +64,7 @@ spec:
     - matches:
         - headers:
             - type: Exact
-              name: x-selected-model
+              name: x-vsr-route-model
               value: local/code
       backendRefs:
         - group: inference.networking.k8s.io
@@ -87,7 +87,7 @@ spec:
 
 3. 将 Semantic Router 作为 ExtProc 服务接入网关。确切资源因网关而异；受支持的接入模式见 [Gateway API Inference Extension](gateway-api-inference-extension)。
 
-4. 在规范 Router 配置中保持 `global.router.clear_route_cache: true`。网关必须在下游请求路径中调用 ExtProc，保留其清除路由缓存的响应，然后在 Semantic Router 写入 `x-selected-model` 后重新评估 `HTTPRoute`。
+4. 在规范 Router 配置中保持 `global.router.clear_route_cache: true`。网关必须在下游请求路径中调用 ExtProc，保留其清除路由缓存的响应，然后在 Semantic Router 写入 `x-vsr-route-model` 后重新评估 `HTTPRoute`。
 
 ## 逐层验证
 
@@ -121,7 +121,7 @@ curl -i "$GATEWAY_URL/v1/chat/completions" \
 
 | 现象 | 检查 |
 | --- | --- |
-| 路由从未匹配 | 比较 `x-selected-model` 与 `HTTPRoute` 值，包括大小写和命名空间。 |
+| 路由从未匹配 | 比较 `x-vsr-route-model` 与 `HTTPRoute` 值，包括大小写和命名空间。 |
 | `ResolvedRefs=False` | 检查 `InferencePool` 名称、group、端口和跨命名空间权限。 |
 | 池正确但已服务模型错误 | 将提供商的模型标识与副本接受的模型名称对齐。 |
 | Semantic Router 被绕过 | 确认网关在路由匹配之前调用 ExtProc。 |

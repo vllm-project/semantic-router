@@ -64,17 +64,3 @@ func TestCandidateRankCompare(t *testing.T) {
 		t.Fatalf("missing evidence must be incomparable, got %d", got)
 	}
 }
-
-func TestEvidenceForCandidateUsesExactEffort(t *testing.T) {
-	params := addTestEvidence(config.ModelParams{}, 0.7, 0.6, "low")
-	params = addTestEvidence(params, 0.8, 1, "high")
-	models := map[string]config.ModelParams{"model": params}
-
-	got := evidenceForCandidate(models, config.ModelRef{Model: "model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}})
-	if got == nil || got.Score == nil || *got.Score != 80 || got.Coverage != 1 {
-		t.Fatalf("high-effort evidence = %+v", got)
-	}
-	if got := evidenceForCandidate(models, config.ModelRef{Model: "model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "medium"}}); got != nil {
-		t.Fatalf("missing exact effort fell back: %+v", got)
-	}
-}

@@ -23,14 +23,25 @@ const LossyFieldToolResultError = "tool_result.is_error"
 // and Responses backends as user text.
 const LossyFieldSystemMessageRole = "messages[].role"
 
+// LossyFieldUnreadableFile names files in the conversation when the selected
+// model declares no file input. Accepting the loss sends each such file as a
+// short note, which ProjectUnreadableFiles writes.
+const LossyFieldUnreadableFile = "content.file"
+
 // LossyFieldReasoningSignature names the signature an Anthropic backend puts
 // on its thinking, which Chat Completions and Responses clients cannot carry.
 const LossyFieldReasoningSignature = "reasoning.signature"
 
+// LossyFieldStore names a request's store: true, which asks the provider to
+// keep the completion. Accepting the loss sends the request without it to a
+// backend whose wire format keeps no completions, which ProjectUnstoredRequest
+// writes.
+const LossyFieldStore = "store"
+
 // OptInLossyFields lists the losses an operator may accept while every other
 // lossy translation keeps failing closed.
 func OptInLossyFields() []string {
-	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldReasoningSignature}
+	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldReasoningSignature, LossyFieldStore}
 }
 
 type MissingIDPolicy string

@@ -8,16 +8,15 @@ replicaCount: 1
 # Replace the chart's example routing config atomically. Using `config` here
 # would recursively merge in its placeholder default route and signals.
 configOverride:
-  version: v0.3
+  version: v0.5
   listeners: []
   providers:
     models:
       # Protocol metadata only: intentionally no backend_refs or credentials.
       - name: openai/gpt-oss-20b
         api_format: openai
-  routing:
-    modelCards:
-      - name: openai/gpt-oss-20b
+  recipes:
+    - name: default
   global:
     router:
       clear_route_cache: false
@@ -30,51 +29,10 @@ configOverride:
         ttl_seconds: 86400
         max_responses: 1000
       router_replay:
-        enabled: false
         store_backend: memory
       observability:
         tracing:
           enabled: false
-    stores:
-      response_cache:
-        enabled: false
-      memory:
-        enabled: false
-    integrations:
-      tools:
-        enabled: false
-    model_catalog:
-      embeddings:
-        semantic:
-          qwen3_model_path: ""
-          mmbert_model_path: ""
-          multimodal_model_path: ""
-          embedding_config:
-            preload_embeddings: false
-            enable_soft_matching: false
-      kbs: []
-      modules:
-        prompt_compression:
-          enabled: false
-        prompt_guard:
-          enabled: false
-        classifier:
-          domain:
-            enabled: false
-          mcp:
-            enabled: false
-          pii:
-            enabled: false
-          preference:
-            use_contrastive: false
-            embedding_model: ""
-        hallucination_mitigation:
-          enabled: false
-        feedback_detector:
-          enabled: false
-        modality_detector:
-          enabled: false
-
 service:
   type: ClusterIP
 

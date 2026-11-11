@@ -21,6 +21,7 @@ queries. See [Router management API](./apiserver).
 | `GET` | `/v1/responses/{id}/input_items` | OpenAI Responses | Reads stored input items |
 | `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
 | `POST` | `/v1/messages/count_tokens` | Anthropic Messages | Counts with the Messages backend of the named model, or of the model that last served the session, at its `count_tokens` path; otherwise answers with its own estimate, which counts text by tokenizer-style pieces rather than bytes. No turn is routed or recorded. A recipe with candidate requirements, or with a decision that reads content (any signal but conversation shape and context size) or has a plugin, always gets the estimate. Rate limits, token budgets included, admit a count by its input before it is forwarded |
+| `POST` | `/v1/images/generations` | OpenAI Images | Routed on the prompt like any text request, and answered only by a decision whose `output` is an image. See [Images API](#images-api) |
 | `POST` | `/openai/deployments/{deployment}/chat/completions` | Azure OpenAI Chat Completions | The deployment names the Router model; `api-version` is accepted and not forwarded |
 | `POST` | `/openai/responses` | Azure OpenAI Responses | Accepts the dated `api-version`; the model is in the request body and the Responses service must be enabled |
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | The model is in the request body and the Responses service must be enabled |
@@ -29,10 +30,18 @@ queries. See [Router management API](./apiserver).
 | `POST` | `/v1/systemone`, `/v1/decisions` | Native System One | Direct decision models or explicitly published native recipes on a standalone listener |
 | `GET` | `/v1/systemone/models` | Native model discovery | Lists that listener's published System One models |
 
+`GET /v1/responses/{id}/input_items` includes nonempty stored `instructions` as a
+system-message item before the stored input items. Item IDs, `first_id`, and
+`last_id` remain stable across repeated reads of an unchanged stored response.
+
 Engine mode serves the native System One paths with recipe routing disabled.
-Publish native model IDs in `listeners[].systemone.models`; the Chat `models`
-allowlist does not grant native access. Both APIs use the listener's API keys.
-See the [model runtime quickstart](../model-runtime/quickstart.md) for a request.
+A listener serves the native API when it lists `systemone` in `apis`
+(`listeners[].apis.systemone`, optionally with `models`); the LLM APIs'
+`models` do not grant native access. All APIs use the listener's API keys, and
+`apis.systemone.schema` sets the System One schema the listener speaks
+(`vllm-sr/5.0` by default, or `vllm-sr/4.0`); see
+[System One schemas](../system-one/use/schemas.md).
+See the [model runtime quickstart](../model-runtime/get-started/quickstart.md) for a request.
 
 The System One paths read bodies compressed with one layer of gzip or zstd
 (`415` with `unsupported_media_type` for any other coding) and
@@ -40,18 +49,19 @@ The System One paths read bodies compressed with one layer of gzip or zstd
 The Router decodes these before it reads the request and forwards the JSON
 request, with each part's image as `data_base64`, to the model. On
 `/v1/systemone` a request with a failed question is answered as a whole with
-`question_failed`, the question's `question_error`, fixed `reason` and ID,
-while `/v1/decisions` answers each question in place. A model the listener does
+`question_failed`, the question's `question_error`, fixed `reason` and ID
+(in a batch, also its entry as `state`), while `/v1/decisions` answers each
+question in place. A model the listener does
 not publish returns `403` `model_not_allowed` with the models it does publish.
-See [System One compatibility](../model-runtime/reference.md#system-one-compatibility)
+See [System One compatibility](../model-runtime/reference/http-api.md#system-one-compatibility)
 for assets, Box, track and long context.
 
 ### Route a System One request
 
 In Router mode, publish an `entrypoints` item with `api: systemone` and grant
-its name in `listeners[].systemone.models`. The Chat default `vllm-sr/auto`
+its name in `listeners[].apis.systemone.models`. The Chat default `vllm-sr/auto`
 does not automatically publish a native entrypoint. Follow the
-[System One cascade guide](../tutorials/algorithm/native/cascade.md) to connect
+[System One escalate guide](../tutorials/algorithm/looper/escalate.md#on-system-one) to connect
 local deployments or remote Engine and compatible System One services.
 
 ```bash
@@ -78,14 +88,14 @@ multiple named states. The selected native response retains its answers,
 probabilities, usage and other fields. `model` stays the public entrypoint;
 the additional `routing` object identifies the execution. Set
 `options.return_meta: true` to include the selected model's runtime metadata.
-Calibrated cascades collect this provenance internally even when
+Calibrated escalations collect this provenance internally even when
 you leave response metadata disabled.
 
 ```json
 {
-  "recipe": "native-cascade",
+  "recipe": "native-escalate",
   "decision": "classify",
-  "algorithm": "cascade",
+  "algorithm": "escalate",
   "stage": "strong",
   "selected_model": "vega",
   "quality": "uncalibrated",
@@ -97,18 +107,30 @@ you leave response metadata disabled.
 the selected algorithm, including remote decision-model calls and transport
 retries. Signal timeouts remain upper bounds inside the shared request deadline.
 It is not a count of GPU forwards. `usage` belongs to the returned native
-candidate and is not total cascade billing.
+candidate and is not total escalation billing.
 The `quality` field names the configured acceptance method; it is not an
 accuracy score. Native discovery marks recipe entrypoints with `routing: true`
 and concrete models with `routing: false`.
 
-Malformed or unsupported auto questions return `400`. If no complete answer
-passes the declared acceptance rule, the request returns `503` with
-`systemone_unresolved`. Exhausting the shared physical-call limit returns
+Malformed or unsupported auto questions return `400` with `invalid_request`,
+and a message saying what auto cannot route. A request that no candidate model
+can answer returns `400` with `unsupported_capability`: for example, a `box`
+question when no model of the decision answers box questions or reads images.
+Its message names what is missing and each candidate, with what it lacks and
+where that came from (its card, its backend's listing, or what its deployment
+declares); see
+[Route by what each model answers](../tutorials/algorithm/looper/escalate.md#route-by-what-each-model-answers).
+If no complete answer passes the declared acceptance rule, the request returns
+`503` with `systemone_unresolved`. Exhausting the shared physical-call limit returns
 `503`; exhausting its deadline returns `504`. Both budget errors use
 `systemone_budget_exhausted` and include the reason and `model_calls` count.
+A model whose auth is `credential: delegated` answers `401`
+(`delegated_credential_missing`) when the request carries no delegated
+credential, before the call, as a request the Dashboard forwards does, and `403`
+(`delegated_router_call_refused`) when no client request is behind the call,
+as for an operator's routing diagnostic.
 Failed candidates never become empty successful answers. Direct model requests
-keep their existing native API contract and do not run the cascade.
+keep their existing native API contract and do not run the escalation.
 
 A remote Engine backend must expose a concrete model. Native backend calls
 carry `X-VSR-SystemOne-Backend: 1`; a receiving Router returns `409`
@@ -122,8 +144,10 @@ Auto execution exports `sr_systemone_stage_total` and
 `sr_systemone_stage_duration_seconds` by configured algorithm, stage and model,
 plus `sr_systemone_auto_requests_total` and
 `sr_systemone_auto_duration_seconds`. These distinguish accepted, rejected,
-invalid and failed attempts; they measure serving behavior, not label-based
-evaluation quality. The auto duration covers the algorithm; preceding recipe
+invalid and failed attempts, and stages skipped because their model cannot
+answer the request (`outcome="incapable"`, also the request outcome when no
+candidate can). They measure serving behavior, not label-based evaluation
+quality. The auto duration covers the algorithm; preceding recipe
 signals are outside that metric.
 
 Other `/v1/*` paths fail closed. In particular, `/v1/files`,
@@ -159,17 +183,17 @@ them. The options are `deadline_ms` (a number greater than 0),
 `return_meta` (`true` or `false`); `null` sets none. Any other option, or a value of another type, returns `400` with
 `invalid_request` and a message that names it. A request the Router sends to
 its model directly waits 30 seconds for the answer, or its `deadline_ms` when
-that is longer, up to the listener's `systemone.max_deadline_ms` (600000, 10
+that is longer, up to the listener's `apis.systemone.max_deadline_ms` (600000, 10
 minutes, by default); a `long_context` request without `deadline_ms` waits
 that whole limit. `options.profile` was removed in
 [#5071](https://github.com/vllm-project/semantic-router/pull/5071): a request
-runs with its deployment's [engine arguments](../model-runtime/engine-args.md),
+runs with its deployment's [engine arguments](../model-runtime/deploy/engine-args.md),
 and `meta` reports `dtype` and `numerics` instead of `profile`.
 
 The model runtime's HTTP API, which the Router calls, belongs to one release
 and makes no such promise. A Router accepts only a runtime that serves exactly
 its contract version; see
-[Attach to a runtime you run](../model-runtime/deploy.md#attach-to-a-runtime-you-run).
+[Attach to a runtime you run](../model-runtime/deploy/connect-the-router.md#attach-to-a-runtime-you-run).
 
 ## Send a routed request
 
@@ -198,7 +222,7 @@ whether it streams or not and whatever format the backend speaks. A stream
 whose backend names no model in its first event keeps the logical name. A
 reply the Router composes itself, from a Looper algorithm or its own refusal,
 names the logical model, the name `x-vsr-selected-model` reports. See
-[VSR routing headers](../troubleshooting/vsr-headers) for the stable
+[VSR routing headers](../api/headers) for the stable
 observability contract.
 
 The model names accepted by the Router come from canonical provider entries.
@@ -225,7 +249,7 @@ providers:
 ```
 
 Pricing is operator-supplied deployment metadata, not a live quote. It stays on
-`providers.models[]`; `routing.modelCards` only describes semantic capabilities.
+`providers.models[]`; `providers.models` only describes semantic capabilities.
 `currency` is optional and resolves to `USD` for accounting when omitted. When set,
 it must be an uppercase three-letter code. All per-million-token rates must be finite
 and non-negative. `cached_input_per_1m` and `cache_write_per_1m` are optional, and an
@@ -288,6 +312,44 @@ curl -sS http://localhost:8899/v1/messages \
   }'
 ```
 
+### Images API
+
+```bash
+curl -sS http://localhost:8899/v1/images/generations \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "vllm-sr/auto",
+    "prompt": "Draw a lighthouse at dusk.",
+    "size": "1024x1024"
+  }'
+```
+
+The Router routes an Images API request on its prompt, like any text request.
+The request must reach a decision whose
+[output contract](../tutorials/decision/output) is an image, such as
+`output: {kind: image, action: generate}`. That decision's model generates the
+image, whether it answers on the Images API (`api_format: images`) or on the
+Responses API with the hosted `image_generation` operation, and the client
+receives the image in the Images API's own shape:
+
+```json
+{"created": 1700000000, "data": [{"b64_json": "iVBORw0KGgo..."}]}
+```
+
+The request takes `model`, `prompt`, `n`, `size`, `quality`, `background`,
+`moderation`, `output_format` and `output_compression`. `response_format` must
+be `b64_json`, and the API does not stream. A request that reaches no image
+decision (it matches none, matches one that answers in text, or names a model
+directly instead of an entrypoint such as `vllm-sr/auto`) gets `400`
+`image_route_required` before any model is called. A Chat Completions or
+Anthropic Messages request that reaches an image decision gets `400`
+`unsupported_capability`, since neither API can return an image. One Responses
+API call generates one image, so `n` above 1 needs a decision with a model on
+the Images API; a decision whose models are all on the Responses API answers it
+with `400` `unsupported_capability` before any model is called, unless its
+[`request_params`](../tutorials/plugin/request-params) `max_n` caps `n` to 1
+or its `blocked_params` removes `n`.
+
 ### Azure OpenAI clients
 
 Clients built for Azure OpenAI can call the Router as if it were an Azure
@@ -313,11 +375,11 @@ supported Chat paths are `/openai/v1/chat/completions` and the deployment
 route. The Router accepts Copilot's `reasoning.summary` on Responses
 turns. It forwards the setting to a Responses backend. With a Chat Completions
 or Messages backend, the turn still runs, but the summary request is dropped
-and reported in `x-vsr-protocol-warnings`.
+and reported in `x-vsr-warnings`.
 
 Protocol translation is limited to fields the router supports. When a request
-crosses protocols, inspect `x-vsr-client-protocol`,
-`x-vsr-upstream-protocol`, and any `x-vsr-protocol-warnings` response header.
+crosses protocols, inspect the `client_protocol` and `upstream_protocol`
+members of `x-vsr-trace` and any `x-vsr-warnings` response header.
 
 Chat Completions accepts OpenRouter's `reasoning_details` on assistant messages
 and streaming deltas. Text, summary, encrypted, and server tool call blocks keep
@@ -337,7 +399,7 @@ identifier remain separate; the Router does not infer their identity.
 
 Only Chat Completions carries these blocks. A Responses or Messages client of a
 Chat backend still gets the reply: the Router drops the blocks and keeps the
-reasoning text. A buffered reply reports the drop in `x-vsr-protocol-warnings`
+reasoning text. A buffered reply reports the drop in `x-vsr-warnings`
 as `dropped;...;reasoning_details`. A stream has already sent its headers when
 the drop is found, so the drop is recorded only in the
 `llm_translation_lossy_total` metric and a `translation_lossy` debug log event;
@@ -369,10 +431,13 @@ decision, or request content:
 | --- | --- | --- | --- |
 | `model_not_found` | 400 | `invalid_request_error` | The request names a model this Router does not serve. |
 | `no_route` | 400 | `invalid_request_error` | No decision matched, and no default model applies. A recipe entrypoint falls back to `providers.defaults.model` when it is configured. Looper entrypoints follow the same recipe rules; their names do not select an algorithm. |
-| `context_length_exceeded` | 400 or 422 | `invalid_request_error` | The request does not fit the models that could serve it: 400 from the [request budget check](#request-budget-errors), 422 from the models' `context_window_size`. |
+| `context_length_exceeded` | 400 or 422 | `invalid_request_error` | The request does not fit the models that could serve it, even without the estimate's reserves for structured data and media: 400 from the [request budget check](#request-budget-errors), 422 from the models' `context_window_size`. |
 | `max_output_tokens_exceeded` | 400 | `invalid_request_error` | The requested output exceeds the configured model limit. See [request budget errors](#request-budget-errors). |
-| `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. `x-vsr-applied-unknown-policy` names the decision. |
+| `decision_unresolved` | 503 | `server_error` | A decision could not be evaluated because a signal it needs was unavailable, and its `rules.on_unknown` is `fail_request`. The `on_unknown` member of `x-vsr-trace` names the decision. |
 | `no_eligible_model` | 503 | `server_error` | The selection policy rejected every candidate model of the matched decision. |
+| `image_route_required` | 400 | `invalid_request_error` | An [Images API](#images-api) request reached no decision whose output is an image. |
+| `image_generation_forbidden` | 400 | `invalid_request_error` | The matched decision answers with a generated image, and the request's `tool_choice` is `none`. |
+| `tool_selection_failed` | 503 | `server_error` | The matched decision's [tool selection](../tutorials/plugin/tools.md#selection) failed or timed out, and its `select.on_error` is `fail`. |
 
 The Router logs each of these failures at `WARN`, under the request's
 `x-request-id`, with the code and its own reason: the model the request named,
@@ -396,7 +461,10 @@ is never intentionally sent with a success status.
 
 With `candidate_requirements.context: known_limits`, the Router checks estimated
 input plus the effective output allowance against the candidates' configured
-limits. If all candidates fail only the budget check, it returns HTTP 400:
+limits. When the full estimate leaves fewer candidates than the decision needs,
+the Router checks again without the estimate's reserves for structured data and
+media and keeps the candidates that count fits. If all candidates still fail
+only the budget check, it returns HTTP 400:
 
 | Error code | Meaning |
 | --- | --- |
@@ -406,7 +474,7 @@ limits. If all candidates fail only the budget check, it returns HTTP 400:
 Missing capabilities, unknown limits, unavailable selection evidence, and mixed
 failures retain their selection-error behavior, `no_eligible_model`. Budget checks do not
 truncate requests by themselves; opt into
-[context compression](../tutorials/plugin/context-compression.md) when appropriate.
+[context compression](../tutorials/plugin/context.md#compression-and-budget) when appropriate.
 
 These counts are estimates. A backend can still reject a request; its valid
 HTTP status and meaningful message are retained. vLLM integer codes are exposed
@@ -424,14 +492,17 @@ Router Replay records routing decisions and selected request lifecycle data.
 It is useful for debugging, evaluation, and Router Learning, but it does not
 change routing merely because a record is read.
 
-Replay is disabled unless the service is enabled:
+Replay is disabled unless a `router_replay` plugin enables it:
 
 ```yaml
 global:
   services:
     router_replay:
-      enabled: true
       store_backend: memory
+  plugins:
+    - type: router_replay
+      configuration:
+        enabled: true
 ```
 
 The in-memory backend is suitable for local inspection. Use a configured

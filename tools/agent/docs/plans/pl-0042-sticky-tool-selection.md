@@ -1,5 +1,10 @@
 # PL-0042: Session-Scoped Sticky Tool-Set Selection
 
+The `tool_selection` plugin has since merged into the `tools` plugin: the
+sticky block is `tools.select.sticky` (`config/tools_plugin.go`), and the
+selection is asked of the decision model. The task records below keep the
+paths of their time.
+
 ## Goal
 
 Implement an opt-in, bounded session tool-set policy around the existing
@@ -154,7 +159,7 @@ it. Kept in sync by hand if the issue's completion signal changes.
       original task wording: empirically confirmed (round-trip test against
       the live `UserConfig` Pydantic model) that `global` is an untyped
       `Optional[Dict[str, Any]]` passthrough in `src/vllm-sr/cli/models.py`
-      (`UserConfig.global_`), unlike `routing.decisions[].plugins[].configuration`
+      (`UserConfig.global_`), unlike `recipes[].decisions[].plugins[].configuration`
       which is strictly typed per-plugin (that's why `StickyToolSelectionConfig`
       needed a Python mirror in TASK-01 — Pydantic silently drops unknown
       fields there, but not under an untyped dict). No `StoresConfig` class

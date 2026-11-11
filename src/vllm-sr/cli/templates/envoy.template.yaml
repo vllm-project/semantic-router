@@ -65,24 +65,29 @@ static_resources:
             virtual_hosts:
             - name: local_service
               domains: ["*"]
-              # Internal and identity headers never reach a model backend. Envoy
-              # removes them from the request it sends upstream, after the HTTP
-              # filters ran; client-sent identity is removed at ingress below.
+              # Identity headers never reach a model backend. Envoy removes them
+              # from the request it sends upstream, after the HTTP filters ran;
+              # client-sent identity is removed at ingress below.
               request_headers_to_remove:
-              - "x-vsr-looper-request"
-              - "x-vsr-looper-secret"
-              - "x-vsr-looper-decision"
-              - "x-vsr-looper-iteration"
               {% for header in identity_headers %}
+              - {{ header | tojson }}
+              {% endfor %}
+              {% for header in delegated_credential_headers %}
               - {{ header | tojson }}
               {% endfor %}
               routes:
               {% for model in models %}
               # Route for model: {{ model.name | tojson }}
               - match:
+                  {% if listener.served_path_regex %}
+                  # Only the paths of the APIs this listener serves.
+                  safe_regex:
+                    regex: {{ listener.served_path_regex | tojson }}
+                  {% else %}
                   prefix: "/"
+                  {% endif %}
                   headers:
-                  - name: x-selected-model
+                  - name: x-vsr-route-model
                     string_match:
                       exact: {{ model.name | tojson }}
                 {% if model.route_request_headers %}
@@ -104,12 +109,17 @@ static_resources:
                   host_rewrite_literal: "{{ model.endpoints[0].host_authority }}"
                   {% endif %}
                   # ext_proc has already resolved the complete provider path for
-                  # requests carrying x-selected-model, so this route must not
+                  # requests carrying x-vsr-route-model, so this route must not
                   # prefix it a second time.
               {% endfor %}
-              # Default route (no x-selected-model header)
+              # Default route (no x-vsr-route-model header)
               - match:
+                  {% if listener.served_path_regex %}
+                  safe_regex:
+                    regex: {{ listener.served_path_regex | tojson }}
+                  {% else %}
                   prefix: "/"
+                  {% endif %}
                 {% if models and models[0].route_request_headers %}
                 request_headers_to_add:
                 {% for header in models[0].route_request_headers %}
@@ -144,6 +154,20 @@ static_resources:
                       regex: "^/v1([/?].*)?$"
                     substitution: "{{ models[0].path_prefix }}\\1"
                   {% endif %}
+              {% if listener.served_path_regex %}
+              # A path of an API this listener does not serve.
+              - match:
+                  prefix: "/"
+                direct_response:
+                  status: 404
+                  body:
+                    inline_string: {{ listener.unserved_body | tojson }}
+                response_headers_to_add:
+                - header:
+                    key: content-type
+                    value: application/json
+                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
+              {% endif %}
           http_filters:
           {% if not listener.trust_identity_headers %}
           # Only an authenticating proxy in front of a listener that sets
@@ -194,6 +218,20 @@ static_resources:
                   )
                 end
           {% endif %}
+          # The delegated credential is an authenticator output, never a client
+          # input. Remove any client copy before ext_proc sees the request; the
+          # route-level removal above only runs at the router filter. This
+          # stack runs no authenticator, so a deployment that issues the
+          # credential adds its authenticator after this filter.
+          - name: envoy.filters.http.lua
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+              inline_code: |
+                function envoy_on_request(request_handle)
+                {% for header in delegated_credential_headers %}
+                  request_handle:headers():remove({{ header | tojson }})
+                {% endfor %}
+                end
           - name: envoy.filters.http.ext_proc
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor

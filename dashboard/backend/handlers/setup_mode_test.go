@@ -22,7 +22,7 @@ func createActivatedSetupConfig(t *testing.T, dir string) string {
 
 	configPath := filepath.Join(dir, "config.yaml")
 	config := map[string]interface{}{
-		"version": "v0.3",
+		"version": "v0.5",
 		"listeners": []map[string]interface{}{
 			{
 				"name":    "http-8899",
@@ -53,7 +53,7 @@ func createCanonicallyInvalidSetupConfig(t *testing.T, dir string, setupMode boo
 	t.Helper()
 
 	configPath := filepath.Join(dir, "config.yaml")
-	body := "version: v0.3\nlisteners: \"not-a-list\"\n"
+	body := "version: v0.5\nlisteners: \"not-a-list\"\n"
 	if setupMode {
 		body += "setup:\n  mode: true\n  state: bootstrap\n"
 	}

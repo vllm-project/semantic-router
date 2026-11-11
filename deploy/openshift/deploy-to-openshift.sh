@@ -377,11 +377,9 @@ sed -e "s/DYNAMIC_MODEL_A_IP/$MODEL_A_IP/g" \
 
 if [[ "$USE_CLASSIFIER_GPU" == "true" ]]; then
     yq eval \
-      '.global.model_catalog.modules.prompt_guard.use_cpu = false |
-       .global.model_catalog.modules.classifier.domain.use_cpu = false |
-       .global.model_catalog.modules.classifier.pii.use_cpu = false' \
+      '.global.model_catalog.deployments.primary = {"provider": "model_runtime", "artifact": "vllm-sr/vela3-fast", "device": "auto"}' \
       -i "$TEMP_CONFIG"
-    log "Patched config for GPU classifier (use_cpu=false)"
+    log "Patched config for a GPU decision model (device=auto)"
 fi
 
 # Verify the IPs were substituted

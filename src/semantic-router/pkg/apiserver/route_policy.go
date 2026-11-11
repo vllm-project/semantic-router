@@ -55,8 +55,6 @@ const (
 	AuditActionConfigSupersede       RouteAuditAction = "config.supersede"
 	AuditActionRecipeSave            RouteAuditAction = "recipe.save"
 	AuditActionRecipeDelete          RouteAuditAction = "recipe.delete"
-	AuditActionKnowledgeBaseSave     RouteAuditAction = "knowledge_base.save"
-	AuditActionKnowledgeBaseDel      RouteAuditAction = "knowledge_base.delete"
 	AuditActionOutcomeIngest         RouteAuditAction = "outcome.ingest"
 	AuditActionMemoryDelete          RouteAuditAction = "memory.delete"
 	AuditActionDataWrite             RouteAuditAction = "data.write"

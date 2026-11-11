@@ -1,0 +1,168 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/vllm-project/semantic-router/vllm-sr
+  tag: latest
+  pullPolicy: Never
+config:
+  version: v0.5
+  listeners: []
+  providers:
+    defaults:
+      model: openai/mock-model
+    models:
+      - name: openai/mock-model
+        backend_refs:
+          - name: provider-mocker
+            provider: vllm
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            weight: 1
+      - name: openai/vision-model
+        capabilities: [chat, image_input]
+        modalities: {input: [text, image], output: [text]}
+        backend_refs:
+          - name: provider-mocker
+            provider: vllm
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            weight: 1
+      # provider-mocker answers the images API with a fixed 1x1 PNG.
+      - name: mock/image-generation
+        api_format: images
+        capabilities: [image_generation]
+        modalities: {input: [text], output: [image]}
+        backend_refs:
+          - name: provider-mocker
+            provider: vllm
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            weight: 1
+      - name: mock/omni-image
+        api_format: responses
+        capabilities: [chat, image_generation]
+        modalities: {input: [text, image], output: [text, image]}
+        backend_refs:
+          - name: provider-mocker
+            provider: vllm
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            weight: 1
+  recipes:
+    - name: default
+      signals:
+        # The System One fixture answers the modality question by the
+        # __SYSTEMONE_CHOICE__ marker in a request's text.
+        modality:
+          - name: wants_image
+            description: Requests for a generated image.
+            labels: [image]
+            predicate: {gte: 0.5}
+          - name: wants_text_image
+            description: Requests for text with a generated image.
+            labels: [text_image]
+            predicate: {gte: 0.5}
+        # The fixture answers this question by the marker an image carries in
+        # its PNG text chunk; the Router sends it the request's images because
+        # the rule reads them.
+        systemone:
+          - name: photo_kind
+            description: What the request's image shows.
+            deployment: fake-systemone
+            question:
+              type: choice
+              instructions: What does the attached image show?
+              choices:
+                - key: other
+                  description: Anything else, or no image at all.
+                - key: receipt
+                  description: A photo of a shop receipt.
+                - key: chart
+                  description: A chart or a graph.
+            input:
+              image: true
+      decisions:
+        - name: receipts
+          description: Requests whose image is a receipt go to the vision model.
+          priority: 300
+          rules:
+            operator: AND
+            conditions:
+              - type: systemone
+                name: photo_kind
+                label: receipt
+          modelRefs:
+            - model: openai/vision-model
+              use_reasoning: false
+        - name: image
+          description: Requests for an image get one from the image model.
+          priority: 200
+          rules:
+            operator: AND
+            conditions:
+              - type: modality
+                name: wants_image
+          output:
+            kind: image
+            action: generate
+          modelRefs:
+            - model: mock/image-generation
+              use_reasoning: false
+        - name: text-and-image
+          description: Requests for text with an image get both from one omni model.
+          priority: 190
+          rules:
+            operator: AND
+            conditions:
+              - type: modality
+                name: wants_text_image
+          output:
+            kind: [text, image]
+            action: generate
+          modelRefs:
+            - model: mock/omni-image
+              use_reasoning: false
+        - name: default_decision
+          description: Everything else.
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/mock-model
+              use_reasoning: false
+  global:
+    router:
+      strategy: priority
+    services:
+      # The output contract cases call the Responses API.
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 86400
+        max_responses: 1000
+      observability:
+        tracing:
+          enabled: false
+    model_catalog:
+      deployments:
+        # provider-mocker's System One fixture (see its README), declared to
+        # read images so image questions load.
+        fake-systemone:
+          provider: systemone
+          endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
+          model: e2e/fake-systemone
+          schema: vllm-sr/4.0
+          timeout_ms: 5000
+          capabilities:
+            question_types: [choice, noul, span]
+            modalities: [text, image]
+      bindings:
+        modality: fake-systemone
+
+resources:
+  limits:
+    cpu: '2'
+    memory: 6Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi
+
+# E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
+persistence:
+  enabled: false

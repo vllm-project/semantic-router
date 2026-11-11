@@ -9,16 +9,16 @@ import (
 )
 
 // targetStructureDecision is one of the decisions configured to route on the
-// structure signal (see e2e/profiles/structure-routing/values.yaml). It is
-// used only to confirm the negative case doesn't accidentally land on it;
-// the empty x-vsr-matched-structure header is what actually proves neither
-// structure rule matched.
+// request shape: keyword rules that count questions or find numbered steps
+// (see e2e/profiles/structure-routing/values.yaml). It is used only to
+// confirm the negative case doesn't accidentally land on it; no keyword
+// signal in the trace is what actually proves neither rule matched.
 const targetStructureDecision = "many_questions_routing"
 
 func init() {
 	pkgtestcases.Register("structure-routing", pkgtestcases.TestCase{
-		Description: "Test structure signal rule matching and routing",
-		Tags:        []string{"kubernetes", "routing", "structure"},
+		Description: "Test keyword count routing on request shape",
+		Tags:        []string{"kubernetes", "routing", "keyword"},
 		Fn:          testStructureRouting,
 	})
 }
@@ -26,7 +26,7 @@ func init() {
 func testStructureRouting(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	return runSignalRoutingTest(ctx, client, opts, signalRoutingConfig{
 		TestDataPath:   "e2e/testcases/testdata/structure_routing_cases.json",
-		MatchedHeader:  "x-vsr-matched-structure",
+		SignalType:     "keyword",
 		TargetDecision: targetStructureDecision,
 		ResultsTitle:   "STRUCTURE ROUTING TEST RESULTS",
 		LogLabel:       "Structure",

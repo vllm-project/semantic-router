@@ -81,7 +81,7 @@ func TestOpenRouterReasoningDetailsDegradeForMessagesClient(t *testing.T) {
 	reply := string(result.GetResponseBody().GetResponse().GetBodyMutation().GetBody())
 	require.Contains(t, reply, `"thinking":"thought"`)
 	require.NotContains(t, reply, "opaque")
-	require.Contains(t, protocolDiagnosticsHeader(result.GetResponseBody().GetResponse().GetHeaderMutation()), ";reasoning_details")
+	require.Contains(t, protocolDiagnosticsHeader(result.GetResponseBody().GetResponse().GetHeaderMutation()), `field="reasoning_details"`)
 }
 
 func reasoningContinuityHistory(t *testing.T) llmprotocol.Request {
@@ -123,9 +123,9 @@ func TestContextRecoveryRefusesReasoningContinuity(t *testing.T) {
 			decision := &config.Decision{
 				Name: "recoverable",
 				Plugins: []config.DecisionPlugin{{
-					Type: config.DecisionPluginContextCompression,
-					Configuration: config.MustStructuredPayload(map[string]interface{}{
-						"enabled": true, "recovery": map[string]interface{}{"enabled": true, "store": "redis"},
+					Type: config.DecisionPluginContext,
+					Configuration: compressPayload(map[string]interface{}{
+						"recovery": map[string]interface{}{"enabled": true, "store": "redis"},
 					}),
 				}},
 			}
