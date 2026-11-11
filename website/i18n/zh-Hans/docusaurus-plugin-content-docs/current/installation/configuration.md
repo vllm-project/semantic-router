@@ -258,6 +258,7 @@ api_key: ${MODEL_API_KEY}
 | `${VAR-default}` | `VAR` 未设置时取 `default` |
 | `$$` | 字面的 `$` |
 
+- `VAR` 是大写名称：由 `A`-`Z`、数字和 `_` 组成，且不以数字开头。其他 `$` 文本保持原样，例如 `$100`、模板中的 `{{range $i := ...}}` 或 `${user_content}` 占位符。
 - 自定义配方必须用 `--recipe-env NAME` 显式授权它需要的主机变量。
 - 在 Kubernetes 上，把敏感值放入 Secret，而不是 ConfigMap 或 Helm values。见[安全加固](security-hardening)。
 
