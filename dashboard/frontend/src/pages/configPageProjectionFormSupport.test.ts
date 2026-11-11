@@ -26,14 +26,19 @@ describe('projection form support', () => {
 
   it('normalizes typed score inputs and validates source-specific fields', () => {
     const inputs = normalizeProjectionInputs([
-      { type: 'embedding', name: ' support ', weight: 0.5, value_source: 'confidence' },
-      { type: 'kb_metric', kb: 'privacy', metric: 'risk', weight: 1, value_source: 'score' },
+      { type: 'domain', name: ' support ', weight: 0.5, value_source: 'confidence' },
+      { type: 'projection', name: 'risk', weight: 1, value_source: 'score' },
     ])
-    expect(inputs[0]).toMatchObject({ type: 'embedding', name: 'support', weight: 0.5 })
+    expect(inputs[0]).toMatchObject({ type: 'domain', name: 'support', weight: 0.5 })
     expect(() => assertProjectionInputs(inputs)).not.toThrow()
     expect(() =>
-      assertProjectionInputs(normalizeProjectionInputs([{ type: 'kb_metric', weight: 1 }])),
-    ).toThrow(/knowledge base/i)
+      assertProjectionInputs(normalizeProjectionInputs([{ type: 'domain', weight: 1 }])),
+    ).toThrow(/name is required/i)
+    expect(() =>
+      assertProjectionInputs(
+        normalizeProjectionInputs([{ type: 'domain', name: 'support', weight: 1, value_source: 'score' }]),
+      ),
+    ).toThrow(/binary, confidence, or raw/i)
   })
 
   it('validates optional calibration and threshold output bands', () => {

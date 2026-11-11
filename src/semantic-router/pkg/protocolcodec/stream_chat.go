@@ -31,7 +31,16 @@ type chatContentKey struct {
 type chatStreamEncoder struct {
 	streamState
 	itemStarted bool
-	toolIndexes map[string]int
+	toolCalls   map[string]*chatStreamToolCall
+}
+
+// chatStreamToolCall is what a Chat client already holds of one call. Clients
+// join the string fields of a call's deltas, so each identity field goes out
+// once: the ID and type with the first delta, the name with the first delta
+// that knows it.
+type chatStreamToolCall struct {
+	index                          int
+	announced, named, hasArguments bool
 }
 
 func (OpenAIChatCodec) NewDecoder(context llmprotocol.StreamContext, policy llmprotocol.Policy) llmprotocol.StreamDecoder {
@@ -45,7 +54,10 @@ func (OpenAIChatCodec) NewDecoder(context llmprotocol.StreamContext, policy llmp
 }
 
 func (OpenAIChatCodec) NewEncoder(context llmprotocol.StreamContext, policy llmprotocol.Policy) llmprotocol.StreamEncoder {
-	return &chatStreamEncoder{streamState: streamState{context: context, policy: policy}, toolIndexes: make(map[string]int)}
+	return &chatStreamEncoder{
+		streamState: streamState{context: context, policy: policy},
+		toolCalls:   make(map[string]*chatStreamToolCall),
+	}
 }
 
 type chatChunkWire struct {
@@ -181,20 +193,29 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	if err != nil || !parsed.HasData {
 		return nil, nil, err
 	}
-	if decoder.terminal {
-		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted data after its terminal sentinel")
-	}
 	if bytes.Equal(bytes.TrimSpace(parsed.Data), []byte("[DONE]")) {
+		// A repeated sentinel is not data after the terminal: gateways that
+		// re-split frames can send it twice. The stream is already complete,
+		// so treat it as a no-op like the Anthropic decoder does.
+		if decoder.terminal {
+			return nil, nil, nil
+		}
 		events, doneErr := decoder.nextAfterHeld(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted, StopReason: decoder.stop, MatchedStopSequence: decoder.stopSequence, Usage: &decoder.usage})
 		return events, nil, doneErr
 	}
+	if decoder.terminal {
+		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted data after its terminal sentinel")
+	}
 	var chunk chatChunkWire
-	_, vendorExtensions, err := decodeProviderWireVendorAware(parsed.Data, &chunk, decoder.policy)
+	_, unknownFields, err := decodeChatProviderWire(parsed.Data, &chunk, decoder.policy)
 	if err != nil {
 		return nil, nil, err
 	}
+	if reservedErr := rejectRouterExtensionFields(unknownFields); reservedErr != nil {
+		return nil, nil, reservedErr
+	}
 	var diagnostics llmprotocol.Diagnostics
-	appendVendorExtensionDiagnostics(&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1, vendorExtensions)
+	decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIChatV1, unknownFields)
 	if err := validateChatStreamChunk(chunk); err != nil {
 		return nil, diagnostics, err
 	}
@@ -837,7 +858,7 @@ func (encoder *chatStreamEncoder) Push(event llmprotocol.Event) ([][]byte, llmpr
 		return encoder.encodeDirectEvent(event)
 	}
 	if event.Type == llmprotocol.EventOutputItemCompleted {
-		return nil, nil, nil
+		return encoder.encodeUnsentToolArguments(event)
 	}
 	chunk := chatChunkWire{ID: event.ResponseID, Object: "chat.completion.chunk", Model: event.Model}
 	choice := chatChunkChoiceWire{Index: 0}
@@ -866,6 +887,7 @@ func (encoder *chatStreamEncoder) applyChunkEvent(
 	case llmprotocol.EventResponseStarted:
 		encoder.startChatItem(choice)
 	case llmprotocol.EventOutputItemStarted:
+		encoder.reserveToolCall(event)
 		return nil, encoder.startChatItem(choice), nil
 	case llmprotocol.EventOutputTextDelta:
 		applyChatTextDelta(event, choice)
@@ -940,16 +962,62 @@ func (encoder *chatStreamEncoder) applyToolCallDelta(event llmprotocol.Event, ch
 	if event.ToolCall == nil {
 		return llmprotocol.NewError(llmprotocol.ErrorInternal, "tool_event_invalid", "tool event is invalid", nil)
 	}
-	index, found := encoder.toolIndexes[event.ToolCall.ID]
-	if !found {
-		index = len(encoder.toolIndexes)
-		encoder.toolIndexes[event.ToolCall.ID] = index
-	}
+	state := encoder.toolCall(event.ToolCall.ID)
 	call := encodeChatToolCall(*event.ToolCall)
-	choice.Delta.ToolCalls = []chatChunkToolCallWire{{
-		Index: index, ID: call.ID, Type: call.Type, Function: call.Function, Custom: call.Custom,
-	}}
+	delta := chatChunkToolCallWire{Index: state.index, Function: call.Function, Custom: call.Custom}
+	if !state.announced {
+		delta.ID, delta.Type = call.ID, call.Type
+	}
+	if state.named {
+		delta.Function.Name = ""
+		if delta.Custom != nil {
+			delta.Custom.Name = ""
+		}
+	}
+	state.announced = true
+	state.named = state.named || event.ToolCall.Name != ""
+	state.hasArguments = state.hasArguments || event.ToolCall.Arguments != ""
+	choice.Delta.ToolCalls = []chatChunkToolCallWire{delta}
 	return nil
+}
+
+// toolCall returns the client's view of a call, giving a new call the next
+// Chat index.
+func (encoder *chatStreamEncoder) toolCall(id string) *chatStreamToolCall {
+	call, found := encoder.toolCalls[id]
+	if !found {
+		call = &chatStreamToolCall{index: len(encoder.toolCalls)}
+		encoder.toolCalls[id] = call
+	}
+	return call
+}
+
+// reserveToolCall gives a call its Chat index when it starts, so the indexes
+// follow the backend's output order even when calls finish out of order.
+func (encoder *chatStreamEncoder) reserveToolCall(event llmprotocol.Event) {
+	if event.ToolCall != nil && event.ToolCall.ID != "" {
+		encoder.toolCall(event.ToolCall.ID)
+	}
+}
+
+// encodeUnsentToolArguments sends a completed call when no delta carried its
+// arguments: Messages and Responses backends can stream a call without any,
+// and Chat carries a call only in deltas.
+func (encoder *chatStreamEncoder) encodeUnsentToolArguments(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	call := event.ToolCall
+	if call == nil {
+		return nil, nil, nil
+	}
+	if state := encoder.toolCalls[call.ID]; state != nil && state.announced && (state.hasArguments || call.Arguments == "") {
+		return nil, nil, nil
+	}
+	choice := chatChunkChoiceWire{Index: 0}
+	if err := encoder.applyToolCallDelta(event, &choice); err != nil {
+		return nil, nil, err
+	}
+	chunk := chatChunkWire{ID: event.ResponseID, Object: "chat.completion.chunk", Model: event.Model, Choices: []chatChunkChoiceWire{choice}}
+	frame, err := encodeChatStreamFrame(encoder.context, chunk)
+	return [][]byte{frame}, nil, err
 }
 
 func (encoder *chatStreamEncoder) encodeDirectEvent(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
@@ -982,10 +1050,8 @@ func (encoder *chatStreamEncoder) encodeCompletion(
 ) ([][]byte, llmprotocol.Diagnostics, error) {
 	encoder.terminal = true
 	var diagnostics llmprotocol.Diagnostics
-	if event.StopReason == llmprotocol.StopPaused || event.StopReason == llmprotocol.StopContextWindow || event.StopReason == llmprotocol.StopCanceled || event.StopReason == llmprotocol.StopUnknown {
-		if err := appendLossy(&diagnostics, encoder.policy, encoder.context.Source, encoder.context.Target, "response.stop_reason", "Chat Completions cannot represent the source terminal reason"); err != nil {
-			return nil, diagnostics, err
-		}
+	if err := appendChatStopReasonDiagnostic(&diagnostics, event.StopReason, encoder.context.Source, encoder.policy); err != nil {
+		return nil, diagnostics, err
 	}
 	reason := encodeChatStop(event.StopReason)
 	finishFrame, err := encodeChatStreamFrame(encoder.context, chatChunkWire{

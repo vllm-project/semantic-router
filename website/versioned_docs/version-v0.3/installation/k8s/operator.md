@@ -1845,5 +1845,5 @@ kubectl apply -f config/samples/vllm_v1alpha1_semanticrouter.yaml
 
 - [Configure semantic router features](../configuration)
 - [Set up monitoring and observability](../../tutorials/global/api-and-observability)
-- [Explore other deployment options](/docs/installation)
+- [Explore other deployment options](/docs/v0.4/installation)
 - [Join the community](../../community/overview)

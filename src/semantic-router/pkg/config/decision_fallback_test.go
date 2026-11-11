@@ -11,7 +11,7 @@ import (
 // decisionFallbackDoc has a default decision and a recipe decision, each
 // with a fallback block (DEFAULT_FALLBACK and RECIPE_FALLBACK).
 const decisionFallbackDoc = `
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: model-a
@@ -27,37 +27,36 @@ providers:
         - endpoint: 127.0.0.1:8001
           provider: vllm
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [support-auto]
     recipe: support
-routing:
-  modelCards:
-    - name: model-a
-    - name: model-b
-  decisions:
-    - name: answer
-      priority: 10
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: model-a
-        - model: model-b
-      fallback: DEFAULT_FALLBACK
 recipes:
+  - name: default
+    decisions:
+      - name: answer
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: model-a
+          - model: model-b
+        fallback: DEFAULT_FALLBACK
   - name: support
-    routing:
-      fallback:
-        total_timeout: 20s
-      decisions:
-        - name: escalate
-          priority: 10
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: model-a
-            - model: model-b
-          fallback: RECIPE_FALLBACK
+    fallback:
+      total_timeout: 20s
+    decisions:
+      - name: escalate
+        priority: 10
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: model-a
+          - model: model-b
+        fallback: RECIPE_FALLBACK
 `
 
 func decisionFallbackConfig(defaultFallback, recipeFallback string) string {
@@ -106,12 +105,12 @@ func TestDecisionFallbackFailsFast(t *testing.T) {
 		"the circuit breaker is per backend": {
 			"{circuit_breaker: {consecutive_failures: 3}}", "{}", "circuit_breaker",
 		},
-		"negative attempts": {"{max_attempts: -1}", "{}", "routing.decisions[answer].fallback: fallback max_attempts cannot be negative"},
+		"negative attempts": {"{max_attempts: -1}", "{}", "recipes[default].decisions[answer].fallback: fallback max_attempts cannot be negative"},
 		"a bad status":      {"{retryable_status_codes: [700]}", "{}", "invalid retryable status code 700"},
 		"a bad duration":    {"{total_timeout: soon}", "{}", "total_timeout"},
 		"a per-attempt timeout beyond the recipe's total": {
 			"{}", "{per_attempt_timeout: 25s}",
-			"recipes[support].routing.decisions[escalate].fallback: fallback per_attempt_timeout (25s) cannot exceed total_timeout (20s)",
+			"recipes[support].decisions[escalate].fallback: fallback per_attempt_timeout (25s) cannot exceed total_timeout (20s)",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

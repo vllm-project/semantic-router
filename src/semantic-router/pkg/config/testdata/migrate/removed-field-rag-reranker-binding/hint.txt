@@ -1,0 +1,1 @@
+global.model_catalog.bindings.rag.reranker: removed_field: the rag.reranker binding is removed: the decision model judges RAG relevance; run `vllm-sr config migrate` (the rag source's match.judge)

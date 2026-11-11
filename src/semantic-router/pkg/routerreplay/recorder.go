@@ -45,6 +45,7 @@ type (
 	LearningPolicyDiagnostics     = store.LearningPolicyDiagnostics
 	LearningProtectionDiagnostics = store.LearningProtectionDiagnostics
 	LearningRescueDiagnostics     = store.LearningRescueDiagnostics
+	LearningReleaseDiagnostics    = store.LearningReleaseDiagnostics
 	LearningSamplingDiagnostics   = store.LearningSamplingDiagnostics
 	Outcome                       = store.Outcome
 	PreparedDispatchReceipt       = store.PreparedDispatchReceipt
@@ -55,7 +56,6 @@ type (
 	LooperAttempt                 = store.LooperAttempt
 	LooperDiagnostics             = store.LooperDiagnostics
 	RouteDiagnostics              = store.RouteDiagnostics
-	TopicContinuityRecord         = store.TopicContinuityRecord
 	DecisionRanking               = store.DecisionRanking
 	RoutingRecord                 = store.Record
 	ToolTrace                     = store.ToolTrace
@@ -500,21 +500,17 @@ func truncateString(s string, maxBytes int) (string, bool) {
 func logSignalFields(signals Signal) map[string]interface{} {
 	return map[string]interface{}{
 		"keyword":       signals.Keyword,
-		"embedding":     signals.Embedding,
 		"domain":        signals.Domain,
 		"fact_check":    signals.FactCheck,
 		"user_feedback": signals.UserFeedback,
-		"reask":         signals.Reask,
-		"preference":    signals.Preference,
+		"turn_relation": signals.TurnRelation,
 		"language":      signals.Language,
 		"context":       signals.Context,
-		"structure":     signals.Structure,
 		"complexity":    signals.Complexity,
 		"modality":      signals.Modality,
 		"authz":         signals.Authz,
 		"jailbreak":     signals.Jailbreak,
 		"pii":           signals.PII,
-		"kb":            signals.KB,
 		"conversation":  signals.Conversation,
 	}
 }
@@ -536,16 +532,6 @@ func appendGuardrailLogFields(fields map[string]interface{}, r RoutingRecord) {
 			fields["jailbreak_decision"] = r.JailbreakDecision
 		} else if r.JailbreakScoreAvailable {
 			fields["jailbreak_confidence"] = r.JailbreakConfidence
-		}
-	}
-	if r.ResponseJailbreakDetected {
-		fields["response_jailbreak_detected"] = r.ResponseJailbreakDetected
-		fields["response_jailbreak_type"] = r.ResponseJailbreakType
-		fields["response_jailbreak_score_available"] = r.ResponseJailbreakScoreAvailable
-		if r.ResponseJailbreakDecision != nil {
-			fields["response_jailbreak_decision"] = r.ResponseJailbreakDecision
-		} else if r.ResponseJailbreakScoreAvailable {
-			fields["response_jailbreak_confidence"] = r.ResponseJailbreakConfidence
 		}
 	}
 	if r.PIIDetected {

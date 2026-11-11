@@ -1,5 +1,7 @@
 package llmprotocol
 
+import "slices"
+
 type UnknownFieldPolicy string
 
 const (
@@ -23,10 +25,34 @@ const LossyFieldToolResultError = "tool_result.is_error"
 // and Responses backends as user text.
 const LossyFieldSystemMessageRole = "messages[].role"
 
+// LossyFieldUnreadableFile names files in the conversation when the selected
+// model declares no file input. Accepting the loss sends each such file as a
+// short note, which ProjectUnreadableFiles writes.
+const LossyFieldUnreadableFile = "content.file"
+
+// LossyFieldReasoningSignature names the signature an Anthropic backend puts
+// on its thinking, which Chat Completions and Responses clients cannot carry.
+const LossyFieldReasoningSignature = "reasoning.signature"
+
+// LossyFieldStore names a request's store: true, which asks the provider to
+// keep the completion. Accepting the loss sends the request without it to a
+// backend whose wire format keeps no completions, which ProjectUnstoredRequest
+// writes.
+const LossyFieldStore = "store"
+
 // OptInLossyFields lists the losses an operator may accept while every other
 // lossy translation keeps failing closed.
 func OptInLossyFields() []string {
-	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole}
+	return []string{LossyFieldToolResultError, LossyFieldSystemMessageRole, LossyFieldUnreadableFile, LossyFieldReasoningSignature, LossyFieldStore}
+}
+
+// OptInHint is what a refusal of field adds when an operator may accept that
+// loss: the setting that lists it. It is empty for every other field.
+func OptInHint(field string) string {
+	if !slices.Contains(OptInLossyFields(), field) {
+		return ""
+	}
+	return "; an operator can accept this loss by listing " + field + " in global.router.allow_lossy_translation"
 }
 
 type MissingIDPolicy string
@@ -43,33 +69,26 @@ const (
 	SourceBoundedSameFormat SourcePreservationPolicy = "bounded_same_format"
 )
 
-// ResponseVendor identifies a provider with response-only wire extensions.
+// ResponseVendor identifies a provider whose failures arrive in an envelope
+// other than its wire format's canonical error object. The backend's provider
+// type selects it; members a wire contract does not declare are tolerated for
+// every backend and need no vendor.
 type ResponseVendor string
 
-// ResponseVendorAzure permits Azure OpenAI response extensions.
-const ResponseVendorAzure ResponseVendor = "azure"
-
-// ResponseVendorCloudflare permits Cloudflare Workors AI response extensions:
-// decorated chat completions and a top-level errors[] array with Workors AI's
-// own integral codes instead of the canonical OpenAI error object.
+// ResponseVendorCloudflare decodes Cloudflare Workers AI failures: a top-level
+// errors[] array with Workers AI's own integral codes instead of the canonical
+// OpenAI error object.
 const ResponseVendorCloudflare ResponseVendor = "cloudflare"
 
-// ResponseVendorSnowflake permits Snowflake Cortex AI response handling: its
-// failures arrive as a flat object carrying the vendor's own string code instead
-// of the canonical OpenAI error object. No accepted-response decoration has been
-// observed, so this vendor changes only how failures are decoded.
+// ResponseVendorSnowflake decodes Snowflake Cortex AI failures: a flat object
+// carrying the vendor's own string code instead of the canonical OpenAI error
+// object. Accepted responses use the canonical contract.
 const ResponseVendorSnowflake ResponseVendor = "snowflake"
 
-// ResponseVendorOpenAICompatGateway permits response extensions and usage-metering
-// aliases from OpenAI-compatible gateways. Extensions are omitted from the
-// protocol-neutral response, including vLLM Responses transfer and per-turn fields.
-const ResponseVendorOpenAICompatGateway ResponseVendor = "openai-compat-gateway"
-
-// ResponseVendorAnthropicCompatGateway permits response extensions from
-// gateways that serve the Anthropic Messages format, such as their own usage
-// metering or cost fields. Extensions are omitted from the protocol-neutral
-// response; unlike the OpenAI-compatible gateway, no usage counter is renamed.
-const ResponseVendorAnthropicCompatGateway ResponseVendor = "anthropic-compat-gateway"
+// ResponseVendorOpenRouter decodes OpenRouter failures: the canonical OpenAI
+// error object without a type, plus a provider metadata object and a
+// top-level user_id. Accepted responses use the canonical contract.
+const ResponseVendorOpenRouter ResponseVendor = "openrouter"
 
 type Policy struct {
 	UnknownFields      UnknownFieldPolicy
@@ -77,9 +96,16 @@ type Policy struct {
 	MissingStableIDs   MissingIDPolicy
 	SourcePreservation SourcePreservationPolicy
 	Limits             Limits
-	// ResponseVendor permits provider-specific fields at the response boundary.
-	// Empty keeps strict canonical decoding.
+	// ResponseVendor selects a provider's own failure envelope at the response
+	// boundary. Empty decodes the wire format's canonical error object.
 	ResponseVendor ResponseVendor
+	// RejectUnknownUpstreamFields fails an upstream response, stream frame or
+	// error envelope that carries a member its wire contract does not declare,
+	// instead of dropping and reporting the member. Conformance tests set it so
+	// the Router's own fixtures and provider simulator cannot drift from the
+	// modelled contracts. The Router never sets it, and configuration cannot
+	// reach it.
+	RejectUnknownUpstreamFields bool
 	// ProviderStopSequences lets a decoder report a provider's non-standard
 	// matched stop sequence (vLLM's choices[].stop_reason) as a stop_sequence
 	// terminal. TranslateResponse and NewStreamWithMutation set it only when

@@ -6,7 +6,7 @@ on:
       verification:
         description: Verification ID from tools/ci/verification_catalog.yaml (or e2e.PROFILE) to run on the selected branch or tag.
         type: string
-        default: platform.image-calibration-cpu
+        default: platform.models-cpu
         required: true
   workflow_call:
     inputs:
@@ -23,6 +23,10 @@ on:
         type: boolean
         default: false
       tag:
+        type: string
+        default: ''
+      date:
+        description: The run's publication date (YYYYMMDD) for every image it builds.
         type: string
         default: ''
       performance-base-ref:
@@ -67,6 +71,7 @@ jobs:
       published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-router'].published_images) }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
+      date: ${{ inputs.date }}
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
     secrets: inherit
 
@@ -80,6 +85,7 @@ jobs:
       published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-dashboard'].published_images) }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
+      date: ${{ inputs.date }}
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
     secrets: inherit
 
@@ -93,6 +99,7 @@ jobs:
       published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-operator'].published_images) }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
+      date: ${{ inputs.date }}
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
     secrets: inherit
 
@@ -106,6 +113,7 @@ jobs:
       published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-fixtures'].published_images) }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
+      date: ${{ inputs.date }}
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
     secrets: inherit
 
@@ -119,6 +127,7 @@ jobs:
       published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-distribution'].published_images) }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
+      date: ${{ inputs.date }}
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
     secrets: inherit
 

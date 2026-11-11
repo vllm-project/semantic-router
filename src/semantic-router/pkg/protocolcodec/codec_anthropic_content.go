@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -454,7 +455,7 @@ func buildAnthropicRequestWire(
 	if instructionErr := encodeAnthropicInstructions(&wire, request); instructionErr != nil {
 		return anthropicRequestWire{}, diagnostics, instructionErr
 	}
-	if messagesErr := appendAnthropicMessages(&wire, request.Messages); messagesErr != nil {
+	if messagesErr := appendAnthropicMessages(&wire, responsesAssistantTurns(request)); messagesErr != nil {
 		return anthropicRequestWire{}, diagnostics, messagesErr
 	}
 	if toolsErr := appendAnthropicTools(&wire, request.Tools); toolsErr != nil {
@@ -513,7 +514,8 @@ func appendAnthropicStateDiagnostics(
 	request llmprotocol.Request,
 	policy llmprotocol.Policy,
 ) error {
-	if request.PreviousResponseID != "" || request.ConversationID != "" || request.Store != nil || request.Truncation == llmprotocol.TruncationAuto {
+	storing := request.Store != nil && *request.Store
+	if request.PreviousResponseID != "" || request.ConversationID != "" || storing || request.Truncation == llmprotocol.TruncationAuto {
 		return appendLossy(diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.AnthropicMessagesV1, "conversation_state", "Messages has no stateful response reference")
 	}
 	return nil
@@ -566,7 +568,8 @@ func encodeAnthropicBaseRequest(request llmprotocol.Request) (anthropicRequestWi
 			Target: llmprotocol.AnthropicMessagesV1,
 			Field:  "max_tokens",
 			Action: llmprotocol.DiagnosticGenerated,
-			Reason: "Anthropic Messages requires an explicit output limit; the source request omitted one",
+			Reason: fmt.Sprintf("Anthropic Messages requires an explicit output limit; the source request omitted one, so %d was sent; "+
+				"request_params.default_max_tokens sets this value", defaultAnthropicMaxOutputTokens),
 		})
 	} else {
 		wire.MaxTokens = llmprotocol.Int64(*request.Sampling.MaxOutputTokens)
@@ -836,6 +839,7 @@ func anthropicContentDiagnostics(contents []llmprotocol.Content, source llmproto
 				return diagnostics, err
 			}
 		}
+		appendAnthropicMediaOmissions(&diagnostics, content, source, policy)
 		if content.Kind == llmprotocol.ContentToolResult && content.ToolResult != nil {
 			nested, err := anthropicContentDiagnostics(content.ToolResult.Content, source, policy)
 			diagnostics = appendDiagnostics(diagnostics, nested, policy.Limits.Diagnostics)
@@ -845,4 +849,15 @@ func anthropicContentDiagnostics(contents []llmprotocol.Content, source llmproto
 		}
 	}
 	return diagnostics, nil
+}
+
+// Messages images have no detail level and documents no file name. The
+// default detail, auto, loses nothing.
+func appendAnthropicMediaOmissions(diagnostics *llmprotocol.Diagnostics, content llmprotocol.Content, source llmprotocol.WireFormat, policy llmprotocol.Policy) {
+	if content.Kind == llmprotocol.ContentImage && content.Detail != "" && content.Detail != "auto" {
+		appendProviderFieldOmission(diagnostics, policy, source, "content.image.detail", "Messages images have no detail level")
+	}
+	if content.Kind == llmprotocol.ContentFile && content.Filename != "" {
+		appendProviderFieldOmission(diagnostics, policy, source, "content.file.filename", "Messages documents have no file name")
+	}
 }

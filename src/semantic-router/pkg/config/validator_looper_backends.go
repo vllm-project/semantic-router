@@ -6,9 +6,9 @@ import (
 )
 
 // validateDecisionLooperBackends refuses a decision that makes model calls of
-// its own (a Looper algorithm, a prompt helper or context recovery) to a model
-// without a backend. The Router makes those calls in process, through the
-// model's providers.models[].backend_refs, in either gateway mode.
+// its own (a Chat executor or context recovery) to a model without a backend.
+// The Router makes those calls in process, through the model's
+// providers.models[].backend_refs, in either gateway mode.
 func validateDecisionLooperBackends(cfg *RouterConfig, decision Decision) error {
 	if cfg.RoutingFragmentOnly {
 		return nil
@@ -33,27 +33,22 @@ func decisionCalledModels(decision Decision) []string {
 			models = append(models, ref.Model)
 		}
 	}
-	if algorithm := decision.Algorithm; algorithm != nil {
-		switch {
-		case IsLooperAlgorithmType(algorithm.Type):
-			refs()
-			if algorithm.Fusion != nil {
-				models = append(models, algorithm.Fusion.AnalysisModels...)
-				if algorithm.Fusion.Model != "" {
-					models = append(models, algorithm.Fusion.Model)
-				}
+	if algorithm := decision.Algorithm; algorithm != nil && IsExecutorAlgorithmType(algorithm.Type) && !algorithm.IsNative() {
+		refs()
+		if algorithm.Fusion != nil {
+			models = append(models, algorithm.Fusion.AnalysisModels...)
+			if algorithm.Fusion.Model != "" {
+				models = append(models, algorithm.Fusion.Model)
 			}
-			if algorithm.Workflows != nil {
-				if planner := strings.TrimSpace(algorithm.Workflows.Planner.Model); planner != "" {
-					models = append(models, planner)
-				}
+		}
+		if algorithm.Workflows != nil {
+			if planner := strings.TrimSpace(algorithm.Workflows.Planner.Model); planner != "" {
+				models = append(models, planner)
 			}
-		case algorithm.Prompt != nil:
-			models = append(models, algorithm.Prompt.Model)
 		}
 	}
-	if compression := decision.GetContextCompressionConfig(); compression != nil &&
-		compression.Recovery != nil && compression.Recovery.Enabled {
+	if plugin := decision.GetContextConfig(); plugin != nil && plugin.Enabled && plugin.Compress != nil &&
+		plugin.Compress.Recovery != nil && plugin.Compress.Recovery.Enabled {
 		refs()
 	}
 	return models

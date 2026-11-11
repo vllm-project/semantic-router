@@ -21,6 +21,7 @@ const (
 	routerLearningActionHoldCurrent       routerLearningAction = "hold_current"
 	routerLearningActionAllowSwitch       routerLearningAction = "allow_switch"
 	routerLearningActionRescueSwitch      routerLearningAction = "rescue_switch"
+	routerLearningActionReleaseSwitch     routerLearningAction = "release_switch"
 )
 
 type routerLearningMethod string

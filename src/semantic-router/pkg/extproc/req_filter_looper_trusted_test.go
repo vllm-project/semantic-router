@@ -55,13 +55,13 @@ func runTrustedFactsLooper(t *testing.T, stageRoles []string, want llmprotocol.T
 	decision := &config.Decision{
 		Name:      "trusted-looper",
 		ModelRefs: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
-		Algorithm: &config.AlgorithmConfig{Type: "confidence"},
+		Algorithm: &config.AlgorithmConfig{Type: "escalate"},
 		Plugins:   []config.DecisionPlugin{mustToolsDecisionPlugin(t, toolsCfg)},
 	}
 	router := &OpenAIRouter{
 		Config:         &config.RouterConfig{Looper: config.LooperConfig{Endpoint: server.URL}},
 		ReplayRecorder: routerreplay.NewRecorder(store.NewMemoryStore(10, 0)),
-		ToolsDatabase:  loadedTrustedFactsToolsDB(t),
+		toolCatalogs:   map[string]*toolCatalog{trustedFactsCatalogPath: loadedTrustedFactsCatalog()},
 	}
 	replayConfig := config.DefaultRouterReplayPluginConfig()
 	request := trustedFactsTestRequest()
@@ -107,7 +107,7 @@ func TestLooperToolStageGateDeniesUnlabeledAttempts(t *testing.T) {
 		StageRoles:   []string{config.TrustedStageCandidate, config.TrustedStageFinal},
 	})
 	decision := &config.Decision{Name: "trusted-looper", Plugins: []config.DecisionPlugin{mustToolsDecisionPlugin(t, toolsCfg)}}
-	router := &OpenAIRouter{ToolsDatabase: loadedTrustedFactsToolsDB(t)}
+	router := trustedFactsRouter(loadedTrustedFactsCatalog())
 	gate := router.looperToolStageGate(trustedFactsTestRequest(), decision, &RequestContext{})
 	if gate == nil {
 		t.Fatal("trusted-facts decision produced no Looper gate")

@@ -219,24 +219,6 @@ const GlobalSettingsRoutingSection: React.FC<
                 />
                 <span>Enabled</span>
               </label>
-              {getBool(modelSelection, "enabled") && (
-                <div className={styles.gsInlineField}>
-                  <span className={styles.gsSmallLabel}>Method:</span>
-                  <input
-                    className={styles.fieldInput}
-                    style={{ width: "8rem" }}
-                    value={getStr(modelSelection, "method")}
-                    onChange={(event) =>
-                      onSetNestedField(
-                        "model_selection",
-                        "method",
-                        event.target.value,
-                      )
-                    }
-                    placeholder="knn"
-                  />
-                </div>
-              )}
             </div>
           </div>
           <div className={styles.gsRow}>

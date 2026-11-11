@@ -62,7 +62,7 @@
   text-overflow: ellipsis;
 }
 
-/* Brand-blue interactive surfaces — matches vLLM icon (#30a2ff). */
+/* Brand-blue interactive surfaces, in Duo's sky (--site-brand-blue). */
 .site-hover-transition {
   transition:
     background var(--site-transition-medium),

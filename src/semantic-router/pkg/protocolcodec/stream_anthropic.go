@@ -144,12 +144,12 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicWireFrame(
 	frame []byte,
 ) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	var wire anthropicEventWire
-	_, vendorExtensions, err := decodeProviderWireVendorAware(data, &wire, decoder.policy)
+	_, unknownFields, err := decodeProviderWireTolerant(data, &wire, decoder.policy)
 	if err != nil {
 		return nil, nil, err
 	}
-	var vendorDiagnostics llmprotocol.Diagnostics
-	appendVendorExtensionDiagnostics(&vendorDiagnostics, decoder.policy, llmprotocol.AnthropicMessagesV1, vendorExtensions)
+	var unknownFieldDiagnostics llmprotocol.Diagnostics
+	decoder.appendStreamUnknownFields(&unknownFieldDiagnostics, llmprotocol.AnthropicMessagesV1, unknownFields)
 	if wire.Type == "" {
 		wire.Type = eventType
 	}
@@ -165,7 +165,7 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicWireFrame(
 		}
 	}
 	events, diagnostics, err := decoder.decodeEvent(wire, frame)
-	diagnostics = appendDiagnostics(vendorDiagnostics, diagnostics, decoder.policy.Limits.Diagnostics)
+	diagnostics = appendDiagnostics(unknownFieldDiagnostics, diagnostics, decoder.policy.Limits.Diagnostics)
 	if err != nil {
 		return events, diagnostics, err
 	}
@@ -813,7 +813,11 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicCompletion(
 	if event.Usage == nil {
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "usage_event_invalid", "terminal usage is invalid", nil)
 	}
-	stop := encodeAnthropicStop(event.StopReason)
+	toolUse := false
+	for _, kind := range encoder.blocks {
+		toolUse = toolUse || kind == llmprotocol.ContentToolCall
+	}
+	stop := encodeAnthropicStop(event.StopReason, toolUse)
 	deltaWire := &anthropicDeltaWire{Type: "message_delta", StopReason: &stop}
 	if event.StopReason == llmprotocol.StopSequence {
 		deltaWire.StopSequence = &event.MatchedStopSequence

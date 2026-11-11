@@ -32,7 +32,6 @@ type effectiveBackendSemantics struct {
 	reasoningTransport modelcatalog.ReasoningTransport
 	reasoningModes     []string
 	reasoningEfforts   []string
-	compatGateway      bool
 }
 
 type effectiveCredentialIdentity struct {
@@ -145,7 +144,7 @@ func newEffectiveBackendSemantics(
 		discovery:          discovery,
 		basePath:           strings.TrimSuffix(parsed.Path, "/"),
 		tlsServerName:      tlsServerName,
-		credentials:        effectiveBackendCredential(effective.Provider.Instance.Credentials),
+		credentials:        effectiveBackendCredential(effective.Provider.Instance),
 		authHeader:         authHeader,
 		authPrefix:         authPrefix,
 		headers:            profile.ExtraHeaders,
@@ -155,11 +154,14 @@ func newEffectiveBackendSemantics(
 		reasoningTransport: reasoningTransport,
 		reasoningModes:     profile.ReasoningModes,
 		reasoningEfforts:   profile.ReasoningEfforts,
-		compatGateway:      profile.CompatGateway,
 	}, nil
 }
 
-func effectiveBackendCredential(credentials modelcatalog.CredentialsRef) effectiveCredentialIdentity {
+func effectiveBackendCredential(instance modelcatalog.ProviderInstance) effectiveCredentialIdentity {
+	if instance.AuthCredential == CredentialDelegated {
+		return effectiveCredentialIdentity{source: CredentialDelegated}
+	}
+	credentials := instance.Credentials
 	if credentials.APIKey != "" {
 		return effectiveCredentialIdentity{source: "inline", value: credentials.APIKey}
 	}
@@ -181,7 +183,7 @@ func effectiveBackendDifferences(left, right effectiveBackendSemantics) []string
 	result = appendDifference(result, left.credentials != right.credentials, "credential source")
 	result = appendDifference(result, left.authHeader != right.authHeader, "auth header")
 	result = appendDifference(result, left.authPrefix != right.authPrefix, "auth prefix")
-	result = appendDifference(result, !maps.Equal(left.headers, right.headers), "extra headers")
+	result = appendDifference(result, !maps.Equal(left.headers, right.headers), "headers")
 	result = appendDifference(result, left.apiVersion != right.apiVersion, "API version")
 	result = appendDifference(result, left.chatPath != right.chatPath, "chat path")
 	result = appendDifference(result, left.createPath != right.createPath, "request path")
@@ -192,7 +194,6 @@ func effectiveBackendDifferences(left, right effectiveBackendSemantics) []string
 	)
 	result = appendDifference(result, !slices.Equal(left.reasoningModes, right.reasoningModes), "reasoning modes")
 	result = appendDifference(result, !slices.Equal(left.reasoningEfforts, right.reasoningEfforts), "reasoning efforts")
-	result = appendDifference(result, left.compatGateway != right.compatGateway, "compat_gateway")
 	return result
 }
 

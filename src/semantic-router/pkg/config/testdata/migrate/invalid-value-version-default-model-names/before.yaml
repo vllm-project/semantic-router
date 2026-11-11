@@ -1,0 +1,34 @@
+# A v0.3 document that names no auto model names served vllm-sr/auto, auto
+# and MoM, and one whose Looper algorithm names no model names served the
+# algorithm's built-in name, here vllm-sr/fusion for the fusion decision.
+# Migrate writes them as it writes the names a document lists.
+version: v0.3
+providers:
+  defaults: {model: small}
+  models:
+    - name: small
+      backend_refs: [{name: small, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+    - name: large
+      backend_refs: [{name: large, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
+global:
+  integrations:
+    looper:
+      endpoint: http://localhost:8899/v1/chat/completions
+routing:
+  signals:
+    keywords:
+      - {name: deliberate, operator: any, keywords: [compare, weigh]}
+  decisions:
+    - name: panel
+      priority: 100
+      rules: {type: keyword, name: deliberate}
+      modelRefs: [{model: small}, {model: large}]
+      algorithm:
+        type: fusion
+        fusion:
+          model: large
+          analysis_models: [small, large]
+    - name: direct
+      priority: 10
+      rules: {operator: AND, conditions: []}
+      modelRefs: [{model: small}]

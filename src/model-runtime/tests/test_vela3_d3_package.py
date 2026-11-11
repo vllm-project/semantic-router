@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from dataclasses import replace
 from pathlib import Path
@@ -66,7 +67,7 @@ def test_verifies_the_package_its_adapters_and_its_base(written) -> None:
     assert set(details.adapters) == set(fixture.ADAPTERS)
     decision = details.adapters["decision"]
     assert (decision.rank, decision.alpha) == (4, 8)
-    assert set(details.heads) == {"span", "ner", "relation"}
+    assert set(details.span.heads) == {"span", "ner", "relation"}
     assert verified.max_input_tokens == base.max_input_tokens
 
 
@@ -143,18 +144,49 @@ def test_refuses_unpaired_lora_factors(written, tmp_path) -> None:
 
 
 @pytest.mark.parametrize(
-    "change",
+    ("change", "message"),
     [
-        lambda span: span.pop("default_question"),
-        lambda span: span.update(threshold="high"),
-        lambda span: span["schemas"]["pii"].pop("labels"),
-        lambda span: span["ner"].pop("threshold_names_only"),
+        (
+            lambda span: span.pop("default_question"),
+            "span.default_question must be a string",
+        ),
+        (lambda span: span.update(threshold="high"), "span.threshold must be a number"),
+        (lambda span: span.update(threshold=True), "span.threshold must be a number"),
+        (
+            lambda span: span["schemas"]["pii"].pop("labels"),
+            "span.schemas.pii.labels must be an object",
+        ),
+        (
+            lambda span: span["router_label_sets"]["pii"].append(3),
+            "span.router_label_sets.pii must be a list of strings",
+        ),
+        (
+            lambda span: span["ner"].pop("threshold_names_only"),
+            "span.ner.threshold_names_only must be a number",
+        ),
+        (
+            lambda span: span["ner"].pop("head_file"),
+            "span.ner.head_file must name a file",
+        ),
+        (
+            lambda span: span["relation"].update(threshold_dev_pair="0.4"),
+            "span.relation.threshold_dev_pair must be a number",
+        ),
+        (
+            lambda span: span.pop("threshold_names_only"),
+            "span.threshold_names_only must be a number",
+        ),
+        (lambda span: span.update(ner="auto"), "span.ner must be an object"),
+        (
+            lambda span: span["pii_buckets"].pop(),
+            "span.pii_buckets must reach the span budget",
+        ),
     ],
 )
-def test_refuses_a_malformed_span_section(written, tmp_path, change) -> None:
+def test_refuses_a_malformed_span_section(written, tmp_path, change, message) -> None:
     root = copy(written, tmp_path)
     edit_config(root, lambda config: change(config["span"]))
-    with pytest.raises(PackageError, match="span is malformed"):
+    with pytest.raises(PackageError, match=re.escape(message)):
         family(root).verify(PackageRef(root))
 
 

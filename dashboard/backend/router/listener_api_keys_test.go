@@ -15,7 +15,7 @@ func TestReadRoleCannotObtainListenerAPIKeys(t *testing.T) {
 	const listenerKey = "listener-client-key-fixture"
 	server, cfg := setupRouteInventoryServerWithConfig(t, func(cfg *config.Config) {
 		cfg.RuntimeConfigWritable = true
-		keyed := "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n    api_keys:\n      - " + listenerKey + "\n"
+		keyed := "version: v0.5\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n    api_keys:\n      - " + listenerKey + "\n"
 		if err := os.WriteFile(cfg.AbsConfigPath, []byte(keyed), 0o644); err != nil {
 			t.Fatal(err)
 		}

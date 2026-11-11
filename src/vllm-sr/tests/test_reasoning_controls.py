@@ -22,7 +22,7 @@ def _config(ref, *, named=True, family="qwen3"):
         ]
     }
     document = {
-        "version": "v0.3",
+        "version": "v0.5",
         "providers": {
             "models": [
                 {
@@ -39,13 +39,13 @@ def _config(ref, *, named=True, family="qwen3"):
                 }
             ]
         },
-        "routing": {"modelCards": [{"name": "local-model"}]},
+        "recipes": [{"name": "default"}],
     }
     if named:
-        document["recipes"] = [{"name": "balance", "routing": routing}]
+        document["recipes"] = [{"name": "balance", **routing}]
         document["entrypoints"] = [{"model_names": ["my/balance"], "recipe": "balance"}]
     else:
-        document["routing"].update(routing)
+        document["recipes"][0].update(routing)
     return document
 
 
@@ -100,7 +100,7 @@ def test_qwen_mode_contract_and_serialization_preserve_authored_choice(ref):
     parsed = UserConfig.model_validate(document)
     assert validate_reasoning_controls(parsed) == []
     serialized = parsed.model_dump(by_alias=True, exclude_none=True)
-    model_ref = serialized["recipes"][0]["routing"]["decisions"][0]["modelRefs"][0]
+    model_ref = serialized["recipes"][0]["decisions"][0]["modelRefs"][0]
     assert ("use_reasoning" in model_ref) == ("use_reasoning" in ref)
     if "use_reasoning" in ref:
         assert model_ref["use_reasoning"] == ref["use_reasoning"]
@@ -135,8 +135,7 @@ def test_catalog_named_custom_model_keeps_its_reasoning_contract(
     model["name"] = model_name
     if catalog_bound:
         model["catalog"] = model_name
-    document["routing"]["modelCards"] = [{"name": model_name}]
-    routing = document["recipes"][0]["routing"] if named else document["routing"]
+    routing = document["recipes"][0]
     routing["decisions"][0]["modelRefs"][0]["model"] = model_name
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(document))
@@ -155,9 +154,7 @@ def test_familyless_custom_effort_remains_passthrough_but_mode_requires_family()
     document = _config({"use_reasoning": True, "reasoning_effort": "custom"})
     document["providers"]["models"][0].pop("reasoning")
     assert validate_reasoning_controls(UserConfig.model_validate(document)) == []
-    document["recipes"][0]["routing"]["decisions"][0]["modelRefs"][0][
-        "reasoning_mode"
-    ] = "enabled"
+    document["recipes"][0]["decisions"][0]["modelRefs"][0]["reasoning_mode"] = "enabled"
     assert (
         "requires a reasoning family"
         in validate_reasoning_controls(UserConfig.model_validate(document))[0].message

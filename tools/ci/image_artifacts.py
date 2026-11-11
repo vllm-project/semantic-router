@@ -69,6 +69,16 @@ def sha256(path: Path) -> str:
         return file_digest(stream, "sha256").hexdigest()
 
 
+def run_date() -> str:
+    """The run's publication date: CI_RUN_DATE when the caller set one, else today (UTC)."""
+    date = os.environ.get("CI_RUN_DATE", "")
+    if not date:
+        return datetime.now(timezone.utc).strftime("%Y%m%d")
+    if not re.fullmatch(r"\d{8}", date):
+        raise ValueError("CI_RUN_DATE must be YYYYMMDD")
+    return date
+
+
 def source_sha() -> str:
     actual = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     if os.environ.get("GITHUB_SHA", actual) != actual:
@@ -203,6 +213,9 @@ def publication_tags(
     else:
         raise ValueError("PR artifacts cannot be published")
     if latest:
+        if mode != "release":
+            # latest_tags.py moves it once main's complete image set exists.
+            raise ValueError("only a release publishes latest with its images")
         tags.append("latest")
     return tags
 
@@ -296,7 +309,7 @@ def main() -> None:
             "target": target,
             "accelerator": accelerator,
             "platforms": ",".join(platforms),
-            "date": datetime.now(timezone.utc).strftime("%Y%m%d"),
+            "date": run_date(),
         }
         with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
             for key, value in values.items():

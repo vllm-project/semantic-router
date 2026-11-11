@@ -36,17 +36,18 @@ const rollbackProbeDecision = "e2e-rollback-probe"
 // passes config validation. No routed traffic flows while the probe is
 // active: the journey only calls the dashboard API, and it restores the
 // original document before finishing.
-const rollbackProbeFragment = `routing:
-  decisions:
-    - name: e2e-rollback-probe
-      description: Temporary decision the rollback journey deploys and reverts
-      priority: 2
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: base-model
-          use_reasoning: false
+const rollbackProbeFragment = `recipes:
+  - name: default
+    decisions:
+      - name: e2e-rollback-probe
+        description: Temporary decision the rollback journey deploys and reverts
+        priority: 2
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: base-model
+            use_reasoning: false
 `
 
 // rollbackMissingVersion is a well-formed version id that never exists: the
