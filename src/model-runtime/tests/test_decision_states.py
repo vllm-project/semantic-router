@@ -166,7 +166,7 @@ def test_a_bundle_task_carries_a_batch(runtimes):
 
 
 def test_an_entry_whose_questions_are_invalid_answers_them_so(runtimes):
-    client = TestClient(create_app(runtimes["vela2"]))
+    client = TestClient(create_app(runtimes["vela2"], systemone_schema="vllm-sr/4.0"))
     invalid = {"q": {"type": "choice", "instructions": "Which?", "criteria": {}}}
     valid = {
         "state": "What is the capital of France?",
@@ -211,7 +211,7 @@ def test_an_entry_whose_questions_are_invalid_answers_them_so(runtimes):
     ],
 )
 def test_a_batch_with_a_standard_requests_fields_is_refused(runtimes, path, mixed):
-    client = TestClient(create_app(runtimes["vela2"]))
+    client = TestClient(create_app(runtimes["vela2"], systemone_schema="vllm-sr/4.0"))
     entry = {
         "state": "Translate hello to French.",
         "questions": vela2_questions("domain"),

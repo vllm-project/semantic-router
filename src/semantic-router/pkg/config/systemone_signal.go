@@ -20,6 +20,11 @@ const (
 	// SystemOneQuestionSpan asks where in the text each label occurs; only a
 	// span-capable model answers it.
 	SystemOneQuestionSpan = "span"
+	// SystemOneQuestionBox asks where in an image something is, and
+	// SystemOneQuestionTrack where it is through a video; only models with
+	// vision answer them.
+	SystemOneQuestionBox   = "box"
+	SystemOneQuestionTrack = "track"
 
 	// SystemOneSpanHeadRouter and SystemOneSpanHeadBroad name the span heads
 	// of models with two: the router head (PII, unsupported claims, toxic

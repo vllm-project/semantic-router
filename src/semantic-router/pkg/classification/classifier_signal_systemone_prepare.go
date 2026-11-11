@@ -70,8 +70,7 @@ func (c *Classifier) prepareSystemOneSignals() error {
 		}
 		question := askedQuestion(asked)
 		if deployment.IsSystemOne() {
-			card := modelservice.RemoteCard(deployment.Model, deployment.DeclaredQuestionTypes(), deployment.DeclaredPresets())
-			card.Modalities = deployment.DeclaredModalities()
+			card := modelservice.DeploymentCard(deployment)
 			if remote := c.systemOne(); remote != nil {
 				var err error
 				if card, err = remote.PrepareCard(context.Background(), name); err != nil {

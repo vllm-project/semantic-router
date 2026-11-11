@@ -16,7 +16,13 @@ import { newModelFormData } from './configPageModelsSectionSupport'
 describe('model form backend targets', () => {
   it('keeps every canonical API format in the public dashboard config type', () => {
     expectTypeOf<NonNullable<ProviderModel['api_format']>>().toEqualTypeOf<
-      'openai' | 'responses' | 'anthropic' | 'images' | 'systemone'
+      | 'chat_completions'
+      | 'responses'
+      | 'messages'
+      | 'images'
+      | 'systemone'
+      | 'openai'
+      | 'anthropic'
     >()
 
     const models = [

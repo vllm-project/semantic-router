@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"sync"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 // The model runtime's built-in decision models, projected from its registry
@@ -62,6 +64,9 @@ func (c *RouterConfig) deploymentAnswers(name string) (questionTypes, modalities
 	if deployment.IsSystemOne() {
 		if declared := deployment.DeclaredQuestionTypes(); len(declared) > 0 {
 			questionTypes = declared
+		} else if capabilities, known := deployment.SchemaCapabilities(); known && !capabilities.Has(systemonecodec.CapabilitySpan) {
+			// A schema without span questions answers the standard types.
+			questionTypes = []string{SystemOneQuestionChoice, SystemOneQuestionNoul, SystemOneQuestionScore}
 		}
 		if declared := deployment.DeclaredModalities(); len(declared) > 0 {
 			modalities = declared
@@ -74,12 +79,20 @@ func (c *RouterConfig) deploymentAnswers(name string) (questionTypes, modalities
 	return nil, nil
 }
 
-// DeploymentAnswers are the question types and input modalities of the model
-// a deployment serves, as far as the configuration tells (deploymentAnswers);
-// nil is unknown.
-func (c *RouterConfig) DeploymentAnswers(name string) (questionTypes, modalities []string) {
-	questionTypes, modalities = c.deploymentAnswers(name)
-	return slices.Clone(questionTypes), slices.Clone(modalities)
+// DeploymentQuestionTypes are the question types of the model a deployment
+// serves, as far as the configuration tells (deploymentAnswers); nil is
+// unknown.
+func (c *RouterConfig) DeploymentQuestionTypes(name string) []string {
+	questionTypes, _ := c.deploymentAnswers(name)
+	return slices.Clone(questionTypes)
+}
+
+// DeploymentModalities are the input modalities the model a deployment serves
+// reads, as far as the configuration tells (deploymentAnswers); nil is
+// unknown.
+func (c *RouterConfig) DeploymentModalities(name string) []string {
+	_, modalities := c.deploymentAnswers(name)
+	return slices.Clone(modalities)
 }
 
 // catalogModel is the built-in decision model a model_runtime deployment
@@ -118,7 +131,36 @@ func validateSystemOneAnswerer(cfg *RouterConfig, path string, rule SystemOneRul
 	if err := CheckSystemOneAnswerer(path, name, rule, questionTypes, modalities); err != nil {
 		return err
 	}
+	if err := checkSchemaCarries(cfg, path, name, rule); err != nil {
+		return err
+	}
 	return checkSpanHead(path, name, rule, cfg.deploymentSpanHeads(name))
+}
+
+// CodeSchemaUnsupported is the load error of a rule that needs what the
+// schema of its systemone deployment cannot carry.
+const CodeSchemaUnsupported = "schema_unsupported"
+
+// checkSchemaCarries refuses a rule that needs what the schema of its
+// systemone deployment cannot carry: proof that its whole input was read
+// (coverage: full, which full-coverage presets set), or video input.
+func checkSchemaCarries(cfg *RouterConfig, path, name string, rule SystemOneRule) error {
+	deployment, ok := cfg.ModelDeployments[name]
+	if !ok || !deployment.IsSystemOne() {
+		return nil
+	}
+	capabilities, known := deployment.SchemaCapabilities()
+	if !known {
+		return nil
+	}
+	schema := deployment.EffectiveSchema()
+	if rule.FullCoverage() && !capabilities.Has(systemonecodec.CapabilityFullInput) {
+		return CheckError(path, CodeSchemaUnsupported, fmt.Sprintf("reads its whole input (coverage: full) and resolves to deployment %q, whose schema %s has no input_coverage to prove it; set coverage: truncate, or bind it to a deployment that reports coverage (schema vllm-sr/5.0)", name, schema))
+	}
+	if rule.Input.Video && !capabilities.Has(systemonecodec.CapabilityVideos) {
+		return CheckError(path, CodeSchemaUnsupported, fmt.Sprintf("input.video resolves to deployment %q, whose schema %s carries no video", name, schema))
+	}
+	return nil
 }
 
 // CodeSpanHeadUnsupported is the load error of a span question whose head
