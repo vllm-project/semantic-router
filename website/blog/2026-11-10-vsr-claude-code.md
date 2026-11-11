@@ -4,7 +4,7 @@ title: "vSR: vLLM Semantic Router Inside Claude Code"
 description: "vSR brings vLLM Semantic Router's decision model into Claude Code. It routes subagents to the right model, hides personal data and secrets before Claude reads them, and holds risky Bash commands for you to confirm."
 authors: [theohsiung, abhinav]
 tags: [claude-code, agents, routing, safety, privacy, vela, semantic-router, community]
-image: /img/blog/vsr-claude-code/05-vsr-pane.png
+image: /img/blog/vsr-claude-code/00-hero.png
 ---
 
 import { ArticleFigure } from '@site/src/components/ArticleMedia';
@@ -46,14 +46,6 @@ vSR is a set of Claude Code hooks around one call. Wherever Claude Code is about
 The call itself is one HTTP request. vSR posts the text and its questions to the runtime's `/v1/decisions` endpoint, and gets back one answer per question: probabilities for a choice, and character spans for personal data. vela3-lite comes from Vela, the family of routing models behind vLLM Semantic Router's signals, so one model of about 2.3 GB answers the questions of all six apps.
 
 The runtime is `vllm-srun`, the project's model runtime. It runs on your machine, on CPU or GPU, or on a server you host for a team. vSR does not sit between you and Anthropic: your prompts and Claude's replies travel exactly as they did before, and vSR adds its checks around them.
-
-{/* FIGURE TO DRAW (architecture): hand-drawn whiteboard sketch, 1672x941, navy ink, pastel hatching.
-    Left zone: a Claude Code terminal window with an Agent row, a Read row and a Bash row.
-    Centre hub: a "vSR hooks" window with six small app badges (router, escalate, redact,
-    shield, guard, check) and circuit lines into a "vela3-lite · vllm-srun" box with mini
-    dashboards for difficulty, PII spans, injection score and review risk. Right zone: the
-    outcomes as stamped cards (ROUTED, REDACTED, SHIELDED, HELD). Bottom strip: small tool
-    windows for "localhost:8790" and "remote GPU runtime". */}
 
 ## Six apps
 
