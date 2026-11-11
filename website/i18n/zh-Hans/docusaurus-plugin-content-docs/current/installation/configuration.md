@@ -55,9 +55,10 @@ global:
 | --- | --- | --- |
 | `timeout` | 整个调用的时长，包括流式响应；它同时限制停滞的流。`0s` 取消这两个限制。若只想取消某个模型的调用时长限制，请为该模型设置 `total_timeout: 0s`。 | `300s` |
 | `api_keys` | listener 要求的客户端 API key。 | 无 |
-| `models` | listener 接受的对话模型。 | 空：全部接受 |
-| `systemone.models` | listener 发布的原生 System One 模型，与 `models` 相互独立。 | 无 |
-| `systemone.max_deadline_ms` | System One 请求等待模型的最长时间。 | 10 分钟 |
+| `apis` | listener 提供的 API，按 API 名称：`chat_completions`、`responses`、`messages`、`images` 和 `systemone`（`openai` 和 `anthropic` 是 `chat_completions` 和 `messages` 的别名）。其他 API 路径返回 `404`，`detail` 中写明 listener。 | 四个 LLM API，不含 `systemone` |
+| `apis.<api>.models` | 某个 API 只接受的请求模型。 | 该类全部模型 |
+| `apis.systemone.schema` | listener 对客户端使用的 System One schema：`vllm-sr/5.0`，或 `vllm-sr/4.0`（同时接受旧契约的全部请求形式）。见 [System One schema](../system-one/use/schemas.md)。 | `vllm-sr/5.0` |
+| `apis.systemone.max_deadline_ms` | System One 请求等待模型的最长时间。 | 10 分钟 |
 | `tls.cert_file`、`tls.key_file` | 单向 TLS。 | 关闭 |
 | `identity.trust_headers`、`identity.trusted_peers` | listener 在 standalone 模式下信任的身份来源。 | 无 |
 

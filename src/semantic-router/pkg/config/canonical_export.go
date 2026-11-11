@@ -248,6 +248,7 @@ func canonicalProviderModelFromRuntime(
 		Name:             name,
 		Catalog:          params.Catalog,
 		APIFormat:        params.APIFormat,
+		Schema:           params.Schema,
 		Pricing:          params.Pricing,
 		Reliability:      params.Reliability,
 		ExternalModelIDs: copyStringMap(params.ExternalModelIDs),

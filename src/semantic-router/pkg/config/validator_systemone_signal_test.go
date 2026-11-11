@@ -326,8 +326,8 @@ func TestSystemOneAnswererLoadChecks(t *testing.T) {
 		"d3":       {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/d3"},
 		"attached": {Provider: ModelRuntimeProvider, Endpoint: "http://runtime:8100"},
 		"custom":   {Provider: ModelRuntimeProvider, Artifact: "/models/custom"},
-		"remote":   {Provider: SystemOneProvider, Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", Capabilities: &DeploymentCapabilities{QuestionTypes: []string{"choice", "noul", "score"}, Modalities: []string{"text", "image"}}},
-		"silent":   {Provider: SystemOneProvider, Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra"},
+		"remote":   {Provider: SystemOneProvider, Schema: "vllm-sr/5.0", Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", Capabilities: &DeploymentCapabilities{QuestionTypes: []string{"choice", "noul", "score"}, Modalities: []string{"text", "image"}}},
+		"silent":   {Provider: SystemOneProvider, Schema: "vllm-sr/5.0", Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra"},
 	}
 	cases := []struct {
 		rule       SystemOneRule
@@ -389,7 +389,7 @@ func TestSystemOneAnswererLoadChecks(t *testing.T) {
 }
 
 func TestDeclaredModalitiesOfASystemOneDeployment(t *testing.T) {
-	base := ModelDeployment{Provider: SystemOneProvider, Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", Auth: &DeploymentAuth{APIKeyEnv: "KEY"}}
+	base := ModelDeployment{Provider: SystemOneProvider, Schema: "vllm-sr/5.0", Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", Auth: &DeploymentAuth{APIKeyEnv: "KEY"}}
 	for _, modalities := range [][]string{{"text", "image", "video"}, {"text"}} {
 		deployment := base
 		deployment.Capabilities = &DeploymentCapabilities{Modalities: modalities}
@@ -407,6 +407,25 @@ func TestDeclaredModalitiesOfASystemOneDeployment(t *testing.T) {
 		if err := deployment.validateSystemOne(); err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("%v: got %v, want %q", modalities, err, want)
 		}
+	}
+}
+
+// A deployment declares box and track questions for a vllm-sr/auto pool to
+// route by; track reads a video, which a systemone/0.2 API does not carry.
+func TestDeclaredBoxAndTrackQuestionsOfASystemOneDeployment(t *testing.T) {
+	deployment := ModelDeployment{Provider: SystemOneProvider, Schema: "vllm-sr/5.0", Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", Auth: &DeploymentAuth{APIKeyEnv: "KEY"}}
+	deployment.Capabilities = &DeploymentCapabilities{QuestionTypes: []string{"choice", "box", "track"}, Modalities: []string{"text", "image", "video"}}
+	if err := deployment.validateSystemOne(); err != nil {
+		t.Fatal(err)
+	}
+	deployment.Schema = "systemone/0.2"
+	deployment.Capabilities = &DeploymentCapabilities{QuestionTypes: []string{"choice", "box"}, Modalities: []string{"text", "image"}}
+	if err := deployment.validateSystemOne(); err != nil {
+		t.Fatalf("box on the standard: %v", err)
+	}
+	deployment.Capabilities.QuestionTypes = []string{"track"}
+	if err := deployment.validateSystemOne(); err == nil || !strings.Contains(err.Error(), "a track question reads a video") {
+		t.Fatalf("track on the standard: %v", err)
 	}
 }
 

@@ -417,7 +417,7 @@ def test_model_runtime_deployments_serve_task_bindings():
 def test_systemone_listener_bounds_the_request_deadline():
     document = copy.deepcopy(BASE)
     systemone = {"models": ["vllm-sr/Decision-2.0-Kai-0.6B"], "max_deadline_ms": 120000}
-    document["listeners"][0]["systemone"] = systemone
+    document["listeners"][0]["apis"] = {"systemone": systemone}
     assert _errors(document) == []
     for limit in (0, -1, "10m"):
         systemone["max_deadline_ms"] = limit
@@ -456,8 +456,8 @@ def test_default_decision_model_accepts_a_scan_budget():
 
 def test_systemone_publication_accepts_a_scan_budget():
     def mutate(document):
-        document["listeners"][0]["systemone"] = {
-            "models": ["vllm-sr/Decision-2.0-Kai-0.6B"]
+        document["listeners"][0]["apis"] = {
+            "systemone": {"models": ["vllm-sr/Decision-2.0-Kai-0.6B"]}
         }
         document["global"]["model_catalog"]["deployments"]["decision-kai"]["input"] = {
             "max_tokens": 4096,

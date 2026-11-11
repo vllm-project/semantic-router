@@ -75,7 +75,10 @@ type ModelPricing struct {
 }
 
 type ModelParams struct {
-	Deployment         string              `yaml:"deployment,omitempty"`
+	Deployment string `yaml:"deployment,omitempty"`
+	// Schema is the version of its API the model's backends speak, as the
+	// model names it; UpstreamSchema gives the API's default without one.
+	Schema             string              `yaml:"schema,omitempty"`
 	PreferredEndpoints []string            `yaml:"preferred_endpoints,omitempty"`
 	Pricing            ModelPricing        `yaml:"pricing,omitempty"`
 	Reliability        ProviderReliability `yaml:"reliability,omitempty"`
