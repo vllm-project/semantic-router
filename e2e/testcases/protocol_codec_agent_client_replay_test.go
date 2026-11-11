@@ -264,11 +264,21 @@ func TestResponsesNamespacedCallDecoding(t *testing.T) {
 func TestRejectProviderNamespaces(t *testing.T) {
 	for body, wantErr := range map[string]bool{
 		`{"tools":[{"type":"function","name":"mcp__echo__echo"}],"input":[{"type":"function_call","name":"mcp__echo__echo"}]}`: false,
-		`{"tools":[{"type":"function","name":"get_pods","parameters":{"properties":{"namespace_name":{}}}}]}`:                  false,
-		`{"input":[{"type":"function_call","name":"echo","namespace":"mcp__echo"}]}`:                                           true,
-		`{"tools":[{"type":"namespace","name":"mcp__echo","tools":[]}]}`:                                                       true,
+		// A tool's own namespace argument, in its schema or a call's input.
+		`{"tools":[{"type":"function","function":{"name":"get_pods","parameters":{"properties":{"namespace":{"type":"string"}}}}}]}`:           false,
+		`{"tools":[{"type":"function","name":"get_pods","parameters":{"properties":{"namespace":{"type":"string"}}}}]}`:                        false,
+		`{"tools":[{"name":"get_pods","input_schema":{"properties":{"namespace":{"type":"string"}}}}]}`:                                        false,
+		`{"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"get_pods","input":{"namespace":"default"}}]}]}`: false,
+		// A Responses namespace left on a tool or call in each format.
+		`{"tools":[{"type":"namespace","name":"mcp__echo","tools":[]}]}`:                                                           true,
+		`{"tools":[{"type":"function","function":{"name":"echo","namespace":"mcp__echo"}}]}`:                                       true,
+		`{"tools":[{"name":"echo","namespace":"mcp__echo","input_schema":{}}]}`:                                                    true,
+		`{"input":[{"type":"function_call","name":"echo","namespace":"mcp__echo"}]}`:                                               true,
+		`{"input":[{"type":"custom_tool_call","name":"echo","namespace":"mcp__echo"}]}`:                                            true,
+		`{"messages":[{"role":"assistant","tool_calls":[{"id":"call_1","function":{"name":"echo","namespace":"mcp__echo"}}]}]}`:    true,
+		`{"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"echo","namespace":"mcp__echo"}]}]}`: true,
 	} {
-		var decoded any
+		var decoded map[string]any
 		if err := json.Unmarshal([]byte(body), &decoded); err != nil {
 			t.Fatal(err)
 		}

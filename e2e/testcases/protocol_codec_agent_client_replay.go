@@ -508,26 +508,29 @@ func verifyAgentClientProviderTool(
 }
 
 // rejectProviderNamespaces fails when a Responses namespace reached a
-// provider, which receives only flat tools and calls.
-func rejectProviderNamespaces(value any) error {
-	switch typed := value.(type) {
-	case map[string]any:
-		if _, found := typed["namespace"]; found {
-			return fmt.Errorf("provider request carries a namespace: %v", typed)
+// provider, which receives only flat tools and calls. It reads only the objects
+// that declare a tool or carry a call in any of the three formats, because a
+// tool schema or call input may name its own "namespace" argument.
+func rejectProviderNamespaces(body map[string]any) error {
+	var objects []map[string]any
+	for _, tool := range agentClientObjects(body["tools"]) {
+		if tool["type"] == "namespace" {
+			return fmt.Errorf("provider request declares a namespace tool: %v", tool)
 		}
-		if typed["type"] == "namespace" {
-			return fmt.Errorf("provider request declares a namespace tool: %v", typed)
+		function, _ := tool["function"].(map[string]any)
+		objects = append(objects, tool, function)
+	}
+	objects = append(objects, agentClientObjects(body["input"])...)
+	for _, message := range agentClientObjects(body["messages"]) {
+		objects = append(objects, agentClientObjects(message["content"])...)
+		for _, call := range agentClientObjects(message["tool_calls"]) {
+			function, _ := call["function"].(map[string]any)
+			objects = append(objects, call, function)
 		}
-		for _, nested := range typed {
-			if err := rejectProviderNamespaces(nested); err != nil {
-				return err
-			}
-		}
-	case []any:
-		for _, nested := range typed {
-			if err := rejectProviderNamespaces(nested); err != nil {
-				return err
-			}
+	}
+	for _, object := range objects {
+		if _, found := object["namespace"]; found {
+			return fmt.Errorf("provider request carries a namespace: %v", object)
 		}
 	}
 	return nil
