@@ -103,7 +103,9 @@ deadline ends before every window is read, `on_unscanned` decides:
 `best_effort` (the default) decides on the windows read, `match` counts the
 request as personal data (strict), `no_match` does not, and `unknown` leaves
 the rule to `on_unknown`. The masking plugin always needs every window: a text
-it could not read whole is not sent.
+it could not read whole is not sent. A tool result the Router cannot read as
+text, such as an image or an unsupported block, counts as unread input too,
+which `on_unscanned` decides the same way, even when no tool result holds text.
 
 A model may find a value once and miss its later copies. Every other exact,
 whole-word copy of a found value of two or more characters is reported too,

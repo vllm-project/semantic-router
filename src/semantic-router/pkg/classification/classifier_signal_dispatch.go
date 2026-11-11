@@ -23,7 +23,7 @@ func (c *Classifier) buildSignalDispatchers(input SignalEvaluationInput, results
 		results, mu, input.ContextText, input.RequestFacts,
 	)...)
 	dispatchers = append(dispatchers, c.buildPolicySignalDispatchers(
-		results, mu, textForSignal, input.PriorUserMessages, input.ToolResultTexts,
+		results, mu, textForSignal, input.PriorUserMessages, input.ToolResultTexts, input.ToolResultScanIncomplete,
 		input.ConversationFacts, input.RequestFacts, usedSignals,
 	)...)
 	return append(dispatchers, c.buildApplicationSignalDispatchers(input, results, mu, textForSignal, usedSignals)...)
@@ -76,7 +76,8 @@ func (c *Classifier) buildApplicationSignalDispatchers(input SignalEvaluationInp
 	facts := input.RequestFacts
 	reading := systemOneReading{
 		request: textForSignal(systemOneQuestionText), history: input.PriorUserMessages, turns: facts.Turns,
-		toolResults: input.ToolResultTexts, images: facts.Images, videos: facts.Videos,
+		toolResults: input.ToolResultTexts, toolResultsIncomplete: input.ToolResultScanIncomplete,
+		images: facts.Images, videos: facts.Videos,
 	}
 	guard := reading
 	guard.request = safetyText(reading.request, facts.RoutingInput)

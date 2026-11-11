@@ -263,7 +263,9 @@ windows when it is longer than one input. When the answer could not cover the
 whole input (the scan budget ran out, the model could not tell its coverage,
 or the input exceeds the model's length), `on_unscanned` decides what the
 rule reports: `match`, `no_match`, or `unknown` (default), which leaves the
-decision's failure policy to decide:
+decision's failure policy to decide. A tool result the Router cannot read as
+text, such as an image or an unsupported block, is unread input of a rule that
+reads `input.tool_results`, which `on_unscanned` decides the same way:
 
 ```yaml
 recipes:
