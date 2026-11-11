@@ -102,7 +102,9 @@ configuration reload does not turn `/ready` back to `503`: the previous
 configuration serves until the new one's models are ready. The standalone
 listeners and the ext_proc gRPC port open only once those models are ready, so
 the listener's `/ready` and the gRPC health service never report ready before
-the management `/ready` does.
+the management `/ready` does. With `config_source: kubernetes`, both also wait
+until the first configuration from Kubernetes is active. Both report not ready
+once shutdown begins, while in-flight requests drain.
 
 For a Router with a runtime registry, `/ready` and `/startup-status` report that
 replica's observed startup state. Another replica's shared file or Redis record

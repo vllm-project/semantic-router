@@ -42,7 +42,7 @@ func startNativeGateway(ctx context.Context, server *extproc.Server, writer star
 	engineOpts.ExecutesFallback = true
 	listeners, err := listenNative(cfg, bindAddress, gateway.Options{
 		Serving:   nativeServing{pin: server.Pin, engine: engineOpts},
-		Ready:     ready.Load,
+		Ready:     func() bool { return ready.Load() && server.ServingActive() },
 		AccessLog: logAccess,
 	})
 	if err != nil {

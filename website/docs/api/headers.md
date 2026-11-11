@@ -28,7 +28,7 @@ Every response of the routing pipeline carries the headers that apply to it: ans
 | Header | Since | Description |
 | --- | --- | --- |
 | `x-vsr-schema-version` | v0.4 | Response-header contract revision; currently `3`. |
-| `x-vsr-response-path` | v0.4 | How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`. |
+| `x-vsr-response-path` | v0.4 | How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `blocked`, `rate_limited`, `error` or `fallback`. |
 | `x-vsr-config-version` | v0.5 | Version of the configuration snapshot that served the request. |
 | `x-vsr-config-hash` | v0.4 | SHA-256 of the active runtime document, on routing previews and `GET /api/v1/config`. |
 | `x-vsr-warnings` | v0.5 | Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`. |
