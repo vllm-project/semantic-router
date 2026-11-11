@@ -171,7 +171,8 @@ class Listener(BaseModel):
         "and anthropic are aliases of chat_completions and messages). Other "
         "API paths answer 404. Omitted, the listener serves chat_completions, "
         "responses, messages and images, and not systemone. A model "
-        "allow-list is enforced in standalone mode; --gateway extproc rejects it.",
+        "allow-list is enforced in standalone mode; --gateway extproc rejects it. "
+        "Standalone mode serves systemone; --gateway extproc rejects it.",
     )
     tls: Optional[ListenerTLS] = Field(
         default=None,
