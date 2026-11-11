@@ -101,15 +101,110 @@ providers:
 ```
 
 An `endpoint` of `host[:port]` takes its scheme from `protocol`; a full URL
-carries its scheme and path, and its path is the complete API root. `auth` and
-`headers` have the same shape as a deployment's
+carries its scheme and path, and its path is the complete API root. `auth`,
+`headers` and `tls` have the same shape as a deployment's
 [connection block](model-catalog.md#connection-block); a backend reads its key
-from `auth.api_key_env`.
+from `auth.api_key_env`, and is always verified (see
+[Trust a private CA](#trust-a-private-ca)).
 
 `api_format` belongs to the model, not to an individual backend ref. It selects
 the backend request and response codec; `protocol` on a backend ref selects the
 HTTP transport. See [Protocol Compatibility](protocol-compatibility) before
 choosing `api_format`.
+
+## Trust a private CA
+
+An https backend is verified against the system roots, under its endpoint's
+host. A backend whose certificate comes from a private CA needs that CA named
+in its `tls` block, or once for every https backend in
+`providers.defaults.tls`:
+
+```yaml
+providers:
+  defaults:
+    tls:
+      ca_file: /etc/vllm-sr/certs/example-corp-ca.pem
+  models:
+    - name: private-llm
+      provider_model_id: private-llm
+      backend_refs:
+        - name: internal
+          endpoint: https://llm.internal.example/v1
+          provider: openai-compatible
+          tls:
+            ca_file: /etc/vllm-sr/certs/example-corp-ca.pem
+            server_name: llm.internal.example
+```
+
+| Field | Meaning |
+| --- | --- |
+| `ca_file` | The PEM bundle this backend's certificate must chain to. It replaces the system roots for this backend, as Envoy's `trusted_ca` does. |
+| `server_name` | The name sent as SNI and that the certificate must carry. Default: the endpoint's host. |
+| `cert_file`, `key_file` | A client certificate for a backend that asks for one. Set both. |
+| `providers.defaults.tls.ca_file` | The `ca_file` of every https backend whose own `tls` names none. |
+
+The generated Envoy cluster and the Router's own calls to the backend use the
+same settings, so both trust the same CAs. The Router's own calls are the
+fallback attempt, the shadow copy, the context-window probe and, in
+standalone mode, every request.
+
+- **Put the intermediate in the bundle.** A server that sends only its leaf
+  certificate verifies only when the bundle holds the issuing intermediate
+  and the root. With the root alone the handshake fails: OpenSSL reports
+  `unable to verify the first certificate` (code 21), Go
+  `certificate signed by unknown authority`. To check a bundle:
+
+  ```bash
+  openssl s_client -connect llm.internal.example:443 \
+    -servername llm.internal.example \
+    -CAfile /etc/vllm-sr/certs/example-corp-ca.pem </dev/null | grep 'Verify return code'
+  ```
+
+  `Verify return code: 0 (ok)` means the bundle is complete.
+- **A CA file replaces the system roots.** A backend that names a `ca_file`
+  no longer trusts the system roots. The default replaces them for every
+  https backend without its own `ca_file`, public providers included. To keep
+  trusting those, put the system bundle and your CA in one file:
+  `cat /etc/ssl/certs/ca-certificates.crt example-corp-ca.pem > /etc/vllm-sr/certs/ca-bundle.pem`.
+- **Validation.** Paths are absolute. `tls` on a plain-HTTP backend, a
+  certificate without its key and `insecure_skip_verify` are rejected: a chat
+  backend is always verified. A file that is present must be readable PEM. A
+  file that is absent where the configuration is checked, as in the
+  Dashboard's container, fails where it is read: when Envoy starts, when the
+  standalone Router loads the configuration, or at the Router's call.
+- **One `tls` per pool.** The backend refs of one model alias share one
+  Envoy cluster, so they must share their `tls` settings.
+- **Replacing a file.** Envoy reads the files when it starts, and the Router
+  when it loads the configuration. Restart the stack after you replace a file
+  in place.
+
+### Mount the files
+
+- **`vllm-sr serve`** mounts each file read-only at the same path into the
+  Router container and, with `--gateway extproc`, the Envoy container. It
+  refuses to start when a file is missing. Keep the bundle in its own file,
+  such as under `/etc/vllm-sr/certs/`, rather than pointing at the host's
+  system bundle: on SELinux hosts the mount relabels the file. Run
+  `vllm-sr serve` again after you add a file.
+- **Helm.** Put the bundle in a Secret or ConfigMap and mount it with
+  `extraVolumes` and `extraVolumeMounts` at the path `ca_file` names:
+
+  ```yaml
+  extraVolumes:
+    - name: backend-ca
+      secret:
+        secretName: example-corp-ca
+  extraVolumeMounts:
+    - name: backend-ca
+      mountPath: /etc/vllm-sr/certs
+      readOnly: true
+  ```
+
+  With `gateway.mode: extproc`, the gateway you run verifies the backend
+  itself, through its own backend TLS settings; the Router's `tls` covers
+  the Router's own calls.
+- **Operator.** The `SemanticRouter` resource has no field for extra mounts
+  yet. Deploy with Helm to reach a backend behind a private CA.
 
 ## Producer behavior
 
