@@ -30,8 +30,11 @@ config:
             description: Deny every PII type, so any remote span blocks the request
             predicate:
               gte: 0.5
-            # A deployment that gives no answer counts as PII found.
+            # A deployment that gives no answer counts as PII found, and so
+            # does an input it could not read in full (the default since
+            # long inputs are read in windows is best_effort).
             on_unknown: match
+            on_unscanned: match
           # Reads what the agent's tools brought back and nothing else: the
           # user turn is left out, and the rule is not asked before a tool
           # result.
