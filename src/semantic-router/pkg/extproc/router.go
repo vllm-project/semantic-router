@@ -33,6 +33,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokenaccounting"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -40,6 +41,10 @@ import (
 type OpenAIRouter struct {
 	// KVHandoff is an optional trusted deployment adapter; nil disables transfer.
 	KVHandoff KVHandoffPlanner
+	// TokenAccounting counts request demand with the receiving model's
+	// tokenizer (#3050). Nil counts every model with the provider-neutral
+	// estimate, calibrated when the request's classifier has enough samples.
+	TokenAccounting *tokenaccounting.Counter
 
 	nativeExecutors map[string]*systemone.Executor
 	// signals is the signal runtime this router extracts signals with; a

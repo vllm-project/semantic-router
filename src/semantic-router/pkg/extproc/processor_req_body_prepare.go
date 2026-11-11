@@ -35,7 +35,7 @@ func (r *OpenAIRouter) extractRequestSignalSnapshot(
 	captureOriginalContextHistory(ctx)
 	snapshot := extractSemanticRequestSignalsWith(ctx.SemanticRequest, r.routingInputSelector())
 	ctx.RoutingInput = snapshot.RoutingInput
-	captureOriginalRequestDemand(ctx, ctx.SemanticRequest, snapshot)
+	r.captureRequestDemand(ctx, requestDemandStageOriginal, ctx.SemanticRequest, "")
 	if snapshot.Stream {
 		logging.ComponentDebugEvent("extproc", "stream_parameter_detected", map[string]interface{}{
 			"request_id": ctx.RequestID,

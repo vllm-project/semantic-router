@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -9,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokenaccounting"
 )
 
 func TestRequestDemandSnapshotSeparatesPromptAndOutputReserve(t *testing.T) {
@@ -21,7 +23,7 @@ func TestRequestDemandSnapshotSeparatesPromptAndOutputReserve(t *testing.T) {
 		requestDemandStageOriginal,
 		request,
 		"",
-		promptTokens,
+		tokenaccounting.Count{Tokens: promptTokens, Source: tokenaccounting.SourceFallback},
 	)
 
 	if snapshot.Stage != requestDemandStageOriginal || snapshot.Model != "vllm-sr/auto" ||
@@ -45,7 +47,7 @@ func TestRequestDemandSnapshotMarksMissingOutputReserveUnknown(t *testing.T) {
 		requestDemandStageOriginal,
 		request,
 		"",
-		extractSemanticRequestSignals(request).ContextTokenFloor,
+		tokenaccounting.Count{Tokens: extractSemanticRequestSignals(request).ContextTokenFloor, Source: tokenaccounting.SourceFallback},
 	)
 
 	if snapshot.OutputReserveSource != requestDemandOutputReserveUnknown || snapshot.TotalDemandKnown ||
@@ -92,8 +94,8 @@ func TestUpsertRequestDemandSnapshotIsBoundedAndStageOrdered(t *testing.T) {
 	}
 }
 
-func TestConcreteModelDispatchCapturesAllRequestDemandStages(t *testing.T) {
-	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+func dispatchRequestDemandStages(t *testing.T, router *OpenAIRouter, model string) *RequestContext {
+	t.Helper()
 	router.Cache = cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: false})
 	body, err := json.Marshal(map[string]interface{}{
 		"model": model,
@@ -116,6 +118,12 @@ func TestConcreteModelDispatchCapturesAllRequestDemandStages(t *testing.T) {
 	if response.GetRequestBody() == nil {
 		t.Fatalf("expected provider dispatch response, got %#v", response)
 	}
+	return ctx
+}
+
+func TestConcreteModelDispatchCapturesAllRequestDemandStages(t *testing.T) {
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	ctx := dispatchRequestDemandStages(t, router, model)
 
 	wantStages := []string{
 		requestDemandStageOriginal,
@@ -136,6 +144,65 @@ func TestConcreteModelDispatchCapturesAllRequestDemandStages(t *testing.T) {
 			snapshot.ReservedOutputTokens != 128 ||
 			snapshot.OutputReserveSource != requestDemandOutputReserveExplicit {
 			t.Fatalf("snapshot[%d] lost demand provenance: %+v", index, snapshot)
+		}
+	}
+}
+
+type demandWordTokenizer struct{}
+
+func (demandWordTokenizer) CountTokens(text string) int { return len(strings.Fields(text)) }
+
+func TestRequestDemandCountsWithTheReceivingModelsTokenizer(t *testing.T) {
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	registry, err := tokenaccounting.NewRegistry(tokenaccounting.Family{
+		Name: "words", Models: []string{model}, Tokenizer: demandWordTokenizer{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	router.TokenAccounting = tokenaccounting.NewCounter(registry)
+	ctx := dispatchRequestDemandStages(t, router, model)
+
+	if len(ctx.RequestDemandSnapshots) != 4 {
+		t.Fatalf("request demand snapshots = %+v, want 4 stages", ctx.RequestDemandSnapshots)
+	}
+	for index, snapshot := range ctx.RequestDemandSnapshots {
+		want := requestDemandCountingSourceFallback
+		if snapshot.Model == model {
+			want = string(tokenaccounting.SourceExact)
+		}
+		if snapshot.CountingSource != want {
+			t.Fatalf("snapshot[%d] for model %q counted by %q, want %q: %+v", index, snapshot.Model, snapshot.CountingSource, want, snapshot)
+		}
+	}
+	final := router.TokenAccounting.Count(model, ctx.SemanticRequest, nil)
+	provider := ctx.RequestDemandSnapshots[3]
+	if provider.Stage != requestDemandStageProviderBound || provider.CountingSource != string(tokenaccounting.SourceExact) ||
+		provider.PromptTokens != final.Tokens || provider.TotalDemandTokens != final.Tokens+128 {
+		t.Fatalf("provider-bound demand = %+v, want the exact count %+v plus 128 reserved", provider, final)
+	}
+}
+
+func TestRequestDemandKeepsTheEstimateForModelsWithoutATokenizer(t *testing.T) {
+	baseline, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	want := dispatchRequestDemandStages(t, baseline, model).RequestDemandSnapshots
+
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	registry, err := tokenaccounting.NewRegistry(tokenaccounting.Family{
+		Name: "words", Models: []string{"some-other-model"}, Tokenizer: demandWordTokenizer{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	router.TokenAccounting = tokenaccounting.NewCounter(registry)
+	got := dispatchRequestDemandStages(t, router, model).RequestDemandSnapshots
+
+	if len(got) != len(want) {
+		t.Fatalf("snapshots = %+v, want %+v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("snapshot[%d] = %+v, want the estimate %+v", index, got[index], want[index])
 		}
 	}
 }
