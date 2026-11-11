@@ -25,7 +25,7 @@ from test_sr_bench import wait_run
 
 ROOT: Path = Path(__file__).resolve().parents[3]
 NATIVE_SPEC = importlib.util.spec_from_file_location(
-    "native_live_benchmark", ROOT / "bench/agentic_routing_live_benchmark.py"
+    "bench.native_live_benchmark", ROOT / "bench/agentic_routing_live_benchmark.py"
 )
 assert NATIVE_SPEC is not None and NATIVE_SPEC.loader is not None
 native = importlib.util.module_from_spec(NATIVE_SPEC)
@@ -186,9 +186,28 @@ def manifest(
 
 def execute(*, store: Store, provider: Provider, root: Path) -> dict[str, Any]:
     frozen = plan(manifest(store_path=root, provider=provider))
-    run = Engine(store).start(frozen)
-    assert wait_run(store, run["id"])["status"] == "completed"
+    engine = Engine(store)
+    run = engine.start(frozen)
+    wait_engine_run(
+        engine=engine,
+        store=store,
+        run_id=run["id"],
+        expected_status="completed",
+    )
     return make_report(store, run["id"])
+
+
+def wait_engine_run(
+    *, engine: Engine, store: Store, run_id: str, expected_status: str
+) -> dict[str, Any]:
+    try:
+        run = wait_run(store, run_id)
+    finally:
+        worker = engine.threads[run_id]
+        worker.join(timeout=35)
+        assert not worker.is_alive()
+    assert run["status"] == expected_status
+    return run
 
 
 def native_requests(
@@ -407,8 +426,14 @@ def test_missing_usage_stays_unknown_and_failed_turn_keeps_planned_denominator(
             session_routing.BENCHMARK_ID: {"thresholds": {"min_success_rate": 0.9}}
         }
         frozen = plan(value)
-        run = Engine(store).start(frozen)
-        assert wait_run(store, run["id"])["status"] == "failed"
+        engine = Engine(store)
+        run = engine.start(frozen)
+        wait_engine_run(
+            engine=engine,
+            store=store,
+            run_id=run["id"],
+            expected_status="failed",
+        )
         report = make_report(store, run["id"])
         observation = report["summary"]["targets"][0]["session_observation"]
         assert observation["planned_turns"] == 6
@@ -442,8 +467,14 @@ def test_output_truncation_fails_closed_and_keeps_all_turns_planned(
                 scenarios=("balanced",),
             )
         )
-        run = Engine(store).start(frozen)
-        assert wait_run(store, run["id"])["status"] == "failed"
+        engine = Engine(store)
+        run = engine.start(frozen)
+        wait_engine_run(
+            engine=engine,
+            store=store,
+            run_id=run["id"],
+            expected_status="failed",
+        )
         observation = make_report(store, run["id"])["summary"]["targets"][0][
             "session_observation"
         ]
