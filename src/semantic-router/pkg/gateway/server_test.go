@@ -144,7 +144,7 @@ func (slowUpstream) Execute(ctx context.Context, _ *routing.Call, _ string) (*up
 // configuration generation the request pinned, forever.
 func TestServerTimesOutAStalledRequestBody(t *testing.T) {
 	released := make(chan struct{}, 1)
-	handler, err := NewHandler(Options{
+	handler, newErr := NewHandler(Options{
 		Serving: pinFunc(func() (Serving, func(), error) {
 			serving := Serving{Engine: routing.NewEngine(&fakeProcessor{}, routing.DefaultOptions), Upstream: slowUpstream{}}
 			return serving, func() { released <- struct{}{} }, nil
@@ -152,8 +152,8 @@ func TestServerTimesOutAStalledRequestBody(t *testing.T) {
 		Listener:    "http-8899",
 		ReadTimeout: 200 * time.Millisecond,
 	})
-	if err != nil {
-		t.Fatal(err)
+	if newErr != nil {
+		t.Fatal(newErr)
 	}
 	addr, stop := serveForTest(t, handler, ServerOptions{IdleTimeout: 200 * time.Millisecond})
 	defer stop()
