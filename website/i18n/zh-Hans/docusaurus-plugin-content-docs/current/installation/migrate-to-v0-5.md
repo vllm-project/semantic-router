@@ -155,6 +155,8 @@ recipes:
 | `jailbreak` 的 `threshold`、`direction`、`include_history` | `predicate`、`stage`、`input.history`；`method: contrastive` 的阈值界定的是相似度之差而不是概率，migrate 会提示重新拟合 |
 | `jailbreak` 的 `method`、`jailbreak_patterns`、`benign_patterns` | 已移除：决策模型直接读取请求。需要确定性的硬拦截时，把这些模式写成一条 [`keywords`](../tutorials/signal/heuristic/keyword) 规则，并由一个拦截决策读取它 |
 | `on_error: block` 下的 `jailbreak` 和 `pii` 规则 | 规则上的 `on_unknown: match` |
+| `on_error: allow` 下的 `jailbreak` 和 `pii` 规则 | 规则上的 `on_unknown: no_match`，因为 v0.5 的这些规则默认失败即拦截 |
+| `on_unscanned: allow` 或 `block` 下的 `jailbreak` 和 `pii` 规则 | 规则上的 `on_unscanned: best_effort`（根据已读窗口判断）或 `match` |
 | `safety` 的 `threshold`、`labels`、`unsafe_labels`、`model` | `predicate`；`labels` 指定[危害类别](../system-one/reference/presets#harm-categories)；`deployment` |
 | `safety` 的 `hazard` | 它的 `categories` 对应的[危害类别](../system-one/reference/presets#harm-categories)写进规则的 `labels`，`hazard.threshold` 成为 `predicate`；不安全判定的 `threshold` 没有对应项，类别都对应不上的规则保留不安全判定（migrate 会说明这两点） |
 | `pii` 的 `threshold`、`pii_types_allowed`、`include_history`、`source: tool_result` | `predicate`、`ignore_labels`、`input.history`、`input.tool_results`；`source: tool_result` 只读取工具结果，因此变为 `input: {tool_results: true, request: false}` 并去掉 `include_history` |
@@ -512,7 +514,7 @@ vllm-sr serve --config config.migrated.yaml
 
 - **原来属于其他模型的阈值已重新拟合。** 没有 `predicate` 的规则使用回答模型的校准阈值；没有校准阈值的模型使用 0.5，并给出 `uncalibrated_preset` 警告。
 - **需要 span 的规则必须解析到支持 span 的部署。** `pii`、`hallucination`、`span` 问题和 masking 在不支持 span 的部署（例如 d3 模型）上会以 `span_required` 加载失败。
-- **模型没有给出答案的 `jailbreak` 或 `pii` 规则不匹配**，除非设置了 `on_unknown: match`。
+- **模型没有给出答案的请求阶段 `jailbreak` 或 `pii` 规则匹配**（失败即拦截），除非设置了 `on_unknown: no_match`。长输入分窗口读取；截止时间提前结束扫描时，规则根据已读窗口作出判断，除非设置了 `on_unscanned: match`。
 - **RAG 相关性和工具选择由决策模型评判**，语义缓存命中由它的 `same_request` 问题确认。
 - **嵌入模型只在召回功能需要时才启动**，Router 的嵌入 API 已移除。
 - **每个评审都有 `max_candidates` 上限**；更多的候选会被截断，绝不报错。
