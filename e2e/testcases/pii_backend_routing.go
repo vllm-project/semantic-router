@@ -17,6 +17,11 @@ func init() {
 		Tags:        []string{"systemone", "routing", "pii"},
 		Fn:          testPIIBackendRouting,
 	})
+	pkgtestcases.Register("pii-tool-output-only", pkgtestcases.TestCase{
+		Description: "Verify a pii rule with input.request: false reads the tool results and never the user turn",
+		Tags:        []string{"systemone", "routing", "pii", "agent"},
+		Fn:          testPIIToolOutputOnly,
+	})
 }
 
 // testPIIBackendRouting drives the PII signal through a remote systemone
@@ -103,6 +108,81 @@ func testPIIBackendRouting(ctx context.Context, client *kubernetes.Clientset, op
 			"no_span":           observed["no span routes normally"],
 			"failed_call":       observed["failed call fails closed"],
 		})
+	}
+	return nil
+}
+
+// testPIIToolOutputOnly checks the profile's pii_tool_output rule, which reads
+// the tool results with the user turn left out, the way an agent's privacy
+// rule must: an agent's user turn carries its harness's own instructions.
+// Personal data in the user turn alone reaches pii_deny_all and never this
+// rule, and personal data in a tool result reaches this rule while the user
+// turn stays clean.
+func testPIIToolOutputOnly(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	localPort, stop, err := setupServiceConnection(ctx, client, opts)
+	if err != nil {
+		return err
+	}
+	defer stop()
+
+	toolTurn := func(user, toolOutput string) []map[string]interface{} {
+		return []map[string]interface{}{
+			{"role": "user", "content": user},
+			{"role": "assistant", "content": nil, "tool_calls": []map[string]interface{}{{
+				"id": "call_1", "type": "function",
+				"function": map[string]interface{}{"name": "read_file", "arguments": `{"path":"owners.txt"}`},
+			}}},
+			{"role": "tool", "tool_call_id": "call_1", "content": toolOutput},
+		}
+	}
+	cases := []struct {
+		name     string
+		messages any
+		want     string
+		why      string
+	}{
+		{
+			name:     "personal data in the user turn alone",
+			messages: []map[string]string{{"role": "user", "content": "__PII_SPAN__ EMAIL_ADDRESS alice@corp.example summarise this thread"}},
+			want:     "block_detected_pii_remote",
+			why:      "pii_deny_all reads the user turn; pii_tool_output has no tool result to read, so it is not asked",
+		},
+		{
+			name:     "personal data in a tool result",
+			messages: toolTurn("summarise the owners file", "__PII_SPAN__ EMAIL_ADDRESS bob@corp.example owns this file"),
+			want:     "block_tool_output_pii",
+			why:      "pii_tool_output reads the tool result, which carries the span",
+		},
+		{
+			name:     "a clean tool result",
+			messages: toolTurn("summarise the owners file", "nobody owns this file"),
+			want:     "default-route",
+			why:      "neither rule finds a span",
+		},
+		{
+			name:     "personal data in the user turn beside a clean tool result",
+			messages: toolTurn("__PII_SPAN__ EMAIL_ADDRESS alice@corp.example summarise the owners file", "nobody owns this file"),
+			want:     "block_detected_pii_remote",
+			why:      "pii_tool_output is asked about the clean tool result alone, so only pii_deny_all, which reads the user turn, matches",
+		},
+	}
+	observed := make(map[string]string, len(cases))
+	for _, tc := range cases {
+		resp, err := sendLocalChatConversation(ctx, localPort, "vllm-sr/auto", tc.messages, 30*time.Second)
+		if err != nil {
+			return fmt.Errorf("tool output PII request (%s): %w", tc.name, err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("tool output PII request (%s): %s", tc.name, formatUnexpectedChatCompletionStatus(resp))
+		}
+		decision := resp.Headers.Get("x-vsr-selected-decision")
+		observed[tc.name] = decision
+		if decision != tc.want {
+			return fmt.Errorf("%s selected decision %q, want %q - %s", tc.name, decision, tc.want, tc.why)
+		}
+	}
+	if opts.SetDetails != nil {
+		opts.SetDetails(map[string]interface{}{"decisions": observed})
 	}
 	return nil
 }

@@ -102,6 +102,7 @@ const systemOneDeployment = `{
 	"provider": "systemone",
 	"endpoint": "https://systemone.example.com/v1/systemone",
 	"model": "vllm-sr/d3-ultra",
+	"schema": "vllm-sr/5.0",
 	"auth": {"header": "X-Api-Key", "prefix": "", "api_key_env": "SYSTEMONE_KEY"},
 	"headers": {"X-Org": "acme"},
 	"timeout_ms": 1500,

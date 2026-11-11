@@ -73,11 +73,16 @@ crisis: it does not imply malicious intent. Choose the response policy in
 the decision, and keep prompt-attack decisions beside content-risk ones with
 explicit priorities.
 
-The question reads its whole input, in windows when it is longer than one
-forward. Like `jailbreak`, it also reads what `global.router.routing_input`
-removes from the routing text. A model that gives no answer, or that could
-not read the whole input, leaves the rule unknown, and the decision's
-`rules.on_unknown` decides: `fail_request` above returns HTTP 503.
+The question reads its whole input: an input longer than one of the
+deployment's `scan_window`s is read in overlapping windows, the tail first,
+then the head, then the middle, and any window found unsafe, or in a listed
+category, flags the input (see
+[Long inputs](../../../system-one/deploy/performance.md#long-inputs)). Like
+`jailbreak`, it also reads what `global.router.routing_input` removes from the
+routing text. When the deadline ends before every window is read, the rule
+decides on the windows read. A model that answers no window leaves the rule
+unknown, and the decision's `rules.on_unknown` decides: `fail_request` above
+returns HTTP 503.
 
 ### Harm categories
 

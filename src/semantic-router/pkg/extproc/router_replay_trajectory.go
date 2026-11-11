@@ -98,6 +98,8 @@ type trajectoryTurn struct {
 	ConversationID string
 	Index          int
 	Steps          []routerreplay.ToolTraceStep
+	// openingInput counts the user inputs up to the one that opened the turn.
+	openingInput int
 }
 
 // buildTrajectoryTurns collapses the cumulative HTTP requests made by an agent
@@ -111,25 +113,29 @@ func buildTrajectoryTurns(records []routerreplay.RoutingRecord) []trajectoryTurn
 	}
 	turnByIndex := make(map[turnKey]int)
 	for _, record := range records {
-		steps := trajectoryStepsForRecord(record)
-		if len(steps) == 0 {
+		if record.ToolTrace == nil || len(record.ToolTrace.Steps) == 0 {
 			continue
 		}
 
 		key := turnKey{conversationID: record.ConversationID, index: record.TurnIndex}
 		turnPosition, exists := turnByIndex[key]
 		if !exists {
+			// The first request of a turn ends with the input that opened it.
+			// Later requests add tool results after it, sometimes with text.
+			opening := countTrajectoryUserInputs(record.ToolTrace.Steps)
 			turnByIndex[key] = len(turns)
 			turns = append(turns, trajectoryTurn{
 				ConversationID: record.ConversationID,
 				Index:          record.TurnIndex,
-				Steps:          append([]routerreplay.ToolTraceStep(nil), steps...),
+				Steps:          trajectoryStepsFromUserInput(record.ToolTrace.Steps, opening),
+				openingInput:   opening,
 			})
 			continue
 		}
 
+		steps := trajectoryStepsFromUserInput(record.ToolTrace.Steps, turns[turnPosition].openingInput)
 		if trajectorySnapshotScore(steps) >= trajectorySnapshotScore(turns[turnPosition].Steps) {
-			turns[turnPosition].Steps = append([]routerreplay.ToolTraceStep(nil), steps...)
+			turns[turnPosition].Steps = steps
 		}
 	}
 	return turns
@@ -201,22 +207,33 @@ func buildTrajectoryMessages(turns []trajectoryTurn) []trajectoryMessage {
 	return messages
 }
 
-// trajectoryStepsForRecord projects the current user turn from the semantic
-// trace. Individual records retain their full input history, but earlier user
-// turns must not be emitted again under the current turn's index. With no
+func countTrajectoryUserInputs(steps []routerreplay.ToolTraceStep) int {
+	count := 0
+	for _, step := range steps {
+		if step.Type == replayToolStepUserInput {
+			count++
+		}
+	}
+	return count
+}
+
+// trajectoryStepsFromUserInput projects the current user turn from the semantic
+// trace, starting at its n-th user input, or at the last one when the trace
+// has fewer. Individual records retain their full input history, but earlier
+// user turns must not be emitted again under the current turn's index. With no
 // visible user boundary, preserve the available trace without inferring one.
 // Stored public wire bodies are never reparsed as an implicit canonical protocol.
-func trajectoryStepsForRecord(record routerreplay.RoutingRecord) []routerreplay.ToolTraceStep {
-	if record.ToolTrace != nil && len(record.ToolTrace.Steps) > 0 {
-		steps := record.ToolTrace.Steps
-		for index := len(steps) - 1; index >= 0; index-- {
-			if steps[index].Type == replayToolStepUserInput {
-				return steps[index:]
+func trajectoryStepsFromUserInput(steps []routerreplay.ToolTraceStep, n int) []routerreplay.ToolTraceStep {
+	start, seen := 0, 0
+	for index, step := range steps {
+		if step.Type == replayToolStepUserInput {
+			start, seen = index, seen+1
+			if seen == n {
+				break
 			}
 		}
-		return steps
 	}
-	return nil
+	return append([]routerreplay.ToolTraceStep(nil), steps[start:]...)
 }
 
 func trajectoryMessageFromStep(step routerreplay.ToolTraceStep, turnIndex int) *trajectoryMessage {

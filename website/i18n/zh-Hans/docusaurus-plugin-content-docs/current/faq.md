@@ -42,7 +42,7 @@ vllm-sr serve vllm-sr/d3-edge -e
 
 ## Router 能否同时提供 System One？ {#can-router-also-expose-system-one}
 
-可以。通过 listener 的 `systemone.models` 授权发布原生模型，再调用
+可以。通过 listener 的 `apis.systemone.models` 授权发布原生模型，再调用
 `/v1/systemone`；`/v1/decisions` 是别名。原生模型发现使用
 `/v1/systemone/models`，Chat 模型发现使用 `/v1/models`。
 

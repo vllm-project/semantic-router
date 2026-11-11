@@ -124,6 +124,7 @@ global:
         provider: systemone
         endpoint: https://decisions.example.com/v1/systemone
         model: vllm-sr/d3-ultra
+        schema: vllm-sr/5.0
         auth:
           credential: delegated              # a decision-model deployment
 providers:
@@ -149,6 +150,12 @@ has one of three modes:
 | Static key | `auth.api_key_env` or `auth.api_key_file`, or a backend's `api_key` | the Router's own key |
 | Delegated | `credential: delegated` | the requesting user's credential |
 | None | neither | no credential |
+
+Whatever the mode, a call carries no other credential: a client's own
+`Authorization`, `api-key`, `x-api-key`, `x-goog-api-key`,
+`api-subscription-key` or `Ocp-Apim-Subscription-Key` header never reaches the
+upstream. A model declared without backends behind an external gateway
+(`listeners: []`) keeps them for that gateway.
 
 The delegated contract is disabled by default. Once it's enabled, the rules
 below apply.
@@ -459,9 +466,10 @@ question resolves to sees the parts of the request the question reads:
   questions. [What leaves the host](../system-one/deploy/deployments#what-leaves-the-host)
   lists them per signal. A remote embedding provider receives the text it
   embeds.
-- **Guards can fail open or closed.** A `jailbreak` or `pii` rule whose model
-  gives no answer does not match unless it sets `on_unknown: match`; text the
-  model could not read counts as an attack or as personal data.
+- **Guards fail closed by default.** A request-stage `jailbreak` or `pii` rule
+  whose model gives no answer matches, unless it sets `on_unknown: no_match`. A
+  long input is read in windows; when the deadline ends a scan early, the rule
+  decides on the windows read, unless it sets `on_unscanned: match`.
 - **Masking covers the final request.** The `masking` plugin replaces personal
   data in every text position of the provider-bound request, including
   retrieved documents and tool results, and fails closed when it cannot get
@@ -502,7 +510,7 @@ administrators, and do not mount it into a stack container.
 | Keep provider and store credentials in a secret manager or Kubernetes Secret | `${ENV}` references in YAML | [Keep credentials out of configuration](#keep-credentials-out-of-configuration) |
 | Review every route's provider locality, tools and data retention | Where each question's decision model runs; which stores each route writes | [Review what the decision model reads](#review-what-the-decision-model-reads), [Review stored request data](#review-stored-request-data) |
 | Grant replay detail, logs and configuration writes only to trusted operators | `replay.read`, `logs.read`, configuration-write access | [Protect the public listener](#protect-the-public-listener) |
-| Set strict failure behavior where bypassing a policy is unacceptable | `on_unknown: match` on `jailbreak` and `pii` rules | [Review what the decision model reads](#review-what-the-decision-model-reads) |
+| Set strict failure behavior where bypassing a policy is unacceptable | `on_unscanned: match` on `jailbreak` and `pii` rules, which keep the default `on_unknown: match` | [Review what the decision model reads](#review-what-the-decision-model-reads) |
 | Rotate the local stack's storage credentials with every other credential | `vllm-sr storage rotate` | [Rotate](#rotate) |
 | Test backup, restore, credential rotation, upgrade and rollback | A rehearsal before each production change | [Upgrade and Rollback](upgrade-rollback) |
 | Keep the container-runtime socket out of every stack container | Only `vllm-sr serve` uses the runtime | [Limit container-runtime access](#limit-container-runtime-access) |

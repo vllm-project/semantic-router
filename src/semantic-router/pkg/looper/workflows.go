@@ -210,30 +210,14 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 	}
 
 	finalResp, interrupt, err := l.synthesizeWorkflowFinal(ctx, req, cfg, plan, original, stepResults, plannerResp, workerModels)
-	if err != nil {
-		if errors.Is(err, graph.ErrHopLimit) {
-			return nil, err
-		}
-		if cfg.OnError != config.WorkflowOnErrorSkip {
-			return nil, err
-		}
-		finalResp = workflowFallbackFinalResponse(
-			req.OutputContractSpec,
-			stepResults,
-		)
-		if finalResp == nil {
-			return nil, err
-		}
-		logging.Warnf("[Workflows] Final synthesis failed; using worker response fallback because on_error=skip: %v", err)
+	if finalResp, err = workflowFinalOrFallback(req, cfg, stepResults, finalResp, err); err != nil {
+		return nil, err
 	}
 	if interrupt != nil {
 		out, _, formatErr := l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg, nil)
 		return out, formatErr
 	}
-	applyJSONActionOutputContract(req.OutputContractSpec, finalResp, workflowStepModelResponses(stepResults))
-	applyFinalOutputContract(req.OutputContractSpec, finalResp)
-	applyWorkflowSingleChoiceFallback(req.OutputContractSpec, finalResp, stepResults)
-	applyFinalOutputContract(req.OutputContractSpec, finalResp)
+	applyWorkflowOutputContract(req.OutputContractSpec, finalResp, stepResults)
 
 	summary := summarizeWorkflowExecution(cfg, plannerResp, stepResults, finalResp)
 	trace := buildWorkflowTrace(cfg, workerModels, plan, stepResults, summary.failed)
@@ -691,6 +675,25 @@ func workflowResponsesFromOrdered(ordered []*ModelResponse) []*ModelResponse {
 		}
 	}
 	return responses
+}
+
+// workflowFinalOrFallback serves a worker's answer when the final synthesis
+// fails under on_error: skip, on a first turn and on a resumed one alike.
+func workflowFinalOrFallback(req *Request, cfg workflowsExecutionConfig, stepResults []workflowStepResult, finalResp *ModelResponse, err error) (*ModelResponse, error) {
+	if err == nil {
+		return finalResp, nil
+	}
+	if errors.Is(err, graph.ErrHopLimit) || cfg.OnError != config.WorkflowOnErrorSkip {
+		return nil, err
+	}
+	fallback := workflowFallbackFinalResponse(req.OutputContractSpec, stepResults)
+	if fallback == nil {
+		return nil, err
+	}
+	// The worker call that gave this answer is already in its step's usage.
+	fallback.Usage = TokenUsage{}
+	logging.Warnf("[Workflows] Final synthesis failed; using worker response fallback because on_error=skip: %v", err)
+	return fallback, nil
 }
 
 func workflowFallbackFinalResponse(spec *config.OutputContractSpec, stepResults []workflowStepResult) *ModelResponse {

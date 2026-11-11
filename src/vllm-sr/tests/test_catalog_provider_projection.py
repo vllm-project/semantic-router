@@ -677,7 +677,7 @@ recipes:
 
     projected = project_provider_models_for_envoy(config)
 
-    assert projected[0].api_format == "openai"
+    assert projected[0].api_format == "chat_completions"
     assert projected[0].external_model_ids == {
         "microsoft-foundry": "operator-mai-production"
     }
