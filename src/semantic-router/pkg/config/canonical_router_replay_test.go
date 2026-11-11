@@ -168,7 +168,7 @@ func TestCatalogBackedModelMaterializesAPIFormat(t *testing.T) {
 		{
 			name:       "provider default for chat binding",
 			catalog:    "openai/gpt-5.4",
-			wantFormat: APIFormatOpenAI,
+			wantFormat: APIFormatChatCompletions,
 			wantWire:   "openai/chat-completions@1",
 		},
 		{

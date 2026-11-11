@@ -1,0 +1,60 @@
+version: v0.5
+listeners: []
+providers:
+  defaults:
+    model: qwen2.5:3b
+  models:
+    - name: qwen2.5:3b
+      reasoning:
+        family: qwen3
+      backend_refs:
+        - name: ollama
+          endpoint: 127.0.0.1:11434
+          provider: ollama
+          weight: 1
+recipes:
+  - name: default
+    decisions: []
+    signals:
+      domains:
+        - name: engineering
+          description: Technical questions
+global:
+  model_catalog:
+    deployments:
+      embedding-onnx:
+        artifact: vllm-sr/Vela-1.0-Encoder-307M-Embedding
+        provider: model_runtime
+        device: cpu
+        input:
+          max_tokens: 32768
+          overflow: reject
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
+      ttl_seconds: 86400
+      max_responses: 1000
+    router_replay:
+      store_backend: memory
+      ttl_seconds: 2592000
+      async_writes: true
+  stores:
+    response_cache:
+      backend_type: memory
+      max_entries: 1000
+      ttl_seconds: 3600
+      eviction_policy: fifo
+  plugins:
+    - type: response_cache
+      configuration:
+        enabled: true
+        scope: global
+        semantic:
+          match:
+            recall:
+              top_k: 1
+              min_similarity: 0.85
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

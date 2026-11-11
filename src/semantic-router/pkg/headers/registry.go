@@ -31,14 +31,17 @@ var directionLabels = []struct {
 }
 
 // String names the hops, such as "request, provider request".
-func (d Direction) String() string {
+func (d Direction) String() string { return strings.Join(d.Labels(), ", ") }
+
+// Labels names the hops in order, such as ["request", "provider request"].
+func (d Direction) Labels() []string {
 	labels := make([]string, 0, len(directionLabels))
 	for _, entry := range directionLabels {
 		if d&entry.direction != 0 {
 			labels = append(labels, entry.label)
 		}
 	}
-	return strings.Join(labels, ", ")
+	return labels
 }
 
 // Surface says who may see a header.
@@ -113,6 +116,19 @@ func KeptFromProviders() []string {
 	return names
 }
 
+// ProviderCredentials are the credential headers a provider request carries
+// only as the Router sets them from the upstream's auth. A client's copy of
+// each is removed before the Router dispatches to a provider it configures.
+func ProviderCredentials() []string {
+	var names []string
+	for _, header := range registry {
+		if header.Owner == "credentials" {
+			names = append(names, header.Name)
+		}
+	}
+	return names
+}
+
 // DroppedFromClients are the Router's own headers no client may supply:
 // every registered x-vsr- header that is not a control header, the route
 // key, the internal authentication and the KV hints among them. The Router
@@ -156,7 +172,7 @@ var registry = []Header{
 	{VSRSchemaVersion, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.4", "Response-header contract revision; currently `3`."},
 	{VSRResponsePath, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.4", "How the response was produced: `upstream`, `cache`, `fast_response`, `looper`, `image_generation`, `blocked`, `rate_limited`, `error` or `fallback`."},
 	{VSRConfigVersion, ToClient, SurfacePublic, SensitivityNone, "config", "v0.5", "Version of the configuration snapshot that served the request."},
-	{VSRConfigHash, ToClient, SurfacePublic, SensitivityNone, "config", "v0.4", "SHA-256 of the active runtime document, on routing previews and configuration activations."},
+	{VSRConfigHash, ToClient, SurfacePublic, SensitivityNone, "config", "v0.4", "SHA-256 of the active runtime document, on routing previews and `GET /api/v1/config`."},
 	{VSRWarnings, ToClient, SurfacePublic, SensitivityNone, "response_contract", "v0.5", "Warnings about the response, as an RFC 8941 list: the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`."},
 
 	// Final routing facts.
@@ -175,7 +191,7 @@ var registry = []Header{
 	{EnvoyOverloaded, ToClient, SurfacePublic, SensitivityNone, "upstream", "v0.5", "`true` on the 503 a full circuit breaker returns, as Envoy sets it."},
 
 	// The routing details.
-	{VSRTrace, ToClient, SurfaceDebug, SensitivityNone, "debug_headers", "v0.5", "Routing details as an RFC 8941 dictionary of at most 4 KB, for a caller `global.router.headers.debug` allows; the members follow this table."},
+	{VSRTrace, ToClient, SurfaceDebug, SensitivityNone, "debug_headers", "v0.5", "Routing details as an RFC 8941 dictionary of at most 4 KB, for a caller `global.router.headers.debug` allows."},
 
 	// Client controls.
 	{VSRSessionID, FromClient, SurfaceControl, SensitivityNone, "session", "v0.5", "Session id the client pins; without it the Router reads the headers `global.router.headers.session_id_headers` names, in order."},

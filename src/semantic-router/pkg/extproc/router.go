@@ -226,6 +226,12 @@ func (r *OpenAIRouter) createJSONResponse(statusCode int, data interface{}) *ext
 
 // createErrorResponse creates a direct error response.
 func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_proc.ProcessingResponse {
+	return r.createErrorResponseOnPath(statusCode, message, headers.ResponsePathError)
+}
+
+// createErrorResponseOnPath creates a direct error response that names
+// responsePath, such as a guard's refusal on the blocked path.
+func (r *OpenAIRouter) createErrorResponseOnPath(statusCode int, message, responsePath string) *ext_proc.ProcessingResponse {
 	statusCode = errorResponseStatusCode(statusCode)
 	errorType := "invalid_request_error"
 	if statusCode >= 500 {
@@ -246,7 +252,7 @@ func (r *OpenAIRouter) createErrorResponse(statusCode int, message string) *ext_
 		statusCode = 500
 	}
 
-	return r.createJSONResponseWithBody(statusCode, jsonData, headers.ResponsePathError)
+	return r.createJSONResponseWithBody(statusCode, jsonData, responsePath)
 }
 
 // shouldClearRouteCache checks if route cache should be cleared.

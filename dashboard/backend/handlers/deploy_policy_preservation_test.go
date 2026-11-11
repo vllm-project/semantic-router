@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -136,9 +137,37 @@ entrypoints:
 	}
 }
 
+// decisionBaseFields maps each decision, as recipe/name, to its fields the
+// DSL cannot express, as written.
+func decisionBaseFields(t *testing.T, raw []byte) map[string]map[string]interface{} {
+	t.Helper()
+	var doc struct {
+		Recipes []struct {
+			Name      string                   `yaml:"name"`
+			Decisions []map[string]interface{} `yaml:"decisions"`
+		} `yaml:"recipes"`
+	}
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("decode decisions: %v", err)
+	}
+	found := map[string]map[string]interface{}{}
+	for _, recipe := range doc.Recipes {
+		for _, decision := range recipe.Decisions {
+			fields := map[string]interface{}{}
+			for _, field := range dsl.BaseDecisionFields() {
+				if value, ok := decision[field]; ok {
+					fields[field] = value
+				}
+			}
+			found[fmt.Sprintf("%s/%v", recipe.Name, decision["name"])] = fields
+		}
+	}
+	return found
+}
+
 // The Builder imports a config, decompiles it to DSL, compiles it back, and
 // deploys the compiled fragment in replace mode.
-func TestMergeDeployPayloadReplaceKeepsMaintainedDecisionAdaptations(t *testing.T) {
+func TestMergeDeployPayloadReplaceKeepsMaintainedBaseDecisionFields(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatalf("resolve repo root: %v", err)
@@ -184,7 +213,17 @@ func TestMergeDeployPayloadReplaceKeepsMaintainedDecisionAdaptations(t *testing.
 			if err != nil {
 				t.Fatalf("mergeDeployPayload error: %v", err)
 			}
-			assertDecisionAdaptations(t, merged, want)
+			wantFields, gotFields := decisionBaseFields(t, original), decisionBaseFields(t, merged)
+			var changed []string
+			for name, fields := range wantFields {
+				if !reflect.DeepEqual(gotFields[name], fields) {
+					changed = append(changed, name)
+				}
+			}
+			if len(changed) > 0 {
+				sort.Strings(changed)
+				t.Fatalf("base-only fields differ after deploy for decisions %v", changed)
+			}
 		})
 	}
 }

@@ -41,6 +41,12 @@ func RecordSystemOneStage(algorithm, stage, model, outcome string, seconds float
 	SystemOneStageDuration.WithLabelValues(algorithm, stage, model).Observe(seconds)
 }
 
+// RecordSystemOneStageSkipped counts a stage a request did not run, such as
+// one whose model cannot answer it; it takes no time.
+func RecordSystemOneStageSkipped(algorithm, stage, model, outcome string) {
+	SystemOneStageTotal.WithLabelValues(algorithm, stage, model, outcome).Inc()
+}
+
 func RecordSystemOneStageCalls(algorithm, stage, model string, calls int) {
 	if calls > 0 {
 		SystemOneStageCalls.WithLabelValues(algorithm, stage, model).Add(float64(calls))

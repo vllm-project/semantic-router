@@ -39,15 +39,15 @@ var maskingSpansFor = func(r *OpenAIRouter, ctx *RequestContext) (piiRuleSpans, 
 	return classifier, classifier != nil
 }
 
-// applyMaskingBeforeDispatch masks the neutral request in place when the
-// selected decision enables the masking plugin: every text position of the
-// request as it is sent, after every other rewrite, including content added
-// after routing such as retrieved documents and memory.
+// applyMaskingBeforeDispatch masks the neutral request in place when its
+// recipe's plugins enable masking: every text position of the request as it
+// is sent, after every other rewrite, including content added after routing
+// such as retrieved documents and memory.
 func (r *OpenAIRouter) applyMaskingBeforeDispatch(ctx *RequestContext) error {
-	if ctx == nil || ctx.SemanticRequest == nil || ctx.VSRSelectedDecision == nil {
+	if ctx == nil || ctx.SemanticRequest == nil {
 		return nil
 	}
-	cfg := ctx.VSRSelectedDecision.GetMaskingConfig()
+	cfg := requestMasking(ctx)
 	if cfg == nil || !cfg.Enabled {
 		return nil
 	}

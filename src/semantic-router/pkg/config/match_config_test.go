@@ -15,7 +15,7 @@ func matchConfig() *RouterConfig {
 		DefaultDecisionDeployment: {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/vela3-fast"},
 		"lite":                    {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/vela3-lite"},
 		"chooser": {
-			Provider: SystemOneProvider, Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra",
+			Provider: SystemOneProvider, Schema: "vllm-sr/5.0", Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra",
 			Capabilities: &DeploymentCapabilities{QuestionTypes: []string{SystemOneQuestionChoice}},
 		},
 		"bert": {Provider: OpenAIEmbeddingsProvider, Endpoint: "http://embedder:8000/v1", Model: "bert"},

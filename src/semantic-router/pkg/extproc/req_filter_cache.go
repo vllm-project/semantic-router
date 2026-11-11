@@ -63,7 +63,7 @@ func (r *OpenAIRouter) handleCaching(
 		logging.Errorf("Error extracting query from request: %v", err)
 		return nil, false
 	}
-	applyCacheIdentity(ctx, identity, selectedModels)
+	applyCacheIdentity(r.Config, ctx, identity, selectedModels)
 	cacheEnabled := r.semanticCacheEnabledForRequest(ctx)
 	applyRequestCacheControls(ctx)
 	if !ctx.CacheReadBypass {
@@ -112,16 +112,16 @@ func (r *OpenAIRouter) handleLooperCacheSkip(
 		logging.Errorf("Error extracting query from request: %v", err)
 		return nil, false
 	}
-	applyCacheIdentity(ctx, identity, selectedModels)
+	applyCacheIdentity(r.Config, ctx, identity, selectedModels)
 	return nil, false
 }
 
-func applyCacheIdentity(ctx *RequestContext, identity cache.RequestIdentity, selectedModels []string) {
+func applyCacheIdentity(cfg *config.RouterConfig, ctx *RequestContext, identity cache.RequestIdentity, selectedModels []string) {
 	ctx.RequestModel = identity.Model
 	ctx.RequestQuery = identity.Query
 	ctx.CacheRequestModel = identity.Model
 	ctx.CacheQuery = identity.Query
-	policyFingerprint := responseCachePolicyFingerprint(ctx)
+	policyFingerprint := responseCachePolicyFingerprint(cfg, ctx)
 	ctx.CacheExactFingerprint = cache.CombineFingerprints(
 		identity.ExactFingerprint,
 		policyFingerprint,
@@ -142,18 +142,24 @@ func selectedCacheModel(requestModel string, selectedModels []string) string {
 	return strings.TrimSpace(requestModel)
 }
 
-func responseCachePolicyFingerprint(ctx *RequestContext) string {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+// responseCachePolicyFingerprint is what besides the request decides its
+// answer: the plugins it runs, a decision's or, without one, the layered
+// defaults, and the decision's models and output contract.
+func responseCachePolicyFingerprint(cfg *config.RouterConfig, ctx *RequestContext) string {
+	if ctx == nil {
 		return ""
 	}
-	fingerprint, err := cache.FingerprintValue(map[string]interface{}{
-		"decision":             ctx.VSRSelectedDecision.Name,
-		"model_refs":           ctx.VSRSelectedDecision.ModelRefs,
-		"plugins":              ctx.VSRSelectedDecision.Plugins,
-		"output_contract":      ctx.VSRSelectedDecision.OutputContract,
-		"output_contract_spec": ctx.VSRSelectedDecision.OutputContractSpec,
-		"client_protocol":      string(ctx.SourceFormat),
-	})
+	policy := map[string]interface{}{
+		"plugins":         requestPlugins(cfg, ctx),
+		"client_protocol": string(ctx.SourceFormat),
+	}
+	if decision := ctx.VSRSelectedDecision; decision != nil {
+		policy["decision"] = decision.Name
+		policy["model_refs"] = decision.ModelRefs
+		policy["output_contract"] = decision.OutputContract
+		policy["output_contract_spec"] = decision.OutputContractSpec
+	}
+	fingerprint, err := cache.FingerprintValue(policy)
 	if err != nil {
 		return ""
 	}
@@ -179,18 +185,17 @@ func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentit
 	}
 	decision := ""
 	epoch := ""
-	var guard *config.ResponseGuardPluginConfig
 	if ctx.VSRSelectedDecision != nil {
 		decision = ctx.VSRSelectedDecision.Name
-		guard = ctx.VSRSelectedDecision.GetResponseGuardConfig()
 	}
+	guard := requestResponseGuard(ctx)
 	if plugin := requestResponseCache(ctx); plugin != nil && plugin.Revision != nil {
 		if value, err := cache.FingerprintValue(plugin.Revision); err == nil {
 			epoch = value
 		}
 	}
 	// An entry is served only under the response_guard that passed it:
-	// adding or changing the decision's guard starts a new partition.
+	// adding or changing the request's guard starts a new partition.
 	if guard != nil {
 		if value, err := cache.FingerprintValue(guard); err == nil {
 			epoch = cache.CombineFingerprints(epoch, value)

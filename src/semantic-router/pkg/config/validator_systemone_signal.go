@@ -5,6 +5,8 @@ import (
 	"math"
 	"slices"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 // validateSystemOneContracts checks systemone rules, the systemone selector
@@ -67,6 +69,13 @@ func validateDecisionSystemOneQuestions(cfg *RouterConfig, decision Decision) er
 		}
 		if err := validateDeclaredQuestionType(cfg, cfg.EscalateCheckDeployment(accept), questionType); err != nil {
 			return fmt.Errorf("decision '%s', %s: %w", decision.Name, path, err)
+		}
+		// An answer check reads the whole answer, which only a schema that
+		// reports input coverage can prove.
+		if name := cfg.EscalateCheckDeployment(accept); accept.SystemOne != nil && cfg.IsSystemOneDeployment(name) {
+			if capabilities, known := cfg.ModelDeployments[name].SchemaCapabilities(); known && !capabilities.Has(systemonecodec.CapabilityFullInput) {
+				return fmt.Errorf("decision '%s', %s: deployment %q speaks %s, which has no input_coverage to prove an answer check read the whole answer; bind the check to a deployment whose schema reports coverage (vllm-sr/5.0)", decision.Name, path, name, cfg.ModelDeployments[name].EffectiveSchema())
+			}
 		}
 	}
 	return nil
@@ -387,6 +396,9 @@ func validateSystemOneLeaf(cfg *RouterConfig, decisionName string, node *RuleNod
 	}
 	if slices.Contains(rule.IgnoreLabels, node.Label) {
 		return fmt.Errorf("decision '%s': systemone condition %q names label %q, which the rule's ignore_labels never count", decisionName, node.Name, node.Label)
+	}
+	if rule.Question.Type != SystemOneQuestionChoice && !slices.Contains(rule.CountedLabels(), node.Label) {
+		return fmt.Errorf("decision '%s': systemone condition %q names label %q, which is not one of the rule's labels (%s)", decisionName, node.Name, node.Label, strings.Join(rule.Labels, ", "))
 	}
 	return nil
 }

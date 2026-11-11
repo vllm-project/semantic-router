@@ -86,7 +86,7 @@ Each evaluation records `llm_plugin_execution_total` with
 `skipped`, or `rejected`. With `x-vsr-debug: true` on the request, the same
 outcome appears in the `prompt_cache` member of `x-vsr-trace`, with its
 `reason` and its `inserted` and `preserved` marker counts; see
-[VSR routing headers](../../troubleshooting/vsr-headers).
+[VSR routing headers](../../api/headers).
 No Router Replay persistence is part of this plugin.
 
 See a complete example:

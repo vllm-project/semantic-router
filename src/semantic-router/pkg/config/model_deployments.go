@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 // ModelDeployment declares one local model resource or externally owned
@@ -65,12 +67,28 @@ type ModelDeployment struct {
 	// Capabilities declares what a remote model answers when its API lists
 	// nothing for it.
 	Capabilities *DeploymentCapabilities `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
+	// Schema is the System One API schema a systemone deployment's endpoint
+	// speaks: systemone/0.2, the published standard (the default);
+	// vllm-sr/5.0, the standard plus the vllm-sr extensions that vllm-sr
+	// serve speaks; or vllm-sr/4.0, the earlier contract of a server not yet
+	// upgraded.
+	Schema string `yaml:"schema,omitempty" json:"schema,omitempty" jsonschema:"enum=systemone/0.2,enum=vllm-sr/5.0,enum=vllm-sr/4.0"`
+	// Deviations are the declared ways a systemone deployment's endpoint
+	// departs from its schema: state_text sends an object or array state as
+	// its canonical text.
+	Deviations []string `yaml:"deviations,omitempty" json:"deviations,omitempty"`
+	// MaxConcurrency bounds the calls a systemone deployment has in flight
+	// for one stage whose schema has no batches (default 8).
+	MaxConcurrency *int `yaml:"max_concurrency,omitempty" json:"max_concurrency,omitempty" jsonschema:"minimum=1"`
 	// Generation sets the completion length and sampling temperature of an
 	// openai_chat deployment's calls.
 	Generation *DeploymentGeneration `yaml:"generation,omitempty" json:"generation,omitempty"`
 	// Replicas places independent workers for this logical resource. Omission
 	// uses the single device/endpoint placement above.
 	Replicas []ModelReplica `yaml:"replicas,omitempty" json:"replicas,omitempty"`
+	// OutlierDetection ejects a model_runtime replica whose exchanges keep
+	// running out of their deadline; unset keeps its defaults.
+	OutlierDetection *DeploymentOutlierDetection `yaml:"outlier_detection,omitempty" json:"outlier_detection,omitempty"`
 	// PublicName is the inference API identity. It never identifies a socket,
 	// local package path, or internal deployment key.
 	PublicName string `yaml:"public_name,omitempty" json:"public_name,omitempty"`
@@ -116,8 +134,36 @@ type ResolvedModelBinding struct {
 	Admission  AdmissionConfig
 }
 
+// EffectiveSchema is the System One schema a systemone deployment speaks: its
+// own, else the published standard.
+func (d ModelDeployment) EffectiveSchema() string {
+	if d.Schema == "" {
+		return string(systemonecodec.DefaultSchema)
+	}
+	return d.Schema
+}
+
+// EffectiveMaxConcurrency bounds the calls a split stage has in flight.
+func (d ModelDeployment) EffectiveMaxConcurrency() int {
+	if d.MaxConcurrency == nil {
+		return systemonecodec.DefaultMaxConcurrency
+	}
+	return *d.MaxConcurrency
+}
+
+// SchemaCapabilities are what the schema of a systemone deployment carries,
+// and false for a schema this build does not speak.
+func (d ModelDeployment) SchemaCapabilities() (systemonecodec.CapabilitySet, bool) {
+	codec, _, err := systemonecodec.Builtin().Resolve(systemonecodec.SchemaID(d.EffectiveSchema()), nil)
+	if err != nil {
+		return systemonecodec.CapabilitySet{}, false
+	}
+	return codec.Capabilities(), true
+}
+
 func (d ModelDeployment) WithDefaults() ModelDeployment {
 	d.Replicas = append([]ModelReplica(nil), d.Replicas...)
+	d.Deviations = append([]string(nil), d.Deviations...)
 	if d.Provider == ModelRuntimeProvider {
 		if d.Device == "" && len(d.Replicas) == 0 && d.Endpoint == "" {
 			d.Device = "auto"
@@ -154,6 +200,9 @@ func (d ModelDeployment) validate() error {
 	if d.PublicName != "" && (strings.TrimSpace(d.PublicName) != d.PublicName || strings.ContainsAny(d.PublicName, "\x00\r\n\t ") || strings.HasPrefix(d.PublicName, "/") || strings.Contains(d.PublicName, "://")) {
 		return fmt.Errorf("public_name must be a trimmed public model ID, not a path or endpoint")
 	}
+	if !d.IsSystemOne() && (d.Schema != "" || len(d.Deviations) > 0 || d.MaxConcurrency != nil) {
+		return fmt.Errorf("schema, deviations and max_concurrency describe a remote System One API; they apply to systemone deployments")
+	}
 	switch d.Provider {
 	case SystemOneProvider:
 		return d.validateSystemOne()
@@ -169,7 +218,7 @@ func (d ModelDeployment) validate() error {
 // validateRecipeBindings checks each binding a recipe writes: it names a
 // declared deployment that answers its application signal.
 func validateRecipeBindings(recipe RecipeName, scoped *RouterConfig) error {
-	bindings := scoped.recipeBindings()
+	bindings := scoped.RecipeBindings()
 	for _, key := range sortedModelKeys(bindings) {
 		if err := validateModelBinding(scoped, key, bindings[key]); err != nil {
 			return fmt.Errorf("recipes[%s].model_bindings.%s: %w", recipe, key, err)
@@ -208,6 +257,7 @@ func cloneModelMap[T any](values map[string]T) map[string]T {
 	for key, value := range values {
 		if deployment, ok := any(value).(ModelDeployment); ok {
 			deployment.Replicas = append([]ModelReplica(nil), deployment.Replicas...)
+			deployment.Deviations = append([]string(nil), deployment.Deviations...)
 			cloned[key] = any(deployment).(T)
 		} else {
 			cloned[key] = value
