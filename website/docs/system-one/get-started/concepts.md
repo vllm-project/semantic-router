@@ -63,7 +63,7 @@ as the model's answer and every other part as context.
 | `candidate` | The item a judge scores: a document, a segment, a cached request | `relevance` and `same_request` judges |
 | `answer` | The model's answer | Response-stage rules; `answer_check` |
 | `context` | The answer's grounding context: retrieved documents and tool results | Response-stage rules with `input.context`; `hallucination` |
-| `images`, `videos` | The current turn's image and video parts | Rules with `input.image` or `input.video` |
+| `images`, `videos` | Every image the request carries, and the current turn's video parts | Rules with `input.image` or `input.video` |
 
 A part with nothing in it is left out, so a rule that reads the history of a
 first turn asks about the request alone.
@@ -156,8 +156,8 @@ recipes[default].signals.pii[personal_data]: span_required: resolves to deployme
 
 ## Media inputs
 
-A rule reads the current turn's images with `input.image` and its videos with
-`input.video`. The answering deployment must declare that it reads the medium,
+A rule reads every image the request carries with `input.image` and the
+current turn's videos with `input.video`. The answering deployment must declare that it reads the medium,
 or the configuration fails to load with `input_modality_unsupported`.
 
 - The d3 family and the Vela 3.0 d3 sizes read images.
