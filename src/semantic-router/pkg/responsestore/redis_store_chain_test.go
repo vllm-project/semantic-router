@@ -2,7 +2,9 @@ package responsestore
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -67,5 +69,50 @@ func TestRedisStoreGetConversationChainGapFailsClosed(t *testing.T) {
 	chain, err := store.GetConversationChain(ctx, "r3")
 	if !errors.Is(err, ErrNotFound) {
 		t.Fatalf("GetConversationChain(r3) = %d entries, err = %v; want ErrNotFound", len(chain), err)
+	}
+}
+
+func TestRedisStoreGetConversationChainRejectsACycle(t *testing.T) {
+	store := newMiniredisStore(t)
+	storeChain(t, store, "r1", "r2")
+
+	// r1 -> r2 -> r1: the walk revisits r1 instead of reaching a root. Stored
+	// responses never change their link, so the cycle is written directly.
+	ctx := context.Background()
+	payload, err := json.Marshal(&responseapi.StoredResponse{ID: "r1", PreviousResponseID: "r2"})
+	if err != nil {
+		t.Fatalf("marshal r1: %v", err)
+	}
+	if err := store.client.Set(ctx, store.buildKey(ResponseKeyPrefix+"r1"), payload, time.Minute).Err(); err != nil {
+		t.Fatalf("rewrite r1: %v", err)
+	}
+
+	chain, err := store.GetConversationChain(ctx, "r1")
+	if err == nil {
+		t.Fatalf("GetConversationChain(r1) = %d entries, err = nil; want an error", len(chain))
+	}
+}
+
+func TestRedisStoreGetConversationChainRejectsAChainPastTheCap(t *testing.T) {
+	store := newMiniredisStore(t)
+	ctx := context.Background()
+
+	previous := ""
+	leaf := ""
+	for index := 0; index <= 1000; index++ {
+		id := fmt.Sprintf("r%d", index)
+		response := &responseapi.StoredResponse{ID: id}
+		if previous != "" {
+			response.PreviousResponseID = previous
+		}
+		if err := store.StoreResponse(ctx, response); err != nil {
+			t.Fatalf("StoreResponse(%s): %v", id, err)
+		}
+		previous, leaf = id, id
+	}
+
+	chain, err := store.GetConversationChain(ctx, leaf)
+	if err == nil {
+		t.Fatalf("a chain past the cap = %d entries, err = nil; want an error", len(chain))
 	}
 }

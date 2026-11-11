@@ -656,10 +656,12 @@ func (s *RedisStore) collectChainResponses(ctx context.Context, startID string) 
 	const maxChainLength = 1000
 
 	for currentID != "" && len(chain) < maxChainLength {
-		// Prevent circular references
+		// Prevent circular references. A cycle is corrupt data: the conversation
+		// it describes cannot be reconstructed, so it fails instead of serving a
+		// prefix of it.
 		if visited[currentID] {
 			logging.Warnf("RedisStore: circular reference detected at %s", currentID)
-			break
+			return nil, fmt.Errorf("response chain loops back to %s", currentID)
 		}
 		visited[currentID] = true
 
@@ -679,5 +681,9 @@ func (s *RedisStore) collectChainResponses(ctx context.Context, startID string) 
 		currentID = response.PreviousResponseID
 	}
 
+	if currentID != "" {
+		// The walk stopped at the cap with history still ahead of it.
+		return nil, fmt.Errorf("response chain is longer than %d entries", maxChainLength)
+	}
 	return chain, nil
 }
