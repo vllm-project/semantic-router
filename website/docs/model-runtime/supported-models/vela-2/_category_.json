@@ -1,0 +1,9 @@
+{
+  "label": "Vela 2.0",
+  "key": "supported-models-vela-2",
+  "position": 5,
+  "link": {
+    "type": "doc",
+    "id": "overview"
+  }
+}

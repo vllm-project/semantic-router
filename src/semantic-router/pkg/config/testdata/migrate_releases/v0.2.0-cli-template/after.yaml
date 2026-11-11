@@ -31,3 +31,6 @@ recipes:
         modelRefs:
           - model: "replace-with-your-model"
             use_reasoning: false
+entrypoints:
+  - model_names: [vllm-sr/auto, auto, MoM]
+    recipe: default

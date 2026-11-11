@@ -134,6 +134,13 @@ func (l *EscalateLooper) formatEscalateStreamingResponse(
 	return resp, nil
 }
 
+// StreamWithUsage replaces the usage chunks of a Looper Chat stream with one
+// chunk carrying usage, before DONE. A Looper stream carries usage only when a
+// Chat client asks for it, so the Router adds it for the client's codec.
+func StreamWithUsage(body []byte, model string, usage TokenUsage) []byte {
+	return normalizeEscalateSSEUsage(body, model, usage, true)
+}
+
 // normalizeEscalateSSEUsage suppresses any usage emitted by the selected
 // upstream stream. When the client requested stream_options.include_usage, it
 // emits exactly one aggregate usage chunk before DONE; otherwise it emits none.

@@ -97,7 +97,7 @@ To ask the decision model directly, grant it on a listener
 mode, then send a standard request (`state` and `questions`) or a batch
 (`states`, each entry a standard request) to `POST /v1/systemone`; the answers
 come back under `answers`, or under `states.NAME.answers` for a batch. See
-[the System One API](https://vllm-sr.ai/docs/system-one/api).
+[the System One API](https://vllm-sr.ai/docs/system-one/use/api).
 
 ## Delivery
 

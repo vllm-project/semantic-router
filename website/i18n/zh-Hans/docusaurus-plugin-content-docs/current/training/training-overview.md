@@ -12,7 +12,7 @@ translation:
 
 Router 会询问两类模型，而对大多数应用来说，只有其中一类值得训练。
 
-- **决策模型**零样本回答每个路由判断：应用信号、你自己的问题、System One 选择器、防护和评审。新的路由问题无需训练：把它写成一条 [`systemone` 规则](../tutorials/signal/systemone)，再调优它的 predicate（[编写自定义问题](../system-one/custom-questions)）。当某个问题需要更高准确率时，下一步是换用更大的[决策模型](../system-one/deployments)。
+- **决策模型**零样本回答每个路由判断：应用信号、你自己的问题、System One 选择器、防护和评审。新的路由问题无需训练：把它写成一条 [`systemone` 规则](../tutorials/signal/systemone)，再调优它的 predicate（[编写自定义问题](../system-one/use/custom-questions)）。当某个问题需要更高准确率时，下一步是换用更大的[决策模型](../system-one/deploy/deployments)。
 - **嵌入模型**只用于召回：响应缓存、记忆和 RAG 用它查找候选，没有任何决策读取它。当召回在你的数据上漏掉相关内容时，训练一个嵌入模型。
 
 ## 选择训练流程 {#choose-a-training-workflow}

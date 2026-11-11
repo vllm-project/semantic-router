@@ -2,61 +2,90 @@ package headers
 
 import (
 	"bytes"
-	"cmp"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 )
 
-// The headers page carries the reference table between these markers.
-const (
-	ReferenceBegin = "<!-- BEGIN-GENERATED-HEADER-REFERENCE -->"
-	ReferenceEnd   = "<!-- END-GENERATED-HEADER-REFERENCE -->"
-)
-
-var surfaceOrder = []Surface{SurfacePublic, SurfaceDebug, SurfaceControl, SurfaceInternal}
-
-// MarkdownReference renders the registry as a Markdown table, by surface and
-// then by name, followed by the members of x-vsr-trace in priority order.
-func MarkdownReference() string {
-	rows := Registry()
-	slices.SortFunc(rows, func(a, b Header) int {
-		return cmp.Or(
-			cmp.Compare(slices.Index(surfaceOrder, a.Surface), slices.Index(surfaceOrder, b.Surface)),
-			strings.Compare(a.Name, b.Name),
-		)
-	})
-	var out strings.Builder
-	out.WriteString("| Header | Direction | Surface | Sensitivity | Owner | Since | Description |\n")
-	out.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
-	for _, header := range rows {
-		fmt.Fprintf(&out, "| `%s` | %s | %s | %s | %s | %s | %s |\n",
-			header.Name, header.Direction, header.Surface, header.Sensitivity, header.Owner, header.Version, header.Doc)
-	}
-	fmt.Fprintf(&out, "\nThe members of `%s`, highest priority first:\n\n", VSRTrace)
-	out.WriteString("| Member | Owner | Description |\n")
-	out.WriteString("| --- | --- | --- |\n")
-	for _, member := range traceMembers {
-		fmt.Fprintf(&out, "| `%s` | %s | %s |\n", member.Key, member.Owner, member.Doc)
-	}
-	return out.String()
+// Reference is the header contract the API reference documents.
+// tools/codegen/headers writes it to reference.generated.json, and
+// tools/docs/generate_header_reference.py renders the page from that file.
+type Reference struct {
+	SchemaVersion   string `json:"schema_version"`
+	TraceLimitBytes int    `json:"trace_limit_bytes"`
+	// DebugModes are the values of global.router.headers.debug, which the
+	// config package owns.
+	DebugModes []string `json:"debug_modes"`
+	// Headers are the registry in its order.
+	Headers []ReferenceHeader `json:"headers"`
+	// DroppedFromClients are the Router's own headers whose client values it
+	// drops.
+	DroppedFromClients []string `json:"dropped_from_clients"`
+	// TraceMembers are the members of x-vsr-trace, highest priority first.
+	TraceMembers []TraceMember `json:"trace_members"`
+	// TraceExample is an encoded x-vsr-trace value.
+	TraceExample string        `json:"trace_example"`
+	WarningCodes []WarningCode `json:"warning_codes"`
 }
 
-// EmbedReference replaces whatever a page holds between the reference
-// markers with the current table.
-func EmbedReference(page []byte) ([]byte, error) {
-	begin := bytes.Index(page, []byte(ReferenceBegin))
-	end := bytes.Index(page, []byte(ReferenceEnd))
-	if begin < 0 || end < begin {
-		return nil, errors.New("the page has no " + ReferenceBegin + " ... " + ReferenceEnd + " block")
+// ReferenceHeader is one registered header, its hops named.
+type ReferenceHeader struct {
+	Name        string      `json:"name"`
+	Direction   []string    `json:"direction"`
+	Surface     Surface     `json:"surface"`
+	Sensitivity Sensitivity `json:"sensitivity"`
+	Owner       string      `json:"owner"`
+	Version     string      `json:"version"`
+	Doc         string      `json:"doc"`
+}
+
+// NewReference collects the registry, the trace members and the warning
+// codes, with the debug modes the caller reads from the config package.
+func NewReference(debugModes []string) Reference {
+	reference := Reference{
+		SchemaVersion:      SchemaVersionValue,
+		TraceLimitBytes:    TraceLimitBytes,
+		DebugModes:         slices.Clone(debugModes),
+		DroppedFromClients: DroppedFromClients(),
+		TraceMembers:       TraceMembers(),
+		TraceExample:       exampleTrace().Encode(),
+		WarningCodes:       WarningCodes(),
 	}
+	for _, header := range registry {
+		reference.Headers = append(reference.Headers, ReferenceHeader{
+			Name:        header.Name,
+			Direction:   header.Direction.Labels(),
+			Surface:     header.Surface,
+			Sensitivity: header.Sensitivity,
+			Owner:       header.Owner,
+			Version:     header.Version,
+			Doc:         header.Doc,
+		})
+	}
+	return reference
+}
+
+func exampleTrace() *Trace {
+	var trace Trace
+	trace.Set(TraceConfidence, Decimal(0.91))
+	trace.Set(TraceAlgorithm, Token("static"))
+	trace.Set(TraceRoutingLatencyMs, Decimal(3.2))
+	trace.Set(TraceSignals, List(String("context:long-context"), String("projection:use-reasoning-model")))
+	trace.Set(TraceSessionPhase, Token("tool_loop"))
+	return &trace
+}
+
+// JSON renders the reference as indented JSON ending in a newline. Markdown
+// in the docs keeps its characters, so HTML escaping is off.
+func (r Reference) JSON() ([]byte, error) {
 	var out bytes.Buffer
-	out.Write(page[:begin+len(ReferenceBegin)])
-	out.WriteString("\n\n")
-	out.WriteString(MarkdownReference())
-	out.WriteString("\n")
-	out.Write(page[end:])
+	encoder := json.NewEncoder(&out)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(r); err != nil {
+		return nil, fmt.Errorf("encode the header reference: %w", err)
+	}
 	return out.Bytes(), nil
 }
 

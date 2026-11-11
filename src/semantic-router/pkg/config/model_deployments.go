@@ -71,6 +71,9 @@ type ModelDeployment struct {
 	// Replicas places independent workers for this logical resource. Omission
 	// uses the single device/endpoint placement above.
 	Replicas []ModelReplica `yaml:"replicas,omitempty" json:"replicas,omitempty"`
+	// OutlierDetection ejects a model_runtime replica whose exchanges keep
+	// running out of their deadline; unset keeps its defaults.
+	OutlierDetection *DeploymentOutlierDetection `yaml:"outlier_detection,omitempty" json:"outlier_detection,omitempty"`
 	// PublicName is the inference API identity. It never identifies a socket,
 	// local package path, or internal deployment key.
 	PublicName string `yaml:"public_name,omitempty" json:"public_name,omitempty"`
@@ -169,7 +172,7 @@ func (d ModelDeployment) validate() error {
 // validateRecipeBindings checks each binding a recipe writes: it names a
 // declared deployment that answers its application signal.
 func validateRecipeBindings(recipe RecipeName, scoped *RouterConfig) error {
-	bindings := scoped.recipeBindings()
+	bindings := scoped.RecipeBindings()
 	for _, key := range sortedModelKeys(bindings) {
 		if err := validateModelBinding(scoped, key, bindings[key]); err != nil {
 			return fmt.Errorf("recipes[%s].model_bindings.%s: %w", recipe, key, err)

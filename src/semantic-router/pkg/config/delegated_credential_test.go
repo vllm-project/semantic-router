@@ -255,3 +255,17 @@ func TestDelegatedUpstreamsKeepTheResponseCachePerUser(t *testing.T) {
 		t.Fatalf("error = %v, want %q", err, want)
 	}
 }
+
+// A request that matches no decision renders its automatic output on the
+// default model, which a delegated backend cannot serve to the Router.
+func TestDefaultAutomaticOutputRejectsADelegatedDefaultModel(t *testing.T) {
+	doc := strings.Replace(delegatedBackendConfig(delegatedGatewayBackend, true), "providers:\n", "providers:\n  defaults: {model: gateway-model}\n", 1) + `  plugins:
+    - type: request_params
+      configuration:
+        default_max_tokens: auto
+`
+	_, err := ParseYAMLBytes([]byte(doc))
+	if err == nil || !strings.Contains(err.Error(), "the automatic output render (decisions[recipes[default].plugins]) calls it as the Router") {
+		t.Fatalf("error = %v, want the default plugins' automatic output refused on a delegated default model", err)
+	}
+}

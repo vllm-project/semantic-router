@@ -2,12 +2,14 @@ package controllers
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/yaml"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -436,5 +438,42 @@ func TestOperatorRefusesTheRemovedClassifierFields(t *testing.T) {
 	}
 	if _, err := r.convertComplexityRules([]vllmv1alpha1.ComplexityRulesConfig{{Name: "code", Threshold: "0.5"}}); err == nil || !strings.Contains(err.Error(), "no longer scores example banks") {
 		t.Fatalf("a complexity threshold: %v", err)
+	}
+}
+
+// The Router reads a CR decision's condition tree as written: labels,
+// predicates, on_error and nested operators included.
+func TestBuildCanonicalConfigCarriesDecisionConditionTrees(t *testing.T) {
+	var decision vllmv1alpha1.DecisionConfig
+	if err := yaml.Unmarshal([]byte(`name: nested
+modelRefs: [{model: small}]
+rules:
+  operator: AND
+  conditions:
+    - {type: complexity, name: needs_reasoning, label: hard}
+    - {type: systemone, name: risk, label: RISKY, predicate: {gte: 0.7}, on_error: no_match}
+    - operator: OR
+      conditions:
+        - {type: keyword, name: urgent}
+        - {operator: NOT, conditions: [{type: domain, name: other}]}
+`), &decision); err != nil {
+		t.Fatal(err)
+	}
+	r := &SemanticRouterReconciler{}
+	sr := &vllmv1alpha1.SemanticRouter{Spec: vllmv1alpha1.SemanticRouterSpec{Config: vllmv1alpha1.ConfigSpec{Decisions: []vllmv1alpha1.DecisionConfig{decision}}}}
+	canonical, err := r.buildCanonicalConfig(context.Background(), sr)
+	if err != nil {
+		t.Fatalf("buildCanonicalConfig failed: %v", err)
+	}
+	want := routerconfig.RuleNode{Operator: "AND", Conditions: []routerconfig.RuleNode{
+		{Type: "complexity", Name: "needs_reasoning", Label: "hard"},
+		{Type: "systemone", Name: "risk", Label: "RISKY", Predicate: &routerconfig.NumericPredicate{GTE: ptr.To(0.7)}, OnError: "no_match"},
+		{Operator: "OR", Conditions: []routerconfig.RuleNode{
+			{Type: "keyword", Name: "urgent"},
+			{Operator: "NOT", Conditions: []routerconfig.RuleNode{{Type: "domain", Name: "other"}}},
+		}},
+	}}
+	if got := defaultRecipe(canonical).Decisions[0].Rules; !reflect.DeepEqual(got, want) {
+		t.Fatalf("decision rules = %#v, want %#v", got, want)
 	}
 }
