@@ -82,6 +82,30 @@ test('redact hides secrets by rule, with no span from the classifier', async ($,
   expect(await paneText($, /hidden before/)).toBe('6 items hidden before Claude read .env · secret ×6')
 })
 
+test('redact reads a config file and source code each as what it is', async ($, on) => {
+  const files: Record<string, string> = {
+    '/repo/config/app.yaml': 'db:\n  user: app\n  password: SuperSecretPassword',
+    '/repo/src/session.ts': "export type Session = {\n  token: Uint8Array\n}\nfetch(url, { credentials: 'same-origin' })",
+  }
+  engine(on, { pii: [] })
+  on('tool.call', (_, e) => readResult(files[String((e as { file_path?: string }).file_path)], String((e as { file_path?: string }).file_path)))
+
+  const config = await $.tool.call({ tool: 'Read', file_path: '/repo/config/app.yaml', tool_use_id: 'r1' })
+  const code = await $.tool.call({ tool: 'Read', file_path: '/repo/src/session.ts', tool_use_id: 'r2' })
+
+  expect(contentOf(config)).toBe('db:\n  user: app\n  password: [vsr:secret]')
+  expect(contentOf(code)).toBe(files['/repo/src/session.ts'])
+})
+
+test('redact reads a command\'s output as the file the command names', async ($, on) => {
+  engine(on, { pii: [], review: 0.1 })
+  on('tool.call', () => ({ result: { stdout: 'password: SuperSecretPassword', stderr: '', interrupted: false, isImage: false } }))
+
+  const ran = await $.tool.call({ tool: 'Bash', command: 'cat config/app.yaml', tool_use_id: 'b1' } as never)
+
+  expect((ran.result as { stdout: string }).stdout).toBe('password: [vsr:secret]')
+})
+
 test('a command that fails still has its output hidden: Claude reads the error with the secrets replaced', async ($, on) => {
   const text = ['Exit code 1', `gh: ${'gh' + 'p_'}abcdefghijklmnopqrstuvwxyz0123456789`, 'aws_access_key_id = AKIAIOSFODNN7EXAMPLE'].join('\n')
   engine(on, { pii: [], review: 0.1 })
