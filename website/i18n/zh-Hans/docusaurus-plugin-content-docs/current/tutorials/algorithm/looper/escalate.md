@@ -86,7 +86,7 @@ recipes:
 
 `gte` 为必填项，取值在 `[0, 1]` 内。`token_filter: tool_call_args` 只对生成的工具调用参数打分，而不是每个 token；`all`（默认）对每个 token 打分。
 
-`systemone: {gte, deployment, timeout_ms}` 就请求和候选回答，向决策模型（或指定的 System One 部署）提出 `answer_check` 预设问题。`refusal: false` 提出 `refusal` 预设问题；`refusal: true` 会被拒绝，因为它只会接受拒答。两种检查对每个被评判的回答各进行一次决策模型调用；该调用计入执行器的 `deadline`，但不计入 `max_calls`。调用工具的回答在评判时，于文本之后附上每个调用的工具名和参数。
+`systemone: {gte, deployment, timeout_ms}` 就请求和候选回答，向决策模型（或指定的 System One 部署）提出 `answer_check` 预设问题。请求指最后一个含有用户自身文字的用户轮次中的这些文字：其字符串内容或拼接后的文本片段，并略去 `<system-reminder>` 块。只含提醒块的轮次会把请求留给更早的轮次；如果没有任何轮次含有用户自身的文字，则以最后一个轮次的提醒块作为请求。`refusal: false` 提出 `refusal` 预设问题；`refusal: true` 会被拒绝，因为它只会接受拒答。两种检查对每个被评判的回答各进行一次决策模型调用；该调用计入执行器的 `deadline`，但不计入 `max_calls`。调用工具的回答在评判时，于文本之后附上每个调用的工具名和参数。
 
 `on_error` 决定没有回答被接受时的处理方式：
 
@@ -109,7 +109,7 @@ Escalate 执行会创建一个 `looper.execute` trace span，并为每次分派�
 
 - Kai 回答原始请求，escalate 先检查这个回答，再决定是否调用 Vega。
 - 不需要单独的、强制的 Kai 分类调用，配方也不会在第一个回答之后重新运行。
-- 它支持 `choice`、`score` 和 `noul` 请求，并保持原始问题包完整。
+- 它支持 `choice`、`score`、`noul` 和 `box` 请求，并保持原始问题包完整。只有当阶段的模型能回答请求所需的一切时，该阶段才会运行；参见[按模型能回答的内容路由](#route-by-what-each-model-answers)。
 
 #### 连接模型 {#connect-the-models}
 
@@ -150,8 +150,9 @@ listeners:
   - name: inference
     address: 127.0.0.1
     port: 8801
-    systemone:
-      models: [vllm-sr/auto]
+    apis:
+      systemone:
+        models: [vllm-sr/auto]
 
 entrypoints:
   - api: systemone
@@ -159,7 +160,7 @@ entrypoints:
     recipe: native-escalate
 ```
 
-在把 listener 暴露到受信任的开发环境之外之前，请为它添加客户端身份验证。如果还想允许某个具体模型，请把它的原生 provider 别名加入 `systemone.models`。
+在把 listener 暴露到受信任的开发环境之外之前，请为它添加客户端身份验证。如果还想允许某个具体模型，请把它的原生 provider 别名加入 `apis.systemone.models`。
 
 #### 定义阶段 {#define-the-stages}
 
@@ -278,6 +279,52 @@ curl -sS http://localhost:8801/v1/systemone \
 3. 打开 **Decision Monitoring**，查看阶段结果、请求速率和延迟。
 
 这些视图描述的是线上执行；要衡量准确率，请单独评估带标签的请求。
+
+#### 按模型能回答的内容路由 {#route-by-what-each-model-answers}
+
+在第一个阶段之前，Router 会把请求所需的内容与每个阶段的模型能回答的内容进行比较：
+
+- **请求所需的内容：** 它的问题类型；带图像时需要 `image`，带视频时需要 `video`（位于 `images`、`videos` 或 `assets` 中）；有问题设置了 `require_full_input` 时需要 `full_input`。
+- **模型能回答的内容**取自下列来源中第一个给出答案的：
+  - 其别名所指部署的模型卡，由模型运行时报告，或由 `provider: systemone` API 列出；
+  - 其后端为它的 `provider_model_id` 列出的条目（`vllm-sr/5.0` 下为端点旁的 `GET /v1/models`，`vllm-sr/4.0` 下为 `GET <endpoint>/models`），每份配置只读取一次；
+  - 部署的 `capabilities`（`question_types`、`modalities`），或运行时所服务模型的内置目录。
+
+  没有任何来源描述的模型照旧被询问。
+- **模型缺少所需内容的阶段会被跳过**，不发起调用，并以 `outcome="incapable"` 计入 `sr_systemone_stage_total`。
+- **没有任何阶段的模型能回答时**，请求以 `400` 和 `unsupported_capability` 失败。其 `detail` 写明缺少什么，以及每个模型缺少什么、这一信息来自哪里：
+
+  ```json
+  {
+    "detail": "no candidate model of decision \"answer\" answers this request, which needs box, image: kai lacks box, image (card); vega lacks box (listing)",
+    "code": "unsupported_capability"
+  }
+  ```
+
+- **只需要针对文本的 `choice`、`noul` 和 `score` 的请求不做检查**，因为每个 System One 模型都能回答它。
+
+因此同一个池里可以同时放文本模型和视觉模型：`choice` 请求照旧从第一个阶段开始，`box` 问题只交给视觉模型。对于什么都不列出的 API，在其别名所指的部署上声明它的模型能回答什么：
+
+```yaml
+providers:
+  models:
+    - name: vision
+      api_format: systemone
+      deployment: gateway-vision
+
+global:
+  model_catalog:
+    deployments:
+      gateway-vision:
+        provider: systemone
+        endpoint: https://gateway.example.com/v1/systemone
+        model: vision-27b
+        capabilities:
+          question_types: [choice, noul, score, box]
+          modalities: [text, image]
+```
+
+`box` 答案的框位于图像之内时才算完整。接受规则可以用 `{question_type: box, field: confidence, gte: ...}` 对它把关。经过校准的策略永远不会接受它，因为校准只覆盖 `choice`、`score` 和 `noul`。auto 目前还不路由 `set`、`span` 或 `track` 问题：它们的答案因模型家族而异，因此带这类问题的请求会以 `400` 被拒绝。
 
 #### 添加路由信号 {#add-routing-signals}
 

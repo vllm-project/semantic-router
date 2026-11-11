@@ -9,11 +9,12 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"sort"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiregistry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
@@ -41,7 +42,7 @@ func startNativeGateway(ctx context.Context, server *extproc.Server, writer star
 	engineOpts.ExecutesFallback = true
 	listeners, err := listenNative(cfg, bindAddress, gateway.Options{
 		Serving:   nativeServing{pin: server.Pin, engine: engineOpts},
-		Ready:     ready.Load,
+		Ready:     func() bool { return ready.Load() && server.ServingActive() },
 		AccessLog: logAccess,
 	})
 	if err != nil {
@@ -126,7 +127,7 @@ func listenNative(cfg *config.RouterConfig, bindAddress string, base gateway.Opt
 		bound = append(bound, &nativeListener{name: spec.Name, server: gateway.NewServer(handler, serverOpts), listener: ln})
 		logging.ComponentEvent("router", "standalone_listener_started", map[string]interface{}{
 			"listener": spec.Name, "address": ln.Addr().String(), "api_keys": len(spec.APIKeys) > 0,
-			"models": spec.Models, "tls": serverOpts.TLS != nil,
+			"apis": spec.ServedAPIs(), "tls": serverOpts.TLS != nil,
 		})
 	}
 	return bound, nil
@@ -215,16 +216,16 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 		nativeRouter = lease.Router
 	}
 	serving := gateway.Serving{
-		SystemOne:       systemone.ForClients(cfg, systemone.Handler(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote))),
+		SystemOne:       systemone.ForClients(cfg, systemone.Handler(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote, models))),
 		RoutingDisabled: !cfg.RoutingEnabled(),
 		APIKeys:         listenerAPIKeys(cfg, listener),
-		Models:          listenerModels(cfg, listener),
 		IdentityHeaders: []string{
 			cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader(),
 			cfg.Authz.DelegatedCredential.GetHeader(),
 		},
 		TrustIdentity: listenerIdentityTrust(cfg, listener),
 	}
+	applyListenerAPIs(&serving, cfg, listener)
 	if cfg.RoutingEnabled() {
 		set, ok := lease.Snapshot.Part(configsnapshot.ComponentUpstream).(*upstream.Set)
 		if !ok || lease.Router == nil {
@@ -246,13 +247,58 @@ func listenerAPIKeys(cfg *config.RouterConfig, name string) []string {
 	return nil
 }
 
-func listenerModels(cfg *config.RouterConfig, name string) []string {
+// applyListenerAPIs gives serving the named listener's API grant: the APIs it
+// serves, the models each accepts and what GET /v1/models lists. A listener
+// that names no apis serves the default APIs on every path, as before apis.
+func applyListenerAPIs(serving *gateway.Serving, cfg *config.RouterConfig, name string) {
+	serving.ListsLLM = true
 	for _, listener := range cfg.Listeners {
-		if listener.Name == name {
-			return listener.Models
+		if listener.Name != name {
+			continue
+		}
+		serving.Models, _ = listener.LLMModels()
+		serving.ListsLLM = servesAnyLLM(listener)
+		serving.ListsSystemOne = listener.Serves(apiregistry.SystemOne)
+		serving.Gate = listenerGate(listener)
+		return
+	}
+}
+
+func servesAnyLLM(listener config.Listener) bool {
+	for _, name := range listener.ServedAPIs() {
+		if api, ok := apiregistry.Lookup(name); ok && api.Kind == apiregistry.KindLLM {
+			return true
 		}
 	}
-	return nil
+	return false
+}
+
+// listenerGate answers which models a listener accepts on a request path.
+// With apis, a path of an API it does not serve, or of no API, answers 404
+// with a detail naming the listener and the APIs it serves.
+func listenerGate(listener config.Listener) func(string) ([]string, string, bool) {
+	refuse := func(path string) ([]string, string, bool) {
+		return nil, fmt.Sprintf("listener %q does not serve %s; it serves %s", listener.Name, path,
+			strings.Join(listener.ServedAPIs(), ", ")), false
+	}
+	return func(path string) ([]string, string, bool) {
+		api, isAPI := apiregistry.ForPath(path)
+		if !isAPI {
+			if listener.APIs == nil {
+				return nil, "", true
+			}
+			return refuse(path)
+		}
+		entry, served := listener.API(api.Name)
+		if !served {
+			if listener.APIs == nil && api.Name == apiregistry.SystemOne {
+				// The System One API answers its own 404 there, as before.
+				return nil, "", true
+			}
+			return refuse(path)
+		}
+		return entry.Models, "", true
+	}
 }
 
 // listenerIdentityTrust is the identity trust of the named listener in cfg,
@@ -329,60 +375,20 @@ func buildUpstream(mode config.GatewayMode, cfg *config.RouterConfig, previous *
 
 // validateNativeListeners refuses a reload that changes what the native
 // gateway bound at startup: the set of listeners, or a listener's address,
-// port, timeout (also its connections' idle timeout) or TLS certificate.
+// port, timeout (also its connections' idle timeout) or TLS file paths.
 func validateNativeListeners(candidate, active *configsnapshot.Snapshot) error {
 	if active == nil {
 		return nil
 	}
-	bound := make(map[string]config.Listener, len(active.Config().Listeners))
-	for _, listener := range active.Config().Listeners {
-		bound[listener.Name] = listener
-	}
 	var reasons []configsnapshot.Reason
-	restart := func(path, message string) {
+	for _, restart := range config.ListenerRestarts(active.Config().Listeners, candidate.Config().Listeners) {
 		reasons = append(reasons, configsnapshot.Reason{
-			Stage: configsnapshot.StageValidate, Code: configsnapshot.CodeRestartRequired, Path: path,
-			Message: message + "; standalone mode binds listeners at startup, so restart the Router to apply it",
+			Stage: configsnapshot.StageValidate, Code: configsnapshot.CodeRestartRequired, Path: restart.Path,
+			Message: restart.Message + "; standalone mode binds listeners at startup, so restart the Router to apply it",
 		})
-	}
-	for _, next := range candidate.Config().Listeners {
-		path := "listeners[" + next.Name + "]"
-		previous, ok := bound[next.Name]
-		delete(bound, next.Name)
-		switch {
-		case !ok:
-			restart(path, "the listener is new")
-		case next.Address != previous.Address:
-			restart(path+".address", fmt.Sprintf("the address changes from %q to %q", previous.Address, next.Address))
-		case next.Port != previous.Port:
-			restart(path+".port", fmt.Sprintf("the port changes from %d to %d", previous.Port, next.Port))
-		case next.Timeout != previous.Timeout:
-			restart(path+".timeout", fmt.Sprintf("the timeout changes from %q to %q", previous.Timeout, next.Timeout))
-		case !sameListenerTLS(next.TLS, previous.TLS):
-			restart(path+".tls", "the TLS certificate changes")
-		}
-	}
-	for _, removed := range sortedListenerNames(bound) {
-		restart("listeners["+removed+"]", "the listener is removed")
 	}
 	if len(reasons) == 0 {
 		return nil
 	}
 	return configsnapshot.RejectReasons(configsnapshot.StageValidate, reasons)
-}
-
-func sameListenerTLS(a, b *config.ListenerTLS) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
-}
-
-func sortedListenerNames(listeners map[string]config.Listener) []string {
-	names := make([]string, 0, len(listeners))
-	for name := range listeners {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
 }

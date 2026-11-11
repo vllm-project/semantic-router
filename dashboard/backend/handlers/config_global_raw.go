@@ -140,7 +140,22 @@ func readEffectiveGlobalYAML(configPath string) ([]byte, error) {
 		global = &defaults
 	}
 
-	globalYAML, err := yaml.Marshal(global)
+	var effective yaml.Node
+	if err = effective.Encode(global); err != nil {
+		return nil, fmt.Errorf("marshal effective global config: %w", err)
+	}
+	// The typed global omits an explicit false or empty value, which a save of
+	// this view would turn back into its default: show what config.yaml writes.
+	written, err := decodeConfigDocument[canonicalConfigTransport](data)
+	if err != nil {
+		return nil, err
+	}
+	if written.globalOverrideRaw != nil {
+		if err = mergeMappingNodes(&effective, written.globalOverrideRaw); err != nil {
+			return nil, err
+		}
+	}
+	globalYAML, err := yaml.Marshal(&effective)
 	if err != nil {
 		return nil, fmt.Errorf("marshal effective global config: %w", err)
 	}

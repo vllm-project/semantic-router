@@ -714,7 +714,7 @@ func canonicalizeYAMLForDiff(raw []byte) string {
 	}
 
 	if looksLikeFullBase, err := looksLikeFullCanonicalDeployBase(raw); err == nil && looksLikeFullBase {
-		if configData, decodeErr := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](raw); decodeErr == nil {
+		if configData, decodeErr := decodeConfigDocument[routerconfig.CanonicalConfig](raw); decodeErr == nil {
 			if canonical, marshalErr := marshalYAMLBytes(configData); marshalErr == nil {
 				return string(canonical)
 			}

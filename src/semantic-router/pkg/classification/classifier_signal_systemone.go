@@ -96,6 +96,9 @@ func (r systemOneReading) previousAnswer() string {
 // others as context). A part with nothing to read is left out.
 func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request {
 	input := rule.Input
+	if !input.ReadsRequest() {
+		return modelservice.Request{State: strings.Join(r.besidesRequest(input), "\n\n")}
+	}
 	if request, ok := r.spanScan(rule); ok {
 		return request
 	}
@@ -151,14 +154,7 @@ func (r systemOneReading) spanScan(rule config.SystemOneRule) (modelservice.Requ
 	if rule.Question.Type != config.SystemOneQuestionSpan || input.Answer || input.Context || input.PreviousTurns > 0 {
 		return modelservice.Request{}, false
 	}
-	var scanned []string
-	if input.History {
-		scanned = append(scanned, r.history...)
-	}
-	if input.ToolResults {
-		scanned = append(scanned, r.toolResults...)
-	}
-	scanned = slices.DeleteFunc(scanned, func(text string) bool { return strings.TrimSpace(text) == "" })
+	scanned := r.besidesRequest(input)
 	if len(scanned) == 0 {
 		return modelservice.Request{}, false
 	}
@@ -170,6 +166,26 @@ func (r systemOneReading) spanScan(rule config.SystemOneRule) (modelservice.Requ
 		request.Videos = slices.Clone(r.videos)
 	}
 	return request, true
+}
+
+// besidesRequest is the text a rule reads in the earlier user turns and the tool
+// results, without the turns and results that hold none.
+func (r systemOneReading) besidesRequest(input config.SystemOneInput) []string {
+	var texts []string
+	if input.History {
+		texts = append(texts, r.history...)
+	}
+	if input.ToolResults {
+		texts = append(texts, r.toolResults...)
+	}
+	return slices.DeleteFunc(texts, func(text string) bool { return strings.TrimSpace(text) == "" })
+}
+
+// hasInput reports whether a rule has text to read: a rule that leaves the
+// current user turn out has none until the earlier turns or the tool results
+// it reads hold some, and is not asked, so it does not match.
+func (r systemOneReading) hasInput(rule config.SystemOneRule) bool {
+	return rule.Input.ReadsRequest() || len(r.besidesRequest(rule.Input)) > 0
 }
 
 // askedRule is one rule a stage asks: a systemone rule, or an application
@@ -217,6 +233,9 @@ type systemOneCall struct {
 func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading) []*systemOneCall {
 	var calls []*systemOneCall
 	for _, asked := range rules {
+		if !reading.hasInput(asked.rule) {
+			continue
+		}
 		deployment := c.Config.SystemOneRuleDeployment(asked.rule)
 		state := reading.state(asked.rule)
 		index := slices.IndexFunc(calls, func(call *systemOneCall) bool {

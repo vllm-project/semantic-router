@@ -22,6 +22,9 @@ zh-Hans	community/development.md
 zh-Hans	community/documentation.md
 zh-Hans	community/model-provider-day-0-support.md
 zh-Hans	community/overview.md
+zh-Hans	community/system-one-schemas/adding-a-deviation.md
+zh-Hans	community/system-one-schemas/adding-a-schema-codec.md
+zh-Hans	community/system-one-schemas/adding-an-extension-field.md
 zh-Hans	community/translation-guide.md
 zh-Hans	faq.md
 zh-Hans	installation/agent-harness.md
@@ -127,6 +130,7 @@ zh-Hans	proposals/router-flow-workflows.md
 zh-Hans	proposals/router-learning-memory-and-adaptations.md
 zh-Hans	proposals/standalone-http-gateway.md
 zh-Hans	proposals/standalone-mode.md
+zh-Hans	proposals/system-one-api-schemas.md
 zh-Hans	proposals/unified-config-contract-v0-3.md
 zh-Hans	proposals/unified-model-catalog-and-evaluation-index.md
 zh-Hans	release-notes/decision-model-first-class.md
@@ -142,6 +146,7 @@ zh-Hans	system-one/reference/support-matrix.md
 zh-Hans	system-one/use/api.md
 zh-Hans	system-one/use/custom-questions.md
 zh-Hans	system-one/use/router.md
+zh-Hans	system-one/use/schemas.md
 zh-Hans	training/mmbert-32k-models.md
 zh-Hans	training/model-performance-eval.md
 zh-Hans	training/training-overview.md

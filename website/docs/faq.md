@@ -43,7 +43,7 @@ Dashboard manages model deployments and tasks in either mode.
 
 ## Can Router also expose System One?
 
-Yes. Publish the native model through the listener's `systemone.models`
+Yes. Publish the native model through the listener's `apis.systemone.models`
 grant, and call `/v1/systemone` (alias `/v1/decisions`). Native model discovery
 uses `/v1/systemone/models`; Chat model discovery uses `/v1/models`.
 

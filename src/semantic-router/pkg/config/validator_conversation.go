@@ -67,6 +67,9 @@ func ValidateConversationRuleContract(rule ConversationRule) error {
 
 func validateConversationPredicate(rule ConversationRule) error {
 	if rule.Predicate == nil {
+		if rule.Feature.Type == "count" {
+			return fmt.Errorf("feature.type \"count\" requires a predicate, such as gte: 1")
+		}
 		return nil
 	}
 	if err := validateNumericPredicateContract(rule.Predicate); err != nil {

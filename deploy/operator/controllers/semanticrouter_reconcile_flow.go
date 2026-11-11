@@ -210,7 +210,7 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 		return err
 	}
 
-	if err := r.reconcileIngress(ctx, semanticrouter); err != nil {
+	if err := r.reconcileIngress(ctx, semanticrouter, gatewayMode); err != nil {
 		logger.Error(err, "Failed to reconcile Ingress")
 		return err
 	}
@@ -219,7 +219,7 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 	if r.isOpenShift != nil {
 		isOpenShift = *r.isOpenShift
 	}
-	if err := reconcileRoute(ctx, r.Client, r.Scheme, semanticrouter, isOpenShift); err != nil {
+	if err := reconcileRoute(ctx, r.Client, r.Scheme, semanticrouter, isOpenShift, gatewayMode); err != nil {
 		logger.Error(err, "Route reconciliation failed")
 		return err
 	}

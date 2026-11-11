@@ -120,6 +120,12 @@ POST /api/v1/observability/outcomes
 `target: router` outcomes are kept for replay and offline recipe learning unless
 a typed online consumer exists.
 
+A model outcome is credited to the model that answered the request. When a
+fallback candidate's answer reached the client, that is the candidate the
+response named in `x-vsr-selected-model`, not the model the request was first
+routed to. A candidate whose answer a response policy blocked did not answer. A
+`target_ref` naming any other model is rejected with `409`.
+
 ## Recipe Learning Command
 
 Run the offline loop from replay:
