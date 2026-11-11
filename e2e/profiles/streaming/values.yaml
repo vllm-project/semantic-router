@@ -130,19 +130,6 @@ config:
               - SSN
               - credit card
             case_sensitive: false
-        domains:
-          - name: code_keywords
-            description: Programming and software development queries
-            labels:
-              - "computer science"
-          - name: business
-            description: Business and management related queries
-            labels:
-              - business
-          - name: other
-            description: General knowledge and miscellaneous topics
-            labels:
-              - other
         jailbreak:
           - name: jailbreak_standard
             description: Standard jailbreak detection for streaming tests

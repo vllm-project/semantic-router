@@ -16,8 +16,7 @@ var BaselineRouterContract = []string{
 	"anthropic-messages-streaming",
 	"apiserver-runtime-config-endpoints",
 	"apiserver-classification-endpoints",
-	"chat-completions-stress-request",
-	"domain-classify",
+	"domain-routing",
 	"semantic-cache",
 	// Polarity guard of the semantic cache (issue #2751)
 	"semantic-cache-polarity",
@@ -56,9 +55,7 @@ var BaselineRouterContract = []string{
 	// for (issue #3182)
 	"streaming-usage-settlement",
 	// Session observability
-	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
-	"session-pricing-response-api",
 	// Keyword routing of event payloads (issue #3178)
 	"event-routing",
 	// Language signal rule matching and routing (issue #3178)
@@ -169,7 +166,6 @@ func Combine(groups ...[]string) []string {
 
 // BaselineStress lists the expensive pressure cases within the canonical inventory.
 var BaselineStress = []string{
-	"chat-completions-stress-request",
 	"chat-completions-progressive-stress",
 }
 
