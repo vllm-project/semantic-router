@@ -2,6 +2,7 @@
 
 import json
 import math
+import os
 import re
 from datetime import date, datetime
 from enum import Enum
@@ -2511,11 +2512,44 @@ class BackendAuth(BaseModel):
     api_key_env: Optional[str] = None
 
 
+class BackendTLS(BaseModel):
+    """How Envoy and the Router verify an https backend, as a deployment's tls
+    block does: ca_file replaces the system roots, server_name the endpoint's
+    host, and cert_file with key_file present a client certificate."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ca_file: Optional[str] = None
+    server_name: Optional[str] = None
+    cert_file: Optional[str] = None
+    key_file: Optional[str] = None
+    insecure_skip_verify: bool = False
+
+    @model_validator(mode="after")
+    def validate_shape(self):
+        if self.insecure_skip_verify:
+            raise ValueError(
+                "tls.insecure_skip_verify applies to global.model_catalog.deployments; "
+                "Envoy and the Router always verify a chat backend, so name its CA "
+                "in tls.ca_file"
+            )
+        for field in ("ca_file", "cert_file", "key_file"):
+            path = getattr(self, field)
+            if path and not os.path.isabs(path):
+                raise ValueError(f"tls.{field} must be an absolute path")
+        if bool(self.cert_file) != bool(self.key_file):
+            raise ValueError("tls.cert_file and tls.key_file go together")
+        server_name = self.server_name or ""
+        if server_name != server_name.strip() or any(c in server_name for c in "/: "):
+            raise ValueError("tls.server_name must be a host name")
+        return self
+
+
 class BackendRef(BaseModel):
     """Inline backend access details carried under providers.models[].backend_refs.
 
     A backend connects as a deployment does: endpoint (host:port with protocol,
-    or a full URL), auth and headers.
+    or a full URL), auth, headers and tls.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -2530,6 +2564,7 @@ class BackendRef(BaseModel):
     api_version: Optional[str] = None
     chat_path: Optional[str] = None
     api_key: Optional[str] = None
+    tls: Optional[BackendTLS] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -2554,10 +2589,24 @@ class BackendRef(BaseModel):
         if self.api_key:
             return self.api_key
         if self.auth is not None and self.auth.api_key_env:
-            import os
-
             return os.getenv(self.auth.api_key_env)
         return None
+
+
+class ProviderDefaultsTLS(BaseModel):
+    """The CA bundle of every https backend whose own tls names none. Like a
+    backend's ca_file it replaces the system roots."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ca_file: str = Field(min_length=1)
+
+    @field_validator("ca_file")
+    @classmethod
+    def absolute_path(cls, value: str) -> str:
+        if not os.path.isabs(value):
+            raise ValueError("tls.ca_file must be an absolute path")
+        return value
 
 
 class ProviderDefaults(BaseModel):
@@ -2567,6 +2616,7 @@ class ProviderDefaults(BaseModel):
 
     model: Optional[str] = None
     reasoning_effort: Optional[str] = None
+    tls: Optional[ProviderDefaultsTLS] = None
 
 
 class Providers(BaseModel):
