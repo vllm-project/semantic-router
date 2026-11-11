@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -27,7 +28,7 @@ const (
 
 func init() {
 	pkgtestcases.Register("agent-session-holds-model", pkgtestcases.TestCase{
-		Description: "A session keeps the model its first turn got when a later turn selects a decision that allows it, a subagent in it is held on its own model without disturbing the parent, and a request without the session, a new session and a session past its idle timeout get the decision's own model",
+		Description: "On Chat, Responses and Messages, a session keeps the model its first turn got when a later turn selects a decision that allows it, a subagent in it is held on its own model without disturbing the parent, and a request without the session, a new session and a session past its idle timeout get the decision's own model",
 		Tags:        []string{"session", "learning", "agent", "functional"},
 		Fn:          testAgentSessionHoldsModel,
 	})
@@ -43,6 +44,20 @@ type agentSessionTurn struct {
 	waitIdleFirst bool
 }
 
+// agentSessionBodies are a one-turn request in each client protocol a coding
+// agent speaks; protection keys on the session headers, never on the body.
+var agentSessionBodies = map[string]func(text string) map[string]interface{}{
+	"/v1/chat/completions": func(text string) map[string]interface{} {
+		return map[string]interface{}{"model": agentSessionEntrypoint, "messages": []map[string]interface{}{{"role": "user", "content": text}}}
+	},
+	"/v1/responses": func(text string) map[string]interface{} {
+		return map[string]interface{}{"model": agentSessionEntrypoint, "input": text}
+	},
+	"/v1/messages": func(text string) map[string]interface{} {
+		return map[string]interface{}{"model": agentSessionEntrypoint, "max_tokens": 64, "messages": []map[string]interface{}{{"role": "user", "content": text}}}
+	},
+}
+
 func testAgentSessionHoldsModel(
 	ctx context.Context,
 	client *kubernetes.Clientset,
@@ -54,7 +69,22 @@ func testAgentSessionHoldsModel(
 	}
 	defer session.Close()
 
-	held := fmt.Sprintf("agent-session-%d", time.Now().UnixNano())
+	var seen []string
+	for _, path := range []string{"/v1/chat/completions", "/v1/responses", "/v1/messages"} {
+		turns, err := runAgentSessionTurns(ctx, session, path)
+		if err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
+		seen = append(seen, turns...)
+	}
+	if opts.SetDetails != nil {
+		opts.SetDetails(map[string]interface{}{"turns": seen})
+	}
+	return nil
+}
+
+func runAgentSessionTurns(ctx context.Context, session *fixtures.ServiceSession, path string) ([]string, error) {
+	held := fmt.Sprintf("agent-session-%s-%d", strings.TrimPrefix(path, "/v1/"), time.Now().UnixNano())
 	turns := []agentSessionTurn{
 		// Without a session, the edit decision's own first model: the hold
 		// below is only evidence if this differs from it.
@@ -75,7 +105,7 @@ func testAgentSessionHoldsModel(
 		if turn.waitIdleFirst {
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return nil, ctx.Err()
 			case <-time.After(agentSessionIdle + time.Second):
 			}
 		}
@@ -86,27 +116,21 @@ func testAgentSessionHoldsModel(
 		if turn.agent != "" {
 			headers[agentIDHeader] = []string{turn.agent}
 		}
-		resp, err := runMaskingRawRequest(ctx, session, "/v1/chat/completions", map[string]interface{}{
-			"model":    agentSessionEntrypoint,
-			"messages": []map[string]interface{}{{"role": "user", "content": turn.keyword + " the parser change"}},
-		}, headers)
+		resp, err := runMaskingRawRequest(ctx, session, path, agentSessionBodies[path](turn.keyword+" the parser change"), headers)
 		if err != nil {
-			return fmt.Errorf("%s: %w", turn.name, err)
+			return nil, fmt.Errorf("%s: %w", turn.name, err)
 		}
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("%s returned HTTP %d: %s", turn.name, resp.StatusCode, truncateString(string(resp.Body), 300))
+			return nil, fmt.Errorf("%s returned HTTP %d: %s", turn.name, resp.StatusCode, truncateString(string(resp.Body), 300))
 		}
 		decision := resp.Headers.Get("x-vsr-selected-decision")
 		model := resp.Headers.Get("x-vsr-selected-model")
 		if decision != turn.wantDecision || model != turn.wantModel {
-			return fmt.Errorf("%s: decision %q model %q, want %q %q (trace: %s)",
+			return nil, fmt.Errorf("%s: decision %q model %q, want %q %q (trace: %s)",
 				turn.name, decision, model, turn.wantDecision, turn.wantModel,
 				truncateString(resp.Headers.Get("x-vsr-trace"), 500))
 		}
-		seen = append(seen, turn.name+"="+model)
+		seen = append(seen, path+" "+turn.name+"="+model)
 	}
-	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{"turns": seen})
-	}
-	return nil
+	return seen, nil
 }
