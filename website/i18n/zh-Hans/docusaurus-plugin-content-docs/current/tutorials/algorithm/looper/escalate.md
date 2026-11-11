@@ -150,8 +150,9 @@ listeners:
   - name: inference
     address: 127.0.0.1
     port: 8801
-    systemone:
-      models: [vllm-sr/auto]
+    apis:
+      systemone:
+        models: [vllm-sr/auto]
 
 entrypoints:
   - api: systemone
@@ -159,7 +160,7 @@ entrypoints:
     recipe: native-escalate
 ```
 
-在把 listener 暴露到受信任的开发环境之外之前，请为它添加客户端身份验证。如果还想允许某个具体模型，请把它的原生 provider 别名加入 `systemone.models`。
+在把 listener 暴露到受信任的开发环境之外之前，请为它添加客户端身份验证。如果还想允许某个具体模型，请把它的原生 provider 别名加入 `apis.systemone.models`。
 
 #### 定义阶段 {#define-the-stages}
 

@@ -60,7 +60,7 @@ func wireHandler(t *testing.T, sink *forwarded) http.HandlerFunc {
 	t.Helper()
 	cfg := &config.RouterConfig{}
 	cfg.ModelDeployments = map[string]config.ModelDeployment{"private": {Provider: config.ModelRuntimeProvider, Artifact: "vllm-sr/test"}}
-	listener := &config.Listener{SystemOne: &config.ListenerSystemOne{Models: []string{"vllm-sr/test", "vllm-sr/other"}}}
+	listener := &config.Listener{APIs: config.ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{"vllm-sr/test", "vllm-sr/other"}}}}
 	return Handler(cfg, listener, func(_ context.Context, _ string, body json.RawMessage) (int, []byte, error) {
 		sink.bodies = append(sink.bodies, string(body))
 		status := sink.status

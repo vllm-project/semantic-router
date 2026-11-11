@@ -194,8 +194,9 @@ listeners:
   - name: inference
     address: 127.0.0.1
     port: 8801
-    systemone:
-      models: [vllm-sr/auto]
+    apis:
+      systemone:
+        models: [vllm-sr/auto]
 
 entrypoints:
   - api: systemone
@@ -205,7 +206,7 @@ entrypoints:
 
 Add client authentication to the listener before exposing it beyond a trusted
 development environment. To allow a concrete model as well, add its native
-provider alias to `systemone.models`.
+provider alias to `apis.systemone.models`.
 
 #### Define the stages
 

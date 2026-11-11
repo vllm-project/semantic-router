@@ -326,8 +326,8 @@ func TestSystemOneAnswererLoadChecks(t *testing.T) {
 		"d3":       {Provider: ModelRuntimeProvider, Artifact: "vllm-sr/d3"},
 		"attached": {Provider: ModelRuntimeProvider, Endpoint: "http://runtime:8100"},
 		"custom":   {Provider: ModelRuntimeProvider, Artifact: "/models/custom"},
-		"remote":   {Provider: SystemOneProvider, Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", Capabilities: &DeploymentCapabilities{QuestionTypes: []string{"choice", "noul", "score"}, Modalities: []string{"text", "image"}}},
-		"silent":   {Provider: SystemOneProvider, Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra"},
+		"remote":   {Provider: SystemOneProvider, Schema: "vllm-sr/5.0", Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", Capabilities: &DeploymentCapabilities{QuestionTypes: []string{"choice", "noul", "score"}, Modalities: []string{"text", "image"}}},
+		"silent":   {Provider: SystemOneProvider, Schema: "vllm-sr/5.0", Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra"},
 	}
 	cases := []struct {
 		rule       SystemOneRule
@@ -389,7 +389,7 @@ func TestSystemOneAnswererLoadChecks(t *testing.T) {
 }
 
 func TestDeclaredModalitiesOfASystemOneDeployment(t *testing.T) {
-	base := ModelDeployment{Provider: SystemOneProvider, Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", Auth: &DeploymentAuth{APIKeyEnv: "KEY"}}
+	base := ModelDeployment{Provider: SystemOneProvider, Schema: "vllm-sr/5.0", Endpoint: "https://api.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", Auth: &DeploymentAuth{APIKeyEnv: "KEY"}}
 	for _, modalities := range [][]string{{"text", "image", "video"}, {"text"}} {
 		deployment := base
 		deployment.Capabilities = &DeploymentCapabilities{Modalities: modalities}

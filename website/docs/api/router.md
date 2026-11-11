@@ -35,8 +35,12 @@ system-message item before the stored input items. Item IDs, `first_id`, and
 `last_id` remain stable across repeated reads of an unchanged stored response.
 
 Engine mode serves the native System One paths with recipe routing disabled.
-Publish native model IDs in `listeners[].systemone.models`; the Chat `models`
-allowlist does not grant native access. Both APIs use the listener's API keys.
+A listener serves the native API when it lists `systemone` in `apis`
+(`listeners[].apis.systemone`, optionally with `models`); the LLM APIs'
+`models` do not grant native access. All APIs use the listener's API keys, and
+`apis.systemone.schema` sets the System One schema the listener speaks
+(`vllm-sr/5.0` by default, or `vllm-sr/4.0`); see
+[System One schemas](../system-one/use/schemas.md).
 See the [model runtime quickstart](../model-runtime/get-started/quickstart.md) for a request.
 
 The System One paths read bodies compressed with one layer of gzip or zstd
@@ -55,7 +59,7 @@ for assets, Box, track and long context.
 ### Route a System One request
 
 In Router mode, publish an `entrypoints` item with `api: systemone` and grant
-its name in `listeners[].systemone.models`. The Chat default `vllm-sr/auto`
+its name in `listeners[].apis.systemone.models`. The Chat default `vllm-sr/auto`
 does not automatically publish a native entrypoint. Follow the
 [System One escalate guide](../tutorials/algorithm/looper/escalate.md#on-system-one) to connect
 local deployments or remote Engine and compatible System One services.
@@ -170,7 +174,7 @@ them. The options are `deadline_ms` (a number greater than 0),
 `return_meta` (`true` or `false`); `null` sets none. Any other option, or a value of another type, returns `400` with
 `invalid_request` and a message that names it. A request the Router sends to
 its model directly waits 30 seconds for the answer, or its `deadline_ms` when
-that is longer, up to the listener's `systemone.max_deadline_ms` (600000, 10
+that is longer, up to the listener's `apis.systemone.max_deadline_ms` (600000, 10
 minutes, by default); a `long_context` request without `deadline_ms` waits
 that whole limit. `options.profile` was removed in
 [#5071](https://github.com/vllm-project/semantic-router/pull/5071): a request

@@ -53,7 +53,7 @@ func TestSystemOneAutoUsesRecipeSignalsAndNativeBackends(t *testing.T) {
 listeners:
   - name: native
     port: 8801
-    systemone: {models: [vllm-sr/auto]}
+    apis: {chat_completions: {}, responses: {}, messages: {}, images: {}, systemone: {schema: vllm-sr/4.0, models: [vllm-sr/auto]}}
 providers:
   models:
     - name: fast
@@ -214,7 +214,7 @@ func TestSystemOneBudgetIncludesRemoteSignalAndTransportRetries(t *testing.T) {
 listeners:
   - name: native
     port: 8801
-    systemone: {models: [vllm-sr/auto]}
+    apis: {chat_completions: {}, responses: {}, messages: {}, images: {}, systemone: {schema: vllm-sr/4.0, models: [vllm-sr/auto]}}
 providers:
   models:
     - name: fast
@@ -234,7 +234,7 @@ entrypoints:
 global:
   model_catalog:
     deployments:
-      remote-kai: {provider: systemone, endpoint: %s/v1/systemone, model: vllm-sr/decision}
+      remote-kai: {provider: systemone, schema: vllm-sr/4.0, endpoint: %s/v1/systemone, model: vllm-sr/decision}
 recipes:
   - name: default
   - name: native
@@ -339,7 +339,7 @@ func TestSystemOneBudgetDeadlineIncludesRemoteSignal(t *testing.T) {
 listeners:
   - name: native
     port: 8801
-    systemone: {models: [vllm-sr/auto]}
+    apis: {chat_completions: {}, responses: {}, messages: {}, images: {}, systemone: {schema: vllm-sr/4.0, models: [vllm-sr/auto]}}
 providers:
   models:
     - name: fast
@@ -349,7 +349,7 @@ providers:
 global:
   model_catalog:
     deployments:
-      remote-kai: {provider: systemone, endpoint: %s/v1/systemone, model: vllm-sr/decision}
+      remote-kai: {provider: systemone, schema: vllm-sr/4.0, endpoint: %s/v1/systemone, model: vllm-sr/decision}
 entrypoints:
   - model_names: [vllm-sr/auto]
     recipe: default

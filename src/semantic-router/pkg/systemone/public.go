@@ -14,10 +14,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiregistry"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 // RequestLimit bounds one native request body. Requests may carry images and
@@ -49,8 +51,21 @@ func RequestArrival(ctx context.Context) (time.Time, bool) {
 
 // Handler serves only the selected listener's native model grant. Authentication
 // is independent of Dashboard sessions and of the listener's Chat model grant.
+// The listener's schema codec reads each request into the IR and plans it,
+// the handler serves its internal form, and the codec writes every answer in
+// the client's schema.
 func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener, invoke Invoke) http.HandlerFunc {
+	codec := listenerCodec(listener)
+	serve := handle(config, listener, invoke, codec)
 	return func(w http.ResponseWriter, r *http.Request) {
+		held := newCodecWriter()
+		serve(held, r)
+		held.flush(w, r, codec)
+	}
+}
+
+func handle(config *routerconfig.RouterConfig, listener *routerconfig.Listener, invoke Invoke, codec systemonecodec.ListenerCodec) func(*codecWriter, *http.Request) {
+	return func(w *codecWriter, r *http.Request) {
 		if _, ok := RequestArrival(r.Context()); !ok {
 			r = r.WithContext(WithRequestArrival(r.Context(), time.Now()))
 		}
@@ -61,7 +76,8 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			publicSystemOneError(w, 405, "method_not_allowed")
 			return
 		}
-		if listener == nil || listener.SystemOne == nil || len(listener.SystemOne.Models) == 0 {
+		published := listenerSystemOneModels(config, listener)
+		if len(published) == 0 {
 			publicSystemOneError(w, 404, "systemone_not_published")
 			return
 		}
@@ -114,6 +130,14 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			writeWireError(w, problem)
 			return
 		}
+		read, readErr := codec.Read(r.URL.Path, body, r.Header)
+		if readErr != nil {
+			publicSystemOneErrorMessage(w, 400, "invalid_request", readErr.Error())
+			return
+		}
+		w.request = &read
+		recordListenerDiagnostics(listener, codec, read)
+		body = read.Internal
 		request, valid := scanRequest(body)
 		if !valid {
 			publicSystemOneError(w, 400, "invalid_request")
@@ -124,15 +148,16 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			publicSystemOneError(w, 400, "model_required")
 			return
 		}
-		if !slices.Contains(listener.SystemOne.Models, model) {
-			publicSystemOneErrorMessage(w, 403, "model_not_allowed", modelNotAllowed(model, listener.SystemOne.Models))
+		if !slices.Contains(published, model) {
+			publicSystemOneErrorMessage(w, 403, "model_not_allowed", modelNotAllowed(model, published))
 			return
 		}
 		if request.repeatedOptions {
 			publicSystemOneErrorMessage(w, 400, "invalid_request", "options may appear only once")
 			return
 		}
-		limit := listener.SystemOne.MaxDeadline()
+		grant, _ := listener.API(apiregistry.SystemOne)
+		limit := grant.MaxDeadline()
 		wait := requestWait(nil, limit)
 		if request.options != nil {
 			options, problem := publicOptions(request.options)
@@ -209,7 +234,7 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 			publicSystemOneError(w, 503, "systemone_unavailable")
 			return
 		}
-		systemOne := r.URL.Path == "/v1/systemone"
+		systemOne := r.URL.Path == systemonecodec.PathSystemOne || r.URL.Path == systemonecodec.PathBatch
 		if code < 200 || code >= 300 {
 			if failure, failed := refusedQuestion(code, response, systemOne); failed {
 				writeQuestionFailure(w, failure)
@@ -246,8 +271,9 @@ func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener,
 // A deployment's model lists the question types the configuration knows it
 // answers, which a systemone deployment naming this API reads.
 func publishedModels(config *routerconfig.RouterConfig, listener *routerconfig.Listener) []map[string]any {
-	models := make([]map[string]any, 0, len(listener.SystemOne.Models))
-	for _, id := range listener.SystemOne.Models {
+	names := listenerSystemOneModels(config, listener)
+	models := make([]map[string]any, 0, len(names))
+	for _, id := range names {
 		_, routed := config.ResolveEntrypoint(routerconfig.SystemOneAPI, id)
 		if routed && !config.RoutingEnabled() {
 			continue
@@ -263,6 +289,14 @@ func publishedModels(config *routerconfig.RouterConfig, listener *routerconfig.L
 		}
 	}
 	return models
+}
+
+// listenerSystemOneModels are the models the listener's systemone API serves.
+func listenerSystemOneModels(config *routerconfig.RouterConfig, listener *routerconfig.Listener) []string {
+	if listener == nil {
+		return nil
+	}
+	return config.SystemOneModels(*listener)
 }
 
 // modelNotAllowed names the models a client may use, so a client sending a
@@ -292,7 +326,7 @@ func SelectListener(listeners []routerconfig.Listener, name string) (*routerconf
 	var selected *routerconfig.Listener
 	for index := range listeners {
 		listener := &listeners[index]
-		if listener.SystemOne == nil || len(listener.SystemOne.Models) == 0 {
+		if !listener.Serves(apiregistry.SystemOne) {
 			continue
 		}
 		if name != "" && listener.Name != name {

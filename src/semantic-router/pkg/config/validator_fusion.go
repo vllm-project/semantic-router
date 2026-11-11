@@ -81,7 +81,7 @@ func validateFusionFallbackTargetModel(
 		return fusionFallbackTargetError(decision.Name, target,
 			"is not a providers.models[] entry")
 	}
-	if strings.EqualFold(modelConfig.APIFormat, ClientProtocolAnthropic) {
+	if CanonicalAPIFormat(strings.ToLower(modelConfig.APIFormat)) == APIFormatMessages {
 		return fusionFallbackTargetError(decision.Name, target,
 			"must use an OpenAI-compatible API format")
 	}

@@ -11,9 +11,11 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiregistry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
@@ -126,7 +128,7 @@ func listenNative(cfg *config.RouterConfig, bindAddress string, base gateway.Opt
 		bound = append(bound, &nativeListener{name: spec.Name, server: gateway.NewServer(handler, serverOpts), listener: ln})
 		logging.ComponentEvent("router", "standalone_listener_started", map[string]interface{}{
 			"listener": spec.Name, "address": ln.Addr().String(), "api_keys": len(spec.APIKeys) > 0,
-			"models": spec.Models, "tls": serverOpts.TLS != nil,
+			"apis": spec.ServedAPIs(), "tls": serverOpts.TLS != nil,
 		})
 	}
 	return bound, nil
@@ -218,13 +220,13 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 		SystemOne:       systemone.ForClients(cfg, systemone.Handler(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote))),
 		RoutingDisabled: !cfg.RoutingEnabled(),
 		APIKeys:         listenerAPIKeys(cfg, listener),
-		Models:          listenerModels(cfg, listener),
 		IdentityHeaders: []string{
 			cfg.Authz.Identity.GetUserIDHeader(), cfg.Authz.Identity.GetUserGroupsHeader(),
 			cfg.Authz.DelegatedCredential.GetHeader(),
 		},
 		TrustIdentity: listenerIdentityTrust(cfg, listener),
 	}
+	applyListenerAPIs(&serving, cfg, listener)
 	if cfg.RoutingEnabled() {
 		set, ok := lease.Snapshot.Part(configsnapshot.ComponentUpstream).(*upstream.Set)
 		if !ok || lease.Router == nil {
@@ -246,13 +248,58 @@ func listenerAPIKeys(cfg *config.RouterConfig, name string) []string {
 	return nil
 }
 
-func listenerModels(cfg *config.RouterConfig, name string) []string {
+// applyListenerAPIs gives serving the named listener's API grant: the APIs it
+// serves, the models each accepts and what GET /v1/models lists. A listener
+// that names no apis serves the default APIs on every path, as before apis.
+func applyListenerAPIs(serving *gateway.Serving, cfg *config.RouterConfig, name string) {
+	serving.ListsLLM = true
 	for _, listener := range cfg.Listeners {
-		if listener.Name == name {
-			return listener.Models
+		if listener.Name != name {
+			continue
+		}
+		serving.Models, _ = listener.LLMModels()
+		serving.ListsLLM = servesAnyLLM(listener)
+		serving.ListsSystemOne = listener.Serves(apiregistry.SystemOne)
+		serving.Gate = listenerGate(listener)
+		return
+	}
+}
+
+func servesAnyLLM(listener config.Listener) bool {
+	for _, name := range listener.ServedAPIs() {
+		if api, ok := apiregistry.Lookup(name); ok && api.Kind == apiregistry.KindLLM {
+			return true
 		}
 	}
-	return nil
+	return false
+}
+
+// listenerGate answers which models a listener accepts on a request path.
+// With apis, a path of an API it does not serve, or of no API, answers 404
+// with a detail naming the listener and the APIs it serves.
+func listenerGate(listener config.Listener) func(string) ([]string, string, bool) {
+	refuse := func(path string) ([]string, string, bool) {
+		return nil, fmt.Sprintf("listener %q does not serve %s; it serves %s", listener.Name, path,
+			strings.Join(listener.ServedAPIs(), ", ")), false
+	}
+	return func(path string) ([]string, string, bool) {
+		api, isAPI := apiregistry.ForPath(path)
+		if !isAPI {
+			if listener.APIs == nil {
+				return nil, "", true
+			}
+			return refuse(path)
+		}
+		entry, served := listener.API(api.Name)
+		if !served {
+			if listener.APIs == nil && api.Name == apiregistry.SystemOne {
+				// The System One API answers its own 404 there, as before.
+				return nil, "", true
+			}
+			return refuse(path)
+		}
+		return entry.Models, "", true
+	}
 }
 
 // listenerIdentityTrust is the identity trust of the named listener in cfg,

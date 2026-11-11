@@ -766,7 +766,10 @@ def client(d3_runtime):
     from starlette.testclient import TestClient
     from vllm_srun.api.app import create_app
 
-    with TestClient(create_app(d3_runtime)) as test_client:
+    # The runtime contract 4.0.0's forms on /v1/systemone, which a vllm-sr/4.0 process reads.
+    with TestClient(
+        create_app(d3_runtime, systemone_schema="vllm-sr/4.0")
+    ) as test_client:
         yield test_client
 
 
@@ -913,7 +916,7 @@ def test_long_context_reads_past_the_validated_length(validated_runtime):
 
     runtime, validated = validated_runtime
     body = {"state": "word " * validated, "questions": {"q": NOUL}}
-    with TestClient(create_app(runtime)) as test_client:
+    with TestClient(create_app(runtime, systemone_schema="vllm-sr/4.0")) as test_client:
         refused = test_client.post("/v1/systemone", json=body)
         answered = test_client.post(
             "/v1/systemone", json={**body, "options": {"long_context": True}}
@@ -927,7 +930,7 @@ def test_long_context_reads_past_the_validated_length(validated_runtime):
 
 def test_models_lists_decision_models_in_the_system_one_shape(client):
     listing = client.get("/v1/models").json()
-    assert listing["api_version"] == "4.0.0"
+    assert listing["api_version"] == "5.0.0"
     assert [model["name"] for model in listing["models"]] == [
         card["id"] for card in listing["data"]
     ]

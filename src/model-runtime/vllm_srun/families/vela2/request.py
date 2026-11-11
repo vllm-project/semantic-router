@@ -24,8 +24,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ...errors import INVALID_QUESTION, QuestionError, question_error
-from ...systemone import QUESTION_TYPES as SYSTEM_ONE_TYPES
 from ...systemone import (
+    IMPLICIT_ROLES,
+    REQUEST_ROLES,
     canonical,
     content,
     json_payload,
@@ -34,6 +35,7 @@ from ...systemone import (
     read_question,
     require_full_input,
 )
+from ...systemone import QUESTION_TYPES as SYSTEM_ONE_TYPES
 from .calibration import SPAN_HEADS, Calibration
 
 ROLES = ("user", "context", "answer")
@@ -151,7 +153,13 @@ def read_state(state: Any) -> State:
 
 
 def typed_state(state: Any) -> State:
-    """The typed parts of a System One state (text is the user part as it is); ValueError when it is empty or malformed."""
+    """The typed parts of a System One state (text is the user part as it is); ValueError when it is empty or malformed.
+
+    An object state's keys take the request's roles (``REQUEST_ROLES``): without ``roles`` the roles their
+    keys name, with ``roles: null`` the user's content every one, and otherwise the role ``roles`` names
+    (context for a key it does not name). A part one known key feeds is its text; any other part is its keys'
+    ``key:`` blocks, whatever the roles, so roles that name what the keys imply read the state as before.
+    """
     if isinstance(state, str):
         if not state.strip():
             raise ValueError("state must not be empty or whitespace")
@@ -164,9 +172,15 @@ def typed_state(state: Any) -> State:
     if not isinstance(state, dict) or not state or not json_payload(state):
         raise ValueError("state must be a non-empty string, JSON object or JSON array")
     by_role: dict[str, list[tuple[str, str, bool]]] = defaultdict(list)
+    roles = REQUEST_ROLES.get()
     for key, value in state.items():
         known = str(key).lower() in STATE_KEY_ROLES
-        role = STATE_KEY_ROLES.get(str(key).lower(), "context")
+        if roles is IMPLICIT_ROLES:
+            role = STATE_KEY_ROLES.get(str(key).lower(), "context")
+        elif roles is None:
+            role = "user"
+        else:
+            role = roles.get(str(key), "context")
         by_role[role].append((str(key), content_text(value), known))
     parts, fields = [], {}
     for role in ROLES:

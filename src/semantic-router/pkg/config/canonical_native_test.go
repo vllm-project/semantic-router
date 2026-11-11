@@ -13,8 +13,14 @@ version: v0.5
 listeners:
   - name: native
     port: 8801
-    systemone:
-      models: [vllm-sr/auto]
+    apis:
+      chat_completions: {}
+      responses: {}
+      messages: {}
+      images: {}
+      systemone:
+        schema: vllm-sr/4.0
+        models: [vllm-sr/auto]
 providers:
   models:
     - name: kai
@@ -173,11 +179,11 @@ func TestNativeRuntimeDemandRequiresPublicationAndEnabledStage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.Listeners[0].SystemOne = nil
+	cfg.Listeners[0].APIs = nil
 	if used := ModelRuntimeDeploymentsInUse(cfg); len(used) != 0 {
 		t.Fatalf("unpublished native recipes started models: %v", used)
 	}
-	cfg.Listeners[0].SystemOne = &ListenerSystemOne{Models: []string{DefaultEntrypointModel}}
+	cfg.Listeners[0].APIs = ListenerAPIs{"systemone": {Schema: "vllm-sr/4.0", Models: []string{DefaultEntrypointModel}}}
 	recipe := findRecipe(cfg.Recipes, "native-decisions")
 	enabled := false
 	recipe.Profile.Decisions[0].Algorithm.Escalate.Stages[0].Enabled = &enabled
@@ -215,8 +221,8 @@ func TestSystemOneProviderAliasesAreDirectNativeTargets(t *testing.T) {
 	if used := ModelRuntimeDeploymentsInUse(cfg); len(used) != 1 || used["local-kai"].Artifact == "" {
 		t.Fatalf("direct native provider did not request its local deployment: %+v", used)
 	}
-	cfg.Listeners[0].SystemOne.Models = []string{"reviewer"}
-	if err := validateListenerSystemOne(cfg, cfg.Listeners[0]); err == nil {
+	cfg.Listeners[0].APIs["systemone"] = ListenerAPI{Schema: "vllm-sr/4.0", Models: []string{"reviewer"}}
+	if err := validateListenerAPIs(cfg, cfg.Listeners[0]); err == nil {
 		t.Fatal("native listener accepted a Chat provider")
 	}
 }

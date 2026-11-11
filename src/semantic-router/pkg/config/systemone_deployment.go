@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"golang.org/x/net/http/httpguts"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 // SystemOneProvider serves a deployment through a remote System One API. The
@@ -121,7 +123,7 @@ func (a *DeploymentAuth) Key() (string, error) {
 
 func (d ModelDeployment) validateSystemOne() error {
 	if d.Artifact != "" || d.Revision != "" || d.Device != "" || d.HasEngineArgs() || len(d.Replicas) != 0 || d.OutlierDetection != nil || d.PublicName != "" {
-		return fmt.Errorf("a systemone deployment takes a connection block (endpoint, model, auth, headers, timeout_ms, max_retries, tls, limits) and capabilities; artifact, revision, device, engine arguments, replicas, outlier_detection and public_name belong to model_runtime")
+		return fmt.Errorf("a systemone deployment takes a connection block (endpoint, model, auth, headers, timeout_ms, max_retries, tls, limits), its schema, deviations and max_concurrency, and capabilities; artifact, revision, device, engine arguments, replicas, outlier_detection and public_name belong to model_runtime")
 	}
 	if d.Input.MaxTokens != 0 || (d.Input.Overflow != "" && d.Input.Overflow != "reject") {
 		return fmt.Errorf("a systemone deployment takes no input budget: its API reads one bounded input")
@@ -164,7 +166,38 @@ func (d ModelDeployment) validateSystemOne() error {
 	if err := validateDeclaredModalities(d.DeclaredModalities()); err != nil {
 		return err
 	}
+	if err := d.validateSchema(); err != nil {
+		return err
+	}
 	return d.validateConnection(endpoint, MaxSystemOneTimeoutMs)
+}
+
+// validateSchema checks the schema and deviations a systemone deployment
+// names, its max_concurrency, and that what it declares is what its schema
+// carries: a systemone/0.2 API has no set or span questions, presets or
+// video.
+func (d ModelDeployment) validateSchema() error {
+	codec, _, err := systemonecodec.Builtin().Resolve(systemonecodec.SchemaID(d.Schema), d.Deviations)
+	if err != nil {
+		return err
+	}
+	if d.MaxConcurrency != nil && *d.MaxConcurrency < 1 {
+		return fmt.Errorf("max_concurrency must be at least 1")
+	}
+	capabilities := codec.Capabilities()
+	for _, questionType := range d.DeclaredQuestionTypes() {
+		if (questionType == SystemOneQuestionSet && !capabilities.Has(systemonecodec.CapabilitySetQuestions)) ||
+			(questionType == SystemOneQuestionSpan && !capabilities.Has(systemonecodec.CapabilitySpan)) {
+			return fmt.Errorf("capabilities.question_types lists %s, which schema %s has no questions of; the Router asks a set question as one noul per label, and span rules need a vllm-sr/5.0 deployment", questionType, codec.ID())
+		}
+	}
+	if len(d.DeclaredPresets()) > 0 && !capabilities.Has(systemonecodec.CapabilityPresets) {
+		return fmt.Errorf("capabilities.presets: schema %s carries no presets; the Router asks its presets with their instructions and criteria", codec.ID())
+	}
+	if slices.Contains(d.DeclaredModalities(), SystemOneModalityVideo) && !capabilities.Has(systemonecodec.CapabilityVideos) {
+		return fmt.Errorf("capabilities.modalities lists video, which schema %s does not carry", codec.ID())
+	}
+	return nil
 }
 
 // validateDeclaredModalities checks the input modalities a systemone

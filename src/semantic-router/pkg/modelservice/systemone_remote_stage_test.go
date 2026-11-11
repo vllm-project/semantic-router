@@ -155,6 +155,9 @@ func fakeRemote(t *testing.T, name string, api *fakeSystemOneAPI, deployment con
 	server := httptest.NewServer(api)
 	t.Cleanup(server.Close)
 	deployment.Provider, deployment.Endpoint = config.SystemOneProvider, server.URL+"/v1/systemone"
+	if deployment.Schema == "" {
+		deployment.Schema = "vllm-sr/4.0"
+	}
 	if deployment.Model == "" {
 		deployment.Model = "vllm-sr/d3-ultra"
 	}

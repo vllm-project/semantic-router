@@ -13,7 +13,8 @@ the options into their own prompt formats.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
 
@@ -42,6 +43,73 @@ DEFAULT_INSTRUCTIONS = "Choose the best matching option."
 
 
 canonical = canonical_json
+
+ROLE_NAMES = ("user", "context", "answer")
+
+
+class _Implicit:
+    """The roles of a request without ``roles``."""
+
+    def __repr__(self) -> str:
+        return "IMPLICIT_ROLES"
+
+
+# A request without ``roles`` gives an object state's parts the roles their
+# keys name (vllm-sr/4.0's implicit roles); ``roles: null`` gives no part a
+# role, so the whole state is the user's content (a vllm-sr/5.0 request
+# without roles); a mapping names each key's role.
+IMPLICIT_ROLES: Any = _Implicit()
+# The roles of the request being planned, which the role-aware families read.
+REQUEST_ROLES: ContextVar[Any] = ContextVar("request_roles", default=IMPLICIT_ROLES)
+
+
+def read_roles(body: Mapping[str, Any]) -> Any:
+    """A request's roles: IMPLICIT_ROLES without ``roles``, None for null, else ``{key: role}``; ValueError when malformed."""
+    if "roles" not in body:
+        return IMPLICIT_ROLES
+    roles = body["roles"]
+    if roles is None:
+        return None
+    if not isinstance(roles, dict) or any(
+        not isinstance(key, str) or value not in ROLE_NAMES
+        for key, value in roles.items()
+    ):
+        raise ValueError("roles must map state keys to user, context or answer")
+    return dict(roles)
+
+
+# What a preset question keeps of a vllm-sr/5.0 question that names it.
+PRESET_KEPT = ("over", "threshold", "overflow", "require_full_input")
+
+
+def normalize_presets(
+    questions: Mapping[str, Any], presets: Sequence[str]
+) -> dict[str, Any]:
+    """The questions as a family reads them: a vllm-sr/5.0 question, typed, that names a ``preset`` beside its
+    own instructions or criteria asks the model's trained preset when it has one (and nothing else of the
+    question), and otherwise the question as written, without the preset. Other questions are unchanged.
+    """
+    normalized: dict[str, Any] = {}
+    for question_id, asked in questions.items():
+        question = asked
+        if (
+            isinstance(asked, dict)
+            and "preset" in asked
+            and "type" in asked
+            and ("instructions" in asked or "criteria" in asked)
+        ):
+            if asked["preset"] in presets:
+                question = {
+                    "preset": asked["preset"],
+                    **{key: asked[key] for key in PRESET_KEPT if key in asked},
+                }
+            else:
+                question = {
+                    key: value for key, value in asked.items() if key != "preset"
+                }
+        normalized[question_id] = question
+    return normalized
+
 
 GOLDEN_STATE = (
     "Write a Python function that merges two sorted lists and explain its running time."

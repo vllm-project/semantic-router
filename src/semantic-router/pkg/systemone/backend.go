@@ -9,7 +9,10 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemoneprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
@@ -61,21 +64,12 @@ func BackendInvoker(cfg *config.RouterConfig, listener string, local Invoke, rem
 		}
 		protocol := "vllm-sr/systemone@1"
 		if model.APIFormat != config.APIFormatSystemOne {
-			if model.APIFormat != "openai" && model.APIFormat != "" {
+			if config.CanonicalAPIFormat(model.APIFormat) != config.APIFormatChatCompletions && model.APIFormat != "" {
 				return 0, nil, errors.New("judge requires OpenAI Chat Completions")
 			}
 			protocol = "openai/chat-completions@1"
 		}
 		path, err := profile.ResolveCreatePath(protocol)
-		if err != nil {
-			return 0, nil, err
-		}
-		var request map[string]json.RawMessage
-		if json.Unmarshal(body, &request) != nil || request == nil {
-			return 0, nil, errors.New("invalid inference body")
-		}
-		request["model"], _ = json.Marshal(cfg.ResolveExternalModelID(alias, endpointName))
-		encoded, err := json.Marshal(request)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -108,18 +102,102 @@ func BackendInvoker(cfg *config.RouterConfig, listener string, local Invoke, rem
 			}
 			header.Set(name, value)
 		}
-		response, err := remote.Do(ctx, &upstream.Request{
-			Method: http.MethodPost, Path: path, Header: header, Body: encoded,
-			RouteKey: alias, ExactRoute: true, Listener: listener,
-		})
+		send := func(ctx context.Context, callPath string, callHeader http.Header, encoded []byte) (int, http.Header, []byte, error) {
+			sent := header.Clone()
+			for name, values := range callHeader {
+				sent[name] = values
+			}
+			response, callErr := remote.Do(ctx, &upstream.Request{
+				Method: http.MethodPost, Path: path + callPath, Header: sent, Body: encoded,
+				RouteKey: alias, ExactRoute: true, Listener: listener,
+			})
+			if callErr != nil {
+				return 0, nil, nil, callErr
+			}
+			defer response.Body.Close()
+			data, readErr := io.ReadAll(io.LimitReader(response.Body, (4<<20)+1))
+			if readErr != nil || len(data) > 4<<20 {
+				return 0, nil, nil, errors.New("invalid inference response size")
+			}
+			return response.StatusCode, response.Header, data, nil
+		}
+		external := cfg.ResolveExternalModelID(alias, endpointName)
+		if model.APIFormat == config.APIFormatSystemOne {
+			// A vllm-sr/4.0 backend gets the internal request as it is,
+			// unless roles it cannot carry must come out first.
+			schema := systemonecodec.SchemaID(cfg.UpstreamSchema(alias))
+			if schema != systemonecodec.SchemaVLLMSR40 || hasRoles(body) {
+				return forwardThrough(ctx, schema, external, alias, body, send)
+			}
+		}
+		var request map[string]json.RawMessage
+		if json.Unmarshal(body, &request) != nil || request == nil {
+			return 0, nil, errors.New("invalid inference body")
+		}
+		request["model"], _ = json.Marshal(external)
+		encoded, err := json.Marshal(request)
 		if err != nil {
 			return 0, nil, err
 		}
-		defer response.Body.Close()
-		data, err := io.ReadAll(io.LimitReader(response.Body, (4<<20)+1))
-		if err != nil || len(data) > 4<<20 {
-			return 0, nil, errors.New("invalid inference response size")
-		}
-		return response.StatusCode, data, nil
+		status, _, data, err := send(ctx, "", nil, encoded)
+		return status, data, err
 	}
+}
+
+// forwardThrough asks an upstream System One backend in its schema: the
+// request, in the internal form, read into the IR and asked through the
+// schema's codec (one batch call, or one call per request), and its answers
+// written back in the internal form.
+func forwardThrough(ctx context.Context, schema systemonecodec.SchemaID, model, alias string, body []byte,
+	send func(context.Context, string, http.Header, []byte) (int, http.Header, []byte, error),
+) (int, []byte, error) {
+	codec, _, err := systemonecodec.Builtin().Resolve(schema, nil)
+	if err != nil {
+		return 0, nil, err
+	}
+	internal := systemonecodec.InternalCodec{}
+	batch, err := internal.DecodeRequest(body)
+	if err != nil {
+		status, encoded := systemonecodec.NativeErrorBody(&systemoneprotocol.Problem{Status: http.StatusBadRequest, Kind: systemoneprotocol.ProblemRejected, Detail: err.Error()}, "")
+		return status, encoded, nil
+	}
+	form := batch.Form
+	batch.Model = model
+	names := make([]string, len(batch.Items))
+	for index := range batch.Items {
+		batch.Items[index].Request.Model = ""
+		names[index] = batch.Items[index].Name
+	}
+	exchange := systemonecodec.Exchange{
+		Codec: codec, Target: systemonecodec.Target{Deployment: alias, Model: model},
+		Policy:         systemonecodec.Policy{StripUnsupported: true, Presets: modelservice.CanonicalPreset},
+		MaxConcurrency: systemonecodec.DefaultMaxConcurrency,
+		Send: func(ctx context.Context, call systemonecodec.WireCall, encoded []byte) (systemonecodec.WireReply, error) {
+			status, header, data, err := send(ctx, call.Path, call.Header, encoded)
+			if err != nil {
+				return systemonecodec.WireReply{}, err
+			}
+			return systemonecodec.WireReply{Status: status, Header: header, Body: data}, nil
+		},
+	}
+	results := exchange.Ask(ctx, batch, nil)
+	if systemonecodec.AllTransport(results) {
+		return 0, nil, results[0].Err
+	}
+	return internal.EncodeResults(results, names, form, model)
+}
+
+// hasRoles reports whether an internal request names its parts' roles, or
+// none.
+func hasRoles(body []byte) bool {
+	batch, err := systemonecodec.InternalCodec{}.DecodeRequest(body)
+	if err != nil {
+		return false
+	}
+	for _, item := range batch.Items {
+		if item.Request.Roles.Mode != systemoneprotocol.RolesImplicit {
+			return true
+		}
+	}
+	return false
 }

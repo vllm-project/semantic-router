@@ -52,12 +52,14 @@ global:
     deployments:
       hosted-d3:
         provider: systemone
+        schema: vllm-sr/5.0
         endpoint: https://systemone.example.com/v1/systemone
         model: vllm-sr/d3-ultra
         auth: {api_key_env: HOSTED_D3_TEST_KEY}
         timeout_ms: 3000
       gateway-d3:
         provider: systemone
+        schema: vllm-sr/5.0
         endpoint: https://gateway.example.com/Unified/v1/systemone
         model: vLLM-SR-d3-27B
         capabilities: {question_types: [choice, noul, score]}
