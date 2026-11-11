@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -11,6 +12,9 @@ import (
 //   - ${VAR:-default} when VAR is unset or empty
 //   - ${VAR-default} when VAR is unset
 //   - $$ for a literal $
+//
+// VAR is an uppercase name (envName). Any other $ text, such as $100, a Go
+// template's $i or a request placeholder like ${user_content}, stays as written.
 type envExpander struct {
 	lookup func(string) (string, bool)
 	// keepUnset writes a reference without a default as is, instead of empty,
@@ -108,33 +112,39 @@ func (e envExpander) expandUnbracedToken(escaped string, start int) (string, int
 	for end < len(escaped) && isEnvNameByte(escaped[end]) {
 		end++
 	}
-	if end == start+1 {
-		return "$", start + 1
+	if !envName.MatchString(escaped[start+1 : end]) {
+		return escaped[start:end], end
 	}
 	return e.resolve(escaped[start+1:end], escaped[start:end]), end
 }
 
 func (e envExpander) resolveBraced(inner string) string {
-	if inner == "" {
-		return ""
+	name, defaultValue, hasDefault := strings.Cut(inner, "-")
+	emptyUsesDefault := false
+	if hasDefault {
+		name, emptyUsesDefault = strings.CutSuffix(name, ":")
 	}
-	if idx := strings.Index(inner, ":-"); idx > 0 {
-		name := inner[:idx]
-		defaultValue := inner[idx+2:]
-		if value, ok := e.lookup(name); ok && value != "" {
-			return value
-		}
-		return defaultValue
+	if !envName.MatchString(name) {
+		return "${" + inner + "}"
 	}
-	if idx := strings.Index(inner, "-"); idx > 0 {
-		name := inner[:idx]
-		defaultValue := inner[idx+1:]
-		if value, ok := e.lookup(name); ok {
-			return value
-		}
-		return defaultValue
+	if !hasDefault {
+		return e.resolve(name, "${"+inner+"}")
 	}
-	return e.resolve(inner, "${"+inner+"}")
+	if value, ok := e.lookup(name); ok && (value != "" || !emptyUsesDefault) {
+		return value
+	}
+	return defaultValue
+}
+
+// EnvironmentReferenceNames returns the environment variables value reads
+// when a config loads, in order, the ones with a default included.
+func EnvironmentReferenceNames(value string) []string {
+	var names []string
+	envExpander{lookup: func(name string) (string, bool) {
+		names = append(names, name)
+		return "", false
+	}}.expandString(value)
+	return names
 }
 
 // resolve returns the value of a reference without a default.
@@ -178,6 +188,9 @@ func quotesReference(message, reference string) bool {
 		}
 	}
 }
+
+// envName matches the variable names a config can reference.
+var envName = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
 
 func isEnvNameByte(ch byte) bool {
 	return (ch >= 'A' && ch <= 'Z') ||

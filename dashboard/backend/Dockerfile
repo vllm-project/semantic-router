@@ -29,7 +29,7 @@ FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}library/node:20-alpine AS fronte
 WORKDIR /workspace/dashboard/frontend
 COPY dashboard/frontend/package.json dashboard/frontend/package-lock.json dashboard/frontend/tsconfig.json dashboard/frontend/tsconfig.node.json dashboard/frontend/vite.config.ts ./
 COPY dashboard/frontend/src ./src
-COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /workspace/src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
+COPY src/semantic-router/pkg/configschema/router-config-v0.5.schema.json /workspace/src/semantic-router/pkg/configschema/router-config-v0.5.schema.json
 COPY dashboard/frontend/public ./public
 COPY dashboard/frontend/index.html ./
 COPY website/static/model-catalog/catalog.json /workspace/website/static/model-catalog/catalog.json
@@ -72,6 +72,7 @@ RUN set -eux; \
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
 COPY src/vllm-sr/pyproject.toml /app/src/vllm-sr/pyproject.toml
 COPY src/semantic-router/pkg/admission/ /app/src/semantic-router/pkg/admission/
+COPY src/semantic-router/pkg/apiregistry/ /app/src/semantic-router/pkg/apiregistry/
 COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/configschema/ /app/src/semantic-router/pkg/configschema/
@@ -88,14 +89,17 @@ COPY src/semantic-router/pkg/modelruntime/connector/ /app/src/semantic-router/pk
 COPY src/semantic-router/pkg/modelservice/ /app/src/semantic-router/pkg/modelservice/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 COPY src/semantic-router/pkg/openapischema/ /app/src/semantic-router/pkg/openapischema/
+COPY src/semantic-router/pkg/presets/ /app/src/semantic-router/pkg/presets/
+COPY src/semantic-router/pkg/principal/ /app/src/semantic-router/pkg/principal/
 COPY src/semantic-router/pkg/routerreplay/redaction/ /app/src/semantic-router/pkg/routerreplay/redaction/
 COPY src/semantic-router/pkg/routing/ /app/src/semantic-router/pkg/routing/
 COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
 COPY src/semantic-router/pkg/trainingcontract/ /app/src/semantic-router/pkg/trainingcontract/
 COPY src/semantic-router/pkg/systemone/ /app/src/semantic-router/pkg/systemone/
+COPY src/semantic-router/pkg/systemonecodec/ /app/src/semantic-router/pkg/systemonecodec/
+COPY src/semantic-router/pkg/systemoneprotocol/ /app/src/semantic-router/pkg/systemoneprotocol/
 COPY src/semantic-router/pkg/upstream/ /app/src/semantic-router/pkg/upstream/
 COPY src/semantic-router/pkg/utils/contentcoding/ /app/src/semantic-router/pkg/utils/contentcoding/
-COPY src/semantic-router/pkg/topiccontinuity/ /app/src/semantic-router/pkg/topiccontinuity/
 COPY src/semantic-router/pkg/configsnapshot/historylock/ /app/src/semantic-router/pkg/configsnapshot/historylock/
 
 # Copy go.mod and go.sum first for better caching
@@ -142,7 +146,7 @@ COPY src/vllm-sr/requirements.txt /app/requirements.txt
 # Do not inherit restrictive permissions from a caller's build context.
 COPY --chmod=0444 src/vllm-sr/pyproject.toml /app/pyproject.toml
 COPY src/vllm-sr/cli/ /app/cli/
-COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
+COPY src/semantic-router/pkg/configschema/router-config-v0.5.schema.json /app/cli/config_schema/router-config-v0.5.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
 COPY config/fragments/algorithm/selection/latency-aware.yaml /app/cli/proposal_assets/fragments/algorithm/selection/latency-aware.yaml
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh

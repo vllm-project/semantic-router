@@ -1,171 +1,107 @@
 package headers
 
 import (
+	"bytes"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
 
-func TestHeaderConstants(t *testing.T) {
-	tests := []struct {
-		name     string
-		header   string
-		expected string
-	}{
-		// Request headers
-		{"RequestID", RequestID, "x-request-id"},
-		{"SelectedModel", SelectedModel, "x-selected-model"},
-		{"VSRSkipProcessing", VSRSkipProcessing, "x-vsr-skip-processing"},
-		{"VSRInternalAuth", VSRInternalAuth, "x-vsr-internal-auth"},
-		{"VSROutcomeSource", VSROutcomeSource, "x-vsr-outcome-source"},
-		{"VSROutcomePrincipal", VSROutcomePrincipal, "x-vsr-outcome-principal"},
-		// VSR headers
-		{"VSRSelectedCategory", VSRSelectedCategory, "x-vsr-selected-category"},
-		{"VSRSelectedReasoning", VSRSelectedReasoning, "x-vsr-selected-reasoning"},
-		{"VSRSelectedModel", VSRSelectedModel, "x-vsr-selected-model"},
-		{"VSREffectiveInputTokens", VSREffectiveInputTokens, "x-vsr-effective-input-tokens"},
-		{"VSREffectiveMaxOutputTokens", VSREffectiveMaxOutputTokens, "x-vsr-effective-max-output-tokens"},
-		{"VSRSelectedAlgorithm", VSRSelectedAlgorithm, "x-vsr-selected-algorithm"},
-		{"VSRRoutingLatencyMs", VSRRoutingLatencyMs, "x-vsr-routing-latency-ms"},
-		{"VSRCost", VSRCost, "x-vsr-cost"},
-		{"VSRCostCurrency", VSRCostCurrency, "x-vsr-cost-currency"},
-		{"VSRSessionPhase", VSRSessionPhase, "x-vsr-session-phase"},
-		{"VSRLearningMethods", VSRLearningMethods, "x-vsr-learning-methods"},
-		{"VSRLearningActions", VSRLearningActions, "x-vsr-learning-actions"},
-		{"VSRLearningScopes", VSRLearningScopes, "x-vsr-learning-scopes"},
-		{"VSRLearningReasons", VSRLearningReasons, "x-vsr-learning-reasons"},
-		{"VSRInjectedSystemPrompt", VSRInjectedSystemPrompt, "x-vsr-injected-system-prompt"},
-		{"VSRPromptCacheAction", VSRPromptCacheAction, "x-vsr-prompt-cache-action"},
-		{"VSRPromptCacheReason", VSRPromptCacheReason, "x-vsr-prompt-cache-reason"},
-		{"VSRPromptCacheInserted", VSRPromptCacheInserted, "x-vsr-prompt-cache-inserted"},
-		{"VSRPromptCachePreserved", VSRPromptCachePreserved, "x-vsr-prompt-cache-preserved"},
-		{"VSRCacheHit", VSRCacheHit, "x-vsr-cache-hit"},
-		{"VSRKVTransferStatus", VSRKVTransferStatus, "x-vsr-kv-transfer-status"},
-		{"VSRKVSourcePod", VSRKVSourcePod, "x-vsr-kv-source-pod"},
-		{"VSRKVCacheID", VSRKVCacheID, "x-vsr-kv-cache-id"},
-		{"VSRKVMapperID", VSRKVMapperID, "x-vsr-kv-mapper-id"},
-		{"VSRMatchedModality", VSRMatchedModality, "x-vsr-matched-modality"},
-		{"VSRMatchedAuthz", VSRMatchedAuthz, "x-vsr-matched-authz"},
-		{"VSRMatchedJailbreak", VSRMatchedJailbreak, "x-vsr-matched-jailbreak"},
-		{"VSRMatchedPII", VSRMatchedPII, "x-vsr-matched-pii"},
-		{"VSRMatchedReask", VSRMatchedReask, "x-vsr-matched-reask"},
-		{"VSRMatchedEvent", VSRMatchedEvent, "x-vsr-matched-event"},
-		{"VSRMatchedProjection", VSRMatchedProjection, "x-vsr-matched-projections"},
-		// Consolidated response-warnings header (v0.4)
-		{"VSRResponseWarnings", VSRResponseWarnings, "x-vsr-response-warnings"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.header != tt.expected {
-				t.Errorf("Expected %s to be %q, got %q", tt.name, tt.expected, tt.header)
-			}
-		})
+func TestWarningCodes(t *testing.T) {
+	// Assert the constants directly — a map keyed by the constant would
+	// compare each value to itself and never fail.
+	for _, tt := range []struct{ got, want string }{
+		{WarningHallucination, "hallucination"},
+		{WarningUnverifiedFactual, "unverified_factual"},
+		{WarningJailbreak, "response_jailbreak"},
+		{WarningGuard, "response_guard"},
+		{WarningProtocol, "protocol"},
+		{WarningTruncated, "truncated"},
+	} {
+		if tt.got != tt.want {
+			t.Errorf("warning code = %q, want %q", tt.got, tt.want)
+		}
 	}
 }
 
-func TestKVTransferStatusValues(t *testing.T) {
-	if KVTransferStatusApplied != "applied" {
-		t.Errorf("KVTransferStatusApplied = %q, want %q", KVTransferStatusApplied, "applied")
+func TestWarningCodesDocumentEachCode(t *testing.T) {
+	want := []string{WarningHallucination, WarningUnverifiedFactual, WarningJailbreak, WarningGuard, WarningProtocol, WarningTruncated}
+	var got []string
+	for _, code := range WarningCodes() {
+		got = append(got, code.Code)
+		if !tableSafeSentence(code.Doc) {
+			t.Errorf("%s: doc %q must be one sentence that a Markdown table and MDX can hold", code.Code, code.Doc)
+		}
 	}
-	if KVTransferStatusFallbackReprefill != "fallback_reprefill" {
-		t.Errorf("KVTransferStatusFallbackReprefill = %q, want %q", KVTransferStatusFallbackReprefill, "fallback_reprefill")
-	}
-	if KVTransferStatusUnsupported != "unsupported" {
-		t.Errorf("KVTransferStatusUnsupported = %q, want %q", KVTransferStatusUnsupported, "unsupported")
-	}
-}
-
-func TestResponseWarningsCodes(t *testing.T) {
-	// The v0.4 contract consolidates the hallucination / unverified-factual /
-	// response-jailbreak warnings into x-vsr-response-warnings; these are the
-	// codes carried in its value. Assert the constants directly — a map keyed by
-	// the constant would compare each value to itself and never fail.
-	if ResponseWarningHallucination != "hallucination" {
-		t.Errorf("ResponseWarningHallucination = %q, want %q", ResponseWarningHallucination, "hallucination")
-	}
-	if ResponseWarningUnverifiedFactual != "unverified_factual" {
-		t.Errorf("ResponseWarningUnverifiedFactual = %q, want %q", ResponseWarningUnverifiedFactual, "unverified_factual")
-	}
-	if ResponseWarningJailbreak != "response_jailbreak" {
-		t.Errorf("ResponseWarningJailbreak = %q, want %q", ResponseWarningJailbreak, "response_jailbreak")
+	if !slices.Equal(got, want) {
+		t.Errorf("WarningCodes() = %v, want %v", got, want)
 	}
 }
 
-func TestVSRRoutingHeadersAreDocumented(t *testing.T) {
-	docPath := filepath.Join("..", "..", "..", "..", "website", "docs", "troubleshooting", "vsr-headers.md")
-	content, err := os.ReadFile(docPath)
+// Each x-vsr-response-path value is a ResponsePath constant that Router code
+// outside this package sends, and the registry documents exactly those
+// values, so the header never promises a value no response carries.
+func TestResponsePathValuesAreSentAndDocumented(t *testing.T) {
+	file, err := parser.ParseFile(token.NewFileSet(), "headers.go", nil, 0)
 	if err != nil {
-		t.Fatalf("failed to read %s: %v", docPath, err)
+		t.Fatal(err)
 	}
-	doc := string(content)
-
-	headers := []string{
-		XSessionID,
-		VSRSkipProcessing,
-		VSRDebug,
-		VSRClientProtocol,
-		VSRUpstreamProtocol,
-		VSRProtocolWarnings,
-		VSRResponseWarnings,
-		RouterReplayID,
-		VSRSelectedCategory,
-		VSRSelectedRecipe,
-		VSRSelectedDecision,
-		VSRSelectedConfidence,
-		VSRAppliedUnknownPolicy,
-		VSRSelectedReasoning,
-		VSRSelectedModality,
-		VSRSelectedModel,
-		VSREffectiveInputTokens,
-		VSREffectiveMaxOutputTokens,
-		VSRSelectedAlgorithm,
-		VSRRoutingLatencyMs,
-		VSRCost,
-		VSRCostCurrency,
-		VSRSessionPhase,
-		VSRLearningMethods,
-		VSRLearningActions,
-		VSRLearningScopes,
-		VSRLearningReasons,
-		VSRInjectedSystemPrompt,
-		VSRPromptCacheAction,
-		VSRPromptCacheReason,
-		VSRPromptCacheInserted,
-		VSRPromptCachePreserved,
-		VSRMatchedKeywords,
-		VSRMatchedEmbeddings,
-		VSRMatchedDomains,
-		VSRMatchedFactCheck,
-		VSRMatchedUserFeedback,
-		VSRMatchedReask,
-		VSRMatchedPreference,
-		VSRMatchedLanguage,
-		VSRMatchedContext,
-		VSRContextTokenCount,
-		VSRMatchedStructure,
-		VSRMatchedComplexity,
-		VSRMatchedModality,
-		VSRMatchedAuthz,
-		VSRMatchedJailbreak,
-		VSRMatchedPII,
-		VSRMatchedKB,
-		VSRMatchedConversation,
-		VSRMatchedEvent,
-		VSRMatchedInputModality,
-		VSRMatchedDecisionModel,
-		VSRMatchedProjection,
-		VSRCacheHit,
-		VSRFastResponse,
-		VSRToolsStrategy,
-		VSRToolsConfidence,
-		VSRToolsLatencyMs,
+	values := map[string]string{}
+	ast.Inspect(file, func(node ast.Node) bool {
+		spec, ok := node.(*ast.ValueSpec)
+		if !ok {
+			return true
+		}
+		for i, name := range spec.Names {
+			if strings.HasPrefix(name.Name, "ResponsePath") {
+				values[name.Name], _ = strconv.Unquote(spec.Values[i].(*ast.BasicLit).Value)
+			}
+		}
+		return false
+	})
+	header, _ := Lookup(VSRResponsePath)
+	var documented []string
+	for _, match := range regexp.MustCompile("`([a-z_]+)`").FindAllStringSubmatch(header.Doc, -1) {
+		documented = append(documented, match[1])
 	}
-
-	for _, header := range headers {
-		if !strings.Contains(doc, header) {
-			t.Fatalf("%s should document public routing header %q", docPath, header)
+	declared := slices.Sorted(maps.Values(values))
+	slices.Sort(documented)
+	if !slices.Equal(documented, declared) {
+		t.Errorf("%s documents %v, the ResponsePath constants are %v", VSRResponsePath, documented, declared)
+	}
+	sent := map[string]bool{}
+	module := os.DirFS(filepath.Join("..", ".."))
+	err = fs.WalkDir(module, ".", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			if err == nil && path != "." && (path == "pkg/headers" || strings.HasPrefix(entry.Name(), ".")) {
+				return fs.SkipDir
+			}
+			return err
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		source, err := fs.ReadFile(module, path)
+		for name := range values {
+			sent[name] = sent[name] || bytes.Contains(source, []byte("headers."+name))
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, value := range values {
+		if !sent[name] {
+			t.Errorf("%s = %q is a documented %s value that no Router code sends", name, value, VSRResponsePath)
 		}
 	}
 }

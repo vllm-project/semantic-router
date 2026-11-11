@@ -99,46 +99,48 @@ Some prompts benefit from multiple independent attempts and a judge pass rather 
 Decision-level Fusion:
 
 ```yaml
-routing:
-  decisions:
-    - name: deliberation
-      description: Compare candidate answers and synthesize one response.
-      priority: 100
-      output_contract: Preserve any explicit output format exactly.
-      modelRefs:
-        - model: qwen3-32b
-        - model: deepseek-worker
-      algorithm:
-        type: fusion
-        fusion:
-          model: qwen3-32b
-          analysis_models:
-            - qwen3-32b
-            - deepseek-worker
-          analysis_mode: separate
-          analysis_overrides:
-            - model: qwen3-32b
-              temperature: 0.15
-              max_completion_tokens: 512
-            - model: deepseek-worker
-              temperature: 0.2
-              max_completion_tokens: 384
+recipes:
+  - name: default
+    decisions:
+      - name: deliberation
+        description: Compare candidate answers and synthesize one response.
+        priority: 100
+        output_contract: Preserve any explicit output format exactly.
+        modelRefs:
+          - model: qwen3-32b
+          - model: deepseek-worker
+        algorithm:
+          type: fusion
+          fusion:
+            model: qwen3-32b
+            analysis_models:
+              - qwen3-32b
+              - deepseek-worker
+            analysis_mode: separate
+            analysis_overrides:
+              - model: qwen3-32b
+                temperature: 0.15
+                max_completion_tokens: 512
+              - model: deepseek-worker
+                temperature: 0.2
+                max_completion_tokens: 384
 ```
 
-`output_contract` is decision-scoped prompt text. Use it for benchmark or
-application format requirements that should apply across Fusion, Flow, and ReMoM
-instead of hard-coding task-specific prompts into an algorithm.
-Use `output_contract_spec` for typed router-executable normalization and
-post-processing such as choice extraction, terminal-action JSON normalization,
-or reference dereferencing. Extraction defaults to exact `content` matching;
-use `extract.sources` or `extract.mode: json_object` only when the decision
-explicitly permits a wider parser.
+| Field | Use it for |
+| --- | --- |
+| `output_contract` | Decision-scoped prompt text: benchmark or application format requirements that apply across Fusion, Flow and ReMoM, instead of task-specific prompts hard-coded in an algorithm. |
+| `output_contract_spec` | Typed normalization and post-processing the Router executes, such as choice extraction, terminal-action JSON normalization or reference dereferencing, which serves the content of the panel response the judge names by its number, and keeps the judge's answer when that response has reasoning only. Only Fusion, ReMoM and Flow decisions accept it. |
+
+Extraction defaults to exact `content` matching. Use `extract.sources` or
+`extract.mode: json_object` only when the decision explicitly permits a wider
+parser.
 
 Minimal algorithm configuration:
 
 ```yaml
 algorithm:
   type: fusion
+  on_error: skip
   fusion:
     model: qwen3-32b
     analysis_models:
@@ -159,7 +161,6 @@ algorithm:
     temperature: 0.2
     include_analysis: true
     include_intermediate_responses: true
-    on_error: skip
     quorum_failure_policy: fail
     judge_prompt_version: fusion-v1
 ```
@@ -180,21 +181,24 @@ For a dedicated Fusion surface, map its public names to an isolated recipe:
 
 ```yaml
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [vllm-sr/fusion, openrouter/fusion]
     recipe: fusion
 recipes:
+  - name: default
   - name: fusion
-    routing:
-      decisions:
-        - name: panel
-          priority: 1
-          rules: {operator: AND, conditions: []}
-          modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
-          algorithm:
-            type: fusion
-            fusion:
-              model: qwen3-32b
-              analysis_models: [qwen3-8b, qwen3-32b]
+    decisions:
+      - name: panel
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: qwen3-8b}, {model: qwen3-32b}]
+        algorithm:
+          type: fusion
+          fusion:
+            model: qwen3-32b
+            analysis_models: [qwen3-8b, qwen3-32b]
 ```
 
 Public entrypoint names must not collide with backend models. Recipe signals,
@@ -218,7 +222,7 @@ belong under `global.integrations.looper`; it does not declare public names.
 | `temperature` | float | request default | Recipe-owned temperature applied to Fusion subrequests |
 | `include_analysis` | bool | `true` | Recipe-owned visibility for an available structured judge analysis; this does not control execution |
 | `include_intermediate_responses` | bool | `true` | Recipe-owned visibility for raw panel responses |
-| `on_error` | string | `skip` | Recipe-owned handling: `skip` individual failed or unusable panel responses while enforcing quorum, or `fail` on the first such response |
+| `algorithm.on_error` | string | `skip` | Set beside `type`, not in this block. Recipe-owned handling: `skip` individual failed or unusable panel responses while enforcing quorum, or `fail` on the first such response |
 | `quorum_failure_policy` | string | `fail` | Panel-level behavior when usable responses fall below `min_successful_responses`: `fail` returns a typed quorum failure, `fallback` routes the request to `quorum_fallback_target`. Recipe-owned; requests cannot override it |
 | `quorum_fallback_target` | string | none | Concrete provider model to route to when `quorum_failure_policy: fallback`. Required by, and only valid with, that policy |
 | `analysis_template` | string | built-in | Recipe-owned separate-analysis prompt with `{{original}}` and `{{responses}}`; rejected outside `separate` |
@@ -253,12 +257,15 @@ Best practice:
   quorum policy handles, under either `on_error` value. Caller cancellation and
   an exhausted caller deadline never dispatch a fallback: the request the answer
   would serve no longer exists, so spending another call on it is pointless.
-- `quorum_failure_policy` selects what happens instead of that error. It defaults
-  to `fail`, preserving the behavior above. Note that `min_successful_responses`
-  itself defaults to the full panel size, so a Fusion decision that sets neither
-  field requires every panel model to produce a usable response. Set
-  `min_successful_responses` explicitly, or configure a `fallback` target, to
-  tolerate partial panel failure.
+- `quorum_failure_policy` selects what happens instead of that error. It
+  defaults to `fail`, which keeps the behavior above.
+
+:::warning Every panel model must answer by default
+`min_successful_responses` defaults to the full panel size, so a Fusion
+decision that sets neither field needs a usable response from every panel
+model. To tolerate partial panel failure, set `min_successful_responses`
+explicitly or configure a `fallback` target.
+:::
 
 ### Below-quorum fallback
 
@@ -281,7 +288,7 @@ answer instead of synthesizing from an under-strength panel. The judge and
 grounding stages are skipped: there is no panel to deliberate over.
 
 The target is validated when the configuration loads. It must be declared in
-`routing.modelCards`, use an OpenAI-compatible API format, be chat-capable text
+`providers.models`, use an OpenAI-compatible API format, be chat-capable text
 modality, have a provider backend, and not be one of the decision's own
 `analysis_models`. It must also be a concrete provider model: `vllm-sr/auto`,
 an entrypoint name, or a Fusion, Flow, or ReMoM slug is rejected, because
@@ -328,14 +335,15 @@ carry the outcome, one per layer:
 | `budget_exhausted` | Fallback did not fit the target's context window |
 | `cancelled` | The caller cancelled or timed out; no fallback was attempted |
 
-Exactly one disposition is recorded per below-quorum panel, and one layer
-records it. The algorithm decides which disposition applies, but the response
-boundary is the only place a quorum sample is emitted, because it is the only
-layer that knows whether protocol encoding succeeded. A fallback that answers
-and then fails to encode is therefore recorded as `response_encode_failed`
-rather than as a success. `fallback_ready` is the internal handoff state
-carrying an answered fallback to that boundary, and never appears as a
-disposition in metrics or Replay.
+Exactly one disposition is recorded per below-quorum panel, by one layer:
+
+- **The algorithm decides** which disposition applies.
+- **The response boundary records it,** because only that layer knows whether
+  protocol encoding succeeded. A fallback that answers and then fails to encode
+  is therefore `response_encode_failed`, not a success.
+- **`fallback_ready`** is the internal handoff state that carries an answered
+  fallback to that boundary; it never appears as a disposition in metrics or
+  Replay.
 
 Accounting includes every panel attempt that was paid for plus the fallback
 call, each exactly once, including when the fallback itself fails.
@@ -369,17 +377,11 @@ fallback answer.
 
 The built-in prompts and stage boundaries are deliberately distinct:
 
-- `separate` asks for compact structured JSON without tools. An analysis
-  transport failure is logged and final synthesis continues from the panel. A
-  parse failure can appear as raw `parse_failed` trace evidence when
-  `include_analysis` is enabled. Final synthesis remains terminal and can use
-  request tools.
-- `one_call` makes no structured-analysis artifact. Its single terminal prompt
-  asks the judge to compare the panel, resolve contradictions, and synthesize
-  the client answer in one call. A failure is terminal.
-- `none` makes no structured-analysis artifact. Its single terminal prompt
-  asks the judge to synthesize directly from the panel without requesting a
-  separate or combined analysis. A failure is terminal.
+| Mode | Analysis | Terminal step | On failure |
+| --- | --- | --- | --- |
+| `separate` | Compact structured JSON, without tools | Final synthesis, which can use request tools | An analysis transport failure is logged and synthesis continues from the panel; a parse failure can appear as `parse_failed` trace evidence when `include_analysis` is on. |
+| `one_call` | None | One prompt asks the judge to compare the panel, resolve contradictions and synthesize the answer | Terminal |
+| `none` | None | One prompt asks the judge to synthesize directly from the panel | Terminal |
 
 For every mode, `synthesis_template` replaces the complete built-in terminal
 prompt. `{{analysis}}` renders as an empty string in `one_call` and `none`.
@@ -390,17 +392,20 @@ Fusion usage aggregates the full panel cost and every successful judge
 response. Reported iterations are the configured panel attempts plus two judge
 calls for `separate`, or plus one judge call for `one_call` and `none`.
 
-The effective `analysis_mode` is recorded in Fusion's internal trace carried by
-`looper.Response.IntermediateResponses`. A mode value alone does not add a
-top-level `fusion` member to the public response. The public trace envelope
-keeps its existing predicate: it is emitted only when analysis or intermediate
-responses are enabled, a panel model failed, or grounding evidence exists.
-Public mode-trace transport remains deferred to
+The effective `analysis_mode` is recorded in Fusion's internal trace, carried
+by `looper.Response.IntermediateResponses`. A mode value alone adds no
+top-level `fusion` member to the public response, which appears only when:
+
+- analysis or intermediate responses are enabled;
+- a panel model failed; or
+- grounding evidence exists.
+
+Public mode-trace transport is tracked in
 [issue #3378](https://github.com/vllm-project/semantic-router/issues/3378).
 
 ## Grounding-Aware Synthesis
 
-By default the judge reads raw panel text with no grounding oracle. Grounding-aware synthesis scores each panel response for **faithfulness** *before* the judge runs, then uses those scores to guide synthesis toward the better-grounded responses. It makes **no extra LLM calls** — it uses the configured hallucination detector (the default decision deployment, or a specialist such as Vela Halu), which runs in the [model runtime](../../../model-runtime/guides/hallucination.md).
+By default the judge reads raw panel text with no grounding oracle. Grounding-aware synthesis scores each panel response for **faithfulness** *before* the judge runs, then uses those scores to guide synthesis toward the better-grounded responses. It makes **no extra LLM calls** — it asks the decision model's [hallucination](../../signal/application/hallucination) question, which needs a span-capable deployment.
 
 Reference selection (what each answer is scored against):
 
@@ -418,9 +423,16 @@ The usable-response quorum is checked on the original panel before grounding.
 If the `filter` policy later removes responses, Fusion does not run a second
 quorum check on the reduced judge input.
 
-> Grounding measures faithfulness/consistency, not truth. With no authoritative source it can down-weight the least-supported responses, not certify correctness. **Hard-dropping** the least mutually-consistent response (the `filter` policy) measurably *hurts* on contested factual questions — three models can be confidently wrong together while the lone dissenter is right — so the default is `weight`. See `bench/grounded_fusion/FINDINGS.md` for the evaluation behind this default.
+:::warning Grounding measures consistency, not truth
+With no authoritative source, it can down-weight the least-supported
+responses, but not certify correctness. Hard-dropping the least consistent
+response (the `filter` policy) measurably hurts on contested factual
+questions, where three models can be confidently wrong together while the lone
+dissenter is right. That is why the default is `weight`; see
+`bench/grounded_fusion/FINDINGS.md` for the evaluation.
+:::
 
-Requires the hallucination detector to be configured under `global` hallucination mitigation. If the backends are unavailable, `on_error: skip` falls back to plain Fusion.
+Grounding asks the decision model's [hallucination](../../signal/application/hallucination) question, which needs a span-capable deployment. If it is unavailable, `on_error: skip` falls back to plain Fusion.
 
 ```yaml
 algorithm:
@@ -466,12 +478,13 @@ limit or an individual SSE frame limit, the router omits the whole trace while
 serving the valid answer. It does not truncate trace JSON or answer text.
 
 OpenAI Responses and Anthropic Messages responses omit this Chat-specific
-extension. Both an unsupported target protocol and a size-based omission emit a
-`x-vsr-protocol-warnings` response header with action `dropped`, field `fusion`,
-and reason `router_extension_unsupported_protocol` or
-`router_extension_size_limit`. The warning also accompanies immediate Looper
-responses. Required answer content remains subject to the normal protocol
-limits; an answer that cannot fit is rejected.
+extension. When it is dropped, for an unsupported target protocol or for size,
+`x-vsr-warnings` reports action `dropped`, field `fusion`, and reason
+`router_extension_unsupported_protocol` or `router_extension_size_limit`,
+immediate Looper responses included.
+
+Required answer content stays subject to the normal protocol limits; an answer
+that cannot fit is rejected.
 
 Provider fields do not acquire router provenance by using the same name. The
 router validates provider content separately from its internal trace data.

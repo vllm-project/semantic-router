@@ -123,7 +123,7 @@ func TestBuiltinRecipesHandlerFailsClosedWithoutLeakingDetails(t *testing.T) {
 func TestBuiltinRecipeComposeHandlerReturnsTheComposedConfig(t *testing.T) {
 	t.Parallel()
 
-	composed := []byte(`{"version":"v0.3","entrypoints":[{"model_names":["my/vault","vault"],"recipe":"vault"}]}`)
+	composed := []byte(`{"version":"v0.5","entrypoints":[{"model_names":["my/vault","vault"],"recipe":"vault"}]}`)
 	runner := &fakeBuiltinRecipeRunner{composed: composed}
 	body := `{"bundle":"mom-v1","recipe":"vault","bindings":{"private":[{"model":"model-a","use_reasoning":false}]},"model_names":["my/vault","vault"]}`
 	response := httptest.NewRecorder()
@@ -215,7 +215,7 @@ compose)
   case "$BUILTIN_RECIPE_TEST_OUTCOME" in
   rejected) echo "Decision 'private' references unconfigured provider models: ['invented']"; exit 65 ;;
   crashed) echo "Traceback: /private/install" >&2; exit 1 ;;
-  *) printf '{"version":"v0.3"}' ;;
+  *) printf '{"version":"v0.5"}' ;;
   esac ;;
 *) exit 2 ;;
 esac
@@ -234,7 +234,7 @@ esac
 	request := BuiltinRecipeComposeRequest{Bundle: "mom-v1", Recipe: "vault", Bindings: map[string][]map[string]any{}, ModelNames: []string{"my/vault"}}
 	t.Setenv("BUILTIN_RECIPE_TEST_OUTCOME", "composed")
 	composed, err := runner.Compose(context.Background(), "/state/config.yaml", request)
-	if err != nil || string(composed) != `{"version":"v0.3"}` {
+	if err != nil || string(composed) != `{"version":"v0.5"}` {
 		t.Fatalf("compose = %s, %v", composed, err)
 	}
 	sent, err := os.ReadFile(requestPath)

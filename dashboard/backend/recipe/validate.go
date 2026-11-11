@@ -183,14 +183,14 @@ func compareEvalSelection(algorithm, selectedModel, status, method string, recom
 
 func expectedSelectionStatuses(algorithm string) []string {
 	return map[string][]string{
-		"static":        {"selected", "execution_required"},
-		"multi_factor":  {"selected", "execution_required"},
-		"latency_aware": {"selected", "execution_required"},
-		"random":        {"selected", "execution_required"},
-		"workflows":     {"planned_final", "execution_required"},
-		"fusion":        {"planned_final", "execution_required"},
-		"remom":         {"planned_final", "execution_required"},
-		"confidence":    {"execution_required"},
+		"static":       {"selected", "execution_required"},
+		"multi_factor": {"selected", "execution_required"},
+		"systemone":    {"selected", "execution_required"},
+		"random":       {"selected", "execution_required"},
+		"workflows":    {"planned_final", "execution_required"},
+		"fusion":       {"planned_final", "execution_required"},
+		"remom":        {"planned_final", "execution_required"},
+		"escalate":     {"execution_required"},
 	}[algorithm]
 }
 

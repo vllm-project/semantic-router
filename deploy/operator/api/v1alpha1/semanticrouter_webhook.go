@@ -71,13 +71,6 @@ func (r *SemanticRouter) ValidateDelete(_ context.Context, _ runtime.Object) (ad
 
 // validateSemanticRouter validates the SemanticRouter resource
 func (r *SemanticRouter) validateSemanticRouter() error {
-	if err := r.validatePromptGuardContext(); err != nil {
-		return err
-	}
-	if err := r.validatePIIWindow(); err != nil {
-		return err
-	}
-
 	// Validate autoscaling configuration
 	if r.Spec.Autoscaling.Enabled != nil && *r.Spec.Autoscaling.Enabled {
 		if err := r.validateAutoscaling(); err != nil {
@@ -188,10 +181,10 @@ func (r *SemanticRouter) validateIngress() error {
 			return fmt.Errorf("ingress.hosts[%d].paths must have at least one path", i)
 		}
 		for j, path := range host.Paths {
-			// Zero means omitted: generateIngress then targets the service
-			// API port, so only values outside the port range are invalid.
+			// Zero means omitted: generateIngress then targets the Router's
+			// default port, so only values outside the port range are invalid.
 			if path.ServicePort < 0 || path.ServicePort > 65535 {
-				return fmt.Errorf("ingress.hosts[%d].paths[%d].servicePort must be between 1 and 65535, or omitted to target the service API port", i, j)
+				return fmt.Errorf("ingress.hosts[%d].paths[%d].servicePort must be between 1 and 65535, or omitted", i, j)
 			}
 		}
 	}

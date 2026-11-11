@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const cliNamedRecipeConfig = `version: v0.3
+const cliNamedRecipeConfig = `version: v0.5
 providers:
   models:
     - name: local-model
@@ -18,25 +18,25 @@ providers:
           provider: vllm
           endpoint: localhost:8000
           protocol: http
-routing:
-  modelCards:
-    - name: local-model
 entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
   - model_names: [my/balance]
     recipe: balance
 recipes:
+  - name: default
   - name: balance
-    routing:
-      decisions:
-        - name: default-route
-          priority: 100
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: local-model
-              use_reasoning: true
-              reasoning_mode: enabled
+    decisions:
+      - name: default-route
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: local-model
+            use_reasoning: true
+            reasoning_mode: enabled
 `
 
 func TestCLIDecompilePreservesNamedRecipeAndEntrypoint(t *testing.T) {
@@ -56,8 +56,9 @@ func TestCLIDecompilePreservesNamedRecipeAndEntrypoint(t *testing.T) {
 	if len(errors) != 0 {
 		t.Fatalf("roundtrip compile: %v", errors)
 	}
-	if len(compiled.Entrypoints) != 1 || compiled.Entrypoints[0].Recipe != "balance" ||
-		len(compiled.Entrypoints[0].ModelNames) != 1 || compiled.Entrypoints[0].ModelNames[0] != "my/balance" {
+	if len(compiled.Entrypoints) != 2 || compiled.Entrypoints[0].Recipe != "default" || !compiled.Entrypoints[0].Default ||
+		compiled.Entrypoints[1].Recipe != "balance" ||
+		len(compiled.Entrypoints[1].ModelNames) != 1 || compiled.Entrypoints[1].ModelNames[0] != "my/balance" {
 		t.Fatalf("entrypoint lost: %+v", compiled.Entrypoints)
 	}
 	for _, recipe := range compiled.Recipes {

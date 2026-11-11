@@ -54,7 +54,7 @@ from ..timing import RunTiming
 from .batching import Batcher, reference
 from .planner import cost
 
-__all__ = ["DEADLINE", "Scheduler", "SchedulerLimits"]
+__all__ = ["DEADLINE", "Forward", "Scheduler", "SchedulerLimits"]
 
 # Seconds per token assumed until a lane's first forward is measured, and the
 # weight of each later forward in the lane's running estimate.
@@ -64,6 +64,8 @@ COST_SMOOTHING = 0.1
 # at most this many windows, checking every BURST_POLL_S once its own has passed.
 BURST_WINDOWS = 3
 BURST_POLL_S = 0.00025
+# How long ``stop`` waits for the worker by default.
+STOP_SECONDS = 10.0
 
 
 @dataclass
@@ -71,6 +73,24 @@ class SchedulerLimits:
     max_queue: int = 256
     max_queued_tokens: int = 1 << 22
     batch_window_ms: float = 2.0
+
+
+@dataclass(frozen=True, eq=False)
+class Forward:
+    """A forward in flight: when it started, its rows and tokens, and the requests whose rows it holds."""
+
+    started: float
+    rows: int
+    tokens: int
+    requests: int
+
+    def describe(self) -> str:
+        counts = (
+            (self.rows, "row"),
+            (self.tokens, "token"),
+            (self.requests, "request"),
+        )
+        return ", ".join(f"{n} {noun}{'' if n == 1 else 's'}" for n, noun in counts)
 
 
 @dataclass
@@ -134,6 +154,7 @@ class Scheduler:
         self._sequence = itertools.count()
         self._token_cost: dict[str, float] = {}
         self._owned = False
+        self._forward: Forward | None = None
         self._thread = threading.Thread(
             target=self._loop, name="vllm-srun-worker", daemon=True
         )
@@ -143,18 +164,23 @@ class Scheduler:
     def start(self) -> None:
         self._thread.start()
 
-    def stop(self) -> bool:
-        """Stop taking work and answer what is left; whether the worker has exited."""
+    def stop(self, timeout: float = STOP_SECONDS) -> bool:
+        """Stop taking work and answer what is left; whether the worker exited within ``timeout`` seconds."""
         with self._lock:
             self._stopped = True
             self._lock.notify_all()
         if self._thread.is_alive():
-            self._thread.join(timeout=10)
+            self._thread.join(timeout=timeout)
         return not self._thread.is_alive()
 
     @property
     def failure(self) -> BaseException | None:
         return self._failure
+
+    @property
+    def forward(self) -> Forward | None:
+        """The forward running now, on the worker or on a ``run_now`` caller, if any."""
+        return self._forward
 
     def depth(self) -> int:
         """Queued jobs plus planned batches still waiting for the device."""
@@ -181,9 +207,11 @@ class Scheduler:
 
         ``deadlines`` holds each job's own deadline. Admission counts every
         job not yet answered, queued or planned, and refuses the whole group
-        or none of it. ``timing`` records the group's forwards. ``reference``
-        jobs (the golden check) run alone, in their released forwards.
-        ``alone`` jobs (``Job.alone``) are planned without the batching window.
+        or none of it; with nothing pending it admits a group beyond either
+        bound, which could never run otherwise. ``timing`` records the
+        group's forwards. ``reference`` jobs (the golden check) run alone, in
+        their released forwards. ``alone`` jobs (``Job.alone``) are planned
+        without the batching window.
         """
         futures, pending = self._jobs(item_lists, deadlines, timing, reference, alone)
         if not pending:
@@ -192,9 +220,9 @@ class Scheduler:
         with self._lock:
             if self._stopped:
                 raise RuntimeServiceError("not_ready", "the runtime is shutting down")
-            if self._pending_jobs + len(pending) > self.limits.max_queue or (
-                self._pending_jobs
-                and self._pending_tokens + tokens > self.limits.max_queued_tokens
+            if self._pending_jobs and (
+                self._pending_jobs + len(pending) > self.limits.max_queue
+                or self._pending_tokens + tokens > self.limits.max_queued_tokens
             ):
                 raise RuntimeServiceError(
                     "overloaded", "the request queue is full; retry later"
@@ -479,6 +507,7 @@ class Scheduler:
 
     def _run_batch(self, batch: Batch, members: list[_Pending], sequence: int) -> None:
         items = batch.items()
+        tokens = sum(cost(item) for item in items)
         started = time.monotonic()
         for pending in members:
             if not pending.started:
@@ -491,7 +520,11 @@ class Scheduler:
                 work = partial(self.model.run_approximate, items)
             else:
                 work = partial(self.model.run, items)
-            values = self.execute(work)
+            self._forward = Forward(started, len(items), tokens, len(members))
+            try:
+                values = self.execute(work)
+            finally:
+                self._forward = None
             # Validate the whole forward before publishing any job's results.
             if len(values) != len(items):
                 raise RuntimeError(
@@ -508,7 +541,6 @@ class Scheduler:
         ended = time.monotonic()
         _timed(members, sequence, started, ended)
         seconds = ended - started
-        tokens = sum(cost(item) for item in items)
         self.observe(
             "forward", {"seconds": seconds, "rows": len(items), "tokens": tokens}
         )

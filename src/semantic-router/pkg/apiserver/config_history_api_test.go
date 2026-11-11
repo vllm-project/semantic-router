@@ -82,10 +82,11 @@ func rollbackTo(t *testing.T, server *ClassificationAPIServer, path string, payl
 
 func TestVersionsListTheHistoryOnce(t *testing.T) {
 	server, manager, path := newHistoryAPIServer(t, nil)
-	watchAndApply(t, manager, path)
+	applied := watchAndApply(t, manager, path)
 	if recorder, result := putConfig(t, server, path); recorder.Code != http.StatusOK || result.ConfigVersion != 2 {
 		t.Fatalf("PUT: %d %s", recorder.Code, recorder.Body.String())
 	}
+	applied()
 
 	entries := listVersions(t, server)
 	if len(entries) != 2 {
@@ -112,16 +113,18 @@ func TestRollbackActivatesARecordedVersionAsANewOne(t *testing.T) {
 	} {
 		server, manager, path := newHistoryAPIServer(t, nil)
 		startupDocument, _ := os.ReadFile(path)
-		watchAndApply(t, manager, path)
+		applied := watchAndApply(t, manager, path)
 		if recorder, _ := putConfig(t, server, path); recorder.Code != http.StatusOK {
 			t.Fatalf("PUT: %d %s", recorder.Code, recorder.Body.String())
 		}
+		applied()
 
-		watchAndApply(t, manager, path)
+		applied = watchAndApply(t, manager, path)
 		recorder, result := rollbackTo(t, server, path, payload)
 		if recorder.Code != http.StatusOK || result.ConfigVersion != 3 || result.RollbackOf != 1 {
 			t.Fatalf("rollback %+v: %d %s", payload, recorder.Code, recorder.Body.String())
 		}
+		applied()
 		if restored, _ := os.ReadFile(path); !bytes.Equal(restored, startupDocument) {
 			t.Fatal("the rollback did not persist the recorded document")
 		}
@@ -135,11 +138,12 @@ func TestRollbackActivatesARecordedVersionAsANewOne(t *testing.T) {
 		}
 
 		putDocument, _ := manager.History().ByVersion(2)
-		watchAndApply(t, manager, path)
+		applied = watchAndApply(t, manager, path)
 		recorder, result = rollbackTo(t, server, path, routerConfigRollbackRequest{ConfigVersion: 2})
 		if recorder.Code != http.StatusOK || result.ConfigVersion != 4 || result.RollbackOf != 2 {
 			t.Fatalf("roll forward: %d %s", recorder.Code, recorder.Body.String())
 		}
+		applied()
 		if restored, _ := os.ReadFile(path); !bytes.Equal(restored, putDocument.Document) {
 			t.Fatal("rolling forward did not restore version 2's document")
 		}
@@ -152,8 +156,8 @@ func TestRollbackActivatesARecordedVersionAsANewOne(t *testing.T) {
 // rejectedFileEdits are edits of the watched file that the Router rejects at
 // parse: the file keeps them, and the version before them keeps serving.
 var rejectedFileEdits = map[string]string{
-	"YAML that does not parse":     "version: v0.3\nrouting: {decisions: [\n",
-	"a document out of its layout": "version: v0.3\nrouting: [not, a, map]\n",
+	"YAML that does not parse":     "version: v0.5\nrouting: {decisions: [\n",
+	"a document out of its layout": "version: v0.5\nrouting: [not, a, map]\n",
 }
 
 // rejectFileEdit writes document to the watched file and rejects it as the
@@ -183,10 +187,11 @@ func TestRollbackReplacesARejectedDocument(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			server, manager, path := newHistoryAPIServer(t, nil)
 			startupDocument, _ := os.ReadFile(path)
-			watchAndApply(t, manager, path)
+			applied := watchAndApply(t, manager, path)
 			if recorder, _ := putConfig(t, server, path); recorder.Code != http.StatusOK {
 				t.Fatalf("PUT: %d %s", recorder.Code, recorder.Body.String())
 			}
+			applied()
 			rejectFileEdit(t, manager, path, document)
 
 			watchAndApply(t, manager, path)

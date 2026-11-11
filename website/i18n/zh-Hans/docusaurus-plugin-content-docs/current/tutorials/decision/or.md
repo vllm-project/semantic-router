@@ -36,21 +36,22 @@ translation:
 ## 配置
 
 ```yaml
-routing:
-  decisions:
-    - name: business_or_law_route
-      description: Share one route across either business or law traffic.
-      priority: 100
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: business
-          - type: domain
-            name: law
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: business_or_law_route
+        description: Share one route across either business or law traffic.
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - type: domain
+              name: business
+            - type: domain
+              name: law
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
 ```
 
 当路由结果相同，但应允许多个信号触发它时，使用 `OR`。

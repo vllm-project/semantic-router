@@ -5,24 +5,6 @@ import (
 	"testing"
 )
 
-func stagedConfig() *RouterConfig {
-	cfg := &RouterConfig{}
-	cfg.JailbreakRules = []JailbreakRule{
-		{Name: "prompt_injection", Threshold: 0.8},
-		{Name: "unsafe_completion", Threshold: 0.85, Direction: SignalDirectionResponse},
-	}
-	return cfg
-}
-
-func TestJailbreakRuleStageDefaultsToRequest(t *testing.T) {
-	if got := (JailbreakRule{Name: "r"}).Stage(); got != SignalStageRequest {
-		t.Fatalf("empty direction stage = %q, want %q", got, SignalStageRequest)
-	}
-	if got := (JailbreakRule{Name: "r", Direction: SignalDirectionResponse}).Stage(); got != SignalStageResponse {
-		t.Fatalf("direction response stage = %q, want %q", got, SignalStageResponse)
-	}
-}
-
 func TestSignalStageOfFollowsTheRuleNotTheType(t *testing.T) {
 	cfg := stagedConfig()
 	if got := cfg.SignalStageOf(SignalTypeJailbreak, "prompt_injection"); got != SignalStageRequest {
@@ -136,49 +118,6 @@ func TestValidateRejectsProjectionReadingResponseDirectionRule(t *testing.T) {
 	}
 }
 
-func TestValidateJailbreakContractsDirection(t *testing.T) {
-	cases := []struct {
-		name string
-		rule JailbreakRule
-		want string
-	}{
-		{
-			name: "unknown direction",
-			rule: JailbreakRule{Name: "r", Threshold: 0.5, Direction: "Response"},
-			want: "unknown direction",
-		},
-		{
-			name: "contrastive cannot score a response",
-			rule: JailbreakRule{Name: "r", Threshold: 0.5, Direction: SignalDirectionResponse, Method: JailbreakMethodContrastive, JailbreakPatterns: []string{"x"}},
-			want: "request-stage only",
-		},
-		{
-			name: "include_history has no meaning on a response",
-			rule: JailbreakRule{Name: "r", Threshold: 0.5, Direction: SignalDirectionResponse, IncludeHistory: true},
-			want: "include_history",
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := &RouterConfig{}
-			cfg.JailbreakRules = []JailbreakRule{tc.rule}
-			err := validateJailbreakContracts(cfg)
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("error = %v, want it to mention %q", err, tc.want)
-			}
-		})
-	}
-
-	cfg := &RouterConfig{}
-	cfg.JailbreakRules = []JailbreakRule{
-		{Name: "req", Threshold: 0.5, Direction: SignalDirectionRequest},
-		{Name: "resp", Threshold: 0.5, Direction: SignalDirectionResponse, Method: JailbreakMethodClassifier},
-	}
-	if err := validateJailbreakContracts(cfg); err != nil {
-		t.Fatalf("valid directions rejected: %v", err)
-	}
-}
-
 // A hallucination rule checks the model's answer, so it is response-stage by
 // type: a decision reading one, directly or behind a projection, is rejected
 // the way a response-direction jailbreak rule is.
@@ -216,18 +155,23 @@ func TestValidateRejectsDecisionReadingHallucinationRule(t *testing.T) {
 	}
 }
 
-func TestValidateHallucinationSignalContracts(t *testing.T) {
+func TestJailbreakAndSafetyRulesDefaultToTheRequestStage(t *testing.T) {
+	if got := (JailbreakRule{Name: "r"}).EffectiveStage(); got != SystemOneStageRequest {
+		t.Fatalf("jailbreak stage = %q, want %q", got, SystemOneStageRequest)
+	}
+	if got := (JailbreakRule{Name: "r", Stage: SystemOneStageResponse}).EffectiveStage(); got != SystemOneStageResponse {
+		t.Fatalf("jailbreak stage = %q, want %q", got, SystemOneStageResponse)
+	}
+	if got := (SafetyRule{Name: "r"}).EffectiveStage(); got != SystemOneStageRequest {
+		t.Fatalf("safety stage = %q, want %q", got, SystemOneStageRequest)
+	}
+}
+
+func stagedConfig() *RouterConfig {
 	cfg := &RouterConfig{}
-	cfg.HallucinationRules = []HallucinationRule{{Name: " "}}
-	if err := validateHallucinationSignalContracts(cfg); err == nil || !strings.Contains(err.Error(), "needs a name") {
-		t.Fatalf("expected the unnamed rule to be rejected, got %v", err)
+	cfg.JailbreakRules = []JailbreakRule{
+		{Name: "prompt_injection"},
+		{Name: "unsafe_completion", Stage: SystemOneStageResponse},
 	}
-	cfg.HallucinationRules = []HallucinationRule{{Name: "ungrounded_claims"}, {Name: "ungrounded_claims"}}
-	if err := validateHallucinationSignalContracts(cfg); err == nil || !strings.Contains(err.Error(), "duplicate rule name") {
-		t.Fatalf("expected the duplicate rule to be rejected, got %v", err)
-	}
-	cfg.HallucinationRules = []HallucinationRule{{Name: "ungrounded_claims"}}
-	if err := validateHallucinationSignalContracts(cfg); err != nil {
-		t.Fatalf("a named rule is valid, got %v", err)
-	}
+	return cfg
 }

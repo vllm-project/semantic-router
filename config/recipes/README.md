@@ -20,7 +20,7 @@ start those inference backends.
 | [Feedback Recovery](feedback/README.md) | Corrections, repeated dissatisfaction, failed code, and verification requests. |
 | [Knowledge](knowledge/README.md) | Evidence-based escalation from a small local model to a stronger model. |
 | [Multi-Objective](multi-objective/README.md) | Five request-facing balance, speed, cost, accuracy, and privacy profiles over one shared pool. |
-| [Vela AMD](vela-amd/README.md) | Explicit AMD execution of all ten Vela task models, with semantic routing and document reranking. |
+| [Vela AMD](vela-amd/README.md) | Explicit AMD execution of the Vela decision model and Vela 1.0 Embedding, with semantic routing and document retrieval. |
 | [Privacy-First](privacy/README.md) | Local containment for sensitive and suspicious requests. |
 
 The [built-in virtual model catalog](built-in/README.md) is a separate

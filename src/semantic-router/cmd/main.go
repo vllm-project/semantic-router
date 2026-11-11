@@ -150,9 +150,6 @@ func runRouterProcess(ctx context.Context, opts runtimeOptions) (runErr error) {
 	}
 
 	embeddingRuntime := routerServer.EmbeddingRuntimeState()
-	if err = warmupRouterRuntime(ctx, routerServer); err != nil {
-		return recordStartupError(startupWriter, "warm up router runtime", err)
-	}
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
 	servingLifecycle, err = runRouterServing(ctx, cfg, opts, routerServer, startupWriter)
 	if err != nil {
@@ -516,7 +513,7 @@ func logStartupSummary(cfg *config.RouterConfig, opts runtimeOptions, embeddingM
 		"config_source":       cfg.ConfigSource,
 		"decisions":           strings.Join(decisionNames, ","),
 		"embedding_ready":     embeddingModelsReady,
-		"sem_cache_enabled":   cfg.Enabled,
+		"sem_cache_enabled":   cfg.SemanticCache.InUse,
 		"model_selection":     cfg.ModelSelection.Enabled,
 		"authz_providers":     len(cfg.Authz.Providers),
 		"ratelimit_providers": len(cfg.RateLimit.Providers),

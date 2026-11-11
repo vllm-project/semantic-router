@@ -18,7 +18,7 @@ from cli.main import main
 from cli.router_management_client import RouterManagementError, RouterResponse
 from click.testing import CliRunner
 
-SOURCE = "version: v0.3\n"
+SOURCE = "version: v0.5\n"
 
 
 class FakeClient:
