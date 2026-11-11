@@ -387,7 +387,12 @@ tools or error translation.
   reply; see
   [Response fields the Router does not model](#response-fields-the-router-does-not-model).
 - Cross-protocol requests preserve shared semantics. Target-specific features
-  that cannot be represented return a typed protocol error.
+  that cannot be represented return a typed protocol error. A
+  `lossy_translation` error for a loss an operator may accept, such as
+  `tool_result.is_error`, names the `global.router.allow_lossy_translation`
+  setting that accepts it. The `unsupported_capability` errors for files,
+  signed reasoning and stored completions don't; their sections above name
+  the setting.
 - Anthropic `tool_result.is_error: true` has no equivalent in OpenAI Chat or
   Responses requests. By default the Router rejects this translation with
   `lossy_translation`, while a false or absent flag remains supported and
