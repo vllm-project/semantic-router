@@ -166,8 +166,8 @@ async function markOffline($: EngineInterface, runtime: Runtime) {
 }
 
 // Asks the runtime's `/health` once; one that does not answer in time is offline. A hosted System One API has no
-// `/health`, so a 404 there is answered by its `/v1/models` instead.
-export async function checkRuntime($: EngineInterface, runtime: Runtime) {
+// `/health`, so a 404 there is answered by its `/v1/models` instead. True when it answered.
+export async function checkRuntime($: EngineInterface, runtime: Runtime): Promise<boolean> {
   const answered = await Promise.race([
     $.http.fetch(healthUrlOf(runtime.url), { headers: headersOf(runtime) }).then(
       response =>
@@ -177,5 +177,6 @@ export async function checkRuntime($: EngineInterface, runtime: Runtime) {
     ),
     $.clock.sleep(HEALTH_TIMEOUT_MS).then(() => false),
   ])
-  return answered ? markReachable($) : markOffline($, runtime)
+  await (answered ? markReachable($) : markOffline($, runtime))
+  return answered
 }
