@@ -16,29 +16,19 @@ span adapter. Every rule and constant is the released runtime's.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Any
 
-from ..vela3_shared import RELATION_WORDING
+from ..vela3_shared import EVIDENCE_WORDING, RELATION_WORDING, normalize
 from .package import Roster
 
 ROUTER_TYPES = ("choice", "set")
-# vela3_encoder._EV_Q, character for character (_REL_Q is RELATION_WORDING).
-EVIDENCE_WORDING = re.compile(
-    r"\b(?:evidence|support(?:s|ing|ed)?|cite[sd]?|citations?)\b"
-)
 TRAINED_SETS = ("pii", "halu", "toxic")
 EVIDENCE = "evidence"
 WINDOW_TOKENS = 8192
 WINDOW_OVERLAP = 512
 SPAN_BUDGET = 32768
 SPAN_ROWS = 32
-
-
-def normalize(text: Any) -> str:
-    """Whitespace-normalised text (``vela3_encoder._norm``)."""
-    return " ".join(str(text or "").split())
 
 
 @dataclass(frozen=True)

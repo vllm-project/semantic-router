@@ -12,9 +12,7 @@ units and the span decoder.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
-from functools import lru_cache
 from typing import Any
 
 import numpy as np
@@ -42,12 +40,13 @@ from ..vela2.encoder_layout import (
     SequenceQuestion,
     option_text,
 )
-from ..vela2.layout import Row, SchemaTooLongError, Tokens, fail_unscanned, read_parts
+from ..vela2.layout import Row, SchemaTooLongError, fail_unscanned, read_parts
 from ..vela2.raw import RawRow
 from ..vela2.request import Plan as PartsPlan
-from ..vela3_shared import PRESETS, text
-from .answers import Answerer
-from .network import DECISION_BUDGET, Call, Networks, Output, Vela3Item
+from ..vela3_shared import PRESETS, layout, text, tokens
+from ..vela3_answers import Answerer
+from ..vela3_calls import DECISION_BUDGET, Call, Output, Vela3Item
+from .network import Networks
 from .package import (
     BACKBONE_FILE,
     ENCODER,
@@ -62,7 +61,6 @@ from .request import DECISION, ROUTER, Asked, Read, Reader
 from .routing import SPAN_BUDGET, SPAN_ROWS, Router
 
 QUESTION_TYPES = ("choice", "noul", "span")
-TOKEN_CACHE = 8192
 # A question reads a part whole up to this many windows' worth of tokens by
 # default (``max_scan_tokens``); a request may set another budget. A question
 # that truncates reads one window of its route: 32,768 tokens for evidence.
@@ -108,44 +106,6 @@ GOLDEN_QUESTIONS = {
         "over": "answer",
     },
 }
-
-
-def _tokens(package: Vela3Package) -> Tokens:
-    """The base UltraBERT tokenizer without marker tokens, so text never creates one."""
-    from tokenizers import Tokenizer
-
-    markers = set(package.config["decision"]["marker_ids"])
-    data = json.loads((package.root / "tokenizer.json").read_text(encoding="utf-8"))
-    data["added_tokens"] = [
-        token
-        for token in data.get("added_tokens", [])
-        if token["content"] not in markers
-    ]
-    tokenizer = Tokenizer.from_str(json.dumps(data))
-    tokenizer.no_padding()
-    tokenizer.no_truncation()
-    cached = lru_cache(maxsize=TOKEN_CACHE)(
-        lambda value: tuple(tokenizer.encode(value, add_special_tokens=False).ids)
-    )
-    return Tokens(
-        encode=lambda value: tokenizer.encode(value, add_special_tokens=False),
-        ids=lambda value: list(cached(value)) if value else [],
-        tokenizer=tokenizer,
-    )
-
-
-def _layout(package: Vela3Package, window: int, overlap: int) -> EncoderLayout:
-    config = package.config
-    return EncoderLayout(
-        {
-            "marker_ids": config["decision"]["marker_ids"],
-            "bos_token_id": config["bos_token_id"],
-            "eos_token_id": config["eos_token_id"],
-            "pad_token_id": config["pad_token_id"],
-            "max_length": window,
-            "window_overlap": overlap,
-        }
-    )
 
 
 class Vela3Family(ModelFamily):
@@ -317,10 +277,12 @@ class Vela3Model(DecisionModel[Vela3Item, Output]):
         self.router = router
         self.reader = Reader(router)
         self.answerer = Answerer(router)
-        self.tokens = _tokens(package)
+        self.tokens = tokens(package.root, package.config["decision"]["marker_ids"])
         self.scan_tokens = scan_tokens
-        self.layout = _layout(package, router.window, router.overlap)
-        self.evidence_layout = _layout(package, router.evidence_window, router.overlap)
+        self.layout = layout(package.config, router.window, router.overlap)
+        self.evidence_layout = layout(
+            package.config, router.evidence_window, router.overlap
+        )
         config = package.config
         self.markers = {k: int(v) for k, v in config["decision"]["marker_ids"].items()}
         self.bos, self.eos = int(config["bos_token_id"]), int(config["eos_token_id"])

@@ -30,8 +30,7 @@ from ...registry.artifacts import (
     safe_relative,
     sha256_json,
 )
-from ..vela2.encoder_layout import MARKERS
-from ..vela3_shared import CONFIG_FILE, config_file
+from ..vela3_shared import CONFIG_FILE, check_markers, config_file
 
 ENCODER = "vela3-encoder/1"
 BACKBONE_FILE = "model.safetensors"
@@ -215,29 +214,6 @@ class Vela3Package:
         return (self.root / BACKBONE_FILE,)
 
 
-def _check_markers(config: dict[str, Any]) -> None:
-    """Every marker a distinct row of the backbone's embedding table, so no input indexes past it."""
-    vocab = config.get("vocab_size")
-    if type(vocab) is not int or vocab <= 0:
-        raise PackageError("config.json: vocab_size must be a positive integer")
-    markers = config["decision"].get("marker_ids")
-    if not isinstance(markers, dict) or set(markers) != set(MARKERS):
-        raise PackageError(
-            f"config.json: decision.marker_ids must name the markers {list(MARKERS)}"
-        )
-    wrong = sorted(
-        name
-        for name, value in markers.items()
-        if type(value) is not int or not 0 <= value < vocab
-    )
-    if wrong:
-        raise PackageError(
-            f"config.json: decision.marker_ids {wrong} are not token IDs below vocab_size {vocab}"
-        )
-    if len(set(markers.values())) != len(markers):
-        raise PackageError("config.json: decision.marker_ids must be distinct")
-
-
 def verify(root: Path, expected: dict[str, str] | None) -> Vela3Package:
     """Check every loaded file; ``expected`` is the built-in table's digests for a pinned revision."""
     root = Path(root)
@@ -271,7 +247,7 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela3Package:
         raise PackageError(
             "config.json does not describe the UltraBERT decision backbone"
         )
-    _check_markers(config)
+    check_markers(config)
     questions = read_json(root / "router_questions.json", mapping=True).get("questions")
     if not isinstance(questions, dict):
         raise PackageError("router_questions.json lists no router questions")
