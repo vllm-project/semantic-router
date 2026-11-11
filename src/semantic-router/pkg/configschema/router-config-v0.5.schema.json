@@ -4586,6 +4586,9 @@
         },
         "tool_results": {
           "type": "boolean"
+        },
+        "request": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -6306,6 +6309,9 @@
           "type": "boolean"
         },
         "tool_results": {
+          "type": "boolean"
+        },
+        "request": {
           "type": "boolean"
         },
         "image": {

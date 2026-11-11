@@ -70,3 +70,30 @@ test('a question the runtime never gets to, behind one vSR gave up on, is skippe
   expect(asked).toHaveLength(1)
   expect(await paneText($, /ran unchecked/)).toBe('command ran unchecked · the decision model was still answering an earlier question after 3 s · /vsr:setup checks it')
 })
+
+// A hosted System One API: no /health, a /v1/models listing, and answers only a question that names its model.
+test(
+  'a hosted runtime without /health counts as up through /v1/models, and its questions name the model',
+  { options: { runtime: 'remote', runtimeUrl: 'https://sr.example/v1/decisions', runtimeModel: 'vllm-sr/vela3-flash', guardWait: 'done' } },
+  async ($, on) => {
+    const reply = { toasts: [] as string[] }
+    const bodies: { model?: string }[] = []
+    const safe = { answers: { kind: { type: 'choice', choice: 'safe', probabilities: { safe: 0.97, destructive: 0.01, exfiltration: 0.01, remote_code: 0.01 }, confidence: 0.97 }, review: { type: 'noul', noul: 0.01 } } }
+    engineWithout(
+      on,
+      (_, e) => {
+        if (e.url.endsWith('/health')) return { value: { status: 404, ok: false, headers: {}, text: '' } }
+        if (e.url.endsWith('/v1/models')) return answered('{"data":[{"id":"vllm-sr/vela3-flash"}]}')
+        bodies.push(JSON.parse(e.init?.body ?? '{}'))
+        return answered(JSON.stringify(safe))
+      },
+      reply,
+    )
+
+    const verdict = await $.tool.check({ tool: 'Bash', input: { command: 'ls' } })
+
+    expect(verdict).toMatchObject({ decision: 'allow' })
+    expect(bodies.map(body => body.model)).toEqual(['vllm-sr/vela3-flash'])
+    expect(reply.toasts).toEqual([])
+  },
+)

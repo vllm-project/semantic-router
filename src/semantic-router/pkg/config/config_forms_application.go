@@ -730,8 +730,13 @@ var applicationFieldForms = []ConfigForm{
 				}
 			}
 			moveInput(m, at.Node, "include_history", "history")
+			// source: tool_result read only the tool results, neither the user
+			// turn nor its history, so the rule keeps reading only them
 			if scalarAt(at.Node, "source") == "tool_result" {
-				setNode(ensureMapping(at.Node, "input"), "tool_results", boolScalar())
+				input := ensureMapping(at.Node, "input")
+				m.Delete(input, "history")
+				setNode(input, "tool_results", boolScalar())
+				setNode(input, "request", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "false"})
 			}
 			m.Delete(at.Node, "source")
 			return nil

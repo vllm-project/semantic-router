@@ -111,6 +111,8 @@ export interface SystemOneInput {
   image?: boolean
   audio?: boolean
   video?: boolean
+  // false leaves the current user turn out: the rule reads only the history or tool results it names
+  request?: boolean
 }
 
 export interface SystemOneSignal {

@@ -60,6 +60,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 func (p *Profile) GetTestCases() []string {
 	return []string{
 		"pii-backend-routing",
+		"pii-tool-output-only",
 		"pii-api-masking",
 		"pii-repeated-value-masking",
 	}

@@ -132,6 +132,7 @@ export function piiIn(text: string, spans: readonly Span[], line: number): Found
 export type Hidden = { text: string; counts: Partial<Record<Tag, number>> }
 
 // What stands where a value was hidden: `[vsr:email]`, a tag no code holds, so writing one back is always a lost value.
+// The Router's masking plugin leaves text of this shape alone (placeholderPattern in pkg/masking), so keep it.
 export const tagText = (tag: Tag) => `[vsr:${tag}]`
 
 // Replaces each found piece with its tag; of two that overlap, the one that starts first stays.

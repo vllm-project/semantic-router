@@ -39,7 +39,7 @@ A `systemone` rule, under `recipes[].signals.systemone`:
 | `predicate` | The bound the answer must meet: `gt`, `gte`, `lt`, `lte` |
 | `deployment` | The deployment that answers |
 | `stage` | `request` (default) or `response` |
-| `input` | `history`, `previous_turns` (0 to 32), `tool_results`, `answer`, `context`, `image`, `audio`, `video` |
+| `input` | `history`, `previous_turns` (0 to 32), `tool_results`, `request` (`false` leaves the current user turn out), `answer`, `context`, `image`, `audio`, `video` |
 | `coverage` | `truncate` (default) or `full` |
 | `on_unscanned` | With `coverage: full`: `match`, `no_match` or `unknown` (default) |
 | `timeout_ms` | Up to 60,000 |
@@ -53,7 +53,7 @@ the fields its type allows:
 | `fact_check`, `user_feedbacks` | `labels`, `predicate` |
 | `jailbreak` | `predicate`, `stage`, `input.history`, `on_unknown` |
 | `safety` | `labels` (harm categories), `predicate`, `stage` |
-| `pii` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results`, `on_unknown` |
+| `pii` | `predicate`, `ignore_labels`, `input.history`, `input.tool_results`, `input.request`, `on_unknown` |
 | `hallucination`, `refusal` | `predicate` |
 | `turn_relation` | `labels`, `input.previous_turns` (default 4) |
 | `complexity` | `labels` |

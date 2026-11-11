@@ -240,6 +240,11 @@ recipes:
 - `previous_turns` (0 to 32): the last turns of the conversation, user and
   assistant, as a transcript.
 - `tool_results`: the request's tool results.
+- `request: false`: leave the current user turn out, so a request-stage rule
+  reads only the earlier user turns or the tool results it names, as its
+  request. It needs `history` or `tool_results`, takes no `previous_turns`
+  or media, and is not asked, so it does not match, while those hold no
+  text.
 - `image` and `video`: the current turn's images and videos. The deployment
   must read that input, or the configuration is refused with
   `input_modality_unsupported`. No deployment reads audio yet, so
