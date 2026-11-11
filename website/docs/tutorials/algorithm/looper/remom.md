@@ -127,7 +127,9 @@ application format requirements that should apply across ReMoM, Fusion, and
 Flow instead of hard-coding task-specific prompts into an algorithm.
 `output_contract_spec` is the typed router-executable contract for post-processing
 and normalization; keep runtime behavior there instead of encoding it as
-prompt-text heuristics. Extraction defaults to exact `content` matching; use
+prompt-text heuristics. Only Fusion, ReMoM and Flow decisions accept it.
+Dereferencing serves the selected reference's content and never its reasoning.
+Extraction defaults to exact `content` matching; use
 `extract.sources` or `extract.mode: json_object` only when the decision
 explicitly permits a wider parser.
 

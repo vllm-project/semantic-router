@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"regexp"
@@ -227,7 +228,7 @@ func (c *remomResultCollector) handleContextDone(err error) ([]*ModelResponse, e
 
 func (c *remomResultCollector) finalize() ([]*ModelResponse, error) {
 	if c.usableCount == 0 {
-		return c.responses, fmt.Errorf("all %d model calls failed or returned no usable response: %v", c.numCalls, c.errs)
+		return c.responses, fmt.Errorf("all %d model calls failed or returned no usable response: %w", c.numCalls, errors.Join(c.errs...))
 	}
 	logging.Infof("[ReMoM] Collected %d/%d usable responses", c.usableCount, c.numCalls)
 	return c.responses, nil
@@ -368,6 +369,7 @@ func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, err
 		finalModelResp,
 		candidateResponses,
 	)
+	applyFinalOutputContract(req.OutputContractSpec, finalModelResp)
 	finalResponse.Content = finalModelResp.Content
 	if strings.TrimSpace(finalResponse.Content) == "" {
 		return nil, fmt.Errorf("remom produced no assistant content")
@@ -505,7 +507,7 @@ func (l *ReMoMLooper) executeReMoMRound(
 		logging.Warnf("[ReMoM] Round %d had errors but continuing (on_error=skip)", roundIdx+1)
 	}
 	if len(responses) == 0 {
-		return execution, fmt.Errorf("round %d: all model calls failed", roundIdx+1)
+		return execution, fmt.Errorf("round %d: all model calls failed: %w", roundIdx+1, err)
 	}
 
 	responses = usableReMoMResponses(responses)
@@ -768,6 +770,8 @@ func replaceLastMessage(req *openai.ChatCompletionNewParams, newContent string) 
 	if err := json.Unmarshal(modifiedData, &result); err != nil {
 		return req
 	}
+	// Decoding drops a json_schema payload from response_format (#3024).
+	result.ResponseFormat = req.ResponseFormat
 
 	return &result
 }

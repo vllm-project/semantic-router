@@ -94,7 +94,7 @@ recipes:
 | 设置 | 含义 |
 | --- | --- |
 | `budget` | `deadline` 是整次运行的墙钟时间上限，`max_calls` 是它可发起的模型调用次数，且低于 Router 的单请求上限。耗尽预算的运行会失败，而不会返回部分答案。 |
-| `on_error` | 调用失败时如何处理。`fusion`、`remom`、`ratings` 和 `workflows` 接受 `skip`（使用成功的调用继续）或 `fail`。`escalate` 接受 `last_attempt`（没有回答被接受时返回最后一个经过评判的回答）或 `fail`。 |
+| `on_error` | 调用失败时如何处理。`fusion`、`remom`、`ratings` 和 `workflows` 接受 `skip`（使用成功的调用继续）或 `fail`。`escalate` 接受 `last_attempt`（没有回答被接受时返回最后一个经过评判的回答）或 `fail`。当某个模型的回答导致运行结束时，若该状态码是限流（429）或服务器错误（5xx），客户端收到该模型的状态码，否则收到 500。 |
 
 要为执行器提供独立的公开模型名，请发布一个入口，让它的 `model_names` 指向包含运行该执行器的决策的配方。
 

@@ -128,7 +128,7 @@ recipes:
             model_distribution: weighted
 ```
 
-`output_contract` 是决策范围的提示词文本。把它用于应同时作用于 ReMoM、Fusion 和 Flow 的基准或应用格式要求，而不是把任务特定提示词硬编码进算法。`output_contract_spec` 是路由器可执行的类型化契约，用于后处理与归一化；把运行时行为放在这里，而不是编码成提示词启发式。提取默认精确匹配 `content`；仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
+`output_contract` 是决策范围的提示词文本。把它用于应同时作用于 ReMoM、Fusion 和 Flow 的基准或应用格式要求，而不是把任务特定提示词硬编码进算法。`output_contract_spec` 是路由器可执行的类型化契约，用于后处理与归一化；把运行时行为放在这里，而不是编码成提示词启发式。只有 Fusion、ReMoM 和 Flow 决策接受它。解引用返回所选引用的内容，从不返回其推理内容。提取默认精确匹配 `content`；仅当决策明确允许更宽的解析器时，才使用 `extract.sources` 或 `extract.mode: json_object`。
 
 最小算法配置：
 
