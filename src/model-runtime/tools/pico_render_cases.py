@@ -217,7 +217,7 @@ def _questions_cases() -> list[dict[str, Any]]:
                 "r_harm": {
                     "type": "choice",
                     "instructions": ANSWER_HARM,
-                    "criteria": ["safe response"],
+                    "criteria": ["unsafe response", "safe response"],
                 },
                 "halu": {
                     "type": "span",
