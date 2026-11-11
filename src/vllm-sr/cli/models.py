@@ -1769,12 +1769,98 @@ class FallbackCircuitBreaker(BaseModel):
     half_open_probes: Optional[int] = Field(default=None, ge=0)
 
 
+# Names forward_request_headers may not list, beside the credential carriers
+# above and a backend's own auth header, which the Router checks. Keep in
+# step with validateForwardRequestHeaders in the Router's pkg/config.
+FORWARD_CREDENTIAL_HEADERS = SHADOW_CREDENTIAL_HEADERS | {
+    "ocp-apim-subscription-key",
+    "api-subscription-key",
+    "x-user-cloudflare-workers-ai-key",
+}
+FORWARD_FRAMING_HEADERS = frozenset(
+    {
+        "connection",
+        "keep-alive",
+        "te",
+        "trailer",
+        "transfer-encoding",
+        "upgrade",
+        "host",
+        "content-length",
+        "content-type",
+        "content-encoding",
+        "accept",
+        "accept-encoding",
+        "expect",
+    }
+)
+FORWARD_IDENTITY_HEADERS = frozenset(
+    {
+        "x-authz-user-id",
+        "x-authz-user-groups",
+        "x-authz-team-id",
+        "x-authz-tenant-id",
+    }
+)
+_HEADER_NAME = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+")
+
+
+def _forwardable_request_headers(names: list[str]) -> list[str]:
+    seen: set[str] = set()
+    for name in names:
+        stripped = name.strip()
+        lower = stripped.lower()
+        if not stripped:
+            raise ValueError("forward_request_headers entries cannot be empty")
+        if stripped.startswith(":"):
+            raise ValueError(
+                f"forward_request_headers cannot include pseudo-header {stripped!r}"
+            )
+        if not _HEADER_NAME.fullmatch(stripped):
+            raise ValueError(
+                f"forward_request_headers lists {stripped!r}, which is not an "
+                "HTTP header name"
+            )
+        if lower in FORWARD_CREDENTIAL_HEADERS:
+            raise ValueError(
+                "forward_request_headers cannot include credential header "
+                f"{stripped!r}"
+            )
+        if lower in FORWARD_FRAMING_HEADERS or lower.startswith("proxy-"):
+            raise ValueError(
+                f"forward_request_headers cannot include {stripped!r}: the Router "
+                "sets the framing and body headers of its own request"
+            )
+        if lower.startswith(("x-vsr-", "x-envoy-")):
+            raise ValueError(
+                f"forward_request_headers cannot include {stripped!r}: x-vsr- and "
+                "x-envoy- headers belong to the Router and Envoy"
+            )
+        if lower in FORWARD_IDENTITY_HEADERS:
+            raise ValueError(
+                f"forward_request_headers cannot include identity header "
+                f"{stripped!r}, which the Router keeps from upstreams"
+            )
+        if lower in seen:
+            raise ValueError(f"forward_request_headers lists {stripped!r} twice")
+        seen.add(lower)
+    return names
+
+
 class FallbackPolicy(FallbackOverride):
     """A recipe's cross-model fallback policy (routing.fallback): the
-    decision fields plus the version and the per-backend circuit breaker."""
+    decision fields plus the version, the per-backend circuit breaker and
+    the client request headers a fallback attempt the Router sends itself
+    copies."""
 
     version: Optional[Literal[0, 1]] = None
     circuit_breaker: Optional[FallbackCircuitBreaker] = None
+    forward_request_headers: Optional[List[str]] = None
+
+    @field_validator("forward_request_headers")
+    @classmethod
+    def _forwardable(cls, names: Optional[List[str]]) -> Optional[List[str]]:
+        return None if names is None else _forwardable_request_headers(names)
 
 
 class CandidateIteration(BaseModel):

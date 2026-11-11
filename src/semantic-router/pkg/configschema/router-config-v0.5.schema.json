@@ -2673,6 +2673,12 @@
         },
         "circuit_breaker": {
           "$ref": "#/$defs/CircuitBreakerConfig"
+        },
+        "forward_request_headers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -4071,6 +4077,12 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "forward_request_headers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "timeout_ms": {
           "type": "integer"

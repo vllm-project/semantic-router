@@ -86,6 +86,53 @@ def test_a_decision_fallback_rejects_what_the_router_rejects(override, field):
         Decision.model_validate({"name": "d", "priority": 1, "fallback": override})
 
 
+def test_a_recipe_fallback_forwards_named_request_headers(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        _DOCUMENT.replace(
+            "      circuit_breaker: {consecutive_failures: 3, cooldown_period: 30s}\n",
+            "      circuit_breaker: {consecutive_failures: 3, cooldown_period: 30s}\n"
+            "      forward_request_headers: [x-user-id, X-Request-Id]\n",
+        )
+    )
+    parsed = parse_user_config(str(config_path), log_summary=False)
+    assert parsed.default_recipe.fallback.forward_request_headers == [
+        "x-user-id",
+        "X-Request-Id",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "message"),
+    [
+        (":authority", "cannot include pseudo-header"),
+        ("x user", "not an HTTP header name"),
+        ("Authorization", "cannot include credential header"),
+        ("ocp-apim-subscription-key", "cannot include credential header"),
+        ("connection", "framing and body headers"),
+        ("proxy-connection", "framing and body headers"),
+        ("Host", "framing and body headers"),
+        ("x-vsr-selected-model", "belong to the Router and Envoy"),
+        ("x-authz-user-id", "cannot include identity header"),
+    ],
+)
+def test_a_recipe_fallback_refuses_headers_no_call_may_carry(name, message):
+    with pytest.raises(ValidationError, match=message):
+        Recipe.model_validate(
+            {"name": "default", "fallback": {"forward_request_headers": [name]}}
+        )
+
+
+def test_a_recipe_fallback_refuses_a_forwarded_header_twice():
+    with pytest.raises(ValidationError, match="lists 'X-User-Id' twice"):
+        Recipe.model_validate(
+            {
+                "name": "default",
+                "fallback": {"forward_request_headers": ["x-user-id", "X-User-Id"]},
+            }
+        )
+
+
 def test_a_per_attempt_timeout_cannot_exceed_the_total():
     with pytest.raises(ValidationError, match="per_attempt_timeout cannot exceed"):
         FallbackOverride.model_validate(
