@@ -29,6 +29,7 @@ Docker or Podman access.
 | `test_integration.py` | Live health, management APIs, model visibility, path rewrites, sidecars, lifecycle, and pull policies. |
 | `test_integration_storage_isolation.py` | Redis and Postgres answer on the stack's data network and are unreachable from its application network. |
 | `test_integration_standalone.py` | Standalone mode on the docker target: no Envoy container, and a chat request routed through the Router's own listener. |
+| `test_integration_agent_task_bench.py` | Four native and sr-bench smoke tasks through a real session-aware Router, with a frozen configuration hash and observed phase/session continuity. |
 | `test_integration_first_run_setup.py` | `vllm-sr serve` in an empty directory opens setup and waits; activation through the Dashboard's API makes the CLI create the Router from the activated config. The Dashboard reports the Router in standby, then running, without a container runtime. |
 | `test_integration_recipe_bearer.py` | The Dashboard imports a Recipe with bearer management auth (`fixtures/bearer-recipe`) from a local HTTPS server signed by a test-only CA, and `vllm-sr serve`, run as the suite's user (non-root in CI), activates it: the Router accepts only the management credential the CLI generated, and no file but the CLI's owner-only state holds it. |
 | `test_integration_model_runtime.py` | The Quickstart's decision signal on a `model_runtime` deployment the Router starts and asks inside its container. |
@@ -57,3 +58,26 @@ Set `CONTAINER_RUNTIME=docker` or `CONTAINER_RUNTIME=podman` to select a
 runtime. `RUN_INTEGRATION_TESTS=true` also enables integration discovery, but
 the `--integration` flag is clearer for direct runs. The Make target supplies
 the local image names used by the full integration suite.
+
+## Model-free agent-task Router check
+
+Set `VLLM_SR_IMAGE` and `VLLM_SR_ROUTER_IMAGE` to a cached CPU Router image, and
+`PROVIDER_MOCKER_IMAGE` to the cached CLI test provider image. From the repository
+root, run:
+
+```bash
+mkdir -p .agent-harness/cli-tmp
+TMPDIR="$PWD/.agent-harness/cli-tmp" \
+  python e2e/testing/vllm-sr-cli/run_cli_tests.py \
+  --integration-only --pattern agent_task_bench --verbose
+```
+
+On Colima, select its Docker context and keep `TMPDIR` on a shared mount;
+the default macOS temporary directory may not be visible in the VM.
+The test owns one unique minimal stack, retains its standard storage defaults,
+and removes its containers, networks and volumes afterward. Its work budget
+reserves cleanup time within ten minutes.
+
+The provider's CLI scenario returns `ok`, so completed task credit is zero in both
+arms. This checks the Router boundary, not model quality. Phase headers must come
+from the Router; the test does not synthesize them.
