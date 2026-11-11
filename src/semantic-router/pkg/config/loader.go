@@ -633,6 +633,9 @@ func attachCanonicalGlobalOverride(raw map[string]interface{}, canonical *Canoni
 	if !ok {
 		return nil
 	}
+	if err := refuseEmptyGlobalValue(rawGlobal); err != nil {
+		return err
+	}
 
 	payload, err := NewStructuredPayload(rawGlobal)
 	if err != nil {

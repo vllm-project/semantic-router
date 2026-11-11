@@ -48,7 +48,11 @@ from pydantic import (
 from .algorithms import AlgorithmConfig, ModelRef
 from .config_contract import UnknownPolicy
 from .config_schema import routing_surface_catalog, surface_types
-from .context_bands import normalize_token_count, validate_context_band
+from .context_bands import (
+    normalize_token_count,
+    references_environment,
+    validate_context_band,
+)
 from .durations import parse_duration
 
 RoutingStrategy = Literal["priority", "confidence"]
@@ -707,7 +711,16 @@ class ResponseCachePluginConfig(BaseModel):
     revision: Optional[ResponseCacheRevisionConfig] = None
 
 
-CompressionTokenLimit = Literal["auto"] | int
+def _environment_reference(value: str) -> str:
+    if not references_environment(value):
+        raise ValueError("must reference the environment")
+    return value
+
+
+# The Router expands a reference before it decodes a number-or-auto field, so a
+# reference can stand for "auto" or a count there.
+EnvironmentReference = Annotated[str, AfterValidator(_environment_reference)]
+CompressionTokenLimit = Literal["auto"] | int | EnvironmentReference
 
 
 class ContextBudgetConfig(BaseModel):
@@ -971,7 +984,9 @@ class RequestParamsPluginConfig(BaseModel):
 
     blocked_params: Optional[List[str]] = None
     default_max_tokens: Optional[
-        Annotated[int, Field(ge=1, strict=True)] | Literal["auto"]
+        Annotated[int, Field(ge=1, strict=True)]
+        | Literal["auto"]
+        | EnvironmentReference
     ] = None
     max_tokens_limit: Optional[int] = Field(default=None, ge=1)
     max_n: Optional[int] = Field(default=None, ge=1)
@@ -2103,6 +2118,12 @@ class EvaluationRecord(BaseModel):
     source: Optional[str] = None
     measured_at: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("measured_at", mode="before")
+    @classmethod
+    def normalize_measured_at(cls, value: Any) -> Any:
+        # YAML reads an unquoted 2026-09-09 as a date; the Router keeps its text.
+        return value.isoformat() if isinstance(value, date) else value
 
     @model_validator(mode="after")
     def validate_measurement(self):
