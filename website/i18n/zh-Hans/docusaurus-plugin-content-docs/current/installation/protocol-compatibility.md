@@ -121,7 +121,7 @@ Chat Completions 客户端可以用 `store: true` 要求提供方保存补全，
 去掉 `store` 发送这类请求，并在 `x-vsr-warnings` 中为 `store` 报告 `dropped` 诊断。
 Chat Completions 和 Responses 后端仍按客户端发送的原样收到 `store`。
 
-Responses 客户端仍可以与 Chat Completions 或 Messages 后端一起使用 `previous_response_id`。Router 检索并物化保留的历史，移除 Router 拥有的对象控制，然后按所选后端格式编码无状态请求。存储输入中的 developer 和 system 项作为指令重放，位于当前请求自身的指令之后；之前请求的顶层 `instructions` 不会沿用。
+Responses 客户端仍可以与 Chat Completions 或 Messages 后端一起使用 `previous_response_id`。Router 检索并物化保留的历史，移除 Router 拥有的对象控制，然后按所选后端格式编码无状态请求。存储输入中的 developer 和 system 项按轮次顺序作为指令重放：位于当前请求的顶层 `instructions` 之后，并位于当前请求自身输入中的 developer 和 system 项之前。之前请求的顶层 `instructions` 不会沿用。
 
 Responses custom tools 使用 `type: custom` 和扁平的 `format` 对象。它们的
 `custom_tool_call` 和 `custom_tool_call_output` 项在 Chat 或 Responses 后端上保留

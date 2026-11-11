@@ -414,8 +414,9 @@ func TestMaterializeResponseObjectContextRejectsBrokenRetainedToolLifecycleAtomi
 }
 
 // previous_response_id replays the stored developer and system input items as
-// instructions after the current request's own. The earlier request's
-// top-level instructions are not carried over.
+// instructions in turn order: after the current request's top-level
+// instructions and before the developer items of its own input. The earlier
+// request's top-level instructions are not carried over.
 func TestPreviousResponseReplaysStoredDeveloperItems(t *testing.T) {
 	for _, backend := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1, llmprotocol.AnthropicMessagesV1} {
 		t.Run(string(backend), func(t *testing.T) {
@@ -429,12 +430,20 @@ func TestPreviousResponseReplaysStoredDeveloperItems(t *testing.T) {
 				t.Fatalf("turn 1 reply was replaced: %s", reply.GetImmediateResponse().GetBody())
 			}
 
-			second := &RequestContext{Headers: map[string]string{}, SourceFormat: llmprotocol.OpenAIResponsesV1, RequestID: "turn-2", TraceContext: t.Context()}
-			body := dispatchTestTurn(t, router, model, second, `{"model":"`+model+`","instructions":"Be brief.","previous_response_id":"`+
-				first.ResponseObjectState.GeneratedResponseID+`","input":[{"type":"message","role":"user","content":"And 3+3?"}]}`)
-			assertTextOrder(t, body, "Be brief.", "Always answer in French.", "What is 2+2?", "hello", "And 3+3?")
-			if bytes.Contains(body, []byte("Old instructions.")) {
-				t.Fatalf("top-level instructions of the earlier request were carried over: %s", body)
+			turnOrder := []string{"Always answer in French.", "Now answer in digits.", "What is 2+2?", "hello", "And 3+3?"}
+			for _, instructions := range []string{`"instructions":"Be brief.",`, ""} {
+				second := &RequestContext{Headers: map[string]string{}, SourceFormat: llmprotocol.OpenAIResponsesV1, RequestID: "turn-2", TraceContext: t.Context()}
+				body := dispatchTestTurn(t, router, model, second, `{"model":"`+model+`",`+instructions+`"previous_response_id":"`+
+					first.ResponseObjectState.GeneratedResponseID+`","input":[{"type":"message","role":"developer","content":"Now answer in digits."},`+
+					`{"type":"message","role":"user","content":"And 3+3?"}]}`)
+				want := turnOrder
+				if instructions != "" {
+					want = append([]string{"Be brief."}, turnOrder...)
+				}
+				assertTextOrder(t, body, want...)
+				if bytes.Contains(body, []byte("Old instructions.")) {
+					t.Fatalf("top-level instructions of the earlier request were carried over: %s", body)
+				}
 			}
 		})
 	}

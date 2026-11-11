@@ -3,6 +3,8 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -23,7 +25,7 @@ func (r *OpenAIRouter) materializeResponseObjectContext(request *llmprotocol.Req
 		return false, nil
 	}
 
-	changed, err := r.prependStoredResponseHistory(request, state.ConversationHistory)
+	changed, err := r.prependStoredResponseHistory(request, state.ConversationHistory, state.Input)
 	if err != nil {
 		return false, err
 	}
@@ -40,6 +42,7 @@ func (r *OpenAIRouter) materializeResponseObjectContext(request *llmprotocol.Req
 func (r *OpenAIRouter) prependStoredResponseHistory(
 	request *llmprotocol.Request,
 	stored []*responseapi.StoredResponse,
+	input []responseapi.InputItem,
 ) (bool, error) {
 	if len(stored) == 0 {
 		return false, nil
@@ -56,11 +59,27 @@ func (r *OpenAIRouter) prependStoredResponseHistory(
 		return false, nil
 	}
 	// The developer and system items of the stored input decode as
-	// instructions, as they do at ingress, and follow this request's own. The
-	// earlier request's top-level instructions are not carried over.
-	request.Instructions = append(request.Instructions, history.Instructions...)
+	// instructions, as they do at ingress. In turn order they follow this
+	// request's top-level instructions and precede the developer and system
+	// items of its own input, which decode after them. The earlier request's
+	// top-level instructions are not carried over.
+	at := max(0, len(request.Instructions)-instructionInputItems(input))
+	request.Instructions = slices.Insert(request.Instructions, at, history.Instructions...)
 	request.Messages = append(history.Messages, request.Messages...)
 	return true, nil
+}
+
+// instructionInputItems counts the developer and system messages of a
+// request's input, which the Responses decoder reads as instructions.
+func instructionInputItems(items []responseapi.InputItem) int {
+	count := 0
+	for _, item := range items {
+		role := strings.ToLower(strings.TrimSpace(item.Role))
+		if item.Type == responseapi.ItemTypeMessage && (role == "developer" || role == "system") {
+			count++
+		}
+	}
+	return count
 }
 
 func clearResponseObjectControls(request *llmprotocol.Request) bool {

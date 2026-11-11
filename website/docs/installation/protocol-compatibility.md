@@ -321,9 +321,10 @@ request without `store` and reports a `dropped` diagnostic for `store` in
   with a Chat Completions or Messages backend. The Router retrieves and
   materializes the retained history, removes Router-owned object controls,
   then encodes the stateless request in the selected backend format. The
-  developer and system items of the stored input come back as instructions,
-  after the current request's own; the earlier request's top-level
-  `instructions` are not carried over.
+  developer and system items of the stored input come back as instructions in
+  turn order: after the current request's top-level `instructions` and before
+  the developer and system items of its own input. The earlier request's
+  top-level `instructions` are not carried over.
 - **Custom tools.** Responses custom tools use `type: custom` with a flattened
   `format` object. Their `custom_tool_call` and `custom_tool_call_output`
   items keep free-form input, tool results and call IDs through Chat or
