@@ -442,7 +442,8 @@ test(
     const clock = engine(rest, reply)
     on('http.fetch', (_, e) => {
       const text = e.url.endsWith('/health') ? '{"status":"ok"}' : e.url.endsWith('/v1/systemone/models') ? JSON.stringify(NO_SCORE) : '{}'
-      if (e.init?.method === 'POST') asked.push(e.url)
+      // Only the router's questions count: another app may ask the model its own at session start.
+      if (e.init?.method === 'POST' && JSON.parse(e.init.body ?? '{}').questions?.complexity) asked.push(e.url)
       return { value: { status: 200, ok: true, headers: {}, text } }
     })
     subagent(on)
