@@ -57,6 +57,7 @@ This model has no calibrated thresholds: a built-in question without a
 Each time it loads, the model compares its answers with the reference
 answers recorded for its revision. They are recorded for:
 
+- Ascend NPU (`npu`)
 - AMD GPU (ROCm) (`rocm`)
 
 On a CPU or an NVIDIA GPU no reference is recorded, so the model serves
