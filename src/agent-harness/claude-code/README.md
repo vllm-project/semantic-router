@@ -156,8 +156,8 @@ as unencrypted. A remote runtime's token is kept in Claude Code's secure storage
 (`/plugin configure vsr@vllm-sr`), never in `settings.json`.
 
 A System One API serves several decision models and answers only a question that names one: the
-Router's own listener, which serves it beside the routed model calls when `listeners[].systemone`
-publishes a model, or a hosted one such as `https://app.vllm-sr.ai/v1/decisions`. Point
+Router's own listener, which serves it beside the routed model calls when the listener's `apis`
+include `systemone`, or a hosted one such as `https://app.vllm-sr.ai/v1/decisions`. Point
 `runtimeUrl` at its `/v1/decisions`, set `runtimeModel` to one it lists at `/v1/systemone/models`,
 and set the listener's API key as the token when it takes one. A hosted API has no `/health`, so vSR
 checks that it is up through its model list instead.
