@@ -29,19 +29,20 @@ Use a single-condition decision when:
 ## Configuration
 
 ```yaml
-routing:
-  decisions:
-    - name: business_route
-      description: Route business and management questions.
-      priority: 110
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: business_route
+        description: Route business and management questions.
+        priority: 110
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: false
 ```
 
 Even for a single condition, keep the route named and reusable. If the policy

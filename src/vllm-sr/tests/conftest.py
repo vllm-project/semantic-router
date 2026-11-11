@@ -6,22 +6,25 @@ from cli import container_run_command, execution_platform, router_validation
 
 @pytest.fixture(autouse=True)
 def _no_router_image_validation(monkeypatch, request):
-    """Keep `config validate` and `config migrate` from running a local Router.
+    """Keep `config validate`, `config migrate` and `serve` from running a
+    local Router, and from inspecting this host's stack.
 
     Tests that cover the Router's validation mark themselves `router_image`,
     or name a fake Router binary in VLLM_SR_ROUTER_BINARY.
     """
 
     monkeypatch.delenv(router_validation.ROUTER_BINARY_ENV, raising=False)
+    monkeypatch.setattr(router_validation, "_running_router", lambda: None)
     if request.node.get_closest_marker("router_image"):
         return
 
-    def unavailable(_explicit=None):
+    def unavailable(*_args, **_kwargs):
         raise router_validation.RouterValidationUnavailableError(
             "Router image validation is off in unit tests"
         )
 
     monkeypatch.setattr(router_validation, "validation_image", unavailable)
+    monkeypatch.setattr(router_validation, "served_router_image", unavailable)
 
 
 @pytest.fixture(autouse=True)

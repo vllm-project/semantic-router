@@ -41,7 +41,7 @@ data:
                       upstream_cluster: "%UPSTREAM_CLUSTER%"
                       upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
                       request_id: "%REQ(X-REQUEST-ID)%"
-                      selected_model: "%REQ(X-SELECTED-MODEL)%"
+                      selected_model: "%REQ(X-VSR-ROUTE-MODEL)%"
               route_config:
                 name: local_route
                 virtual_hosts:

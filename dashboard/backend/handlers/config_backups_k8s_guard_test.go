@@ -65,18 +65,19 @@ func TestStaleConfigMapDeployAndRollbackLeaveBaselineBackupUntouched(t *testing.
 	}
 	installMountedConfigMapTestWriter(t, configPath)
 
-	deployYAML := `routing:
-  decisions:
-    - name: deployed-default
-      priority: 5
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
+	deployYAML := `recipes:
+  - name: default
+    decisions:
+      - name: deployed-default
+        priority: 5
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+        modelRefs:
+          - model: test-model
+            use_reasoning: false
 `
 	deploy := func(dsl string) *httptest.ResponseRecorder {
 		body, marshalErr := json.Marshal(DeployRequest{YAML: deployYAML, DSL: dsl})

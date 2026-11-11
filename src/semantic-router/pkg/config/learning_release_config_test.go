@@ -58,7 +58,7 @@ func TestValidateProtectionReleaseConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := RouterLearningProtectionConfig{Release: tc.release}
 			cfg.Identity.Headers.Agent = tc.agent
-			err := validateRouterLearningProtectionConfig(cfg)
+			err := validateRouterLearningProtectionConfig(cfg, RouterHeadersConfig{}.SessionIDHeaderNames())
 			if tc.wantErr == "" {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
@@ -73,7 +73,7 @@ func TestValidateProtectionReleaseConfig(t *testing.T) {
 }
 
 const protectionReleaseYAMLPrefix = `
-version: v0.3
+version: v0.5
 listeners:
   - name: http
     address: 0.0.0.0
@@ -86,9 +86,8 @@ providers:
       backend_refs:
         - endpoint: 127.0.0.1:8000
           provider: vllm
-routing:
-  modelCards:
-    - name: cheap
+recipes:
+  - name: default
 global:
   router:
     learning:

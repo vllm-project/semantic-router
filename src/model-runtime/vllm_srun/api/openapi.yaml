@@ -1,16 +1,29 @@
 openapi: 3.0.3
 info:
   title: vLLM Semantic Router Model Runtime
-  version: 3.2.0
+  version: 5.0.0
   description: |
     Contract of the vllm-sr model runtime. A runtime process serves one or
     more models; every request may name its `model` (required when a process
-    serves several). `POST /v1/systemone` accepts System One requests,
+    serves several).
+
+    `POST /v1/systemone` and `POST /v1/systemone/batch` speak the process's
+    System One schema (`vllm-srun serve --systemone-schema`): `vllm-sr/5.0` by
+    default, the System One standard plus the vllm-sr extension set
+    (config/schemas/systemone/vllm-sr-5.0.extensions.yaml), or `vllm-sr/4.0`,
+    which accepts the request forms below and every 5.0 form. Either is read
+    into the runtime's internal request form, described here (DecisionRequest):
+    the 4.0 forms plus `roles`. `POST /v1/decisions` and `POST /v1/bundle` read
+    the internal form as it is, whatever the schema.
+
+    In the internal form, `POST /v1/systemone` accepts System One requests,
     including `assets` (as base64 or as multipart/form-data parts) and
     compressed bodies, and answers them with System One fields. It also
-    accepts vLLM Semantic Router extensions: `images`, `videos`, `states`, Set
-    and Span questions, `choices` / `levels` / `labels`, Box `at` and `track`
-    questions on videos, and `options`. `POST /v1/decisions` takes the same
+    accepts vLLM Semantic Router extensions: `images`, `videos`, batches of
+    named requests (`states`), Set and Span questions, `choices` / `levels` /
+    `labels`, Box `at` and `track` questions on videos, and `options`. A
+    request is a standard request (`state` and `questions`) or a batch
+    (`states` alone), never both. `POST /v1/decisions` takes the same
     requests and answers a failed question in its answer, where
     `POST /v1/systemone` answers the request as a whole, as System One does.
     The model runtime reference documents both. `POST /v1/classify`,
@@ -43,9 +56,12 @@ paths:
       responses:
         '200':
           description: |
-            One answer per question, in request order; a failed question carries its own error. A request in which
-            no question, of its own or of its `states`, is valid is answered 400 invalid_request, with each
-            question's reason in the message.
+            One answer per question, in request order (in a batch, per entry); a failed question carries its own
+            error. A request in which no question is valid, of a standard request or of any entry of a batch, is
+            answered 400 invalid_request, with each question's reason in the message. A batch entry whose images,
+            videos, assets or tokens are refused fails each of its questions with `invalid_input` (reason
+            `input_malformed`) and the refusal's message, and the other entries are answered; a batch every entry
+            of which is refused is answered with the first refusal.
           headers:
             Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
@@ -65,12 +81,22 @@ paths:
       operationId: createSystemOne
       summary: System One requests; a failed question fails the request
       description: |
-        The requests of /v1/decisions. A request any of whose questions (of its own state or of a `states`
-        entry) cannot be answered is answered as a whole with that question's error instead of a 200: the
+        In the process's System One schema. Under `vllm-sr/5.0` (the default) a request is one standard request
+        with the extension fields flat in their places, any other member refused with 400 naming it; an object
+        state without `roles` gives no part a role; assets whose placeholders lead the state (images, then
+        videos, then one other item) are read in front of that item, as `images` and `videos` are; errors are the
+        standard `detail` (a list on a 422) with the flat `code`, `question`, `state`, `reason` and `limit`; and an
+        overloaded process answers 529 with Retry-After. Under `vllm-sr/4.0` the requests of /v1/decisions below
+        are read as they are, and an error adds `detail` and the flat fields beside `error`.
+
+        In the internal form: the requests of /v1/decisions: a standard request (`state` and `questions`) or a batch of named
+        standard requests (`states`), whose answers come back under the same names. A request any of whose
+        questions (of a standard request or of an entry of a batch) cannot be answered is answered as a whole
+        with that question's error instead of a 200: the
         first failed question in request order gives the status (`invalid_question` 422;
         `max_length_exceeded`, `scan_budget_exceeded` and `invalid_input` 400; `invalid_model_output` 500;
         `unavailable` 503; `deadline_exceeded` 504) and the body is `question_failed` with that question's
-        `question_error`, `reason` and `question` ID, and the
+        `question_error`, `reason` and `question` ID (in a batch, with its entry's name as `state`), and the
         message lists every failed question. System One answers carry no per-question error, and the official
         SDKs validate each answer by its type. Bodies, compression and headers are read as /v1/decisions reads
         them.
@@ -85,7 +111,7 @@ paths:
               $ref: '#/components/schemas/DecisionMultipart'
       responses:
         '200':
-          description: One answer per question, in request order; every question answered.
+          description: One answer per question, in request order (in a batch, per entry); every question answered.
           headers:
             Server-Timing: {$ref: '#/components/headers/ServerTiming'}
           content:
@@ -98,6 +124,38 @@ paths:
         '415': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
         '429': {$ref: '#/components/responses/Error'}
+        '500': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+        '504': {$ref: '#/components/responses/Error'}
+  /v1/systemone/batch:
+    post:
+      operationId: createSystemOneBatch
+      summary: Named System One requests answered in one call; a failed question fails the batch
+      description: |
+        vllm-sr/5.0's batch endpoint, on either schema: `requests` holds named standard requests (each may
+        repeat the batch's `model`), answered under the same names in `responses`, each as it would be alone
+        on /v1/systemone. A failed question answers the batch as /v1/systemone answers a batch, with its
+        request's name as the error's `state`. An object state without `roles` gives no part a role under
+        `vllm-sr/5.0` and keeps 4.0's implicit roles under `vllm-sr/4.0`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SystemOneBatchRequest'
+      responses:
+        '200':
+          description: Every request's response under its name, and the usage of them all.
+          headers:
+            Server-Timing: {$ref: '#/components/headers/ServerTiming'}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemOneBatchResponse'
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '413': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
         '500': {$ref: '#/components/responses/Error'}
         '503': {$ref: '#/components/responses/Error'}
         '504': {$ref: '#/components/responses/Error'}
@@ -224,7 +282,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Health'
         '503':
-          description: Not ready.
+          description: Not ready. A model whose forward has run longer than `--forward-timeout-seconds` is `degraded` until it returns.
           content:
             application/json:
               schema:
@@ -232,10 +290,16 @@ paths:
   /health/live:
     get:
       operationId: getLiveness
-      summary: Liveness; 200 while the process serves HTTP
+      summary: Liveness; 200 while the process serves HTTP and no forward has run longer than `--forward-timeout-seconds`
       responses:
         '200':
           description: Alive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Liveness'
+        '503':
+          description: Stalled; a forward has run longer than `--forward-timeout-seconds` and has not returned. Restart the process.
           content:
             application/json:
               schema:
@@ -280,19 +344,27 @@ components:
     DecisionRequest:
       type: object
       additionalProperties: false
-      required: [state, questions]
+      description: |
+        A standard request or a batch; the two forms are mutually exclusive. A standard request is one context
+        and its questions: `state` and `questions` (both required), and the `images` and `videos` every
+        question sees. A batch is `states` alone: named standard requests, each answered under its name. A
+        batch has no top-level `state`, `questions`, `images` or `videos`; a body with `states` and any of them
+        is answered 400 invalid_request. `model`, `options` and `assets` belong to the request, and in a batch
+        to every entry.
       properties:
         model:
           type: string
           description: Served model ID. Optional while a runtime serves one model.
         state:
+          x-go-type-skip-optional-pointer: true
           description: |
-            The context the questions are about; text, an object or an array of JSON values. Models with typed
-            parts read an object's `request` / `user` / `prompt` as the user part, `answer` / `response` as the
-            answer part and every other field as context.
+            A standard request's context, which its questions are about; text, an object or an array of JSON
+            values. Models with typed parts read an object's `request` / `user` / `prompt` as the user part,
+            `answer` / `response` as the answer part and every other field as context.
         questions:
           type: object
-          description: Named questions; answers keep this order.
+          x-go-type-skip-optional-pointer: true
+          description: A standard request's named questions; answers keep this order.
           minProperties: 1
           additionalProperties:
             $ref: '#/components/schemas/Question'
@@ -302,12 +374,16 @@ components:
           $ref: '#/components/schemas/DecisionVideos'
         assets:
           $ref: '#/components/schemas/DecisionAssets'
+        roles:
+          $ref: '#/components/schemas/DecisionRoles'
         states:
           type: object
+          minProperties: 1
           description: |
-            Further states, each with its own questions, answered in the same call: a client asks every question it
-            has for one model in one request. Each entry is read exactly as a request with its state, its questions
-            and this request's model and options would be, and its answers come back under the same name in the
+            A batch: named standard requests answered in one call, so a client asks every question it has for one
+            model at once. Questions about one context go in one entry, and each other context in an entry of its
+            own. Each entry is read exactly as a standard request with its state, questions, images and videos and
+            the batch's model, options and assets would be, and its answers come back under the same name in the
             response's `states`. Question IDs are unique within an entry.
           additionalProperties:
             $ref: '#/components/schemas/DecisionState'
@@ -317,9 +393,10 @@ components:
       type: object
       additionalProperties: false
       required: [state, questions]
+      description: One entry of a batch, a standard request without the batch's shared fields.
       properties:
         state:
-          description: The context this entry's questions are about, as a request's `state`.
+          description: The context this entry's questions are about, as a standard request's `state`.
         questions:
           type: object
           description: Named questions about this state; answers keep this order.
@@ -330,6 +407,51 @@ components:
           $ref: '#/components/schemas/DecisionImages'
         videos:
           $ref: '#/components/schemas/DecisionVideos'
+        roles:
+          $ref: '#/components/schemas/DecisionRoles'
+    DecisionRoles:
+      type: object
+      nullable: true
+      # A client that leaves roles unset must omit the member: null means no roles.
+      x-omitempty: true
+      description: |
+        What each key of an object state holds for a role-aware family (vela2, vela3, vela3_d3): the `user`'s
+        content, `context`, or the `answer` under check; a key without one is context. Omitted, the keys name
+        their parts as `state` says (vllm-sr/4.0's implicit roles). Null gives no part a role: the whole state is
+        the user's content, as a vllm-sr/5.0 request without roles has it. Other families read the state as they
+        render it, whatever the roles.
+      additionalProperties:
+        type: string
+        enum: [user, context, answer]
+    SystemOneBatchRequest:
+      type: object
+      required: [model, requests]
+      additionalProperties: false
+      properties:
+        model:
+          type: string
+        requests:
+          type: object
+          minProperties: 1
+          description: Named vllm-sr/5.0 requests without options; each may repeat the batch's model.
+          additionalProperties:
+            type: object
+        options:
+          $ref: '#/components/schemas/RequestOptions'
+    SystemOneBatchResponse:
+      type: object
+      required: [model, responses, usage]
+      properties:
+        model:
+          type: string
+        responses:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/DecisionResponse'
+        usage:
+          $ref: '#/components/schemas/Usage'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
     DecisionMultipart:
       type: object
       required: [request]
@@ -353,7 +475,7 @@ components:
         reference is 1 to 1,024 bytes and not blank, all of them together at most 65,536 bytes, and every one
         must be used (reason `asset_unreferenced`). A reference is replaced wherever it occurs in a string of
         the state, of a question's `instructions` or of its options (criteria values, `choices` and `labels`
-        descriptions, `levels`), in the request and in every `states` entry: a string equal to a reference is
+        descriptions, `levels`), in a standard request or in every entry of a batch: a string equal to a reference is
         that image, a longer one is split at each occurrence (left to right, the longest reference first at
         one position), and object keys are never replaced. Each occurrence is one use, read where it sits and
         counted again, toward the token limits and `usage.input_tokens`; the bytes of all uses together are at
@@ -547,13 +669,20 @@ components:
             takes it.
     DecisionResponse:
       type: object
-      required: [model, answers, usage]
+      required: [model, usage]
+      description: |
+        The answers to a standard request (`answers`, and `spans`, `sets`, `thresholds` and `span_heads` for the
+        questions that have them) or to a batch (`states`: each entry's answers under its name). A batch's
+        `usage` counts every entry, and its `meta` (with `return_meta`) is the one every entry carries.
       properties:
         model:
           type: string
         answers:
           type: object
-          description: One answer per question; a Set question adds a Noul answer per label under `<id>.<label>`.
+          x-go-type-skip-optional-pointer: true
+          description: |
+            A standard request's answers, one per question; a Set question adds a Noul answer per label under
+            `<id>.<label>`.
           additionalProperties:
             $ref: '#/components/schemas/Answer'
         spans:
@@ -583,9 +712,7 @@ components:
           $ref: '#/components/schemas/Usage'
         states:
           type: object
-          description: |
-            The answers about each entry of the request's `states`, as that entry's own request would get them. The
-            response's own fields answer the request's `state`, and its `usage` counts that state alone.
+          description: A batch's answers by entry name, each as that entry's own standard request would get them.
           additionalProperties:
             $ref: '#/components/schemas/DecisionStateResponse'
         meta:
@@ -593,7 +720,7 @@ components:
     DecisionStateResponse:
       type: object
       required: [model, answers, usage]
-      description: The answers about one entry of a request's `states`, with the fields of a response of its own.
+      description: The answers to one entry of a batch, with the fields of a standard request's response.
       properties:
         model:
           type: string
@@ -1369,6 +1496,9 @@ components:
           description: |
             The question whose failure answers the request: on POST /v1/systemone, and on a request none of whose
             questions is valid.
+        state:
+          type: string
+          description: In a batch, the name of the entry `question` belongs to.
         question_error:
           $ref: '#/components/schemas/ItemError'
           description: The failed question's code (`question_failed`).
@@ -1810,4 +1940,8 @@ components:
           description: The version of this contract the runtime serves (`info.version`); a client refuses another major version.
         status:
           type: string
-          enum: [alive]
+          enum: [alive, stalled]
+        reason:
+          type: string
+          nullable: true
+          description: Why the process is stalled, per model; absent while alive.

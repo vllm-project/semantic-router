@@ -5,14 +5,15 @@ kind: Namespace
 metadata:
   name: llama-stack-system
 ---
-# Llama Stack Deployment for E2E testing
-# Provides vector store backend via OpenAI-compatible REST API
-# Uses the Milvus (inline::milvus / Milvus Lite) vector_io provider to
-# support hybrid search (vector + BM25 keyword search with RRF ranking).
+# Llama Stack Deployment for E2E testing, from the starter distribution of
+# OGX (the project Llama Stack became). It serves the vector store backend
+# through its OpenAI-compatible REST API, and all-MiniLM-L6-v2 through
+# /v1/embeddings so the Router embeds chunks with the model Llama Stack embeds
+# queries with. The sqlite-vec vector_io provider supports hybrid search
+# (vector + keyword search with RRF ranking).
 #
-# Workaround: setuptools >=78 ships a broken pkg_resources in the 0.5.0 image.
-# The startup script downgrades setuptools to restore milvus-lite compatibility,
-# then patches the Llama Stack config to use Milvus instead of the default Faiss.
+# The startup script copies the distribution's config with all-MiniLM-L6-v2
+# registered and sqlite-vec as the default vector_io provider.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -30,27 +31,37 @@ spec:
       labels:
         app: llama-stack
     spec:
-      # Disable Kubernetes service-link env vars to prevent collision:
-      # K8s auto-injects LLAMA_STACK_PORT=tcp://... for the Service,
-      # but the Llama Stack CLI expects LLAMA_STACK_PORT to be an integer.
-      enableServiceLinks: false
       containers:
         - name: llama-stack
-          image: llamastack/distribution-starter:0.5.0
+          image: ogxai/distribution-starter:1.5.0
           command: ["sh", "-c"]
           args:
             - |
-              pip install 'setuptools<78' --quiet 2>/dev/null
-              python3 -c "
+              python3 - <<'EOF'
               import pathlib
-              src = pathlib.Path('/usr/local/lib/python3.12/site-packages/llama_stack/distributions/starter/config.yaml')
-              cfg = src.read_text().replace('default_provider_id: faiss', 'default_provider_id: milvus')
-              pathlib.Path('/tmp/config.yaml').write_text(cfg)
-              "
-              exec llama stack run /tmp/config.yaml --port 8321
+              import yaml
+              import ogx
+              src = pathlib.Path(ogx.__file__).parent / "distributions/starter/config.yaml"
+              cfg = yaml.safe_load(src.read_text())
+              cfg["registered_resources"]["models"].append({
+                  "model_id": "all-MiniLM-L6-v2",
+                  "provider_id": "sentence-transformers",
+                  "provider_model_id": "sentence-transformers/all-MiniLM-L6-v2",
+                  "model_type": "embedding",
+                  "metadata": {"embedding_dimension": 384},
+              })
+              cfg["vector_stores"]["default_provider_id"] = "sqlite-vec"
+              pathlib.Path("/tmp/config.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
+              EOF
+              exec /usr/local/bin/ogx-entrypoint.sh
           env:
-            - name: MILVUS_URL
-              value: "enabled"
+            - name: RUN_CONFIG_PATH
+              value: /tmp/config.yaml
+            # torch starts a thread per node CPU, which the CPU limit throttles.
+            - name: OMP_NUM_THREADS
+              valueFrom:
+                resourceFieldRef:
+                  resource: limits.cpu
           ports:
             - containerPort: 8321
               name: http

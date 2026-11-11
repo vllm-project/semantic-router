@@ -34,11 +34,9 @@ def _validate_definition(name: str, value: dict[str, Any]) -> dict[str, Any]:
     return value
 
 
-NativeQuality = Annotated[
-    dict[str, Any], AfterValidator(partial(_validate_definition, "NativeQualityConfig"))
-]
-NativeStage = Annotated[
-    dict[str, Any], AfterValidator(partial(_validate_definition, "CascadeStage"))
+EscalateAlgorithm = Annotated[
+    dict[str, Any],
+    AfterValidator(partial(_validate_definition, "EscalateAlgorithmConfig")),
 ]
 AlgorithmBudget = Annotated[
     dict[str, Any], AfterValidator(partial(_validate_definition, "AlgorithmBudget"))

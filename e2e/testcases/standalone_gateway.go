@@ -222,8 +222,8 @@ func testStandaloneFallback(ctx context.Context, client *kubernetes.Clientset, o
 	if reply.echo["mock"] != "provider-mocker" || reply.echo["model"] != standaloneFallbackModel {
 		return fmt.Errorf("the answer came from model %v, want the fallback %q", reply.echo["model"], standaloneFallbackModel)
 	}
-	if reply.headers.Get("x-vsr-fallback-attempts") == "" {
-		return fmt.Errorf("the response does not report the fallback attempts")
+	if path := reply.headers.Get(responsePathHeader); path != "fallback" {
+		return fmt.Errorf("the response path is %q, want fallback", path)
 	}
 	return nil
 }
@@ -288,8 +288,13 @@ func testStandaloneConfigRollout(ctx context.Context, client *kubernetes.Clients
 }
 
 func setDecisionModel(document map[string]any, decision, model string) error {
-	routing, _ := document["routing"].(map[string]any)
-	decisions, _ := routing["decisions"].([]any)
+	recipes, _ := document["recipes"].([]any)
+	var decisions []any
+	for _, raw := range recipes {
+		recipe, _ := raw.(map[string]any)
+		list, _ := recipe["decisions"].([]any)
+		decisions = append(decisions, list...)
+	}
 	for _, item := range decisions {
 		entry, _ := item.(map[string]any)
 		if entry["name"] != decision {

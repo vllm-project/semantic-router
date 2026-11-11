@@ -1,0 +1,12 @@
+{
+  "name": "vllm-sr",
+  "description": "Claude Code plugins from the vLLM Semantic Router project.",
+  "owner": { "name": "vLLM Semantic Router" },
+  "plugins": [
+    {
+      "name": "vsr",
+      "source": "./src/agent-harness/claude-code",
+      "description": "Routes subagents by difficulty, escalates when you push back, redacts personal data and secrets, shields against prompt injection, guards risky Bash commands, and checks answers against what Claude read. Run /vsr:setup after installing."
+    }
+  ]
+}

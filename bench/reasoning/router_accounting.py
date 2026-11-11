@@ -1,6 +1,8 @@
 """Routing and cost fields for router benchmark reports.
 
-Per-request values come from router response headers. Per-run totals can also
+Per-request values come from router response headers; the routing latency
+comes from x-vsr-trace, which the router sends when its
+global.router.headers.debug allows the caller. Per-run totals can also
 be read from the router's Prometheus endpoint, which works on routers that
 predate the per-request headers.
 """
@@ -13,11 +15,12 @@ import urllib.request
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from router_trace import TRACE_HEADER, trace_members
+
 SELECTED_MODEL_HEADER = "x-vsr-selected-model"
-ROUTING_LATENCY_HEADER = "x-vsr-routing-latency-ms"
 COST_HEADER = "x-vsr-cost"
 COST_CURRENCY_HEADER = "x-vsr-cost-currency"
-CACHE_HIT_HEADER = "x-vsr-cache-hit"
+RESPONSE_PATH_HEADER = "x-vsr-response-path"
 
 COST_METRIC = "llm_model_cost_total"
 ROUTING_LATENCY_METRIC = "llm_model_routing_latency_seconds"
@@ -64,10 +67,12 @@ def response_accounting(
             usage, "completion_tokens_details", "reasoning_tokens"
         ),
         "cached_tokens": usage_detail(usage, "prompt_tokens_details", "cached_tokens"),
-        "routing_latency_ms": parse_float(headers.get(ROUTING_LATENCY_HEADER)),
+        "routing_latency_ms": parse_float(
+            trace_members(headers.get(TRACE_HEADER)).get("routing_latency_ms")
+        ),
         "cost": parse_float(headers.get(COST_HEADER)),
         "cost_currency": headers.get(COST_CURRENCY_HEADER) or "",
-        "cache_hit": (headers.get(CACHE_HIT_HEADER) or "").lower() == "true",
+        "cache_hit": headers.get(RESPONSE_PATH_HEADER) == "cache",
     }
 
 

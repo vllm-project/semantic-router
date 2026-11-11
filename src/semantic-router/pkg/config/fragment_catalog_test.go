@@ -28,25 +28,15 @@ func TestConfigFragmentCatalogCoversSupportedRoutingSurfaces(t *testing.T) {
 	}
 
 	requiredAlgorithmFragments := map[string]string{
-		"cascade":       filepath.Join("native", "cascade.yaml"),
-		"automix":       filepath.Join("selection", "automix.yaml"),
-		"confidence":    filepath.Join("looper", "confidence.yaml"),
-		"fusion":        filepath.Join("looper", "fusion.yaml"),
-		"hybrid":        filepath.Join("selection", "hybrid.yaml"),
-		"kmeans":        filepath.Join("selection", "kmeans.yaml"),
-		"knn":           filepath.Join("selection", "knn.yaml"),
-		"latency_aware": filepath.Join("selection", "latency-aware.yaml"),
-		"mlp":           filepath.Join("selection", "mlp.yaml"),
-		"multi_factor":  filepath.Join("selection", "multi-factor.yaml"),
-		"random":        filepath.Join("selection", "random.yaml"),
-		"ratings":       filepath.Join("looper", "ratings.yaml"),
-		"remom":         filepath.Join("looper", "remom.yaml"),
-		"router_dc":     filepath.Join("selection", "router-dc.yaml"),
-		"static":        filepath.Join("selection", "static.yaml"),
-		"svm":           filepath.Join("selection", "svm.yaml"),
-		"workflows":     filepath.Join("looper", "workflows.yaml"),
-		"prompt":        filepath.Join("selection", "prompt.yaml"),
-		"decision":      filepath.Join("selection", "decision.yaml"),
+		"static":       filepath.Join("selection", "static.yaml"),
+		"random":       filepath.Join("selection", "random.yaml"),
+		"multi_factor": filepath.Join("selection", "multi-factor.yaml"),
+		"systemone":    filepath.Join("selection", "systemone.yaml"),
+		"escalate":     filepath.Join("looper", "escalate.yaml"),
+		"fusion":       filepath.Join("looper", "fusion.yaml"),
+		"ratings":      filepath.Join("looper", "ratings.yaml"),
+		"remom":        filepath.Join("looper", "remom.yaml"),
+		"workflows":    filepath.Join("looper", "workflows.yaml"),
 	}
 	for _, algorithmType := range SupportedDecisionAlgorithmTypes() {
 		relPath, ok := requiredAlgorithmFragments[algorithmType]
@@ -104,40 +94,6 @@ func TestConfigFragmentsAreValidYAML(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("failed to walk config fragment catalog: %v", err)
-	}
-}
-
-func TestClassifierFragmentsCoverRemoteProviders(t *testing.T) {
-	root := repoRootFromTestFile(t)
-	fragments := map[string]string{
-		OpenAIChatProvider: "label-score.yaml",
-		ClassifyProvider:   "sequence-label-score.yaml",
-	}
-	for provider, filename := range fragments {
-		path := filepath.Join(root, "config", "fragments", "signal", "classifier", filename)
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("failed to read classifier fragment %s: %v", path, err)
-		}
-		var fragment struct {
-			Global struct {
-				ModelCatalog struct {
-					Deployments map[string]ModelDeployment `yaml:"deployments"`
-				} `yaml:"model_catalog"`
-			} `yaml:"global"`
-			Routing struct {
-				Signals struct {
-					Classifiers []ClassifierSignalRule `yaml:"classifiers"`
-				} `yaml:"signals"`
-			} `yaml:"routing"`
-		}
-		if err := yaml.Unmarshal(data, &fragment); err != nil {
-			t.Fatalf("failed to parse classifier fragment %s: %v", path, err)
-		}
-		rules := fragment.Routing.Signals.Classifiers
-		if len(rules) != 1 || fragment.Global.ModelCatalog.Deployments[rules[0].Deployment].Provider != provider {
-			t.Fatalf("classifier fragment %s must contain exactly one rule answered by a %s deployment", path, provider)
-		}
 	}
 }
 

@@ -18,9 +18,7 @@ package looper
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"math"
 	"time"
 )
 
@@ -205,32 +203,6 @@ func (e *VerifierError) Unwrap() error { return e.Err }
 // convention inherited by callers.
 func NewVerifierError(code VerifierFailureCode, err error) *VerifierError {
 	return &VerifierError{Code: code, Err: err}
-}
-
-// classifyVerifierHTTPError maps a client-side HTTP error to a typed failure
-// code. Adapters that build on net/http reuse this so cancellation-vs-timeout
-// vs-unavailable semantics stay uniform: caller cancellation is its own
-// deterministic outcome (issue #2857), deadline expiry is a timeout, and
-// everything else is unavailable.
-func classifyVerifierHTTPError(err error) VerifierFailureCode {
-	if errors.Is(err, context.Canceled) {
-		return VerifierFailureCanceled
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return VerifierFailureTimeout
-	}
-	var nerr interface{ Timeout() bool }
-	if errors.As(err, &nerr) && nerr.Timeout() {
-		return VerifierFailureTimeout
-	}
-	return VerifierFailureUnavailable
-}
-
-// validVerifierConfidence reports whether c is a usable bounded score in
-// [0,1]. The contract caps confidence so no adapter can approve on an
-// out-of-domain or non-finite value from the verifier server.
-func validVerifierConfidence(c float64) bool {
-	return !math.IsNaN(c) && !math.IsInf(c, 0) && c >= 0 && c <= 1
 }
 
 // waitForLatency measures caller-side latency into the result when the

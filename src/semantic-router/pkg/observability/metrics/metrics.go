@@ -247,80 +247,12 @@ var (
 		},
 	)
 
-	// HallucinationDetectionLatency tracks the latency of hallucination detection
-	HallucinationDetectionLatency = promauto.NewHistogram(
-		prometheus.HistogramOpts{
-			Name:    "llm_hallucination_detection_latency_seconds",
-			Help:    "The latency of hallucination detection operations in seconds",
-			Buckets: prometheus.DefBuckets,
-		},
-	)
-
 	// UnverifiedFactualResponses tracks responses that needed fact-checking but had no context
 	UnverifiedFactualResponses = promauto.NewCounter(
 		prometheus.CounterOpts{
 			Name: "llm_unverified_factual_responses_total",
 			Help: "The total number of factual responses that could not be verified due to missing tool context",
 		},
-	)
-
-	// EntropyClassificationDecisions tracks entropy-based reasoning decisions
-	EntropyClassificationDecisions = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "llm_entropy_classification_decisions_total",
-			Help: "The total number of entropy-based classification decisions by uncertainty level and reasoning outcome",
-		},
-		[]string{"uncertainty_level", "reasoning_enabled", "decision_reason", "top_category"},
-	)
-
-	// EntropyValues tracks the distribution of entropy values in classifications
-	EntropyValues = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "llm_entropy_values",
-			Help:    "Distribution of Shannon entropy values in classification decisions",
-			Buckets: []float64{0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0},
-		},
-		[]string{"category", "classification_type"},
-	)
-
-	// ClassificationConfidence tracks confidence scores from probability distributions
-	ClassificationConfidence = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "llm_classification_confidence",
-			Help:    "Distribution of classification confidence scores",
-			Buckets: []float64{0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
-		},
-		[]string{"category", "classification_method"},
-	)
-
-	// EntropyClassificationLatency tracks the latency of entropy-based classification
-	EntropyClassificationLatency = promauto.NewHistogram(
-		prometheus.HistogramOpts{
-			Name:    "llm_entropy_classification_latency_seconds",
-			Help:    "The latency of entropy-based classification operations in seconds",
-			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0},
-		},
-	)
-
-	// ProbabilityDistributionQuality tracks quality metrics of probability distributions
-	ProbabilityDistributionQuality = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "llm_probability_distribution_quality_total",
-			Help: "Quality indicators for probability distributions from classification models",
-		},
-		[]string{"quality_check", "status"},
-	)
-
-	// toolsRetrievalDuration tracks wall-clock time spent inside the retriever
-	// per request, partitioned by strategy name.  Use RecordToolsRetrieval to
-	// observe values.
-	toolsRetrievalDuration = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "vsr_tools_retrieval_duration_seconds",
-			Help:    "Wall-clock time spent in the tool retriever, by strategy.",
-			Buckets: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1},
-		},
-		[]string{"strategy"},
 	)
 )
 
@@ -444,11 +376,6 @@ func RecordModelResponseDurationPerOutputToken(model string, secondsPerToken flo
 // RecordModelRoutingLatency records the latency of model routing
 func RecordModelRoutingLatency(seconds float64) {
 	ModelRoutingLatency.Observe(seconds)
-}
-
-// RecordHallucinationDetectionLatency records the latency for hallucination detection
-func RecordHallucinationDetectionLatency(seconds float64) {
-	HallucinationDetectionLatency.Observe(seconds)
 }
 
 // RecordUnverifiedFactualResponse records when a factual response could not be verified
@@ -661,97 +588,4 @@ func InitializeBatchMetrics(config BatchMetricsConfig) {
 			[]string{"processing_type"},
 		)
 	})
-}
-
-// RecordEntropyClassificationDecision records an entropy-based classification decision
-func RecordEntropyClassificationDecision(uncertaintyLevel string, reasoningEnabled bool, decisionReason string, topCategory string) {
-	if uncertaintyLevel == "" {
-		uncertaintyLevel = consts.UnknownLabel
-	}
-	if decisionReason == "" {
-		decisionReason = "unspecified"
-	}
-	if topCategory == "" {
-		topCategory = "none"
-	}
-
-	reasoningStatus := "false"
-	if reasoningEnabled {
-		reasoningStatus = "true"
-	}
-
-	EntropyClassificationDecisions.WithLabelValues(uncertaintyLevel, reasoningStatus, decisionReason, topCategory).Inc()
-}
-
-// RecordEntropyValue records the entropy value for a classification
-func RecordEntropyValue(category string, classificationType string, entropyValue float64) {
-	if category == "" {
-		category = consts.UnknownLabel
-	}
-	if classificationType == "" {
-		classificationType = "standard"
-	}
-
-	EntropyValues.WithLabelValues(category, classificationType).Observe(entropyValue)
-}
-
-// RecordClassificationConfidence records the confidence score from classification
-func RecordClassificationConfidence(category string, classificationMethod string, confidence float64) {
-	if category == "" {
-		category = consts.UnknownLabel
-	}
-	if classificationMethod == "" {
-		classificationMethod = "traditional"
-	}
-
-	ClassificationConfidence.WithLabelValues(category, classificationMethod).Observe(confidence)
-}
-
-// RecordEntropyClassificationLatency records the latency of entropy-based classification
-func RecordEntropyClassificationLatency(seconds float64) {
-	EntropyClassificationLatency.Observe(seconds)
-}
-
-// RecordProbabilityDistributionQuality records quality checks for probability distributions
-func RecordProbabilityDistributionQuality(qualityCheck string, status string) {
-	if qualityCheck == "" {
-		qualityCheck = consts.UnknownLabel
-	}
-	if status == "" {
-		status = consts.UnknownLabel
-	}
-
-	ProbabilityDistributionQuality.WithLabelValues(qualityCheck, status).Inc()
-}
-
-// RecordEntropyClassificationMetrics records comprehensive entropy-based classification metrics
-func RecordEntropyClassificationMetrics(
-	category string,
-	uncertaintyLevel string,
-	entropyValue float64,
-	confidence float64,
-	reasoningEnabled bool,
-	decisionReason string,
-	topCategory string,
-	latencySeconds float64,
-) {
-	// Record the main decision
-	RecordEntropyClassificationDecision(uncertaintyLevel, reasoningEnabled, decisionReason, topCategory)
-
-	// Record entropy value
-	RecordEntropyValue(category, "entropy_based", entropyValue)
-
-	// Record confidence
-	RecordClassificationConfidence(category, "entropy_based", confidence)
-
-	// Record latency if provided
-	if latencySeconds > 0 {
-		RecordEntropyClassificationLatency(latencySeconds)
-	}
-}
-
-// RecordToolsRetrieval records the retrieval latency for the given strategy.
-// strategyID must match the value returned in RetrievalResult.StrategyID.
-func RecordToolsRetrieval(strategyID string, durationSeconds float64) {
-	toolsRetrievalDuration.WithLabelValues(strategyID).Observe(durationSeconds)
 }

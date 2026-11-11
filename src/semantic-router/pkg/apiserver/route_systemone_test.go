@@ -34,8 +34,8 @@ func TestSystemOneHTTPUsesPublishedDeploymentAndNativeTypes(t *testing.T) {
 	manager := modelservice.NewManager()
 	defer func() { _ = manager.Shutdown(context.Background()) }()
 	cfg := &config.RouterConfig{}
-	cfg.ModelDeployments = map[string]config.ModelDeployment{"selected": {Provider: config.ModelRuntimeProvider, Endpoint: upstream.URL, ServedName: "served"}}
-	cfg.DecisionRules = []config.DecisionSignalRule{{Name: "probe", Deployment: "selected", Question: config.DecisionQuestion{Type: "noul", Instructions: "test?"}}}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"selected": {Provider: config.ModelRuntimeProvider, Endpoint: upstream.URL, Model: "served"}}
+	cfg.SystemOneRules = []config.SystemOneRule{{Name: "probe", Deployment: "selected", Question: config.SystemOneQuestion{Type: "noul", Instructions: "test?"}}}
 	if err := manager.Reconcile(cfg); err != nil {
 		t.Fatal(err)
 	}

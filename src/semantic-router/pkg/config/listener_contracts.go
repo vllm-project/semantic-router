@@ -5,16 +5,18 @@ import (
 	"net/netip"
 	"path/filepath"
 	"strings"
-	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiregistry"
 )
 
-// CapabilityListenerModels is a listener's model allow-list, which only the
-// standalone gateway enforces: the Envoy listener the CLI generates does not
-// yet, so behind Envoy every model would stay reachable.
+// CapabilityListenerModels is the model allow-list of a listener's LLM API,
+// which only the standalone gateway enforces: the Envoy listener the CLI
+// generates does not yet, so behind Envoy every model would stay reachable.
 const CapabilityListenerModels = "listener_models"
 
 // DefaultSystemOneMaxDeadlineMs is the longest a listener's System One API
-// waits for a model when its systemone.max_deadline_ms is omitted: 10 minutes.
+// waits for a model when its apis.systemone.max_deadline_ms is omitted: 10
+// minutes.
 const DefaultSystemOneMaxDeadlineMs = 600_000
 
 func init() {
@@ -23,11 +25,14 @@ func init() {
 		Uses: func(cfg *RouterConfig) []CapabilityUse {
 			var uses []CapabilityUse
 			for _, listener := range cfg.Listeners {
-				if len(listener.Models) > 0 {
-					uses = append(uses, CapabilityUse{
-						Path:    "listeners[" + listener.Name + "].models",
-						Subject: fmt.Sprintf("listener '%s': models", listener.Name),
-					})
+				for _, name := range listener.ServedAPIs() {
+					api, _ := apiregistry.Lookup(name)
+					if api.Kind == apiregistry.KindLLM && listener.APIs[name].Models != nil {
+						uses = append(uses, CapabilityUse{
+							Path:    listenerPath(listener, "apis."+name+".models"),
+							Subject: fmt.Sprintf("listener '%s': apis.%s.models", listener.Name, name),
+						})
+					}
 				}
 			}
 			return uses
@@ -45,10 +50,7 @@ func validateListenerContracts(cfg *RouterConfig) error {
 			(strings.TrimSpace(listener.TLS.CertFile) == "" || strings.TrimSpace(listener.TLS.KeyFile) == "") {
 			return fmt.Errorf("listener '%s': tls needs both cert_file and key_file", listener.Name)
 		}
-		if err := validateListenerModels(listener); err != nil {
-			return err
-		}
-		if err := validateListenerSystemOne(cfg, listener); err != nil {
+		if err := validateListenerAPIs(cfg, listener); err != nil {
 			return err
 		}
 		if listener.Identity == nil {
@@ -62,47 +64,6 @@ func validateListenerContracts(cfg *RouterConfig) error {
 		}
 	}
 	return nil
-}
-
-func validateListenerSystemOne(cfg *RouterConfig, listener Listener) error {
-	if listener.SystemOne == nil {
-		return nil
-	}
-	if len(listener.SystemOne.Models) == 0 {
-		return fmt.Errorf("listener %q: systemone.models must explicitly name at least one public model", listener.Name)
-	}
-	if limit := listener.SystemOne.MaxDeadlineMs; limit != nil && *limit <= 0 {
-		return fmt.Errorf("listener %q: systemone.max_deadline_ms must be greater than zero, got %d", listener.Name, *limit)
-	}
-	seen := map[string]bool{}
-	for _, model := range listener.SystemOne.Models {
-		if model == "" || model != strings.TrimSpace(model) || seen[model] {
-			return fmt.Errorf("listener %q: systemone.models must contain distinct non-empty model names without surrounding spaces", listener.Name)
-		}
-		seen[model] = true
-		// A routed entrypoint is not one deployment. A provider alias is
-		// checked in validateNativeRoutingConfig, published or not.
-		if _, routed := cfg.ResolveEntrypoint(SystemOneAPI, model); routed || cfg.IsSystemOneBackend(model) {
-			continue
-		}
-		name, deployment, err := cfg.ResolveSystemOneDeployment(model)
-		if err != nil {
-			return fmt.Errorf("listener %q: systemone.models: %w", listener.Name, err)
-		}
-		if err := deployment.ValidateDecisionInput(name); err != nil {
-			return fmt.Errorf("listener %q: systemone.models: %w", listener.Name, err)
-		}
-	}
-	return nil
-}
-
-// MaxDeadline is the longest the listener's System One API waits for a model
-// it calls directly.
-func (s *ListenerSystemOne) MaxDeadline() time.Duration {
-	if s == nil || s.MaxDeadlineMs == nil {
-		return DefaultSystemOneMaxDeadlineMs * time.Millisecond
-	}
-	return time.Duration(*s.MaxDeadlineMs) * time.Millisecond
 }
 
 // IsSystemOneBackend reports whether model is an exact provider alias for the
@@ -141,22 +102,6 @@ func (c *RouterConfig) ResolveSystemOneDeployment(model string) (string, ModelDe
 		return "", ModelDeployment{}, fmt.Errorf("public System One model %q requires a model_runtime deployment", model)
 	}
 	return name, deployment, nil
-}
-
-// validateListenerModels checks that every allowed model is a distinct name
-// a request can send: request models are matched exactly, after trimming.
-func validateListenerModels(listener Listener) error {
-	seen := make(map[string]bool, len(listener.Models))
-	for index, model := range listener.Models {
-		if model == "" || strings.TrimSpace(model) != model {
-			return fmt.Errorf("listener '%s': models[%d] %q must be a model name without surrounding spaces", listener.Name, index, model)
-		}
-		if seen[model] {
-			return fmt.Errorf("listener '%s': models lists %q twice", listener.Name, model)
-		}
-		seen[model] = true
-	}
-	return nil
 }
 
 // PeerPrefixes parses TrustedPeers.

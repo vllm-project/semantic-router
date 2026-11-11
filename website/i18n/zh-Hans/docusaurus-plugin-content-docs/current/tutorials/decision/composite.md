@@ -36,29 +36,31 @@ translation:
 ## 配置
 
 ```yaml
-routing:
-  decisions:
-    - name: priority_safe_escalation_route
-      description: Combine AND, OR, and NOT for a realistic multi-signal routing case.
-      priority: 160
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-          - operator: OR
-            conditions:
-              - type: keyword
-                name: urgent_keywords
-              - type: complexity
-                name: needs_reasoning:hard
-          - operator: NOT
-            conditions:
-              - type: jailbreak
-                name: prompt_injection
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: true
+recipes:
+  - name: default
+    decisions:
+      - name: priority_safe_escalation_route
+        description: Combine AND, OR, and NOT for a realistic multi-signal routing case.
+        priority: 160
+        rules:
+          operator: AND
+          conditions:
+            - type: domain
+              name: business
+            - operator: OR
+              conditions:
+                - type: keyword
+                  name: urgent_keywords
+                - type: complexity
+                  name: needs_reasoning
+                  label: hard
+            - operator: NOT
+              conditions:
+                - type: jailbreak
+                  name: prompt_injection
+        modelRefs:
+          - model: qwen2.5:3b
+            use_reasoning: true
 ```
 
 如果决策需要嵌套逻辑，请保持分组显式，而不是把一个扁平规则块拉长到难以阅读。

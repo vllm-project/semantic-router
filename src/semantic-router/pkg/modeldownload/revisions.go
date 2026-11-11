@@ -11,9 +11,10 @@ import (
 )
 
 // ValidateReloadArtifacts prevents provisioning from modifying directories used
-// by the live generation. DownloadModel additionally rejects reusing populated
-// explicit artifact paths without matching immutable HF cache metadata, which
-// also protects retired generations still draining requests.
+// by the live generation. DownloadModelWithProgressContext additionally
+// rejects reusing populated explicit artifact paths without matching immutable
+// HF cache metadata, which also protects retired generations still draining
+// requests.
 func ValidateReloadArtifacts(current, next *config.RouterConfig) error {
 	if current == nil {
 		return nil

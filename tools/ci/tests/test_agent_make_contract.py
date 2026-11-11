@@ -138,11 +138,13 @@ class HarnessMakeContractTests(unittest.TestCase):
             "docs-generated-check",
             "docs-crd-check",
             "decision-runtime-catalog-check",
+            "systemone-schemas-check",
         ):
             self.assertIn(dependency, check)
         generate = target_block("generated-contract-generate", docs_make)
         self.assertIn("config-schema-generate", generate)
         self.assertIn("decision-runtime-catalog-generate", generate)
+        self.assertIn("systemone-schemas-generate", generate)
         self.assertLess(
             generate.index("api-docs-generate"), generate.index("agent-skill-sync")
         )
@@ -164,6 +166,7 @@ class HarnessMakeContractTests(unittest.TestCase):
             "api-docs-check",
             "docs-crd-check",
             "decision-runtime-catalog-check",
+            "systemone-schemas-check",
         ):
             self.assertIn(target, commands)
         self.assertTrue(
@@ -195,7 +198,7 @@ class HarnessMakeContractTests(unittest.TestCase):
             "src/model-runtime/vllm_srun/registry/tables/omni.py",
             "src/model-runtime/vllm_srun/registry/releases.generated.json",
             "src/model-runtime/vllm_srun/families/vela2/request.py",
-            "src/semantic-router/pkg/modelservice/decision_catalog.generated.json",
+            "src/semantic-router/pkg/config/decision_catalog.generated.json",
             "src/model-runtime/vllm_srun/registry/tables/common.py",
             "src/model-runtime/vllm_srun/systemone.py",
             "src/model-runtime/vllm_srun/families/decision1/family.py",
