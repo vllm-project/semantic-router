@@ -356,6 +356,11 @@ layer first:
   for the request. There's no separate fallback list, and a provider model has
   no fallback of its own: other replicas of the same model are tried through
   its retries, ejection and health checks instead.
+- **Reasoning.** A candidate is sent with its own `modelRefs` reasoning
+  settings (`use_reasoning`, `reasoning_effort`, `reasoning_mode`), written for
+  its backend the way the first attempt's are. A candidate the Router cannot
+  prepare, such as one its rate limit refuses, is passed over for the next one
+  and logged as `fallback_candidate_skipped` with the reason.
 
 Both gateway modes run the same policy, with one deliberate difference:
 standalone mode also falls back when no backend answered at all, such as a
