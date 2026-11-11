@@ -153,11 +153,12 @@ async function markOffline($: EngineInterface, runtime: Runtime) {
   $.ui.toast(`vSR: the decision model is not answering at ${runtime.url} · vSR's checks step aside until it does (apps set to wait until done hold instead); guard's fixed rules still hold · /vsr:setup`)
 }
 
-// Asks the runtime's `/health` once; one that does not answer in time is offline.
-export async function checkRuntime($: EngineInterface, runtime: Runtime) {
+// Asks the runtime's `/health` once; one that does not answer in time is offline. True when it answered.
+export async function checkRuntime($: EngineInterface, runtime: Runtime): Promise<boolean> {
   const answered = await Promise.race([
     $.http.fetch(healthUrlOf(runtime.url), { headers: headersOf(runtime) }).then(response => response.ok, () => false),
     $.clock.sleep(HEALTH_TIMEOUT_MS).then(() => false),
   ])
-  return answered ? markReachable($) : markOffline($, runtime)
+  await (answered ? markReachable($) : markOffline($, runtime))
+  return answered
 }

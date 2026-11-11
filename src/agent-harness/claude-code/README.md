@@ -125,6 +125,10 @@ or an error answer) lets the command run with a `SKIPPED` row, as redact and shi
 the fixed rules below and a score already over the line hold it. With `until done` guard waits up to
 60 s and holds a command it could not check. A command of more than 12 parts is always held.
 
+The 0.9 line is measured on vela3-lite. Another model can score the same command far lower: vela3-fast
+gives `git push --force origin main` 0.02. So at session start vSR asks the decision model about that
+command once, and when it scores under the line a toast says guard would let commands like it run.
+
 Some commands are always held, whatever the score and even while the decision model is offline:
 recursive deletes of `/`, your home directory or a top-level system directory, `mkfs`, `dd` to a
 device (not `/dev/null` and the like), fork bombs, recursive permission changes on `/`, and scripts
