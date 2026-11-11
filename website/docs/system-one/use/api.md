@@ -148,7 +148,7 @@ states:
 | `preset` | all | Extension. A question the model was trained on (for example `pii`), listed in its card's `presets`; the question still carries its own `instructions` and `criteria`, which any other server answers |
 | `threshold` | `set`, `span` | Extension. Replaces the model's own decision threshold; the applied value comes back in `thresholds` |
 | `head` | `span` | Extension. `router` or `broad`, on models with a broad span head |
-| `over` | all | Extension. The state keys the question reads |
+| `over` | all | Extension. The state keys the question reads, on Vela models: any question on Vela 2.0, and on Vela 3.0 a `span`, a preset or one of vela3-fast's trained router questions. Decision 1.0, 2.0 and 3.0 refuse it with `invalid_question` |
 | `overflow` | all | Extension. `window` (read a long part whole, in windows) or `truncate` (its first tokens), on models with a scan budget |
 | `require_full_input` | all | Extension. Fails the question unless the whole input is read; the answer then carries `input_coverage: complete` |
 
