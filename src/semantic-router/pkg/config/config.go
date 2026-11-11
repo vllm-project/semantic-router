@@ -354,6 +354,9 @@ type BackendModels struct {
 	DefaultQualityIndex string                     `yaml:"-"`
 	VLLMEndpoints       []VLLMEndpoint             `yaml:"vllm_endpoints"`
 	ProviderProfiles    map[string]ProviderProfile `yaml:"provider_profiles,omitempty"`
+	// DefaultBackendTLS is providers.defaults.tls, already applied to each
+	// https backend's provider profile.
+	DefaultBackendTLS *ProviderDefaultsTLS `yaml:"-" json:"-"`
 	// ProviderModelOrder lists providers.models aliases in authored order.
 	// VLLMEndpoints are sorted by alias, but the data plane's default route
 	// serves the first authored model that has a backend.

@@ -347,12 +347,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	attemptStart := time.Now()
 
 	if r.fallbackCaller != nil {
-		extraHeaders := make(map[string]string)
-		if dispatch.profile != nil {
-			for k, v := range dispatch.profile.ExtraHeaders {
-				extraHeaders[k] = v
-			}
-		}
+		extraHeaders := fallbackRequestHeaders(ctx, dispatch.profile, orch)
 		resBody, statusCode, callErr = r.fallbackCaller(attemptCtx, candidateModel, requestBody, extraHeaders)
 	} else {
 		resBody, statusCode, callErr = r.dispatchFallbackHTTP(attemptCtx, ctx, dispatch, requestBody, orch)
@@ -360,24 +355,26 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	attemptDuration := time.Since(attemptStart)
 
 	attemptOutcome := fallback.AttemptOutcome{
-		Model:      candidateModel,
-		Backend:    dispatch.backendName,
-		StatusCode: statusCode,
-		Error:      callErr,
-		Duration:   attemptDuration,
-		Discarded:  callErr != nil || statusCode < 200 || statusCode >= 300,
+		Model:            candidateModel,
+		Backend:          dispatch.backendName,
+		StatusCode:       statusCode,
+		Error:            callErr,
+		Duration:         attemptDuration,
+		Discarded:        callErr != nil || statusCode < 200 || statusCode >= 300,
+		ForwardedHeaders: forwardedFallbackHeaders(ctx, orch),
 	}
 
 	if callErr != nil || statusCode < 200 || statusCode >= 300 {
 		attemptOutcome.ErrorMessage = string(resBody)
 		evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 		logging.ComponentWarnEvent("extproc", "fallback_candidate_attempt_failed", map[string]interface{}{
-			"request_id":      ctx.RequestID,
-			"candidate_model": candidateModel,
-			"status":          statusCode,
-			"error":           callErr,
-			"can_fallback":    evalResult.CanFallback,
-			"final_status":    ctx.FallbackRecord.FinalStatus,
+			"request_id":        ctx.RequestID,
+			"candidate_model":   candidateModel,
+			"status":            statusCode,
+			"error":             callErr,
+			"can_fallback":      evalResult.CanFallback,
+			"final_status":      ctx.FallbackRecord.FinalStatus,
+			"forwarded_headers": attemptOutcome.ForwardedHeaders,
 		})
 		return nil, evalResult, fmt.Errorf("candidate %s failed with status %d: %w", candidateModel, statusCode, callErr)
 	}
@@ -908,11 +905,16 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 			timeout = remaining
 		}
 	}
+	tlsConfig, err := providerTLSConfig(dispatch.profile)
+	if err != nil {
+		return nil, 0, err
+	}
 	client, err := connector.New(base, authorize, connector.Options{
 		AttemptTimeout:   timeout,
 		MaxRequestBytes:  16 << 20,
 		MaxResponseBytes: 32 << 20,
 		MaxErrorBytes:    8 << 10,
+		TLSConfig:        tlsConfig,
 	})
 	if err != nil {
 		return nil, 0, err
@@ -929,12 +931,7 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 		Query:             query,
 		SuccessStatusCode: http.StatusOK,
 	}
-	reqHeaders := make(map[string]string)
-	if dispatch.profile != nil {
-		for k, v := range dispatch.profile.ExtraHeaders {
-			reqHeaders[k] = v
-		}
-	}
+	reqHeaders := fallbackRequestHeaders(reqCtx, dispatch.profile, orch)
 	resp, err := client.DoRequest(ctx, operation, connector.Request{
 		Body:    body,
 		Headers: reqHeaders,

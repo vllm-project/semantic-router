@@ -121,9 +121,10 @@ func NewRemoteSystemOne(cfg *config.RouterConfig) (*RemoteSystemOne, error) {
 			return nil, fmt.Errorf("systemone deployment %q: %w", name, err)
 		}
 		// A delegated deployment answers each user with that user's
-		// credential, so no answer is kept for another request.
+		// credential, and one that forwards request headers may answer by
+		// them, so neither keeps an answer for another request.
 		var cache *resultCache
-		if !deployment.Auth.Delegated() {
+		if !deployment.Auth.Delegated() && len(deployment.ForwardRequestHeaders) == 0 {
 			cache = newExpiringResultCache(ResultCacheEntries(), remoteCacheTTL)
 		}
 		codec, deviations, err := systemonecodec.Builtin().Resolve(systemonecodec.SchemaID(deployment.Schema), deployment.Deviations)

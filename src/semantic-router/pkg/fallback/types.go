@@ -50,6 +50,11 @@ type FallbackPolicy struct {
 	PerAttemptTimeout    time.Duration        `json:"per_attempt_timeout,omitempty" yaml:"per_attempt_timeout,omitempty"`
 	RetryableStatusCodes []int                `json:"retryable_status_codes,omitempty" yaml:"retryable_status_codes,omitempty"`
 	CircuitBreaker       CircuitBreakerConfig `json:"circuit_breaker,omitempty" yaml:"circuit_breaker,omitempty"`
+	// ForwardRequestHeaders names the client request headers a fallback
+	// attempt the Router sends itself copies, matched case-insensitively,
+	// when the client sent them. The configuration loader refuses names that
+	// can never be forwarded.
+	ForwardRequestHeaders []string `json:"forward_request_headers,omitempty" yaml:"forward_request_headers,omitempty"`
 
 	rawEnabled *bool
 }
@@ -85,6 +90,7 @@ func (p *FallbackPolicy) fromRaw(
 	rawPerAttemptTimeout any,
 	retryableStatusCodes []int,
 	cb CircuitBreakerConfig,
+	forwardRequestHeaders []string,
 ) error {
 	p.Version = version
 	p.rawEnabled = enabled
@@ -94,6 +100,7 @@ func (p *FallbackPolicy) fromRaw(
 	p.MaxAttempts = maxAttempts
 	p.RetryableStatusCodes = retryableStatusCodes
 	p.CircuitBreaker = cb
+	p.ForwardRequestHeaders = forwardRequestHeaders
 
 	totalTimeout, err := unmarshalDuration(rawTotalTimeout)
 	if err != nil {
@@ -113,38 +120,40 @@ func (p *FallbackPolicy) fromRaw(
 // preserving tri-state presence for enabled.
 func (p *FallbackPolicy) UnmarshalJSON(data []byte) error {
 	type rawFallbackPolicy struct {
-		Version              int                  `json:"version,omitempty"`
-		Enabled              *bool                `json:"enabled,omitempty"`
-		MaxAttempts          int                  `json:"max_attempts,omitempty"`
-		TotalTimeout         any                  `json:"total_timeout,omitempty"`
-		PerAttemptTimeout    any                  `json:"per_attempt_timeout,omitempty"`
-		RetryableStatusCodes []int                `json:"retryable_status_codes,omitempty"`
-		CircuitBreaker       CircuitBreakerConfig `json:"circuit_breaker,omitempty"`
+		Version               int                  `json:"version,omitempty"`
+		Enabled               *bool                `json:"enabled,omitempty"`
+		MaxAttempts           int                  `json:"max_attempts,omitempty"`
+		TotalTimeout          any                  `json:"total_timeout,omitempty"`
+		PerAttemptTimeout     any                  `json:"per_attempt_timeout,omitempty"`
+		RetryableStatusCodes  []int                `json:"retryable_status_codes,omitempty"`
+		CircuitBreaker        CircuitBreakerConfig `json:"circuit_breaker,omitempty"`
+		ForwardRequestHeaders []string             `json:"forward_request_headers,omitempty"`
 	}
 	var raw rawFallbackPolicy
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	return p.fromRaw(raw.Version, raw.Enabled, raw.MaxAttempts, raw.TotalTimeout, raw.PerAttemptTimeout, raw.RetryableStatusCodes, raw.CircuitBreaker)
+	return p.fromRaw(raw.Version, raw.Enabled, raw.MaxAttempts, raw.TotalTimeout, raw.PerAttemptTimeout, raw.RetryableStatusCodes, raw.CircuitBreaker, raw.ForwardRequestHeaders)
 }
 
 // UnmarshalYAML supports both string duration format ("30s") and numeric nanoseconds,
 // preserving tri-state presence for enabled to support recipe inheritance.
 func (p *FallbackPolicy) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	type rawFallbackPolicy struct {
-		Version              int                  `yaml:"version,omitempty"`
-		Enabled              *bool                `yaml:"enabled,omitempty"`
-		MaxAttempts          int                  `yaml:"max_attempts,omitempty"`
-		TotalTimeout         any                  `yaml:"total_timeout,omitempty"`
-		PerAttemptTimeout    any                  `yaml:"per_attempt_timeout,omitempty"`
-		RetryableStatusCodes []int                `yaml:"retryable_status_codes,omitempty"`
-		CircuitBreaker       CircuitBreakerConfig `yaml:"circuit_breaker,omitempty"`
+		Version               int                  `yaml:"version,omitempty"`
+		Enabled               *bool                `yaml:"enabled,omitempty"`
+		MaxAttempts           int                  `yaml:"max_attempts,omitempty"`
+		TotalTimeout          any                  `yaml:"total_timeout,omitempty"`
+		PerAttemptTimeout     any                  `yaml:"per_attempt_timeout,omitempty"`
+		RetryableStatusCodes  []int                `yaml:"retryable_status_codes,omitempty"`
+		CircuitBreaker        CircuitBreakerConfig `yaml:"circuit_breaker,omitempty"`
+		ForwardRequestHeaders []string             `yaml:"forward_request_headers,omitempty"`
 	}
 	var raw rawFallbackPolicy
 	if err := unmarshal(&raw); err != nil {
 		return err
 	}
-	return p.fromRaw(raw.Version, raw.Enabled, raw.MaxAttempts, raw.TotalTimeout, raw.PerAttemptTimeout, raw.RetryableStatusCodes, raw.CircuitBreaker)
+	return p.fromRaw(raw.Version, raw.Enabled, raw.MaxAttempts, raw.TotalTimeout, raw.PerAttemptTimeout, raw.RetryableStatusCodes, raw.CircuitBreaker, raw.ForwardRequestHeaders)
 }
 
 // DefaultPolicy returns the canonical v1 fallback policy configuration.
@@ -203,6 +212,9 @@ func (p FallbackPolicy) Inherit(base FallbackPolicy) FallbackPolicy {
 	if len(p.RetryableStatusCodes) == 0 && len(base.RetryableStatusCodes) > 0 {
 		p.RetryableStatusCodes = append([]int(nil), base.RetryableStatusCodes...)
 	}
+	if len(p.ForwardRequestHeaders) == 0 && len(base.ForwardRequestHeaders) > 0 {
+		p.ForwardRequestHeaders = append([]string(nil), base.ForwardRequestHeaders...)
+	}
 	if p.CircuitBreaker.ConsecutiveFailures == 0 {
 		p.CircuitBreaker.ConsecutiveFailures = base.CircuitBreaker.ConsecutiveFailures
 	}
@@ -228,6 +240,9 @@ func (p *FallbackPolicy) Clone() *FallbackPolicy {
 	cp := *p
 	if p.RetryableStatusCodes != nil {
 		cp.RetryableStatusCodes = append([]int(nil), p.RetryableStatusCodes...)
+	}
+	if p.ForwardRequestHeaders != nil {
+		cp.ForwardRequestHeaders = append([]string(nil), p.ForwardRequestHeaders...)
 	}
 	if p.rawEnabled != nil {
 		val := *p.rawEnabled
@@ -393,6 +408,9 @@ type AttemptOutcome struct {
 	Cost              float64       `json:"cost,omitempty"`
 	Currency          string        `json:"currency,omitempty"`
 	Discarded         bool          `json:"discarded"`
+	// ForwardedHeaders names the client request headers an attempt the
+	// Router sent itself copied (forward_request_headers); never their values.
+	ForwardedHeaders []string `json:"forwarded_headers,omitempty"`
 }
 
 // TokenUsageSummary groups billable vs discarded token counts across attempts.

@@ -81,11 +81,14 @@ With `--gateway extproc`, the generated Envoy cluster for an HTTPS backend
 verifies both the server certificate chain and its DNS hostname:
 
 - **One hostname per pool.** The supported Envoy runtime shares its TLS
-  context within a cluster, so an HTTPS replica pool must keep one hostname.
-  Use separate model aliases for different HTTPS hosts.
+  context within a cluster, so an HTTPS replica pool must keep one hostname
+  and one `tls` block. Use separate model aliases for different HTTPS hosts.
 - **No IP literals.** IP-literal HTTPS targets are rejected, instead of
   silently weakening hostname verification.
-- **A CA bundle.** A custom Envoy image used with `vllm-sr serve` must provide
+- **A CA bundle.** A backend's `tls.ca_file`, else
+  `providers.defaults.tls.ca_file`, names the bundle its certificate must
+  chain to; see [Trust a private CA](backend-target-compatibility#trust-a-private-ca).
+  Without either, a custom Envoy image used with `vllm-sr serve` must provide
   the system CA bundle at `/etc/ssl/certs/ca-certificates.crt`. Startup
   validation fails when that trust store is missing, rather than silently
   disabling verification.
