@@ -58,6 +58,7 @@ Each time it loads, the model compares its answers with the reference
 answers recorded for its revision. They are recorded for:
 
 - NVIDIA Ada (sm_89) (`cuda:sm_89`)
+- Ascend NPU (`npu`)
 - AMD GPU (ROCm) (`rocm`)
 
 Where a hardware reference and its device class's are both recorded, the
