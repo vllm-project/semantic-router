@@ -388,6 +388,9 @@ func validateSystemOneLeaf(cfg *RouterConfig, decisionName string, node *RuleNod
 	if slices.Contains(rule.IgnoreLabels, node.Label) {
 		return fmt.Errorf("decision '%s': systemone condition %q names label %q, which the rule's ignore_labels never count", decisionName, node.Name, node.Label)
 	}
+	if rule.Question.Type != SystemOneQuestionChoice && !slices.Contains(rule.CountedLabels(), node.Label) {
+		return fmt.Errorf("decision '%s': systemone condition %q names label %q, which is not one of the rule's labels (%s)", decisionName, node.Name, node.Label, strings.Join(rule.Labels, ", "))
+	}
 	return nil
 }
 

@@ -171,6 +171,10 @@ class ImageArtifactTests(unittest.TestCase):
             images.publication_tags("vllm-sr", "release", "v1.2.3", True, ""),
             ["v1.2.3", "latest"],
         )
+        # Main moves latest only after its complete image set is published.
+        for mode in ("main", "nightly"):
+            with self.subTest(mode=mode), self.assertRaisesRegex(ValueError, "latest"):
+                images.publication_tags("vllm-sr", mode, "", True, "20260917")
 
     def test_promotion_records_the_copied_digest_for_each_tag(self):
         with (

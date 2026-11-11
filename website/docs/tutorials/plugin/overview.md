@@ -69,14 +69,17 @@ plugins, not an additional plugin type.
 
 ## Capability Gating
 
-A plugin that acts on request content runs only when the request needs that
-content and the selected model can take it. The `context` plugin acts on
-text, so it is skipped when the request has no text in its instructions or
-messages. Text is assumed for every model, so a model card never gates them.
-The model card gates only a plugin that acts on another modality, such as
-images: it is skipped when the card declares capabilities and omits that
-modality. A model with no recognized declaration is not gated. Other plugin
-types are not gated and still run on configuration alone.
+A plugin that acts on request content runs only when the request has that
+content and the selected model can take it:
+
+- **Text.** The `context` plugin acts on text, so it is skipped when the
+  request has no text in its instructions or messages. Every model is assumed
+  to take text, so a model card never gates it.
+- **Other modalities.** A plugin that acts on, say, images is skipped when the
+  model card declares capabilities and omits that modality. A model with no
+  recognized declaration is not gated.
+- **Everything else.** Other plugin types are not gated, and run on
+  configuration alone.
 
 A skip is typed and carries no request content:
 
@@ -100,13 +103,16 @@ match:
   judge:  {preset: relevance, top_k: 6, min_score: 0.5, max_candidates: 64}  # decides with a System One question
 ```
 
-- **Stages.** A block runs the stages it writes, at least one; an empty block
-  fails to load with `match_empty`. A feature that writes no block runs its
-  default (below); a block it writes replaces the default as a whole.
-  - With `recall` only, the result is classic embedding or BM25 similarity.
-  - With `judge` only, a System One question judges every candidate; this
-    suits small, naturally bounded candidate sets.
-  - With both, `recall` narrows the set and `judge` decides.
+A block runs the stages it writes, at least one; an empty block fails to load
+with `match_empty`. A feature that writes no block runs its default (below),
+and a block it writes replaces that default as a whole.
+
+| Stages | Result |
+| --- | --- |
+| `recall` only | Classic embedding or BM25 similarity. |
+| `judge` only | A System One question judges every candidate; suits small, naturally bounded sets. |
+| Both | `recall` narrows the set, and `judge` decides. |
+
 - **`recall`** narrows the candidates by index similarity:
   - `method: embedding` (the default) compares embeddings in the store's
     embedding space (`global.model_catalog.embeddings.default` unless the
@@ -115,26 +121,23 @@ match:
     `min_similarity` is a BM25 score;
   - `top_k` bounds the candidates; it is required when they come from an index.
 - **`judge`** asks one System One question about the request and the
-  candidates, in one call, on the decision model or the named `deployment`:
-  - `preset: relevance | same_request | tool_rank`, or a custom `question`
-    (`choice`, `noul` or `score`);
-  - a choice question (`tool_rank`) chooses among the candidates, which are its
-    options, in one standard request, and scores each with its probability; a
-    noul or score question (`relevance`, `same_request`) is asked about each
-    candidate, one batch entry per candidate, and scores it with P(yes) or the
-    expected level;
-  - `top_k`, `min_score` (absolute) and `min_ratio` (a fraction of the best
-    score, in (0, 1]) keep candidates, best first;
-  - `on_error: skip` (the default) keeps the recall result, or the candidates
-    as they came without recall, when the judge fails or is late;
-    `on_error: fail` fails the feature's match; `timeout_ms` bounds the call
-    (else the deployment's `timeout_ms`, else 1000 ms).
-- **`judge.max_candidates`** is a hard cap: at most 255 for a choice judge (the
-  options of one question, its default), and 64 by default for a judge asked
-  about each candidate. More candidates never fail: the judge reads the first
-  `max_candidates` by recall rank, or as the feature lists them (most recent
-  first) without recall. Each truncation adds a `match.judge.truncated` event to
-  the request's trace span and counts in `vsr_match_judge_truncated_total`.
+  candidates, in one call, on the decision model or the named `deployment`.
+  A choice judge (`tool_rank`) asks one question whose options are the
+  candidates; a `noul` or `score` judge (`relevance`, `same_request`) asks about
+  each candidate, one batch entry each.
+
+| `judge` field | Meaning |
+| --- | --- |
+| `preset` or `question` | `relevance`, `same_request` or `tool_rank`, or a custom `choice`, `noul` or `score` question. |
+| `top_k`, `min_score`, `min_ratio` | Keep candidates, best first. `min_score` is absolute; `min_ratio` is a fraction of the best score, in (0, 1]. |
+| `on_error` | `skip` (the default) keeps the recall result, or the candidates as they came, when the judge fails or is late. `fail` fails the feature's match. |
+| `timeout_ms` | Bounds the call; else the deployment's `timeout_ms`, else 1000 ms. |
+| `max_candidates` | A hard cap: 255 for a choice judge, and 64 by default for a judge asked about each candidate. |
+
+Extra candidates never fail a request: the judge reads the first
+`max_candidates`, by recall rank or in the feature's order (most recent
+first). Each truncation adds a `match.judge.truncated` event to the trace
+span and counts in `vsr_match_judge_truncated_total`.
 
 | Feature | Default `match` | Notes |
 |---|---|---|
@@ -142,7 +145,7 @@ match:
 | `context.sources[rag].match` | `recall: {method: embedding, top_k: 20, min_similarity: 0.3}`, `judge: {preset: relevance, top_k: 6, min_score: 0.5}` | `recall: {method: bm25}` and a judge without recall read a local knowledge base: a `vectorstore` source over the in-memory vector store. A source over an external vector database recalls by `embedding` |
 | `context.sources[memory].match` | `recall: {method: embedding, top_k: 5, min_similarity: 0.7}` | The memory store's `default_retrieval_limit` and `default_similarity_threshold` replace the recall defaults. A judge without recall reads the user's newest memories |
 | `context.compress.match` | `recall: {method: bm25}`, `judge: {preset: relevance}` | Each segment of the request is a candidate about the latest user message; BM25 prefilters for the judge's 64; the budget bounds what is kept |
-| `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | At most 255 tools; more are truncated, or narrowed by `recall: {method: bm25}` |
+| `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | At most 255 tools; more are truncated, or narrowed by `recall: {method: bm25}`; a block without a judge fails to load |
 
 Every stage is counted in `vsr_match_recall_total` (feature, method, outcome)
 or `vsr_match_judge_total` (feature, preset, outcome), and timed in

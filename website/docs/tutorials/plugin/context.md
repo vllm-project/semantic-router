@@ -2,13 +2,16 @@
 
 ## Overview
 
-`context` is the plugin that assembles the request's context. Its `sources`
-retrieve documents (`rag`) and the user's memories (`memory`), each kept by
-its `match` block. `compress` shrinks the request's own segments, judged by
-its `match` block, until the request fits the `budget`, and its `signals`
-compress the text the routing signals read. `injection` places what the
-sources kept. A memory source also writes the turn to memory after the
-response.
+`context` is the plugin that assembles the request's context. It has three
+parts:
+
+- **`sources`** retrieve documents (`rag`) and the user's memories
+  (`memory`), each kept by its `match` block. A memory source also writes the
+  turn to memory after the response.
+- **`compress`** shrinks the request's own segments, judged by its `match`
+  block, until the request fits the `budget`. Its `signals` compress the text
+  the routing signals read.
+- **`injection`** places what the sources kept.
 
 ## Key Advantages
 
@@ -86,41 +89,52 @@ Choose one backend:
 | `external_api` | A service with a custom HTTP request contract | `endpoint`, `request_format` |
 | `mcp` | Rejected at startup until an MCP tool invoker exists | `server_name`, `tool_name` |
 | `openai` | OpenAI file search | `vector_store_id`, `api_key` |
-| `vectorstore` | The Router-managed vector-store service | `vector_store_id` |
+| `vectorstore` | The Router-managed vector-store service, with `global.stores.vector_store.enabled: true` | `vector_store_id` |
 | `hybrid` | A primary backend with an optional fallback | `primary`, plus backend-specific nested configuration |
 
-`hybrid.strategy` defaults to `sequential`: the fallback runs only after the
-primary fails or returns no documents. `parallel` starts both lookups and
-returns as soon as the primary has documents. For `external_api`,
-`max_response_bytes` caps each response body; omitted or `0` uses 4 MiB. For
-OpenAI `direct_search`, the same default applies to each vector-store search
-response.
+- **`hybrid.strategy`** defaults to `sequential`: the fallback runs only
+  after the primary fails or returns no documents. `parallel` starts both
+  lookups and returns as soon as the primary has documents.
+- **`max_response_bytes`** caps each `external_api` response body; omitted or
+  `0` uses 4 MiB. The same default applies to each OpenAI `direct_search`
+  vector-store search response.
 
-The source's `match` block keeps the documents. By default the backend
-recalls up to 20 documents with an embedding similarity of at least 0.3, and
-one call to the deployment that answers the judge (the decision model unless
-`match.judge.deployment` names another) asks the `relevance` question about
-each, one batch entry per document: the 6 most relevant documents with a
-score of at least 0.5 are kept, in the judge's order. A written block replaces
-the default whole: a block with only `recall` keeps the recalled documents in
-the backend's order. A local knowledge base, a `vectorstore` source over the
-in-memory vector store, can also recall with `method: bm25`, which embeds no
-query, or be judged whole by a block with only a `judge`: the judge reads its
-newest chunks, at most `max_candidates` (64 by default). A source over an
-external vector database recalls by embedding. External
-API documents carry the score the service returns (Pinecone `score`, Weaviate
-`1 - distance`, Elasticsearch `_score`, a custom `score`); a document without
-one counts as similarity 1.
+The source's `match` block keeps the documents. By default:
+
+1. **Recall.** The backend recalls up to 20 documents with an embedding
+   similarity of at least 0.3.
+2. **Judge.** One call to the deployment that answers the judge (the decision
+   model, unless `match.judge.deployment` names another) asks the `relevance`
+   question about each document, one batch entry per document.
+3. **Keep.** The 6 most relevant documents with a score of at least 0.5 are
+   kept, in the judge's order.
+
+A written block replaces the default whole:
+
+- **A block with only `recall`** keeps the recalled documents in the
+  backend's order.
+- **A local knowledge base**, a `vectorstore` source over the in-memory vector
+  store, can also recall with `method: bm25`, which embeds no query. Or a
+  block with only a `judge` judges it whole: the judge reads its newest
+  chunks, at most `max_candidates` (64 by default).
+- **A source over an external vector database** recalls by embedding.
+
+External API documents carry the score the service returns (Pinecone `score`,
+Weaviate `1 - distance`, Elasticsearch `_score`, a custom `score`); a document
+without one counts as similarity 1.
 
 `on_failure` is what a failed retrieval does: `skip` (the default) goes on
 without the documents, `warn` also logs a warning, `block` refuses the request
 with `503`. A retrieval that finds nothing is not a failure. `cache_results`
 keeps the kept documents for `cache_ttl_seconds` (default 3600) per query,
-source and match block.
+source and match block; the unjudged documents a failed judge keeps under
+`on_error: skip` serve that request only and are not cached.
 
-Retrieved documents become provider-bound context. Apply collection-level
-access control and avoid mixing tenants in one unrestricted search scope.
-Similarity thresholds are embedding-model specific.
+:::caution
+Retrieved documents are sent to the model provider as context. Apply
+collection-level access control, and don't mix tenants in one unrestricted
+search scope. Similarity thresholds are specific to the embedding model.
+:::
 
 ### Memory sources
 
@@ -148,22 +162,28 @@ memories, at most `max_candidates` (64 by default).
   heuristic, about 1.3 tokens per Latin word and 1.5 tokens per Han, Hiragana,
   Katakana or Hangul character, rounded up.
 
+A memory failure never refuses the request: the Router records it in the
+replay record and goes on.
+
+:::caution
 Memory persists request-derived content and sends retrieved memories to the
 selected model. Choose user and tenant isolation, retention, authentication
-and transport security appropriate for that data. A memory failure never
-refuses the request: the Router records it in the replay record and goes on.
+and transport security appropriate for that data.
+:::
 
 ### Compression and budget
 
-`compress` shrinks the request's own segments: tool outputs, history and the
-documents and memories the sources injected. Its `match` block judges which
-segments matter. Each segment is a candidate about the latest user message: by
-default BM25 ranks the segments and one `relevance` call scores the best 64
-of them (`judge.max_candidates`), one batch entry each; the least relevant
-segments, and those the judge did not read, shrink first, until the request
-fits the budget. `match: {recall: {method: bm25}}` ranks them lexically
-instead, with no call. Without a judge answer the segments are ranked
-lexically.
+`compress` shrinks the request's own segments: tool outputs, history, and
+the documents and memories the sources injected. Each segment is a candidate
+about the latest user message, and the `match` block judges which matter:
+
+- **By default** BM25 ranks the segments, and one `relevance` call scores the
+  best 64 of them (`judge.max_candidates`), one batch entry each.
+- **What shrinks first:** the least relevant segments, and those the judge
+  didn't read, until the request fits the budget.
+- **Lexical only.** `match: {recall: {method: bm25}}` ranks them lexically,
+  with no call. Without a judge answer, the segments are ranked lexically
+  too.
 
 - `mode: auto` (the default) compresses a request over the budget, or with
   segments over their target's `min_tokens`; `always` compresses every request.
@@ -180,13 +200,15 @@ lexically.
   a request whose protected content cannot fit gets `400` with
   `context_length_exceeded`.
 
-The budget uses a conservative UTF-8 byte estimate, not an exact tokenizer
-count. System and developer instructions, safety text, tool calls, schemas,
-media, citations and JSON user payloads are never truncated, and tool call and
-result IDs stay paired. With `current_user: {mode: truncate}` the latest
-plain-text user message keeps its beginning and end, separated by
-`[... context omitted by route compression ...]`; the middle is omitted, not
-summarized.
+- **The estimate.** The budget uses a conservative UTF-8 byte estimate, not
+  an exact tokenizer count.
+- **Never truncated:** system and developer instructions, safety text, tool
+  calls, schemas, media, citations and JSON user payloads. Tool call and
+  result IDs stay paired.
+- **The latest user message.** With `current_user: {mode: truncate}`, the
+  latest plain-text user message keeps its beginning and end, separated by
+  `[... context omitted by route compression ...]`. The middle is omitted, not
+  summarized.
 
 JSON strings compress only through their string leaves, OpenAI array content
 compresses text blocks and keeps images, and Anthropic `tool_result` content
@@ -261,18 +283,16 @@ recovery invalidation requires `compression.manage`.
 
 ## Observability
 
-`compress.signals` is counted by `llm_prompt_compression_total` (by `recipe`
-and `outcome`) and timed as the `prompt_compression` stage of
-`llm_routing_stage_duration_seconds`. Each stage's judge is counted in
-`vsr_match_judge_total{feature="rag"}`,
-`{feature="memory"}` or `{feature="compress"}`. The request's
-[router replay](./router-replay) record keeps the RAG backend and the memory
-outcome, including a memory failure the request went on without. Memory
-retrieval is counted by
-`llm_memory_retrieval_total` with `backend` and `status` labels (`hit`, `miss`,
-`error`). Compression metrics report whether it ran, its strategy, the
-before and after counts and the omissions; these are estimates, not measured
-billing-token savings. Raw omitted content and recovery keys are not included.
+| What | Where it's reported |
+| --- | --- |
+| `compress.signals` | `llm_prompt_compression_total` (by `recipe` and `outcome`), and the `prompt_compression` stage of `llm_routing_stage_duration_seconds` |
+| Each stage's judge | `vsr_match_judge_total{feature="rag"}`, `{feature="memory"}` or `{feature="compress"}` |
+| Memory retrieval | `llm_memory_retrieval_total`, with `backend` and `status` labels (`hit`, `miss`, `error`) |
+| The RAG backend and the memory outcome, including a memory failure the request went on without | The request's [router replay](./router-replay) record |
+
+Compression metrics report whether it ran, its strategy, the before and after
+counts and the omissions. These are estimates, not measured billing-token
+savings, and they never include raw omitted content or recovery keys.
 
 ## Migrating
 

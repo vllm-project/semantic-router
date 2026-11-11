@@ -235,7 +235,7 @@ Router 管理的存储和记忆：
 | `context` | 用 `supplied_context` 预览 RAG 源的注入；`mode: probe` 执行检索并绕过 RAG 结果缓存。压缩有自己的预览，位于 `/api/v1/plugins/context/compression` 下 |
 | `tools` | 预览工具策略；决策模型的工具选择必须显式使用 `mode: probe` |
 | `response_cache`、记忆源 | 操作 `/api/v1/storage` 下的资源 |
-| `router_replay`、`shadow_dispatch` | 通过 `/api/v1/observability/replays` 查询记录 |
+| `router_replay` | 通过 `/api/v1/observability/replays` 查询记录 |
 
 Guard、RAG 和工具预览要求显式 `binding: {"recipe":"<name>","decision":"<name>"}`。
 默认 `mode` 为 `preview`，不会自动升级为 probe。Probe 可以调用决策模型、

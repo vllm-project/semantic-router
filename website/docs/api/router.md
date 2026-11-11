@@ -30,10 +30,14 @@ queries. See [Router management API](./apiserver).
 | `POST` | `/v1/systemone`, `/v1/decisions` | Native System One | Direct decision models or explicitly published native recipes on a standalone listener |
 | `GET` | `/v1/systemone/models` | Native model discovery | Lists that listener's published System One models |
 
+`GET /v1/responses/{id}/input_items` includes nonempty stored `instructions` as a
+system-message item before the stored input items. Item IDs, `first_id`, and
+`last_id` remain stable across repeated reads of an unchanged stored response.
+
 Engine mode serves the native System One paths with recipe routing disabled.
 Publish native model IDs in `listeners[].systemone.models`; the Chat `models`
 allowlist does not grant native access. Both APIs use the listener's API keys.
-See the [model runtime quickstart](../model-runtime/quickstart.md) for a request.
+See the [model runtime quickstart](../model-runtime/get-started/quickstart.md) for a request.
 
 The System One paths read bodies compressed with one layer of gzip or zstd
 (`415` with `unsupported_media_type` for any other coding) and
@@ -41,10 +45,11 @@ The System One paths read bodies compressed with one layer of gzip or zstd
 The Router decodes these before it reads the request and forwards the JSON
 request, with each part's image as `data_base64`, to the model. On
 `/v1/systemone` a request with a failed question is answered as a whole with
-`question_failed`, the question's `question_error`, fixed `reason` and ID,
-while `/v1/decisions` answers each question in place. A model the listener does
+`question_failed`, the question's `question_error`, fixed `reason` and ID
+(in a batch, also its entry as `state`), while `/v1/decisions` answers each
+question in place. A model the listener does
 not publish returns `403` `model_not_allowed` with the models it does publish.
-See [System One compatibility](../model-runtime/reference.md#system-one-compatibility)
+See [System One compatibility](../model-runtime/reference/http-api.md#system-one-compatibility)
 for assets, Box, track and long context.
 
 ### Route a System One request
@@ -169,13 +174,13 @@ that is longer, up to the listener's `systemone.max_deadline_ms` (600000, 10
 minutes, by default); a `long_context` request without `deadline_ms` waits
 that whole limit. `options.profile` was removed in
 [#5071](https://github.com/vllm-project/semantic-router/pull/5071): a request
-runs with its deployment's [engine arguments](../model-runtime/engine-args.md),
+runs with its deployment's [engine arguments](../model-runtime/deploy/engine-args.md),
 and `meta` reports `dtype` and `numerics` instead of `profile`.
 
 The model runtime's HTTP API, which the Router calls, belongs to one release
 and makes no such promise. A Router accepts only a runtime that serves exactly
 its contract version; see
-[Attach to a runtime you run](../model-runtime/deploy.md#attach-to-a-runtime-you-run).
+[Attach to a runtime you run](../model-runtime/deploy/connect-the-router.md#attach-to-a-runtime-you-run).
 
 ## Send a routed request
 
@@ -204,7 +209,7 @@ whether it streams or not and whatever format the backend speaks. A stream
 whose backend names no model in its first event keeps the logical name. A
 reply the Router composes itself, from a Looper algorithm or its own refusal,
 names the logical model, the name `x-vsr-selected-model` reports. See
-[VSR routing headers](../troubleshooting/vsr-headers) for the stable
+[VSR routing headers](../api/headers) for the stable
 observability contract.
 
 The model names accepted by the Router come from canonical provider entries.
@@ -325,7 +330,12 @@ decision (it matches none, matches one that answers in text, or names a model
 directly instead of an entrypoint such as `vllm-sr/auto`) gets `400`
 `image_route_required` before any model is called. A Chat Completions or
 Anthropic Messages request that reaches an image decision gets `400`
-`unsupported_capability`, since neither API can return an image.
+`unsupported_capability`, since neither API can return an image. One Responses
+API call generates one image, so `n` above 1 needs a decision with a model on
+the Images API; a decision whose models are all on the Responses API answers it
+with `400` `unsupported_capability` before any model is called, unless its
+[`request_params`](../tutorials/plugin/request-params) `max_n` caps `n` to 1
+or its `blocked_params` removes `n`.
 
 ### Azure OpenAI clients
 

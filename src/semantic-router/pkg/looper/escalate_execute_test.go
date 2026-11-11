@@ -186,6 +186,38 @@ func TestEscalateLooperAcceptsByRefusal(t *testing.T) {
 	}
 }
 
+// An answer that only calls a tool is judged by its tool calls, not as an
+// empty answer, by answer_check and refusal alike.
+func TestEscalateLooperJudgesTheToolCallsOfAnAnswer(t *testing.T) {
+	refusal := false
+	for name, accept := range map[string]*config.EscalateAccept{
+		"answer_check": {SystemOne: &config.EscalateAnswerCheck{GTE: gte(0.7)}},
+		"refusal":      {Refusal: &refusal},
+	} {
+		t.Run(name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"id":"chatcmpl-tool","object":"chat.completion","created":0,"model":"small","choices":[{"index":0,` +
+					`"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"get_weather","arguments":"{\"city\":\"Paris\"}"}}]},` +
+					`"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}`))
+			}))
+			defer server.Close()
+			checker := &stubAnswerChecker{}
+			request := escalateRequest("", "")
+			request.ModelRefs = request.ModelRefs[:1]
+			request.Algorithm.Escalate.Accept = accept
+			request.AnswerChecks = checker
+
+			if _, err := NewEscalateLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), request); err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			if want := name + `:answer with calibrated confidence|get_weather {"city":"Paris"}`; !slices.Equal(checker.asked, []string{want}) {
+				t.Fatalf("checks = %q, want %q", checker.asked, want)
+			}
+		})
+	}
+}
+
 // A check the decision model cannot answer leaves every answer unscored.
 func TestEscalateLooperFailsWhenTheAnswerCheckFails(t *testing.T) {
 	server, _ := newEscalateLogprobBackend(t, map[string]int{}, false)

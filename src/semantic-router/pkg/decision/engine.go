@@ -112,6 +112,9 @@ type nodeEvaluation struct {
 	scored       bool
 	matchedRules []string
 	onError      bool
+	// unknown marks a False that a failed signal produced and no
+	// condition's on_error resolved: it is not a known negative.
+	unknown bool
 	// kind is the score kind behind confidence, and evidence counts the
 	// matched evidence leaves that produced it. Policy leaves report no
 	// kind and no evidence, so they gate eligibility without ranking.
@@ -385,11 +388,18 @@ func (e *DecisionEngine) evalLeaf(
 		return nodeEvaluation{state: evaluationFalse}
 	}
 	matched := slices.Contains(rules, node.Name)
-	if node.Predicate != nil {
-		return evaluatePredicateLeaf(node, normalizedType, signals, policy)
-	}
 	if node.Label != "" {
 		matched = slices.Contains(rules, node.Name+":"+node.Label)
+	}
+	if node.Predicate != nil {
+		// A model's rule that matched without a value matched by policy (it
+		// was unscanned or fails closed): the predicate has nothing to read,
+		// so the condition resolves as it does without one.
+		_, available := signalPredicateValue(signals, normalizedType, node.Name, node.Label)
+		modelRule := normalizedType == config.SignalTypeSystemOne || config.IsApplicationSignalType(normalizedType)
+		if available || !matched || !modelRule {
+			return evaluatePredicateLeaf(node, normalizedType, signals, policy)
+		}
 	}
 	unresolved := signalFailed(signals, normalizedType, node.Name) &&
 		(!matched || signalErrorMatch(signals, normalizedType, node.Name))
@@ -400,7 +410,7 @@ func (e *DecisionEngine) evalLeaf(
 		return nodeEvaluation{state: evaluationTrue, confidence: 1, matchedRules: []string{formatMatchedRule(node)}, onError: true}
 	}
 	if !matched {
-		return nodeEvaluation{state: evaluationFalse, onError: unresolved}
+		return nodeEvaluation{state: evaluationFalse, onError: unresolved, unknown: unresolved && node.OnError == ""}
 	}
 	confidence, reported := signalConfidence(signals.SignalConfidences, normalizedType, node.Name)
 	if node.Label != "" {
@@ -444,7 +454,7 @@ func evaluatePredicateLeaf(
 	if strings.EqualFold(strings.TrimSpace(node.OnError), "match") {
 		return nodeEvaluation{state: evaluationTrue, confidence: 1, matchedRules: []string{formatMatchedRule(node)}, onError: true}
 	}
-	return nodeEvaluation{state: evaluationFalse, onError: true}
+	return nodeEvaluation{state: evaluationFalse, onError: true, unknown: strings.TrimSpace(node.OnError) == ""}
 }
 
 func signalFailed(signals *SignalMatches, signalType, name string) bool {
@@ -635,7 +645,9 @@ func (e *DecisionEngine) evalAND(
 				trace.finish(evaluation)
 				return evaluation, trace
 			}
-			evaluation = nodeEvaluation{state: evaluationFalse, onError: true}
+			// One resolved False child makes the conjunction a known negative.
+			unknown := childEvaluation.unknown && (evaluation.state != evaluationFalse || evaluation.unknown)
+			evaluation = nodeEvaluation{state: evaluationFalse, onError: true, unknown: unknown}
 			continue
 		case evaluationUnknown:
 			evaluation.state = evaluationUnknown
@@ -712,7 +724,7 @@ func (e *DecisionEngine) evalOR(
 	trace := newTraceNode("OR", withTrace)
 	evaluation := nodeEvaluation{state: evaluationFalse}
 	unknown := false
-	falseOnError := false
+	falseOnError, falseUnknown := false, false
 	for _, child := range children {
 		childEvaluation, childTrace := e.evalNode(child, signals, policy, withTrace)
 		trace.addChild(childTrace)
@@ -725,13 +737,14 @@ func (e *DecisionEngine) evalOR(
 			}
 		default:
 			falseOnError = falseOnError || childEvaluation.onError
+			falseUnknown = falseUnknown || childEvaluation.unknown
 		}
 	}
 	if evaluation.state != evaluationTrue {
 		if unknown {
 			evaluation.state = evaluationUnknown
 		} else {
-			evaluation.onError = falseOnError
+			evaluation.onError, evaluation.unknown = falseOnError, falseUnknown
 		}
 	}
 	trace.finish(evaluation)
@@ -771,7 +784,13 @@ func (e *DecisionEngine) evalNOT(
 	var evaluation nodeEvaluation
 	switch childEvaluation.state {
 	case evaluationFalse:
+		// A False a failed signal produced is not a known negative, so NOT
+		// keeps it False, as it keeps Unknown; one a condition's on_error
+		// resolved is reversed.
 		evaluation = nodeEvaluation{state: evaluationTrue, confidence: 1, matchedRules: childEvaluation.matchedRules, onError: childEvaluation.onError}
+		if childEvaluation.unknown {
+			evaluation = nodeEvaluation{state: evaluationFalse, onError: true, unknown: true}
+		}
 	case evaluationUnknown:
 		evaluation = nodeEvaluation{state: evaluationUnknown}
 	default:

@@ -72,11 +72,16 @@ a fallback from the matched decision. A fallback cannot reintroduce a model
 that was excluded by the request's context-window check.
 
 Model Card capability metadata accepts protocol names such as `image_input`
-and `image_generation`. The catalog aliases `vision`, `audio`, and `video`
-describe image, audio, and video **input**, respectively; they do not grant
-media-generation support. `structured_output` maps to `structured_json`, and
-`tool_use` maps to `tools`. Descriptive labels such as `long_context` or `coding`
-do not erase recognized capability declarations alongside them.
+and `image_generation`, and these catalog aliases:
+
+| Alias | Means |
+| --- | --- |
+| `vision`, `audio`, `video` | Image, audio and video **input**; they don't grant media generation |
+| `structured_output` | `structured_json` |
+| `tool_use` | `tools` |
+
+Descriptive labels such as `long_context` or `coding` don't erase the
+recognized capability declarations beside them.
 
 A model without any recognized capability declaration retains protocol-only
 compatibility. For an annotated model, a protocol that can encode a request
@@ -95,7 +100,7 @@ Open **Build → Routing → Models → Add Model**. You can then:
    `catalog`, inline reasoning fields, `provider_model_id`, `api_format`, and
    backend references.
 
-The Dashboard edits the same v0.3 document as YAML. Use one authoring owner for
+The Dashboard edits the same configuration document as YAML. Use one authoring owner for
 a deployment and review the exported YAML before serving it. See
 [Configuration workflows](configuration-workflows).
 
@@ -223,8 +228,8 @@ The Envoy data plane has no first-byte timeout, so a configuration that sets
 
 Active health checks run in the gateway that carries the client traffic. In
 standalone mode the Router probes each replica. Behind Envoy, Envoy probes
-them, and the model calls the Router makes itself, such as a Looper
-algorithm's, leave the rotation to outlier ejection (`consecutive_5xx`).
+them, and the model calls the Router makes itself, such as an executor's,
+leave the rotation to outlier ejection (`consecutive_5xx`).
 
 ### Override timeouts and retries for one decision
 
@@ -329,8 +334,8 @@ recipes:
 | --- | --- | --- |
 | `enabled` | `false` | Whether a failed attempt moves on to the next candidate. |
 | `max_attempts` | `3` | Attempts across candidates, the first one included. |
-| `total_timeout` | `30s` | Time for the whole chain. |
-| `per_attempt_timeout` | `10s` | Time for each candidate. It cannot exceed `total_timeout`. |
+| `total_timeout` | `30s` | Time from the start of the request in which another candidate is tried. A candidate gets at most what is left, and none starts after it runs out. |
+| `per_attempt_timeout` | `10s` | Time for each candidate after the first. It cannot exceed `total_timeout`. |
 | `retryable_status_codes` | `[502, 503, 504]` | Statuses that move on to the next candidate. |
 | `circuit_breaker` | 3 failures, `30s`, 1 probe | Skips a backend that keeps failing, for a cool-down. Global and recipe policies only. |
 
@@ -343,13 +348,14 @@ layer first:
 3. the recipe's `recipes[].fallback`;
 4. `global.router.fallback`.
 
-A field a layer leaves out keeps the layer below, and `enabled` is only set
-where you write it. A decision's block takes every field except
-`circuit_breaker`, which belongs to the backends. The candidates are always
-the decision's ranked models that remain eligible for the request; there is
-no separate fallback list, and a provider model has no fallback of its own.
-Other replicas of the same model are tried through its retries, ejection and
-health checks instead.
+- **Layers.** A field a layer leaves out keeps the layer below, and `enabled`
+  is only set where you write it.
+- **Decisions.** A decision's block takes every field except
+  `circuit_breaker`, which belongs to the backends.
+- **Candidates** are always the decision's ranked models that remain eligible
+  for the request. There's no separate fallback list, and a provider model has
+  no fallback of its own: other replicas of the same model are tried through
+  its retries, ejection and health checks instead.
 
 Both gateway modes run the same policy, with one deliberate difference:
 standalone mode also falls back when no backend answered at all, such as a
@@ -357,6 +363,17 @@ refused connection or a timeout, while behind Envoy the client receives
 Envoy's reply. Such a failure counts as a `503` or `504`, so keep those
 statuses in `retryable_status_codes` to fall back on it. Nothing falls back
 once any part of the response has reached the client.
+
+Neither fallback timeout shortens the first attempt, which keeps its provider
+model's and decision's `reliability` timeouts. To fall back from a model that
+never answers, give that provider model a `reliability.per_try_timeout` in
+standalone mode:
+
+- The timeout counts as a `504`, and the next candidate is tried.
+- The candidate gets at most `per_attempt_timeout` and what is left of
+  `total_timeout`, so make `total_timeout` longer than the `per_try_timeout`.
+- A decision's own `per_try_timeout` bounds every candidate it tries, so a
+  slower candidate fails the same way.
 
 On Kubernetes, a decision takes the same `reliability` and `fallback` blocks,
 with the same field names: in an `IntelligentRoute`'s `spec.decisions[]` and in
@@ -375,6 +392,6 @@ Model Card identities, and backend-pool compatibility before startup.
 
 ## Configure models used by Router tasks
 
-For classifiers, safety checks, and embeddings used inside the Router, start
-with [Router Runtime](model-runtime/overview.md). It covers in-process and external
-models, their configuration, and operations.
+For the decision and embedding models the Router uses itself, start with the
+[model runtime](model-runtime/get-started/overview.md). It covers local and remote models,
+their configuration, and operations.

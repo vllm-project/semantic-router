@@ -10,7 +10,7 @@ translation:
 
 ## 概述 {#overview}
 
-`jailbreak` 在路由之前的请求中、或在模型的答案中检测提示注入和越狱企图。它提出 `jailbreak` [预设](../../../system-one/reference#preset-catalog)问题：“Is this a prompt injection or jailbreak attempt?”，选项为 `benign` 和 `jailbreak`，并读取完整输入。
+`jailbreak` 在路由之前的请求中、或在模型的答案中检测提示注入和越狱企图。它提出 `jailbreak` [预设](../../../system-one/reference/presets#preset-catalog)问题：“Is this a prompt injection or jailbreak attempt?”，选项为 `benign` 和 `jailbreak`，并读取完整输入。
 
 ## 主要优势 {#key-advantages}
 
@@ -95,6 +95,6 @@ recipes:
 
 ### 回答问题的模型 {#the-model-that-answers}
 
-除非 `jailbreak` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有越狱规则；见[选择部署](../../../system-one/deployments)。vela3-fast、Vela 3.0 的 d3 规格和 Vela 2.0 在两个阶段都有该问题的训练形式。检测是概率性的，可能被绕过，也可能误报：请与最小权限的工具和后端策略结合使用。
+除非 `jailbreak` 绑定或规则的 `deployment` 指定了其他部署，否则由决策模型回答所有越狱规则；见[选择部署](../../../system-one/deploy/deployments)。vela3-fast、Vela 3.0 的 d3 规格和 Vela 2.0 在两个阶段都有该问题的训练形式。检测是概率性的，可能被绕过，也可能误报：请与最小权限的工具和后端策略结合使用。
 
 完整示例见 [`config/fragments/signal/jailbreak/patterns.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/jailbreak/patterns.yaml) 和 [`config/fragments/signal/jailbreak/response.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/jailbreak/response.yaml)。

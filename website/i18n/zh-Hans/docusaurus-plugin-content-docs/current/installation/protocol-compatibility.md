@@ -114,6 +114,13 @@ Router 在编码后端请求之前检查所需语义。所选后端格式无法�
 发送后失败，因为签名随推理增量才到达编码器。同格式流量不受影响，包括 Messages
 客户端读取 Anthropic 后端的情况。
 
+Chat Completions 客户端可以用 `store: true` 要求提供方保存补全，而 Messages 后端
+不保存补全。`store: false` 不要求这类后端做任何额外的事，因此请求去掉该字段后照常
+发送；`store: true` 会以 `unsupported_capability`（`request_storage`）失败，因为后端
+无法保存补全。在 `global.router.allow_lossy_translation` 中列出 `store` 后，Router 会
+去掉 `store` 发送这类请求，并在 `x-vsr-warnings` 中为 `store` 报告 `dropped` 诊断。
+Chat Completions 和 Responses 后端仍按客户端发送的原样收到 `store`。
+
 Responses 客户端仍可以与 Chat Completions 或 Messages 后端一起使用 `previous_response_id`。Router 检索并物化保留的历史，移除 Router 拥有的对象控制，然后按所选后端格式编码无状态请求。
 
 Responses custom tools 使用 `type: custom` 和扁平的 `format` 对象。它们的
@@ -154,7 +161,7 @@ providers:
 - 响应保持客户端协议的 JSON 或 SSE 形状。Provider 传输错误和不完整流会与成功的模型响应分开翻译。
 - 对于 Anthropic 兼容提供方，缺失的可空 `stop_sequence` 会被解释为 null，并产生有界的兼容性诊断。这适用于缓冲 Messages、`message_start.message` 和 `message_delta.delta`。显式 null 不产生诊断；停止原因为 `stop_sequence` 时，仍必须提供非空的匹配序列，终止增量仍必须包含 `stop_reason`。
 - OpenAI 兼容 Chat 提供方通过 `choices[].stop_reason` 返回匹配到的停止字符串时（例如 vLLM），Anthropic Messages 客户端会收到 `stop_sequence` 停止原因及该序列。Chat 和 Responses 客户端不受影响。
-- 适用时，`x-vsr-warnings` 以及 `x-vsr-trace` 的 `client_protocol` 和 `upstream_protocol` 成员会暴露翻译细节。参见 [VSR 路由标头](../troubleshooting/vsr-headers)。流式响应头发送后才发现的诊断会记录在转换告警指标和结构化调试日志中，不能添加到已经发送的响应头。
+- 适用时，`x-vsr-warnings` 以及 `x-vsr-trace` 的 `client_protocol` 和 `upstream_protocol` 成员会暴露翻译细节。参见 [VSR 路由标头](../api/headers)。流式响应头发送后才发现的诊断会记录在转换告警指标和结构化调试日志中，不能添加到已经发送的响应头。
 
 仓库在编解码器测试、Envoy ExtProc 边界，以及 18 单元格部署矩阵中成对验证全部三种协议：三种客户端格式 × 三种后端格式 × 缓冲或流式模式。完整的验证和扩展契约见[已实现的编解码器设计](../proposals/multi-protocol-adaptor)。
 

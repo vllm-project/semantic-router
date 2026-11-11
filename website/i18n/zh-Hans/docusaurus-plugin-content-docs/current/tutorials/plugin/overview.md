@@ -1,34 +1,34 @@
 ---
 is_mtpe: false
 translation:
-  source_commit: "b2db276cf1b5057c31f2ab2bddbd181e5692dbb6"
+  source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
   source_file: "docs/tutorials/plugin/overview.md"
-  outdated: true
+  outdated: false
 ---
 
-# 插件
+# 插件 {#plugins}
 
-## 概览
+## 概览 {#overview}
 
 插件在决策匹配后添加路由局部行为。它们可以改写请求、检索上下文、短路生成、检查响应，或控制保留哪些运维数据。
 
 共享服务和存储属于 `global:`；决策插件只为一条路由启用并调优该行为。
 
-## 主要优势
+## 主要优势 {#key-advantages}
 
 - 把行为附着在需要它的路由上。
 - 复用共享存储和服务，而不重复其配置。
 - 让请求改写、检索和响应检查可审计。
 
-## 解决什么问题？
+## 解决什么问题？ {#what-problem-does-it-solve}
 
 即使共享同一 Router，各路由也常常需要不同行为。插件把这些差异放在决策旁边，而不是藏进应用中间件或全局启用。
 
-## 何时使用
+## 何时使用 {#when-to-use}
 
 当行为应仅在特定路由匹配后生效时，使用插件。当每条路由共享同一服务或后台存储时，改用 `global:`。插件条目位于 `recipes[].decisions[].plugins` 下。
 
-## 配置
+## 配置 {#configuration}
 
 ```yaml
 recipes:
@@ -67,6 +67,23 @@ recipes:
 
 [内容安全](./content-safety) 打包了三个受支持插件，而不是额外的插件类型。
 
+## 能力门控 {#capability-gating}
+
+作用于请求内容的插件，只有在请求包含该内容、且选中的模型能接收它时才运行：
+
+- **文本。** `context` 插件作用于文本，因此当请求的指令和消息中没有文本时会被跳过。每个模型都被视为能接收文本，所以模型卡从不因文本而门控它。
+- **其他模态。** 作用于图片等模态的插件，在模型卡声明了能力但未包含该模态时会被跳过。没有可识别声明的模型不受门控。
+- **其他所有情况。** 其他插件类型不受门控，仅凭配置运行。
+
+跳过带有类型，且不携带任何请求内容：
+
+| 原因 | 含义 |
+|---|---|
+| `request_does_not_require` | 请求中没有插件要处理的内容。 |
+| `backend_lacks_capability` | 选中的模型声明了能力，但未包含插件所作用的模态。 |
+
+跳过会以状态 `skipped_<reason>` 计入 `llm_plugin_execution_total`。对于记忆源，同样的原因会作为记忆结果出现，状态为 `skipped`。无论插件是否运行，图片等非文本内容都保持不变。
+
 ## 相似度：`match` 块 {#match-block}
 
 所有查找相似项的功能都使用同一个 `match` 块：
@@ -77,16 +94,28 @@ match:
   judge:  {preset: relevance, top_k: 6, min_score: 0.5, max_candidates: 64}  # 用一道 System One 题决定
 ```
 
-- **阶段。** 块只运行写出的阶段，至少一个；空块在加载时报 `match_empty`。功能没有写块时运行其缺省值（见下表）；写出的块整体替换缺省值。只有 `recall` 时就是经典的 embedding 或 BM25 相似度；只有 `judge` 时由 System One 题判断每个候选，适合天然有界的小候选集；两者都有时 `recall` 缩小范围、`judge` 决定。
+块只运行写出的阶段，至少一个；空块在加载时报 `match_empty`。功能没有写块时运行其缺省值（见下表），写出的块会整体替换缺省值。
+
+| 阶段 | 结果 |
+| --- | --- |
+| 只有 `recall` | 经典的 embedding 或 BM25 相似度。 |
+| 只有 `judge` | 由 System One 题判断每个候选；适合天然有界的小候选集。 |
+| 两者都有 | `recall` 缩小范围，`judge` 做决定。 |
+
 - **`recall`** 按索引相似度缩小候选范围：
   - `method: embedding`（缺省）在存储的 embedding 空间中比较向量（存储没有指定自己的部署时用 `global.model_catalog.embeddings.default`），`min_similarity` 是 [-1, 1] 内的余弦相似度；`method: bm25` 使用词法索引，不需要模型，`min_similarity` 是 BM25 分数；
   - `top_k` 限定候选数量；候选来自索引时必须填写。
-- **`judge`** 在一次调用中，由决策模型或指定的 `deployment` 回答一道关于请求和候选的 System One 题：
-  - `preset: relevance | same_request | tool_rank`，或自定义 `question`（`choice`、`noul` 或 `score`）；
-  - choice 题（`tool_rank`）在一个标准请求中从候选中选择，候选就是它的选项，每个候选的分数是它的概率；noul 或 score 题（`relevance`、`same_request`）对每个候选各问一次，每个候选是批量请求中的一项，分数是 P(yes) 或期望档位；
-  - `top_k`、`min_score`（绝对值）和 `min_ratio`（相对最高分的比例，取值 (0, 1]）决定保留哪些候选，按分数从高到低排列；
-  - judge 失败或超时时，`on_error: skip`（缺省）保留召回结果，没有召回时保持候选原样；`on_error: fail` 让该功能的匹配失败；`timeout_ms` 限定这次调用（未设置时取部署的 `timeout_ms`，再缺省为 1000 毫秒）。
-- **`judge.max_candidates`** 是硬上限：choice judge 最多 255（一道题的选项数，也是它的缺省值），逐个候选提问的 judge 缺省 64。候选更多时从不失败：judge 按召回排名读取前 `max_candidates` 个，没有召回时按功能列出的顺序（最新的在前）读取。每次截断都会在请求的 trace span 上记一个 `match.judge.truncated` 事件，并计入 `vsr_match_judge_truncated_total`。
+- **`judge`** 在一次调用中，由决策模型或指定的 `deployment` 回答一道关于请求和候选的 System One 题。choice judge（`tool_rank`）提出一道以候选为选项的题；`noul` 或 `score` judge（`relevance`、`same_request`）对每个候选各问一次，每个候选是批量请求中的一项。
+
+| `judge` 字段 | 含义 |
+| --- | --- |
+| `preset` 或 `question` | `relevance`、`same_request` 或 `tool_rank`，或自定义的 `choice`、`noul` 或 `score` 题。 |
+| `top_k`、`min_score`、`min_ratio` | 决定保留哪些候选，按分数从高到低排列。`min_score` 是绝对值；`min_ratio` 是相对最高分的比例，取值 (0, 1]。 |
+| `on_error` | `skip`（缺省）在 judge 失败或超时时保留召回结果，没有召回时保持候选原样。`fail` 让该功能的匹配失败。 |
+| `timeout_ms` | 限定这次调用；未设置时取部署的 `timeout_ms`，再缺省为 1000 毫秒。 |
+| `max_candidates` | 硬上限：choice judge 为 255，逐个候选提问的 judge 缺省为 64。 |
+
+候选再多也不会让请求失败：judge 按召回排名，或按功能的顺序（最新的在前），读取前 `max_candidates` 个。每次截断都会在 trace span 上记一个 `match.judge.truncated` 事件，并计入 `vsr_match_judge_truncated_total`。
 
 | 功能 | 缺省 `match` | 说明 |
 |---|---|---|
@@ -94,7 +123,7 @@ match:
 | `context.sources[rag].match` | `recall: {method: embedding, top_k: 20, min_similarity: 0.3}`，`judge: {preset: relevance, top_k: 6, min_score: 0.5}` | `recall: {method: bm25}` 和没有召回的 judge 读取本地知识库：基于内存向量库的 `vectorstore` 源。基于外部向量数据库的源用 `embedding` 召回 |
 | `context.sources[memory].match` | `recall: {method: embedding, top_k: 5, min_similarity: 0.7}` | 记忆存储的 `default_retrieval_limit` 和 `default_similarity_threshold` 替代召回缺省值。没有召回的 judge 读取用户最新的记忆 |
 | `context.compress.match` | `recall: {method: bm25}`，`judge: {preset: relevance}` | 请求的每个片段都是关于最新一条用户消息的候选；BM25 先为 judge 的 64 个名额预筛；保留多少由预算决定 |
-| `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | 最多 255 个工具；更多的会被截断，或由 `recall: {method: bm25}` 缩小 |
+| `tools.select.match` | `judge: {preset: tool_rank, top_k: 3, min_ratio: 0.1}` | 最多 255 个工具；更多的会被截断，或由 `recall: {method: bm25}` 缩小；没有 judge 的块在加载时失败 |
 
 每个阶段都计入 `vsr_match_recall_total`（feature、method、outcome）或 `vsr_match_judge_total`（feature、preset、outcome），并在 `vsr_match_stage_duration_seconds` 中计时。
 
