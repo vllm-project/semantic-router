@@ -1078,7 +1078,13 @@ class NativeEngineModel(EngineModel):
         else:
             input_ids = batch.input_ids.to(self.device)
             rows, width = input_ids.shape
-            if graphs is not None and batch.attention_mask is not None:
+            # Only NPUs replay padded batches: on CUDA and ROCm the eager padded
+            # layout keeps answers byte-identical to the released runtime.
+            if (
+                graphs is not None
+                and batch.attention_mask is not None
+                and self.device.type == "npu"
+            ):
                 with torch.inference_mode(), context():
                     replayed = graphs.padded(
                         input_ids, batch.attention_mask, exits, batch.normalize_exits

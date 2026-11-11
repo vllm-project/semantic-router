@@ -19,7 +19,10 @@ grid is padded to a bucket and the key mask comes from the device-side mask
 through ``EncoderBackbone.masked``, which never reads it back — the backbone's
 ``padded`` layout reads the mask on the host, and a replay would keep that
 read from its capture. A grid above the buckets or one that pads too much
-returns None for the engine's eager padded path.
+returns None for the engine's eager padded path. The engine sends padded
+batches here on NPUs only: on CUDA and ROCm the bucket grid would change
+answers in their last digits (``docs/records/rocm-encoder-padded-graphs-mi325x.md``),
+so they keep the eager padded layout, byte-identical to the released runtime.
 """
 
 from __future__ import annotations
