@@ -72,7 +72,7 @@ ROUTE sensitive-turn {
 | Field | Effect | Important limit |
 |---|---|---|
 | `drop: true` | Skips the response-cache write for the matched decision | It does not prevent a cache read earlier in the same request |
-| `ttl_turns` | Overrides the response-cache entry lifetime using the Router's turn-to-time mapping | It is a cache TTL hint, not durable conversation retention |
+| `ttl_turns` | Shortens the response-cache entry lifetime to at most `ttl_turns` turns, using the Router's turn-to-time mapping; a shorter `ttl_seconds` (the plugin's, else the store's) or caller `ttl` still applies, and a `0` from either still stores nothing | It is a cache TTL hint, not durable conversation retention |
 | `keep_current_model: true` | Forces the model-switch gate to stay on the known current model | It has no effect when session/current-model identity is unavailable |
 | `prefer_prefix_retention: true` | Reported as `prefer_prefix` in the `retention` member of `x-vsr-trace` | The Router does not itself manage a provider's KV-cache eviction |
 

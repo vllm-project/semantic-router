@@ -37,8 +37,13 @@ type MaskingPluginConfig struct {
 // GetMaskingConfig returns the masking plugin configuration, or nil when the
 // decision does not configure it.
 func (d *Decision) GetMaskingConfig() *MaskingPluginConfig {
-	result := &MaskingPluginConfig{}
-	return decodeDecisionPlugin(d, DecisionPluginMasking, result)
+	return MaskingPluginOf(d.Plugins)
+}
+
+// MaskingPluginOf is the masking plugin among a request's plugins, nil
+// without one.
+func MaskingPluginOf(plugins []DecisionPlugin) *MaskingPluginConfig {
+	return decodePlugin(plugins, DecisionPluginMasking, &MaskingPluginConfig{})
 }
 
 // EffectivePlaceholder returns the template for an entity type, defaulting to
@@ -82,9 +87,12 @@ func validateMaskingPlugin(at PluginAt, p *MaskingPluginConfig) error {
 	return nil
 }
 
-// validateMaskingSignals resolves every masking plugin of a recipe to
-// the pii rule it names.
+// validateMaskingSignals resolves every masking plugin of a recipe, its
+// default plugins' and its decisions', to the pii rule it names.
 func validateMaskingSignals(cfg *RouterConfig) error {
+	if masking := MaskingPluginOf(cfg.DefaultPlugins); masking != nil && cfg.PIIRule(masking.Signal) == nil {
+		return fmt.Errorf("%s masking: signal %q names no pii rule of this recipe", cfg.ScopePath("plugins"), masking.Signal)
+	}
 	for i := range cfg.Decisions {
 		masking := cfg.Decisions[i].GetMaskingConfig()
 		if masking == nil || cfg.PIIRule(masking.Signal) != nil {
@@ -106,14 +114,17 @@ func (c *RouterConfig) PIIRule(name string) *PIIRule {
 }
 
 // MaskingSignals are the pii rules the enabled masking plugins of this
-// recipe name, in decision order.
+// recipe name, in decision order, then its default plugins'.
 func (c *RouterConfig) MaskingSignals() []string {
 	var names []string
-	for i := range c.Decisions {
-		masking := c.Decisions[i].GetMaskingConfig()
+	add := func(masking *MaskingPluginConfig) {
 		if masking != nil && masking.Enabled && masking.Signal != "" && !slices.Contains(names, masking.Signal) {
 			names = append(names, masking.Signal)
 		}
 	}
+	for i := range c.Decisions {
+		add(c.Decisions[i].GetMaskingConfig())
+	}
+	add(MaskingPluginOf(c.DefaultPlugins))
 	return names
 }

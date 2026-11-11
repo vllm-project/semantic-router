@@ -81,7 +81,7 @@ type Decision struct {
 // pointers so we can distinguish "unset" from an explicit zero value.
 //
 // Runtime consumes Drop (response-cache, memory, and Responses-object write
-// suppression), TTLTurns (per-entry cache TTL override), and KeepCurrentModel
+// suppression), TTLTurns (per-entry cache TTL bound), and KeepCurrentModel
 // (model-switch-gate forced stay). Drop does not delete existing objects or
 // disable explicit history reads, telemetry, or backend-side persistence.
 // PreferPrefixRetention is only reported; its session-aware scoring bias and

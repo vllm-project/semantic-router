@@ -20,6 +20,11 @@ const (
 	// SystemOneQuestionSpan asks where in the text each label occurs; only a
 	// span-capable model answers it.
 	SystemOneQuestionSpan = "span"
+	// SystemOneQuestionBox asks where in an image something is, and
+	// SystemOneQuestionTrack where it is through a video; only models with
+	// vision answer them.
+	SystemOneQuestionBox   = "box"
+	SystemOneQuestionTrack = "track"
 
 	// SystemOneSpanHeadRouter and SystemOneSpanHeadBroad name the span heads
 	// of models with two: the router head (PII, unsupported claims, toxic
@@ -107,6 +112,12 @@ type SystemOneInput struct {
 	Context bool `yaml:"context,omitempty"`
 	// ToolResults adds the request's tool results.
 	ToolResults bool `yaml:"tool_results,omitempty"`
+	// Request false leaves the current user turn out, so a request-stage rule
+	// reads only the earlier user turns or the tool results it names, and is
+	// not asked when they hold no text. An agent's user turn carries its
+	// harness's own instructions, which a rule about tool output must not
+	// read. Unset reads the turn.
+	Request *bool `yaml:"request,omitempty"`
 	// Image, Audio and Video add the request's parts of that medium; the
 	// answering deployment must declare the input modality.
 	Image bool `yaml:"image,omitempty"`
@@ -115,6 +126,11 @@ type SystemOneInput struct {
 	// PreviousAnswer adds the assistant answer the current turn replies to.
 	// Only a preset declares it, for the application rules that ask it.
 	PreviousAnswer bool `yaml:"-" json:"-"`
+}
+
+// ReadsRequest reports whether a rule reads the current user turn.
+func (i SystemOneInput) ReadsRequest() bool {
+	return i.Request == nil || *i.Request
 }
 
 // Input modalities a rule reads besides text.
@@ -143,20 +159,20 @@ func (i SystemOneInput) Media() []string {
 // optional threshold that replaces the model's own, and, for Span, the head
 // that answers.
 type SystemOneQuestion struct {
-	Type         string            `yaml:"type"`
-	Instructions string            `yaml:"instructions"`
-	Choices      []SystemOneOption `yaml:"choices,omitempty"`
-	Levels       []string          `yaml:"levels,omitempty"`
-	Labels       []SystemOneOption `yaml:"labels,omitempty"`
-	Threshold    *float64          `yaml:"threshold,omitempty"`
-	Head         string            `yaml:"head,omitempty"`
+	Type         string            `yaml:"type" json:"type"`
+	Instructions string            `yaml:"instructions" json:"instructions"`
+	Choices      []SystemOneOption `yaml:"choices,omitempty" json:"choices,omitempty"`
+	Levels       []string          `yaml:"levels,omitempty" json:"levels,omitempty"`
+	Labels       []SystemOneOption `yaml:"labels,omitempty" json:"labels,omitempty"`
+	Threshold    *float64          `yaml:"threshold,omitempty" json:"threshold,omitempty"`
+	Head         string            `yaml:"head,omitempty" json:"head,omitempty"`
 }
 
 // SystemOneOption is one Choice option, the false/true descriptions of a
 // Noul, or one Set or Span label.
 type SystemOneOption struct {
-	Key         string `yaml:"key"`
-	Description string `yaml:"description,omitempty"`
+	Key         string `yaml:"key" json:"key"`
+	Description string `yaml:"description,omitempty" json:"description,omitempty"`
 }
 
 // SystemOneSelectionConfig asks a System One model to choose one of a routing

@@ -96,6 +96,9 @@ func (r systemOneReading) previousAnswer() string {
 // others as context). A part with nothing to read is left out.
 func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request {
 	input := rule.Input
+	if !input.ReadsRequest() {
+		return modelservice.Request{State: strings.Join(r.besidesRequest(input), "\n\n")}
+	}
 	if request, ok := r.spanScan(rule); ok {
 		return request
 	}
@@ -151,14 +154,7 @@ func (r systemOneReading) spanScan(rule config.SystemOneRule) (modelservice.Requ
 	if rule.Question.Type != config.SystemOneQuestionSpan || input.Answer || input.Context || input.PreviousTurns > 0 {
 		return modelservice.Request{}, false
 	}
-	var scanned []string
-	if input.History {
-		scanned = append(scanned, r.history...)
-	}
-	if input.ToolResults {
-		scanned = append(scanned, r.toolResults...)
-	}
-	scanned = slices.DeleteFunc(scanned, func(text string) bool { return strings.TrimSpace(text) == "" })
+	scanned := r.besidesRequest(input)
 	if len(scanned) == 0 {
 		return modelservice.Request{}, false
 	}
@@ -170,6 +166,26 @@ func (r systemOneReading) spanScan(rule config.SystemOneRule) (modelservice.Requ
 		request.Videos = slices.Clone(r.videos)
 	}
 	return request, true
+}
+
+// besidesRequest is the text a rule reads in the earlier user turns and the tool
+// results, without the turns and results that hold none.
+func (r systemOneReading) besidesRequest(input config.SystemOneInput) []string {
+	var texts []string
+	if input.History {
+		texts = append(texts, r.history...)
+	}
+	if input.ToolResults {
+		texts = append(texts, r.toolResults...)
+	}
+	return slices.DeleteFunc(texts, func(text string) bool { return strings.TrimSpace(text) == "" })
+}
+
+// hasInput reports whether a rule has text to read: a rule that leaves the
+// current user turn out has none until the earlier turns or the tool results
+// it reads hold some, and is not asked, so it does not match.
+func (r systemOneReading) hasInput(rule config.SystemOneRule) bool {
+	return rule.Input.ReadsRequest() || len(r.besidesRequest(rule.Input)) > 0
 }
 
 // askedRule is one rule a stage asks: a systemone rule, or an application
@@ -217,6 +233,9 @@ type systemOneCall struct {
 func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading) []*systemOneCall {
 	var calls []*systemOneCall
 	for _, asked := range rules {
+		if !reading.hasInput(asked.rule) {
+			continue
+		}
 		deployment := c.Config.SystemOneRuleDeployment(asked.rule)
 		state := reading.state(asked.rule)
 		index := slices.IndexFunc(calls, func(call *systemOneCall) bool {
@@ -461,7 +480,8 @@ func unscanned(reason string) bool {
 // applyUnscanned resolves a full-coverage rule whose model could not read
 // the whole input as its on_unscanned says, when that is not unknown: the
 // rule and its counted labels match, or nothing does. An unscanned answer
-// has no values, so a condition's own predicate does not match it.
+// has no values, so a condition's own predicate resolves the match as the
+// condition without one does.
 func (c *Classifier) applyUnscanned(results *SignalResults, asked askedRule) {
 	if asked.rule.EffectiveOnUnscanned() != config.SystemOneUnscannedMatch {
 		return
@@ -560,9 +580,10 @@ func SystemOneQuestion(id string, question config.SystemOneQuestion) modelservic
 // applySystemOneAnswer publishes an answer's values and returns the matched
 // references: the rule name when the rule matches itself, and "rule:label"
 // for each matching option (choice) or label (set, span). A value is
-// published under "<type>:<rule>" (P(yes), the expected level, the chosen
-// option's probability, or the highest probability of a counted label) and
-// under "<type>:<rule>:<label>" for every option or label.
+// published under "<type>:<rule>" (P(yes), the expected level, the highest
+// probability of a counted label, or for a choice rule without labels the
+// chosen option's) and under "<type>:<rule>:<label>" for every option or
+// label.
 func applySystemOneAnswer(results *SignalResults, signalType string, rule config.SystemOneRule, answer modelservice.Answer) []string {
 	key := signalConfidenceKey(signalType, rule.Name)
 	predicate := rule.EffectivePredicate()
@@ -591,8 +612,8 @@ func applySystemOneAnswer(results *SignalResults, signalType string, rule config
 }
 
 // applyChoiceAnswer publishes each option's probability, and under the rule
-// itself the chosen option's (or, for an operating point, the highest of its
-// labels'), and returns the matching options. With two options and a
+// itself the highest of its labels' (the chosen option's for a rule without
+// labels), and returns the matching options. With two options and a
 // predicate, the predicate is an operating point: an option matches when its
 // own probability satisfies it, whichever option the model chose. Otherwise
 // the chosen option matches, when the predicate (a confidence floor) holds
@@ -602,25 +623,23 @@ func applyChoiceAnswer(rule config.SystemOneRule, answer modelservice.Answer, pr
 	for option, probability := range answer.Probabilities {
 		publish(key+":"+option, probability)
 	}
+	best := answer.Probabilities[answer.Choice]
+	if len(rule.Labels) > 0 {
+		best = 0
+		for _, label := range rule.Labels {
+			best = max(best, answer.Probabilities[label])
+		}
+	}
+	publish(key, best)
 	var matched []string
 	if predicate != nil && len(rule.Question.Choices) == 2 {
-		best := 0.0
 		for _, option := range rule.Question.OptionKeys() {
-			probability := answer.Probabilities[option]
-			if slices.Contains(rule.Labels, option) {
-				best = max(best, probability)
-			}
-			if predicateMatches(probability, predicate) {
+			if predicateMatches(answer.Probabilities[option], predicate) {
 				matched = append(matched, rule.Name+":"+option)
 			}
 		}
-		if len(rule.Labels) == 0 {
-			best = answer.Probabilities[answer.Choice]
-		}
-		publish(key, best)
 	} else {
 		chosen := answer.Probabilities[answer.Choice]
-		publish(key, chosen)
 		if answer.Choice == "" || (predicate != nil && !predicateMatches(chosen, predicate)) {
 			return nil
 		}

@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -36,6 +37,10 @@ func TestToolResultErrorTranslationPolicy(t *testing.T) {
 				failed, err := engine.TranslateRequest(llmprotocol.AnthropicMessagesV1, target, toolErrorHistory(`,"is_error":true`), nil)
 				if lossy == llmprotocol.LossyReject {
 					assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "lossy_translation")
+					// the refusal names the setting that accepts this loss
+					if want := "listing tool_result.is_error in global.router.allow_lossy_translation"; !strings.Contains(err.Error(), want) {
+						t.Fatalf("refusal %q does not name the opt-in %q", err, want)
+					}
 					if len(failed.Body) != 0 {
 						t.Fatalf("strict translation emitted provider body: %s", failed.Body)
 					}

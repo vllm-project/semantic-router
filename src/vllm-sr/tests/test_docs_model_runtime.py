@@ -38,10 +38,9 @@ from cli.validator import validate_user_config  # noqa: E402
 DOCS = REPO_ROOT / "website" / "docs"
 PAGES = [
     *sorted((DOCS / "model-runtime").rglob("*.md")),
-    DOCS / "tutorials/global/model-runtime.md",
     DOCS / "tutorials/signal/systemone.md",
     DOCS / "tutorials/algorithm/selection/systemone.md",
-    DOCS / "system-one/api.md",
+    DOCS / "system-one/use/api.md",
 ]
 RUNTIME = REPO_ROOT / "src" / "model-runtime" / "vllm_srun"
 FENCE = re.compile(r"^```(\w*)([^\n]*)\n(.*?)^```", re.M | re.S)
@@ -58,6 +57,7 @@ REQUEST_SCHEMAS = {
     "/v1/embeddings": "EmbeddingsRequest",
     "/v1/rerank": "RerankRequest",
     "/v1/bundle": "BundleRequest",
+    "/v1/systemone/batch": "SystemOneBatchRequest",
 }
 # Fragments that are not router configuration documents; the Router's docs
 # test checks that migrate writes legacy.migrated.yaml for legacy.yaml.
@@ -258,13 +258,13 @@ def _runtime_config_module():
 
 
 def test_models_file_example_loads_with_the_runtime_loader(tmp_path):
-    block = _block("model-runtime/reference.md", "models.yaml")
+    block = _block("model-runtime/reference/commands.md", "models.yaml")
     path = tmp_path / "models.yaml"
     path.write_text(block.text, encoding="utf-8")
 
     models = _runtime_config_module().load_models_file(path)
 
-    assert [model.name for model in models] == ["vela-domain", "decision-kai"]
+    assert [model.name for model in models] == ["vela-domain", "decision-edge"]
 
 
 OPENAPI_URI = "urn:vllm-srun:openapi"
@@ -318,7 +318,7 @@ def test_reference_decision_responses_have_the_documented_shape():
     responses = [
         block
         for block in _blocks("json")
-        if block.title == "Response" and "reference.md" in str(block.where)
+        if block.title == "Response" and "reference/http-api.md" in str(block.where)
     ]
     validator = _openapi_validator("DecisionResponse")
 
@@ -334,7 +334,9 @@ def test_reference_decision_responses_have_the_documented_shape():
 
 
 def test_quickstart_response_example_has_the_documented_shape():
-    response = json.loads(_block("model-runtime/quickstart.md", "Response").text)
+    response = json.loads(
+        _block("model-runtime/get-started/quickstart.md", "Response").text
+    )
     validator = _openapi_validator("DecisionResponse")
     # The illustrative response omits usage; everything it shows must conform.
     problems = [

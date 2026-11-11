@@ -134,43 +134,34 @@ func newEscalateLooper(cfg *config.LooperConfig, binding clientBinding) *Escalat
 	}
 }
 
-// parseParamSize parses a param_size string (e.g., "10b", "5b", "100m") into a comparable integer
-// Returns the number of parameters in millions (e.g., "10b" -> 10000, "100m" -> 100)
-func parseParamSize(size string) int64 {
-	if size == "" {
-		return 0
+// paramSizePattern matches the leading count of a param_size, such as "10b",
+// "1.6T" or "397B (17B active)".
+var paramSizePattern = regexp.MustCompile(`^~?([0-9]+(?:\.[0-9]+)?)\s*([kmbt]?)`)
+
+// parseParamSize parses a param_size string by its leading count into millions
+// of parameters (e.g., "10b" -> 10000, "397B (17B active)" -> 397000, "1.6T" ->
+// 1600000). A size it cannot read returns math.MaxFloat64, so it sorts last.
+func parseParamSize(size string) float64 {
+	matches := paramSizePattern.FindStringSubmatch(strings.ToLower(strings.TrimSpace(size)))
+	if matches == nil {
+		return math.MaxFloat64
 	}
 
-	size = strings.ToLower(strings.TrimSpace(size))
-
-	// Match pattern like "10b", "5.5b", "100m", "500k"
-	re := regexp.MustCompile(`^([0-9.]+)([bBmMkK]?)$`)
-	matches := re.FindStringSubmatch(size)
-	if len(matches) < 2 {
-		return 0
-	}
-
-	numStr := matches[1]
-	unit := ""
-	if len(matches) >= 3 {
-		unit = strings.ToLower(matches[2])
-	}
-
-	num, err := strconv.ParseFloat(numStr, 64)
+	num, err := strconv.ParseFloat(matches[1], 64)
 	if err != nil {
-		return 0
+		return math.MaxFloat64
 	}
 
 	// Convert to millions for comparison
-	switch unit {
-	case "b": // billions
-		return int64(num * 1000)
+	switch matches[2] {
+	case "t": // trillions
+		return num * 1000000
 	case "m": // millions
-		return int64(num)
+		return num
 	case "k": // thousands
-		return int64(num / 1000)
-	default: // assume billions if no unit
-		return int64(num * 1000)
+		return num / 1000
+	default: // billions, also when no unit is given
+		return num * 1000
 	}
 }
 
@@ -210,11 +201,11 @@ func sortModelRefsByCost(refs []config.ModelRef, modelParams map[string]config.M
 	// Helper function to get cost for a model ref
 	getCost := func(ref config.ModelRef) float64 {
 		if modelParams != nil {
-			if params, ok := modelParams[ref.Model]; ok {
+			if params, ok := modelParams[ref.Model]; ok && params.Pricing != (config.ModelPricing{}) {
 				return params.Pricing.PromptPer1M
 			}
 		}
-		return math.MaxFloat64 // Unknown cost goes last
+		return math.MaxFloat64 // Unknown or unset cost goes last
 	}
 
 	sort.SliceStable(sorted, func(i, j int) bool {
@@ -631,29 +622,29 @@ func (l *EscalateLooper) judgeAnswer(run *escalateRun, modelName, accessKey stri
 	req, acceptance := run.req, run.acceptance
 	switch {
 	case acceptance.answerCheck != nil:
-		question := extractQuestionFromRequest(req.OriginalRequest)
+		question := extractOriginalContent(req.OriginalRequest)
 		if question == "" {
 			return 0, 0, false, fmt.Errorf("could not extract user question from request")
 		}
-		probability, err := req.AnswerChecks.CheckAnswer(run.ctx, question, resp.Content)
+		probability, err := req.AnswerChecks.CheckAnswer(run.ctx, question, judgedAnswer(resp))
 		if err != nil {
 			return 0, 0, false, err
 		}
 		threshold := *acceptance.answerCheck.GTE
 		return probability, threshold, probability >= threshold, nil
 	case acceptance.refusal:
-		question := extractQuestionFromRequest(req.OriginalRequest)
+		question := extractOriginalContent(req.OriginalRequest)
 		if question == "" {
 			return 0, 0, false, fmt.Errorf("could not extract user question from request")
 		}
-		probability, threshold, err := req.AnswerChecks.Refusal(run.ctx, question, resp.Content)
+		probability, threshold, err := req.AnswerChecks.Refusal(run.ctx, question, judgedAnswer(resp))
 		if err != nil {
 			return 0, 0, false, err
 		}
 		return probability, threshold, probability < threshold, nil
 	case acceptance.confidence.IsSelfVerify():
 		verificationIteration := run.attempts + 1
-		verification, err := l.performSelfVerification(run.ctx, req, modelName, resp.Content, accessKey, acceptance.confidence.Threshold, verificationIteration)
+		verification, err := l.performSelfVerification(run.ctx, req, modelName, judgedAnswer(resp), accessKey, acceptance.confidence.Threshold, verificationIteration)
 		if verification.Attempted {
 			run.attempts++
 			run.modelsUsed = append(run.modelsUsed, modelName)
@@ -669,6 +660,19 @@ func (l *EscalateLooper) judgeAnswer(run *escalateRun, modelName, accessKey stri
 		confidence, accepted, err := acceptance.confidence.evaluate(resp)
 		return confidence, acceptance.confidence.Threshold, accepted, err
 	}
+}
+
+// judgedAnswer is the answer an accept check judges: its text, then each tool
+// call it makes as the tool's name and arguments, so a call is not judged as
+// an empty answer.
+func judgedAnswer(resp *ModelResponse) string {
+	answer := resp.Content
+	if resp.Parsed != nil && len(resp.Parsed.Choices) > 0 {
+		for _, call := range resp.Parsed.Choices[0].Message.ToolCalls {
+			answer = strings.TrimSpace(answer + "\n" + call.Function.Name + " " + call.Function.Arguments)
+		}
+	}
+	return answer
 }
 
 func escalateStreamUsageRequested(req *Request) bool {
@@ -688,7 +692,7 @@ func (l *EscalateLooper) performSelfVerification(
 	iteration int,
 ) (selfVerificationExecution, error) {
 	// Extract original question from the request
-	originalQuestion := extractQuestionFromRequest(req.OriginalRequest)
+	originalQuestion := extractOriginalContent(req.OriginalRequest)
 	if originalQuestion == "" {
 		return selfVerificationExecution{}, fmt.Errorf("could not extract user question from request")
 	}
@@ -754,59 +758,6 @@ func (l *EscalateLooper) performSelfVerification(
 		Response:   verifyResp,
 		Attempted:  true,
 	}, nil
-}
-
-// extractQuestionFromRequest extracts the user's question from the original request
-// Uses JSON marshaling for robust extraction across SDK versions
-func extractQuestionFromRequest(originalRequest *openai.ChatCompletionNewParams) string {
-	if originalRequest == nil {
-		return ""
-	}
-
-	// Marshal to JSON and parse to extract messages
-	data, err := json.Marshal(originalRequest)
-	if err != nil {
-		return ""
-	}
-
-	var reqMap map[string]interface{}
-	if err := json.Unmarshal(data, &reqMap); err != nil {
-		return ""
-	}
-
-	messages, ok := reqMap["messages"].([]interface{})
-	if !ok || len(messages) == 0 {
-		return ""
-	}
-
-	// Find the last user message
-	for i := len(messages) - 1; i >= 0; i-- {
-		msg, ok := messages[i].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		role, _ := msg["role"].(string)
-		if role == "user" {
-			// Content can be a string or array of parts
-			switch content := msg["content"].(type) {
-			case string:
-				return content
-			case []interface{}:
-				// Array of content parts
-				for _, part := range content {
-					if partMap, ok := part.(map[string]interface{}); ok {
-						if partMap["type"] == "text" {
-							if text, ok := partMap["text"].(string); ok {
-								return text
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return ""
 }
 
 // buildSelfVerificationRequest creates a new request for self-verification

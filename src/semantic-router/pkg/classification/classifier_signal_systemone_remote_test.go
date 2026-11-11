@@ -55,7 +55,7 @@ func systemOneTestClassifier(local modelservice.Decider, remote modelservice.Rem
 	cfg := &config.RouterConfig{}
 	cfg.DecisionModel = "hosted-d3"
 	cfg.ModelDeployments = map[string]config.ModelDeployment{
-		"hosted-d3": {Provider: config.SystemOneProvider, Endpoint: "https://systemone.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", TimeoutMs: deploymentTimeoutMs},
+		"hosted-d3": {Provider: config.SystemOneProvider, Schema: "vllm-sr/4.0", Endpoint: "https://systemone.example.com/v1/systemone", Model: "vllm-sr/d3-ultra", TimeoutMs: deploymentTimeoutMs},
 		"kai":       {Provider: config.ModelRuntimeProvider, Endpoint: "http://127.0.0.1:1"},
 	}
 	cfg.SystemOneRules = []config.SystemOneRule{

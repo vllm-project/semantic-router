@@ -80,7 +80,7 @@ reasoning:
   disabled: none
 ```
 
-恰好选择一种形式。此前的全局自定义家族注册表不属于 canonical v0.3；内联定义位于使用它们的自定义 Model 上。字段语义和决策控制见[推理配置](model-reasoning)。
+恰好选择一种形式。此前的全局自定义家族注册表不属于 canonical v0.5；内联定义位于使用它们的自定义 Model 上。字段语义和决策控制见[推理配置](model-reasoning)。
 
 ## 仅对相同上游契约使用副本
 

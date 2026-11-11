@@ -147,13 +147,33 @@ domains:
       - src/model-runtime/vllm_srun/families/decision1/questions.py
       - src/model-runtime/vllm_srun/families/decision2/family.py
       - src/model-runtime/vllm_srun/families/decision3/family.py
+      - config/schemas/systemone/**
+      - tools/codegen/systemone/**
+      - tools/make/model-runtime.mk
+      - src/model-runtime/vllm_srun/families/*/family.py
+      - src/model-runtime/vllm_srun/api/systemone_fields.py
+      - src/semantic-router/pkg/systemoneprotocol/zz_generated_fields.go
+      - src/semantic-router/pkg/systemoneprotocol/testdata/canonical_golden.json
+      - src/semantic-router/pkg/systemonecodec/zz_generated_specs.go
+      - src/semantic-router/pkg/systemonecodec/testdata/internal_corpus.json
+      - website/docs/system-one/reference/extension-reference.md
+      - website/docs/system-one/reference/compatibility-matrix.md
       - dashboard/frontend/scripts/generate-decision-runtime-catalog.py
       - dashboard/frontend/src/pages/decisionRuntimeCatalog.generated.json
       - dashboard/frontend/src/generated/routerConfigContract.ts
       - dashboard/frontend/src/generated/vsrHeaders.ts
+      - tools/docs/generate_header_reference.py
+      - tools/docs/generate_model_pages.py
+      - tools/docs/supported_models.yaml
+      - src/model-runtime/vllm_srun/registry/golden_answers*.json
+      - src/model-runtime/docs/records/**
+      - src/semantic-router/pkg/presets/presets.go
+      - src/semantic-router/pkg/presets/calibration.go
+      - src/semantic-router/pkg/presets/bindings.go
+      - website/docs/model-runtime/supported-models/**
+      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/model-runtime/supported-models/**
       - website/docs/api/apiserver.md
-      - website/docs/troubleshooting/vsr-headers.md
-      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/troubleshooting/vsr-headers.md
+      - website/docs/api/headers.md
       - website/static/openapi/apiserver/**
     checks: [make generated-contract-check]
     verifications: [generated-contracts]
@@ -174,9 +194,8 @@ domains:
 
   # The Router's tests read these pages and files: the config tests load every
   # YAML example (src/semantic-router/pkg/config/docs_examples_test.go and,
-  # for the agent skill, agent_skill_examples_test.go), and the header
-  # registry tests check the generated header reference
-  # (src/semantic-router/pkg/headers).
+  # for the agent skill, agent_skill_examples_test.go) and check the
+  # generated header reference (docs_contract_test.go).
   router-checked-docs:
     owner: router-core
     documentation_check: true
@@ -184,8 +203,7 @@ domains:
       - website/docs/installation/protocol-compatibility.md
       - website/docs/installation/storage-overview.md
       - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/installation/storage-overview.md
-      - website/docs/troubleshooting/vsr-headers.md
-      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/troubleshooting/vsr-headers.md
+      - website/docs/api/headers.md
       - website/docs/system-one/**
       - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/system-one/**
       - website/docs/tutorials/signal/overview.md
@@ -196,8 +214,8 @@ domains:
       - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/tutorials/signal/application/**
       - website/docs/installation/migrate-to-v0-5.md
       - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/installation/migrate-to-v0-5.md
-      - website/docs/installation/runtime/external.md
-      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/installation/runtime/external.md
+      - website/docs/model-runtime/deploy/remote-services.md
+      - website/i18n/zh-Hans/docusaurus-plugin-content-docs/current/model-runtime/deploy/remote-services.md
       - website/docs/training/router-embeddings-huggingface.md
       - tools/docker/riscv64/standalone.yaml
       - tools/agent/skills/vllm-sr-agent-operations/**
@@ -227,10 +245,11 @@ domains:
     documentation_check: true
     paths:
       - .claude-plugin/**
-      - src/claude-code/**
+      - src/agent-harness/AGENTS.md
+      - src/agent-harness/claude-code/**
     checks:
-      - python3 -m unittest discover -s src/claude-code/skills/setup/scripts
-      - python3 -m unittest discover -s src/claude-code/skills/calibrate/scripts
+      - python3 -m unittest discover -s src/agent-harness/claude-code/skills/setup/scripts
+      - python3 -m unittest discover -s src/agent-harness/claude-code/skills/calibrate/scripts
     verifications: []
 
   vela-omni-artifacts:
@@ -423,11 +442,9 @@ domains:
       - tools/agent/skills/vllm-sr-agent-operations/**
       - install.sh
       - website/docs/model-runtime/**
-      - website/docs/tutorials/global/model-runtime.md
       - website/docs/tutorials/signal/systemone.md
       - website/docs/tutorials/algorithm/selection/systemone.md
       - website/i18n/*/docusaurus-plugin-content-docs/current/model-runtime/**
-      - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/global/model-runtime.md
       - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/signal/systemone.md
       - website/i18n/*/docusaurus-plugin-content-docs/current/tutorials/algorithm/selection/systemone.md
     checks: [make vllm-sr-test]
@@ -444,11 +461,11 @@ domains:
       - website/docs/installation/choose-a-model-for-a-signal.md
       - website/docs/installation/model-catalog.md
       - website/docs/installation/model-resource-migration.md
-      - website/docs/model-runtime/migrate.md
+      - website/docs/model-runtime/deploy/migrate.md
       - website/i18n/*/docusaurus-plugin-content-docs/current/installation/choose-a-model-for-a-signal.md
       - website/i18n/*/docusaurus-plugin-content-docs/current/installation/model-catalog.md
       - website/i18n/*/docusaurus-plugin-content-docs/current/installation/model-resource-migration.md
-      - website/i18n/*/docusaurus-plugin-content-docs/current/model-runtime/migrate.md
+      - website/i18n/*/docusaurus-plugin-content-docs/current/model-runtime/deploy/migrate.md
     checks: [make test-semantic-router, make vllm-sr-test]
     verifications: [core, cli-unit]
 

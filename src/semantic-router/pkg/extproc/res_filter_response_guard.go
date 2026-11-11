@@ -47,15 +47,15 @@ type responseGuardRuleRun struct {
 	matchedRules []string
 }
 
-// runResponseGuard reads the selected decision's response_guard rules over
-// answer, in order, until one blocks, and returns nil when the decision has no
-// guard. Without the recipe's classifier no response-stage rule can be read,
-// so every rule is unknown.
+// runResponseGuard reads the response_guard rules of the plugins the request
+// runs over answer, in order, until one blocks, and returns nil when it runs
+// no guard. Without the recipe's classifier no rule can be read, so every
+// rule is unknown.
 func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string) *responseGuardRun {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+	if ctx == nil {
 		return nil
 	}
-	guard := ctx.VSRSelectedDecision.GetResponseGuardConfig()
+	guard := requestResponseGuard(ctx)
 	if guard == nil {
 		return nil
 	}
@@ -80,7 +80,9 @@ func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string) *res
 		case decision.RuleUnknown:
 			ruleRun.action = guard.EffectiveOnUnknown()
 		}
-		ruleRun.codes = responseGuardCodes(cfg, rule.When, ruleRun.state)
+		ruleRun.codes = responseGuardCodes(cfg, rule.When, ruleRun.state, func(node config.RuleNode) bool {
+			return run.conditions.Evaluate(node).State == decision.RuleTrue
+		})
 		run.rules = append(run.rules, ruleRun)
 		if ruleRun.action == config.ResponseGuardBlock {
 			break
@@ -95,14 +97,16 @@ func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string) *res
 }
 
 // responseInput is what response-stage rules read about the request and its
-// answer: the grounding context is the retrieved documents and the tool
-// results of the request as it was sent.
+// answer: the grounding context is the retrieved documents and memories, in
+// whichever injection mode, and the tool results of the request as it was sent.
 func (ctx *RequestContext) responseInput(answer string) classification.ResponseInput {
 	input := ctx.ResponseStage
 	input.Answer = answer
 	var grounding []string
-	if ctx.RAGRetrievedContext != "" {
-		grounding = append(grounding, ctx.RAGRetrievedContext)
+	for _, retrieved := range []string{ctx.RAGRetrievedContext, ctx.MemoryContext} {
+		if retrieved != "" {
+			grounding = append(grounding, retrieved)
+		}
 	}
 	if ctx.SemanticRequest != nil {
 		for _, message := range ctx.SemanticRequest.Messages {
@@ -110,7 +114,9 @@ func (ctx *RequestContext) responseInput(answer string) classification.ResponseI
 				if content.Kind != llmprotocol.ContentToolResult || content.ToolResult == nil {
 					continue
 				}
-				if _, retrieved := ctx.RAGToolCallIDs[content.ToolResult.CallID]; retrieved {
+				_, rag := ctx.RAGToolCallIDs[content.ToolResult.CallID]
+				_, memory := ctx.MemoryToolCallIDs[content.ToolResult.CallID]
+				if rag || memory {
 					continue
 				}
 				if text := semanticText(content.ToolResult.Content); text != "" {
@@ -124,16 +130,20 @@ func (ctx *RequestContext) responseInput(answer string) classification.ResponseI
 }
 
 // responseGuardCodes are the codes an annotating rule adds to
-// x-vsr-warnings, one per response-stage signal type the rule reads:
+// x-vsr-warnings, one per response-stage signal type of the conditions that
+// made it true, or of every condition it reads when it is unknown:
 // hallucination (unverified_factual when the answer could not be checked),
-// response_jailbreak, and response_guard for any other rule.
-func responseGuardCodes(cfg *config.RouterConfig, when config.RuleNode, state decision.RuleState) []string {
+// response_jailbreak, and response_guard for any other rule. holds reads a
+// condition of a true rule over the signals the rule already read.
+func responseGuardCodes(cfg *config.RouterConfig, when config.RuleNode, state decision.RuleState, holds func(config.RuleNode) bool) []string {
 	var codes []string
 	var walk func(node *config.RuleNode)
 	walk = func(node *config.RuleNode) {
 		if !node.IsLeaf() {
 			for i := range node.Conditions {
-				walk(&node.Conditions[i])
+				if state != decision.RuleTrue || holds(node.Conditions[i]) {
+					walk(&node.Conditions[i])
+				}
 			}
 			return
 		}

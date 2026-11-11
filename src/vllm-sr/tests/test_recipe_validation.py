@@ -88,6 +88,69 @@ def test_recipe_model_references_are_validated():
     assert any("unknown model 'missing-model'" in error.message for error in errors)
 
 
+@pytest.mark.parametrize(
+    ("ref", "message"),
+    [
+        ({"model": "ghost"}, "Decision 'support' references unknown model 'ghost'"),
+        (
+            {"model": "general", "lora_name": "undeclared"},
+            "Decision 'support' references unknown LoRA 'undeclared' for model 'general'",
+        ),
+        ({"model": "general", "lora_name": "declared"}, None),
+        ({"model": "declared"}, None),
+    ],
+)
+def test_candidate_iteration_models_are_checked_as_the_router_checks_them(ref, message):
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.5",
+            "providers": {
+                "defaults": {"model": "general"},
+                "models": [
+                    {
+                        "name": "general",
+                        "backend_refs": [
+                            {"endpoint": "127.0.0.1:8000", "provider": "vllm"}
+                        ],
+                        "loras": [{"name": "declared"}],
+                    }
+                ],
+            },
+            "recipes": [
+                {
+                    "name": "default",
+                    "decisions": [
+                        {
+                            "name": "support",
+                            "priority": 1,
+                            "rules": {"operator": "AND", "conditions": []},
+                            "modelRefs": [{"model": "general"}],
+                            "candidateIterations": [
+                                {
+                                    "variable": "candidate",
+                                    "source": "models",
+                                    "models": [ref],
+                                    "outputs": [
+                                        {"type": "model", "value": "candidate"}
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    errors = [
+        (error.field, error.message)
+        for error in validate_user_config(config, log_summary=False)
+    ]
+
+    field = "recipes.default.decisions.support.candidateIterations[0].models"
+    assert errors == ([(field, message)] if message else [])
+
+
 def test_catalog_model_cannot_override_reasoning_binding():
     config = recipe_config()
     config.providers.models[0].catalog = "vllm-sr/mom-v1-lite"
@@ -860,25 +923,74 @@ def test_default_entrypoint_override_and_reset():
     ] == [["our/router", "MoM"]]
 
 
-def test_systemone_listener_scope_is_explicit_and_nonempty():
-    listener = Listener(
-        name="public", address="0.0.0.0", port=8000, models=["chat-only"]
-    )
-    assert listener.systemone is None
-    for models in ([], [""], [" padded "], ["one", "one"]):
-        with pytest.raises(PydanticValidationError):
-            Listener(
-                name="public",
-                address="0.0.0.0",
-                port=8000,
-                systemone={"models": models},
-            )
+def test_listener_apis_are_named_by_the_api_registry():
     listener = Listener(
         name="public",
         address="0.0.0.0",
         port=8000,
-        models=["chat-only"],
-        systemone={"models": ["decision-public"]},
+        apis={"openai": {"models": ["chat-only"]}},
     )
-    assert listener.models == ["chat-only"]
-    assert listener.systemone.models == ["decision-public"]
+    assert listener.served_apis() == ("chat_completions",)
+    assert listener.apis["chat_completions"].models == ["chat-only"]
+    assert listener.systemone_models() is None
+    assert Listener(name="public", port=8000).served_apis() == (
+        "chat_completions",
+        "responses",
+        "messages",
+        "images",
+    )
+    for models in ([], [""], [" padded "], ["one", "one"]):
+        with pytest.raises(PydanticValidationError):
+            Listener(name="public", port=8000, apis={"systemone": {"models": models}})
+    listener = Listener(
+        name="public",
+        port=8000,
+        apis={
+            "chat_completions": {"models": ["chat-only"]},
+            "systemone": {
+                "schema": "vllm-sr/4.0",
+                "models": ["decision-public"],
+                "max_deadline_ms": 120000,
+            },
+        },
+    )
+    assert listener.systemone_models() == ["decision-public"]
+    assert listener.apis["systemone"].schema_ == "vllm-sr/4.0"
+    for apis, message in (
+        (
+            {"openai": {}, "chat_completions": {}},
+            "openai and chat_completions name the same API, chat_completions",
+        ),
+        (
+            {"messages": {}, "anthropic": {}},
+            "anthropic and messages name the same API, messages",
+        ),
+        ({"realtime": {}}, "api 'realtime' is not supported"),
+        ({"chat_completions": {"schema": "openai/v1"}}, "has one schema"),
+        (
+            {"systemone": {"schema": "systemone/0.2"}},
+            "a listener serves api systemone in vllm-sr/5.0 or vllm-sr/4.0",
+        ),
+        ({"responses": {"max_deadline_ms": 5}}, "takes no max_deadline_ms"),
+        ({}, "apis names no API"),
+    ):
+        with pytest.raises(PydanticValidationError, match=message):
+            Listener(name="public", port=8000, apis=apis)
+    for removed in ({"models": ["m"]}, {"systemone": {"models": ["m"]}}):
+        with pytest.raises(
+            PydanticValidationError, match="run `vllm-sr config migrate`"
+        ):
+            Listener(name="public", port=8000, **removed)
+
+
+def test_listener_names_are_unique():
+    listeners = [
+        Listener(name="http", address="0.0.0.0", port=8000),
+        Listener(name="http", address="0.0.0.0", port=8001),
+    ]
+    with pytest.raises(
+        PydanticValidationError, match="listener 'http' is defined twice"
+    ):
+        UserConfig(version="v0.5", listeners=listeners)
+    listeners[1].name = "http-8001"
+    assert len(UserConfig(version="v0.5", listeners=listeners).listeners) == 2

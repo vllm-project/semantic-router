@@ -46,7 +46,8 @@ recipes:
                 - type: keyword
                   name: urgent_keywords
                 - type: complexity
-                  name: needs_reasoning:hard
+                  name: needs_reasoning
+                  label: hard
             - operator: NOT
               conditions:
                 - type: jailbreak

@@ -123,8 +123,8 @@ not become optional merely because their filenames contain `test`.
 | --- | --- |
 | PR | Automatic affected checks; required expensive checks wait for `/ci run`. PR Gate stays pending with **Waiting for committer approval** while authorization is the only missing requirement. |
 | PR with `/ci run full` | The complete versioned CPU inventory, including baseline stress cases. |
-| Main push | Automatic affected source, deterministic router and product checks. No image or CLI publication. Reviewed PRs and the merge queue own affected live qualification. |
-| Main dispatch with `publish=true` | Full CPU qualification and a complete commit-addressed development image/CLI set; the CLI publishes only after its images succeed. |
+| Main push | Automatic affected source, deterministic router and product checks, then the commit's complete development image/CLI set: six multi-arch images under the commit SHA, `latest`, the development CLI, and the `0.0.0-latest` chart when the chart changed. A newer push cancels this run while it is queued or qualifying, and checks this commit's changes itself; a publication that started always finishes. `latest` moves only forward: a run whose commit main has already published past keeps only its SHA tags. The CLI publishes only after its images succeed. Reviewed PRs and the merge queue own affected live qualification. |
+| Main dispatch with `publish=true` | Full CPU qualification, then the same publication, including the chart. |
 | Nightly Qualification | Daily full CPU qualification of the newest main commit and nightly-channel image/Helm publication. Images and chart share the run's date, and a published date never moves: a later run on the same date publishes nothing. A scheduled run skips a commit that another run already passed or is still qualifying; a dispatch cancels the qualification it supersedes and a scheduled run waits for one, never cancelling a publication; a failed first attempt re-runs its failed jobs once while it is still main's newest commit, so don't re-run it by hand first. |
 | Release tag | Artifact/version pipeline: build and publish images, Helm, and Python with aligned versions. It does not invoke another full CPU suite; the catalog retains a release qualification profile for explicit use. |
 
@@ -289,8 +289,9 @@ cache does not activate optional inference during ordinary core tests.
 A build identity includes its source revision, platform, and build inputs.
 CI builds each selected image once, checks its content digest when loading it,
 and reuses that read-only artifact across suites. If the exact provider fixture
-has not yet been published by an explicit Main publication, PR and weekly runs
-build and qualify their own candidate; registry access failures still fail.
+has not yet been published by a Main publication dispatch (a push publishes no
+fixture), PR and nightly runs build and qualify their own candidate; registry
+access failures still fail.
 Containers, databases, networks, and volumes are not shared between suites.
 Image publication promotes the qualified OCI archive. CLI publication uploads
 the wheel and source distribution already checked from an isolated installation.

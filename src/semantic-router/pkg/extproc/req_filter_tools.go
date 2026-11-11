@@ -10,7 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// applyToolsPlugin applies the selected decision's tools plugin to the
+// applyToolsPlugin applies the tools plugin the request runs to the
 // provider-bound request: the trusted-facts gate, the policy, then the
 // selection, which runs when the request leaves the choice of tools to the
 // model. A selection that refuses the request turns response into the
@@ -19,7 +19,7 @@ func (r *OpenAIRouter) applyToolsPlugin(request *llmprotocol.Request, response *
 	if response.GetImmediateResponse() != nil {
 		return
 	}
-	plugin := resolveDecisionToolsConfig(ctx)
+	plugin := resolveDecisionToolsConfig(r.Config, ctx)
 	if plugin != nil && plugin.Enabled && !r.applyTrustedFactsGate(request, ctx, plugin, trustedFactsRequestStage) {
 		if applyToolsPolicy(request, plugin.Policy) && plugin.Select != nil && leavesToolChoiceToModel(request) {
 			if failure := r.selectTools(request, plugin, ctx); failure != nil {
@@ -46,6 +46,11 @@ func applyToolsPolicy(request *llmprotocol.Request, policy *config.ToolsPolicyCo
 	case config.ToolsPolicyModeFiltered:
 		if filtered := filterToolsByPolicy(request.Tools, policy); len(filtered) != len(request.Tools) {
 			request.Tools = filtered
+			// A tool_choice naming a removed tool goes with it, as under none,
+			// and the model chooses among the tools left.
+			if request.ToolChoice.Mode == llmprotocol.ToolChoiceNamed && !policy.Allows(request.ToolChoice.Name) {
+				request.ToolChoice = llmprotocol.ToolChoice{}
+			}
 			request.Generation++
 		}
 	}
@@ -69,11 +74,11 @@ func filterToolsByPolicy(tools []llmprotocol.Tool, policy *config.ToolsPolicyCon
 	return filtered
 }
 
-func resolveDecisionToolsConfig(ctx *RequestContext) *config.ToolsPluginConfig {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
+func resolveDecisionToolsConfig(cfg *config.RouterConfig, ctx *RequestContext) *config.ToolsPluginConfig {
+	if ctx == nil {
 		return nil
 	}
-	return ctx.VSRSelectedDecision.GetToolsConfig()
+	return config.ToolsPluginOf(requestPlugins(cfg, ctx))
 }
 
 // commitToolSelection publishes the mutated neutral request to the dispatch

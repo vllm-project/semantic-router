@@ -25,7 +25,7 @@ translation:
 
 ## 何时使用 {#when-to-use}
 
-当你需要对请求做出某种判断，而现有的[应用信号](./overview#application-signals)都不涵盖时使用它。长度、关键词、输入媒体、身份等结构性事实，优先使用启发式信号。[编写自定义问题](../../system-one/custom-questions)从一个想法一路讲到调优好的规则。
+当你需要对请求做出某种判断，而现有的[应用信号](./overview#application-signals)都不涵盖时使用它。长度、关键词、输入媒体、身份等结构性事实，优先使用启发式信号。[编写自定义问题](../../system-one/use/custom-questions)从一个想法一路讲到调优好的规则。
 
 ## 配置 {#configuration}
 
@@ -82,7 +82,7 @@ global:
         artifact: vllm-sr/Decision-2.0-Kai-0.6B
 ```
 
-没有 `deployment` 的规则询问决策模型 `global.model_catalog.system.decision_model`（除非另行选择，否则为 vela3-fast）；[选择部署](../../system-one/deployments)介绍了本地、挂接和远程模型。部署必须能回答规则的问题类型，否则配置加载时会被拒绝。vela3-fast 回答 `choice`、`noul` 和 `span` 问题，并把 `set` 问题拆成每个标签一个 `noul` 来回答，但不回答 `score` 问题，所以 `difficulty` 询问的是一个 Decision 2.0 部署。
+没有 `deployment` 的规则询问决策模型 `global.model_catalog.system.decision_model`（除非另行选择，否则为 vela3-fast）；[选择部署](../../system-one/deploy/deployments)介绍了本地、挂接和远程模型。部署必须能回答规则的问题类型，否则配置加载时会被拒绝。vela3-fast 回答 `choice`、`noul` 和 `span` 问题，并把 `set` 问题拆成每个标签一个 `noul` 来回答，但不回答 `score` 问题，所以 `difficulty` 询问的是一个 Decision 2.0 部署。
 
 为早期版本编写的配置把这个信号命名为 `decision`（`recipes[].signals.decision` 和 `type: decision` 条件）。它们仍能加载，但会给出 `renamed_signal_type` 警告，`vllm-sr config migrate` 会把它们改写为 `systemone`。
 
@@ -92,7 +92,7 @@ global:
 | --- | --- |
 | `name` | 规则名称，供条件和投影使用。 |
 | `question` | 类型化问题：`type`、`instructions`，以及它的 `choices`、`levels` 或 `labels`。 |
-| `labels` | `choice`、`set` 或 `span` 规则匹配的选项。条件仍可以指定任意选项。 |
+| `labels` | `choice`、`set` 或 `span` 规则匹配的选项。`choice` 规则上的条件仍可以指定任意选项；`set` 或 `span` 规则上的条件只能指定计入的标签。 |
 | `ignore_labels` | 仅 `set` 和 `span`：永不计入规则的标签。 |
 | `predicate` | 答案必须满足的概率或等级（`gt`、`gte`、`lt`、`lte`）。 |
 | `deployment` | 回答问题的部署；不写时为决策模型。 |
@@ -114,7 +114,7 @@ global:
 | `set` | 有计入的标签匹配 | 该标签的概率满足 `predicate`；不设置时，模型选中了该标签 |
 | `span` | 有计入的标签匹配 | 带该标签的某个 span 概率满足 `predicate`；不设置时，模型找到了带该标签的 span |
 
-`set` 或 `span` 规则计入 `labels`（不写时为问题的所有标签），再减去 `ignore_labels`。条件可以加上自己的 `predicate`；带 `label` 的条件读取该标签的值。以下情况配置会被拒绝：`label`、`labels` 或 `ignore_labels` 中的某项不是问题的选项；条件指定了被忽略的标签；不带 label 的条件指定了没有 `labels` 的 `choice` 规则。
+`set` 或 `span` 规则计入 `labels`（不写时为问题的所有标签），再减去 `ignore_labels`。条件可以加上自己的 `predicate`；带 `label` 的条件读取该标签的值。以下情况配置会被拒绝：`label`、`labels` 或 `ignore_labels` 中的某项不是问题的选项；条件指定了 `set` 或 `span` 规则不计入的标签（被忽略的标签，或不在其 `labels` 中的标签）；不带 label 的条件指定了没有 `labels` 的 `choice` 规则。
 
 规则发布以下值，供条件的 `predicate` 和[投影得分](../projection/scores)读取：
 
@@ -122,7 +122,7 @@ global:
 | --- | --- | --- |
 | `noul` | P(是) | — |
 | `score` | 期望等级 | — |
-| `choice` | P(选中) | 每个选项的 P(key) |
+| `choice` | `labels` 中最高的 P；没有 `labels` 的规则为 P(选中) | 每个选项的 P(key) |
 | `set` | 计入标签中最高的 P | 每个标签的 P(key) |
 | `span` | 计入标签中最高的概率 | 该标签最可能的 span（没有时为 0） |
 
@@ -210,6 +210,7 @@ recipes:
 - `history`：之前的用户轮次。
 - `previous_turns`（0 到 32）：最近几个轮次（用户和助手），以对话记录形式给出。
 - `tool_results`：请求中的工具结果。
+- `request: false`：不读取当前用户轮次，请求阶段的规则只把它指定的之前用户轮次或工具结果作为请求读取。它需要 `history` 或 `tool_results`，不能带 `previous_turns` 或媒体输入；这些部分没有文本时，规则不会被询问，因此也不会匹配。
 - `image` 和 `video`：当前轮次的图片和视频。部署必须能读取该输入，否则配置以 `input_modality_unsupported` 被拒绝。目前还没有部署能读取音频，所以 `input.audio` 总会被拒绝。
 - `answer` 和 `context`：模型的答案及其依据上下文，仅用于 `stage: response` 规则。
 

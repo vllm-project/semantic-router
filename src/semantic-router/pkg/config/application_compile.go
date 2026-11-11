@@ -147,7 +147,7 @@ func (c *RouterConfig) applicationRuleSpecs() []applicationRuleSpec {
 		specs = append(specs, applicationRuleSpec{
 			signalType: SignalTypePII, preset: presets.PII, name: r.Name, description: r.Description,
 			deployment: r.Deployment, ignoreLabels: r.IgnoreLabels, predicate: r.Predicate,
-			input: SystemOneInput{History: r.Input.History, ToolResults: r.Input.ToolResults}, onUnscanned: SystemOneUnscannedMatch,
+			input: SystemOneInput{History: r.Input.History, ToolResults: r.Input.ToolResults, Request: r.Input.Request}, onUnscanned: SystemOneUnscannedMatch,
 			onUnknown: r.OnUnknown, timeoutMs: r.TimeoutMs,
 		})
 	}
@@ -280,7 +280,7 @@ func (c *RouterConfig) applicationDeployment(signalType, deployment string) stri
 	if named := strings.TrimSpace(deployment); named != "" {
 		return named
 	}
-	for _, bindings := range []map[string]ModelBinding{c.recipeBindings(), c.GlobalModelBindings} {
+	for _, bindings := range []map[string]ModelBinding{c.RecipeBindings(), c.GlobalModelBindings} {
 		if binding, ok := bindings[signalType]; ok {
 			return binding.Deployment
 		}
@@ -300,7 +300,7 @@ func (c *RouterConfig) ApplicationTypeDeployment(signalType string) (string, str
 // ApplicationTypeBinding is the binding ApplicationTypeDeployment reads, as
 // written; the decision model's for "default".
 func (c *RouterConfig) ApplicationTypeBinding(signalType string) (ModelBinding, string) {
-	if binding, ok := c.recipeBindings()[signalType]; ok {
+	if binding, ok := c.RecipeBindings()[signalType]; ok {
 		return binding, "recipe"
 	}
 	if binding, ok := c.GlobalModelBindings[signalType]; ok {

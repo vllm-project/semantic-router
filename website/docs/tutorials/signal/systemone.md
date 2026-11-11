@@ -30,7 +30,7 @@ about our product?" from the question text alone.
 Use it for a judgment about the request that no
 [application signal](./overview#application-signals) already makes. Prefer a
 heuristic signal for structural facts: length, keywords, input media,
-identity. [Write custom questions](../../system-one/custom-questions) walks
+identity. [Write custom questions](../../system-one/use/custom-questions) walks
 from an idea to a tuned rule.
 
 ## Configuration
@@ -90,7 +90,7 @@ global:
 
 A rule without `deployment` asks the decision model,
 `global.model_catalog.system.decision_model` (vela3-fast unless you choose
-another); [Choose a deployment](../../system-one/deployments) covers local,
+another); [Choose a deployment](../../system-one/deploy/deployments) covers local,
 attached and remote models. The deployment must answer the rule's question
 type, or the configuration is refused when it loads. vela3-fast answers
 `choice`, `noul` and `span` questions, and `set` questions as one `noul` per
@@ -108,7 +108,7 @@ rewrites them to `systemone`.
 | --- | --- |
 | `name` | The rule's name, which conditions and projections use. |
 | `question` | The typed question: `type`, `instructions`, and its `choices`, `levels` or `labels`. |
-| `labels` | The options a `choice`, `set` or `span` rule matches. A condition can still name any option. |
+| `labels` | The options a `choice`, `set` or `span` rule matches. A condition on a `choice` rule can still name any option; one on a `set` or `span` rule names a counted label. |
 | `ignore_labels` | `set` and `span` only: labels that never count toward the rule. |
 | `predicate` | The probability or level the answer must meet (`gt`, `gte`, `lt`, `lte`). |
 | `deployment` | The deployment that answers; without one, the decision model. |
@@ -135,8 +135,9 @@ A `set` or `span` rule counts `labels`, or every label of the question
 without them, less `ignore_labels`. A condition may add its own `predicate`;
 for a condition with a `label`, it reads that label's value. The
 configuration is refused when a `label` or an entry of `labels` or
-`ignore_labels` is not an option of the question, when a condition names an
-ignored label, and when an unlabelled condition names a `choice` rule
+`ignore_labels` is not an option of the question, when a condition names a
+label a `set` or `span` rule does not count (an ignored one, or one outside
+its `labels`), and when an unlabelled condition names a `choice` rule
 without `labels`.
 
 The rule publishes these values, which a condition's `predicate` and a
@@ -146,7 +147,7 @@ The rule publishes these values, which a condition's `predicate` and a
 | --- | --- | --- |
 | `noul` | P(yes) | — |
 | `score` | the expected level | — |
-| `choice` | P(chosen) | P(key) for every option |
+| `choice` | the highest P among `labels`; P(chosen) for a rule without them | P(key) for every option |
 | `set` | the highest P among the counted labels | P(key) for every label |
 | `span` | the highest probability among the counted labels | the label's most probable span (0 when none) |
 
@@ -239,6 +240,11 @@ recipes:
 - `previous_turns` (0 to 32): the last turns of the conversation, user and
   assistant, as a transcript.
 - `tool_results`: the request's tool results.
+- `request: false`: leave the current user turn out, so a request-stage rule
+  reads only the earlier user turns or the tool results it names, as its
+  request. It needs `history` or `tool_results`, takes no `previous_turns`
+  or media, and is not asked, so it does not match, while those hold no
+  text.
 - `image` and `video`: the current turn's images and videos. The deployment
   must read that input, or the configuration is refused with
   `input_modality_unsupported`. No deployment reads audio yet, so

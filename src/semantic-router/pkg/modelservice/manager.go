@@ -41,6 +41,9 @@ type Manager struct {
 	closed          bool
 
 	dispatchSequence uint64
+	// ejecting serializes replica ejections across a deployment's
+	// generations. It is taken with no other lock held.
+	ejecting sync.Mutex
 
 	autoOnce sync.Once
 	auto     string

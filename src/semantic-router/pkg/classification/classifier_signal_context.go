@@ -118,6 +118,12 @@ func (c *Classifier) EvaluateAllSignalsWithRequestFactsForDecisions(
 }
 
 func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, signalScope []config.Decision, signalScopeSet bool) *SignalResults {
+	return c.applyProjections(c.applySignalGroups(c.evaluateBaseSignals(input, signalScope, signalScopeSet)))
+}
+
+// evaluateBaseSignals evaluates the request's signals, without the partitions
+// and projections derived from them.
+func (c *Classifier) evaluateBaseSignals(input SignalEvaluationInput, signalScope []config.Decision, signalScopeSet bool) *SignalResults {
 	// Determine which signals (type:name) should be evaluated
 	var usedSignals map[string]bool
 	switch {
@@ -180,7 +186,5 @@ func (c *Classifier) evaluateAllSignalsWithContext(input SignalEvaluationInput, 
 	if input.ImageURL != "" || input.Audio != "" {
 		results.PIIContentVerified = false
 	}
-	results = c.applySignalGroups(results)
-	results = c.applyProjections(results)
 	return results
 }

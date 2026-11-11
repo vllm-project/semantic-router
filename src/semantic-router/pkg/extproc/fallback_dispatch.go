@@ -267,7 +267,7 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 		}
 	}
 
-	return nil
+	return r.encodeImmediateResponseForClient(r.delegatedCredentialRefusal(ctx), ctx)
 }
 
 // fallbackHaltStatus names why a chain stopped at a candidate that could not
@@ -278,6 +278,8 @@ func fallbackHaltStatus(err error) string {
 		return "total_deadline_exceeded"
 	case errors.Is(err, context.Canceled):
 		return "context_canceled"
+	case errors.Is(err, principal.ErrCredentialMissing):
+		return delegatedCredentialCode
 	default:
 		return "fallback_halted"
 	}
@@ -316,6 +318,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	origSemanticRequest := ctx.SemanticRequest
 	origRateLimitCtx := ctx.RateLimitCtx
 	origDiags := ctx.ProtocolDiagnostics
+	origTargetFormat := ctx.TargetFormat
 	var candidateSucceeded bool
 	defer func() {
 		ctx.TraceContext = origTraceContext
@@ -476,6 +479,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	ctx.VSRSelectedModel = candidateModel
 	ctx.ResponsePath = headers.ResponsePathFallback
 	ctx.UpstreamStatusCode = statusCode
+	ctx.TargetFormat = dispatch.targetFormat
 	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
 	ctx.SemanticResponse = &candidateResponse
 	ctx.SemanticRequest = reqCopy
@@ -511,7 +515,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		candidateSucceeded = true
 		if isStreaming {
 			r.updateRouterReplayStatus(ctx, http.StatusOK, true)
-			return r.streamedFallbackRefusal(ctx), evalResult, nil
+			return r.streamedFallbackRefusal(ctx, policyPlan.refusal), evalResult, nil
 		}
 		r.updateRouterReplayStatus(ctx, blockedStatus, false)
 		return policyPlan.blocked, evalResult, nil
@@ -554,7 +558,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 					} else {
 						attemptOutcome.Error = validateErr
 						attemptOutcome.Discarded = true
-						r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming)
+						r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming, origTargetFormat)
 						evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 						return nil, evalResult, fmt.Errorf("finalized fallback stream validation failed: %w", validateErr)
 					}
@@ -562,7 +566,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 			} else {
 				attemptOutcome.Error = streamErr
 				attemptOutcome.Discarded = true
-				r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming)
+				r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming, origTargetFormat)
 				evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 				return nil, evalResult, fmt.Errorf("finalized fallback stream encoding failed: %w", streamErr)
 			}
@@ -571,7 +575,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		if validateErr := engine.ValidateEncodedResponse(finalBody, false); validateErr != nil {
 			attemptOutcome.Error = validateErr
 			attemptOutcome.Discarded = true
-			r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming)
+			r.rollbackFallbackContext(ctx, primaryModel, primaryStatusCode, origPath, origDiags, wasStreaming, origTargetFormat)
 			evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
 			return nil, evalResult, fmt.Errorf("finalized fallback body wire validation failed: %w", validateErr)
 		}
@@ -640,6 +644,13 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 	if err != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, err
 	}
+	if dispatch.profile.Delegated() {
+		// A candidate the request cannot pay for ends the chain before its
+		// call, and the request answers 401, as for the primary.
+		if _, err := principal.Delegated(ctx.TraceContext); err != nil {
+			return nil, fallback.EvaluationResult{CanFallback: false}, err
+		}
+	}
 
 	requestBase := ctx.FallbackRequest
 	requestAlreadyPrepared := requestBase != nil
@@ -705,7 +716,12 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		return nil, fallback.EvaluationResult{CanFallback: true}, engineErr
 	}
 
-	projected, projectionDiagnostics, projectionErr := r.projectRequestForBackendWithDiagnostics(*reqCopy, dispatch.effectiveBackendModel(), dispatch.targetFormat)
+	// As for the primary, prompt-cache markers go on the provider-bound copy only.
+	dispatchRequest := *reqCopy
+	if policyErr := r.applyPromptCachePolicy(&dispatchRequest, ctx, dispatch.targetFormat); policyErr != nil {
+		return nil, fallback.EvaluationResult{CanFallback: true}, policyErr
+	}
+	projected, projectionDiagnostics, projectionErr := r.projectRequestForBackendWithDiagnostics(dispatchRequest, dispatch.effectiveBackendModel(), dispatch.targetFormat)
 	if projectionErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
 	}
@@ -750,6 +766,9 @@ func (r *OpenAIRouter) settleFallbackCandidateUsage(ctx *RequestContext, attempt
 	if !ctx.StartTime.IsZero() {
 		completionLatency = time.Since(ctx.StartTime)
 	}
+	// The answer replaces the failed primary's response headers, so the
+	// candidate's own call time is its first response time.
+	recordNonStreamingFirstResponse(ctx, attemptDuration)
 	usage := r.takeNeutralResponseUsage(ctx)
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
@@ -837,10 +856,6 @@ func (r *OpenAIRouter) dispatchFallbackHTTP(
 		return nil, 0, err
 	}
 	authorize, err := r.fallbackProviderAuthorizer(reqCtx, dispatch.profile, dispatch.effectiveBackendModel())
-	if errors.Is(err, principal.ErrCredentialMissing) {
-		// The attempt ends as the Router's own 401, before any upstream call.
-		return delegatedCredentialMissingBody, http.StatusUnauthorized, nil
-	}
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1062,6 +1077,7 @@ func (r *OpenAIRouter) rollbackFallbackContext(
 	origPath string,
 	origDiags []llmprotocol.Diagnostic,
 	wasStreaming bool,
+	origTargetFormat llmprotocol.WireFormat,
 ) {
 	if ctx == nil {
 		return
@@ -1070,6 +1086,7 @@ func (r *OpenAIRouter) rollbackFallbackContext(
 	ctx.VSRSelectedModel = primaryModel
 	ctx.ResponsePath = origPath
 	ctx.UpstreamStatusCode = primaryStatusCode
+	ctx.TargetFormat = origTargetFormat
 	ctx.ProtocolDiagnostics = origDiags
 	ctx.IsStreamingResponse = wasStreaming
 	ctx.ResponseVendor = ""

@@ -1,0 +1,9 @@
+{
+  "label": "Supported models",
+  "key": "model-runtime-supported-models",
+  "position": 2,
+  "link": {
+    "type": "doc",
+    "id": "overview"
+  }
+}

@@ -241,6 +241,40 @@ func TestDelegatedDeploymentRefusals(t *testing.T) {
 	}
 }
 
+// A global block parsed on its own has no recipe to ask a delegated
+// deployment, so the check waits for the whole config, which still runs it.
+func TestGlobalBlockDefersTheDelegatedDeploymentCheck(t *testing.T) {
+	global := `
+version: v0.5
+global:
+  services:
+    authz:
+      delegated_credential: {enabled: true}
+  model_catalog:
+    deployments:
+      hosted-d3:
+        provider: systemone
+        endpoint: https://hosted.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        auth: {credential: delegated}
+`
+	cfg, err := ParseGlobalYAMLBytesWithoutEnvExpansion([]byte(global))
+	if err != nil {
+		t.Fatalf("global block refused: %v", err)
+	}
+	if !cfg.ModelDeployments["hosted-d3"].Auth.Delegated() {
+		t.Fatalf("deployment auth = %+v", cfg.ModelDeployments["hosted-d3"].Auth)
+	}
+	want := "global.model_catalog.deployments.hosted-d3: auth.credential: delegated, but only Router-own calls reach it"
+	if _, err := ParseYAMLBytesWithoutEnvExpansion([]byte(global)); err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("whole config error = %v, want %q", err, want)
+	}
+	reserved := strings.Replace(global, "hosted-d3:", `"`+ImplicitDeploymentPrefix+`d3":`, 1)
+	if _, err := ParseGlobalYAMLBytesWithoutEnvExpansion([]byte(reserved)); err == nil || !strings.Contains(err.Error(), "are reserved for module defaults") {
+		t.Fatalf("global block error = %v, want the reserved deployment name refused", err)
+	}
+}
+
 func TestDelegatedUpstreamsKeepTheResponseCachePerUser(t *testing.T) {
 	cache := func(scope string) string {
 		return delegatedBackendConfig(delegatedGatewayBackend, true) +
@@ -253,5 +287,19 @@ func TestDelegatedUpstreamsKeepTheResponseCachePerUser(t *testing.T) {
 	want := `global.plugins: response_cache scope "global" shares answers across users, and providers.models[gateway-model].backend_refs[0] is delegated`
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Fatalf("error = %v, want %q", err, want)
+	}
+}
+
+// A request that matches no decision renders its automatic output on the
+// default model, which a delegated backend cannot serve to the Router.
+func TestDefaultAutomaticOutputRejectsADelegatedDefaultModel(t *testing.T) {
+	doc := strings.Replace(delegatedBackendConfig(delegatedGatewayBackend, true), "providers:\n", "providers:\n  defaults: {model: gateway-model}\n", 1) + `  plugins:
+    - type: request_params
+      configuration:
+        default_max_tokens: auto
+`
+	_, err := ParseYAMLBytes([]byte(doc))
+	if err == nil || !strings.Contains(err.Error(), "the automatic output render (decisions[recipes[default].plugins]) calls it as the Router") {
+		t.Fatalf("error = %v, want the default plugins' automatic output refused on a delegated default model", err)
 	}
 }

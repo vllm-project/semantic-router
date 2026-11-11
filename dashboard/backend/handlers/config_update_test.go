@@ -40,6 +40,11 @@ func TestUpdateConfigHandler_ValidUpdates(t *testing.T) {
 			endpoint: "example.com:8000",
 		},
 		{
+			name:     "Valid config - host:port with a path, as the Router reads it",
+			method:   http.MethodPost,
+			endpoint: "127.0.0.1:8000/v1",
+		},
+		{
 			name:     "PUT request should work",
 			method:   http.MethodPut,
 			endpoint: "10.0.0.1:8000",
@@ -154,13 +159,6 @@ func TestUpdateConfigHandler_InvalidUpdates(t *testing.T) {
 			name:           "Invalid config - credentials in backend ref endpoint",
 			method:         http.MethodPost,
 			requestBody:    canonicalConfigBody("http://user:secret@127.0.0.1:8000"),
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "Config validation failed",
-		},
-		{
-			name:           "Invalid config - path in backend ref endpoint",
-			method:         http.MethodPost,
-			requestBody:    canonicalConfigBody("127.0.0.1:8000/v1"),
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  "Config validation failed",
 		},
