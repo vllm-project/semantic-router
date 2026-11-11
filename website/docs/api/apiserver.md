@@ -404,6 +404,10 @@ fields. They exist only on the management listener. `/v1/files` and
 `/v1/vector_stores` are not inference-listener aliases and are not registered
 by the Router API.
 
+Deleting a file first detaches it from every vector store it is attached to,
+so its chunks stop answering searches. If a detach fails, the delete returns
+`500` and the file and its attachments stay, so the delete can be retried.
+
 ## Discover and inspect plugins
 
 `GET /api/v1/plugins` projects the canonical plugin registry, including each

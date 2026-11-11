@@ -36878,7 +36878,7 @@
             }
           },
           "500": {
-            "description": "Management authentication configuration is invalid",
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -42397,7 +42397,7 @@
             }
           },
           "500": {
-            "description": "Management authentication configuration is invalid",
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -42776,7 +42776,7 @@
             }
           },
           "500": {
-            "description": "Management authentication configuration is invalid",
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {

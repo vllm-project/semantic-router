@@ -610,7 +610,7 @@ func apiVectorStoreRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleUpdateVectorStore,
 			pluginOperationFor(config.DecisionPluginContext, "mutation"),
 			jsonResponse[vectorstore.VectorStore](http.StatusOK, "Successful response"),
-			errorResponses(400, 404, 503),
+			errorResponses(400, 404, 500, 503),
 			jsonBodyWithLimitFor[vectorstore.UpdateStoreRequest](maxVectorStoreJSONBodySize),
 		),
 		managedRoute(
@@ -619,7 +619,7 @@ func apiVectorStoreRoutes() []apiRoute {
 			(*ClassificationAPIServer).handleDeleteVectorStore,
 			pluginOperationFor(config.DecisionPluginContext, "mutation"),
 			jsonResponse[objectDeletedResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 404, 503),
+			errorResponses(400, 404, 500, 503),
 		),
 		managedRoute(
 			EndpointMetadata{Path: apiStorageVectorStoresPath + "/{id}/search", Method: "POST", Description: "Search a vector store"},
@@ -692,7 +692,7 @@ func apiFileRoutes() []apiRoute {
 			routePolicy{Permission: PermDataWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionDataWrite},
 			(*ClassificationAPIServer).handleDeleteFile,
 			jsonResponse[objectDeletedResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 404, 503),
+			errorResponses(400, 404, 500, 503),
 		),
 		managedRoute(
 			EndpointMetadata{Path: apiStorageFilesPath + "/{id}/content", Method: "GET", Description: "Download uploaded-file content"},
