@@ -40,9 +40,8 @@ jobs:
         run: python3 -m pip install PyYAML==6.0.3
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: ./.github/actions/setup-go-ci
         with:
-          go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: deploy/operator/go.sum
 
       - name: Download dependencies
