@@ -13,11 +13,12 @@ import type {
   InsightsRecord,
 } from './insightsPageTypes'
 import InsightsDecisionBadge from './InsightsDecisionBadge'
+import InsightsSignalsCell from './InsightsSignalsCell'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
 import { buildRoutingMetadataFields } from './insightsRoutingMetadata'
 import { buildRoutingExplanationSections } from './insightsPageRouting'
 import { renderToolNamesCell } from './insightsPageToolTrace'
-import { buildSignalFields, collectSignals } from './insightsRecordSignals'
+import { buildSignalFields } from './insightsRecordSignals'
 import { buildInsightsPluginFields } from './insightsRecordPlugins'
 import { buildProviderCacheSection } from './insightsProviderCache'
 import styles from './InsightsPage.module.css'
@@ -139,18 +140,6 @@ function formatCompactIdentifier(value: string) {
   return `${value.slice(0, 8)}…${value.slice(-8)}`
 }
 
-function buildCompactListSummary(items: string[], maxVisibleItems: number) {
-  if (items.length === 0) {
-    return '-'
-  }
-
-  const visibleItems = items.slice(0, maxVisibleItems)
-  const hiddenCount = items.length - visibleItems.length
-  return hiddenCount > 0
-    ? `${visibleItems.join(' · ')} · +${hiddenCount}`
-    : visibleItems.join(' · ')
-}
-
 // The agent session a request belongs to, so a session search shows which rows matched.
 const SESSION_COLUMN: Column<InsightsRecord> = {
   key: 'session_id',
@@ -217,19 +206,8 @@ export function createInsightsTableColumns(): Column<InsightsRecord>[] {
     {
       key: 'signals',
       header: 'Signals',
-      width: '180px',
-      render: (row) => {
-        const allSignals = collectSignals(row.signals)
-        if (allSignals.length === 0) {
-          return <span>-</span>
-        }
-
-        return (
-          <span className={styles.tableSummaryText} title={allSignals.join(', ')}>
-            {buildCompactListSummary(allSignals, 2)}
-          </span>
-        )
-      },
+      width: '200px',
+      render: (row) => <InsightsSignalsCell record={row} />,
     },
     {
       key: 'tools',

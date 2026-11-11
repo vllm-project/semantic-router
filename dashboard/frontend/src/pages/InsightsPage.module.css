@@ -1370,3 +1370,52 @@
   --badge: #5cc8b8;
   --badge-text: #bfeae3;
 }
+
+/* A row's signals: each name over a hairline bar filled to its probability. */
+.signalCell {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.signalItem {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.signalText {
+  overflow: hidden;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signalText > span {
+  color: var(--color-text-secondary);
+}
+
+.signalText > strong {
+  color: var(--color-text);
+  font-weight: 550;
+}
+
+.signalMeter {
+  display: block;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.signalMeter > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.signalMore {
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+}

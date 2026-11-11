@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { formatSeconds } from '../utils/dateTime'
 import InsightsDecisionBadge from './InsightsDecisionBadge'
+import InsightsSignalsCell from './InsightsSignalsCell'
 import InsightsSystemOneAnswers from './InsightsSystemOneAnswers'
 import { buildRoutingMetadataFields } from './insightsRoutingMetadata'
 import { decisionTone } from './insightsDecisionTone'
@@ -166,5 +167,33 @@ describe('Insights display pieces', () => {
     expect(folded).toContain('Raw System One values (9)')
     expect(folded).toContain('systemone:difficulty:d0')
     expect(folded).not.toContain('pii:personal_data')
+  })
+
+  it('draws two matched signals over hairline bars of their probability and counts the rest', () => {
+    const record = {
+      signals: {
+        decision: ['injection:jailbreak', 'difficulty:d0', 'needs_debugging'],
+        keyword: ['urgent'],
+      },
+      signal_values: { ...VALUES, 'systemone:injection:jailbreak': 0.99 },
+    } as unknown as InsightsRecord
+    const html = renderToStaticMarkup(<InsightsSignalsCell record={record} />)
+    expect(html).toContain('aria-label="99%"')
+    expect(html).toContain('style="width:99%"')
+    expect(html).toContain('aria-label="73%"')
+    expect(html).toContain('+2 more')
+    expect(html.match(/role="img"/g)).toHaveLength(2)
+  })
+
+  it('draws a match without a recorded probability as text alone', () => {
+    const record = {
+      signals: { keyword: ['urgent'] },
+      signal_values: {},
+    } as unknown as InsightsRecord
+    const html = renderToStaticMarkup(<InsightsSignalsCell record={record} />)
+    expect(html).toContain('Urgent')
+    expect(html).not.toContain('role="img"')
+    const empty = { signals: {} } as unknown as InsightsRecord
+    expect(renderToStaticMarkup(<InsightsSignalsCell record={empty} />)).toBe('<span>-</span>')
   })
 })
