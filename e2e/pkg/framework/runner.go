@@ -241,6 +241,61 @@ func (r *Runner) runTests(ctx context.Context, kubeClient *kubernetes.Clientset)
 	return results, nil
 }
 
+// selectTestCases is the run's cases: the requested ones, or the profile's
+// cases in the run's scope. Run calls it before any setup, so a scope that
+// leaves a profile nothing to run stops before the cluster is built.
+func (r *Runner) selectTestCases() ([]testcases.TestCase, error) {
+	var cases []testcases.TestCase
+	var err error
+	if len(r.opts.TestCases) > 0 {
+		r.log("Requested test cases: %v", r.opts.TestCases)
+		cases, err = testcases.ListByNames(r.opts.TestCases...)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		profileTestCases := r.profile.GetTestCases()
+		if r.opts.Profile == "envoy-ai-gateway" {
+			profileTestCases = testmatrix.BaselineCases()
+		}
+		r.log("Profile test cases: %v", profileTestCases)
+		cases, err = testcases.ListByNames(profileTestCases...)
+		if err != nil {
+			return nil, err
+		}
+		cases, err = casesInScope(cases, r.opts.BaselineSuite)
+		if err != nil {
+			return nil, err
+		}
+		if len(cases) == 0 {
+			return nil, fmt.Errorf("profile %s has no case in scope %q", r.profile.Name(), r.opts.BaselineSuite)
+		}
+	}
+	inventory := make([]string, 0, len(cases))
+	for _, tc := range cases {
+		inventory = append(inventory, tc.Name)
+	}
+	if err := validateCaseInventory(inventory); err != nil {
+		return nil, err
+	}
+	return cases, nil
+}
+
+// casesInScope keeps the cases a scope runs, by each case's priority.
+func casesInScope(cases []testcases.TestCase, scope string) ([]testcases.TestCase, error) {
+	kept := make([]testcases.TestCase, 0, len(cases))
+	for _, tc := range cases {
+		in, err := testcases.InScope(tc, scope)
+		if err != nil {
+			return nil, err
+		}
+		if in {
+			kept = append(kept, tc)
+		}
+	}
+	return kept, nil
+}
+
 func (r *Runner) runSingleTest(ctx context.Context, kubeClient *kubernetes.Clientset, tc testcases.TestCase) TestResult {
 	r.log("Running test: %s", tc.Name)
 
@@ -555,59 +610,4 @@ func prebuiltFixtureImage(dockerfile string) string {
 	default:
 		return ""
 	}
-}
-
-// selectTestCases is the run's cases: the requested ones, or the profile's
-// cases in the run's scope. Run calls it before any setup, so a scope that
-// leaves a profile nothing to run stops before the cluster is built.
-func (r *Runner) selectTestCases() ([]testcases.TestCase, error) {
-	var cases []testcases.TestCase
-	var err error
-	if len(r.opts.TestCases) > 0 {
-		r.log("Requested test cases: %v", r.opts.TestCases)
-		cases, err = testcases.ListByNames(r.opts.TestCases...)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		profileTestCases := r.profile.GetTestCases()
-		if r.opts.Profile == "envoy-ai-gateway" {
-			profileTestCases = testmatrix.BaselineCases()
-		}
-		r.log("Profile test cases: %v", profileTestCases)
-		cases, err = testcases.ListByNames(profileTestCases...)
-		if err != nil {
-			return nil, err
-		}
-		cases, err = casesInScope(cases, r.opts.BaselineSuite)
-		if err != nil {
-			return nil, err
-		}
-		if len(cases) == 0 {
-			return nil, fmt.Errorf("profile %s has no case in scope %q", r.profile.Name(), r.opts.BaselineSuite)
-		}
-	}
-	inventory := make([]string, 0, len(cases))
-	for _, tc := range cases {
-		inventory = append(inventory, tc.Name)
-	}
-	if err := validateCaseInventory(inventory); err != nil {
-		return nil, err
-	}
-	return cases, nil
-}
-
-// casesInScope keeps the cases a scope runs, by each case's priority.
-func casesInScope(cases []testcases.TestCase, scope string) ([]testcases.TestCase, error) {
-	kept := make([]testcases.TestCase, 0, len(cases))
-	for _, tc := range cases {
-		in, err := testcases.InScope(tc, scope)
-		if err != nil {
-			return nil, err
-		}
-		if in {
-			kept = append(kept, tc)
-		}
-	}
-	return kept, nil
 }
