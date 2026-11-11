@@ -36,13 +36,13 @@ const STEPS = {
 const noScore = atom({ plugin: 'vsr', key: 'noScoreModel' } as const, '')
 
 // Reads which questions the runtime's model answers and, when it answers no `score` question, says once why the
-// router keeps every subagent on its default model.
+// router steps aside: a subagent keeps its default model unless escalate moves it up.
 export async function checkRouterModel($: EngineInterface, runtime: Runtime) {
   const model = await modelOf($, runtime)
   if (model === undefined || model.types.includes('score')) return
   await update($, noScore, () => model.id)
   $.ui.toast(
-    `vSR router: ${model.id} answers no score questions, so subagents keep their default model · vela3-lite does · /vsr:setup`,
+    `vSR router: ${model.id} answers no score questions, so the router app steps aside · vela3-lite does · /vsr:setup`,
   )
 }
 

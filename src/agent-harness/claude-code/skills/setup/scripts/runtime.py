@@ -373,8 +373,8 @@ def main(argv: list[str]) -> int:
         model = options.get("runtimeModel") or out["model"]
         if model in out.get("noScore", []):
             print(
-                f"warning: {model} answers no score questions, so the router app keeps every "
-                "subagent on its default model; vela3-lite answers them",
+                f"warning: {model} answers no score questions, so the router app steps "
+                "aside; vela3-lite answers them",
                 file=sys.stderr,
             )
         return 0 if out["ready"] else 1

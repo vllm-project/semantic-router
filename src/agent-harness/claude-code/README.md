@@ -163,7 +163,8 @@ and set the listener's API key as the token when it takes one. A hosted API has 
 checks that it is up through its model list instead.
 The router app asks two `score` questions, which vela3-lite answers and models of the runtime's
 `vela3` family, such as vela3-fast, do not: on a model that lists no `score` question type, vSR says
-so once at session start and leaves every subagent on its default model.
+so once at session start and the router app steps aside, so a subagent keeps its default model unless
+escalate moves it up.
 
 Redact hides names, emails, phone numbers, card numbers, IP addresses, addresses, ID numbers and
 secrets (API keys, tokens, private keys, passwords in config files and connection URLs). It waits

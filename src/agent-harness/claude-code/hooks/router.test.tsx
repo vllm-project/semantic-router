@@ -455,7 +455,7 @@ test(
     expect([first.model, second.model]).toEqual(['opus', 'opus'])
     expect(asked).toEqual([])
     expect(reply.toasts).toEqual([
-      'vSR router: vela3-fast answers no score questions, so subagents keep their default model · vela3-lite does · /vsr:setup',
+      'vSR router: vela3-fast answers no score questions, so the router app steps aside · vela3-lite does · /vsr:setup',
     ])
     expect(await paneText($, /no score/, 140)).toContain('vela3-fast answers no score questions')
   },
