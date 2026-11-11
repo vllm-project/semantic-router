@@ -512,13 +512,20 @@ def _build_router_runtime_command(
             *_runtime_mount_specs(runtime_paths, include_models=True),
             *([compiler_cache.mount] if compiler_cache else []),
             runtime_paths["log_spool_router_mount"],
-            *backend_tls_mounts,
-            *(
-                _listener_tls_mounts(
-                    listeners, os.path.dirname(runtime_paths["source_config_path"])
-                )
-                if gateway == GATEWAY_STANDALONE
-                else []
+            # A listener and a backend may name the same file, and the runtime
+            # refuses a second mount at one path.
+            *dict.fromkeys(
+                [
+                    *backend_tls_mounts,
+                    *(
+                        _listener_tls_mounts(
+                            listeners,
+                            os.path.dirname(runtime_paths["source_config_path"]),
+                        )
+                        if gateway == GATEWAY_STANDALONE
+                        else []
+                    ),
+                ]
             ),
         ],
         port_mappings=[

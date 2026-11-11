@@ -145,8 +145,8 @@ providers:
 
 The generated Envoy cluster and the Router's own calls to the backend use the
 same settings, so both trust the same CAs. The Router's own calls are the
-fallback attempt, the shadow copy, the context-window probe and, in
-standalone mode, every request.
+fallback attempt, the shadow copy, the context-window probe, Looper and
+request-graph hops in either mode and, in standalone mode, every request.
 
 - **Put the intermediate in the bundle.** A server that sends only its leaf
   certificate verifies only when the bundle holds the issuing intermediate

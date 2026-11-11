@@ -120,7 +120,7 @@ providers:
 | `cert_file`、`key_file` | 后端要求客户端证书时出示的证书，二者须同时设置。 |
 | `providers.defaults.tls.ca_file` | 自身 `tls` 未指定 `ca_file` 的每个 https 后端所用的 `ca_file`。 |
 
-生成的 Envoy cluster 与 Router 自己对该后端的调用使用相同设置，因此二者信任相同的 CA。Router 自己的调用包括回退尝试、影子副本、上下文窗口探测，以及 standalone 模式下的每个请求。
+生成的 Envoy cluster 与 Router 自己对该后端的调用使用相同设置，因此二者信任相同的 CA。Router 自己的调用包括回退尝试、影子副本、上下文窗口探测、两种模式下的 Looper 和 request-graph hop，以及 standalone 模式下的每个请求。
 
 - **证书包中要包含中间证书。**服务器只发送叶证书时，只有证书包同时包含签发它的中间证书和根证书，验证才能通过。只有根证书时握手失败：OpenSSL 报 `unable to verify the first certificate`（代码 21），Go 报 `certificate signed by unknown authority`。检查证书包：
 

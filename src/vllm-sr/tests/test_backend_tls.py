@@ -231,7 +231,10 @@ def test_backend_tls_is_validated_like_the_routers(
         _render(tmp_path, monkeypatch, _document(defaults, backends))
 
 
-def _start(tmp_path, monkeypatch, gateway, document):
+LISTENERS = [{"name": "http-8899", "address": "127.0.0.1", "port": 8899}]
+
+
+def _start(tmp_path, monkeypatch, gateway, document, listeners=LISTENERS):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(document)
     monkeypatch.setenv("VLLM_SR_TOPOLOGY", "split")
@@ -254,7 +257,7 @@ def _start(tmp_path, monkeypatch, gateway, document):
     rc, _, _ = container_cli.container_start_vllm_sr(
         str(config_path),
         {},
-        [{"name": "http-8899", "address": "127.0.0.1", "port": 8899}],
+        listeners,
         network_name="vllm-sr-network",
         minimal=True,
         gateway=gateway,
@@ -300,6 +303,32 @@ def test_serve_mounts_the_backend_tls_files_read_only(tmp_path, monkeypatch, gat
     for name in readers:
         mounts = _mounts(containers[name])
         assert all(mount in mounts for mount in expected), (name, mounts)
+
+
+def test_serve_mounts_a_file_a_tls_listener_also_names_once(tmp_path, monkeypatch):
+    certs = tmp_path / "certs"
+    certs.mkdir()
+    for name in ("router.crt", "router.key"):
+        (certs / name).write_text("pem")
+    document = _document(
+        backends=HTTPS_BACKEND
+        + f"""          tls:
+            cert_file: {certs}/router.crt
+            key_file: {certs}/router.key
+""",
+    )
+    listener = {
+        "name": "https-8443",
+        "address": "127.0.0.1",
+        "port": 8443,
+        "tls": {"cert_file": f"{certs}/router.crt", "key_file": f"{certs}/router.key"},
+    }
+
+    containers = _start(tmp_path, monkeypatch, "standalone", document, [listener])
+
+    mounts = _mounts(containers["vllm-sr-router-container"])
+    for name in ("router.crt", "router.key"):
+        assert mounts.count(f"{certs}/{name}:{certs}/{name}:ro,z") == 1, mounts
 
 
 def test_serve_refuses_a_backend_tls_file_that_is_not_there(tmp_path, monkeypatch):
