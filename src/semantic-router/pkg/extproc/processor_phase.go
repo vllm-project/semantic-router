@@ -84,6 +84,7 @@ func (r *OpenAIRouter) responseBodyReply(
 func responseHeadersReplySent(ctx *RequestContext, response *ext_proc.ProcessingResponse, endOfStream bool) {
 	finishImmediateResponseTrace(ctx, response)
 	if endOfStream {
+		ctx.responseComplete = true
 		finishRequestTrace(ctx, nil)
 	}
 }
@@ -91,6 +92,7 @@ func responseHeadersReplySent(ctx *RequestContext, response *ext_proc.Processing
 func responseBodyReplySent(ctx *RequestContext, response *ext_proc.ProcessingResponse, endOfStream bool) {
 	finishImmediateResponseTrace(ctx, response)
 	if endOfStream || ctx.StreamingComplete {
+		ctx.responseComplete = true
 		finishRequestTrace(ctx, nil)
 	}
 }

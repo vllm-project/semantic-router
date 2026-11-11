@@ -666,16 +666,18 @@ recipes:
             configuration:
               enabled: true
               shadow:
-                model: qwen3-32b
+                models:
+                  - qwen3-32b
                 sample_rate: 0.05
-                max_concurrency: 2
-                max_queue_depth: 8
-                timeout_seconds: 30
-                max_response_bytes: 1048576
-                max_retries: 0
-                capture_response_body: false
-                max_capture_bytes: 4096
-                tls_skip_verify: false
+                execution:
+                  max_concurrency: 2
+                  max_queue_size: 8
+                  timeout: 30s
+                budget:
+                  max_response_bytes: 1048576
+                capture:
+                  enabled: false
+                  max_bytes: 4096
                 forward_headers: []
           - type: system_prompt
             configuration:

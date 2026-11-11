@@ -27,6 +27,8 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	}
 	response := r.handleDecodedResponseBody(responseBody, v.ResponseBody.GetEndOfStream(), completionLatency, ctx)
 	deliverUpstreamResponseBody(response, ctx, responseBody, decoded)
+	// A buffered body can precede trailers even when its entire payload arrived.
+	ctx.bufferedResponseComplete = !ctx.IsStreamingResponse
 	return response, nil
 }
 

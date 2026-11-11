@@ -1,9 +1,14 @@
 package config
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"math"
+	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
@@ -11,8 +16,7 @@ import (
 // shadowCredentialHeaders names the headers that carry a credential on the
 // primary path: the auth headers the provider registry knows, the per-user
 // key headers the auth backend injects, and the generic HTTP credential
-// carriers. A shadow copy never carries them, and forward_headers may not
-// list them. Names are lower-case.
+// carriers. A shadow copy never carries them. Names are lower-case.
 var shadowCredentialHeaders = map[string]struct{}{
 	headers.Authorization:              {},
 	"proxy-authorization":              {},
@@ -49,70 +53,99 @@ func CredentialCarrierHeaders() []string {
 }
 
 const (
-	defaultShadowSampleRate       = 1.0
-	defaultShadowMaxConcurrency   = 2
-	defaultShadowMaxQueueDepth    = 8
-	defaultShadowTimeoutSeconds   = 30
-	defaultShadowMaxResponseBytes = 1 << 20
-	defaultShadowMaxCaptureBytes  = 4096
-	// maxShadowRetries keeps the total resource use of one shadow
-	// observation bounded even when an operator asks for retries.
-	maxShadowRetries = 3
+	maxShadowModels                    = 8
+	defaultShadowSampleRate            = 1.0
+	defaultShadowMaxConcurrency        = 2
+	defaultShadowMaxQueueSize          = 8
+	defaultShadowTimeout               = "30s"
+	defaultShadowResponseBytesPerModel = 1 << 20
+	defaultShadowCaptureBytesPerModel  = 4096
+	maxShadowTimeout                   = 5 * time.Minute
+	maxShadowTimeoutLength             = 128
 )
 
-// DefaultRouterReplayShadowConfig returns the bounds applied when a shadow
-// omits a field. Model has no default: an operator names the shadow model
-// explicitly.
-func DefaultRouterReplayShadowConfig() RouterReplayShadowConfig {
-	return RouterReplayShadowConfig{
-		MaxConcurrency:   defaultShadowMaxConcurrency,
-		MaxQueueDepth:    defaultShadowMaxQueueDepth,
-		TimeoutSeconds:   defaultShadowTimeoutSeconds,
-		MaxResponseBytes: defaultShadowMaxResponseBytes,
-		MaxCaptureBytes:  defaultShadowMaxCaptureBytes,
+var shadowDurationPattern = regexp.MustCompile(`^\+?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:ms|s|m)(?:(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:ms|s|m))*$`)
+
+// UnmarshalJSON checks presence before WithDefaults fills in runtime defaults.
+// YAML and DSL plugin payloads pass through this same strict JSON decoder.
+func (c *RouterReplayShadowConfig) UnmarshalJSON(data []byte) error {
+	type plain RouterReplayShadowConfig
+	var decoded plain
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&decoded); err != nil {
+		return err
 	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	for _, name := range []string{"execution", "budget", "capture"} {
+		if isNullJSON(fields[name]) {
+			return fmt.Errorf("%s must be an object when provided", name)
+		}
+	}
+	var execution struct {
+		Timeout json.RawMessage `json:"timeout"`
+	}
+	if raw, ok := fields["execution"]; ok {
+		if err := json.Unmarshal(raw, &execution); err != nil {
+			return err
+		}
+	}
+	if len(execution.Timeout) > 0 && decoded.Execution.Timeout == "" {
+		return fmt.Errorf("execution.timeout must be a non-empty duration when provided")
+	}
+	var capture struct {
+		Enabled json.RawMessage `json:"enabled"`
+	}
+	if raw, ok := fields["capture"]; ok {
+		if err := json.Unmarshal(raw, &capture); err != nil {
+			return err
+		}
+	}
+	if isNullJSON(capture.Enabled) {
+		return fmt.Errorf("capture.enabled must be a boolean when provided")
+	}
+	*c = RouterReplayShadowConfig(decoded)
+	return nil
 }
 
-// WithDefaults returns a copy with every zero bound replaced by its default.
-// SampleRate is left as declared; use EffectiveSampleRate to read it.
+// DefaultRouterReplayShadowConfig returns bounded defaults. Models must be
+// explicitly configured before enabling observations.
+func DefaultRouterReplayShadowConfig() RouterReplayShadowConfig {
+	return (RouterReplayShadowConfig{}).WithDefaults()
+}
+
+func shadowBound(value *int, fallback int) *int {
+	if value != nil {
+		fallback = *value
+	}
+	return &fallback
+}
+
+// WithDefaults returns an independent configuration snapshot.
 func (c RouterReplayShadowConfig) WithDefaults() RouterReplayShadowConfig {
-	defaults := DefaultRouterReplayShadowConfig()
-	if c.MaxConcurrency <= 0 {
-		c.MaxConcurrency = defaults.MaxConcurrency
+	c.Models = append([]string(nil), c.Models...)
+	c.ForwardHeaders = append([]string(nil), c.ForwardHeaders...)
+	for i := range c.Models {
+		c.Models[i] = strings.TrimSpace(c.Models[i])
 	}
-	if c.MaxQueueDepth <= 0 {
-		c.MaxQueueDepth = defaults.MaxQueueDepth
+	n := max(1, len(c.Models))
+	c.Execution.MaxConcurrency = shadowBound(c.Execution.MaxConcurrency, defaultShadowMaxConcurrency)
+	c.Execution.MaxQueueSize = shadowBound(c.Execution.MaxQueueSize, defaultShadowMaxQueueSize)
+	if c.Execution.Timeout == "" {
+		c.Execution.Timeout = defaultShadowTimeout
 	}
-	if c.TimeoutSeconds <= 0 {
-		c.TimeoutSeconds = defaults.TimeoutSeconds
+	c.Budget.MaxResponseBytes = shadowBound(c.Budget.MaxResponseBytes, n*defaultShadowResponseBytesPerModel)
+	c.Capture.MaxBytes = shadowBound(c.Capture.MaxBytes, n*defaultShadowCaptureBytesPerModel)
+	if c.SampleRate != nil {
+		rate := *c.SampleRate
+		c.SampleRate = &rate
 	}
-	if c.MaxResponseBytes <= 0 {
-		c.MaxResponseBytes = defaults.MaxResponseBytes
-	}
-	if c.MaxCaptureBytes <= 0 {
-		c.MaxCaptureBytes = defaults.MaxCaptureBytes
-	}
-	c.Model = strings.TrimSpace(c.Model)
 	return c
 }
 
-// ForwardsHeader reports whether a decision header mutation with this name is
-// allowlisted for the shadow copy. Matching is case-insensitive. An empty
-// allowlist forwards nothing.
-func (c *RouterReplayShadowConfig) ForwardsHeader(name string) bool {
-	if c == nil {
-		return false
-	}
-	trimmed := strings.TrimSpace(name)
-	for _, allowed := range c.ForwardHeaders {
-		if strings.EqualFold(strings.TrimSpace(allowed), trimmed) {
-			return true
-		}
-	}
-	return false
-}
-
-// EffectiveSampleRate returns the declared sample rate, or 1.0 when omitted.
 func (c *RouterReplayShadowConfig) EffectiveSampleRate() float64 {
 	if c == nil || c.SampleRate == nil {
 		return defaultShadowSampleRate
@@ -120,46 +153,53 @@ func (c *RouterReplayShadowConfig) EffectiveSampleRate() float64 {
 	return *c.SampleRate
 }
 
-// Validate checks the shadow in isolation. Both the config loader and the
-// Kubernetes converter use it so the two admission paths agree. The
-// referenced model is checked against the model catalog separately because
-// the payload has no access to the router configuration.
 func (c *RouterReplayShadowConfig) Validate() error {
 	if c == nil {
 		return nil
 	}
-	if strings.TrimSpace(c.Model) == "" {
-		return fmt.Errorf("model is required")
+	if len(c.Models) == 0 {
+		return fmt.Errorf("models is required")
 	}
-	if c.SampleRate != nil && (*c.SampleRate < 0 || *c.SampleRate > 1) {
-		return fmt.Errorf("sample_rate must be between 0 and 1")
+	if len(c.Models) > maxShadowModels {
+		return fmt.Errorf("models cannot exceed %d candidates", maxShadowModels)
 	}
+	seen := map[string]bool{}
+	for _, model := range c.Models {
+		name := strings.TrimSpace(model)
+		if name == "" {
+			return fmt.Errorf("models cannot contain empty names")
+		}
+		if seen[name] {
+			return fmt.Errorf("models contains duplicate %q", name)
+		}
+		seen[name] = true
+	}
+	rate := c.EffectiveSampleRate()
+	if math.IsNaN(rate) || math.IsInf(rate, 0) || rate < 0 || rate > 1 {
+		return fmt.Errorf("sample_rate must be finite and between 0 and 1")
+	}
+	effective := c.WithDefaults()
 	for _, bound := range []struct {
 		name  string
-		value int
+		value *int
 	}{
-		{"max_concurrency", c.MaxConcurrency},
-		{"max_queue_depth", c.MaxQueueDepth},
-		{"timeout_seconds", c.TimeoutSeconds},
-		{"max_response_bytes", c.MaxResponseBytes},
-		{"max_retries", c.MaxRetries},
-		{"max_capture_bytes", c.MaxCaptureBytes},
+		{"execution.max_concurrency", effective.Execution.MaxConcurrency},
+		{"execution.max_queue_size", effective.Execution.MaxQueueSize},
+		{"budget.max_response_bytes", effective.Budget.MaxResponseBytes},
+		{"capture.max_bytes", effective.Capture.MaxBytes},
 	} {
-		if bound.value < 0 {
-			return fmt.Errorf("%s cannot be negative", bound.name)
+		if *bound.value <= 0 {
+			return fmt.Errorf("%s must be positive", bound.name)
 		}
 	}
-	if c.MaxRetries > maxShadowRetries {
-		return fmt.Errorf("max_retries cannot exceed %d", maxShadowRetries)
+	duration, err := time.ParseDuration(effective.Execution.Timeout)
+	if err != nil || duration <= 0 || duration > maxShadowTimeout || len(effective.Execution.Timeout) > maxShadowTimeoutLength || !shadowDurationPattern.MatchString(effective.Execution.Timeout) {
+		return fmt.Errorf("execution.timeout must be a positive duration at most 5m")
 	}
-	return validateShadowForwardHeaders(c.ForwardHeaders)
-}
-
-// validateShadowForwardHeaders rejects allowlist entries that could never be
-// forwarded safely, so the mistake is visible at load time instead of being
-// silently dropped on every shadow call.
-func validateShadowForwardHeaders(names []string) error {
-	for _, name := range names {
+	if *effective.Budget.MaxResponseBytes < 2*len(c.Models) {
+		return fmt.Errorf("budget.max_response_bytes must allocate at least two bytes to each model")
+	}
+	for _, name := range c.ForwardHeaders {
 		if err := validateForwardedHeaderName("forward_headers", name); err != nil {
 			return err
 		}
@@ -167,11 +207,7 @@ func validateShadowForwardHeaders(names []string) error {
 	return nil
 }
 
-// validateDecisionReplayShadow checks that a decision's shadow model resolves
-// to a configured backend, so a shadow copy can never leave the router's
-// trust boundary toward an unknown endpoint, and that the decision dispatches
-// to one model. The shadow model may also appear in modelRefs: the runtime
-// skips a shadow whenever the primary dispatch already selected that model.
+// validateDecisionReplayShadow limits shadows to single-model primary dispatch.
 func validateDecisionReplayShadow(cfg *RouterConfig, decision *Decision) error {
 	if cfg == nil || decision == nil {
 		return nil
@@ -187,16 +223,25 @@ func validateDecisionReplayShadow(cfg *RouterConfig, decision *Decision) error {
 			decision.Algorithm.Type,
 		)
 	}
-	model := strings.TrimSpace(replay.Shadow.Model)
-	if len(cfg.GetEndpointsForModel(model)) == 0 {
-		return fmt.Errorf(
-			"decision %q: router_replay shadow model %q has no configured backend",
-			decision.Name,
-			model,
-		)
+	return nil
+}
+
+// validateReplayShadowModels checks all candidates, including default plugins.
+func validateReplayShadowModels(cfg *RouterConfig, owner string, shadow *RouterReplayShadowConfig) error {
+	if shadow == nil {
+		return nil
 	}
-	if path, mode, ok := cfg.CredentialBackendOf(model); ok {
-		return requestCredentialRouterOwnError(path, mode, fmt.Sprintf("router_replay.shadow copies (decisions[%s]) call it as the Router", decision.Name))
+	for _, model := range shadow.WithDefaults().Models {
+		if len(cfg.GetEndpointsForModel(model)) == 0 {
+			return fmt.Errorf(
+				"decision %q: router_replay shadow model %q has no configured backend",
+				owner,
+				model,
+			)
+		}
+		if path, mode, ok := cfg.CredentialBackendOf(model); ok {
+			return requestCredentialRouterOwnError(path, mode, fmt.Sprintf("router_replay.shadow copies (decisions[%s]) call it as the Router", owner))
+		}
 	}
 	return nil
 }

@@ -58,3 +58,43 @@ func TestPluginFieldTyposFailToCompile(t *testing.T) {
 		}
 	}
 }
+
+// Builder ASTs can carry null even though the text DSL has no null literal.
+func TestReplayShadowRejectsNullASTFields(t *testing.T) {
+	for _, field := range []string{"execution", "budget", "capture", "capture.enabled"} {
+		t.Run(field, func(t *testing.T) {
+			shadow := map[string]Value{
+				"models": ArrayValue{Items: []Value{StringValue{V: "candidate"}}},
+			}
+			fields := map[string]Value{
+				"enabled": BoolValue{V: false},
+				"shadow":  ObjectValue{Fields: shadow},
+			}
+			switch field {
+			case "capture.enabled":
+				shadow["capture"] = ObjectValue{Fields: map[string]Value{"enabled": nil}}
+			default:
+				shadow[field] = nil
+			}
+			compiler := &Compiler{}
+			if _, ok := compiler.compileRouterReplayPluginConfig(fields); ok {
+				t.Fatalf("accepted null %s", field)
+			}
+		})
+	}
+}
+
+func TestReplayNullShadowClearsInheritedConfig(t *testing.T) {
+	compiler := &Compiler{}
+	payload, ok := compiler.compileRouterReplayPluginConfig(map[string]Value{"shadow": nil})
+	if !ok {
+		t.Fatal("null shadow must remain an explicit inheritance override")
+	}
+	fields, ok := payload.(map[string]interface{})
+	if !ok {
+		t.Fatalf("unexpected replay payload: %T", payload)
+	}
+	if value, present := fields["shadow"]; !present || value != nil {
+		t.Fatalf("null shadow override was lost: %#v", fields)
+	}
+}

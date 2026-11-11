@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
-import { getCuratedPluginFieldSchema } from './dslPluginSchemas'
+import { getPluginFieldSchema } from './dslSchemas'
+import { pluginFieldsFromRouterSchema } from './routerConfigSchema'
 
 describe('capability plugin field schemas', () => {
   it('exposes the complete context contract', () => {
@@ -29,23 +30,18 @@ describe('capability plugin field schemas', () => {
     expect(resolveCapabilityPluginFieldSchema('context_compression')).toBeNull()
   })
 
-  it('exposes the shadow bounds under router_replay', () => {
-    const shadow = getCuratedPluginFieldSchema('router_replay').find(
-      (field) => field.key === 'shadow',
-    )
+  it('uses the generated Replay schema for the decision editor', () => {
     expect(resolveCapabilityPluginFieldSchema('shadow_dispatch')).toBeNull()
-    expect(shadow?.fields?.map((field) => field.key)).toEqual([
-      'model',
-      'sample_rate',
-      'max_concurrency',
-      'max_queue_depth',
-      'timeout_seconds',
-      'max_response_bytes',
-      'max_retries',
-      'capture_response_body',
-      'max_capture_bytes',
-      'tls_skip_verify',
-      'forward_headers',
+    const fields = getPluginFieldSchema('router_replay')
+    expect(fields).toEqual(pluginFieldsFromRouterSchema('router_replay'))
+    const shadow = fields.find((field) => field.key === 'shadow')?.fields
+    expect(shadow?.map(({ key, type }) => [key, type])).toEqual([
+      ['models', 'string[]'],
+      ['sample_rate', 'number'],
+      ['execution', 'object'],
+      ['budget', 'object'],
+      ['capture', 'object'],
+      ['forward_headers', 'string[]'],
     ])
   })
 

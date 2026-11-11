@@ -6112,7 +6112,14 @@
           "type": "integer"
         },
         "shadow": {
-          "$ref": "#/$defs/RouterReplayShadowConfig"
+          "oneOf": [
+            {
+              "$ref": "#/$defs/RouterReplayShadowConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "capture_personal_data": {
           "type": "boolean",
@@ -6212,35 +6219,30 @@
     },
     "RouterReplayShadowConfig": {
       "properties": {
-        "model": {
-          "type": "string"
+        "models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "sample_rate": {
-          "type": "number"
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
-        "max_concurrency": {
-          "type": "integer"
+        "execution": {
+          "$ref": "#/$defs/ShadowExecutionConfig"
         },
-        "max_queue_depth": {
-          "type": "integer"
+        "budget": {
+          "$ref": "#/$defs/ShadowBudgetConfig"
         },
-        "timeout_seconds": {
-          "type": "integer"
-        },
-        "max_response_bytes": {
-          "type": "integer"
-        },
-        "max_retries": {
-          "type": "integer"
-        },
-        "capture_response_body": {
-          "type": "boolean"
-        },
-        "max_capture_bytes": {
-          "type": "integer"
-        },
-        "tls_skip_verify": {
-          "type": "boolean"
+        "capture": {
+          "$ref": "#/$defs/ShadowCaptureConfig"
         },
         "forward_headers": {
           "items": {
@@ -6401,6 +6403,72 @@
           "type": "number",
           "maximum": 1,
           "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ShadowBudgetConfig": {
+      "properties": {
+        "max_response_bytes": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ShadowCaptureConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_bytes": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ShadowExecutionConfig": {
+      "properties": {
+        "max_concurrency": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_queue_size": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timeout": {
+          "type": "string",
+          "maxLength": 128,
+          "minLength": 1
         }
       },
       "additionalProperties": false,
