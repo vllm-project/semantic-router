@@ -862,7 +862,8 @@
   "e2e/profiles/pii-remote-backend/values.yaml": {
     "signals": {
       "default/pii.pii_deny_all": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
-      "default/pii.pii_tool_output": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
+      "default/pii.pii_tool_output": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "default/systemone.tool_output_injection": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
   "e2e/profiles/preference-routing/values.yaml": {

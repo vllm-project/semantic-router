@@ -990,6 +990,7 @@ profiles:
     paths:
       - e2e/profiles/pii-remote-backend/**
       - e2e/testcases/pii_backend_routing.go
+      - e2e/testcases/agent_tool_output_guards.go
       - e2e/testcases/pii_api_masking.go
   masking:
     display_name: PII Masking
