@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"net/netip"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiregistry"
@@ -45,7 +47,12 @@ func init() {
 // validateListenerContracts checks the listener settings every gateway mode
 // reads the same way.
 func validateListenerContracts(cfg *RouterConfig) error {
+	names := make(map[string]bool, len(cfg.Listeners))
 	for _, listener := range cfg.Listeners {
+		if names[listener.Name] {
+			return fmt.Errorf("listener '%s' is defined twice; give each listener its own name", listener.Name)
+		}
+		names[listener.Name] = true
 		if listener.TLS != nil &&
 			(strings.TrimSpace(listener.TLS.CertFile) == "" || strings.TrimSpace(listener.TLS.KeyFile) == "") {
 			return fmt.Errorf("listener '%s': tls needs both cert_file and key_file", listener.Name)
@@ -139,4 +146,55 @@ func (t ListenerTLS) Files(baseDir string) (certFile, keyFile string) {
 		return filepath.Join(baseDir, path)
 	}
 	return resolve(t.CertFile), resolve(t.KeyFile)
+}
+
+// ListenerRestart is a listener change a standalone Router applies only by
+// restarting: Path names the changed field, Message what changed.
+type ListenerRestart struct {
+	Path    string
+	Message string
+}
+
+// ListenerRestarts lists what changes from the bound listeners to next that a
+// standalone Router, which binds its listeners at startup, cannot apply in
+// place: a new or removed listener, or a listener's address, port, timeout
+// (also its connections' idle timeout) or TLS file paths. Keys, APIs and
+// identity reload in place.
+func ListenerRestarts(bound, next []Listener) []ListenerRestart {
+	byName := make(map[string]Listener, len(bound))
+	for _, listener := range bound {
+		byName[listener.Name] = listener
+	}
+	var restarts []ListenerRestart
+	restart := func(path, message string) {
+		restarts = append(restarts, ListenerRestart{Path: path, Message: message})
+	}
+	for _, listener := range next {
+		path := "listeners[" + listener.Name + "]"
+		previous, ok := byName[listener.Name]
+		delete(byName, listener.Name)
+		switch {
+		case !ok:
+			restart(path, "the listener is new")
+		case listener.Address != previous.Address:
+			restart(path+".address", fmt.Sprintf("the address changes from %q to %q", previous.Address, listener.Address))
+		case listener.Port != previous.Port:
+			restart(path+".port", fmt.Sprintf("the port changes from %d to %d", previous.Port, listener.Port))
+		case listener.Timeout != previous.Timeout:
+			restart(path+".timeout", fmt.Sprintf("the timeout changes from %q to %q", previous.Timeout, listener.Timeout))
+		case !sameListenerTLS(listener.TLS, previous.TLS):
+			restart(path+".tls", "the TLS file paths change")
+		}
+	}
+	for _, removed := range slices.Sorted(maps.Keys(byName)) {
+		restart("listeners["+removed+"]", "the listener is removed")
+	}
+	return restarts
+}
+
+func sameListenerTLS(a, b *ListenerTLS) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }

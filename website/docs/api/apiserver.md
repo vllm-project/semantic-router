@@ -333,9 +333,9 @@ connection pools when the providers' backends and the listeners are unchanged.
 A request in standalone mode is served by the version it started on, from routing through
 its fallback chain to the last byte. Such a Router binds its listeners at
 startup, so a change to the set of listeners or to a listener's `address`,
-`port` or `timeout` is rejected with code `restart_required` at that
-listener's path; restart the Router to apply it. Listener `api_keys` change
-without a restart.
+`port`, `timeout` or `tls` is rejected with code `restart_required` at that
+listener's path; restart the Router to apply it. A listener's `api_keys`,
+`apis` and `identity` change without a restart.
 
 The Router records every activation, from any source, in one history of the
 last 10 versions (`-config-history-limit` changes it). Every configuration file

@@ -91,8 +91,8 @@ See the [release note](../release-notes/standalone-mode).
   metrics port (9190).
 - **Reloads:** the Router reloads its config in place. A change to a listener's
   address, port, timeout or `tls` paths, or a new or removed listener, is
-  rejected as `restart_required` until the Router restarts; API keys and model
-  allow-lists reload in place.
+  rejected as `restart_required` until the Router restarts; API keys, `apis`
+  with their model allow-lists, and identity trust reload in place.
 
 ### Model allow-list
 
