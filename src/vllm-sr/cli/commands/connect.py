@@ -57,6 +57,14 @@ def _options(command):
                 is_flag=True,
                 help="Take back what earlier runs set; keys changed since are left as they are.",
             ),
+            click.option(
+                "--context-window",
+                type=click.IntRange(min=1),
+                default=None,
+                help="The smallest context window, in tokens, of the models the gateway"
+                " can pick. Claude Code then neither assumes 200,000 nor warns that it does"
+                " not know the entrypoint, and Codex budgets with it.",
+            ),
             click.option("--yes", is_flag=True, help="Write without asking."),
         ]
     ):
@@ -84,7 +92,16 @@ def connect() -> None:
     help="Also show in Claude Code's status line which models answered, the last first.",
 )
 def claude_code(
-    router_config, base_url, model, api_key_env, dry_run, undo, yes, scope, status_line
+    router_config,
+    base_url,
+    model,
+    api_key_env,
+    dry_run,
+    undo,
+    context_window,
+    yes,
+    scope,
+    status_line,
 ):
     """Route Claude Code's model calls through the gateway."""
     env = dict(os.environ)
@@ -100,6 +117,8 @@ def claude_code(
             f" (git rm --cached {path}) or connect with --scope user."
         )
     values = hc.claude_env(gateway, model, token)
+    if context_window:
+        values["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] = str(context_window)
     changes = []
     if status_line:
         script, values["statusLine"] = hc.status_line(path)
@@ -114,6 +133,11 @@ def claude_code(
     if from_env:
         warning(f"{path} now holds the API key from ${api_key_env}.")
     _check_vsr(env, gateway, doc, api_key_env if from_env else None)
+    if not context_window:
+        echo(
+            f"Claude Code does not know {model}, so it assumes 200,000 tokens and says"
+            " so at start; --context-window sets the real window."
+        )
     _probe(gateway, "claude-code", model, token)
     echo("Start a new Claude Code session to use it.")
 
@@ -126,7 +150,17 @@ def claude_code(
     show_default=True,
     help="The Codex profile to write.",
 )
-def codex(router_config, base_url, model, api_key_env, dry_run, undo, yes, profile):
+def codex(
+    router_config,
+    base_url,
+    model,
+    api_key_env,
+    dry_run,
+    undo,
+    context_window,
+    yes,
+    profile,
+):
     """Route Codex CLI through the gateway with a profile of its own."""
     env = dict(os.environ)
     home = hc.codex_home(env)
@@ -136,7 +170,7 @@ def codex(router_config, base_url, model, api_key_env, dry_run, undo, yes, profi
     gateway, doc = _gateway(router_config, base_url)
     token, from_env = hc.token_from(env, api_key_env)
     key_env = api_key_env if from_env else None
-    change = hc.codex_change(home, profile, gateway, model, key_env)
+    change = hc.codex_change(home, profile, gateway, model, key_env, context_window)
     if not _run("codex", [change], home, "", doc, dry_run, yes):
         return
     if from_env:

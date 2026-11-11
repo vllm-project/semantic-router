@@ -488,6 +488,31 @@ def test_cli_refuses_a_key_in_a_settings_file_git_tracks(
     assert settings.read_text() == "{}"
 
 
+def test_cli_context_window_reaches_both_harnesses(tmp_path, gateway, monkeypatch):
+    url, _, _ = gateway
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    args = ["--base-url", url, "--yes"]
+    result = CliRunner().invoke(main, ["connect", "claude-code", *args])
+    assert "assumes 200,000 tokens" in result.output
+    result = CliRunner().invoke(
+        main, ["connect", "claude-code", *args, "--context-window", "131072"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "assumes 200,000 tokens" not in result.output
+    env = json.loads((tmp_path / "settings.json").read_text())["env"]
+    # Claude Code neither warns about vllm-sr/auto nor assumes its own window
+    assert env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] == "131072"
+    result = CliRunner().invoke(
+        main, ["connect", "codex", *args, "--context-window", "131072"]
+    )
+    assert result.exit_code == 0, result.output
+    profile = (tmp_path / "vllm-sr.config.toml").read_text()
+    assert "model_context_window = 131072\n" in profile
+
+
 def test_cli_takes_the_gateway_from_the_configurations_listener(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
@@ -587,7 +612,11 @@ def test_status_line_names_the_models_that_answered(tmp_path):
         run({"transcript_path": str(transcript)})
         == "vllm-sr ⇢ qwen36 (3) · haiku-like (1) · qwen38-27b (2)"
     )
-    assert run({"transcript_path": str(tmp_path / "missing.jsonl")}) == "vllm-sr"
+    assert (
+        run({"transcript_path": str(tmp_path / "missing.jsonl")})
+        == "vllm-sr: no reply yet"
+    )
+    assert run({}) == "vllm-sr"
 
 
 def test_cli_status_line_is_written_and_taken_back(tmp_path, gateway, monkeypatch):

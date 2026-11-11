@@ -126,6 +126,11 @@ The command shows the changes and asks before writing them:
   provider, selects it and turns off hosted web search, which the Router does
   not serve. `~/.codex/config.toml` is not touched.
 
+Claude Code does not know `vllm-sr/auto` either: it assumes a 200,000-token
+window and says so at start. `--context-window` with the smallest window of the
+models the gateway can pick sets `CLAUDE_CODE_MAX_CONTEXT_TOKENS`, which gives
+Claude Code the real window and silences that notice.
+
 It then reports three checks, each on its own line:
 
 - `Router configuration`: what the configuration given with `--config` lacks
@@ -308,8 +313,8 @@ the variable it names is unset, and `vllm-sr connect` writes it only when
 `VLLM_SR_API_KEY` is set.
 
 Codex does not know `vllm-sr/auto`, so it warns that it uses fallback model
-metadata. Set `model_context_window` in the profile when that guess should
-follow your backends.
+metadata. `--context-window` sets `model_context_window` in the profile, so its
+budget follows your backends, though the warning stays.
 
 The Codex TUI sends a `namespace` tool on every turn. A Router that refuses
 namespace tools answers its first turn with `unsupported_tool`; on such a

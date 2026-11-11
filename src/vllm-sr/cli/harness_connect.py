@@ -173,6 +173,8 @@ def main() -> str:
     paths = [transcript, *sorted(transcript.with_suffix("").glob("subagents/*.jsonl"))]
     replies = {}
     for path in paths:
+        if not path.is_file():  # a session's transcript starts with its first reply
+            continue
         with open(path, encoding="utf-8") as lines:
             for line in lines:
                 if '"assistant"' not in line:
@@ -216,7 +218,12 @@ def codex_home(env: dict[str, str]) -> Path:
 
 
 def codex_change(
-    home: Path, profile: str, gateway: str, model: str, key_env: str | None
+    home: Path,
+    profile: str,
+    gateway: str,
+    model: str,
+    key_env: str | None,
+    context_window: int | None = None,
 ) -> Change:
     """The profile file. Codex layers it over config.toml with --profile, and it
     holds the provider too, so config.toml is not touched. key_env is left out
@@ -224,7 +231,8 @@ def codex_change(
     provider names is unset."""
     text = (
         f"model = {json.dumps(model)}\n"
-        f'model_provider = "{PROVIDER}"\n'
+        + (f"model_context_window = {context_window}\n" if context_window else "")
+        + f'model_provider = "{PROVIDER}"\n'
         # the Router does not serve hosted web search
         'web_search = "disabled"\n'
         "\n"
