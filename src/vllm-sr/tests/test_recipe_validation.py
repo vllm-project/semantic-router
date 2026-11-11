@@ -923,28 +923,64 @@ def test_default_entrypoint_override_and_reset():
     ] == [["our/router", "MoM"]]
 
 
-def test_systemone_listener_scope_is_explicit_and_nonempty():
-    listener = Listener(
-        name="public", address="0.0.0.0", port=8000, models=["chat-only"]
-    )
-    assert listener.systemone is None
-    for models in ([], [""], [" padded "], ["one", "one"]):
-        with pytest.raises(PydanticValidationError):
-            Listener(
-                name="public",
-                address="0.0.0.0",
-                port=8000,
-                systemone={"models": models},
-            )
+def test_listener_apis_are_named_by_the_api_registry():
     listener = Listener(
         name="public",
         address="0.0.0.0",
         port=8000,
-        models=["chat-only"],
-        systemone={"models": ["decision-public"]},
+        apis={"openai": {"models": ["chat-only"]}},
     )
-    assert listener.models == ["chat-only"]
-    assert listener.systemone.models == ["decision-public"]
+    assert listener.served_apis() == ("chat_completions",)
+    assert listener.apis["chat_completions"].models == ["chat-only"]
+    assert listener.systemone_models() is None
+    assert Listener(name="public", port=8000).served_apis() == (
+        "chat_completions",
+        "responses",
+        "messages",
+        "images",
+    )
+    for models in ([], [""], [" padded "], ["one", "one"]):
+        with pytest.raises(PydanticValidationError):
+            Listener(name="public", port=8000, apis={"systemone": {"models": models}})
+    listener = Listener(
+        name="public",
+        port=8000,
+        apis={
+            "chat_completions": {"models": ["chat-only"]},
+            "systemone": {
+                "schema": "vllm-sr/4.0",
+                "models": ["decision-public"],
+                "max_deadline_ms": 120000,
+            },
+        },
+    )
+    assert listener.systemone_models() == ["decision-public"]
+    assert listener.apis["systemone"].schema_ == "vllm-sr/4.0"
+    for apis, message in (
+        (
+            {"openai": {}, "chat_completions": {}},
+            "openai and chat_completions name the same API, chat_completions",
+        ),
+        (
+            {"messages": {}, "anthropic": {}},
+            "anthropic and messages name the same API, messages",
+        ),
+        ({"realtime": {}}, "api 'realtime' is not supported"),
+        ({"chat_completions": {"schema": "openai/v1"}}, "has one schema"),
+        (
+            {"systemone": {"schema": "systemone/0.2"}},
+            "a listener serves api systemone in vllm-sr/5.0 or vllm-sr/4.0",
+        ),
+        ({"responses": {"max_deadline_ms": 5}}, "takes no max_deadline_ms"),
+        ({}, "apis names no API"),
+    ):
+        with pytest.raises(PydanticValidationError, match=message):
+            Listener(name="public", port=8000, apis=apis)
+    for removed in ({"models": ["m"]}, {"systemone": {"models": ["m"]}}):
+        with pytest.raises(
+            PydanticValidationError, match="run `vllm-sr config migrate`"
+        ):
+            Listener(name="public", port=8000, **removed)
 
 
 def test_listener_names_are_unique():

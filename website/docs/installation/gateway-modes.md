@@ -91,12 +91,13 @@ See the [release note](../release-notes/standalone-mode).
   metrics port (9190).
 - **Reloads:** the Router reloads its config in place. A change to a listener's
   address, port, timeout or `tls` paths, or a new or removed listener, is
-  rejected as `restart_required` until the Router restarts; API keys, model
-  allow-lists and identity trust reload in place.
+  rejected as `restart_required` until the Router restarts; API keys, `apis`
+  with their model allow-lists, and identity trust reload in place.
 
 ### Model allow-list
 
-A listener's `models` lists the only request `model` values it accepts. Use it
+An API's `models` in a listener's `apis` lists the only request `model` values
+it accepts there. Use it
 to give a public key access to the router's auto model and nothing else, while
 an internal listener keeps every model:
 
@@ -109,7 +110,9 @@ listeners:
     address: 0.0.0.0
     port: 8899
     api_keys: ["${WORKSHOP_KEY}"]
-    models: [vllm-sr/auto]
+    apis:
+      chat_completions: {models: [vllm-sr/auto]}
+      responses: {models: [vllm-sr/auto]}
 ```
 
 - Names match exactly (case-sensitive, after trimming the request value), and

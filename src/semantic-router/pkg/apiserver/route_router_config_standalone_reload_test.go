@@ -40,8 +40,8 @@ func TestStandaloneReloadNeedsARestartOnlyForListeners(t *testing.T) {
 }
 
 // A standalone Router's management API takes the listener changes its file
-// watcher takes: keys, model allow-lists and identity reload in place, and
-// only what the Router bound at startup needs a restart.
+// watcher takes: keys, APIs and identity reload in place, and only what the
+// Router bound at startup needs a restart.
 func TestStandaloneConfigUpdateReloadsListenerKeysInPlace(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -49,7 +49,9 @@ func TestStandaloneConfigUpdateReloadsListenerKeysInPlace(t *testing.T) {
 		restart string
 	}{
 		{name: "api_keys", change: func(l *config.Listener) { l.APIKeys = []string{"rotated-key"} }},
-		{name: "models", change: func(l *config.Listener) { l.Models = []string{"qwen-test"} }},
+		{name: "apis", change: func(l *config.Listener) {
+			l.APIs = config.ListenerAPIs{"chat_completions": {Models: []string{"qwen-test"}}}
+		}},
 		{name: "identity", change: func(l *config.Listener) { l.Identity = &config.ListenerIdentity{TrustHeaders: true} }},
 		{name: "port", change: func(l *config.Listener) { l.Port = 8898 }, restart: "listeners[http-8899].port"},
 	} {

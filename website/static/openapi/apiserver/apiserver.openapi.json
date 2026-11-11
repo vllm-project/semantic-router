@@ -14143,6 +14143,13 @@
                           "additionalProperties": false
                         }
                       },
+                      "roles": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
                       "state": {},
                       "states": {
                         "nullable": true,
@@ -14255,6 +14262,13 @@
                                   }
                                 },
                                 "additionalProperties": false
+                              }
+                            },
+                            "roles": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
                               }
                             },
                             "state": {},
@@ -16139,6 +16153,13 @@
                           "additionalProperties": false
                         }
                       },
+                      "roles": {
+                        "nullable": true,
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
                       "state": {},
                       "states": {
                         "nullable": true,
@@ -16251,6 +16272,13 @@
                                   }
                                 },
                                 "additionalProperties": false
+                              }
+                            },
+                            "roles": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "string"
                               }
                             },
                             "state": {},

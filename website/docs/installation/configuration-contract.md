@@ -169,7 +169,7 @@ An automation or deployment agent should:
    `current_etag` in `If-Match`. A change the running Router can't take returns
    `RESTART_REQUIRED`: in standalone mode, a new or removed listener or a
    listener's new `address`, `port`, `timeout` or `tls` paths (its `api_keys`,
-   `models`, `identity` and `systemone` reload in place); with
+   `apis` and `identity` reload in place); with
    `--gateway extproc`, a listener or provider topology change. On local Docker,
    `vllm-sr config apply` saves such a change and the next `vllm-sr serve`
    applies it (or, after approval, run the explicit

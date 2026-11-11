@@ -68,11 +68,11 @@ vllm-sr serve --target kubernetes --config config.yaml
 - **探针：** 进程运行时 `GET /health` 就会应答；路由核心可以接收流量后 `GET /ready` 才应答。Prometheus 指标仍在
   Router 的指标端口（9190）。
 - **重新加载：** Router 原地重新加载配置。修改 listener 的地址、端口、超时或 `tls` 路径，或者新增、删除 listener，
-  都会以 `restart_required` 被拒绝，直到 Router 重启；API key、模型白名单和身份信任可原地重新加载。
+  都会以 `restart_required` 被拒绝，直到 Router 重启；API key、`apis` 及其模型白名单和身份信任可原地重新加载。
 
 ### 模型白名单 {#model-allow-list}
 
-listener 的 `models` 列出它接受的全部请求 `model` 值。可以用它让公开 key 只能访问 Router 的自动模型，而内部
+listener `apis` 中某个 API 的 `models` 列出该 API 接受的全部请求 `model` 值。可以用它让公开 key 只能访问 Router 的自动模型，而内部
 listener 仍可使用所有模型：
 
 ```yaml
@@ -84,7 +84,9 @@ listeners:
     address: 0.0.0.0
     port: 8899
     api_keys: ["${WORKSHOP_KEY}"]
-    models: [vllm-sr/auto]
+    apis:
+      chat_completions: {models: [vllm-sr/auto]}
+      responses: {models: [vllm-sr/auto]}
 ```
 
 - 名称精确匹配（区分大小写，请求值去除首尾空白后比较），不展开别名：请列出客户端可能发送的每个名称。为空或不设置时，

@@ -46,7 +46,7 @@ The Router rebuilds only what a change reaches:
 - In standalone mode the Router binds its listeners at startup. Adding or
   removing a listener, or changing a listener's `address`, `port`, `timeout` or
   `tls`, is rejected with `restart_required`; restart the Router to apply it.
-  A listener's `api_keys`, `models` and `identity` change without a restart.
+  A listener's `api_keys`, `apis` and `identity` change without a restart.
 
 ## Change a local stack
 

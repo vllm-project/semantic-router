@@ -3,6 +3,7 @@ package config
 import (
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiregistry"
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
@@ -36,17 +37,32 @@ const (
 	SignalTypeProjection    = "projection"
 )
 
-// API format constants for model backends.
+// API names of model backends (providers.models[].api_format), which are the
+// API registry's names. A configuration may still write the aliases openai
+// and anthropic; the Router reads them as chat_completions and messages.
 const (
-	APIFormatSystemOne = "systemone"
-	APIFormatOpenAI    = "openai"
-	APIFormatResponses = "responses"
-	APIFormatAnthropic = "anthropic"
+	APIFormatSystemOne       = string(apiregistry.SystemOne)
+	APIFormatChatCompletions = string(apiregistry.ChatCompletions)
+	APIFormatResponses       = string(apiregistry.Responses)
+	APIFormatMessages        = string(apiregistry.Messages)
 	// APIFormatImages selects the DALL-E-compatible image-generation dialect
 	// (/v1/images/generations), used to sink responses hosted image_generation
 	// requests to diffusion backends.
-	APIFormatImages = "images"
+	APIFormatImages = string(apiregistry.Images)
+	// APIFormatOpenAI and APIFormatAnthropic are aliases of
+	// APIFormatChatCompletions and APIFormatMessages.
+	APIFormatOpenAI    = "openai"
+	APIFormatAnthropic = "anthropic"
 )
+
+// CanonicalAPIFormat is the API name an api_format value names: an alias
+// reads as its API, and empty or unknown values stay as they are.
+func CanonicalAPIFormat(apiFormat string) string {
+	if apiFormat == "" {
+		return ""
+	}
+	return apiregistry.Canonical(apiFormat)
+}
 
 // ClientProtocol* identifies the inbound wire format; distinct from APIFormat (upstream backend).
 // The zero value (empty string) is treated as OpenAI-compatible; additional constants will be
@@ -216,27 +232,18 @@ type Listener struct {
 	// APIKeys are client bearer credentials the listener enforces, in
 	// standalone mode and in the CLI-managed Envoy listener.
 	APIKeys []string `yaml:"api_keys,omitempty"`
-	// Models, when set, are the only request models a standalone listener
-	// accepts, by exact `model` value; others get 403 model_not_allowed and
-	// /v1/models lists only these. Empty accepts every model.
-	Models []string `yaml:"models,omitempty"`
-	// SystemOne explicitly publishes native decision inference independently
-	// from the Chat/Responses model allow-list. Omission keeps it private.
-	SystemOne *ListenerSystemOne `yaml:"systemone,omitempty"`
+	// APIs, when set, are the only APIs the listener serves, by API name (an
+	// alias reads as its API), each with its schema, models and settings;
+	// other paths answer 404. Omitted, the listener serves chat_completions,
+	// responses, messages and images with their default schemas, and not
+	// systemone.
+	APIs ListenerAPIs `yaml:"apis,omitempty"`
 	// TLS, when set, makes a standalone Router serve this listener over TLS.
 	TLS *ListenerTLS `yaml:"tls,omitempty"`
 	// Identity, when set, decides whether the listener keeps the client
 	// identity headers its requests carry: a standalone Router does, and so
 	// does the Envoy listener the CLI generates for --gateway extproc.
 	Identity *ListenerIdentity `yaml:"identity,omitempty"`
-}
-
-type ListenerSystemOne struct {
-	Models []string `yaml:"models"`
-	// MaxDeadlineMs bounds how long the listener waits for a model it calls
-	// directly, however long a request's options.deadline_ms asks for.
-	// Omitted, it is DefaultSystemOneMaxDeadlineMs.
-	MaxDeadlineMs *int `yaml:"max_deadline_ms,omitempty"`
 }
 
 // ListenerIdentity names the identity sources a listener trusts. It trusts

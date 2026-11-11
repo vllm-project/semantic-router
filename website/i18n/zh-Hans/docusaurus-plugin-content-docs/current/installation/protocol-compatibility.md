@@ -34,7 +34,7 @@ client endpoint -> client codec -> routing -> backend codec -> model endpoint
 
 公共监听器还提供 `GET /v1/models`。完整的方法和路径清单、Responses 对象操作以及请求示例见 [Router API](../api/router)。
 
-原生 **System One** API 是独立的类型化接口，用于直接调用判断模型，不经过本页的 Chat 协议转换矩阵。Router 和 Engine 模式都可以提供它，但 listener 必须通过 `systemone.models` 显式授予模型访问权限。见[组件架构](../overview/component-architecture#keep-public-and-worker-apis-distinct)。
+原生 **System One** API 是独立的类型化接口，用于直接调用判断模型，不经过本页的 Chat 协议转换矩阵。Router 和 Engine 模式都可以提供它，但 listener 必须通过 `apis.systemone.models` 显式授予模型访问权限。见[组件架构](../overview/component-architecture#keep-public-and-worker-apis-distinct)。
 
 ## 后端模型协议
 

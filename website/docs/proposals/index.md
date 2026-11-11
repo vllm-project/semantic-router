@@ -58,6 +58,7 @@ different client and transport protocols.
 | [Standalone Mode](./standalone-mode) | 2026-10-06 | Implemented | The Router serves the OpenAI-compatible API and proxies to backends itself, with one routing core for standalone and extproc modes ([#4623](https://github.com/vllm-project/semantic-router/issues/4623)). |
 | [Unified Config Contract v0.3](./unified-config-contract-v0-3) | 2026-03-17 | Implemented | One configuration contract across authoring and deployment surfaces. |
 | [Multi-Protocol Adapter Architecture](./multi-protocol-adaptor) | 2026-02-18 | Implemented | Protocol-independent access to the routing engine. |
+| [System One API Schemas](./system-one-api-schemas) | 2026-11-11 | Implemented | Versioned schemas (`systemone/0.2`, `vllm-sr/5.0`, `vllm-sr/4.0`) for every decision-model API, one API registry for listeners and upstreams, and one codec layer through a schema-neutral IR ([#6143](https://github.com/vllm-project/semantic-router/issues/6143)). |
 | [Standalone HTTP Gateway](./standalone-http-gateway) | 2026-08-31 | Superseded | A separate gateway binary linking the router packages; superseded by [Standalone Mode](./standalone-mode). |
 
 ## Serving Integrations
