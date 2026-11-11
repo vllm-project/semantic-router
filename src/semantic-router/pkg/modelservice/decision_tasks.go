@@ -97,6 +97,9 @@ func compileTask(definition TaskDefinition, question Question, card ModelCard) (
 	if err != nil {
 		return plan, err
 	}
+	if question.RequireFullInput && !card.ReportsInputCoverage() {
+		return plan, fmt.Errorf("%w: model %s answers over %s, which has no input_coverage to prove that %s read its whole input; read it truncated (coverage: truncate), or bind it to a deployment that reports coverage", ErrRejected, card.ID, card.Schema, definition.ID)
+	}
 	if question.Preset != "" {
 		if !card.HasPreset(question.Preset) {
 			return plan, fmt.Errorf("%w: model %s does not define preset %s", ErrRejected, card.ID, question.Preset)

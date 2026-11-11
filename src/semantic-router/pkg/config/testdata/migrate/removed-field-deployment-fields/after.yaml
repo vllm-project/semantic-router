@@ -36,6 +36,7 @@ global:
         auth: {api_key_env: SYSTEMONE_KEY}
         capabilities:
           question_types: [choice, noul, score, set]
+        schema: vllm-sr/5.0
       decision-kai:
         provider: model_runtime
         endpoint: https://decision-worker.example.com:8100

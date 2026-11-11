@@ -72,7 +72,7 @@ vllm-sr serve --target kubernetes --config config.yaml
 
 ### 模型白名单 {#model-allow-list}
 
-listener 的 `models` 列出它接受的全部请求 `model` 值。可以用它让公开 key 只能访问 Router 的自动模型，而内部
+listener `apis` 中某个 API 的 `models` 列出该 API 接受的全部请求 `model` 值。可以用它让公开 key 只能访问 Router 的自动模型，而内部
 listener 仍可使用所有模型：
 
 ```yaml
@@ -84,7 +84,9 @@ listeners:
     address: 0.0.0.0
     port: 8899
     api_keys: ["${WORKSHOP_KEY}"]
-    models: [vllm-sr/auto]
+    apis:
+      chat_completions: {models: [vllm-sr/auto]}
+      responses: {models: [vllm-sr/auto]}
 ```
 
 - 名称精确匹配（区分大小写，请求值去除首尾空白后比较），不展开别名：请列出客户端可能发送的每个名称。为空或不设置时，
