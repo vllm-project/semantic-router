@@ -163,6 +163,8 @@ src/model-runtime/
       task_heads/           # HF encoder task models (Vela 1.0 and compatible ModernBERT models)
       vela2/                # Vela 2.0 schema encoder (0.3B) and Qwen3.5 encoders (0.8B, 4B, 9B); Set and Span
       vela3/                # Vela 3.0 vela3-fast: one UltraBERT backbone and its adapter networks
+      vela3_pico/           # Vela 3.1 picos: one UltraBERT, render31, one pass or question by question
+      render31.py           # the Vela 3.1 question renderer (shared by the Vela 3.1 readers)
       multimodal_embedding/ # Vela 1.0 Omni: the published package, readouts, processors; ONNX bundles
     engines/
       native/               # PyTorch: models/qwen3.py, qwen3_5.py, modernbert.py, ultrabert.py, bert.py, siglip.py,
@@ -189,7 +191,7 @@ so the runtime has one discovery path.
 
 | Entry-point group | Base class | Built-in |
 | --- | --- | --- |
-| `vllm_srun.families` | `ModelFamily` | `decision3`, `decision2`, `decision1`, `task_heads`, `vela2`, `vela3`, `vela3_d3`, `multimodal_embedding` |
+| `vllm_srun.families` | `ModelFamily` | `decision3`, `decision2`, `decision1`, `task_heads`, `vela2`, `vela3`, `vela3_d3`, `vela3_pico`, `multimodal_embedding` |
 | `vllm_srun.engines` | `Engine` | `native`, `onnxruntime` |
 | `vllm_srun.accelerators` | `Accelerator` | `cpu`, `cuda`, `rocm`, `xpu`, `mps` |
 
@@ -1107,6 +1109,39 @@ its compatibility block at U+F900, unlike the word splitter's). Open labels
 without a description run by name: the packages' label-definition writers
 (vela3-mini's base, vela3-flash's grafted head) are not run
 ([record](records/vela3-d3-parity.md)).
+
+### 8.9 Vela 3.1 picos (`vela3_pico`)
+
+vela3.1-pico-380m and -150m (`vela3_config.json` format `vela3-pico/1`) are
+one UltraBERT encoder each (380M: hidden 1,024; 150M: hidden 768), fine-tuned
+whole, with one readout in `model.safetensors`: the option projections and
+MLP, and the word and label projections. There are no adapters; every input
+runs on the one network. The family reimplements the package's runtime
+(`render31.py`, `vela3_encoder.py`, `vela3_schema.py`) and never imports it.
+
+Questions are rendered by render31 (`families/render31.py`), the one renderer
+Vela 3.1 trains, reads and ships: a question renders exactly as given, an
+option or label with a description as `name: description` and without one as
+`name`, a Noul as `{"no": false text, "yes": true text}`. Nothing is filled
+in from a trained schema; only a router question asked with no criteria takes
+its `router_questions.json` options, and a span question with no instructions
+its trained set's question. `tests/test_render31.py` and
+`tests/test_vela3_pico_sequence.py` check the port byte for byte against the
+package's own renderer, `render_call`, `one_pass` and decision encoding, on
+cases recorded by `tools/pico_render_cases.py`.
+
+| Request | Inputs |
+| --- | --- |
+| Some question is a span, a Set or a router text, every question a span, router text, Choice or Noul, and the whole request fits one window (8,192 tokens) uncut | One sequence, one forward: `<bos> ([Q] question ([O] option)* [ABS]?)* ([E] label)* [SEP_SCHEMA] ([SEG_role] part)* <eos>`, questions in request order, each span question's labels a group reading its own target part, decisions pooled over every part |
+| Anything else | Question by question: decisions one sequence each on the decision layout (the whole state as one part, up to 32,768 tokens); router questions one row per part they read in the Vela 2.0 layout and 8,192-token windows; each span question a row of its own (evidence questions one window up to 32,768 tokens) |
+
+Span thresholds follow the package's policy on both paths: PII by the target
+part's token count, unsupported claims and harm at their set thresholds (both
+at `router_set_temperature`), evidence questions by target length, relation
+wordings at `relation_threshold`, other questions at `span.threshold`. A Set
+question applies its own threshold, else 0.5 (the package always uses 0.5).
+A question the package would fail with an exception fails alone here, and a
+blank text state is refused, as on the other Vela families.
 
 ## 9. Scheduler and planner
 
