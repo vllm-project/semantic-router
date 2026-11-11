@@ -132,3 +132,22 @@ def test_the_pins_tool_prints_a_table_entry(tmp_path) -> None:
         "model.safetensors",
     }
     assert pins["loaded_parameters"] > 0 and pins["golden_one_pass"]
+
+
+def test_a_router_question_failed_by_its_neighbours_row_is_compared_apart() -> None:
+    message = "schema alone does not fit max_length (12 tokens over)"
+    theirs = {
+        "answers": {
+            "a": {"type": "choice", "error": "invalid_question", "message": message},
+            "b": {"type": "choice", "error": "invalid_question", "message": message},
+            "c": {"type": "set", "error": "invalid_question", "message": message},
+        }
+    }
+    ours = {
+        "answers": {
+            "a": {"type": "choice", "choice": "x", "probabilities": {"x": 1.0}},
+            "b": {"type": "choice", "error": "max_length_exceeded"},
+        },
+        "sets": {"c": {"selected": [], "probabilities": {"l": 0.1}}},
+    }
+    assert parity.apart({"a": {}, "b": {}, "c": {}}, ours, theirs) == ["a", "c"]

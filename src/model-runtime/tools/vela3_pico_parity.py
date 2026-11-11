@@ -422,6 +422,22 @@ def compare(
     return rows
 
 
+def apart(
+    questions: dict[str, Any], ours: dict[str, Any], theirs: dict[str, Any]
+) -> list[str]:
+    """Questions the family answers that the package failed only because another row of their call did not fit."""
+    return [
+        qid
+        for qid in questions
+        if "error" in theirs["answers"][qid]
+        and "does not fit" in str(theirs["answers"][qid].get("message", ""))
+        and "error"
+        not in (
+            ours["answers"].get(qid) or ours.get("sets", {}).get(qid) or {"error": 1}
+        )
+    ]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--package", required=True, type=Path)
@@ -480,6 +496,17 @@ def main() -> None:
             continue
         timing["package"] += time.perf_counter() - started
         rows = compare(questions, ours, theirs)
+        for qid in apart(questions, ours, theirs):
+            # The package runs every router question of the request in one
+            # try, so one row that does not fit fails them all; the family
+            # fails that row alone. Compare the others asked apart.
+            alone = reference.system_one(
+                *package_request(state, {qid: questions[qid]}, schemas)
+            )
+            rows[qid] = {
+                **compare({qid: questions[qid]}, ours, alone)[qid],
+                "apart": True,
+            }
         tokens = ours["usage"]["input_tokens"] == theirs["usage"]["input_tokens"]
         errored = any("error" in theirs["answers"][q] for q in questions)
         passes = [one_pass, theirs.get("passes") == 1]
