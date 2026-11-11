@@ -172,7 +172,27 @@ escalate moves it up.
 
 Redact hides names, emails, phone numbers, card numbers, IP addresses (only text shaped like an IPv4 or
 IPv6 address, so a pinned version such as `2.32.3` stays), addresses, ID numbers and
-secrets (API keys, tokens, private keys, passwords in config files and connection URLs). It waits
+secrets. The secrets are found by rule, with no model, so they are hidden even while the decision model
+is offline:
+
+- Tokens with a shape of their own, wherever they stand: private keys, JSON Web Tokens, password
+  hashes, and the keys of AWS, GitHub, GitLab, Anthropic, OpenAI, Google, Hugging Face, Slack, Stripe,
+  npm, PyPI, SendGrid, Docker and Vault.
+- A value under a key that names a credential (`password`, `secret`, `token`, `api_key`, `auth`
+  and the like), anywhere on a line: in an env file, YAML, JSON, INI, a Dockerfile, a compose file,
+  a connection string or source code. A quoted value is hidden whatever characters it holds.
+- Passwords in connection URLs, URL queries, command lines (`--password`, `--token`, `-u user:pass`,
+  `mysql -p`), XML, `.netrc`, `.npmrc`, a Docker config, a kubeconfig and `Cookie` headers.
+
+A value that is not the credential stays: a variable or a template (`$TOKEN`, `${DB_PASS}`,
+`{password}`), a key that describes one (`token_url`, `password_file`, `max_tokens`, `api_key_env`),
+a key's name (`"x-api-key"`) or a label (`"Password"`). A value with no quotes is read by the file it
+is in: in a config file (`.env`, `.yaml`, `.ini`, `.toml` and the like) it is the secret, in source
+code it is a name or a call and stays, and elsewhere it is hidden when it is written as `KEY=value` or
+holds a letter and a digit. A command's output is read as the file the command names (`cat .env`). A
+password under six characters, or eight for other secrets, is not hidden.
+
+It waits
 `redactWait` (3 s by default) for the decision model, and shield then waits `shieldWait` (2 s by
 default) on a `Read` or a fetched page; when redact ran out of time the model is still busy, so shield
 steps aside with it and one `SKIPPED` row says both (unless shield waits `until done`). On CPU redact reads about the first 8,000 characters of an output in 3 s, and says so
