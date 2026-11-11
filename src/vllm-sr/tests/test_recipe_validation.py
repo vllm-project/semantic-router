@@ -981,3 +981,16 @@ def test_listener_apis_are_named_by_the_api_registry():
             PydanticValidationError, match="run `vllm-sr config migrate`"
         ):
             Listener(name="public", port=8000, **removed)
+
+
+def test_listener_names_are_unique():
+    listeners = [
+        Listener(name="http", address="0.0.0.0", port=8000),
+        Listener(name="http", address="0.0.0.0", port=8001),
+    ]
+    with pytest.raises(
+        PydanticValidationError, match="listener 'http' is defined twice"
+    ):
+        UserConfig(version="v0.5", listeners=listeners)
+    listeners[1].name = "http-8001"
+    assert len(UserConfig(version="v0.5", listeners=listeners).listeners) == 2

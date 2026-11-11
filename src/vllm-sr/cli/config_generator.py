@@ -245,6 +245,13 @@ def generate_envoy_config_from_user_config(
                     "listener does not enforce it; serve with --gateway standalone "
                     "or remove models from the listener's apis"
                 )
+            if "systemone" in (listener.apis or {}):
+                raise ValueError(
+                    f"listener '{listener.name}': apis.systemone is served in "
+                    "standalone mode, and the --gateway extproc Envoy listener "
+                    "does not serve the System One API; serve with --gateway "
+                    "standalone or remove systemone from the listener's apis"
+                )
             gate = {}
             if listener.apis is not None:
                 served = listener.served_apis()
@@ -265,9 +272,7 @@ def generate_envoy_config_from_user_config(
                         ENVOY_CONTAINER_LISTENER_ADDRESS_ENV, listener.address
                     ),
                     "port": listener.port,
-                    "timeout": (
-                        listener.timeout if hasattr(listener, "timeout") else "300s"
-                    ),
+                    "timeout": envoy_duration(listener.timeout or "300s"),
                     "api_keys": (
                         list(listener.api_keys)
                         if getattr(listener, "api_keys", None)

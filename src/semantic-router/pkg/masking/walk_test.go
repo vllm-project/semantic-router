@@ -814,3 +814,50 @@ func TestApply_ToolResultSiblingMembersStayStructured(t *testing.T) {
 		})
 	}
 }
+
+// Case: an agent's later request. The tool result still holds the real name,
+// and the agent's own tool call echoes the placeholder it got for that name
+// one turn earlier. A detector that also reads the placeholder's inner text
+// as a name must not turn the echo into a nested placeholder, or the agent
+// sees its own earlier output change and its edits stop matching the file.
+func TestApply_EchoedPlaceholderInLaterTurnUnchanged(t *testing.T) {
+	request := &llmprotocol.Request{
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
+					CallID:  "call_1",
+					Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "customer: Minji Kim"}},
+				}},
+			}},
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
+					ID: "call_2", Name: "Write", Arguments: `{"content":"Hi [PERSON_0],"}`,
+				}},
+			}},
+		},
+	}
+	scan := func(text string) ([]Span, error) {
+		var spans []Span
+		for _, value := range []string{"Minji Kim", "PERSON_0"} {
+			if idx := strings.Index(text, value); idx >= 0 {
+				spans = append(spans, Span{EntityType: "PERSON", Start: idx, End: idx + len(value), Confidence: 1.0})
+			}
+		}
+		return spans, nil
+	}
+
+	result, err := Apply(request, NewAllocator(defaultCfg()), scan)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// only the real name counts as masked, not the echo left as it was
+	if result.MaskedCount != 1 {
+		t.Fatalf("MaskedCount: got %d, want 1", result.MaskedCount)
+	}
+	if got, want := request.Messages[0].Content[0].ToolResult.Content[0].Text, "customer: [PERSON_0]"; got != want {
+		t.Fatalf("tool result: got %q, want %q", got, want)
+	}
+	if got, want := request.Messages[1].Content[0].ToolCall.Arguments, `{"content":"Hi [PERSON_0],"}`; got != want {
+		t.Fatalf("tool call arguments: got %q, want %q", got, want)
+	}
+}

@@ -38,12 +38,12 @@ curl -s localhost:8100/v1/systemone -H 'content-type: application/json' -d '{
 | `POST /v1/systemone` | 回答一个请求。某个问题无法回答时，整个请求失败 |
 | `POST /v1/systemone/batch` | 一次调用回答多个具名请求，每个请求的回答与单独发送时相同 |
 | `POST /v1/decisions` | 同一调用的原生形式，供 Router 使用：内部请求形式，失败的问题在 200 中带自己的错误 |
-| `GET /v1/models` | 列出服务器回答用的模型，每个带 `version`、`features` 和 `card` |
+| `GET /v1/models` | 列出服务器回答用的模型，每个带 `version`、`features` 和 `card`；Router 或 Engine 前端还在 `GET /v1/systemone/models` 列出其 System One 模型，并给出其所服务的每个内置决策模型的 `question_types` 和 `modalities` |
 
 运行时在 `GET /health` 中以 `api_version` 报告其契约（`5.0.0`）。
 
 :::note
-Router 拒绝任何其他契约的运行时：Router 和它的模型运行时来自同一个版本。[HTTP API 参考](../../model-runtime/reference/http-api.md#decisions)记录了运行时读取的每个字段；其 OpenAPI 契约是事实来源，[扩展参考](../reference/extension-reference.md)列出了 vllm-sr 在标准之上增加的每个字段。
+Router 拒绝任何其他契约的运行时：Router 和它的模型运行时来自同一个版本。[HTTP API 参考](../../model-runtime/reference/http-api.md#decisions)记录了运行时读取的每个字段；其 OpenAPI 契约是事实来源，[扩展参考](/docs/system-one/reference/extension-reference)列出了 vllm-sr 在标准之上增加的每个字段。
 :::
 
 ## 单个请求 {#a-single-request}
@@ -127,7 +127,7 @@ Router 拒绝任何其他契约的运行时：Router 和它的模型运行时来
 | `preset` | 全部 | 扩展。模型训练过的问题（例如 `pii`），列在其模型卡的 `presets` 中；问题仍带有自己的 `instructions` 和 `criteria`，其他服务器按它们回答 |
 | `threshold` | `set`、`span` | 扩展。替换模型自己的判定阈值；实际使用的值在 `thresholds` 中返回 |
 | `head` | `span` | 扩展。`router` 或 `broad`，用于有 broad span head 的模型 |
-| `over` | 全部 | 扩展。问题读取的 state 键 |
+| `over` | 全部 | 扩展。问题读取的 state 键，仅用于 Vela 模型：Vela 2.0 上任何问题都可用；Vela 3.0 上限于 `span`、预设问题和 vela3-fast 训练过的路由问题。Decision 1.0、2.0 和 3.0 以 `invalid_question` 拒绝 |
 | `overflow` | 全部 | 扩展。`window`（分窗完整读取长部分）或 `truncate`（只读前面的 token），用于有扫描预算的模型 |
 | `require_full_input` | 全部 | 扩展。除非完整读取全部输入，否则问题失败；此时答案带 `input_coverage: complete` |
 

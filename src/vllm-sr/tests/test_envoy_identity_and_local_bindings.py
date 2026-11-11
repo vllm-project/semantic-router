@@ -50,11 +50,24 @@ def _model_routes(rendered):
     }
 
 
-@pytest.mark.parametrize("timeout", ["0s", "300s"])
-def test_chat_duration_is_independent_of_extproc_message_timeout(tmp_path, timeout):
+# The Router reads a listener timeout as a Go duration; Envoy takes seconds.
+@pytest.mark.parametrize(
+    ("configured", "timeout"),
+    [
+        ("0s", "0s"),
+        ("300s", "300s"),
+        ("0", "0s"),
+        ("5m", "300s"),
+        ("1m30s", "90s"),
+        ("500ms", "0.5s"),
+    ],
+)
+def test_chat_duration_is_independent_of_extproc_message_timeout(
+    tmp_path, configured, timeout
+):
     path = _write_config(tmp_path, ["model-a", "model-b"])
     document = yaml.safe_load(path.read_text())
-    document["listeners"][0]["timeout"] = timeout
+    document["listeners"][0]["timeout"] = configured
     path.write_text(yaml.safe_dump(document))
     config = parse_user_config(str(path))
     assert not validate_user_config(config, log_summary=False)

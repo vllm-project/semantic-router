@@ -89,6 +89,11 @@ type ModelDeployment struct {
 	// OutlierDetection ejects a model_runtime replica whose exchanges keep
 	// running out of their deadline; unset keeps its defaults.
 	OutlierDetection *DeploymentOutlierDetection `yaml:"outlier_detection,omitempty" json:"outlier_detection,omitempty"`
+	// RoutingView bounds what a routing question sends this decision
+	// deployment about a long input: its head and tail.
+	RoutingView *DeploymentRoutingView `yaml:"routing_view,omitempty" json:"routing_view,omitempty"`
+	// ScanWindow sizes the windows a guard rule reads a long input in.
+	ScanWindow *DeploymentScanWindow `yaml:"scan_window,omitempty" json:"scan_window,omitempty"`
 	// PublicName is the inference API identity. It never identifies a socket,
 	// local package path, or internal deployment key.
 	PublicName string `yaml:"public_name,omitempty" json:"public_name,omitempty"`
@@ -202,6 +207,9 @@ func (d ModelDeployment) validate() error {
 	}
 	if !d.IsSystemOne() && (d.Schema != "" || len(d.Deviations) > 0 || d.MaxConcurrency != nil) {
 		return fmt.Errorf("schema, deviations and max_concurrency describe a remote System One API; they apply to systemone deployments")
+	}
+	if err := d.validateInputViews(); err != nil {
+		return err
 	}
 	switch d.Provider {
 	case SystemOneProvider:

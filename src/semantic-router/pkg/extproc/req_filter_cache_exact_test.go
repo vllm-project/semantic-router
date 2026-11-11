@@ -5,9 +5,14 @@ import (
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 const exactCacheHitBody = `{"id":"chatcmpl-cache","object":"chat.completion","created":123,"model":"gpt-4o",` +
@@ -74,5 +79,30 @@ func TestExactCacheHitKeepsTheTraceFromOtherCallers(t *testing.T) {
 
 	if trace := traceOf(t, response.GetImmediateResponse().GetHeaders().GetSetHeaders()); trace != nil {
 		t.Errorf("a caller without debug got the trace %v", trace)
+	}
+}
+
+// Replay keeps what the client received from an exact hit, once, the same way
+// a semantic hit records it.
+func TestExactCacheHitRecordsTheAnswerTheClientReceived(t *testing.T) {
+	for _, streaming := range []bool{false, true} {
+		recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+		recorder.SetCapturePolicy(true, true, 1<<20)
+		ctx := exactCacheHitContext(nil)
+		ctx.SourceFormat = llmprotocol.OpenAIChatV1
+		ctx.ExpectStreamingResponse = streaming
+		ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, CaptureRequestBody: true, CaptureResponseBody: true}
+		ctx.SemanticRequest = testNeutralRequest("gpt-4o", "Prove the theorem.")
+		ctx.SemanticRequest.Stream = streaming
+
+		client := exactCacheHitResponse(t, &OpenAIRouter{ReplayRecorder: recorder}, ctx).GetImmediateResponse().GetBody()
+		record, found := recorder.GetRecord(ctx.RouterReplayID)
+		require.True(t, found)
+		require.Equal(t, string(client), record.ResponseBody, "streaming=%t", streaming)
+		types := make([]string, 0, len(record.ToolTrace.Steps))
+		for _, step := range record.ToolTrace.Steps {
+			types = append(types, step.Type)
+		}
+		require.Equal(t, []string{replayToolStepUserInput, replayToolStepAssistantFinalResponse}, types, "streaming=%t", streaming)
 	}
 }

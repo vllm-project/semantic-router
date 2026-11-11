@@ -532,3 +532,47 @@ func TestPreparationReadsTheListingAndFallsBackWithinItsDeadline(t *testing.T) {
 		t.Fatalf("card %+v, %v, want the System One types", card, err)
 	}
 }
+
+// The modalities a listing gives for the model, in a vllm-sr/4.0 listing or a
+// vllm-sr/5.0 card, replace the declared ones with or without question types,
+// and never include audio; a listing without them keeps the declared ones.
+func TestPreparationReadsTheModalitiesTheListingGives(t *testing.T) {
+	const fiveCard = `{"models":[{"name":"vllm-sr/d3-ultra","description":"","release_date":"","version":"5.0","card":%s}]}`
+	for name, tc := range map[string]struct {
+		schema, listing        string
+		declared, types, reads []string
+	}{
+		"vllm-sr/4.0 listing": {
+			schema: "vllm-sr/4.0", listing: `{"data":[{"id":"vllm-sr/d3-ultra","question_types":["noul"],"modalities":["text","image","audio"]}]}`,
+			types: []string{"noul"}, reads: []string{"text", "image"},
+		},
+		"vllm-sr/4.0 listing of modalities only": {
+			schema: "vllm-sr/4.0", listing: `{"data":[{"id":"vllm-sr/d3-ultra","modalities":["text"]}]}`,
+			declared: []string{"text", "image"}, types: []string{"choice"}, reads: []string{"text"},
+		},
+		"vllm-sr/4.0 listing without modalities": {
+			schema: "vllm-sr/4.0", listing: `{"data":[{"id":"vllm-sr/d3-ultra","question_types":["noul"]}]}`,
+			declared: []string{"text", "image"}, types: []string{"noul"}, reads: []string{"text", "image"},
+		},
+		"vllm-sr/5.0 card": {
+			schema: "vllm-sr/5.0", listing: fmt.Sprintf(fiveCard, `{"question_types":["choice","noul"],"modalities":["text","image","video"]}`),
+			types: []string{"choice", "noul"}, reads: []string{"text", "image", "video"},
+		},
+		"vllm-sr/5.0 card of modalities only": {
+			schema: "vllm-sr/5.0", listing: fmt.Sprintf(fiveCard, `{"modalities":["text"]}`),
+			declared: []string{"text", "image"}, types: []string{"choice"}, reads: []string{"text"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			deployment := config.ModelDeployment{Schema: tc.schema}
+			if tc.declared != nil {
+				deployment.Capabilities = &config.DeploymentCapabilities{QuestionTypes: []string{"choice"}, Modalities: tc.declared}
+			}
+			remote := fakeRemote(t, "hosted", &fakeSystemOneAPI{listing: tc.listing}, deployment)
+			card, err := remote.PrepareCard(context.Background(), "hosted")
+			if err != nil || !slices.Equal(card.QuestionTypes, tc.types) || !slices.Equal(card.ReadModalities(), tc.reads) {
+				t.Fatalf("card %+v, %v; want question types %v reading %v", card, err, tc.types, tc.reads)
+			}
+		})
+	}
+}

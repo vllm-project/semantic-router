@@ -68,6 +68,9 @@ type Server struct {
 	// gateway is the mode client traffic reaches the server in; a reload
 	// that needs a capability the mode lacks is rejected.
 	gateway config.GatewayMode
+	// servingActive, under servingMu, is what the gRPC health service
+	// reports as SERVING.
+	servingActive bool
 }
 
 // NewServer creates a new ExtProc gRPC server

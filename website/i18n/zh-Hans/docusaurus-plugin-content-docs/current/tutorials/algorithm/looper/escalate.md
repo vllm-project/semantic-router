@@ -86,7 +86,7 @@ recipes:
 
 `gte` 为必填项，取值在 `[0, 1]` 内。`token_filter: tool_call_args` 只对生成的工具调用参数打分，而不是每个 token；`all`（默认）对每个 token 打分。
 
-`systemone: {gte, deployment, timeout_ms}` 就请求和候选回答，向决策模型（或指定的 System One 部署）提出 `answer_check` 预设问题。`refusal: false` 提出 `refusal` 预设问题；`refusal: true` 会被拒绝，因为它只会接受拒答。两种检查对每个被评判的回答各进行一次决策模型调用；该调用计入执行器的 `deadline`，但不计入 `max_calls`。调用工具的回答在评判时，于文本之后附上每个调用的工具名和参数。
+`systemone: {gte, deployment, timeout_ms}` 就请求和候选回答，向决策模型（或指定的 System One 部署）提出 `answer_check` 预设问题。请求指最后一个含有用户自身文字的用户轮次中的这些文字：其字符串内容或拼接后的文本片段，并略去 `<system-reminder>` 块。只含提醒块的轮次会把请求留给更早的轮次；如果没有任何轮次含有用户自身的文字，则以最后一个轮次的提醒块作为请求。`refusal: false` 提出 `refusal` 预设问题；`refusal: true` 会被拒绝，因为它只会接受拒答。两种检查对每个被评判的回答各进行一次决策模型调用；该调用计入执行器的 `deadline`，但不计入 `max_calls`。调用工具的回答在评判时，于文本之后附上每个调用的工具名和参数。
 
 `on_error` 决定没有回答被接受时的处理方式：
 
