@@ -37,6 +37,7 @@ const (
 
 func init() {
 	pkgtestcases.Register("response-jailbreak-window-block", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Verify a response_guard block rule blocks a buffered response carrying jailbreak content at the end of a long answer",
 		Tags:        []string{"kubernetes", "security", "jailbreak", "response-jailbreak"},
 		Fn:          testResponseJailbreakWindowBlock,
