@@ -22,11 +22,11 @@ func TestConfigSecretViewsCoverHistoricalProjectionsAndPreview(t *testing.T) {
 	store := openTestConfigProjectionStore(t)
 	SetConfigProjectionStore(store)
 	t.Cleanup(func() { SetConfigProjectionStore(nil) })
-	if err := store.RefreshFromCanonical(configprojection.RefreshInput{
+	if refreshErr := store.RefreshFromCanonical(configprojection.RefreshInput{
 		Version: "secret-fixture", Source: configprojection.SourceDSL,
 		YAMLBytes: data, DSLSnapshot: configSecretFixture,
-	}); err != nil {
-		t.Fatal(err)
+	}); refreshErr != nil {
+		t.Fatal(refreshErr)
 	}
 	for _, endpoint := range []struct {
 		path    string

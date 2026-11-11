@@ -56,6 +56,7 @@ func TestConfigSecretsThroughAuthentication(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				//nolint:gosec // G117: the fixture password is only sent to this in-memory login handler.
 				body, _ := json.Marshal(auth.LoginRequest{Email: user.Email, Password: password})
 				response := httptest.NewRecorder()
 				handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body)))

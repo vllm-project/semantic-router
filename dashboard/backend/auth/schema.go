@@ -20,10 +20,11 @@ const (
 )
 
 const (
-	PermUsersManage       = "users.manage"
-	PermUsersView         = "users.view"
-	PermSessionRead       = "session.read"
-	PermConfigRead        = "config.read"
+	PermUsersManage = "users.manage"
+	PermUsersView   = "users.view"
+	PermSessionRead = "session.read"
+	PermConfigRead  = "config.read"
+	//nolint:gosec // G101: this is a permission identifier, not a credential.
 	PermConfigSecretsRead = "config.secrets.read"
 	PermConfigWrite       = "config.write"
 	PermConfigDeploy      = "config.deploy"

@@ -24,7 +24,7 @@ func restoreConfigSecrets(existing, updated []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := restoreConfigSecretNode(oldNode, newNode, false, false, ""); err != nil {
+	if err := restoreConfigSecretNode(oldNode, newNode, false, configSecretTargetsChanged(oldNode, newNode), ""); err != nil {
 		return nil, err
 	}
 	return yaml.Marshal(newNode)
@@ -88,13 +88,88 @@ func matchingConfigSequenceItem(old, updated *yaml.Node, index int) *yaml.Node {
 	return nil
 }
 
+var configSecretTargetFields = [...]string{"name", "id", "address", "addresses", "host", "hosts", "hostname", "port", "endpoint", "endpoints", "url", "base_url", "baseURL", "provider", "provider_profile", "type", "protocol", "scheme", "command", "transport", "api_key_env", "api_key_file"}
+
+// Config editors submit a whole document, and some schemas associate a secret
+// with a target in another branch. Without a schema-level association for every
+// supported extension, fail closed: preserve no placeholder if any target changed.
+func configSecretTargetsChanged(old, updated *yaml.Node) bool {
+	if updated == nil {
+		return configSecretContainsTarget(old)
+	}
+	if old == nil || old.Kind != updated.Kind {
+		return configSecretContainsTarget(old)
+	}
+	if configSecretTargetChanged(old, updated) {
+		return true
+	}
+	switch updated.Kind {
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(updated.Content); i += 2 {
+			key := updated.Content[i].Value
+			if configSecretTargetsChanged(mappingValueNode(old, key), updated.Content[i+1]) {
+				return true
+			}
+		}
+		for i := 0; i+1 < len(old.Content); i += 2 {
+			key := old.Content[i].Value
+			if mappingValueNode(updated, key) == nil && configSecretContainsTarget(old.Content[i+1]) {
+				return true
+			}
+		}
+	case yaml.SequenceNode:
+		for i, child := range updated.Content {
+			if configSecretTargetsChanged(matchingConfigSequenceItem(old, child, i), child) {
+				return true
+			}
+		}
+		for i, previous := range old.Content {
+			if matchingConfigSequenceItem(updated, previous, i) == nil && configSecretContainsTarget(previous) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func configSecretContainsTarget(node *yaml.Node) bool {
+	if node == nil {
+		return false
+	}
+	switch node.Kind {
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			key := node.Content[i].Value
+			if isConfigSecretTargetField(key) || configSecretContainsTarget(node.Content[i+1]) {
+				return true
+			}
+		}
+	case yaml.SequenceNode:
+		for _, child := range node.Content {
+			if configSecretContainsTarget(child) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isConfigSecretTargetField(candidate string) bool {
+	for _, key := range configSecretTargetFields {
+		if key == candidate {
+			return true
+		}
+	}
+	return false
+}
+
 func configSecretTargetChanged(old, updated *yaml.Node) bool {
-	for _, key := range []string{"name", "id", "address", "addresses", "host", "hosts", "hostname", "port", "endpoint", "endpoints", "url", "base_url", "baseURL", "provider", "provider_profile", "type", "protocol", "scheme", "command", "transport", "api_key_env", "api_key_file"} {
+	for _, key := range configSecretTargetFields {
 		before, after := mappingValueNode(old, key), mappingValueNode(updated, key)
-		if before == nil && after == nil {
+		if before == nil {
 			continue
 		}
-		if before == nil || after == nil {
+		if after == nil {
 			return true
 		}
 		masked := cloneYAMLNode(before)

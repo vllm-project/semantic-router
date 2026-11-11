@@ -24,7 +24,7 @@ func TestConfigSecretRestorationRejectsRetargeting(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			updated := bytes.Replace(redacted, []byte(tc.before), []byte(tc.after), 1)
-			if _, err := restoreConfigSecrets(original, updated); err == nil {
+			if _, restoreErr := restoreConfigSecrets(original, updated); restoreErr == nil {
 				t.Fatal("credential reuse was accepted after target/field change")
 			}
 		})
@@ -57,6 +57,18 @@ func TestConfigSecretRestorationRejectsRetargeting(t *testing.T) {
 	}
 	if decoded.Backends[0].Auth.APIKey != "other-credential-fixture" || decoded.Backends[1].Auth.APIKey != "credential-fixture" {
 		t.Fatal("reordering changed credential ownership")
+	}
+}
+
+func TestConfigSecretRestorationRejectsCrossBranchRetargeting(t *testing.T) {
+	original := []byte("backends:\n  primary:\n    endpoint: https://old.example/v1\ncredentials:\n  primary:\n    api_key: credential-fixture\n")
+	redacted, err := redactConfigYAML(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := bytes.Replace(redacted, []byte("https://old.example/v1"), []byte("https://attacker.example/v1"), 1)
+	if _, err := restoreConfigSecrets(original, updated); err == nil {
+		t.Fatal("credential was restored after its endpoint changed in another config branch")
 	}
 }
 

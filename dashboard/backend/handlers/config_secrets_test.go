@@ -10,8 +10,10 @@ import (
 	"testing"
 )
 
-const configSecretFixture = "dashboard-config-secret-fixture"
-const configSecretPermission = "config.secrets.read"
+const (
+	configSecretFixture    = "dashboard-config-secret-fixture"
+	configSecretPermission = "config.secrets.read"
+)
 
 func writeSecretConfig(t *testing.T, password string) string {
 	t.Helper()

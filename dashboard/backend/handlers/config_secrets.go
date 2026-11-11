@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
+//nolint:gosec // G101: this is a fixed redaction marker, not a credential.
 const redactedConfigSecret = "__VLLM_SR_REDACTED__"
 
 var configEnvReference = regexp.MustCompile(`^\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)$`)
