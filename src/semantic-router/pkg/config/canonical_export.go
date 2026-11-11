@@ -23,6 +23,7 @@ func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 			Defaults: CanonicalProviderDefaults{
 				DefaultModel:           cfg.DefaultModel,
 				DefaultReasoningEffort: cfg.DefaultReasoningEffort,
+				TLS:                    cloneProviderDefaultsTLS(cfg.DefaultBackendTLS),
 			},
 			Models: canonicalProviderModelsFromRouterConfig(cfg),
 		},
@@ -310,6 +311,7 @@ func cloneCanonicalProviderModel(model *CanonicalProviderModel) *CanonicalProvid
 	for index, backend := range model.BackendRefs {
 		clone.BackendRefs[index] = backend
 		clone.BackendRefs[index].Headers = copyStringMap(backend.Headers)
+		clone.BackendRefs[index].TLS = cloneDeploymentTLS(backend.TLS)
 	}
 	return &clone
 }
@@ -400,6 +402,7 @@ func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fal
 	if len(profile.ExtraHeaders) > 0 {
 		ref.Headers = copyStringMap(profile.ExtraHeaders)
 	}
+	ref.TLS = cloneDeploymentTLS(profile.TLS)
 	return ref
 }
 

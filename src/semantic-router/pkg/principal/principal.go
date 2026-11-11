@@ -1,13 +1,15 @@
 // Package principal says on whose behalf an upstream call is made. A call
-// made for a client request acts as the requesting user and may present the
-// delegated credential the authenticator issued for that request; every other
-// call acts as the Router. An upstream whose auth is credential: delegated
+// made for a client request acts as the requesting user: it may present the
+// delegated credential the authenticator issued for that request and copy
+// the client's headers an upstream forwards. Every other call acts as the
+// Router and carries neither. An upstream whose auth is credential: delegated
 // takes only the first kind, and only with a credential.
 package principal
 
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync/atomic"
 )
 
@@ -25,6 +27,9 @@ type key struct{}
 // request is the principal of the calls made for one client request.
 type request struct {
 	credential string
+	// headers are the client's values of the headers an upstream forwards,
+	// by lower-case name; read-only once the principal is made.
+	headers map[string]string
 	// refused records that a call of the request was refused for want of a
 	// credential, so the request answers 401 even where the call's own error
 	// is absorbed, as a signal's is.
@@ -34,7 +39,14 @@ type request struct {
 // ForRequest marks the calls made with ctx as made for a client request whose
 // delegated credential is credential; empty when the request carries none.
 func ForRequest(ctx context.Context, credential string) context.Context {
-	return context.WithValue(ctx, key{}, &request{credential: credential})
+	return ForRequestWithHeaders(ctx, credential, nil)
+}
+
+// ForRequestWithHeaders is ForRequest for a request whose headers the calls
+// made for it may copy: headers are the client's values of the request
+// headers an upstream forwards (forward_request_headers), by lower-case name.
+func ForRequestWithHeaders(ctx context.Context, credential string, headers map[string]string) context.Context {
+	return context.WithValue(ctx, key{}, &request{credential: credential, headers: headers})
 }
 
 // ForRouter marks the calls made with ctx as the Router's own, whatever
@@ -77,6 +89,18 @@ func RequestCredential(ctx context.Context) (string, bool) {
 		return "", false
 	}
 	return value.credential, true
+}
+
+// RequestHeader returns the client's value of header name, in any letter
+// case, for a call made with ctx for a client request; ok is false for a
+// Router-own call and for a header the request did not carry.
+func RequestHeader(ctx context.Context, name string) (string, bool) {
+	value := requestOf(ctx)
+	if value == nil {
+		return "", false
+	}
+	header, ok := value.headers[strings.ToLower(strings.TrimSpace(name))]
+	return header, ok
 }
 
 // Delegated returns the credential a call made with ctx presents to a
