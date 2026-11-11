@@ -9,6 +9,8 @@ image: /img/blog/vsr-claude-code/00-hero.png
 
 import { ArticleFigure } from '@site/src/components/ArticleMedia';
 
+![The vLLM Semantic Router mascot leads six bodyguards, one per vSR app, to the Claude Code mascot: a signpost for router, a ladder for escalate, a marker for redact, a shield for shield, a stop sign for guard and a magnifying glass for check.](/img/blog/vsr-claude-code/00-hero-illustration.png)
+
 A coding agent does three things all day: it hands work to subagents, it reads files, and it runs commands. Each one carries a cost that the session never shows you.
 
 **Subagents run at your model's price.** A general-purpose subagent starts on your session's model. Listing files, counting lines or renaming a variable costs the same as a hard design question, because nothing asks how hard the task is before the subagent starts.
@@ -179,7 +181,7 @@ vSR stays quiet unless something needs you.
 
 A one-line tally above the prompt counts the session's decisions, and says `model offline` when the runtime stops answering. `display: quiet` shows only the cards, and `display: verbose` shows every decision with its scores.
 
-`/vsr` opens a pane beside the conversation, as in the first figure. At the top are the controls: one toggle per app (keys 1 to 6) and the waits for redact, shield and guard. A change applies at once. Below them are the session's decisions grouped by app, the routing cost row, and the runtime and thresholds in use.
+`/vsr` opens a pane beside the conversation, as in the first screenshot. At the top are the controls: one toggle per app (keys 1 to 6) and the waits for redact, shield and guard. A change applies at once. Below them are the session's decisions grouped by app, the routing cost row, and the runtime and thresholds in use.
 
 Each scored decision in the pane has buttons for your verdict: `right call` or `wrong call`, and for a routed subagent `right model`, `needed stronger` or `could be lighter`. Your answers are saved beside the decision log. After a few hundred decisions, `/vsr:calibrate` asks about the decisions closest to each threshold and fits the thresholds to your answers, moving each by at most 0.15 per run. The defaults are measured; calibration makes them fit how you work.
 
