@@ -59,6 +59,19 @@ class SelectionTests(unittest.TestCase):
                 self.assertNotIn("e2e.response-api-redis", selected)
                 self.assertNotIn("e2e.response-api-redis-cluster", selected)
 
+    def test_dashboard_frontend_changes_run_the_dashboard_lane_without_approval(self):
+        # CI static checks skip the Dashboard lint hook because this lane lints
+        # the whole frontend; it must stay selected and automatic for them.
+        for options in ({}, {"require_approval": True}):
+            plan = make_plan(
+                ["dashboard/frontend/src/App.tsx"], source_sha=SHA, **options
+            )
+            self.assertIn("dashboard", plan["expected_verification_ids"])
+            self.assertNotIn(
+                "dashboard",
+                [record["id"] for record in plan.get("deferred_verifications", [])],
+            )
+
     def test_request_path_changes_run_the_p0_cases_of_their_e2e_profiles(self):
         guards = ("envoy-ai-gateway", "masking", "pii-remote-backend")
 
