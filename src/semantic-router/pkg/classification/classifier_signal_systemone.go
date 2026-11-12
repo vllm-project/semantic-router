@@ -2,6 +2,7 @@ package classification
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"sync"
@@ -459,10 +460,19 @@ func (c *Classifier) sendCall(ctx context.Context, call *systemOneCall) (modelse
 	} else {
 		response, err = c.decider().Decide(callCtx, deployment, request)
 	}
-	if err != nil && !modelservice.SignalsAbandoned(ctx) {
+	if err != nil && !answersGivenUp(ctx) {
 		modelservice.RecordUnknown(deployment, modelservice.ErrorReason(err), len(rules))
 	}
 	return response, time.Since(started).Seconds(), err
+}
+
+// answersGivenUp reports a call cancelled because its answers are no longer
+// needed, rather than one its deployment left unanswered: the request
+// abandoned its signals, a window decided the stage's scans, or a scan's
+// re-plan reads the window in a larger one.
+func answersGivenUp(ctx context.Context) bool {
+	cause := context.Cause(ctx)
+	return modelservice.SignalsAbandoned(ctx) || errors.Is(cause, errScanDecided) || errors.Is(cause, errWindowReplaced)
 }
 
 // applyCall applies each rule's answer in one call's response to results.

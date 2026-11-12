@@ -148,9 +148,18 @@ var (
 )
 
 // SignalsAbandoned reports a context its caller cancelled with
-// ErrSignalsAbandoned.
+// ErrSignalsAbandoned, or one in a bundle whose base was: the exchanges a
+// bundle carries end with its base, before the contexts of their calls say
+// why.
 func SignalsAbandoned(ctx context.Context) bool {
-	return ctx != nil && errors.Is(context.Cause(ctx), ErrSignalsAbandoned)
+	if ctx == nil {
+		return false
+	}
+	if errors.Is(context.Cause(ctx), ErrSignalsAbandoned) {
+		return true
+	}
+	bundle := bundleFrom(ctx)
+	return bundle != nil && errors.Is(context.Cause(bundle.base), ErrSignalsAbandoned)
 }
 
 // ErrorReason is a stable, low-cardinality label for an error.

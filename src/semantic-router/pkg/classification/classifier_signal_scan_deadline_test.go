@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving/servingtest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
@@ -81,6 +83,25 @@ func injectedAt(prose string, share float64) string {
 	at := int(float64(len(prose)) * share)
 	at += strings.IndexByte(prose[at:], ' ') + 1
 	return prose[:at] + scanInjection + " " + prose[at:] + "\n\nSummarize the minutes above."
+}
+
+// unknownAnswersCounted is vsr_model_runtime_unknown_answers_total over every
+// deployment and reason.
+func unknownAnswersCounted(t *testing.T) float64 {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	total := 0.0
+	for _, family := range families {
+		if family.GetName() == "vsr_model_runtime_unknown_answers_total" {
+			for _, metric := range family.GetMetric() {
+				total += metric.GetCounter().GetValue()
+			}
+		}
+	}
+	return total
 }
 
 // guardStatesSince are the states the fake read for the jailbreak question
@@ -206,6 +227,7 @@ func TestAScanThatFallsBehindReadsTheRestInLargerWindowsThatFit(t *testing.T) {
 	}
 	text := distinctProse(300_000, 6) + "\n\nSummarize the minutes above."
 
+	unknown := unknownAnswersCounted(t)
 	started := time.Now()
 	results := evaluateTurn(classifier, text)
 	elapsed := time.Since(started)
@@ -213,6 +235,9 @@ func TestAScanThatFallsBehindReadsTheRestInLargerWindowsThatFit(t *testing.T) {
 	if results.ScanCoverage["jailbreak:prompt_attack"] != scanCoverageFull || elapsed > deadline || guarded(results) {
 		t.Fatalf("coverage %v after %v (guarded %v): the rest should be read in larger windows by the %v deadline",
 			results.ScanCoverage, elapsed, guarded(results), deadline)
+	}
+	if counted := unknownAnswersCounted(t) - unknown; counted != 0 {
+		t.Fatalf("the windows the runs replaced were counted as %v unknown answers", counted)
 	}
 	states := guardStates(fake)
 	if !slices.ContainsFunc(states, func(state string) bool { return len(state) > configuredWindow }) {
