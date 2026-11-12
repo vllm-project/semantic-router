@@ -191,9 +191,9 @@ describe('Global Config section saves', () => {
     expect(
       editedRouterSectionPatch(responseCache, {
         ...responseCache.editData,
-        similarity_threshold: 0.9,
+        max_entries: 2000,
       }),
-    ).toEqual({ stores: { response_cache: { similarity_threshold: 0.9 } } })
+    ).toEqual({ stores: { response_cache: { max_entries: 2000 } } })
 
     const policies = admission.editData.value as Record<string, Record<string, unknown>>
     expect(
