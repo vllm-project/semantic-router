@@ -35,3 +35,23 @@ func TestForClientsKeepsTheCredentialOnlyBesideTheAuthenticatedUser(t *testing.T
 		}
 	}
 }
+
+func TestForClientsGivesTheCallsTheHeadersADeploymentForwards(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelDeployments = map[string]config.ModelDeployment{
+		"gateway-d3": {Provider: config.SystemOneProvider, ForwardRequestHeaders: []string{"X-User-Id"}},
+	}
+	var user string
+	var forwarded, other bool
+	handler := ForClients(cfg, func(_ http.ResponseWriter, r *http.Request) {
+		user, forwarded = principal.RequestHeader(r.Context(), "x-user-id")
+		_, other = principal.RequestHeader(r.Context(), "x-other")
+	})
+	request := httptest.NewRequest(http.MethodPost, "/v1/systemone", nil)
+	request.Header.Set("X-User-Id", "alice")
+	request.Header.Set("X-Other", "client-only")
+	handler(httptest.NewRecorder(), request)
+	if !forwarded || user != "alice" || other {
+		t.Fatalf("the calls copy only the forwarded header: x-user-id %q (%v), x-other %v", user, forwarded, other)
+	}
+}

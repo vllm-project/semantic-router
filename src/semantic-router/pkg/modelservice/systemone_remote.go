@@ -121,9 +121,10 @@ func NewRemoteSystemOne(cfg *config.RouterConfig) (*RemoteSystemOne, error) {
 			return nil, fmt.Errorf("systemone deployment %q: %w", name, err)
 		}
 		// A delegated deployment answers each user with that user's
-		// credential, so no answer is kept for another request.
+		// credential, and one that forwards request headers may answer by
+		// them, so neither keeps an answer for another request.
 		var cache *resultCache
-		if !deployment.Auth.Delegated() {
+		if !deployment.Auth.Delegated() && len(deployment.ForwardRequestHeaders) == 0 {
 			cache = newExpiringResultCache(ResultCacheEntries(), remoteCacheTTL)
 		}
 		codec, deviations, err := systemonecodec.Builtin().Resolve(systemonecodec.SchemaID(deployment.Schema), deployment.Deviations)
@@ -593,11 +594,35 @@ func (d *systemOneDeployment) listedCard(ctx context.Context) (ModelCard, error)
 		}
 		if json.Unmarshal(data, &card) == nil {
 			if listed, ok := d.listedEntryCard(card.QuestionTypes, card.Presets, card.Modalities); ok {
+				listed.MaxInputTokens, listed.ValidatedInputTokens = listedInputLimits(data)
 				return listed, nil
 			}
 		}
 	}
 	return ModelCard{}, fmt.Errorf("the models listing gives no question types or modalities for %q", d.model)
+}
+
+// listedInputLimits are the question token caps a listed card's limits give:
+// max_input_tokens and validated_input_tokens, zero when absent or not a
+// positive whole number.
+func listedInputLimits(data json.RawMessage) (maxInput, validated int) {
+	var card struct {
+		Limits struct {
+			MaxInputTokens       json.Number `json:"max_input_tokens"`
+			ValidatedInputTokens json.Number `json:"validated_input_tokens"`
+		} `json:"limits"`
+	}
+	if json.Unmarshal(data, &card) != nil {
+		return 0, 0
+	}
+	whole := func(number json.Number) int {
+		value, err := number.Int64()
+		if err != nil || value < 1 || value > math.MaxInt32 {
+			return 0
+		}
+		return int(value)
+	}
+	return whole(card.Limits.MaxInputTokens), whole(card.Limits.ValidatedInputTokens)
 }
 
 // checkListed reads the listing of a schema without model cards, whose

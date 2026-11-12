@@ -15,6 +15,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("chat-completions-progressive-stress", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P2,
 		Description: "10/20/50 concurrent requests, each answered by the Router inside the gateway's deadline, then a drained queue",
 		Tags:        []string{"llm", "stress", "progressive", "concurrency"},
 		Fn:          testProgressiveStress,
