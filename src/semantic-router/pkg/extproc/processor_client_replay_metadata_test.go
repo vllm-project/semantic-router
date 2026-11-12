@@ -52,7 +52,7 @@ func TestChatTurnReplayingALiteLLMParsedReplyReachesTheBackend(t *testing.T) {
 					`"messages":[{"role":"user","content":"List the files."}],"tools":`+replayTools+`}`), first)
 				require.Nil(t, immediate)
 				upstream := strings.Replace(replayVLLMToolCallReply, "REASONING", reasoning, 1)
-				received := replayClientBody(t, router.handleNonStreamingResponseBody([]byte(upstream), first, 0), upstream)
+				received := replayClientBody(t, router.handleNonStreamingResponseBody([]byte(upstream), first, 0, false), upstream)
 
 				second := replayContext(t)
 				_, immediate = router.prepareProtocolRequest(litellmSecondTurn(t, received, stream), second)
@@ -71,7 +71,7 @@ func TestChatTurnReplayingALiteLLMParsedReplyReachesTheBackend(t *testing.T) {
 					require.Contains(t, frames, "data: [DONE]")
 					return
 				}
-				response := router.handleNonStreamingResponseBody([]byte(replayVLLMTextReply), second, 0)
+				response := router.handleNonStreamingResponseBody([]byte(replayVLLMTextReply), second, 0, false)
 				require.Contains(t, string(replayClientBody(t, response, replayVLLMTextReply)), "README.md is there.")
 			})
 		}
