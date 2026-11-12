@@ -142,9 +142,14 @@ func TestAScannedRuleMissingPartOfItsToolResultsReadsInPart(t *testing.T) {
 		unread.questionID(): {Type: "noul", Noul: 0.1}, whole.questionID(): {Type: "noul", Noul: 0.1},
 	}}
 	scan := &guardScan{
-		deployment: "kai", rules: []askedRule{unread, whole}, text: "first window second window",
-		windows:   []scanWindow{{start: 0, end: 12}, {start: 13, end: 26, runeStart: 13}},
-		responses: []modelservice.Response{response, response}, errs: make([]error, 2),
+		deployment: "kai",
+		rules:      []askedRule{unread, whole},
+		text:       "first window second window",
+		windows:    []scanWindow{{start: 0, end: 12, first: 0, last: 0}, {start: 13, end: 26, runeStart: 13, first: 1, last: 1}},
+		cut:        2,
+		responses:  []modelservice.Response{response, response},
+		errs:       make([]error, 2),
+		done:       []bool{true, true},
 	}
 	classifier := newSystemOneTestClassifier(newFakeDecider(nil), unread.rule, whole.rule)
 	results := newSignalResults()

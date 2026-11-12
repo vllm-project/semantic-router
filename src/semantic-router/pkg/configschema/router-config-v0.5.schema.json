@@ -2412,6 +2412,11 @@
           "type": "integer",
           "maximum": 1048576,
           "minimum": 256
+        },
+        "reread_margin": {
+          "type": "number",
+          "maximum": 20,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
