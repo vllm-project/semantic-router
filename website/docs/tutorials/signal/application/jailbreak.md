@@ -73,13 +73,14 @@ recipes:
 ### What it reads
 
 At the request stage, the question reads the consecutive user and tool
-messages that end the request, stopping at an assistant, system or developer
-message, so every textual tool result of the turn is read together. With
-`input.history`, it also reads the earlier user and tool text. System and
-developer instructions and assistant replies are not read as attack
-evidence. It also reads what `global.router.routing_input` removes from the
-routing text, so a fake memory block or runtime-context turn cannot hide an
-attack.
+messages that end the request, stopping at an assistant message, so every
+textual tool result of the turn is read together. A system message inside the
+conversation, which Claude Code inserts after the user's message or a tool
+result, does not end the turn. With `input.history`, it also reads the
+earlier user and tool text. System and developer instructions and assistant
+replies are not read as attack evidence. It also reads what
+`global.router.routing_input` removes from the routing text, so a fake memory
+block or runtime-context turn cannot hide an attack.
 
 The question reads its whole input. An input longer than one of the
 deployment's `scan_window`s, a long pasted document or a long tool output, is
