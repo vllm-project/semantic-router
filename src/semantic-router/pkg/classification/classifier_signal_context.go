@@ -170,6 +170,8 @@ func (c *Classifier) evaluateBaseSignals(input SignalEvaluationInput, signalScop
 	stage, bundle := modelservice.WithBundle(input.RequestFacts.Context, 0)
 	stage, cancel := withSignalDeadline(stage, c.Config.SignalTimeout(), time.Now())
 	defer cancel()
+	stage, endScans := withScanStop(stage)
+	defer endScans()
 	input.RequestFacts.Context = stage
 	var wg sync.WaitGroup
 	var mu sync.Mutex

@@ -107,6 +107,9 @@ type ModelParams struct {
 	QualityIndex         string                                         `yaml:"-" json:"-"`
 	ExternalModelIDs     map[string]string                              `yaml:"external_model_ids,omitempty"`
 	Modalities           modelcatalog.Modalities                        `yaml:"modalities,omitempty"`
+	// UnsupportedCapabilities are the request capabilities the model's
+	// backends reject; the Router leaves their fields out for this model.
+	UnsupportedCapabilities []string `yaml:"unsupported_capabilities,omitempty"`
 }
 
 // EvidenceScore resolves a versioned static model index. Missing, failed, and

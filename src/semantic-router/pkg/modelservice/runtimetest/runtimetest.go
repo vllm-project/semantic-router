@@ -78,10 +78,10 @@ type Runtime struct {
 	limits     api.ProcessLimits
 	timing     string
 	decisions  []api.DecisionRequest
-	// wordTime is how long the engine takes per word of a decisions state;
-	// engine holds it, one state at a time.
-	wordTime time.Duration
-	engine   sync.Mutex
+	// wordTime is how long the engine takes per word of a decisions state,
+	// and stateTime per state besides; engine holds it, one state at a time.
+	wordTime, stateTime time.Duration
+	engine              sync.Mutex
 	// inFlight and maxInFlight count the /v1/bundle calls being answered.
 	inFlight, maxInFlight int
 }
@@ -155,6 +155,14 @@ func (r *Runtime) SetWordTime(perWord time.Duration) {
 	r.wordTime = perWord
 }
 
+// SetStateTime makes every decisions state take the engine perState besides
+// its words' time, one state at a time: each guard window costs the same.
+func (r *Runtime) SetStateTime(perState time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.stateTime = perState
+}
+
 // MaxConcurrentBundles reports the most /v1/bundle calls answered at once.
 func (r *Runtime) MaxConcurrentBundles() int {
 	r.mu.Lock()
@@ -165,14 +173,14 @@ func (r *Runtime) MaxConcurrentBundles() int {
 // read holds the engine for a state of text, or until the call is cancelled.
 func (r *Runtime) read(ctx context.Context, text string) {
 	r.mu.Lock()
-	perWord := r.wordTime
+	perWord, perState := r.wordTime, r.stateTime
 	r.mu.Unlock()
-	if perWord <= 0 {
+	if perWord <= 0 && perState <= 0 {
 		return
 	}
 	r.engine.Lock()
 	defer r.engine.Unlock()
-	timer := time.NewTimer(time.Duration(len(strings.Fields(text))) * perWord)
+	timer := time.NewTimer(perState + time.Duration(len(strings.Fields(text)))*perWord)
 	defer timer.Stop()
 	select {
 	case <-timer.C:

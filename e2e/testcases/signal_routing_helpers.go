@@ -58,6 +58,9 @@ type signalRoutingConfig struct {
 	ResultsTitle string
 	// LogLabel names the signal in progress/summary log lines (e.g. "Event").
 	LogLabel string
+	// Entrypoint is the model name the requests carry, which selects the
+	// signal's recipe; empty means vllm-sr/auto.
+	Entrypoint string
 }
 
 func runSignalRoutingTest(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, cfg signalRoutingConfig) error {
@@ -140,12 +143,16 @@ func testSingleSignalRouting(ctx context.Context, testCase SignalRoutingCase, lo
 		ShouldMatch:           testCase.ShouldMatch,
 	}
 
+	entrypoint := cfg.Entrypoint
+	if entrypoint == "" {
+		entrypoint = "vllm-sr/auto"
+	}
 	var response *localChatCompletionResponse
 	var err error
 	if len(testCase.Messages) > 0 {
-		response, err = sendLocalChatConversation(ctx, localPort, "vllm-sr/auto", testCase.Messages, 30*time.Second)
+		response, err = sendLocalChatConversation(ctx, localPort, entrypoint, testCase.Messages, 30*time.Second)
 	} else {
-		response, err = sendLocalChatCompletion(ctx, localPort, "vllm-sr/auto", testCase.Query, 30*time.Second)
+		response, err = sendLocalChatCompletion(ctx, localPort, entrypoint, testCase.Query, 30*time.Second)
 	}
 	if err != nil {
 		result.Error = err.Error()
