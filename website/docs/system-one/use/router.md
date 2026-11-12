@@ -92,8 +92,8 @@ recipes:
 :::tip
 A late or failed answer leaves the rule unknown. A decision's
 `rules.on_unknown`, or a condition's `on_error`, says what that means; a
-`jailbreak` or `pii` rule with `on_unknown: match` matches when its model gives
-no answer.
+request-stage `jailbreak` or `pii` rule matches when its model gives no answer,
+unless it sets `on_unknown: no_match`.
 :::
 
 ## The `systemone` selector

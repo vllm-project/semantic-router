@@ -89,7 +89,7 @@ translation:
 
 每个模型都以规范形式回答预设。如果某个模型家族针对某个预设训练过，Router 会改用训练形式提问：
 
-- **训练绑定。** Vela 3.0 d3 规格按精确的问题 ID（`domain`、`attack`、`factcheck` 等）开启训练过的适配器；vela3-fast 和 Vela 2.0 按精确措辞选择，而它们训练过的每个预设的措辞就是规范措辞。训练选项的键会被映射回来：modality 问题训练用的 `AR`、`DIFFUSION` 和 `BOTH` 分别返回为 `text`、`image` 和 `text_image`。
+- **训练绑定。** Vela 3.0 d3 规格按精确的问题 ID（`domain`、`factcheck`、`modality` 等）开启训练过的适配器；vela3-fast 和 Vela 2.0 按精确措辞选择，而它们训练过的每个预设的措辞就是规范措辞。训练选项的键会被映射回来：modality 问题训练用的 `AR`、`DIFFUSION` 和 `BOTH` 分别返回为 `text`、`image` 和 `text_image`。d3 规格的防护问题（jailbreak，以及 request 阶段的 harm）改由基座模型回答，它们的适配器在这些问题上表现更差（[支持矩阵](../reference/support-matrix.md#support-matrix)）。
 - **Router 自有 ID。** 没有训练形式的问题以带 `:` 的 ID 发出，它不会与训练 ID 冲突，因此不会意外开启适配器。
 - **校准阈值。** 在 vela3-fast 和 Vela 2.0 上，预设的默认谓词是在 router signal suite 上保持 Vela 1.0 专用模型工作点的阈值。
 

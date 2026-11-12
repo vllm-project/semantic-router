@@ -115,7 +115,7 @@ rewrites them to `systemone`.
 | `stage` | `request` (default) or `response`. |
 | `input` | What the rule reads besides the current user turn; see [Read more than the current turn](#read-more-than-the-current-turn). |
 | `coverage` | `truncate` (default) reads what fits the model's input; `full` reads all of it. |
-| `on_unscanned` | `coverage: full` only: what an answer that could not read the whole input means: `match`, `no_match` or `unknown` (default). |
+| `on_unscanned` | `coverage: full` only: what an answer that could not read the whole input means: `match`, `no_match` or `unknown` (default); `best_effort` reads as `unknown` here, since a `systemone` rule reads its input in one call. |
 | `timeout_ms` | The answer's deadline, up to 60000 ms; else the deployment's, else 1000 ms. |
 
 ### What a rule matches
@@ -269,7 +269,9 @@ windows when it is longer than one input. When the answer could not cover the
 whole input (the scan budget ran out, the model could not tell its coverage,
 or the input exceeds the model's length), `on_unscanned` decides what the
 rule reports: `match`, `no_match`, or `unknown` (default), which leaves the
-decision's failure policy to decide:
+decision's failure policy to decide. A tool result the Router cannot read as
+text, such as an image or an unsupported block, is unread input of a rule that
+reads `input.tool_results`, which `on_unscanned` decides the same way:
 
 ```yaml
 recipes:

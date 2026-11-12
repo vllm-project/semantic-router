@@ -99,7 +99,7 @@ global:
 | `stage` | `request`（默认）或 `response`。 |
 | `input` | 规则在当前用户轮次之外读取的内容；见[读取当前轮次之外的内容](#read-more-than-the-current-turn)。 |
 | `coverage` | `truncate`（默认）读取能放进模型输入的部分；`full` 读取全部。 |
-| `on_unscanned` | 仅 `coverage: full`：无法读完整个输入的答案意味着什么：`match`、`no_match` 或 `unknown`（默认）。 |
+| `on_unscanned` | 仅 `coverage: full`：无法读完整个输入的答案意味着什么：`match`、`no_match` 或 `unknown`（默认）；`best_effort` 在这里等同于 `unknown`，因为 `systemone` 规则一次调用读取其输入。 |
 | `timeout_ms` | 答案的截止时间，最长 60000 毫秒；否则使用部署的值，再否则为 1000 毫秒。 |
 
 ### 规则匹配什么 {#what-a-rule-matches}
