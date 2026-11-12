@@ -90,7 +90,22 @@ How the limits count:
 - **A truncated raw body** may no longer be complete JSON; check its
   truncation flag.
 - **Tool traces** have their own limits, separate from the request and
-  response bodies.
+  response bodies. `max_tool_trace_bytes` bounds each structured text field:
+  the prompt, tool definitions, and each trace step's text, arguments and
+  output. A cut step has `truncated: true`.
+
+What the body switches cover:
+
+- **`capture_request_body: false`** keeps all request text out of the record:
+  the body, the prompt, tool definitions, and each request step of the tool
+  trace, including user turns, tool arguments and tool results.
+- **`capture_response_body: false`** does the same for the response: the
+  body, the answer and tool calls in the trace, hallucination span excerpts,
+  and the provider replies of failed fallback attempts, which keep their
+  status with a fixed reason.
+- **Kept either way:** step types, tool names, call IDs, result statuses and
+  routing metadata. Text left out this way is absent rather than marked
+  `content_redacted`, so the Dashboard shows it as not captured.
 
 How the layers combine:
 
@@ -165,6 +180,8 @@ With it on:
 - **A captured request body** keeps the tool results, up to `max_body_bytes`.
 - **`max_tool_trace_bytes`** bounds each stored result, and sets the step's
   `truncated` flag when it cuts one.
+- **`capture_request_body: false`** still stores no tool results, because they
+  are request text.
 
 :::tip Set a limit
 With the default of `0`, results are stored whole. A large tool output makes
