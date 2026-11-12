@@ -474,6 +474,9 @@ domains:
     paths:
       - src/model-runtime/**
       - tools/make/model-runtime.mk
+      # The Claude Code plugin's decision requests, answered by
+      # tests/test_claude_code_plugin_contract.py.
+      - src/agent-harness/claude-code/skills/setup/scripts/framing.py
     checks: [make model-runtime-test, make model-runtime-client-check]
     verifications: [model-runtime, generated-contracts, cli-package]
 
