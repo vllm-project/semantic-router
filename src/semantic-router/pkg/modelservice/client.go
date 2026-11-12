@@ -58,7 +58,7 @@ func NewAttachedClient(endpoint string, connection config.ModelDeployment) (*Cli
 		return nil, err
 	}
 	if connection.Auth != nil || len(connection.Headers) > 0 {
-		httpClient.Transport = authorizingTransport{next: httpClient.Transport, authorize: connector.DeploymentAuthorizer(connection.Auth, connection.Headers)}
+		httpClient.Transport = authorizingTransport{next: httpClient.Transport, authorize: connector.DeploymentAuthorizer(connection.Auth, connection.Headers, nil)}
 	}
 	if connection.TimeoutMs > 0 {
 		httpClient.Timeout = time.Duration(connection.TimeoutMs) * time.Millisecond

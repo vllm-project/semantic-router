@@ -53,6 +53,12 @@ describe('model form backend targets', () => {
       api_key: 'test-only-key',
       auth: { header: 'x-api-key', prefix: '', api_key_env: 'PROVIDER_API_KEY' },
       headers: { 'X-Org': 'acme' },
+      tls: {
+        ca_file: '/etc/vllm-sr/certs/example-corp-ca.pem',
+        server_name: 'provider.internal',
+        cert_file: '/etc/vllm-sr/certs/router.crt',
+        key_file: '/etc/vllm-sr/certs/router.key',
+      },
     } as const
 
     expect(normalizeModelBackendRefs([backend])).toEqual([backend])

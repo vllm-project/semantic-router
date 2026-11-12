@@ -756,12 +756,6 @@
     }
   },
   "e2e/profiles/authz-rbac/values.yaml": {},
-  "e2e/profiles/complexity-routing/values.yaml": {
-    "signals": {
-      "default/complexity.task_difficulty": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
-    }
-  },
-  "e2e/profiles/conversation-routing/values.yaml": {},
   "e2e/profiles/delegated-credential/values.yaml": {
     "signals": {
       "default/systemone.delegated_check": "systemone http://delegated-gateway.delegated-credential-system.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
@@ -787,7 +781,6 @@
       "default/jailbreak.guardrail_unreachable": "systemone http://127.0.0.1:1/v1/systemone unreachable-guardrail"
     }
   },
-  "e2e/profiles/long-context-routing/values.yaml": {},
   "e2e/profiles/looper/values.yaml": {},
   "e2e/profiles/masking/values.yaml": {
     "signals": {
@@ -850,11 +843,6 @@
       "default/pii.pii_tool_output": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
-  "e2e/profiles/preference-routing/values.yaml": {
-    "signals": {
-      "default/systemone.preference": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
-    }
-  },
   "e2e/profiles/production-stack/prometheus-config.yaml": {
     "error": "config contains unknown fields: unknown field \"evaluation_interval\" in global; unknown field \"scrape_configs\" in top level; unknown field \"scrape_interval\" in global"
   },
@@ -889,14 +877,10 @@
   "e2e/profiles/response-api-redis-cluster/values.yaml": {},
   "e2e/profiles/response-api-redis/values.yaml": {},
   "e2e/profiles/response-api/values.yaml": {},
-  "e2e/profiles/response-jailbreak/values.yaml": {
-    "signals": {
-      "default/jailbreak.unsafe_completion": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
-    }
-  },
   "e2e/profiles/route-action/values.yaml": {
     "signals": {
-      "default/jailbreak.prompt_attack": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
+      "default/jailbreak.prompt_attack": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "response-guard/jailbreak.unsafe_completion": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
   "e2e/profiles/router-replay/values.yaml": {},
@@ -946,12 +930,17 @@
       "default/pii.pii_deny_all": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
+  "e2e/profiles/signal-routing/values.yaml": {
+    "signals": {
+      "complexity/complexity.task_difficulty": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
+      "preference/systemone.preference": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
+    }
+  },
   "e2e/profiles/streaming/values.yaml": {
     "signals": {
       "default/jailbreak.jailbreak_standard": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone",
       "default/pii.pii_deny_all": "systemone http://provider-mocker.default.svc.cluster.local:8000/v1/systemone e2e/fake-systemone"
     }
   },
-  "e2e/profiles/structure-routing/values.yaml": {},
   "e2e/profiles/vectorstore-registry/values.yaml": {}
 }
