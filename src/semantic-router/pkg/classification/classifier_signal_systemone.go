@@ -235,7 +235,7 @@ type systemOneCall struct {
 // deployment in one call, a batch with an entry per state when it reads
 // several. A rule that does not read its whole input reads the routing view
 // of its state, and a guard rule whose input is longer than one window reads
-// it in windows: a call per window of the scans returned.
+// it in windows: the scans returned, whose windows windowReaders reads.
 func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading) ([]*systemOneCall, []*guardScan) {
 	var calls []*systemOneCall
 	var scans []*guardScan
@@ -264,9 +264,6 @@ func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading)
 		}
 		calls[index].rules = append(calls[index].rules, asked)
 	}
-	for _, scan := range scans {
-		calls = append(calls, scan.windowCalls()...)
-	}
 	return calls, scans
 }
 
@@ -278,8 +275,8 @@ func (c *Classifier) guardScanOf(scans *[]*guardScan, deployment string, state m
 			return scan
 		}
 	}
-	size, overlap := c.scanWindowBudget(deployment)
-	scan := newGuardScan(deployment, state, size, overlap)
+	size, overlap, parallel := c.scanWindowBudget(deployment)
+	scan := newGuardScan(deployment, state, size, overlap, parallel)
 	if scan == nil {
 		return nil
 	}
@@ -359,14 +356,12 @@ func newResponseSignalResults() *SignalResults {
 
 func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResults, mu *sync.Mutex, rules []askedRule, reading systemOneReading) {
 	calls, scans := c.systemOneCalls(rules, reading)
-	modelservice.Fan(ctx, len(calls), func(i int) {
-		if call := calls[i]; call.scan != nil {
-			response, latency, err := c.sendCall(ctx, call)
-			call.scan.record(call.window, response, err, latency)
-			return
-		}
-		c.evaluateSystemOneDeployment(ctx, results, mu, calls[i])
-	})
+	work := make([]func(), 0, len(calls))
+	for _, call := range calls {
+		work = append(work, func() { c.evaluateSystemOneDeployment(ctx, results, mu, call) })
+	}
+	work = append(work, c.windowReaders(ctx, scans)...)
+	modelservice.Fan(ctx, len(work), func(i int) { work[i]() })
 	for _, scan := range scans {
 		c.applyScan(results, mu, scan)
 	}
