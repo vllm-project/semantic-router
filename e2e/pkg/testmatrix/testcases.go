@@ -1,7 +1,5 @@
 package testmatrix
 
-import "fmt"
-
 // RouterSmoke is the smallest shared router check that heavy environments reuse.
 var RouterSmoke = []string{
 	"chat-completions-request",
@@ -164,28 +162,8 @@ func Combine(groups ...[]string) []string {
 	return combined
 }
 
-// BaselineStress lists the expensive pressure cases within the canonical inventory.
-var BaselineStress = []string{
-	"chat-completions-progressive-stress",
-}
-
-// BaselineCases selects a qualification scope without a second functional allowlist.
-func BaselineCases(suite string) ([]string, error) {
-	if suite == "full" {
-		return append([]string(nil), BaselineRouterContract...), nil
-	}
-	if suite != "" && suite != "standard" {
-		return nil, fmt.Errorf("unknown baseline suite %q", suite)
-	}
-	stress := make(map[string]bool, len(BaselineStress))
-	for _, name := range BaselineStress {
-		stress[name] = true
-	}
-	var cases []string
-	for _, name := range BaselineRouterContract {
-		if !stress[name] {
-			cases = append(cases, name)
-		}
-	}
-	return cases, nil
+// BaselineCases is the canonical baseline inventory. Which of its cases a
+// scope runs is the cases' own priority (pkg/testcases InScope).
+func BaselineCases() []string {
+	return append([]string(nil), BaselineRouterContract...)
 }

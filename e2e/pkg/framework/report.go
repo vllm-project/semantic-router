@@ -324,7 +324,11 @@ func (rg *ReportGenerator) generateMarkdown() string {
 		if result.Flaked {
 			flakyNote = fmt.Sprintf(" - passed on attempt %d", result.Attempts)
 		}
-		md += fmt.Sprintf("- %s **%s** (%s)%s%s\n", status, result.Name, result.Duration, flakyNote, errorMsg)
+		priority := ""
+		if result.Priority != "" {
+			priority = strings.ToUpper(result.Priority) + ", "
+		}
+		md += fmt.Sprintf("- %s **%s** (%s%s)%s%s\n", status, result.Name, priority, result.Duration, flakyNote, errorMsg)
 
 		// Add details if available
 		if len(result.Details) > 0 {

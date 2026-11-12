@@ -101,6 +101,7 @@ cluster; it does not reconcile drift first.
 | `E2E_KEEP_CLUSTER` | `false` | Preserve the cluster after the run. |
 | `E2E_USE_EXISTING_CLUSTER` | `false` | Skip Kind creation and use current access. |
 | `E2E_TESTS` | empty | Comma-separated test names; empty uses the profile list. |
+| `E2E_BASELINE_SUITE` | `standard` | Case scope by priority: `p0` runs P0 cases only, `standard` P0 and P1, `full` every case. Ignored when `E2E_TESTS` names cases. |
 | `E2E_PARALLEL` | `false` | Run selected test cases concurrently. |
 | `E2E_VERBOSE` | `true` | Print lifecycle and test details. |
 | `E2E_SETUP_ONLY` | `false` | Deploy the profile without tests. |

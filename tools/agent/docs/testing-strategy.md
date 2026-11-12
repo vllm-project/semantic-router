@@ -115,6 +115,20 @@ platform profile must justify its distinct assertion and public support claim.
 Storage backend semantics belong in their storage contracts, while Operator
 qualification owns configuration conversion, reconciliation and a routed request.
 
+Within the E2E layer, every case has a priority, set where it is registered:
+
+| Priority | Cases | Scopes that run it |
+| --- | --- | --- |
+| P0 | Contracts whose break reaches users or fails open: the routed request, routing refusals, guardrail blocks and no-dispatch, PII and jailbreak detection, identity and credential boundaries | `p0`, `standard`, `full` |
+| P1 (default) | Per-feature contracts, run when changed paths select their profile | `standard`, `full` |
+| P2 | Expensive qualification such as load stages | `full` |
+
+A PR runs the `standard` scope and `/ci run full` and Nightly the `full` scope.
+The `p0` scope runs P0 cases alone, for a quick local check of a profile; a
+profile with no P0 case stops before its cluster is built. Model
+quality is not an E2E priority: E2E answers decision questions with the System
+One fixture, and the release benchmarks measure the models.
+
 A layer is not a dependency rule: a configuration change can require checks in
 several layers. `domains.yaml` remains the only changed-path selector. Tests do
 not become optional merely because their filenames contain `test`.

@@ -24,6 +24,7 @@ func init() {
 		Fn:          testResponseJailbreakStreamingPassthrough,
 	})
 	pkgtestcases.Register("response-jailbreak-streaming-block", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Verify a response_guard block rule holds a streamed answer until it has read the whole answer, then refuses it with the stream's error event",
 		Tags:        []string{"kubernetes", "security", "jailbreak", "response-jailbreak", "streaming"},
 		Fn:          testResponseJailbreakStreamingBlock,
