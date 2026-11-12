@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 
@@ -87,9 +88,9 @@ router:
     debug: authenticated
 services:
   authz:
-    gateway_credential:
+    delegated_credential:
       enabled: true
-      header: x-gateway-credential
+      header: x-delegated-credential
 `)
 	masked, err := redactConfigYAML(original)
 	if err != nil {
@@ -100,7 +101,7 @@ services:
 			t.Errorf("secret %s remained visible", hidden)
 		}
 	}
-	for _, visible := range []string{"${UPSTREAM_KEY}", "/run/secrets/key", "debug: authenticated", "enabled: true", "header: x-gateway-credential"} {
+	for _, visible := range []string{"${UPSTREAM_KEY}", "/run/secrets/key", "debug: authenticated", "enabled: true", "header: x-delegated-credential"} {
 		if !bytes.Contains(masked, []byte(visible)) {
 			t.Errorf("safe metadata %s was lost", visible)
 		}
@@ -156,5 +157,138 @@ func TestConfigSecretRedactionCoversMalformedURLs(t *testing.T) {
 		if !sameConfigNode(before, after) {
 			t.Error("redacted malformed URL did not round-trip")
 		}
+	}
+}
+
+func TestConfigSecretRestorationProtectsRedisClusterTargets(t *testing.T) {
+	const nodes = "  cluster_addresses: [redis-a.example.test:6379, redis-b.example.test:6379]\n"
+	const cluster = "  cluster_mode: true\n" + nodes
+	for _, tc := range []struct {
+		name, before, after, credential string
+		wantReject                      bool
+	}{
+		{name: "unchanged cluster", before: cluster, after: cluster},
+		{name: "replace node", before: cluster, after: strings.ReplaceAll(cluster, "redis-a.example.test", "different.example.test"), wantReject: true},
+		{name: "add node", before: cluster, after: strings.ReplaceAll(cluster, "]", ", different.example.test:6379]"), wantReject: true},
+		{name: "remove node", before: cluster, after: strings.ReplaceAll(cluster, ", redis-b.example.test:6379", ""), wantReject: true},
+		{name: "remove nodes field", before: cluster, after: "  cluster_mode: true\n", wantReject: true},
+		{name: "empty nodes", before: cluster, after: "  cluster_mode: true\n  cluster_addresses: []\n", wantReject: true},
+		{name: "switch to standalone", before: cluster, after: "  cluster_mode: false\n" + nodes, wantReject: true},
+		{name: "enable dormant cluster", before: nodes, after: cluster, wantReject: true},
+		{name: "introduce cluster", after: cluster, wantReject: true},
+		{name: "introduce dormant nodes", after: nodes, wantReject: true},
+		{name: "explicit standalone default", after: "  cluster_mode: false\n  cluster_addresses: []\n"},
+		{name: "remove empty defaults", before: "  cluster_mode: false\n  cluster_addresses: []\n"},
+		{name: "ordinary setting", before: cluster, after: cluster + "  pool_size: 20\n"},
+		{name: "replace password for new target", before: cluster, after: strings.ReplaceAll(cluster, "redis-a.example.test", "different.example.test"), credential: "replacement-fixture"},
+		{name: "clear password for new target", before: cluster, after: strings.ReplaceAll(cluster, "redis-a.example.test", "different.example.test"), credential: "\"\""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			prefix := "redis:\n  address: redis.example.test:6379\n  password: "
+			original := []byte(prefix + configSecretFixture + "\n" + tc.before)
+			credential := tc.credential
+			if credential == "" {
+				credential = redactedConfigSecret
+			}
+			updated := []byte(prefix + credential + "\n" + tc.after)
+			restored, err := restoreConfigSecrets(original, updated)
+			if tc.wantReject {
+				if !errors.Is(err, errConfigSecretReuse) {
+					t.Fatalf("target change reused a stored password: err=%v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bytes.Contains(restored, []byte(redactedConfigSecret)) {
+				t.Fatal("persisted placeholder instead of a credential")
+			}
+			if retained := bytes.Contains(restored, []byte(configSecretFixture)); retained != (tc.credential == "") {
+				t.Fatalf("old credential retained=%v", retained)
+			}
+		})
+	}
+}
+
+func TestConfigSecretRedactionPreservesDelegatedPolicy(t *testing.T) {
+	original := []byte(`global:
+  services:
+    authz:
+      delegated_credential:
+        enabled: true
+        header: x-reviewed-credential
+        token: nested-fixture
+  model_catalog:
+    deployments:
+      team:
+        auth:
+          credential: delegated
+          api_key: deployment-fixture
+      another-team:
+        auth:
+          credential: unknown-mode-fixture
+providers:
+  models:
+    - backend_refs:
+        - auth:
+            credential: delegated
+            api_key: backend-fixture
+unrelated:
+  auth:
+    credential: delegated
+  delegated_credential: unrelated-fixture
+`)
+	masked, err := redactConfigYAML(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node, err := configSecretDocument(masked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	global := mappingValueNode(node, "global")
+	authz := mappingValueNode(mappingValueNode(global, "services"), "authz")
+	policy := mappingValueNode(authz, "delegated_credential")
+	if enabled := mappingValueNode(policy, "enabled"); enabled == nil || enabled.Tag != "!!bool" || enabled.Value != "true" {
+		t.Error("delegated credential policy lost its boolean enabled field")
+	}
+	if header := mappingValueNode(policy, "header"); header == nil || header.Value != "x-reviewed-credential" {
+		t.Error("delegated credential policy lost its header name")
+	}
+	deployments := mappingValueNode(mappingValueNode(global, "model_catalog"), "deployments")
+	auth := mappingValueNode(mappingValueNode(deployments, "team"), "auth")
+	if mode := mappingValueNode(auth, "credential"); mode == nil || mode.Value != "delegated" {
+		t.Error("deployment credential mode was treated as a stored secret")
+	}
+	models := mappingValueNode(mappingValueNode(node, "providers"), "models")
+	backends := mappingValueNode(models.Content[0], "backend_refs")
+	backendAuth := mappingValueNode(backends.Content[0], "auth")
+	if mode := mappingValueNode(backendAuth, "credential"); mode == nil || mode.Value != "delegated" {
+		t.Error("backend credential mode was treated as a stored secret")
+	}
+	unrelated := mappingValueNode(mappingValueNode(node, "unrelated"), "auth")
+	if credential := mappingValueNode(unrelated, "credential"); credential == nil || credential.Value != redactedConfigSecret {
+		t.Fatal("policy exception unmasked an unrelated credential")
+	}
+	for _, hidden := range []string{"nested-fixture", "deployment-fixture", "backend-fixture", "unknown-mode-fixture", "unrelated-fixture"} {
+		if bytes.Contains(masked, []byte(hidden)) {
+			t.Fatalf("policy exception exposed %s", hidden)
+		}
+	}
+	restored, err := restoreConfigSecrets(original, masked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := configSecretDocument(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := configSecretDocument(restored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sameConfigNode(before, after) {
+		t.Fatal("policy fields or credentials changed on round trip")
 	}
 }

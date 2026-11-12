@@ -11,6 +11,7 @@ import (
 	sigsyaml "sigs.k8s.io/yaml"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 //nolint:gosec // G101: this is a fixed redaction marker, not a credential.
@@ -80,7 +81,9 @@ func redactConfigNode(node *yaml.Node, sensitive bool) bool {
 }
 
 func configSecretChild(key, path string) bool {
-	if strings.HasSuffix(path, ".authz.gateway_credential") {
+	if strings.TrimPrefix(path, ".global") == ".services.authz.delegated_credential" {
+		// This is a policy container, not the requesting user's credential.
+		// Continue examining its children so actual secret fields stay masked.
 		return false
 	}
 	if compactConfigKey(key) != "headers" {
@@ -89,6 +92,19 @@ func configSecretChild(key, path string) bool {
 	// These typed sections describe header names/policy, not values sent to
 	// an upstream. Masking their enum fields would break an editor round trip.
 	return !strings.HasSuffix(path, ".router.headers") && !strings.HasSuffix(path, ".identity.headers")
+}
+
+// Only the supported enum at typed upstream auth locations is public metadata.
+// Other fields named credential, including invalid mode values, remain secrets.
+func configSecretCredentialMode(node *yaml.Node, path string) bool {
+	if node.Tag != "!!str" || node.Value != routerconfig.CredentialDelegated {
+		return false
+	}
+	if path == ".providers.models.backend_refs.auth.credential" {
+		return true
+	}
+	path = strings.TrimPrefix(path, ".global")
+	return strings.HasPrefix(path, ".model_catalog.deployments.") && strings.HasSuffix(path, ".auth.credential")
 }
 
 func redactConfigNodeAt(node *yaml.Node, sensitive bool, path string) bool {
@@ -109,6 +125,9 @@ func redactConfigNodeAt(node *yaml.Node, sensitive bool, path string) bool {
 		}
 	case yaml.ScalarNode:
 		if node.Tag == "!!null" || node.Value == "" || configEnvReference.MatchString(node.Value) {
+			return false
+		}
+		if configSecretCredentialMode(node, path) {
 			return false
 		}
 		if sensitive {

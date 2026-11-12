@@ -36,7 +36,7 @@ func restoreConfigSecretNode(old, updated *yaml.Node, sensitive, targetChanged b
 			return errConfigSecretReuse
 		}
 		masked := *old
-		if !redactConfigNode(&masked, sensitive) || masked.Value != updated.Value {
+		if !redactConfigNodeAt(&masked, sensitive, path) || masked.Value != updated.Value {
 			return errConfigSecretReuse
 		}
 		*updated = *cloneYAMLNode(old)
@@ -88,7 +88,7 @@ func matchingConfigSequenceItem(old, updated *yaml.Node, index int) *yaml.Node {
 	return nil
 }
 
-var configSecretTargetFields = [...]string{"name", "id", "address", "addresses", "host", "hosts", "hostname", "port", "endpoint", "endpoints", "url", "base_url", "baseURL", "provider", "provider_profile", "type", "protocol", "scheme", "command", "transport", "api_key_env", "api_key_file"}
+var configSecretTargetFields = [...]string{"name", "id", "address", "addresses", "cluster_addresses", "cluster_mode", "host", "hosts", "hostname", "port", "endpoint", "endpoints", "url", "base_url", "baseURL", "provider", "provider_profile", "type", "protocol", "scheme", "command", "transport", "api_key_env", "api_key_file"}
 
 // Config editors submit a whole document, and some schemas associate a secret
 // with a target in another branch. Without a schema-level association for every
@@ -166,10 +166,16 @@ func isConfigSecretTargetField(candidate string) bool {
 func configSecretTargetChanged(old, updated *yaml.Node) bool {
 	for _, key := range configSecretTargetFields {
 		before, after := mappingValueNode(old, key), mappingValueNode(updated, key)
-		if before == nil {
+		if key == "cluster_addresses" || key == "cluster_mode" {
+			// A newly introduced cluster can redirect an existing password too.
+			// Explicit empty/false defaults do not change the selected target.
+			if defaultConfigSecretClusterTarget(before, key) && defaultConfigSecretClusterTarget(after, key) {
+				continue
+			}
+		} else if before == nil {
 			continue
 		}
-		if after == nil {
+		if before == nil || after == nil {
 			return true
 		}
 		masked := cloneYAMLNode(before)
@@ -179,4 +185,14 @@ func configSecretTargetChanged(old, updated *yaml.Node) bool {
 		}
 	}
 	return false
+}
+
+func defaultConfigSecretClusterTarget(node *yaml.Node, key string) bool {
+	if node == nil || node.Tag == "!!null" {
+		return true
+	}
+	if key == "cluster_mode" {
+		return node.Tag == "!!bool" && node.Value == "false"
+	}
+	return node.Kind == yaml.SequenceNode && len(node.Content) == 0
 }

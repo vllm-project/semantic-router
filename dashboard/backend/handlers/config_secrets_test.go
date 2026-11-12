@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
+	sigsyaml "sigs.k8s.io/yaml"
 )
 
 const (
@@ -114,4 +117,90 @@ func TestGlobalConfigEditorPreservesRedactedSecret(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGlobalConfigEditorRejectsRedisClusterRetargeting(t *testing.T) {
+	for _, raw := range []bool{false, true} {
+		for _, tc := range []struct {
+			name, patch string
+			standalone  bool
+		}{
+			{name: "replace node", patch: "cluster_addresses: [different.example.test:6379]"},
+			{name: "add node", patch: "cluster_addresses: [redis-a.example.test:6379, redis-b.example.test:6379, different.example.test:6379]"},
+			{name: "remove node", patch: "cluster_addresses: [redis-a.example.test:6379]"},
+			{name: "remove nodes field", patch: "cluster_addresses: null"},
+			{name: "disable cluster", patch: "cluster_mode: false"},
+			{name: "introduce cluster", standalone: true, patch: "cluster_mode: true\ncluster_addresses: [different.example.test:6379]"},
+		} {
+			t.Run(map[bool]string{false: "json", true: "yaml"}[raw]+"/"+tc.name, func(t *testing.T) {
+				path := writeSecretConfig(t, configSecretFixture)
+				original, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !tc.standalone {
+					original = append(original, []byte("        cluster_mode: true\n        cluster_addresses: [redis-a.example.test:6379, redis-b.example.test:6379]\n")...)
+				}
+				if writeErr := os.WriteFile(path, original, 0o600); writeErr != nil {
+					t.Fatal(writeErr)
+				}
+				read, update := globalSecretEditorHandlers(path, raw)
+				view := httptest.NewRecorder()
+				read(view, requestAs("/", "config.read", "config.write"))
+				if view.Code != http.StatusOK || strings.Contains(view.Body.String(), configSecretFixture) {
+					t.Fatalf("redacted read status=%d", view.Code)
+				}
+				document, err := configSecretDocument(view.Body.Bytes())
+				if err != nil {
+					t.Fatal(err)
+				}
+				redis := mappingValueNode(mappingValueNode(mappingValueNode(document, "services"), "response_api"), "redis")
+				patch, err := configSecretDocument([]byte(tc.patch))
+				if err != nil {
+					t.Fatal(err)
+				}
+				for i := 0; i+1 < len(patch.Content); i += 2 {
+					setMappingValueNode(redis, patch.Content[i].Value, patch.Content[i+1])
+				}
+				body, err := yaml.Marshal(document)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !raw {
+					body, err = sigsyaml.YAMLToJSON(body)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				previousPropagate := propagateConfig
+				calls := 0
+				propagateConfig = func(string, string) error { calls++; return nil }
+				t.Cleanup(func() { propagateConfig = previousPropagate })
+				request := httptest.NewRequest(http.MethodPut, "/", bytes.NewReader(body))
+				request = request.WithContext(requestAs("/", "config.write").Context())
+				result := httptest.NewRecorder()
+				update(result, request)
+				if result.Code != http.StatusBadRequest {
+					t.Errorf("retargeted save status=%d, want 400: %s", result.Code, result.Body.String())
+				}
+				saved, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !bytes.Equal(saved, original) {
+					t.Error("rejected target change modified persisted configuration")
+				}
+				if calls != 0 {
+					t.Error("rejected target change propagated configuration to the runtime")
+				}
+			})
+		}
+	}
+}
+
+func globalSecretEditorHandlers(path string, raw bool) (http.HandlerFunc, http.HandlerFunc) {
+	if raw {
+		return GlobalConfigYAMLHandler(path), UpdateGlobalConfigYAMLHandler(path, false, filepath.Dir(path))
+	}
+	return RouterDefaultsHandler(path), UpdateRouterDefaultsHandler(path, false, filepath.Dir(path))
 }
