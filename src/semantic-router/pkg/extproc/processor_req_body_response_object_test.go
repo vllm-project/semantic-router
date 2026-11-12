@@ -376,7 +376,7 @@ func TestStoredCustomToolHistoryCanContinue(t *testing.T) {
 			body := fmt.Sprintf(`{"model":"m","store":true,"tools":[{"type":"custom","name":"patch"}],"input":[{"role":"user","content":"edit the file"},{"type":"custom_tool_call","id":"ct_0","call_id":"call_0","name":"patch","input":%s},{"type":"custom_tool_call_output","call_id":"call_0","output":"earlier result"}]}`, inputJSON)
 			ctx, _ := prepareCustomHistoryRequest(t, router, []byte(body))
 			provider := fmt.Sprintf(`{"id":"resp_provider","model":"m","status":"completed","output":[{"type":"custom_tool_call","id":"ct_1","call_id":"call_1","name":"patch","input":%s}]}`, inputJSON)
-			reply := router.handleNonStreamingResponseBody([]byte(provider), ctx, 0)
+			reply := router.handleNonStreamingResponseBody([]byte(provider), ctx, 0, false)
 			require.NotNil(t, ctx.SemanticResponse)
 			require.Nil(t, ctx.SemanticResponse.Error)
 
@@ -489,7 +489,7 @@ func TestPreviousResponseReplaysStoredDeveloperItems(t *testing.T) {
 			dispatchTestTurn(t, router, model, first, `{"model":"`+model+`","instructions":"Old instructions.","input":[`+
 				`{"type":"message","role":"developer","content":"Always answer in French."},`+
 				`{"type":"message","role":"user","content":"What is 2+2?"}]}`)
-			if reply := router.handleNonStreamingResponseBody(extProcResponseFixture(backend), first, 0); reply.GetImmediateResponse() != nil {
+			if reply := router.handleNonStreamingResponseBody(extProcResponseFixture(backend), first, 0, false); reply.GetImmediateResponse() != nil {
 				t.Fatalf("turn 1 reply was replaced: %s", reply.GetImmediateResponse().GetBody())
 			}
 

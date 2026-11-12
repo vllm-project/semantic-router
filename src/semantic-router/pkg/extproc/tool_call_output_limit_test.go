@@ -43,7 +43,7 @@ func TestBufferedReplyCutInsideAToolCallReachesEveryClient(t *testing.T) {
 		for client, fragments := range want {
 			t.Run(name+"/"+string(client), func(t *testing.T) {
 				ctx := &RequestContext{SourceFormat: client, TargetFormat: llmprotocol.OpenAIChatV1, RequestModel: "public-model", TraceContext: t.Context()}
-				body := deliveredBody(t, (&OpenAIRouter{}).handleNonStreamingResponseBody([]byte(cut.body), ctx, 0), cut.body)
+				body := deliveredBody(t, (&OpenAIRouter{}).handleNonStreamingResponseBody([]byte(cut.body), ctx, 0, false), cut.body)
 				for _, fragment := range fragments {
 					if !bytes.Contains(body, []byte(fragment)) {
 						t.Errorf("want %s in:\n%s", fragment, body)
