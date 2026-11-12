@@ -131,6 +131,7 @@ until the selected cases are known to be isolated.
 - **multi-endpoint**: environment policy across several backends.
 - **authz-rbac**: authorization routing and rate-limit behavior.
 - **streaming**: streamed request bodies and cache round trips.
+- **masking**: the masking plugin on Chat, Responses and Anthropic, including a coding-agent tool loop whose tool results and tool call arguments reach the backend masked, scan errors that refuse the request without dispatching it, and session protection that holds a session's model, scopes subagents to their own key and releases after the idle timeout.
 - **provider-protocols**: affected-change Anthropic backend and cross-protocol matrix coverage.
 - **response-api**: affected-change memory-backed Responses API and cross-protocol matrix coverage.
 - **route-action**: decision route action for detected prompt attacks and benign traffic, and, behind `vllm-sr/response-guard`, response-direction jailbreak signal and response_guard coverage for LLM output carrying jailbreak content past the classifier's sequence window, and the streamed-response pass-through contract.
