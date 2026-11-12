@@ -163,6 +163,7 @@ providers:
 - 响应保持客户端协议的 JSON 或 SSE 形状。Provider 传输错误和不完整流会与成功的模型响应分开翻译。
 - 对于 Anthropic 兼容提供方，缺失的可空 `stop_sequence` 会被解释为 null，并产生有界的兼容性诊断。这适用于缓冲 Messages、`message_start.message` 和 `message_delta.delta`。显式 null 不产生诊断；停止原因为 `stop_sequence` 时，仍必须提供非空的匹配序列，终止增量仍必须包含 `stop_reason`。
 - OpenAI 兼容 Chat 提供方通过 `choices[].stop_reason` 返回匹配到的停止字符串时（例如 vLLM），Anthropic Messages 客户端会收到 `stop_sequence` 停止原因及该序列。Chat 和 Responses 客户端不受影响。
+- vLLM 的服务元数据无论取值如何都不会导致回复失败：回复或流式块顶层的 `prompt_logprobs`、`prompt_text`、`prompt_routed_experts`、`kv_transfer_params`、`ec_transfer_params` 和 `metrics`，以及 choices 中的 `routed_experts` 和 `weight_versions`。Chat 客户端原样收到这些字段；取值不为 null 或空时报告为 `dropped`。在 vLLM-Omni 的流中，`modality` 不是 `text` 的块会以 `unsupported_upstream_audio`（或 `unsupported_upstream_modality`）失败，因为其 `delta.content` 承载的是编码后的媒体，而不是回答文本。
 - Chat 提供方以 `finish_reason: "stop"` 结束强制指定的工具调用。对于以这种方式结束且包含 `tool_use` 块的轮次，Anthropic Messages 客户端会收到 `stop_reason: "tool_use"`。因达到输出上限、命中停止序列或拒绝而结束的轮次保留原停止原因。
 - Anthropic 的 `model_context_window_exceeded` 停止以 `finish_reason: "length"` 到达 Chat 客户端，并以原因为 `max_output_tokens` 的 incomplete 响应到达 Responses 客户端，与 vLLM 报告输出达到 `max_model_len` 的方式一致。Router 会为 `response.stop_reason` 报告 `approximated` 诊断。`pause_turn` 停止对这些客户端仍会失败。
 - 适用时，`x-vsr-warnings` 以及 `x-vsr-trace` 的 `client_protocol` 和 `upstream_protocol` 成员会暴露翻译细节。参见 [VSR 路由标头](../api/headers)。流式响应头发送后才发现的诊断会记录在转换告警指标和结构化调试日志中，不能添加到已经发送的响应头。

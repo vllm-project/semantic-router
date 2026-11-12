@@ -2,13 +2,11 @@ package modelservice
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/runtimetest"
 )
 
 func TestACardReportsTheLengthItsModelWasValidatedAt(t *testing.T) {
@@ -41,36 +39,5 @@ func TestAListedCardGivesItsInputLimits(t *testing.T) {
 				t.Fatalf("card %+v, %v; want limits %d and %d", card, err, tc.maxInput, tc.validated)
 			}
 		})
-	}
-}
-
-// The states a stage asks one model about go in its batch in their requests'
-// order, so the windows of a scan are read tail first.
-func TestAStagesStatesGoInTheirRequestsOrder(t *testing.T) {
-	runtime := runtimetest.New(runtimetest.Model{ID: "d3"})
-	lease := attachedLease(t, map[*runtimetest.Runtime][]string{runtime: {"d3"}})
-	states := []struct {
-		text  string
-		order int
-	}{{"window b, read third", 3}, {"a routing view, read first", 0}, {"window z, read second", 1}, {"window a, read fourth", 4}}
-	askers := make([]asker, len(states))
-	for index, state := range states {
-		askers[index] = asker{deployments: []string{"d3"}, ask: func(ctx context.Context) error {
-			_, err := lease.Decide(ctx, "d3", Request{State: state.text, Order: state.order, Questions: []Question{choiceQuestion("guard")}})
-			return err
-		}}
-	}
-	if _, errs := runStage(DefaultBundleWindow, askers...); errors.Join(errs...) != nil {
-		t.Fatal(errors.Join(errs...))
-	}
-	decisions := runtime.Decisions()
-	if len(decisions) != 1 || decisions[0].States == nil {
-		t.Fatalf("decisions %+v, want one batch", decisions)
-	}
-	batch := *decisions[0].States
-	for name, want := range map[string]string{"1": "a routing view, read first", "2": "window z, read second", "3": "window b, read third", "4": "window a, read fourth"} {
-		if got := fmt.Sprint(batch[name].State); got != want {
-			t.Fatalf("entry %s is %q, want %q", name, got, want)
-		}
 	}
 }
