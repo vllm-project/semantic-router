@@ -83,8 +83,8 @@ func TestRedisStoreGetConversationChainRejectsACycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal r1: %v", err)
 	}
-	if err := store.client.Set(ctx, store.buildKey(ResponseKeyPrefix+"r1"), payload, time.Minute).Err(); err != nil {
-		t.Fatalf("rewrite r1: %v", err)
+	if setErr := store.client.Set(ctx, store.buildKey(ResponseKeyPrefix+"r1"), payload, time.Minute).Err(); setErr != nil {
+		t.Fatalf("rewrite r1: %v", setErr)
 	}
 
 	chain, err := store.GetConversationChain(ctx, "r1")
